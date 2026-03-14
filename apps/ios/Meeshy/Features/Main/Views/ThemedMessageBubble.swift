@@ -502,7 +502,8 @@ struct ThemedMessageBubble: View {
                                         flags: !textTranslations.isEmpty ? buildAvailableFlags() : [],
                                         activeFlag: secondaryLangCode,
                                         onFlagTap: !textTranslations.isEmpty ? { code in handleFlagTap(code) } : nil,
-                                        onTranslateTap: textTranslations.isEmpty ? nil : { onShowTranslationDetail?(message.id) }
+                                        onTranslateTap: textTranslations.isEmpty ? nil : { onShowTranslationDetail?(message.id) },
+                                        isMe: message.isMe
                                     )
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 4)

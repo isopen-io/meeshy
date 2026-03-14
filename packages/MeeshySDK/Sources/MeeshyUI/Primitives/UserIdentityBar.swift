@@ -91,6 +91,7 @@ public struct UserIdentityBar: View {
     public let trailingPrimary: [IdentityBarElement]
     public let leadingSecondary: [IdentityBarElement]
     public let trailingSecondary: [IdentityBarElement]
+    public let tintColor: Color?
 
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -100,7 +101,8 @@ public struct UserIdentityBar: View {
         leadingPrimary: [IdentityBarElement] = [],
         trailingPrimary: [IdentityBarElement] = [],
         leadingSecondary: [IdentityBarElement] = [],
-        trailingSecondary: [IdentityBarElement] = []
+        trailingSecondary: [IdentityBarElement] = [],
+        tintColor: Color? = nil
     ) {
         // avatar or name required for identity contexts; metaRow preset has neither
         self.avatar = avatar
@@ -109,6 +111,7 @@ public struct UserIdentityBar: View {
         self.trailingPrimary = trailingPrimary
         self.leadingSecondary = leadingSecondary
         self.trailingSecondary = trailingSecondary
+        self.tintColor = tintColor
     }
 
     public var body: some View {
@@ -187,7 +190,7 @@ public struct UserIdentityBar: View {
         case .time(let value):
             Text(value)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundColor(tintColor ?? theme.textSecondary)
 
         case .delivery(let status):
             deliveryView(for: status)
@@ -286,15 +289,16 @@ public struct UserIdentityBar: View {
 
     @ViewBuilder
     private func deliveryView(for status: MeeshyMessage.DeliveryStatus) -> some View {
+        let secondaryColor = tintColor ?? theme.textSecondary
         switch status {
         case .sending:
             Image(systemName: "clock")
                 .font(.system(size: 10))
-                .foregroundColor(theme.textSecondary)
+                .foregroundColor(secondaryColor)
         case .sent:
             Image(systemName: "checkmark")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(theme.textSecondary)
+                .foregroundColor(secondaryColor)
         case .delivered:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
@@ -303,7 +307,7 @@ public struct UserIdentityBar: View {
                     .font(.system(size: 10, weight: .semibold))
                     .offset(x: 4)
             }
-            .foregroundColor(theme.textSecondary)
+            .foregroundColor(secondaryColor)
             .frame(width: 16)
         case .read:
             ZStack(alignment: .leading) {
@@ -313,7 +317,7 @@ public struct UserIdentityBar: View {
                     .font(.system(size: 10, weight: .semibold))
                     .offset(x: 4)
             }
-            .foregroundColor(MeeshyColors.readReceipt)
+            .foregroundColor(tintColor != nil ? tintColor! : MeeshyColors.readReceipt)
             .frame(width: 16)
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
@@ -539,7 +543,8 @@ extension UserIdentityBar {
         flags: [String],
         activeFlag: String?,
         onFlagTap: ((String) -> Void)?,
-        onTranslateTap: (() -> Void)?
+        onTranslateTap: (() -> Void)?,
+        isMe: Bool = false
     ) -> UserIdentityBar {
         var leading1: [IdentityBarElement] = []
         if !flags.isEmpty {
@@ -556,7 +561,8 @@ extension UserIdentityBar {
 
         return UserIdentityBar(
             leadingPrimary: leading1,
-            trailingPrimary: trailing1
+            trailingPrimary: trailing1,
+            tintColor: isMe ? .white.opacity(0.7) : nil
         )
     }
 }
