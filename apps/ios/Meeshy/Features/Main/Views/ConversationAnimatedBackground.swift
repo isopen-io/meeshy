@@ -454,7 +454,7 @@ struct ConversationAnimatedBackground: View {
 
             globeCore
 
-            ForEach(0..<6, id: \.self) { i in
+            ForEach(0..<3, id: \.self) { i in
                 ConvBgSatellite(index: i, color: config.accentColor)
             }
         }

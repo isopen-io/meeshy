@@ -152,7 +152,8 @@ public struct MeeshyAvatar: View {
     public init(name: String, size: AvatarSize, accentColor: String = "", secondaryColor: String? = nil,
                 avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil,
                 onMoodTap: ((CGPoint) -> Void)? = nil, presenceState: PresenceState = .offline,
-                onOnlineTap: (() -> Void)? = nil, enablePulse: Bool = true) {
+                onOnlineTap: (() -> Void)? = nil, enablePulse: Bool = true,
+                isDark: Bool = ThemeManager.shared.mode.isDark) {
         self.name = name
         switch size {
         case .small: self.mode = .messageBubble
@@ -164,7 +165,7 @@ public struct MeeshyAvatar: View {
         self.accentColor = accentColor; self.secondaryColor = secondaryColor
         self.avatarURL = avatarURL; self.storyState = storyState; self.moodEmoji = moodEmoji
         self.onMoodTap = onMoodTap; self.presenceState = presenceState; self.onOnlineTap = onOnlineTap
-        self.enablePulse = enablePulse
+        self.enablePulse = enablePulse; self.isDark = isDark
     }
 
     // Primary init (AvatarMode)
@@ -172,13 +173,14 @@ public struct MeeshyAvatar: View {
                 secondaryColor: String? = nil, avatarURL: String? = nil,
                 storyState: StoryRingState = .none, moodEmoji: String? = nil,
                 presenceState: PresenceState = .offline, enablePulse: Bool = true,
+                isDark: Bool = ThemeManager.shared.mode.isDark,
                 onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
                 onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
         self.name = name; self.mode = mode; self.kind = kind; self.accentColor = accentColor
         self.secondaryColor = secondaryColor; self.avatarURL = avatarURL
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
-        self.enablePulse = enablePulse
+        self.enablePulse = enablePulse; self.isDark = isDark
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
         self.onMoodTap = onMoodTap; self.onOnlineTap = onOnlineTap; self.contextMenuItems = contextMenuItems
     }
@@ -186,7 +188,8 @@ public struct MeeshyAvatar: View {
     @State private var ringRotation: Double = 0
     @State private var tapScale: CGFloat = 1.0
     @State private var moodScale: CGFloat = 1.0
-    @ObservedObject private var theme = ThemeManager.shared
+    private let isDark: Bool
+    private var theme: ThemeManager { ThemeManager.shared }
 
     private var resolvedAccent: String {
         accentColor.isEmpty ? DynamicColorGenerator.colorForName(name) : accentColor

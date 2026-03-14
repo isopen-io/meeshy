@@ -106,6 +106,7 @@ class ConversationListViewModel: ObservableObject {
                     return filterMatch && searchMatch
                 }
             }
+            .receive(on: DispatchQueue.main)
             .assign(to: &$filteredConversations)
 
         Publishers.CombineLatest($filteredConversations, $userCategories)
@@ -148,6 +149,7 @@ class ConversationListViewModel: ObservableObject {
 
                 return result
             }
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] newGroups in
                 self?.groupedConversations = newGroups
             }

@@ -10,6 +10,8 @@ import MeeshyUI
 struct ThemedMessageBubble: View {
     let message: Message
     let contactColor: String
+    var isDirect: Bool = false
+    var isDark: Bool = ThemeManager.shared.mode.isDark
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
     var textTranslations: [MessageTranslation] = []
@@ -51,7 +53,7 @@ struct ThemedMessageBubble: View {
     @State var revealedAttachmentIds: Set<String> = [] // internal for cross-file extension access
 
     @State var fullscreenLocationAttachment: MessageAttachment? = nil
-    @ObservedObject var theme = ThemeManager.shared // internal for cross-file extension access
+    var theme: ThemeManager { ThemeManager.shared } // non-observed — isDark drives re-renders
     @ObservedObject private var videoPlayerManager = SharedAVPlayerManager.shared
 
     // Ephemeral timer state
@@ -61,6 +63,10 @@ struct ThemedMessageBubble: View {
 
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
     let gridSpacing: CGFloat = 2 // internal for cross-file extension access
+
+    private var showIdentityBar: Bool {
+        !isDirect && isLastInGroup && !message.isMe
+    }
 
     private var hasReactions: Bool { !message.reactions.isEmpty }
 
@@ -101,8 +107,9 @@ struct ThemedMessageBubble: View {
         })?.translatedContent
     }
 
-    private var bubbleColor: String {
-        message.isMe ? contactColor : contactColor
+    private var otherBubbleColor: String {
+        let senderHex = message.senderColor ?? contactColor
+        return DynamicColorGenerator.blendTwo(senderHex, weight1: 0.30, "6366F1", weight2: 0.70)
     }
 
     var visualAttachments: [MessageAttachment] { // internal for cross-file extension access
@@ -337,10 +344,10 @@ struct ThemedMessageBubble: View {
             .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                     .overlay(
                         Capsule()
-                            .stroke(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
                     )
             )
             .accessibilityElement(children: .combine)
@@ -385,30 +392,8 @@ struct ThemedMessageBubble: View {
     }
 
     private var messageContent: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: 0) {
             if message.isMe { Spacer(minLength: 50) }
-
-            // Sender avatar (non-me messages only, last in group)
-            if !message.isMe {
-                if showAvatar {
-                    MeeshyAvatar(
-                        name: message.senderName ?? "?",
-                        mode: .messageBubble,
-                        accentColor: message.senderColor ?? contactColor,
-                        avatarURL: message.senderAvatarURL,
-                        moodEmoji: senderMoodEmoji,
-                        presenceState: presenceState,
-                        onViewProfile: { selectedProfileUser = .from(message: message) },
-                        contextMenuItems: [
-                            AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                                selectedProfileUser = .from(message: message)
-                            }
-                        ]
-                    )
-                } else {
-                    Color.clear.frame(width: 32, height: 32)
-                }
-            }
 
             VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
                 // Pin indicator
@@ -486,11 +471,43 @@ struct ThemedMessageBubble: View {
                                     }
 
                                     secondaryContentView
-
-                                    messageMetaRow(insideBubble: true)
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, hasTextOrNonMediaContent ? 10 : 4)
+
+                                // Unified identity bar — full for group sender signature, compact meta row otherwise
+                                if showIdentityBar {
+                                    UserIdentityBar.messageBubble(
+                                        name: message.senderName ?? "?",
+                                        username: message.senderUsername.map { "@\($0)" },
+                                        avatarURL: message.senderAvatarURL,
+                                        accentColor: message.senderColor ?? contactColor,
+                                        role: nil,
+                                        time: timeString,
+                                        delivery: message.isMe ? message.deliveryStatus : nil,
+                                        flags: buildAvailableFlags(),
+                                        activeFlag: secondaryLangCode,
+                                        onFlagTap: { code in handleFlagTap(code) },
+                                        onTranslateTap: textTranslations.isEmpty ? nil : { onShowTranslationDetail?(message.id) },
+                                        presenceState: presenceState,
+                                        moodEmoji: senderMoodEmoji,
+                                        onAvatarTap: { selectedProfileUser = .from(message: message) }
+                                    )
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                } else {
+                                    UserIdentityBar.metaRow(
+                                        time: timeString,
+                                        delivery: message.isMe ? message.deliveryStatus : nil,
+                                        flags: !textTranslations.isEmpty ? buildAvailableFlags() : [],
+                                        activeFlag: secondaryLangCode,
+                                        onFlagTap: !textTranslations.isEmpty ? { code in handleFlagTap(code) } : nil,
+                                        onTranslateTap: textTranslations.isEmpty ? nil : { onShowTranslationDetail?(message.id) },
+                                        isMe: message.isMe
+                                    )
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 4)
+                                }
                             }
                             .padding(.top, message.isEdited ? 12 : 0)
                             .overlay(alignment: .topLeading) {
@@ -503,7 +520,7 @@ struct ThemedMessageBubble: View {
                             .background(bubbleBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 18))
                             .shadow(
-                                color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
+                                color: Color(hex: message.isMe ? "6366F1" : otherBubbleColor).opacity(message.isMe ? 0.3 : 0.2),
                                 radius: 6,
                                 y: 3
                             )
@@ -650,7 +667,7 @@ struct ThemedMessageBubble: View {
         .padding(.vertical, 4)
         .background(
             Capsule()
-                .fill(Color(hex: "FF6B6B").opacity(theme.mode.isDark ? 0.15 : 0.1))
+                .fill(Color(hex: "FF6B6B").opacity(isDark ? 0.15 : 0.1))
                 .overlay(
                     Capsule()
                         .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
@@ -721,61 +738,6 @@ struct ThemedMessageBubble: View {
         }
     }
 
-    // translationFlagStrip replaced by inlineFlagStrip inside messageMetaRow
-
-    @ViewBuilder
-    private func swapFlagButton(code: String, textColor: Color) -> some View {
-        let display = LanguageDisplay.from(code: code)
-        let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
-        let isOriginal = code.lowercased() == message.originalLanguage.lowercased()
-        let hasContent = isOriginal || textTranslations.contains(where: { $0.targetLanguage.lowercased() == code.lowercased() })
-        let isShowingSecondary = secondaryLangCode?.lowercased() == code.lowercased()
-
-        VStack(spacing: 1) {
-            Text(display?.flag ?? "🏳️")
-                .font(.system(size: isShowingSecondary ? 12 : 10))
-                .scaleEffect(isShowingSecondary ? 1.05 : 1.0)
-
-            if isShowingSecondary {
-                RoundedRectangle(cornerRadius: 0.5)
-                    .fill(langColor)
-                    .frame(width: 10, height: 1.5)
-            }
-        }
-        .animation(.spring(response: 0.2), value: isShowingSecondary)
-        .onTapGesture {
-            if !hasContent {
-                onRequestTranslation?(message.id, code)
-                HapticFeedback.light()
-                return
-            }
-            if isOriginal {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    activeDisplayLangCode = code
-                    secondaryLangCode = nil
-                }
-            } else {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    secondaryLangCode = isShowingSecondary ? nil : code
-                }
-            }
-            HapticFeedback.light()
-        }
-        .onLongPressGesture(minimumDuration: 0.4) {
-            guard hasContent else {
-                onRequestTranslation?(message.id, code)
-                HapticFeedback.light()
-                return
-            }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                activeDisplayLangCode = code
-                secondaryLangCode = nil
-            }
-            HapticFeedback.medium()
-        }
-        .accessibilityLabel(display?.name ?? code)
-    }
-
     // MARK: - Secondary Content (inline translation)
 
     @ViewBuilder
@@ -837,76 +799,53 @@ struct ThemedMessageBubble: View {
         Text("")
     }
 
-    @ViewBuilder
-    private func messageMetaRow(insideBubble: Bool) -> some View {
-        let metaColor: Color = insideBubble && message.isMe
-            ? .white.opacity(0.7)
-            : theme.textSecondary.opacity(0.6)
-        let textColor = message.isMe ? Color.white : theme.textPrimary
-
-        HStack(spacing: 4) {
-            if insideBubble && !textTranslations.isEmpty {
-                inlineFlagStrip(textColor: textColor)
-            }
-
-            Spacer(minLength: 0)
-
-            if !textTranslations.isEmpty {
-                Image(systemName: "translate")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Color(hex: "4ECDC4"))
-                    .onTapGesture {
-                        onShowTranslationDetail?(message.id)
-                    }
-                    .accessibilityLabel("Traduction disponible")
-            }
-
-            Text(timeString)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(metaColor)
-
-            if message.isMe {
-                deliveryCheckmarks(insideBubble: insideBubble)
-                    .onTapGesture {
-                        onShowInfo?()
-                    }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func inlineFlagStrip(textColor: Color) -> some View {
+    private func buildAvailableFlags() -> [String] {
         let activeLang = currentDisplayLangCode.lowercased()
         let origLower = message.originalLanguage.lowercased()
         let user = AuthManager.shared.currentUser
 
-        let availableFlags: [String] = {
-            var all: [String] = [origLower]
-            var seen: Set<String> = [origLower]
+        var all: [String] = [origLower]
+        var seen: Set<String> = [origLower]
 
-            if let pc = preferredTranslation?.targetLanguage.lowercased(), !seen.contains(pc) {
-                all.append(pc); seen.insert(pc)
+        if let pc = preferredTranslation?.targetLanguage.lowercased(), !seen.contains(pc) {
+            all.append(pc); seen.insert(pc)
+        }
+
+        if let reg = user?.regionalLanguage?.lowercased(), !seen.contains(reg),
+           textTranslations.contains(where: { $0.targetLanguage.lowercased() == reg }) {
+            all.append(reg); seen.insert(reg)
+        }
+
+        if user?.useCustomDestination == true,
+           let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom),
+           textTranslations.contains(where: { $0.targetLanguage.lowercased() == custom }) {
+            all.append(custom); seen.insert(custom)
+        }
+
+        return all.filter { $0 != activeLang }
+    }
+
+    private func handleFlagTap(_ code: String) {
+        let isOriginal = code.lowercased() == message.originalLanguage.lowercased()
+        let hasContent = isOriginal || textTranslations.contains(where: { $0.targetLanguage.lowercased() == code.lowercased() })
+
+        if !hasContent {
+            onRequestTranslation?(message.id, code)
+            HapticFeedback.light()
+            return
+        }
+        if isOriginal {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                activeDisplayLangCode = code
+                secondaryLangCode = nil
             }
-
-            if let reg = user?.regionalLanguage?.lowercased(), !seen.contains(reg),
-               textTranslations.contains(where: { $0.targetLanguage.lowercased() == reg }) {
-                all.append(reg); seen.insert(reg)
-            }
-
-            if user?.useCustomDestination == true,
-               let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom),
-               textTranslations.contains(where: { $0.targetLanguage.lowercased() == custom }) {
-                all.append(custom); seen.insert(custom)
-            }
-
-            return all.filter { $0 != activeLang }
-        }()
-
-        HStack(spacing: 4) {
-            ForEach(availableFlags, id: \.self) { code in
-                swapFlagButton(code: code, textColor: textColor)
+        } else {
+            let isShowing = secondaryLangCode?.lowercased() == code.lowercased()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                secondaryLangCode = isShowing ? nil : code
             }
         }
+        HapticFeedback.light()
     }
 
     // MARK: - Edited Indicator (top-leading overlay)
@@ -923,51 +862,6 @@ struct ThemedMessageBubble: View {
                 .italic()
         }
         .foregroundColor(metaColor)
-    }
-
-    @ViewBuilder
-    private func deliveryCheckmarks(insideBubble: Bool = false) -> some View {
-        let metaColor: Color = insideBubble && message.isMe
-            ? .white.opacity(0.7)
-            : theme.textSecondary.opacity(0.6)
-
-        Group {
-            switch message.deliveryStatus {
-            case .sending:
-                Image(systemName: "clock")
-                    .font(.system(size: 10))
-                    .foregroundColor(metaColor)
-            case .sent:
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(metaColor)
-            case .delivered:
-                ZStack(alignment: .leading) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .semibold))
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .semibold))
-                        .offset(x: 4)
-                }
-                .foregroundColor(metaColor)
-                .frame(width: 16)
-            case .read:
-                ZStack(alignment: .leading) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .semibold))
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .semibold))
-                        .offset(x: 4)
-                }
-                .foregroundColor(insideBubble && message.isMe ? .white : MeeshyColors.readReceipt)
-                .frame(width: 16)
-            case .failed:
-                Image(systemName: "exclamationmark.circle.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(MeeshyColors.error)
-            }
-        }
-        .accessibilityLabel(deliveryStatusAccessibilityLabel)
     }
 
     // MARK: - Media Timestamp Overlay (for visual media grid)
@@ -1087,7 +981,6 @@ struct ThemedMessageBubble: View {
         let previewColor: Color = message.isMe
             ? .white.opacity(0.65)
             : theme.textMuted
-        let isDark = theme.mode.isDark
         let bgColor: Color = message.isMe
             ? Color.white.opacity(0.15)
             : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
@@ -1241,7 +1134,6 @@ struct ThemedMessageBubble: View {
 
     @ViewBuilder
     private var reactionsOverlay: some View {
-        let isDark = theme.mode.isDark
         let accent = Color(hex: contactColor)
         let hasReactions = !reactionSummaries.isEmpty
         let visible = Array(reactionSummaries.prefix(maxVisibleReactions))
@@ -1382,21 +1274,20 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Bubble Background
     private var bubbleBackground: some View {
-        let accent = Color(hex: contactColor)
-        let isDark = theme.mode.isDark
+        let other = Color(hex: otherBubbleColor)
 
         return RoundedRectangle(cornerRadius: 18)
             .fill(
                 message.isMe ?
                 LinearGradient(
-                    colors: [accent, accent.opacity(0.8)],
+                    colors: [Color(hex: "6366F1"), Color(hex: "4338CA")],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ) :
                 LinearGradient(
                     colors: [
-                        accent.opacity(isDark ? 0.35 : 0.25),
-                        accent.opacity(isDark ? 0.2 : 0.15)
+                        other.opacity(isDark ? 0.35 : 0.25),
+                        other.opacity(isDark ? 0.20 : 0.15)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -1408,7 +1299,7 @@ struct ThemedMessageBubble: View {
                         message.isMe ?
                         LinearGradient(colors: [Color.clear, Color.clear], startPoint: .leading, endPoint: .trailing) :
                         LinearGradient(
-                            colors: [accent.opacity(0.5), accent.opacity(0.2)],
+                            colors: [other.opacity(0.5), other.opacity(0.2)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -1451,7 +1342,6 @@ struct ThemedMessageBubble: View {
     // MARK: - Audio Bubble Background
     private var audioBubbleBackground: some View {
         let accent = Color(hex: contactColor)
-        let isDark = theme.mode.isDark
         return RoundedRectangle(cornerRadius: 20)
             .fill(isDark ? accent.opacity(0.15) : accent.opacity(0.08))
             .overlay(
@@ -1461,4 +1351,26 @@ struct ThemedMessageBubble: View {
     }
 
     // See ThemedMessageBubble+Media.swift for downloadBadge
+}
+
+// MARK: - Equatable (permet .equatable() pour eviter les re-renders superflus)
+extension ThemedMessageBubble: @MainActor Equatable {
+    static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {
+        lhs.message.id == rhs.message.id &&
+        lhs.message.content == rhs.message.content &&
+        lhs.message.deliveryStatus == rhs.message.deliveryStatus &&
+        lhs.message.reactions.count == rhs.message.reactions.count &&
+        lhs.message.attachments.count == rhs.message.attachments.count &&
+        lhs.contactColor == rhs.contactColor &&
+        lhs.isDirect == rhs.isDirect &&
+        lhs.isDark == rhs.isDark &&
+        lhs.preferredTranslation?.translatedContent == rhs.preferredTranslation?.translatedContent &&
+        lhs.transcription?.text == rhs.transcription?.text &&
+        lhs.showAvatar == rhs.showAvatar &&
+        lhs.presenceState == rhs.presenceState &&
+        lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
+        lhs.isLastInGroup == rhs.isLastInGroup &&
+        lhs.isLastReceivedMessage == rhs.isLastReceivedMessage &&
+        lhs.activeAudioLanguage == rhs.activeAudioLanguage
+    }
 }

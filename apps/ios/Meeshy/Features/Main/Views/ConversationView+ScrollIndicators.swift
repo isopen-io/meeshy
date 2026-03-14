@@ -233,9 +233,8 @@ extension ConversationView {
             }
         }
         .onReceive(typingDotTimer) { _ in
-            if !viewModel.typingUsernames.isEmpty {
-                headerState.typingDotPhase = (headerState.typingDotPhase + 1) % 3
-            }
+            guard !viewModel.typingUsernames.isEmpty else { return }
+            headerState.typingDotPhase = (headerState.typingDotPhase + 1) % 3
         }
     }
 
@@ -266,9 +265,8 @@ extension ConversationView {
                 }
             }
             .onReceive(typingDotTimer) { _ in
-                if !viewModel.typingUsernames.isEmpty {
-                    headerState.inlineTypingDotPhase = (headerState.inlineTypingDotPhase + 1) % 3
-                }
+                guard !viewModel.typingUsernames.isEmpty else { return }
+                headerState.inlineTypingDotPhase = (headerState.inlineTypingDotPhase + 1) % 3
             }
 
             Spacer()

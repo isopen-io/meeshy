@@ -8,7 +8,6 @@ final class UserProfileViewModelTests: XCTestCase {
     // MARK: - Properties
 
     private var mockAuthManager: MockAuthManager!
-    private var mockProfileCache: MockProfileCache!
     private var mockBlockService: MockBlockService!
 
     // MARK: - Lifecycle
@@ -16,13 +15,11 @@ final class UserProfileViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         mockAuthManager = MockAuthManager()
-        mockProfileCache = MockProfileCache()
         mockBlockService = MockBlockService()
     }
 
     override func tearDown() {
         mockAuthManager = nil
-        mockProfileCache = nil
         mockBlockService = nil
         super.tearDown()
     }
@@ -41,7 +38,6 @@ final class UserProfileViewModelTests: XCTestCase {
         return UserProfileViewModel(
             user: profileUser,
             authManager: mockAuthManager,
-            profileCache: mockProfileCache,
             blockService: mockBlockService
         )
     }
@@ -130,30 +126,6 @@ final class UserProfileViewModelTests: XCTestCase {
 
     // MARK: - loadFullProfile Tests
 
-    func test_loadFullProfile_success_setsFullUser() async {
-        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        let targetUser = makeTargetUser()
-        mockProfileCache.stubProfile(targetUser, for: "target-user-001")
-        let sut = makeSUT()
-
-        await sut.loadFullProfile()
-
-        XCTAssertNotNil(sut.fullUser)
-        XCTAssertEqual(sut.fullUser?.id, "target-user-001")
-        XCTAssertEqual(sut.fullUser?.bio, "Hello world")
-        XCTAssertFalse(sut.isLoading)
-    }
-
-    func test_loadFullProfile_setsIsLoadingDuringFetch() async {
-        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        mockProfileCache.stubProfile(makeTargetUser(), for: "target-user-001")
-        let sut = makeSUT()
-
-        XCTAssertFalse(sut.isLoading)
-        await sut.loadFullProfile()
-        XCTAssertFalse(sut.isLoading)
-    }
-
     func test_loadFullProfile_skipsWhenIsCurrentUser() async {
         let currentUser = makeCurrentUser(id: "same-id")
         mockAuthManager.simulateLoggedIn(user: currentUser)
@@ -162,7 +134,6 @@ final class UserProfileViewModelTests: XCTestCase {
         await sut.loadFullProfile()
 
         XCTAssertNil(sut.fullUser)
-        XCTAssertEqual(mockProfileCache.profileCallCount, 0)
     }
 
     func test_loadFullProfile_skipsWhenUserIdIsNil() async {
@@ -172,65 +143,9 @@ final class UserProfileViewModelTests: XCTestCase {
         await sut.loadFullProfile()
 
         XCTAssertNil(sut.fullUser)
-        XCTAssertEqual(mockProfileCache.profileCallCount, 0)
-    }
-
-    func test_loadFullProfile_403Error_setsIsBlockedByTarget() async {
-        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        mockProfileCache.profileResults["target-user-001"] = .failure(
-            APIError.serverError(403, "Forbidden")
-        )
-        let sut = makeSUT()
-
-        await sut.loadFullProfile()
-
-        XCTAssertTrue(sut.isBlockedByTarget)
-        XCTAssertNil(sut.fullUser)
-    }
-
-    func test_loadFullProfile_nonForbiddenError_doesNotSetBlockedByTarget() async {
-        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        mockProfileCache.profileResults["target-user-001"] = .failure(
-            APIError.serverError(500, "Internal Server Error")
-        )
-        let sut = makeSUT()
-
-        await sut.loadFullProfile()
-
-        XCTAssertFalse(sut.isBlockedByTarget)
-        XCTAssertNil(sut.fullUser)
     }
 
     // MARK: - loadUserStats Tests
-
-    func test_loadUserStats_success_setsUserStats() async {
-        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        let stats = UserStats(totalMessages: 42, totalConversations: 5, totalTranslations: 10)
-        mockProfileCache.stubStats(stats, for: "target-user-001")
-        let sut = makeSUT()
-
-        await sut.loadUserStats()
-
-        XCTAssertNotNil(sut.userStats)
-        XCTAssertEqual(sut.userStats?.totalMessages, 42)
-        XCTAssertEqual(sut.userStats?.totalConversations, 5)
-        XCTAssertFalse(sut.isLoadingStats)
-        XCTAssertNil(sut.statsError)
-    }
-
-    func test_loadUserStats_failure_setsStatsError() async {
-        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        mockProfileCache.statsResults["target-user-001"] = .failure(
-            NSError(domain: "test", code: 500)
-        )
-        let sut = makeSUT()
-
-        await sut.loadUserStats()
-
-        XCTAssertNil(sut.userStats)
-        XCTAssertNotNil(sut.statsError)
-        XCTAssertFalse(sut.isLoadingStats)
-    }
 
     func test_loadUserStats_skipsWhenUserIdIsNil() async {
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
@@ -239,7 +154,6 @@ final class UserProfileViewModelTests: XCTestCase {
         await sut.loadUserStats()
 
         XCTAssertNil(sut.userStats)
-        XCTAssertEqual(mockProfileCache.statsCallCount, 0)
     }
 
     // MARK: - blockUser Tests

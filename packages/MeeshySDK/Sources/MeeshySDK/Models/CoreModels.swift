@@ -137,22 +137,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case direct, group, `public`, global, community, channel, bot
     }
 
-    public var colorContext: ConversationContext {
-        let ctxType: ConversationContext.ConversationType
-        switch type {
-        case .direct: ctxType = .direct
-        case .group: ctxType = .group
-        case .public, .global: ctxType = .community
-        case .community: ctxType = .community
-        case .channel: ctxType = .channel
-        case .bot: ctxType = .bot
-        }
-        return ConversationContext(name: title ?? identifier, type: ctxType, language: language, theme: theme, memberCount: memberCount)
-    }
-
-    public var colorPalette: ConversationColorPalette {
-        DynamicColorGenerator.colorFor(context: colorContext)
-    }
+    public let colorPalette: ConversationColorPalette
 
     public var accentColor: String { colorPalette.primary }
     public var name: String { title ?? identifier }
@@ -191,6 +176,22 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         return h.finalize()
     }
 
+    public static func computeColorPalette(type: ConversationType, title: String?, identifier: String,
+                                               language: ConversationContext.ConversationLanguage,
+                                               theme: ConversationContext.ConversationTheme,
+                                               memberCount: Int) -> ConversationColorPalette {
+        let ctxType: ConversationContext.ConversationType
+        switch type {
+        case .direct: ctxType = .direct
+        case .group: ctxType = .group
+        case .public, .global, .community: ctxType = .community
+        case .channel: ctxType = .channel
+        case .bot: ctxType = .bot
+        }
+        let context = ConversationContext(name: title ?? identifier, type: ctxType, language: language, theme: theme, memberCount: memberCount)
+        return DynamicColorGenerator.colorFor(context: context)
+    }
+
     public init(id: String = UUID().uuidString, identifier: String, type: ConversationType = .direct,
                 title: String? = nil, description: String? = nil, avatar: String? = nil, banner: String? = nil,
                 communityId: String? = nil, isActive: Bool = true, memberCount: Int = 2,
@@ -209,7 +210,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 isMuted: Bool = false, participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
                 currentUserRole: String? = nil, reaction: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
-                theme: ConversationContext.ConversationTheme = .general) {
+                theme: ConversationContext.ConversationTheme = .general,
+                colorPalette: ConversationColorPalette? = nil) {
         self.id = id; self.identifier = identifier; self.type = type
         self.title = title; self.description = description; self.avatar = avatar; self.banner = banner
         self.communityId = communityId; self.isActive = isActive; self.memberCount = memberCount
@@ -230,6 +232,10 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.recentMessages = recentMessages
         self.tags = tags
         self.language = language; self.theme = theme
+        self.colorPalette = colorPalette ?? Self.computeColorPalette(
+            type: type, title: title, identifier: identifier,
+            language: language, theme: theme, memberCount: memberCount
+        )
     }
 
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -713,6 +719,43 @@ public struct SharedContact: Codable, Identifiable, Sendable {
         self.fullName = fullName
         self.phoneNumbers = phoneNumbers
         self.emails = emails
+    }
+}
+
+// MARK: - ConversationColorPalette Codable + Hashable
+
+extension ConversationColorPalette: Codable, Hashable {
+    enum CodingKeys: String, CodingKey {
+        case primary, secondary, accent, saturationBoost
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let primary = try container.decode(String.self, forKey: .primary)
+        let secondary = try container.decode(String.self, forKey: .secondary)
+        let accent = try container.decode(String.self, forKey: .accent)
+        let saturationBoost = try container.decode(Double.self, forKey: .saturationBoost)
+        self.init(primary: primary, secondary: secondary, accent: accent, saturationBoost: saturationBoost)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(primary, forKey: .primary)
+        try container.encode(secondary, forKey: .secondary)
+        try container.encode(accent, forKey: .accent)
+        try container.encode(saturationBoost, forKey: .saturationBoost)
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(primary)
+        hasher.combine(secondary)
+        hasher.combine(accent)
+        hasher.combine(saturationBoost)
+    }
+
+    public static func == (lhs: ConversationColorPalette, rhs: ConversationColorPalette) -> Bool {
+        lhs.primary == rhs.primary && lhs.secondary == rhs.secondary
+            && lhs.accent == rhs.accent && lhs.saturationBoost == rhs.saturationBoost
     }
 }
 

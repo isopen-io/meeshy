@@ -45,11 +45,13 @@ extension ConversationView {
                 ThemedMessageBubble(
                     message: msg,
                     contactColor: accentColor,
+                    isDirect: isDirect,
+                    isDark: theme.mode.isDark,
                     transcription: viewModel.messageTranscriptions[msg.id],
                     translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
                     textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                     preferredTranslation: viewModel.preferredTranslation(for: msg.id),
-                    showAvatar: !isDirect && isLastInGroup,
+                    showAvatar: false,
                     presenceState: bubblePresence,
                     senderMoodEmoji: statusViewModel.statusForUser(userId: msg.senderId)?.moodEmoji,
                     onAddReaction: { messageId in
@@ -111,6 +113,7 @@ extension ConversationView {
                     isLastReceivedMessage: isLastReceived,
                     mentionDisplayNames: viewModel.mentionDisplayNames
                 )
+                .equatable()
                 .onLongPressGesture(minimumDuration: 0.5) {
                     guard overlayState.longPressEnabled else { return }
                     // Removed overlayMessageFrame (GeometryReader dependency)

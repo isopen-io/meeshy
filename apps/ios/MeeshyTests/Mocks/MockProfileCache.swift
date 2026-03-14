@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-final class MockProfileCache: UserProfileCaching, @unchecked Sendable {
+final class MockProfileCache: @unchecked Sendable {
 
     // MARK: - Stubbed Results
 
