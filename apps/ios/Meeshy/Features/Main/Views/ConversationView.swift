@@ -417,7 +417,7 @@ struct ConversationView: View {
                 }
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
-                if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages, topActiveMembers: topActiveMembers) }
+                if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
             }
             .alert("Action sélectionnée", isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
                 Button("OK") { composerState.actionAlert = nil }

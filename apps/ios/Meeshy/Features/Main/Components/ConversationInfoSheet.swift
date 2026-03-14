@@ -11,7 +11,6 @@ struct ConversationInfoSheet: View {
     let conversation: Conversation
     let accentColor: String
     let messages: [Message]
-    var topActiveMembers: [ConversationActiveMember] = []
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
@@ -180,38 +179,17 @@ struct ConversationInfoSheet: View {
 
     private var conversationHeader: some View {
         VStack(spacing: 12) {
-            // Avatar — always show conversation avatar at profileSheet size
-            // For groups, add stacked active member avatars alongside
-            ZStack {
-                MeeshyAvatar(
-                    name: conversation.name,
-                    context: .profileSheet,
-                    accentColor: accentColor,
-                    avatarURL: isDirect
-                        ? conversation.participantAvatarURL
-                        : conversation.avatar,
-                    moodEmoji: otherUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                    onMoodTap: otherUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
-                )
-
-                // Stacked active members (groups only)
-                if !isDirect, !topActiveMembers.isEmpty {
-                    HStack(spacing: -6) {
-                        ForEach(topActiveMembers.prefix(3)) { member in
-                            let presence = presenceManager.presenceState(for: member.id)
-                            MeeshyAvatar(
-                                name: member.name,
-                                context: .conversationHeaderStacked,
-                                accentColor: member.color,
-                                avatarURL: member.avatarURL,
-                                moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
-                                presenceState: presence
-                            )
-                        }
-                    }
-                    .offset(x: -44, y: 26)
-                }
-            }
+            // Avatar
+            MeeshyAvatar(
+                name: conversation.name,
+                context: .profileSheet,
+                accentColor: accentColor,
+                avatarURL: isDirect
+                    ? conversation.participantAvatarURL
+                    : conversation.avatar,
+                moodEmoji: otherUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                onMoodTap: otherUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
+            )
 
             // Name
             Text(conversation.name)
