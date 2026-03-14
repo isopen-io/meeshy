@@ -237,6 +237,10 @@ extension APIMessage {
             }
         }()
 
+        let senderDisplayName = sender?.name
+        let senderColor = senderDisplayName.map { DynamicColorGenerator.colorForName($0) }
+        let thumbnailColor = senderColor ?? DynamicColorGenerator.colorForName("?")
+
         let uiAttachments: [MeeshyMessageAttachment] = (attachments ?? []).map { apiAtt in
             MeeshyMessageAttachment(
                 id: apiAtt.id, fileName: apiAtt.fileName ?? "", originalName: apiAtt.originalName ?? "",
@@ -244,7 +248,7 @@ extension APIMessage {
                 fileUrl: apiAtt.fileUrl ?? "", width: apiAtt.width, height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
-                thumbnailColor: DynamicColorGenerator.colorForName(sender?.name ?? "?")
+                thumbnailColor: thumbnailColor
             )
         }
 
@@ -291,9 +295,6 @@ extension APIMessage {
                 attachmentThumbnailUrl: firstAtt?.thumbnailUrl
             )
         }()
-
-        let senderDisplayName = sender?.name
-        let senderColor = senderDisplayName.map { DynamicColorGenerator.colorForName($0) }
         let resolvedUsername = sender?.username ?? sender?.user?.username
 
         return MeeshyMessage(
