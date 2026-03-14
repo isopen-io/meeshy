@@ -1,8 +1,139 @@
 import SwiftUI
 import MeeshySDK
 
+// MARK: - Avatar Context
+
+public enum AvatarContext {
+    // Stories
+    case storyTray              // 44pt
+    case storyViewer            // 44pt
+
+    // Feed
+    case feedComposer           // 36pt
+    case postAuthor             // 44pt
+    case postComment            // 28pt
+    case postReaction           // 20pt
+
+    // Messages
+    case messageBubble          // 32pt
+    case typingIndicator        // 24pt
+
+    // Conversation
+    case conversationList       // 52pt
+    case conversationHeaderCollapsed  // 44pt
+    case conversationHeaderExpanded   // 44pt
+    case conversationHeaderStacked    // 28pt
+    case recentParticipant      // 20pt
+
+    // Profile
+    case profileBanner          // 90pt
+    case profileEdit            // 80pt
+    case profileSheet           // 80pt
+
+    // Listings
+    case userListItem           // 44pt
+
+    // Notifications
+    case notification           // 44pt
+
+    // Custom
+    case custom(CGFloat)
+
+    public var size: CGFloat {
+        switch self {
+        case .storyTray, .storyViewer, .conversationHeaderCollapsed,
+             .conversationHeaderExpanded, .postAuthor, .userListItem, .notification:
+            return 44
+        case .conversationList: return 52
+        case .messageBubble: return 32
+        case .feedComposer: return 36
+        case .postComment, .conversationHeaderStacked: return 28
+        case .typingIndicator: return 24
+        case .postReaction, .recentParticipant: return 20
+        case .profileBanner: return 90
+        case .profileEdit, .profileSheet: return 80
+        case .custom(let v): return v
+        }
+    }
+
+    public var showsStoryRing: Bool {
+        switch self {
+        case .storyViewer, .postComment, .postReaction, .typingIndicator, .profileEdit:
+            return false
+        default: return true
+        }
+    }
+
+    public var showsMoodBadge: Bool {
+        switch self {
+        case .storyViewer, .postComment, .postReaction, .typingIndicator,
+             .profileEdit, .userListItem, .notification:
+            return false
+        default: return true
+        }
+    }
+
+    public var showsOnlineDot: Bool {
+        switch self {
+        case .storyViewer, .postComment, .postReaction, .typingIndicator,
+             .profileEdit, .notification:
+            return false
+        default: return true
+        }
+    }
+
+    public var isTappable: Bool {
+        switch self {
+        case .postReaction, .typingIndicator:
+            return false
+        default: return true
+        }
+    }
+
+    public var defaultPulse: Bool {
+        switch self {
+        case .messageBubble, .conversationHeaderCollapsed, .conversationHeaderExpanded,
+             .profileBanner, .profileSheet, .custom:
+            return true
+        default: return false
+        }
+    }
+
+    public var shadowRadius: CGFloat {
+        switch self {
+        case .postReaction, .typingIndicator, .recentParticipant: return 0
+        case .postComment: return 2
+        case .messageBubble, .storyViewer, .feedComposer, .userListItem, .notification,
+             .conversationHeaderStacked: return 4
+        case .profileBanner: return 12
+        default: return 8
+        }
+    }
+
+    public var shadowY: CGFloat {
+        switch self {
+        case .postReaction, .typingIndicator, .recentParticipant: return 0
+        case .postComment: return 1
+        case .messageBubble, .conversationHeaderStacked: return 2
+        default: return 4
+        }
+    }
+
+    public var ringSize: CGFloat { size + 6 }
+    public var initialFont: CGFloat { size * 0.38 }
+    public var ringWidth: CGFloat {
+        switch self {
+        case .storyTray: return 0.7
+        default: return size <= 32 ? 1.5 : 2.5
+        }
+    }
+    public var badgeSize: CGFloat { size * 0.42 }
+    public var onlineDotSize: CGFloat { size * 0.26 }
+}
+
 // MARK: - Avatar Mode
 
+@available(*, deprecated, message: "Use AvatarContext instead")
 public enum AvatarMode {
     case conversationList    // 52pt
     case storyTray           // 44pt (compact)
