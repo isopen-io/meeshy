@@ -79,6 +79,7 @@ class StoryViewModel: ObservableObject {
                     id: storyGroups[i].id,
                     username: storyGroups[i].username,
                     avatarColor: storyGroups[i].avatarColor,
+                    avatarURL: storyGroups[i].avatarURL,
                     stories: updated
                 )
                 return
@@ -352,6 +353,7 @@ class StoryViewModel: ObservableObject {
                             id: self.storyGroups[idx].id,
                             username: self.storyGroups[idx].username,
                             avatarColor: self.storyGroups[idx].avatarColor,
+                            avatarURL: self.storyGroups[idx].avatarURL,
                             stories: updated
                         )
                     } else {
