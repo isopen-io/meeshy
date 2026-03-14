@@ -138,7 +138,7 @@ struct MemberRow: View {
         HStack(spacing: 12) {
             MeeshyAvatar(
                 name: displayName,
-                mode: .conversationHeader,
+                context: .userListItem,
                 accentColor: accentColor,
                 avatarURL: user?.avatar,
                 presenceState: user?.isOnline == true ? .online : .offline

@@ -171,11 +171,10 @@ public struct CommunitySettingsView: View {
                     HStack {
                         MeeshyAvatar(
                             name: viewModel.name,
-                            mode: .custom(40),
+                            context: .custom(40),
                             kind: .entity,
                             accentColor: viewModel.localColor,
-                            avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl,
-                            enablePulse: false
+                            avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl
                         )
                         
                         PhotosPicker(selection: $avatarItem, matching: .images) {

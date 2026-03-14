@@ -114,7 +114,7 @@ public struct CommunityInviteView: View {
         HStack(spacing: 12) {
             MeeshyAvatar(
                 name: user.displayName ?? user.username,
-                mode: .conversationHeader,
+                context: .userListItem,
                 accentColor: DynamicColorGenerator.colorForName(user.username),
                 avatarURL: user.avatar,
                 presenceState: user.isOnline == true ? .online : .offline

@@ -241,7 +241,7 @@ public struct UserProfileSheet: View {
 
         MeeshyAvatar(
             name: avatarName,
-            mode: .custom(80),
+            context: .profileSheet,
             accentColor: isBlockedByTarget ? "888888" : resolvedAccent,
             avatarURL: displayUser.avatarURL,
             storyState: showRing ? .read : .none,
@@ -563,7 +563,7 @@ public struct UserProfileSheet: View {
                         HStack(spacing: 12) {
                             MeeshyAvatar(
                                 name: conv.name,
-                                mode: .messageBubble,
+                                context: .conversationList,
                                 accentColor: conv.accentColor,
                                 avatarURL: conv.avatar ?? conv.participantAvatarURL
                             )
