@@ -23,15 +23,20 @@ Message recu → Detection langue originale → Traduction auto (NLLB-200 via tr
 ```
 
 ### Resolution de langue
-La resolution respecte les booleens de preference utilisateur (`useCustomDestination`, `translateToSystemLanguage`, `translateToRegionalLanguage`) :
+La resolution pour le contenu utilisateur (messages, transcriptions) :
 1. Override manuel utilisateur (selection explicite dans l'onglet Language)
 2. `customDestinationLanguage` (si `useCustomDestination` = true)
-3. `systemLanguage` (si `translateToSystemLanguage` = true)
-4. `regionalLanguage` (si `translateToRegionalLanguage` = true)
-5. `systemLanguage` (fallback inconditionnel)
-6. Locale appareil (fallback final)
+3. `systemLanguage` — langue primaire configuree dans l'app (TOUJOURS incluse)
+4. `regionalLanguage` — langue secondaire configuree dans l'app (TOUJOURS incluse)
 
-Source de verite : `packages/shared/utils/conversation-helpers.ts` → `resolveUserLanguage()`
+**La locale appareil (`Locale.current`) ne doit JAMAIS etre utilisee pour la resolution de contenu.** C'est la langue d'interface (UI), pas la langue de contenu. Un utilisateur francophone avec un iPhone en anglais veut lire ses messages en francais, pas en anglais.
+
+Source de verite gateway : `packages/shared/utils/conversation-helpers.ts` → `resolveUserLanguage()`
+Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTranslation(for:)`
+
+### Regles critiques du Prisme
+1. **Si aucune traduction ne matche la langue preferee, afficher le contenu original (retourner `nil`).** Ne JAMAIS tomber sur `translations.first` comme fallback — l'absence de traduction vers la langue preferee signifie que le contenu est deja dans cette langue.
+2. **Ne JAMAIS ajouter la locale appareil dans les langues preferees de contenu.** Seules `systemLanguage` et `regionalLanguage` (configurees in-app) determinent les langues de contenu.
 
 ## Architecture
 
@@ -250,6 +255,38 @@ NEXT_PUBLIC_API_URL="https://gate.meeshy.me"
 - Container names: `meeshy-frontend`, `meeshy-gateway`, `meeshy-translator`
 - Healthcheck ~30s before Traefik routes traffic
 
+### API Access & Authentication
+**All API routes are prefixed** with `/api/v1/`:
+```
+Production: https://gate.meeshy.me/api/v1/
+Staging:    https://staging.meeshy.me/api/v1/
+Local:      http://localhost:3000/api/v1/
+```
+
+**Login endpoint**: `POST /api/v1/auth/login`
+```bash
+curl -X POST https://gate.meeshy.me/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"<user>","password":"<pass>"}'
+```
+Response: `{ data: { token: "jwt...", user: { ... } } }`
+
+**Authenticated requests**: `Authorization: Bearer {token}`
+```bash
+curl https://gate.meeshy.me/api/v1/conversations?limit=10 \
+  -H 'Authorization: Bearer {token}'
+```
+
+**Common API paths**:
+| Resource | Endpoint |
+|----------|----------|
+| Login | `POST /api/v1/auth/login` |
+| Register | `POST /api/v1/auth/register` |
+| Conversations | `GET /api/v1/conversations` |
+| Messages | `GET /api/v1/conversations/:id/messages` |
+| User profile | `GET /api/v1/users/:id` |
+| Update profile | `PATCH /api/v1/users/profile` |
+
 ### iOS Build
 Always use `./apps/ios/meeshy.sh`:
 ```bash
@@ -264,6 +301,15 @@ Always use `./apps/ios/meeshy.sh`:
 ```bash
 docker exec meeshy-local-redis redis-cli DEL "ratelimit:auth:login:ip:{ip}:{prefix}"
 ```
+
+### Prisma Schema vs MongoDB Reality
+**IMPORTANT**: Certains champs existent dans MongoDB mais PAS dans le schema Prisma (`packages/shared/prisma/schema.prisma`). Exemples sur le model `User`:
+- `translateToSystemLanguage`, `translateToRegionalLanguage`, `useCustomDestination` — booleans de preferences de traduction
+- `autoTranslateEnabled`, `profileCompletionRate`, `registrationCountry`
+
+Ces champs sont accessibles sur les objets retournes par `findFirst()`/`findMany()` **SANS `select`**, mais ne peuvent PAS etre utilises dans un `select: {}` Prisma (erreur de compilation TS). **Toujours verifier le schema Prisma avant d'ajouter des champs dans un `select`.**
+
+Pour acceder a ces champs non-modélisés: utiliser un cast `(user as any).translateToSystemLanguage` ou ne pas utiliser `select` sur la requete.
 
 ## Key Patterns
 

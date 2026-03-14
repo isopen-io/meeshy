@@ -33,6 +33,8 @@ class ConversationViewModel: ObservableObject {
             _mediaCaptionMap = nil
             _allAudioItems = nil
             _replyCountMap = nil
+            _mentionDisplayNames = nil
+            _mentionCandidates = nil
         }
     }
     @Published var isLoadingInitial = false
@@ -270,21 +272,27 @@ class ConversationViewModel: ObservableObject {
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
     private var currentUsername: String? { authManager.currentUser?.username }
 
-    // MARK: - Mention Display Names (username → displayName)
+    // MARK: - Mention Display Names (username → displayName) — cached
+
+    private var _mentionDisplayNames: [String: String]?
 
     var mentionDisplayNames: [String: String] {
+        if let cached = _mentionDisplayNames { return cached }
         var map: [String: String] = [:]
         for msg in messages {
             guard let username = msg.senderUsername, let displayName = msg.senderName else { continue }
             map[username] = displayName
         }
+        _mentionDisplayNames = map
         return map
     }
 
-    // MARK: - Mention Autocomplete Logic
+    // MARK: - Mention Autocomplete Logic — cached
 
-    /// Builds the candidate list from all known senders in this conversation.
+    private var _mentionCandidates: [MentionCandidate]?
+
     private var mentionCandidates: [MentionCandidate] {
+        if let cached = _mentionCandidates { return cached }
         var seen = Set<String>()
         var candidates: [MentionCandidate] = []
         for msg in messages {
@@ -297,6 +305,7 @@ class ConversationViewModel: ObservableObject {
                 avatarURL: msg.senderAvatarURL
             ))
         }
+        _mentionCandidates = candidates
         return candidates
     }
 
@@ -547,10 +556,10 @@ class ConversationViewModel: ObservableObject {
                 extractAttachmentTranscriptions(from: response.data)
                 extractTextTranslations(from: response.data)
 
-                // Dedup and prepend
+                // Dedup and prepend (single array assignment to avoid O(N) insert + multiple didSet)
                 let existingIds = Set(messages.map(\.id))
                 let newMessages = olderMessages.filter { !existingIds.contains($0.id) }
-                messages.insert(contentsOf: newMessages, at: 0)
+                messages = newMessages + messages
 
                 self.nextMessageCursor = response.cursorPagination?.nextCursor
                 hasOlderMessages = response.cursorPagination?.hasMore ?? false
@@ -1260,43 +1269,49 @@ class ConversationViewModel: ObservableObject {
         activeAudioLanguageOverrides[messageId] = language
     }
 
-    func preferredTranslation(for messageId: String) -> MessageTranslation? {
-        // Manual override from Language tab takes priority
-        if let override = activeTranslationOverrides[messageId] {
-            return override  // nil means user chose "original"
+    private var _cachedPreferredLanguages: [String]?
+    private var _cachedPreferredLanguagesUserId: String?
+
+    private var preferredLanguages: [String] {
+        let userId = currentUserId
+        if let cached = _cachedPreferredLanguages, _cachedPreferredLanguagesUserId == userId {
+            return cached
         }
-
-        // Automatic resolution — mirrors gateway resolveUserLanguage() logic
-        guard let translations = messageTranslations[messageId], !translations.isEmpty else { return nil }
         let user = authManager.currentUser
-
-        // Build priority list respecting boolean preferences (same as packages/shared resolveUserLanguage)
         var preferred: [String] = []
-
+        // 1. Custom destination (explicit override)
         if user?.useCustomDestination == true, let custom = user?.customDestinationLanguage {
             preferred.append(custom)
         }
-        if user?.translateToSystemLanguage == true, let sys = user?.systemLanguage {
-            preferred.append(sys)
-        }
-        if user?.translateToRegionalLanguage == true, let reg = user?.regionalLanguage {
-            preferred.append(reg)
-        }
-        // Fallback: systemLanguage (unconditional), then device locale
+        // 2. Primary language (systemLanguage) — always included for content
         if let sys = user?.systemLanguage, !preferred.contains(where: { $0.lowercased() == sys.lowercased() }) {
             preferred.append(sys)
         }
-        if let deviceLang = Locale.current.language.languageCode?.identifier,
-           !preferred.contains(where: { $0.lowercased() == deviceLang.lowercased() }) {
-            preferred.append(deviceLang)
+        // 3. Secondary language (regionalLanguage) — always included for content
+        if let reg = user?.regionalLanguage, !preferred.contains(where: { $0.lowercased() == reg.lowercased() }) {
+            preferred.append(reg)
         }
+        // NOTE: Device locale (Locale.current) is NOT added here — it is the UI interface
+        // language, not the user's content language preference. Content languages are
+        // systemLanguage (primary) and regionalLanguage (secondary) configured in-app.
+        _cachedPreferredLanguages = preferred
+        _cachedPreferredLanguagesUserId = userId
+        return preferred
+    }
 
-        for lang in preferred {
+    func preferredTranslation(for messageId: String) -> MessageTranslation? {
+        if let override = activeTranslationOverrides[messageId] {
+            return override
+        }
+        guard let translations = messageTranslations[messageId], !translations.isEmpty else { return nil }
+        let langs = preferredLanguages
+        for lang in langs {
             if let match = translations.first(where: { $0.targetLanguage.lowercased() == lang.lowercased() }) {
                 return match
             }
         }
-        return translations.first
+        // No translation matches preferred languages → content is already in user's language
+        return nil
     }
 
     // MARK: - Extract Transcription/Translation Data from REST Responses

@@ -184,6 +184,10 @@ struct ConversationView: View {
         conversation?.type == .direct
     }
 
+    var cachedLastReceivedIndex: Int? {
+        viewModel.messages.indices.last(where: { !viewModel.messages[$0].isMe })
+    }
+
     var headerPresenceState: PresenceState {
         guard isDirect, let userId = conversation?.participantUserId else { return .offline }
         return presenceManager.presenceState(for: userId)

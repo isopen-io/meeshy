@@ -208,6 +208,12 @@ public struct ConsumeViewOnceResponse: Decodable, Sendable {
 // MARK: - APIMessage -> MeeshyMessage Conversion
 
 extension APIMessage {
+    nonisolated(unsafe) private static let pinnedAtFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
     public func toMessage(currentUserId: String) -> MeeshyMessage {
         let msgType: MeeshyMessage.MessageType = {
             switch messageType?.lowercased() {
@@ -297,7 +303,7 @@ extension APIMessage {
             isEdited: isEdited ?? false, deletedAt: deletedAt, replyToId: replyToId,
             forwardedFromId: forwardedFromId, forwardedFromConversationId: forwardedFromConversationId,
             isViewOnce: isViewOnce ?? false, isBlurred: isBlurred ?? false,
-            pinnedAt: pinnedAt.flatMap { ISO8601DateFormatter().date(from: $0) },
+            pinnedAt: pinnedAt.flatMap { Self.pinnedAtFormatter.date(from: $0) },
             pinnedBy: pinnedBy,
             isEncrypted: isEncrypted ?? false, encryptionMode: encryptionMode,
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
