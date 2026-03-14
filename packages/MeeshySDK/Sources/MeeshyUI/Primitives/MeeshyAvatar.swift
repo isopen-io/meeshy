@@ -3,7 +3,7 @@ import MeeshySDK
 
 // MARK: - Avatar Context
 
-public enum AvatarContext {
+public enum AvatarContext: Sendable {
     // Stories
     case storyTray              // 44pt
     case storyViewer            // 44pt
