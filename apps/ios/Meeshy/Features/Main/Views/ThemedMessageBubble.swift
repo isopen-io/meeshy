@@ -471,15 +471,11 @@ struct ThemedMessageBubble: View {
                                     }
 
                                     secondaryContentView
-
-                                    if !showIdentityBar {
-                                        messageMetaRow(insideBubble: true)
-                                    }
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, hasTextOrNonMediaContent ? 10 : 4)
 
-                                // Identity bar (group conversations only, last in group, others' messages)
+                                // Unified identity bar — full for group sender signature, compact meta row otherwise
                                 if showIdentityBar {
                                     UserIdentityBar.messageBubble(
                                         name: message.senderName ?? "?",
@@ -488,7 +484,7 @@ struct ThemedMessageBubble: View {
                                         accentColor: message.senderColor ?? contactColor,
                                         role: nil,
                                         time: timeString,
-                                        delivery: message.deliveryStatus,
+                                        delivery: message.isMe ? message.deliveryStatus : nil,
                                         flags: buildAvailableFlags(),
                                         activeFlag: secondaryLangCode,
                                         onFlagTap: { code in handleFlagTap(code) },
@@ -499,6 +495,17 @@ struct ThemedMessageBubble: View {
                                     )
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 8)
+                                } else {
+                                    UserIdentityBar.metaRow(
+                                        time: timeString,
+                                        delivery: message.isMe ? message.deliveryStatus : nil,
+                                        flags: !textTranslations.isEmpty ? buildAvailableFlags() : [],
+                                        activeFlag: secondaryLangCode,
+                                        onFlagTap: !textTranslations.isEmpty ? { code in handleFlagTap(code) } : nil,
+                                        onTranslateTap: textTranslations.isEmpty ? nil : { onShowTranslationDetail?(message.id) }
+                                    )
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 4)
                                 }
                             }
                             .padding(.top, message.isEdited ? 12 : 0)
@@ -730,61 +737,6 @@ struct ThemedMessageBubble: View {
         }
     }
 
-    // translationFlagStrip replaced by inlineFlagStrip inside messageMetaRow
-
-    @ViewBuilder
-    private func swapFlagButton(code: String, textColor: Color) -> some View {
-        let display = LanguageDisplay.from(code: code)
-        let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
-        let isOriginal = code.lowercased() == message.originalLanguage.lowercased()
-        let hasContent = isOriginal || textTranslations.contains(where: { $0.targetLanguage.lowercased() == code.lowercased() })
-        let isShowingSecondary = secondaryLangCode?.lowercased() == code.lowercased()
-
-        VStack(spacing: 1) {
-            Text(display?.flag ?? "🏳️")
-                .font(.system(size: isShowingSecondary ? 12 : 10))
-                .scaleEffect(isShowingSecondary ? 1.05 : 1.0)
-
-            if isShowingSecondary {
-                RoundedRectangle(cornerRadius: 0.5)
-                    .fill(langColor)
-                    .frame(width: 10, height: 1.5)
-            }
-        }
-        .animation(.spring(response: 0.2), value: isShowingSecondary)
-        .onTapGesture {
-            if !hasContent {
-                onRequestTranslation?(message.id, code)
-                HapticFeedback.light()
-                return
-            }
-            if isOriginal {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    activeDisplayLangCode = code
-                    secondaryLangCode = nil
-                }
-            } else {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    secondaryLangCode = isShowingSecondary ? nil : code
-                }
-            }
-            HapticFeedback.light()
-        }
-        .onLongPressGesture(minimumDuration: 0.4) {
-            guard hasContent else {
-                onRequestTranslation?(message.id, code)
-                HapticFeedback.light()
-                return
-            }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                activeDisplayLangCode = code
-                secondaryLangCode = nil
-            }
-            HapticFeedback.medium()
-        }
-        .accessibilityLabel(display?.name ?? code)
-    }
-
     // MARK: - Secondary Content (inline translation)
 
     @ViewBuilder
@@ -846,43 +798,6 @@ struct ThemedMessageBubble: View {
         Text("")
     }
 
-    @ViewBuilder
-    private func messageMetaRow(insideBubble: Bool) -> some View {
-        let metaColor: Color = insideBubble && message.isMe
-            ? .white.opacity(0.7)
-            : theme.textSecondary.opacity(0.6)
-        let textColor = message.isMe ? Color.white : theme.textPrimary
-
-        HStack(spacing: 4) {
-            if insideBubble && !textTranslations.isEmpty {
-                inlineFlagStrip(textColor: textColor)
-            }
-
-            Spacer(minLength: 0)
-
-            if !textTranslations.isEmpty {
-                Image(systemName: "translate")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Color(hex: "4ECDC4"))
-                    .onTapGesture {
-                        onShowTranslationDetail?(message.id)
-                    }
-                    .accessibilityLabel("Traduction disponible")
-            }
-
-            Text(timeString)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(metaColor)
-
-            if message.isMe {
-                deliveryCheckmarks(insideBubble: insideBubble)
-                    .onTapGesture {
-                        onShowInfo?()
-                    }
-            }
-        }
-    }
-
     private func buildAvailableFlags() -> [String] {
         let activeLang = currentDisplayLangCode.lowercased()
         let origLower = message.originalLanguage.lowercased()
@@ -932,17 +847,6 @@ struct ThemedMessageBubble: View {
         HapticFeedback.light()
     }
 
-    @ViewBuilder
-    private func inlineFlagStrip(textColor: Color) -> some View {
-        let flags = buildAvailableFlags()
-
-        HStack(spacing: 4) {
-            ForEach(flags, id: \.self) { code in
-                swapFlagButton(code: code, textColor: textColor)
-            }
-        }
-    }
-
     // MARK: - Edited Indicator (top-leading overlay)
     private var editedIndicator: some View {
         let metaColor: Color = message.isMe
@@ -957,51 +861,6 @@ struct ThemedMessageBubble: View {
                 .italic()
         }
         .foregroundColor(metaColor)
-    }
-
-    @ViewBuilder
-    private func deliveryCheckmarks(insideBubble: Bool = false) -> some View {
-        let metaColor: Color = insideBubble && message.isMe
-            ? .white.opacity(0.7)
-            : theme.textSecondary.opacity(0.6)
-
-        Group {
-            switch message.deliveryStatus {
-            case .sending:
-                Image(systemName: "clock")
-                    .font(.system(size: 10))
-                    .foregroundColor(metaColor)
-            case .sent:
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(metaColor)
-            case .delivered:
-                ZStack(alignment: .leading) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .semibold))
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .semibold))
-                        .offset(x: 4)
-                }
-                .foregroundColor(metaColor)
-                .frame(width: 16)
-            case .read:
-                ZStack(alignment: .leading) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .semibold))
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .semibold))
-                        .offset(x: 4)
-                }
-                .foregroundColor(insideBubble && message.isMe ? .white : MeeshyColors.readReceipt)
-                .frame(width: 16)
-            case .failed:
-                Image(systemName: "exclamationmark.circle.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(MeeshyColors.error)
-            }
-        }
-        .accessibilityLabel(deliveryStatusAccessibilityLabel)
     }
 
     // MARK: - Media Timestamp Overlay (for visual media grid)

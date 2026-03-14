@@ -102,7 +102,7 @@ public struct UserIdentityBar: View {
         leadingSecondary: [IdentityBarElement] = [],
         trailingSecondary: [IdentityBarElement] = []
     ) {
-        assert(avatar != nil || name != nil, "UserIdentityBar requires at least avatar or name")
+        // avatar or name required for identity contexts; metaRow preset has neither
         self.avatar = avatar
         self.name = name
         self.leadingPrimary = leadingPrimary
@@ -112,6 +112,451 @@ public struct UserIdentityBar: View {
     }
 
     public var body: some View {
-        EmptyView()
+        HStack(spacing: 8) {
+            if let avatar {
+                MeeshyAvatar(
+                    name: name ?? "",
+                    mode: avatar.mode,
+                    accentColor: avatar.accentColor,
+                    avatarURL: avatar.url,
+                    moodEmoji: avatar.moodEmoji,
+                    presenceState: avatar.presenceState,
+                    enablePulse: false,
+                    onTap: avatar.onTap,
+                    contextMenuItems: avatar.contextMenuItems
+                )
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    ForEach(leadingPrimary) { element in
+                        renderElement(element)
+                    }
+                    Spacer(minLength: 4)
+                    ForEach(trailingPrimary) { element in
+                        renderElement(element)
+                    }
+                }
+
+                if !leadingSecondary.isEmpty || !trailingSecondary.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(leadingSecondary) { element in
+                            renderElement(element)
+                        }
+                        Spacer(minLength: 4)
+                        ForEach(trailingSecondary) { element in
+                            renderElement(element)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Element Rendering
+
+    @ViewBuilder
+    private func renderElement(_ element: IdentityBarElement) -> some View {
+        switch element {
+        case .name:
+            if let name {
+                Text(name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+            }
+
+        case .username(let value):
+            Text(value)
+                .font(.system(size: 11))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+
+        case .roleBadge(let role):
+            if role != .member {
+                Label {
+                    Text(role.displayName)
+                        .font(.system(size: 11))
+                } icon: {
+                    Image(systemName: role.icon)
+                        .font(.system(size: 11))
+                }
+                .foregroundColor(roleBadgeColor(for: role))
+            }
+
+        case .time(let value):
+            Text(value)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+
+        case .delivery(let status):
+            deliveryView(for: status)
+
+        case .flags(let codes, let active, let onTap):
+            flagsView(codes: codes, active: active, onTap: onTap)
+
+        case .translateButton(let action):
+            Image(systemName: "translate")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Color(hex: "4ECDC4"))
+                .onTapGesture { action() }
+                .accessibilityLabel("Traduction disponible")
+
+        case .presence(let state):
+            if state != .offline {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(state == .online ? Color(hex: "2ECC71") : Color(hex: "F39C12"))
+                        .frame(width: 6, height: 6)
+                    Text(state == .online ? "En ligne" : "Absent")
+                        .font(.system(size: 11))
+                        .foregroundColor(state == .online ? Color(hex: "2ECC71") : Color(hex: "F39C12"))
+                }
+            }
+
+        case .memberSince(let value):
+            Text(value)
+                .font(.system(size: 11))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+
+        case .actionButton(let label, let action):
+            Button(action: action) {
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(MeeshyColors.indigo500)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(MeeshyColors.indigo500.opacity(0.15))
+                    )
+            }
+            .buttonStyle(.plain)
+
+        case .actionMenu(let label, let items):
+            Menu {
+                ForEach(items) { item in
+                    Button(role: item.role) {
+                        item.action()
+                    } label: {
+                        if let icon = item.icon {
+                            Label(item.label, systemImage: icon)
+                        } else {
+                            Text(item.label)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(label)
+                        .font(.system(size: 12, weight: .medium))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .medium))
+                }
+                .foregroundColor(MeeshyColors.indigo500)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(MeeshyColors.indigo500.opacity(0.15))
+                )
+            }
+
+        case .text(let value):
+            Text(value)
+                .font(.system(size: 11))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+        }
+    }
+
+    // MARK: - Role Badge Color
+
+    private func roleBadgeColor(for role: MemberRole) -> Color {
+        switch role {
+        case .creator: return MeeshyColors.warning
+        case .admin: return MeeshyColors.indigo500
+        case .moderator: return MeeshyColors.indigo400
+        case .member: return .clear
+        }
+    }
+
+    // MARK: - Delivery View
+
+    @ViewBuilder
+    private func deliveryView(for status: MeeshyMessage.DeliveryStatus) -> some View {
+        switch status {
+        case .sending:
+            Image(systemName: "clock")
+                .font(.system(size: 10))
+                .foregroundColor(theme.textSecondary)
+        case .sent:
+            Image(systemName: "checkmark")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+        case .delivered:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .offset(x: 4)
+            }
+            .foregroundColor(theme.textSecondary)
+            .frame(width: 16)
+        case .read:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .offset(x: 4)
+            }
+            .foregroundColor(MeeshyColors.readReceipt)
+            .frame(width: 16)
+        case .failed:
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 10))
+                .foregroundColor(MeeshyColors.error)
+        }
+    }
+
+    // MARK: - Flags View
+
+    @ViewBuilder
+    private func flagsView(codes: [String], active: String?, onTap: ((String) -> Void)?) -> some View {
+        HStack(spacing: 2) {
+            ForEach(codes, id: \.self) { code in
+                let display = LanguageDisplay.from(code: code)
+                let isActive = code == active
+                VStack(spacing: 1) {
+                    Text(display?.flag ?? code.uppercased())
+                        .font(.system(size: isActive ? 12 : 10))
+                        .scaleEffect(isActive ? 1.05 : 1.0)
+                        .animation(.easeInOut(duration: 0.2), value: isActive)
+
+                    if isActive {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
+                            .frame(width: 10, height: 1.5)
+                    }
+                }
+                .onTapGesture {
+                    onTap?(code)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Factory Presets
+
+extension UserIdentityBar {
+
+    public static func messageBubble(
+        name: String,
+        username: String?,
+        avatarURL: String?,
+        accentColor: String,
+        role: MemberRole?,
+        time: String,
+        delivery: MeeshyMessage.DeliveryStatus?,
+        flags: [String],
+        activeFlag: String?,
+        onFlagTap: ((String) -> Void)?,
+        onTranslateTap: (() -> Void)?,
+        presenceState: PresenceState = .offline,
+        moodEmoji: String? = nil,
+        onAvatarTap: (() -> Void)?
+    ) -> UserIdentityBar {
+        var leading1: [IdentityBarElement] = [.name]
+        if let role, role != .member {
+            leading1.append(.roleBadge(role))
+        }
+
+        var trailing1: [IdentityBarElement] = [.time(time)]
+        if let delivery {
+            trailing1.append(.delivery(delivery))
+        }
+
+        var leading2: [IdentityBarElement] = []
+        if let username {
+            leading2.append(.username(username))
+        }
+
+        var trailing2: [IdentityBarElement] = []
+        if !flags.isEmpty {
+            trailing2.append(.flags(flags, active: activeFlag, onTap: onFlagTap))
+        }
+        if let onTranslateTap {
+            trailing2.append(.translateButton(action: onTranslateTap))
+        }
+
+        var contextMenuItems: [AvatarContextMenuItem]?
+        if let onAvatarTap {
+            contextMenuItems = [
+                AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap)
+            ]
+        }
+
+        let avatarConfig = AvatarConfig(
+            url: avatarURL,
+            accentColor: accentColor,
+            mode: .messageBubble,
+            moodEmoji: moodEmoji,
+            presenceState: presenceState,
+            contextMenuItems: contextMenuItems
+        )
+
+        return UserIdentityBar(
+            avatar: avatarConfig,
+            name: name,
+            leadingPrimary: leading1,
+            trailingPrimary: trailing1,
+            leadingSecondary: leading2,
+            trailingSecondary: trailing2
+        )
+    }
+
+    public static func comment(
+        name: String,
+        username: String?,
+        avatarURL: String?,
+        accentColor: String,
+        role: MemberRole?,
+        time: String,
+        flags: [String],
+        activeFlag: String?,
+        onFlagTap: ((String) -> Void)?,
+        onTranslateTap: (() -> Void)?,
+        onAvatarTap: (() -> Void)?
+    ) -> UserIdentityBar {
+        var leading1: [IdentityBarElement] = [.name]
+        if let role, role != .member {
+            leading1.append(.roleBadge(role))
+        }
+
+        let trailing1: [IdentityBarElement] = [.time(time)]
+
+        var leading2: [IdentityBarElement] = []
+        if let username {
+            leading2.append(.username(username))
+        }
+
+        var trailing2: [IdentityBarElement] = []
+        if !flags.isEmpty {
+            trailing2.append(.flags(flags, active: activeFlag, onTap: onFlagTap))
+        }
+        if let onTranslateTap {
+            trailing2.append(.translateButton(action: onTranslateTap))
+        }
+
+        var contextMenuItems: [AvatarContextMenuItem]?
+        if let onAvatarTap {
+            contextMenuItems = [
+                AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap)
+            ]
+        }
+
+        let avatarConfig = AvatarConfig(
+            url: avatarURL,
+            accentColor: accentColor,
+            mode: .messageBubble,
+            presenceState: .offline,
+            contextMenuItems: contextMenuItems
+        )
+
+        return UserIdentityBar(
+            avatar: avatarConfig,
+            name: name,
+            leadingPrimary: leading1,
+            trailingPrimary: trailing1,
+            leadingSecondary: leading2,
+            trailingSecondary: trailing2
+        )
+    }
+
+    public static func listing(
+        name: String,
+        username: String?,
+        avatarURL: String?,
+        accentColor: String,
+        role: MemberRole?,
+        actionLabel: String?,
+        onAction: (() -> Void)?,
+        statusText: String?,
+        onAvatarTap: (() -> Void)?
+    ) -> UserIdentityBar {
+        var leading1: [IdentityBarElement] = [.name]
+        if let role, role != .member {
+            leading1.append(.roleBadge(role))
+        }
+
+        var trailing1: [IdentityBarElement] = []
+        if let actionLabel, let onAction {
+            trailing1.append(.actionButton(actionLabel, action: onAction))
+        }
+
+        var leading2: [IdentityBarElement] = []
+        if let username {
+            leading2.append(.username(username))
+        }
+
+        var trailing2: [IdentityBarElement] = []
+        if let statusText {
+            trailing2.append(.text(statusText))
+        }
+
+        var contextMenuItems: [AvatarContextMenuItem]?
+        if let onAvatarTap {
+            contextMenuItems = [
+                AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap)
+            ]
+        }
+
+        let avatarConfig = AvatarConfig(
+            url: avatarURL,
+            accentColor: accentColor,
+            mode: .conversationList,
+            presenceState: .offline,
+            contextMenuItems: contextMenuItems
+        )
+
+        return UserIdentityBar(
+            avatar: avatarConfig,
+            name: name,
+            leadingPrimary: leading1,
+            trailingPrimary: trailing1,
+            leadingSecondary: leading2,
+            trailingSecondary: trailing2
+        )
+    }
+
+    public static func metaRow(
+        time: String,
+        delivery: MeeshyMessage.DeliveryStatus?,
+        flags: [String],
+        activeFlag: String?,
+        onFlagTap: ((String) -> Void)?,
+        onTranslateTap: (() -> Void)?
+    ) -> UserIdentityBar {
+        var leading1: [IdentityBarElement] = []
+        if !flags.isEmpty {
+            leading1.append(.flags(flags, active: activeFlag, onTap: onFlagTap))
+        }
+        if let onTranslateTap {
+            leading1.append(.translateButton(action: onTranslateTap))
+        }
+
+        var trailing1: [IdentityBarElement] = [.time(time)]
+        if let delivery {
+            trailing1.append(.delivery(delivery))
+        }
+
+        return UserIdentityBar(
+            leadingPrimary: leading1,
+            trailingPrimary: trailing1
+        )
     }
 }
