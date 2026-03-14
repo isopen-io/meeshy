@@ -147,7 +147,7 @@ struct ConversationView: View {
     @State var composerHeight: CGFloat = 130
     @State private var keyboardHeight: CGFloat = 0
 
-    let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    @State var typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
@@ -185,7 +185,7 @@ struct ConversationView: View {
     }
 
     var cachedLastReceivedIndex: Int? {
-        viewModel.messages.indices.last(where: { !viewModel.messages[$0].isMe })
+        viewModel.cachedLastReceivedIndex
     }
 
     var headerPresenceState: PresenceState {
