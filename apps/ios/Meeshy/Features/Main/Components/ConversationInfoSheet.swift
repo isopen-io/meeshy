@@ -180,18 +180,37 @@ struct ConversationInfoSheet: View {
 
     private var conversationHeader: some View {
         VStack(spacing: 12) {
-            // Avatar
-            if isDirect {
+            // Avatar — always show conversation avatar at profileSheet size
+            // For groups, add stacked active member avatars alongside
+            ZStack {
                 MeeshyAvatar(
                     name: conversation.name,
                     context: .profileSheet,
                     accentColor: accentColor,
-                    avatarURL: conversation.participantAvatarURL,
+                    avatarURL: isDirect
+                        ? conversation.participantAvatarURL
+                        : conversation.avatar,
                     moodEmoji: otherUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
                     onMoodTap: otherUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
                 )
-            } else {
-                groupAvatarHeader
+
+                // Stacked active members (groups only)
+                if !isDirect, !topActiveMembers.isEmpty {
+                    HStack(spacing: -6) {
+                        ForEach(topActiveMembers.prefix(3)) { member in
+                            let presence = presenceManager.presenceState(for: member.id)
+                            MeeshyAvatar(
+                                name: member.name,
+                                context: .conversationHeaderStacked,
+                                accentColor: member.color,
+                                avatarURL: member.avatarURL,
+                                moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
+                                presenceState: presence
+                            )
+                        }
+                    }
+                    .offset(x: -44, y: 26)
+                }
             }
 
             // Name
@@ -246,37 +265,6 @@ struct ConversationInfoSheet: View {
         .padding(.bottom, 16)
         .opacity(appearAnimation ? 1 : 0)
         .offset(y: appearAnimation ? 0 : 10)
-    }
-
-    // MARK: - Group Avatar Header
-
-    private var groupAvatarHeader: some View {
-        HStack(spacing: 16) {
-            // Left: stacked member avatars (up to 3 most active)
-            if !topActiveMembers.isEmpty {
-                HStack(spacing: -8) {
-                    ForEach(topActiveMembers.prefix(3)) { member in
-                        let presence = presenceManager.presenceState(for: member.id)
-                        MeeshyAvatar(
-                            name: member.name,
-                            context: .conversationHeaderStacked,
-                            accentColor: member.color,
-                            avatarURL: member.avatarURL,
-                            moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
-                            presenceState: presence
-                        )
-                    }
-                }
-            }
-
-            // Right: group avatar (large)
-            MeeshyAvatar(
-                name: conversation.name,
-                context: .profileSheet,
-                accentColor: accentColor,
-                avatarURL: conversation.avatar
-            )
-        }
     }
 
     // MARK: - Tab Selector
