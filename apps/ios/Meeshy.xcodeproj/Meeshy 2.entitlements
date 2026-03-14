@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Push Notifications -->
+    <key>aps-environment</key>
+    <string>production</string>
+    
+    <!-- Associated Domains pour Universal Links et App Clips -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:meeshy.me</string>
+        <string>applinks:www.meeshy.me</string>
+        <string>applinks:app.meeshy.me</string>
+    </array>
+    
+    <!-- App Groups (si vous partagez des données entre extensions) -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.me.meeshy.app</string>
+    </array>
+    
+    <!-- Keychain Sharing -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)me.meeshy.app</string>
+    </array>
+    
+    <!-- iCloud (si nécessaire pour la synchronisation) -->
+    <!-- Décommentez si vous utilisez iCloud -->
+    <!--
+    <key>com.apple.developer.icloud-container-identifiers</key>
+    <array>
+        <string>iCloud.me.meeshy.app</string>
+    </array>
+    <key>com.apple.developer.icloud-services</key>
+    <array>
+        <string>CloudDocuments</string>
+        <string>CloudKit</string>
+    </array>
+    -->
+    
+    <!-- Background Modes via entitlements -->
+    <key>com.apple.developer.usernotifications.time-sensitive</key>
+    <true/>
+    
+    <!-- Communication Notifications pour CallKit -->
+    <key>com.apple.developer.usernotifications.communication</key>
+    <true/>
+</dict>
+</plist>
