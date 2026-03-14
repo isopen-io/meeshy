@@ -224,7 +224,7 @@ public struct MeeshyAvatar: View {
         if let onViewProfile {
             items.append(.init(label: "Voir le profil", icon: "person.fill", action: onViewProfile))
         }
-        if let onViewStory, kind == .user {
+        if let onViewStory, kind == .user, storyState != .none {
             items.append(.init(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
         }
         if let custom = contextMenuItems {

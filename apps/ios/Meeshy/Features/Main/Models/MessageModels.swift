@@ -16,6 +16,12 @@ struct SearchResultItem: Identifiable {
 
 // MARK: - APIMessage -> Message Conversion
 
+private nonisolated(unsafe) let sharedISO8601Formatter: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
+
 extension APIMessage {
     func toMessage(currentUserId: String, currentUsername: String? = nil) -> Message {
         let msgType: Message.MessageType = {
@@ -126,12 +132,7 @@ extension APIMessage {
             )
         }()
 
-        let parsedPinnedAt: Date? = {
-            guard let str = pinnedAt else { return nil }
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            return formatter.date(from: str)
-        }()
+        let parsedPinnedAt: Date? = pinnedAt.flatMap { sharedISO8601Formatter.date(from: $0) }
 
         let status: Message.DeliveryStatus = {
             guard (sender?.resolvedUserId ?? senderId) == currentUserId else { return .sent }

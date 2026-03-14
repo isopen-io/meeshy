@@ -180,15 +180,17 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
           "col-span-8 sm:col-span-6 flex gap-1 sm:gap-1.5 max-w-[90vw]",
           isOwnMessage ? "flex-row-reverse" : "flex-row"
         )}>
-          {/* Message Header with Avatar - hidden for grouped messages */}
-          {isFirstInGroup ? (
-            <MessageHeader
-              message={message as any}
-              isOwnMessage={isOwnMessage}
-              t={tBubble}
-            />
-          ) : (
-            !isOwnMessage && <div className="w-8 sm:w-9 flex-shrink-0" />
+          {/* Avatar - only for other users' messages (like iOS) */}
+          {!isOwnMessage && (
+            isFirstInGroup ? (
+              <MessageHeader
+                message={message as any}
+                isOwnMessage={isOwnMessage}
+                t={tBubble}
+              />
+            ) : (
+              <div className="w-8 sm:w-9 flex-shrink-0" />
+            )
           )}
 
           {/* Message content wrapper */}

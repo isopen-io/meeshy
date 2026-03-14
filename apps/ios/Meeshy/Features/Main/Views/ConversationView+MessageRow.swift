@@ -14,8 +14,7 @@ extension ConversationView {
         let nextMsg: Message? = index + 1 < viewModel.messages.count ? viewModel.messages[index + 1] : nil
         let isLastInGroup: Bool = nextMsg == nil || nextMsg?.senderId != msg.senderId
         let bubblePresence: PresenceState = isDirect ? .offline : presenceManager.presenceState(for: msg.senderId)
-        let lastReceivedIdx = viewModel.messages.indices.last(where: { !viewModel.messages[$0].isMe })
-        let isLastReceived = !msg.isMe && index == lastReceivedIdx
+        let isLastReceived = !msg.isMe && index == cachedLastReceivedIndex
 
         // Swipe direction: reply = swipe toward center (right for other, left for own)
         let replyDirection: CGFloat = msg.isMe ? -1 : 1

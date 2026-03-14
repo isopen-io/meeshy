@@ -10,6 +10,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
 
     private let db: any DatabaseWriter
     private let maxL1Keys: Int
+    private let namespace: String
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb-cache-store")
 
     private var memoryCache: [Key: L1Entry] = [:]
@@ -23,10 +24,15 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         var loadedAt: Date
     }
 
-    public init(policy: CachePolicy, db: any DatabaseWriter, maxL1Keys: Int = 20) {
+    public init(policy: CachePolicy, db: any DatabaseWriter, namespace: String = "", maxL1Keys: Int = 20) {
         self.policy = policy
         self.db = db
+        self.namespace = namespace
         self.maxL1Keys = maxL1Keys
+    }
+
+    private func namespacedKey(_ key: String) -> String {
+        namespace.isEmpty ? key : "\(namespace):\(key)"
     }
 
     public func save(_ items: [Value], for key: Key) async {
@@ -40,7 +46,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         memoryCache[key] = L1Entry(items: trimmed, loadedAt: Date())
         touchKey(key)
 
-        writeToL2(trimmed, for: key.description)
+        writeToL2(trimmed, for: namespacedKey(key.description))
     }
 
     public func load(for key: Key) async -> CacheResult<[Value]> {
@@ -60,7 +66,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
             }
         }
 
-        let l2Result = readFromL2(for: key.description)
+        let l2Result = readFromL2(for: namespacedKey(key.description))
         guard let l2Result else { return .empty }
 
         let age = Date().timeIntervalSince(l2Result.lastFetchedAt)
@@ -92,7 +98,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         memoryCache.removeValue(forKey: key)
         removeFromAccessOrder(key)
         dirtyKeys.remove(key)
-        deleteL2(for: key.description)
+        deleteL2(for: namespacedKey(key.description))
     }
 
     public func invalidateAll() async {
@@ -112,7 +118,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
 
         for key in keysToFlush {
             guard let l1 = memoryCache[key] else { continue }
-            let keyStr = key.description
+            let keyStr = namespacedKey(key.description)
             let items = l1.items
 
             let success = flushKeyToL2(keyStr: keyStr, items: items)

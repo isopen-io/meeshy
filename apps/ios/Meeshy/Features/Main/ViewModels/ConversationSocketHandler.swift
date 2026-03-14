@@ -195,8 +195,10 @@ final class ConversationSocketHandler {
             .sink { [weak self] apiMsg in
                 guard let delegate = self?.delegate else { return }
                 if let idx = delegate.messageIndex(for: apiMsg.id) {
-                    delegate.messages[idx].content = apiMsg.content ?? ""
-                    delegate.messages[idx].isEdited = true
+                    var updated = delegate.messages[idx]
+                    updated.content = apiMsg.content ?? ""
+                    updated.isEdited = true
+                    delegate.messages[idx] = updated
                 }
             }
             .store(in: &cancellables)
@@ -208,8 +210,10 @@ final class ConversationSocketHandler {
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
-                    delegate.messages[idx].deletedAt = Date()
-                    delegate.messages[idx].content = ""
+                    var updated = delegate.messages[idx]
+                    updated.deletedAt = Date()
+                    updated.content = ""
+                    delegate.messages[idx] = updated
                 }
             }
             .store(in: &cancellables)
@@ -290,22 +294,26 @@ final class ConversationSocketHandler {
                     return
                 }
 
-                for i in delegate.messages.indices.reversed() {
-                    guard delegate.messages[i].isMe else { continue }
+                var batch = delegate.messages
+                var changed = false
+                for i in batch.indices.reversed() {
+                    guard batch[i].isMe else { continue }
 
-                    let current = delegate.messages[i].deliveryStatus
+                    let current = batch[i].deliveryStatus
 
-                    if delegate.messages[i].createdAt <= event.updatedAt {
+                    if batch[i].createdAt <= event.updatedAt {
                         if newStatus == .read && current == .read { break }
                         if newStatus == .delivered && (current == .delivered || current == .read) { break }
 
                         if newStatus == .read || (newStatus == .delivered && current != .read) {
-                            delegate.messages[i].deliveryStatus = newStatus
+                            batch[i].deliveryStatus = newStatus
+                            changed = true
                         }
                     } else if current == .read {
                         break
                     }
                 }
+                if changed { delegate.messages = batch }
             }
             .store(in: &cancellables)
 

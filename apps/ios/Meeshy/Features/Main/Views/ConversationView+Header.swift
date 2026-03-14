@@ -30,7 +30,6 @@ extension ConversationView {
             topActiveMembers: topActiveMembers,
             accentColor: accentColor,
             secondaryColor: secondaryColor,
-            headerHasStoryRing: headerHasStoryRing,
             headerMoodEmoji: headerMoodEmoji,
             headerPresenceState: headerPresenceState,
             onNavigateToDM: { userId, name in
@@ -199,7 +198,6 @@ private struct ConversationHeaderAvatarView: View {
     let topActiveMembers: [ConversationActiveMember]
     let accentColor: String
     let secondaryColor: String
-    let headerHasStoryRing: Bool
     let headerMoodEmoji: String?
     let headerPresenceState: PresenceState
     var onNavigateToDM: (String, String) -> Void
@@ -240,6 +238,13 @@ private struct ConversationHeaderAvatarView: View {
         return items
     }
 
+    private var collapsedStoryState: StoryRingState {
+        if isDirect, let userId = conversation?.participantUserId {
+            return memberStoryState(for: userId)
+        }
+        return .none
+    }
+
     private var directContextMenu: [AvatarContextMenuItem] {
         guard let userId = conversation?.participantUserId else { return [] }
         return avatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
@@ -253,6 +258,7 @@ private struct ConversationHeaderAvatarView: View {
                     name: conversation?.name ?? "?",
                     mode: .custom(44),
                     accentColor: accentColor,
+                    secondaryColor: secondaryColor,
                     avatarURL: conversation?.participantAvatarURL,
                     storyState: memberStoryState(for: userId),
                     moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
@@ -320,7 +326,7 @@ private struct ConversationHeaderAvatarView: View {
                 accentColor: accentColor,
                 secondaryColor: secondaryColor,
                 avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
-                storyState: headerHasStoryRing ? .unread : .none,
+                storyState: collapsedStoryState,
                 moodEmoji: headerMoodEmoji,
                 presenceState: headerPresenceState,
                 enablePulse: true,
@@ -330,6 +336,12 @@ private struct ConversationHeaderAvatarView: View {
                         composerState.showOptions = true
                     }
                 },
+                onViewStory: isDirect ? {
+                    if let userId = conversation?.participantUserId {
+                        headerState.storyUserIdForHeader = userId
+                        headerState.showStoryViewerFromHeader = true
+                    }
+                } : nil,
                 onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "") : nil,
                 contextMenuItems: directContextMenu
             )

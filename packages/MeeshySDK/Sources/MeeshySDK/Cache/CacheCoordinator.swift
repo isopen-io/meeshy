@@ -32,10 +32,10 @@ public actor CacheCoordinator {
         self.messageSocket = messageSocket
         self.socialSocket = socialSocket
 
-        self.conversations = GRDBCacheStore(policy: .conversations, db: db)
-        self.messages = GRDBCacheStore(policy: .messages, db: db)
-        self.participants = GRDBCacheStore(policy: .participants, db: db)
-        self.profiles = GRDBCacheStore(policy: .userProfiles, db: db)
+        self.conversations = GRDBCacheStore(policy: .conversations, db: db, namespace: "conv")
+        self.messages = GRDBCacheStore(policy: .messages, db: db, namespace: "msg")
+        self.participants = GRDBCacheStore(policy: .participants, db: db, namespace: "part")
+        self.profiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "prof")
 
         self.images = DiskCacheStore(policy: .mediaImages)
         self.audio = DiskCacheStore(policy: .mediaAudio)
