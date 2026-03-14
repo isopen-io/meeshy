@@ -35,7 +35,17 @@ class ConversationViewModel: ObservableObject {
             _replyCountMap = nil
             _mentionDisplayNames = nil
             _mentionCandidates = nil
+            _cachedLastReceivedIndex = nil
         }
+    }
+
+    // Double-optional: nil = not computed, .some(nil) = computed but no match, .some(.some(N)) = found at N
+    private var _cachedLastReceivedIndex: Int?? = nil
+    var cachedLastReceivedIndex: Int? {
+        if let cached = _cachedLastReceivedIndex { return cached }
+        let result = messages.indices.last(where: { !messages[$0].isMe })
+        _cachedLastReceivedIndex = .some(result)
+        return result
     }
     @Published var isLoadingInitial = false
     @Published var isLoadingOlder = false
