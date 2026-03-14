@@ -275,7 +275,7 @@ struct ParticipantsView: View {
         return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: participant.name,
-                mode: .messageBubble,
+                context: .userListItem,
                 accentColor: color,
                 avatarURL: participant.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: participant.id)?.moodEmoji,

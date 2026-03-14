@@ -103,7 +103,7 @@ struct FriendRequestListView: View {
         return HStack(spacing: 14) {
             MeeshyAvatar(
                 name: name,
-                size: .small,
+                context: .userListItem,
                 accentColor: color,
                 avatarURL: sender?.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: request.senderId)?.moodEmoji,

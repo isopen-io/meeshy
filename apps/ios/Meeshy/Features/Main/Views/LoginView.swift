@@ -480,7 +480,7 @@ struct LoginView: View {
     private func accountAvatar(_ account: SavedAccount, size: CGFloat) -> some View {
         MeeshyAvatar(
             name: account.shortName,
-            mode: .custom(size),
+            context: .custom(size),
             kind: .user,
             avatarURL: account.avatarURL,
             enablePulse: false

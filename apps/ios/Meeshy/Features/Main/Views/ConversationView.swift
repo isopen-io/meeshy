@@ -615,7 +615,7 @@ struct ConversationView: View {
                         HStack(spacing: 10) {
                             MeeshyAvatar(
                                 name: candidate.displayName,
-                                size: .small,
+                                context: .userListItem,
                                 accentColor: accentColor,
                                 avatarURL: candidate.avatarURL
                             )

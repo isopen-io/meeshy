@@ -182,7 +182,7 @@ struct ConversationInfoSheet: View {
             // Avatar
             MeeshyAvatar(
                 name: conversation.name,
-                size: .large,
+                context: .profileSheet,
                 accentColor: accentColor,
                 avatarURL: conversation.type == .direct
                     ? conversation.participantAvatarURL
@@ -383,12 +383,12 @@ struct ConversationInfoSheet: View {
         return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: participant.name,
-                size: .small,
+                context: .userListItem,
                 accentColor: color,
                 avatarURL: participant.avatar,
                 moodEmoji: participant.userId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                onMoodTap: participant.userId.flatMap { statusViewModel.moodTapHandler(for: $0) },
-                presenceState: presence
+                presenceState: presence,
+                onMoodTap: participant.userId.flatMap { statusViewModel.moodTapHandler(for: $0) }
             )
 
             VStack(alignment: .leading, spacing: 2) {

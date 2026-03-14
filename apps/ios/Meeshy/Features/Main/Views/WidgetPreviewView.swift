@@ -220,7 +220,7 @@ struct WidgetPreviewView: View {
             HStack(spacing: 12) {
                 MeeshyAvatar(
                     name: conv.name,
-                    mode: .custom(40),
+                    context: .conversationList,
                     accentColor: conv.accentColor,
                     avatarURL: conv.avatar
                 )

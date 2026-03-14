@@ -811,7 +811,7 @@ struct MessageDetailSheet: View {
             HStack(spacing: 12) {
                 MeeshyAvatar(
                     name: message.senderName ?? "?",
-                    mode: .conversationHeader,
+                    context: .userListItem,
                     accentColor: message.senderColor ?? contactColor,
                     avatarURL: message.senderAvatarURL
                 )
@@ -1144,7 +1144,7 @@ struct MessageDetailSheet: View {
         HStack(spacing: 10) {
             MeeshyAvatar(
                 name: username,
-                mode: .messageBubble,
+                context: .userListItem,
                 accentColor: contactColor,
                 avatarURL: avatar
             )
@@ -1223,7 +1223,7 @@ struct MessageDetailSheet: View {
                     HStack(spacing: 10) {
                         MeeshyAvatar(
                             name: user.username,
-                            mode: .messageBubble,
+                            context: .userListItem,
                             accentColor: contactColor,
                             avatarURL: user.avatar
                         )
@@ -1401,7 +1401,7 @@ struct MessageDetailSheet: View {
         HStack(spacing: 10) {
             MeeshyAvatar(
                 name: item.username,
-                mode: .messageBubble,
+                context: .userListItem,
                 accentColor: contactColor,
                 avatarURL: item.avatar
             )
@@ -1668,7 +1668,7 @@ struct MessageDetailSheet: View {
         HStack(spacing: 12) {
             MeeshyAvatar(
                 name: conv.name,
-                mode: .conversationList,
+                context: .conversationList,
                 accentColor: conv.accentColor,
                 avatarURL: conv.avatar
             )

@@ -153,7 +153,7 @@ struct MessageInfoSheet: View {
         HStack(spacing: 12) {
             MeeshyAvatar(
                 name: message.senderName ?? "?",
-                mode: .messageBubble,
+                context: .messageBubble,
                 accentColor: message.senderColor ?? contactColor,
                 avatarURL: message.senderAvatarURL
             )

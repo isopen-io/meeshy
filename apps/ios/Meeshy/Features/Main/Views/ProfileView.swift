@@ -218,7 +218,7 @@ struct ProfileView: View {
             ZStack(alignment: .bottomTrailing) {
                 MeeshyAvatar(
                     name: user?.displayName ?? user?.username ?? "?",
-                    mode: .custom(90),
+                    context: .profileBanner,
                     accentColor: accentColor,
                     secondaryColor: "4ECDC4",
                     avatarURL: user?.avatar

@@ -256,7 +256,7 @@ private struct ConversationHeaderAvatarView: View {
             if isDirect, let userId = conversation?.participantUserId {
                 MeeshyAvatar(
                     name: conversation?.name ?? "?",
-                    mode: .custom(44),
+                    context: .conversationHeaderExpanded,
                     accentColor: accentColor,
                     secondaryColor: secondaryColor,
                     avatarURL: conversation?.participantAvatarURL,
@@ -281,7 +281,7 @@ private struct ConversationHeaderAvatarView: View {
                     ForEach(topActiveMembers) { member in
                         MeeshyAvatar(
                             name: member.name,
-                            mode: .custom(28),
+                            context: .conversationHeaderStacked,
                             accentColor: member.color,
                             avatarURL: member.avatarURL,
                             storyState: memberStoryState(for: member.id),
@@ -322,14 +322,13 @@ private struct ConversationHeaderAvatarView: View {
             // Collapsed: avatar trigger — tap expands band, long press shows context menu
             MeeshyAvatar(
                 name: conversation?.name ?? "?",
-                mode: .conversationHeader,
+                context: .conversationHeaderCollapsed,
                 accentColor: accentColor,
                 secondaryColor: secondaryColor,
                 avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
                 storyState: collapsedStoryState,
                 moodEmoji: headerMoodEmoji,
                 presenceState: headerPresenceState,
-                enablePulse: true,
                 onTap: {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {

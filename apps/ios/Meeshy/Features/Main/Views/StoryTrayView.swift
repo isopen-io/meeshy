@@ -147,7 +147,7 @@ struct StoryTrayView: View {
             ZStack {
                 MeeshyAvatar(
                     name: group.username,
-                    mode: .storyTray,
+                    context: .storyTray,
                     accentColor: group.avatarColor,
                     avatarURL: group.avatarURL,
                     storyState: group.hasUnviewed ? .unread : .read,
@@ -248,7 +248,7 @@ private struct MyStoryButton: View {
             ZStack {
                 MeeshyAvatar(
                     name: userName,
-                    mode: .storyTray,
+                    context: .storyTray,
                     accentColor: accentColor,
                     avatarURL: currentUser?.avatar,
                     storyState: storyState,

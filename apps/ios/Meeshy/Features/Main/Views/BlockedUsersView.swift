@@ -170,7 +170,7 @@ struct BlockedUsersView: View {
         return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: user.name,
-                size: .medium,
+                context: .userListItem,
                 accentColor: color,
                 avatarURL: user.avatar
             )

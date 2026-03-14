@@ -993,7 +993,7 @@ struct StoryViewerView: View {
 
                             MeeshyAvatar(
                                 name: group.username,
-                                mode: .custom(40),
+                                context: .storyViewer,
                                 accentColor: group.avatarColor,
                                 onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
                                 contextMenuItems: [

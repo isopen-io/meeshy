@@ -125,7 +125,7 @@ struct FeedPostCard: View {
             // Avatar
             MeeshyAvatar(
                 name: post.author,
-                mode: .custom(44),
+                context: .postAuthor,
                 accentColor: accentColor,
                 moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
                 onViewProfile: { selectedProfileUser = .from(feedPost: post) },
@@ -413,7 +413,7 @@ struct FeedPostCard: View {
                 // Avatar
                 MeeshyAvatar(
                     name: comment.author,
-                    mode: .messageBubble,
+                    context: .postComment,
                     accentColor: comment.authorColor,
                     moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                     onViewProfile: { selectedProfileUser = .from(feedComment: comment) },

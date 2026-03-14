@@ -347,7 +347,7 @@ private struct AudioFullscreenPage: View {
             } label: {
                 MeeshyAvatar(
                     name: message.senderName ?? "?",
-                    mode: .custom(34),
+                    context: .messageBubble,
                     accentColor: message.senderColor ?? contactColor,
                     avatarURL: message.senderAvatarURL,
                     moodEmoji: message.senderId.isEmpty ? nil : statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,

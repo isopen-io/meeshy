@@ -578,7 +578,7 @@ struct FeedComposerSheet: View {
                 HStack(spacing: 12) {
                     MeeshyAvatar(
                         name: getUserDisplayName(authManager.currentUser, fallback: "M"),
-                        mode: .custom(40),
+                        context: .feedComposer,
                         accentColor: "FF6B6B",
                         secondaryColor: "4ECDC4"
                     )

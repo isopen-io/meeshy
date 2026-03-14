@@ -334,7 +334,7 @@ struct ConversationMediaGalleryView: View {
             HStack(spacing: 10) {
                 MeeshyAvatar(
                     name: info?.senderName ?? "?",
-                    mode: .custom(36),
+                    context: .messageBubble,
                     accentColor: info?.senderColor ?? accentColor,
                     avatarURL: info?.senderAvatarURL
                 )

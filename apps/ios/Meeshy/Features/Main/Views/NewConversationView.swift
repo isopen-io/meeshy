@@ -132,7 +132,7 @@ struct NewConversationView: View {
         HStack(spacing: 6) {
             MeeshyAvatar(
                 name: user.displayName ?? user.username,
-                mode: .custom(24),
+                context: .custom(24),
                 accentColor: DynamicColorGenerator.colorForName(user.username),
                 secondaryColor: accentColor,
                 moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
@@ -259,7 +259,7 @@ struct NewConversationView: View {
             HStack(spacing: 12) {
                 MeeshyAvatar(
                     name: user.displayName ?? user.username,
-                    mode: .custom(42),
+                    context: .userListItem,
                     accentColor: userColor,
                     secondaryColor: accentColor,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,

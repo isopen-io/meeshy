@@ -401,7 +401,7 @@ extension ConversationView {
             // Avatar
             MeeshyAvatar(
                 name: result.senderName,
-                mode: .custom(36),
+                context: .messageBubble,
                 accentColor: DynamicColorGenerator.colorForName(result.senderName),
                 avatarURL: result.senderAvatar
             )

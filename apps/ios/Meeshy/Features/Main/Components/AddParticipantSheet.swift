@@ -177,7 +177,7 @@ struct AddParticipantSheet: View {
         return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: user.name,
-                size: .small,
+                context: .userListItem,
                 accentColor: color,
                 avatarURL: user.avatar
             )

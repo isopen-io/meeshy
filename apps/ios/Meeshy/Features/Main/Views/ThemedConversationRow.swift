@@ -595,14 +595,13 @@ private struct ConversationAvatarView: View {
         ZStack {
             MeeshyAvatar(
                 name: conversation.name,
-                mode: .conversationList,
+                context: .conversationList,
                 accentColor: conversation.accentColor,
                 secondaryColor: conversation.colorPalette.secondary,
                 avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,
                 presenceState: (isDirect && moodStatus == nil) ? presenceState : .offline,
-                enablePulse: false,
                 // DM : tap → story (si non lu) ou profil via la logique MeeshyAvatar handleTap()
                 // Groupe : tap → infos conversation directement via onTap
                 onTap: isDirect ? nil : onViewConversationInfo,

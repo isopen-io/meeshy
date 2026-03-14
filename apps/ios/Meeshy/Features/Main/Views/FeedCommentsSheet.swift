@@ -99,7 +99,7 @@ struct CommentsSheetView: View {
             HStack(spacing: 10) {
                 MeeshyAvatar(
                     name: post.author,
-                    mode: .custom(40),
+                    context: .postAuthor,
                     accentColor: post.authorColor,
                     moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
                     onViewProfile: { selectedProfileUser = .from(feedPost: post) },
@@ -324,7 +324,7 @@ struct CommentRowView: View {
             // Avatar
             MeeshyAvatar(
                 name: comment.author,
-                mode: .custom(36),
+                context: .postComment,
                 accentColor: comment.authorColor,
                 moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                 onViewProfile: { selectedProfileUser = .from(feedComment: comment) },

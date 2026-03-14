@@ -80,14 +80,13 @@ struct ThemedAvatarButton: View {
         }) {
             MeeshyAvatar(
                 name: name,
-                mode: .conversationHeader,
+                context: .conversationHeaderCollapsed,
                 accentColor: color,
                 secondaryColor: secondaryColor,
                 avatarURL: avatarURL,
                 storyState: hasStoryRing ? .unread : .none,
                 moodEmoji: moodEmoji,
-                presenceState: presenceState,
-                enablePulse: true
+                presenceState: presenceState
             )
             .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
             .scaleEffect(isPressed ? 0.9 : (isExpanded ? 1.1 : 1))

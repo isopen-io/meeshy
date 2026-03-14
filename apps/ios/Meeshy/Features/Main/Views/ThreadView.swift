@@ -81,7 +81,7 @@ struct ThreadView: View {
             HStack(spacing: 8) {
                 MeeshyAvatar(
                     name: parentMessage.senderName ?? "?",
-                    mode: .custom(32),
+                    context: .messageBubble,
                     accentColor: accentColor,
                     moodEmoji: statusViewModel.statusForUser(userId: parentMessage.senderId)?.moodEmoji,
                     onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.senderId)
@@ -144,7 +144,7 @@ struct ThreadView: View {
         HStack(alignment: .top, spacing: 10) {
             MeeshyAvatar(
                 name: message.senderName ?? "?",
-                mode: .custom(28),
+                context: .postComment,
                 accentColor: message.senderColor ?? "4ECDC4",
                 moodEmoji: statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: message.senderId)

@@ -233,7 +233,7 @@ struct SharePickerView: View {
         HStack(spacing: 12) {
             MeeshyAvatar(
                 name: conv.name,
-                mode: .custom(44),
+                context: .conversationList,
                 accentColor: conv.accentColor,
                 avatarURL: conv.avatar,
                 moodEmoji: conv.participantUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },

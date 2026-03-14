@@ -370,7 +370,7 @@ struct GlobalSearchView: View {
         return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: result.conversationName,
-                mode: .messageBubble,
+                context: .conversationList,
                 avatarURL: result.conversationAvatar
             )
 
@@ -431,7 +431,7 @@ struct GlobalSearchView: View {
         return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: result.name,
-                mode: .messageBubble,
+                context: .conversationList,
                 avatarURL: result.avatar
             )
 
@@ -513,7 +513,7 @@ struct GlobalSearchView: View {
         return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: result.displayName ?? result.username,
-                mode: .messageBubble,
+                context: .userListItem,
                 avatarURL: result.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: result.id)?.moodEmoji,
                 presenceState: result.isOnline ? .online : .offline,

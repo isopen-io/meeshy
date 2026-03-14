@@ -85,7 +85,7 @@ struct PostDetailView: View {
         HStack(spacing: 12) {
             MeeshyAvatar(
                 name: post.author,
-                mode: .custom(44),
+                context: .postAuthor,
                 accentColor: post.authorColor,
                 moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
                 onViewProfile: { selectedProfileUser = .from(feedPost: post) },

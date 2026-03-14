@@ -154,7 +154,7 @@ struct MessageOverlayMenu: View {
             if !isMe {
                 MeeshyAvatar(
                     name: name,
-                    mode: .custom(22),
+                    context: .recentParticipant,
                     accentColor: color,
                     avatarURL: message.senderAvatarURL
                 )

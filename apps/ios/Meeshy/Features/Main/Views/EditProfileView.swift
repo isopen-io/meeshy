@@ -118,7 +118,7 @@ struct EditProfileView: View {
                 } else {
                     MeeshyAvatar(
                         name: user?.displayName ?? user?.username ?? "?",
-                        mode: .custom(100),
+                        context: .profileEdit,
                         accentColor: accentColor,
                         secondaryColor: "6366F1",
                         avatarURL: user?.avatar
