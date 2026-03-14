@@ -278,6 +278,17 @@ public struct DynamicColorGenerator {
         return String(format: "%02X%02X%02X", min(255, r), min(255, g), min(255, b))
     }
 
+    public static func blendTwo(_ hex1: String, weight1: Double, _ hex2: String, weight2: Double) -> String {
+        let c1 = hexToRGB(hex1)
+        let c2 = hexToRGB(hex2)
+
+        let r = Int(Double(c1.r) * weight1 + Double(c2.r) * weight2)
+        let g = Int(Double(c1.g) * weight1 + Double(c2.g) * weight2)
+        let b = Int(Double(c1.b) * weight1 + Double(c2.b) * weight2)
+
+        return String(format: "%02X%02X%02X", min(255, r), min(255, g), min(255, b))
+    }
+
     private static func hexToRGB(_ hex: String) -> (r: Int, g: Int, b: Int) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
