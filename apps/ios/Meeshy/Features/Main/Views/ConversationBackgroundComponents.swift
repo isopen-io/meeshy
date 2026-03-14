@@ -142,7 +142,7 @@ struct ConvBgSatellite: View {
     private let orbitRadius: CGFloat = 140
 
     private var baseAngle: CGFloat {
-        CGFloat(index) * .pi * 2 / 6
+        CGFloat(index) * .pi * 2 / 3
     }
 
     private var currentAngle: CGFloat {
@@ -262,7 +262,7 @@ struct ConvBgWaveShape: Shape {
         var path = Path()
         path.move(to: CGPoint(x: 0, y: rect.midY))
 
-        for x in stride(from: 0, through: rect.width, by: 1) {
+        for x in stride(from: 0, through: rect.width, by: 4) {
             let relativeX = x / rect.width
             let y = sin(relativeX * .pi * 2 * frequency + phase) * amplitude + rect.midY
             path.addLine(to: CGPoint(x: x, y: y))
