@@ -45,11 +45,12 @@ extension ConversationView {
                 ThemedMessageBubble(
                     message: msg,
                     contactColor: accentColor,
+                    isDirect: isDirect,
                     transcription: viewModel.messageTranscriptions[msg.id],
                     translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
                     textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                     preferredTranslation: viewModel.preferredTranslation(for: msg.id),
-                    showAvatar: !isDirect && isLastInGroup,
+                    showAvatar: false,
                     presenceState: bubblePresence,
                     senderMoodEmoji: statusViewModel.statusForUser(userId: msg.senderId)?.moodEmoji,
                     onAddReaction: { messageId in

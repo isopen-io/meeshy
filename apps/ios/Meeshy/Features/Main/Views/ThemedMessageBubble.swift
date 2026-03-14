@@ -10,6 +10,7 @@ import MeeshyUI
 struct ThemedMessageBubble: View {
     let message: Message
     let contactColor: String
+    var isDirect: Bool = false
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
     var textTranslations: [MessageTranslation] = []
@@ -101,8 +102,8 @@ struct ThemedMessageBubble: View {
         })?.translatedContent
     }
 
-    private var bubbleColor: String {
-        message.isMe ? contactColor : contactColor
+    private var otherBubbleColor: String {
+        DynamicColorGenerator.blendTwo(contactColor, weight1: 0.30, "6366F1", weight2: 0.70)
     }
 
     var visualAttachments: [MessageAttachment] { // internal for cross-file extension access
@@ -385,30 +386,8 @@ struct ThemedMessageBubble: View {
     }
 
     private var messageContent: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: 0) {
             if message.isMe { Spacer(minLength: 50) }
-
-            // Sender avatar (non-me messages only, last in group)
-            if !message.isMe {
-                if showAvatar {
-                    MeeshyAvatar(
-                        name: message.senderName ?? "?",
-                        mode: .messageBubble,
-                        accentColor: message.senderColor ?? contactColor,
-                        avatarURL: message.senderAvatarURL,
-                        moodEmoji: senderMoodEmoji,
-                        presenceState: presenceState,
-                        onViewProfile: { selectedProfileUser = .from(message: message) },
-                        contextMenuItems: [
-                            AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                                selectedProfileUser = .from(message: message)
-                            }
-                        ]
-                    )
-                } else {
-                    Color.clear.frame(width: 32, height: 32)
-                }
-            }
 
             VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
                 // Pin indicator
@@ -491,6 +470,34 @@ struct ThemedMessageBubble: View {
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, hasTextOrNonMediaContent ? 10 : 4)
+
+                                // Identity bar (group conversations only, last in group, others' messages)
+                                if !isDirect && isLastInGroup && !message.isMe {
+                                    Divider()
+                                        .background(theme.textMuted.opacity(0.2))
+                                        .padding(.horizontal, 8)
+
+                                    UserIdentityBar(
+                                        name: message.senderName ?? "?",
+                                        username: message.senderUsername,
+                                        avatarURL: message.senderAvatarURL,
+                                        accentColor: message.senderColor ?? contactColor,
+                                        timestamp: message.createdAt,
+                                        avatarMode: .messageBubble,
+                                        presenceState: presenceState,
+                                        moodEmoji: senderMoodEmoji,
+                                        onAvatarTap: {
+                                            selectedProfileUser = .from(message: message)
+                                        },
+                                        contextMenuItems: [
+                                            AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                                                selectedProfileUser = .from(message: message)
+                                            }
+                                        ]
+                                    )
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                }
                             }
                             .padding(.top, message.isEdited ? 12 : 0)
                             .overlay(alignment: .topLeading) {
@@ -503,7 +510,7 @@ struct ThemedMessageBubble: View {
                             .background(bubbleBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 18))
                             .shadow(
-                                color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
+                                color: Color(hex: message.isMe ? "6366F1" : otherBubbleColor).opacity(message.isMe ? 0.3 : 0.2),
                                 radius: 6,
                                 y: 3
                             )
@@ -1382,21 +1389,21 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Bubble Background
     private var bubbleBackground: some View {
-        let accent = Color(hex: contactColor)
+        let other = Color(hex: otherBubbleColor)
         let isDark = theme.mode.isDark
 
         return RoundedRectangle(cornerRadius: 18)
             .fill(
                 message.isMe ?
                 LinearGradient(
-                    colors: [accent, accent.opacity(0.8)],
+                    colors: [Color(hex: "6366F1"), Color(hex: "4338CA")],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ) :
                 LinearGradient(
                     colors: [
-                        accent.opacity(isDark ? 0.35 : 0.25),
-                        accent.opacity(isDark ? 0.2 : 0.15)
+                        other.opacity(isDark ? 0.35 : 0.25),
+                        other.opacity(isDark ? 0.20 : 0.15)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -1408,7 +1415,7 @@ struct ThemedMessageBubble: View {
                         message.isMe ?
                         LinearGradient(colors: [Color.clear, Color.clear], startPoint: .leading, endPoint: .trailing) :
                         LinearGradient(
-                            colors: [accent.opacity(0.5), accent.opacity(0.2)],
+                            colors: [other.opacity(0.5), other.opacity(0.2)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
