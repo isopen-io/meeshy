@@ -87,7 +87,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Background Processing
     private func setupBackgroundProcessing() {
         Publishers.CombineLatest3($conversations, $searchText, $selectedFilter)
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.global(qos: .userInitiated))
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
             .map { (convs, text, filter) -> [Conversation] in
                 convs.filter { c in
                     let filterMatch: Bool
@@ -110,7 +110,6 @@ class ConversationListViewModel: ObservableObject {
             .assign(to: &$filteredConversations)
 
         Publishers.CombineLatest($filteredConversations, $userCategories)
-            .subscribe(on: DispatchQueue.global(qos: .userInitiated))
             .map { (filtered, categories) -> [(section: ConversationSection, conversations: [Conversation])] in
                 var result: [(section: ConversationSection, conversations: [Conversation])] = []
 
