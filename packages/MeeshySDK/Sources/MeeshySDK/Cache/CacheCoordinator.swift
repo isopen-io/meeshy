@@ -341,5 +341,6 @@ public actor CacheCoordinator {
         await audio.invalidateAll()
         await video.invalidateAll()
         await thumbnails.invalidateAll()
+        await UserColorCache.shared.invalidateAll()
     }
 }
