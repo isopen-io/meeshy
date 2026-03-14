@@ -4,6 +4,7 @@ import CoreLocation
 public actor ClientInfoProvider {
     public static let shared = ClientInfoProvider()
 
+    private var cachedStaticHeaders: [String: String]?
     private var cachedCity: String?
     private var cachedRegion: String?
     private var geoCacheExpiry: Date = .distantPast
@@ -13,18 +14,8 @@ public actor ClientInfoProvider {
     // MARK: - Public API
 
     public func buildHeaders() async -> [String: String] {
-        var headers: [String: String] = [:]
+        var headers = staticHeaders()
 
-        let version = appVersion()
-        let build   = appBuild()
-        let os      = osVersion()
-        let model   = deviceModel()
-
-        headers["X-Meeshy-Version"]  = version
-        headers["X-Meeshy-Build"]    = build
-        headers["X-Meeshy-Platform"] = "ios"
-        headers["X-Meeshy-Device"]   = model
-        headers["X-Meeshy-OS"]       = os
         headers["X-Meeshy-Locale"]   = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
         headers["X-Meeshy-Timezone"] = TimeZone.current.identifier
         if let country = Locale.current.region?.identifier {
@@ -33,6 +24,24 @@ public actor ClientInfoProvider {
 
         await enrichWithLocation(&headers)
 
+        return headers
+    }
+
+    // MARK: - Static Headers (cached for session lifetime)
+
+    private func staticHeaders() -> [String: String] {
+        if let cached = cachedStaticHeaders {
+            return cached
+        }
+
+        let headers: [String: String] = [
+            "X-Meeshy-Version": appVersion(),
+            "X-Meeshy-Build": appBuild(),
+            "X-Meeshy-Platform": "ios",
+            "X-Meeshy-Device": deviceModel(),
+            "X-Meeshy-OS": osVersion()
+        ]
+        cachedStaticHeaders = headers
         return headers
     }
 
