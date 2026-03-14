@@ -1,86 +1,117 @@
 import SwiftUI
 import MeeshySDK
 
-public struct UserIdentityBar: View {
-    public let name: String
-    public var username: String? = nil
-    public var avatarURL: String? = nil
-    public var accentColor: String = ""
-    public var timestamp: Date? = nil
-    public var avatarMode: AvatarMode = .messageBubble
-    public var presenceState: PresenceState = .offline
-    public var moodEmoji: String? = nil
-    public var onAvatarTap: (() -> Void)? = nil
-    public var contextMenuItems: [AvatarContextMenuItem]? = nil
+// MARK: - IdentityBarElement
+
+public enum IdentityBarElement: Identifiable {
+    case name
+    case username(String)
+    case roleBadge(MemberRole)
+    case time(String)
+    case delivery(MeeshyMessage.DeliveryStatus)
+    case flags([String], active: String?, onTap: ((String) -> Void)?)
+    case translateButton(action: () -> Void)
+    case presence(PresenceState)
+    case memberSince(String)
+    case actionButton(String, action: () -> Void)
+    case actionMenu(String, items: [ActionMenuItem])
+    case text(String)
+
+    public var id: String {
+        switch self {
+        case .name: return "name"
+        case .username(let value): return "username:\(value)"
+        case .roleBadge(let role): return "role:\(role.rawValue)"
+        case .time(let value): return "time:\(value)"
+        case .delivery(let status): return "delivery:\(status.rawValue)"
+        case .flags(let codes, _, _): return "flags:\(codes.joined(separator: ","))"
+        case .translateButton: return "translate"
+        case .presence(let state): return "presence:\(String(describing: state))"
+        case .memberSince(let value): return "memberSince:\(value)"
+        case .actionButton(let label, _): return "action:\(label)"
+        case .actionMenu(let label, _): return "menu:\(label)"
+        case .text(let value): return "text:\(value)"
+        }
+    }
+}
+
+// MARK: - ActionMenuItem
+
+public struct ActionMenuItem: Identifiable {
+    public let id = UUID()
+    public let label: String
+    public let icon: String?
+    public let role: ButtonRole?
+    public let action: () -> Void
+
+    public init(label: String, icon: String? = nil, role: ButtonRole? = nil, action: @escaping () -> Void) {
+        self.label = label
+        self.icon = icon
+        self.role = role
+        self.action = action
+    }
+}
+
+// MARK: - AvatarConfig
+
+public struct AvatarConfig {
+    public let url: String?
+    public let accentColor: String
+    public let mode: AvatarMode
+    public let moodEmoji: String?
+    public let presenceState: PresenceState
+    public let onTap: (() -> Void)?
+    public let contextMenuItems: [AvatarContextMenuItem]?
 
     public init(
-        name: String,
-        username: String? = nil,
-        avatarURL: String? = nil,
-        accentColor: String = "",
-        timestamp: Date? = nil,
-        avatarMode: AvatarMode = .messageBubble,
-        presenceState: PresenceState = .offline,
+        url: String? = nil,
+        accentColor: String,
+        mode: AvatarMode = .messageBubble,
         moodEmoji: String? = nil,
-        onAvatarTap: (() -> Void)? = nil,
+        presenceState: PresenceState = .offline,
+        onTap: (() -> Void)? = nil,
         contextMenuItems: [AvatarContextMenuItem]? = nil
     ) {
-        self.name = name
-        self.username = username
-        self.avatarURL = avatarURL
+        self.url = url
         self.accentColor = accentColor
-        self.timestamp = timestamp
-        self.avatarMode = avatarMode
-        self.presenceState = presenceState
+        self.mode = mode
         self.moodEmoji = moodEmoji
-        self.onAvatarTap = onAvatarTap
+        self.presenceState = presenceState
+        self.onTap = onTap
         self.contextMenuItems = contextMenuItems
     }
+}
+
+// MARK: - UserIdentityBar
+
+public struct UserIdentityBar: View {
+    public let avatar: AvatarConfig?
+    public let name: String?
+    public let leadingPrimary: [IdentityBarElement]
+    public let trailingPrimary: [IdentityBarElement]
+    public let leadingSecondary: [IdentityBarElement]
+    public let trailingSecondary: [IdentityBarElement]
 
     @ObservedObject private var theme = ThemeManager.shared
 
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
+    public init(
+        avatar: AvatarConfig? = nil,
+        name: String? = nil,
+        leadingPrimary: [IdentityBarElement] = [],
+        trailingPrimary: [IdentityBarElement] = [],
+        leadingSecondary: [IdentityBarElement] = [],
+        trailingSecondary: [IdentityBarElement] = []
+    ) {
+        assert(avatar != nil || name != nil, "UserIdentityBar requires at least avatar or name")
+        self.avatar = avatar
+        self.name = name
+        self.leadingPrimary = leadingPrimary
+        self.trailingPrimary = trailingPrimary
+        self.leadingSecondary = leadingSecondary
+        self.trailingSecondary = trailingSecondary
+    }
 
     public var body: some View {
-        HStack(spacing: 8) {
-            MeeshyAvatar(
-                name: name,
-                mode: avatarMode,
-                accentColor: accentColor.isEmpty ? DynamicColorGenerator.colorForName(name) : accentColor,
-                avatarURL: avatarURL,
-                moodEmoji: moodEmoji,
-                presenceState: presenceState,
-                enablePulse: false,
-                onTap: onAvatarTap,
-                onViewProfile: onAvatarTap,
-                contextMenuItems: contextMenuItems
-            )
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-
-                if let username {
-                    Text("@\(username)")
-                        .font(.system(size: 11))
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 4)
-
-            if let timestamp {
-                Text(Self.timeFormatter.string(from: timestamp))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
-            }
-        }
+        EmptyView()
     }
 }

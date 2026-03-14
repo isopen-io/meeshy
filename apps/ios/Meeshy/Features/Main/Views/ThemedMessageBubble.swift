@@ -104,7 +104,8 @@ struct ThemedMessageBubble: View {
     }
 
     private var otherBubbleColor: String {
-        DynamicColorGenerator.blendTwo(contactColor, weight1: 0.30, "6366F1", weight2: 0.70)
+        let senderHex = message.senderColor ?? contactColor
+        return DynamicColorGenerator.blendTwo(senderHex, weight1: 0.30, "6366F1", weight2: 0.70)
     }
 
     var visualAttachments: [MessageAttachment] { // internal for cross-file extension access
@@ -479,22 +480,26 @@ struct ThemedMessageBubble: View {
                                         .padding(.horizontal, 8)
 
                                     UserIdentityBar(
-                                        name: message.senderName ?? "?",
-                                        username: message.senderUsername,
-                                        avatarURL: message.senderAvatarURL,
-                                        accentColor: message.senderColor ?? contactColor,
-                                        timestamp: message.createdAt,
-                                        avatarMode: .messageBubble,
-                                        presenceState: presenceState,
-                                        moodEmoji: senderMoodEmoji,
-                                        onAvatarTap: {
-                                            selectedProfileUser = .from(message: message)
-                                        },
-                                        contextMenuItems: [
-                                            AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                                        avatar: AvatarConfig(
+                                            url: message.senderAvatarURL,
+                                            accentColor: message.senderColor ?? contactColor,
+                                            mode: .messageBubble,
+                                            moodEmoji: senderMoodEmoji,
+                                            presenceState: presenceState,
+                                            onTap: {
                                                 selectedProfileUser = .from(message: message)
-                                            }
-                                        ]
+                                            },
+                                            contextMenuItems: [
+                                                AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                                                    selectedProfileUser = .from(message: message)
+                                                }
+                                            ]
+                                        ),
+                                        name: message.senderName ?? "?",
+                                        leadingPrimary: [.name],
+                                        trailingPrimary: [],
+                                        leadingSecondary: message.senderUsername.map { [.username($0)] } ?? [],
+                                        trailingSecondary: []
                                     )
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 8)
