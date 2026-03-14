@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- OBLIGATOIRE pour les appels vidéo -->
+    <key>NSCameraUsageDescription</key>
+    <string>Meeshy a besoin d'accéder à votre caméra pour les appels vidéo avec vos contacts.</string>
+    
+    <!-- OBLIGATOIRE pour les appels audio/vidéo -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Meeshy a besoin d'accéder à votre microphone pour les appels audio et vidéo avec vos contacts.</string>
+    
+    <!-- OBLIGATOIRE pour la bibliothèque photo (si vous permettez d'envoyer des images) -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Meeshy a besoin d'accéder à vos photos pour vous permettre de partager des images avec vos contacts.</string>
+    
+    <!-- OBLIGATOIRE pour ajouter des photos (iOS 14+) -->
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Meeshy a besoin de cette permission pour sauvegarder les photos que vous recevez.</string>
+    
+    <!-- OBLIGATOIRE pour les contacts (si vous synchronisez) -->
+    <key>NSContactsUsageDescription</key>
+    <string>Meeshy peut accéder à vos contacts pour vous aider à trouver vos amis sur la plateforme.</string>
+    
+    <!-- OBLIGATOIRE pour les notifications -->
+    <key>NSUserNotificationsUsageDescription</key>
+    <string>Meeshy utilise les notifications pour vous informer des nouveaux messages et appels.</string>
+    
+    <!-- Configuration des domaines pour Universal Links -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:meeshy.me</string>
+        <string>applinks:www.meeshy.me</string>
+        <string>applinks:app.meeshy.me</string>
+    </array>
+    
+    <!-- Modes d'arrière-plan nécessaires -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+        <string>voip</string>
+        <string>remote-notification</string>
+        <string>fetch</string>
+    </array>
+    
+    <!-- Permissions pour les appels -->
+    <key>UIRequiresPersistentWiFi</key>
+    <false/>
+    
+    <!-- Support des orientations -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    
+    <!-- Support uniquement portrait pour iPhone -->
+    <key>UISupportedInterfaceOrientations~iphone</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    
+    <!-- Configuration de l'App Transport Security -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+        <!-- Si vous avez des domaines spécifiques, utilisez NSExceptionDomains -->
+    </dict>
+    
+    <!-- Informations de l'app -->
+    <key>CFBundleDisplayName</key>
+    <string>Meeshy</string>
+    
+    <key>CFBundleName</key>
+    <string>Meeshy</string>
+    
+    <!-- Version minimale iOS -->
+    <key>LSMinimumSystemVersion</key>
+    <string>17.0</string>
+    
+    <!-- Scènes pour SwiftUI -->
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <true/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UIWindowSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneConfigurationName</key>
+                    <string>Default Configuration</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
+    
+    <!-- Couleur d'accentuation -->
+    <key>NSAccentColorName</key>
+    <string>AccentColor</string>
+</dict>
+</plist>
