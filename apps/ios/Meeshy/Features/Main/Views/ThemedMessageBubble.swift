@@ -64,6 +64,10 @@ struct ThemedMessageBubble: View {
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
     let gridSpacing: CGFloat = 2 // internal for cross-file extension access
 
+    private var showIdentityBar: Bool {
+        !isDirect && isLastInGroup && !message.isMe
+    }
+
     private var hasReactions: Bool { !message.reactions.isEmpty }
 
     private var bottomSpacing: CGFloat {
@@ -468,38 +472,30 @@ struct ThemedMessageBubble: View {
 
                                     secondaryContentView
 
-                                    messageMetaRow(insideBubble: true)
+                                    if !showIdentityBar {
+                                        messageMetaRow(insideBubble: true)
+                                    }
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, hasTextOrNonMediaContent ? 10 : 4)
 
                                 // Identity bar (group conversations only, last in group, others' messages)
-                                if !isDirect && isLastInGroup && !message.isMe {
-                                    Divider()
-                                        .background(theme.textMuted.opacity(0.2))
-                                        .padding(.horizontal, 8)
-
-                                    UserIdentityBar(
-                                        avatar: AvatarConfig(
-                                            url: message.senderAvatarURL,
-                                            accentColor: message.senderColor ?? contactColor,
-                                            mode: .messageBubble,
-                                            moodEmoji: senderMoodEmoji,
-                                            presenceState: presenceState,
-                                            onTap: {
-                                                selectedProfileUser = .from(message: message)
-                                            },
-                                            contextMenuItems: [
-                                                AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                                                    selectedProfileUser = .from(message: message)
-                                                }
-                                            ]
-                                        ),
+                                if showIdentityBar {
+                                    UserIdentityBar.messageBubble(
                                         name: message.senderName ?? "?",
-                                        leadingPrimary: [.name],
-                                        trailingPrimary: [],
-                                        leadingSecondary: message.senderUsername.map { [.username($0)] } ?? [],
-                                        trailingSecondary: []
+                                        username: message.senderUsername.map { "@\($0)" },
+                                        avatarURL: message.senderAvatarURL,
+                                        accentColor: message.senderColor ?? contactColor,
+                                        role: nil,
+                                        time: timeString,
+                                        delivery: message.deliveryStatus,
+                                        flags: buildAvailableFlags(),
+                                        activeFlag: secondaryLangCode,
+                                        onFlagTap: { code in handleFlagTap(code) },
+                                        onTranslateTap: textTranslations.isEmpty ? nil : { onShowTranslationDetail?(message.id) },
+                                        presenceState: presenceState,
+                                        moodEmoji: senderMoodEmoji,
+                                        onAvatarTap: { selectedProfileUser = .from(message: message) }
                                     )
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 8)
@@ -887,36 +883,61 @@ struct ThemedMessageBubble: View {
         }
     }
 
-    @ViewBuilder
-    private func inlineFlagStrip(textColor: Color) -> some View {
+    private func buildAvailableFlags() -> [String] {
         let activeLang = currentDisplayLangCode.lowercased()
         let origLower = message.originalLanguage.lowercased()
         let user = AuthManager.shared.currentUser
 
-        let availableFlags: [String] = {
-            var all: [String] = [origLower]
-            var seen: Set<String> = [origLower]
+        var all: [String] = [origLower]
+        var seen: Set<String> = [origLower]
 
-            if let pc = preferredTranslation?.targetLanguage.lowercased(), !seen.contains(pc) {
-                all.append(pc); seen.insert(pc)
+        if let pc = preferredTranslation?.targetLanguage.lowercased(), !seen.contains(pc) {
+            all.append(pc); seen.insert(pc)
+        }
+
+        if let reg = user?.regionalLanguage?.lowercased(), !seen.contains(reg),
+           textTranslations.contains(where: { $0.targetLanguage.lowercased() == reg }) {
+            all.append(reg); seen.insert(reg)
+        }
+
+        if user?.useCustomDestination == true,
+           let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom),
+           textTranslations.contains(where: { $0.targetLanguage.lowercased() == custom }) {
+            all.append(custom); seen.insert(custom)
+        }
+
+        return all.filter { $0 != activeLang }
+    }
+
+    private func handleFlagTap(_ code: String) {
+        let isOriginal = code.lowercased() == message.originalLanguage.lowercased()
+        let hasContent = isOriginal || textTranslations.contains(where: { $0.targetLanguage.lowercased() == code.lowercased() })
+
+        if !hasContent {
+            onRequestTranslation?(message.id, code)
+            HapticFeedback.light()
+            return
+        }
+        if isOriginal {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                activeDisplayLangCode = code
+                secondaryLangCode = nil
             }
-
-            if let reg = user?.regionalLanguage?.lowercased(), !seen.contains(reg),
-               textTranslations.contains(where: { $0.targetLanguage.lowercased() == reg }) {
-                all.append(reg); seen.insert(reg)
+        } else {
+            let isShowing = secondaryLangCode?.lowercased() == code.lowercased()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                secondaryLangCode = isShowing ? nil : code
             }
+        }
+        HapticFeedback.light()
+    }
 
-            if user?.useCustomDestination == true,
-               let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom),
-               textTranslations.contains(where: { $0.targetLanguage.lowercased() == custom }) {
-                all.append(custom); seen.insert(custom)
-            }
-
-            return all.filter { $0 != activeLang }
-        }()
+    @ViewBuilder
+    private func inlineFlagStrip(textColor: Color) -> some View {
+        let flags = buildAvailableFlags()
 
         HStack(spacing: 4) {
-            ForEach(availableFlags, id: \.self) { code in
+            ForEach(flags, id: \.self) { code in
                 swapFlagButton(code: code, textColor: textColor)
             }
         }
