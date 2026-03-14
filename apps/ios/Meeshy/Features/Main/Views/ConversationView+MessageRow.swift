@@ -46,6 +46,7 @@ extension ConversationView {
                     message: msg,
                     contactColor: accentColor,
                     isDirect: isDirect,
+                    isDark: theme.mode.isDark,
                     transcription: viewModel.messageTranscriptions[msg.id],
                     translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
                     textTranslations: viewModel.messageTranslations[msg.id] ?? [],
@@ -112,6 +113,7 @@ extension ConversationView {
                     isLastReceivedMessage: isLastReceived,
                     mentionDisplayNames: viewModel.mentionDisplayNames
                 )
+                .equatable()
                 .onLongPressGesture(minimumDuration: 0.5) {
                     guard overlayState.longPressEnabled else { return }
                     // Removed overlayMessageFrame (GeometryReader dependency)

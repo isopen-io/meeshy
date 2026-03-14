@@ -11,6 +11,7 @@ struct ThemedMessageBubble: View {
     let message: Message
     let contactColor: String
     var isDirect: Bool = false
+    var isDark: Bool = ThemeManager.shared.mode.isDark
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
     var textTranslations: [MessageTranslation] = []
@@ -52,7 +53,7 @@ struct ThemedMessageBubble: View {
     @State var revealedAttachmentIds: Set<String> = [] // internal for cross-file extension access
 
     @State var fullscreenLocationAttachment: MessageAttachment? = nil
-    @ObservedObject var theme = ThemeManager.shared // internal for cross-file extension access
+    var theme: ThemeManager { ThemeManager.shared } // non-observed — isDark drives re-renders
     @ObservedObject private var videoPlayerManager = SharedAVPlayerManager.shared
 
     // Ephemeral timer state
@@ -338,10 +339,10 @@ struct ThemedMessageBubble: View {
             .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                     .overlay(
                         Capsule()
-                            .stroke(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
                     )
             )
             .accessibilityElement(children: .combine)
@@ -657,7 +658,7 @@ struct ThemedMessageBubble: View {
         .padding(.vertical, 4)
         .background(
             Capsule()
-                .fill(Color(hex: "FF6B6B").opacity(theme.mode.isDark ? 0.15 : 0.1))
+                .fill(Color(hex: "FF6B6B").opacity(isDark ? 0.15 : 0.1))
                 .overlay(
                     Capsule()
                         .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
@@ -1094,7 +1095,6 @@ struct ThemedMessageBubble: View {
         let previewColor: Color = message.isMe
             ? .white.opacity(0.65)
             : theme.textMuted
-        let isDark = theme.mode.isDark
         let bgColor: Color = message.isMe
             ? Color.white.opacity(0.15)
             : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
@@ -1248,7 +1248,6 @@ struct ThemedMessageBubble: View {
 
     @ViewBuilder
     private var reactionsOverlay: some View {
-        let isDark = theme.mode.isDark
         let accent = Color(hex: contactColor)
         let hasReactions = !reactionSummaries.isEmpty
         let visible = Array(reactionSummaries.prefix(maxVisibleReactions))
@@ -1390,7 +1389,6 @@ struct ThemedMessageBubble: View {
     // MARK: - Bubble Background
     private var bubbleBackground: some View {
         let other = Color(hex: otherBubbleColor)
-        let isDark = theme.mode.isDark
 
         return RoundedRectangle(cornerRadius: 18)
             .fill(
@@ -1458,7 +1456,6 @@ struct ThemedMessageBubble: View {
     // MARK: - Audio Bubble Background
     private var audioBubbleBackground: some View {
         let accent = Color(hex: contactColor)
-        let isDark = theme.mode.isDark
         return RoundedRectangle(cornerRadius: 20)
             .fill(isDark ? accent.opacity(0.15) : accent.opacity(0.08))
             .overlay(
@@ -1468,4 +1465,26 @@ struct ThemedMessageBubble: View {
     }
 
     // See ThemedMessageBubble+Media.swift for downloadBadge
+}
+
+// MARK: - Equatable (permet .equatable() pour eviter les re-renders superflus)
+extension ThemedMessageBubble: @MainActor Equatable {
+    static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {
+        lhs.message.id == rhs.message.id &&
+        lhs.message.content == rhs.message.content &&
+        lhs.message.deliveryStatus == rhs.message.deliveryStatus &&
+        lhs.message.reactions.count == rhs.message.reactions.count &&
+        lhs.message.attachments.count == rhs.message.attachments.count &&
+        lhs.contactColor == rhs.contactColor &&
+        lhs.isDirect == rhs.isDirect &&
+        lhs.isDark == rhs.isDark &&
+        lhs.preferredTranslation?.translatedContent == rhs.preferredTranslation?.translatedContent &&
+        lhs.transcription?.text == rhs.transcription?.text &&
+        lhs.showAvatar == rhs.showAvatar &&
+        lhs.presenceState == rhs.presenceState &&
+        lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
+        lhs.isLastInGroup == rhs.isLastInGroup &&
+        lhs.isLastReceivedMessage == rhs.isLastReceivedMessage &&
+        lhs.activeAudioLanguage == rhs.activeAudioLanguage
+    }
 }
