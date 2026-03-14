@@ -158,6 +158,18 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     private let session: URLSession
     private let decoder: JSONDecoder
 
+    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private nonisolated(unsafe) static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     public var authToken: String?
     public var anonymousSessionToken: String?
 
@@ -175,11 +187,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         self.decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = iso.date(from: dateStr) { return date }
-            iso.formatOptions = [.withInternetDateTime]
-            if let date = iso.date(from: dateStr) { return date }
+            if let date = Self.isoFormatterWithFractional.date(from: dateStr) { return date }
+            if let date = Self.isoFormatter.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
     }
