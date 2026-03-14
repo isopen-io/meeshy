@@ -60,28 +60,12 @@ public struct NotificationRowView: View {
 
     private var iconView: some View {
         ZStack(alignment: .topTrailing) {
-            if let avatarUrl = notification.senderAvatar, !avatarUrl.isEmpty {
-                CachedAsyncImage(url: avatarUrl) {
-                    Circle()
-                        .fill(accentColor.opacity(0.12))
-                        .overlay(
-                            Image(systemName: notifType.systemIcon)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(accentColor)
-                        )
-                }
-                .frame(width: 44, height: 44)
-                .clipShape(Circle())
-            } else {
-                Circle()
-                    .fill(accentColor.opacity(0.12))
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Image(systemName: notifType.systemIcon)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(accentColor)
-                    )
-            }
+            MeeshyAvatar(
+                name: notification.senderName ?? notifType.rawValue,
+                context: .notification,
+                accentColor: notifType.accentHex,
+                avatarURL: notification.senderAvatar
+            )
 
             if !notification.isRead {
                 Circle()

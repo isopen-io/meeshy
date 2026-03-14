@@ -181,14 +181,11 @@ struct FeedPostCard: View {
         VStack(alignment: .leading, spacing: 10) {
             // Original author
             HStack(spacing: 8) {
-                Circle()
-                    .fill(theme.accentText(repost.authorColor).opacity(0.3))
-                    .frame(width: 28, height: 28)
-                    .overlay(
-                        Text(String(repost.author.prefix(1)))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(theme.accentText(repost.authorColor))
-                    )
+                MeeshyAvatar(
+                    name: repost.author,
+                    context: .postComment,
+                    accentColor: repost.authorColor
+                )
 
                 Text(repost.author)
                     .font(.system(size: 13, weight: .semibold))
@@ -371,14 +368,11 @@ struct FeedPostCard: View {
                         if post.comments.count > 3 {
                             HStack(spacing: -6) {
                                 ForEach(Array(post.comments.dropFirst(3).prefix(3).enumerated()), id: \.element.id) { index, comment in
-                                    Circle()
-                                        .fill(theme.accentText(comment.authorColor))
-                                        .frame(width: 20, height: 20)
-                                        .overlay(
-                                            Text(String(comment.author.prefix(1)))
-                                                .font(.system(size: 8, weight: .bold))
-                                                .foregroundColor(.white)
-                                        )
+                                    MeeshyAvatar(
+                                        name: comment.author,
+                                        context: .postReaction,
+                                        accentColor: comment.authorColor
+                                    )
                                         .overlay(
                                             Circle()
                                                 .stroke(theme.backgroundPrimary, lineWidth: 1.5)

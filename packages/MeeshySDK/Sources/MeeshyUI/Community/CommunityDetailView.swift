@@ -289,41 +289,13 @@ public struct CommunityDetailView: View {
 
     @ViewBuilder
     private func communityAvatar(_ community: MeeshyCommunity, color: String) -> some View {
-        let emoji = localEmoji.flatMap { $0.isEmpty ? nil : $0 } ?? (community.emoji.isEmpty ? nil : community.emoji)
-
-        ZStack {
-            if let avatarUrl = community.avatar, !avatarUrl.isEmpty, let url = URL(string: avatarUrl) {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } else {
-                        avatarFallback(emoji: emoji, color: color, name: community.name)
-                    }
-                }
-                .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-            } else {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: color), Color(hex: color).opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 72, height: 72)
-                    .overlay {
-                        if let e = emoji {
-                            Text(e).font(.system(size: 32))
-                        } else {
-                            Text(String(community.name.prefix(2)).uppercased())
-                                .font(.system(size: 28, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                        }
-                    }
-            }
-        }
-        .shadow(color: Color(hex: color).opacity(0.4), radius: 8, y: 4)
+        MeeshyAvatar(
+            name: community.name,
+            context: .custom(72),
+            kind: .entity,
+            accentColor: color,
+            avatarURL: community.avatar
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 18)
                 .stroke(theme.backgroundPrimary, lineWidth: 3)

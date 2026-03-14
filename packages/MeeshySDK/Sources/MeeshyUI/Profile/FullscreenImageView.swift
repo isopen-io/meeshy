@@ -90,23 +90,10 @@ public struct FullscreenImageView: View {
 
     @ViewBuilder
     private var fallbackView: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(hex: accentColor).opacity(0.6),
-                            Color(hex: accentColor).opacity(0.3)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 200, height: 200)
-
-            Text(String(fallbackText.prefix(2)).uppercased())
-                .font(.system(size: 64, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-        }
+        MeeshyAvatar(
+            name: fallbackText,
+            context: .custom(200),
+            accentColor: accentColor
+        )
     }
 }

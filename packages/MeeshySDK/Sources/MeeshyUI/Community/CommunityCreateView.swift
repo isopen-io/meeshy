@@ -378,14 +378,11 @@ public struct CommunityCreateView: View {
             }
         } label: {
             HStack(spacing: 12) {
-                Circle()
-                    .fill(Color(hex: DynamicColorGenerator.colorForName(user.username)))
-                    .frame(width: 36, height: 36)
-                    .overlay {
-                        Text(String(user.username.prefix(1)).uppercased())
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                    }
+                MeeshyAvatar(
+                    name: user.username,
+                    context: .userListItem,
+                    avatarURL: user.avatar
+                )
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(user.displayName ?? user.username)

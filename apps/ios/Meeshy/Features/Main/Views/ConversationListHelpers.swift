@@ -121,22 +121,12 @@ struct ConversationPreviewView: View {
             // Header with avatar and name
             HStack(spacing: 12) {
                 // Avatar
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 44, height: 44)
-                        .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
-
-                    Text(String(conversation.name.prefix(1)))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                }
+                MeeshyAvatar(
+                    name: conversation.name,
+                    context: .conversationList,
+                    accentColor: accentColor,
+                    secondaryColor: secondaryColor
+                )
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {

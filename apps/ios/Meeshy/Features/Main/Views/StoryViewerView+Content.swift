@@ -886,13 +886,10 @@ struct StoryViewersSheet: View {
 
     private func viewerRow(_ viewer: StoryViewerItem) -> some View {
         HStack(spacing: 12) {
-            CachedAsyncImage(url: viewer.avatarUrl ?? "") {
-                Color.gray.opacity(0.3)
-            }
-            .frame(width: 44, height: 44)
-            .clipShape(Circle())
-            .overlay(
-                Circle().stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            MeeshyAvatar(
+                name: viewer.displayName,
+                context: .storyViewer,
+                avatarURL: viewer.avatarUrl
             )
 
             VStack(alignment: .leading, spacing: 4) {

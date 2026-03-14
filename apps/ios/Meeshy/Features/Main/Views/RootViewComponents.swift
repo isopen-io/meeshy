@@ -489,21 +489,11 @@ struct ThemedFeedCard: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack(spacing: 12) {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: item.color), Color(hex: item.color).opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Text(String(item.author.prefix(1)))
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                    )
-                    .shadow(color: Color(hex: item.color).opacity(0.4), radius: 6, y: 3)
+                MeeshyAvatar(
+                    name: item.author,
+                    context: .feedComposer,
+                    accentColor: item.color
+                )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.author)
