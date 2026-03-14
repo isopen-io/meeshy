@@ -1,9 +1,8 @@
 import Foundation
-import MeeshySDK
 import UIKit
 import XCTest
 
-final class MockMediaCache: MediaCaching, @unchecked Sendable {
+final class MockMediaCache: @unchecked Sendable {
 
     // MARK: - Storage
 

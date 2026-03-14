@@ -48,6 +48,10 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
         consumedMessageIds.append(messageId)
     }
 
+    func handleParticipantRoleUpdated(participantId: String, newRole: String) {
+        // no-op in tests
+    }
+
     func syncMissedMessages() async {
         syncMissedCalled = true
     }
