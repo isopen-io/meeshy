@@ -1304,13 +1304,20 @@ class ConversationViewModel: ObservableObject {
             return override
         }
         guard let translations = messageTranslations[messageId], !translations.isEmpty else { return nil }
+
+        // Determine original language of this message
+        let originalLang = messageIndex(for: messageId)
+            .map { messages[$0].originalLanguage.lowercased() }
+
         let langs = preferredLanguages
         for lang in langs {
-            if let match = translations.first(where: { $0.targetLanguage.lowercased() == lang.lowercased() }) {
+            let langLower = lang.lowercased()
+            // If the original is already in this preferred language, show original (no translation needed)
+            if let orig = originalLang, orig == langLower { return nil }
+            if let match = translations.first(where: { $0.targetLanguage.lowercased() == langLower }) {
                 return match
             }
         }
-        // No translation matches preferred languages → content is already in user's language
         return nil
     }
 
