@@ -276,46 +276,51 @@ private struct ConversationHeaderAvatarView: View {
                     onMoodTap: statusViewModel.moodTapHandler(for: userId),
                     contextMenuItems: directContextMenu
                 )
-            } else if !topActiveMembers.isEmpty {
-                HStack(spacing: -6) {
-                    ForEach(topActiveMembers) { member in
-                        MeeshyAvatar(
-                            name: member.name,
-                            context: .conversationHeaderStacked,
-                            accentColor: member.color,
-                            avatarURL: member.avatarURL,
-                            storyState: memberStoryState(for: member.id),
-                            moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
-                            presenceState: PresenceManager.shared.presenceState(for: member.id),
-                            onTap: {
-                                HapticFeedback.light()
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    composerState.showOptions = false
-                                }
-                            },
-                            onViewStory: {
-                                headerState.storyUserIdForHeader = member.id
-                                headerState.showStoryViewerFromHeader = true
-                            },
-                            onMoodTap: statusViewModel.moodTapHandler(for: member.id),
-                            contextMenuItems: avatarContextMenu(for: member.id, name: member.name)
-                        )
+            } else {
+                HStack(spacing: 4) {
+                    // Stacked active member avatars
+                    if !topActiveMembers.isEmpty {
+                        HStack(spacing: -6) {
+                            ForEach(topActiveMembers) { member in
+                                MeeshyAvatar(
+                                    name: member.name,
+                                    context: .conversationHeaderStacked,
+                                    accentColor: member.color,
+                                    avatarURL: member.avatarURL,
+                                    storyState: memberStoryState(for: member.id),
+                                    moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
+                                    presenceState: PresenceManager.shared.presenceState(for: member.id),
+                                    onTap: {
+                                        HapticFeedback.light()
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                            composerState.showOptions = false
+                                        }
+                                    },
+                                    onViewStory: {
+                                        headerState.storyUserIdForHeader = member.id
+                                        headerState.showStoryViewerFromHeader = true
+                                    },
+                                    onMoodTap: statusViewModel.moodTapHandler(for: member.id),
+                                    contextMenuItems: avatarContextMenu(for: member.id, name: member.name)
+                                )
+                            }
+                        }
                     }
-                }
-            } else if let conv = conversation, conv.memberCount > 2 {
-                Button {
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        composerState.showOptions = false
-                    }
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "person.2.fill")
-                            .font(.system(size: 9))
-                        Text("\(conv.memberCount)")
-                            .font(.system(size: 10, weight: .bold))
-                    }
-                    .foregroundColor(.white.opacity(0.5))
+
+                    // Conversation avatar (always visible for groups)
+                    MeeshyAvatar(
+                        name: conversation?.name ?? "?",
+                        context: .conversationHeaderExpanded,
+                        accentColor: accentColor,
+                        secondaryColor: secondaryColor,
+                        avatarURL: conversation?.avatar,
+                        onTap: {
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                composerState.showOptions = false
+                            }
+                        }
+                    )
                 }
             }
         } else {
