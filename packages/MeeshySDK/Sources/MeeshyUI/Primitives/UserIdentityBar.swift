@@ -378,6 +378,15 @@ extension UserIdentityBar {
         if let role, role != .member {
             leading1.append(.roleBadge(role))
         }
+        if !flags.isEmpty || onTranslateTap != nil {
+            leading1.append(.text("·"))
+        }
+        if !flags.isEmpty {
+            leading1.append(.flags(flags, active: activeFlag, onTap: onFlagTap))
+        }
+        if let onTranslateTap {
+            leading1.append(.translateButton(action: onTranslateTap))
+        }
 
         var trailing1: [IdentityBarElement] = [.time(time)]
         if let delivery {
@@ -389,13 +398,7 @@ extension UserIdentityBar {
             leading2.append(.username(username))
         }
 
-        var trailing2: [IdentityBarElement] = []
-        if !flags.isEmpty {
-            trailing2.append(.flags(flags, active: activeFlag, onTap: onFlagTap))
-        }
-        if let onTranslateTap {
-            trailing2.append(.translateButton(action: onTranslateTap))
-        }
+        let trailing2: [IdentityBarElement] = []
 
         var contextMenuItems: [AvatarContextMenuItem]?
         if let onAvatarTap {

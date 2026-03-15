@@ -68,6 +68,8 @@ struct ThemedMessageBubble: View {
         !isDirect && isLastInGroup && !message.isMe
     }
 
+    private var hasAnyTranslation: Bool { !textTranslations.isEmpty || !translatedAudios.isEmpty }
+
     private var hasReactions: Bool { !message.reactions.isEmpty }
 
     private var bottomSpacing: CGFloat {
@@ -488,7 +490,7 @@ struct ThemedMessageBubble: View {
                                         flags: buildAvailableFlags(),
                                         activeFlag: secondaryLangCode,
                                         onFlagTap: { code in handleFlagTap(code) },
-                                        onTranslateTap: textTranslations.isEmpty ? nil : { onShowTranslationDetail?(message.id) },
+                                        onTranslateTap: hasAnyTranslation ? { onShowTranslationDetail?(message.id) } : nil,
                                         presenceState: presenceState,
                                         moodEmoji: senderMoodEmoji,
                                         onAvatarTap: { selectedProfileUser = .from(message: message) }
@@ -499,10 +501,10 @@ struct ThemedMessageBubble: View {
                                     UserIdentityBar.metaRow(
                                         time: timeString,
                                         delivery: message.isMe ? message.deliveryStatus : nil,
-                                        flags: !textTranslations.isEmpty ? buildAvailableFlags() : [],
+                                        flags: hasAnyTranslation ? buildAvailableFlags() : [],
                                         activeFlag: secondaryLangCode,
-                                        onFlagTap: !textTranslations.isEmpty ? { code in handleFlagTap(code) } : nil,
-                                        onTranslateTap: textTranslations.isEmpty ? nil : { onShowTranslationDetail?(message.id) },
+                                        onFlagTap: hasAnyTranslation ? { code in handleFlagTap(code) } : nil,
+                                        onTranslateTap: hasAnyTranslation ? { onShowTranslationDetail?(message.id) } : nil,
                                         isMe: message.isMe
                                     )
                                     .padding(.horizontal, 14)
@@ -804,6 +806,11 @@ struct ThemedMessageBubble: View {
         let origLower = message.originalLanguage.lowercased()
         let user = AuthManager.shared.currentUser
 
+        let hasTranslation: (String) -> Bool = { code in
+            textTranslations.contains(where: { $0.targetLanguage.lowercased() == code })
+            || translatedAudios.contains(where: { $0.targetLanguage.lowercased() == code })
+        }
+
         var all: [String] = [origLower]
         var seen: Set<String> = [origLower]
 
@@ -811,14 +818,12 @@ struct ThemedMessageBubble: View {
             all.append(pc); seen.insert(pc)
         }
 
-        if let reg = user?.regionalLanguage?.lowercased(), !seen.contains(reg),
-           textTranslations.contains(where: { $0.targetLanguage.lowercased() == reg }) {
+        if let reg = user?.regionalLanguage?.lowercased(), !seen.contains(reg), hasTranslation(reg) {
             all.append(reg); seen.insert(reg)
         }
 
         if user?.useCustomDestination == true,
-           let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom),
-           textTranslations.contains(where: { $0.targetLanguage.lowercased() == custom }) {
+           let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom), hasTranslation(custom) {
             all.append(custom); seen.insert(custom)
         }
 
