@@ -42,7 +42,7 @@ export const MessageHeader = memo(function MessageHeader({
         <Avatar
           className={cn(
             "h-8 w-8 sm:h-9 sm:w-9",
-            avatarUrl && "cursor-pointer hover:ring-2 hover:ring-blue-500 transition-shadow"
+            avatarUrl && "cursor-pointer hover:ring-2 hover:ring-indigo-500 transition-shadow"
           )}
           onClick={(e) => {
             e.stopPropagation();
@@ -52,7 +52,7 @@ export const MessageHeader = memo(function MessageHeader({
           }}
         >
           <AvatarImage src={avatarUrl} alt={message.sender?.firstName} />
-          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs sm:text-sm font-semibold">
+          <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white text-xs sm:text-sm font-semibold">
             {getMessageInitials(message)}
           </AvatarFallback>
         </Avatar>

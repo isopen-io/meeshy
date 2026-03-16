@@ -114,7 +114,7 @@ jest.mock('@/components/ui/dropdown-menu', () => ({
 
 // Mock de next/link
 jest.mock('next/link', () => {
-  return ({ children, href }: any) => <a href={href} data-testid="next-link">{children}</a>;
+  return ({ children, href, className }: any) => <a href={href} className={className} data-testid="next-link">{children}</a>;
 });
 
 // MarkdownMessage is mocked via moduleNameMapper -> __mocks__/components/messages/MarkdownMessage.tsx
@@ -967,6 +967,33 @@ describe('BubbleMessageNormalView', () => {
       const card = screen.getByTestId('message-card');
       expect(card.className).toContain('rounded-2xl');
       expect(card.className).toContain('shadow-sm');
+    });
+
+    it('devrait utiliser le gradient indigo brand pour le fallback avatar', () => {
+      renderNormalView({
+        message: createMockMessage({
+          senderId: 'other-user',
+          sender: { id: 'other-user', firstName: 'Jane', avatar: null },
+        }),
+        currentUser: createMockUser({ id: 'user-456' }),
+      });
+
+      const fallback = screen.getByTestId('avatar-fallback');
+      expect(fallback.className).toContain('from-indigo-500');
+      expect(fallback.className).toContain('to-indigo-700');
+    });
+
+    it('devrait utiliser hover:text-indigo-500 pour le lien du nom', () => {
+      renderNormalView({
+        message: createMockMessage({
+          senderId: 'other-user',
+          sender: { id: 'other-user', firstName: 'Jane', lastName: 'Smith', username: 'janesmith', avatar: null },
+        }),
+        currentUser: createMockUser({ id: 'user-456' }),
+      });
+
+      const nameLink = screen.getByText('Jane Smith');
+      expect(nameLink.className).toContain('hover:text-indigo-500');
     });
   });
 

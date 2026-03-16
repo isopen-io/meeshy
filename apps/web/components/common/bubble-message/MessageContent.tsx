@@ -134,8 +134,8 @@ export const MessageContent = memo(function MessageContent({
                   className={cn(
                     "text-sm sm:text-base break-words",
                     isOwnMessage
-                      ? "text-white [&_code]:bg-white/10 [&_code]:text-white/90 [&_pre]:bg-white/10"
-                      : "text-gray-800 dark:text-gray-100"
+                      ? "text-white [&_code]:bg-white/15 [&_code]:text-white/95 [&_pre]:bg-white/10 [&_a]:text-indigo-200 [&_a]:underline"
+                      : "text-gray-800 dark:text-gray-100 [&_a]:text-indigo-500 [&_a]:dark:text-indigo-400"
                   )}
                   enableTracking={true}
                   isOwnMessage={isOwnMessage}
