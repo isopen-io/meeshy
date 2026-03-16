@@ -1,6 +1,6 @@
 /**
  * Tests for user-status module
- * Tests user online status calculation based on activity
+ * Tests user online status calculation combining isOnline + lastActiveAt
  */
 
 import { getUserStatus, type UserStatus } from '../../lib/user-status';
@@ -17,237 +17,143 @@ describe('User Status Module', () => {
       });
     });
 
-    describe('isOnline property handling', () => {
-      it('should use lastActiveAt even when isOnline is explicitly false', () => {
+    describe('isOnline === false (explicit disconnect)', () => {
+      it('should return away when isOnline false but lastActiveAt is recent', () => {
         const user = {
           id: '1',
           isOnline: false,
           lastActiveAt: new Date().toISOString(),
         };
-
-        expect(getUserStatus(user as any)).toBe('online');
+        // Disconnected but was just active => away
+        expect(getUserStatus(user as any)).toBe('away');
       });
 
-      it('should return offline when isOnline is true but no lastActiveAt', () => {
-        const user = {
-          id: '1',
-          isOnline: true,
-        };
+      it('should return away when isOnline false and active 10min ago', () => {
+        const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const user = { id: '1', isOnline: false, lastActiveAt: tenMinAgo.toISOString() };
+        expect(getUserStatus(user as any)).toBe('away');
+      });
 
+      it('should return offline when isOnline false and active 30+ min ago', () => {
+        const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+        const user = { id: '1', isOnline: false, lastActiveAt: thirtyMinAgo.toISOString() };
+        expect(getUserStatus(user as any)).toBe('offline');
+      });
+
+      it('should return offline when isOnline false and no lastActiveAt', () => {
+        const user = { id: '1', isOnline: false };
         expect(getUserStatus(user as any)).toBe('offline');
       });
     });
 
-    describe('lastActiveAt based status', () => {
+    describe('isOnline === true (connected via socket)', () => {
+      it('should return online when isOnline true and no lastActiveAt', () => {
+        const user = { id: '1', isOnline: true };
+        expect(getUserStatus(user as any)).toBe('online');
+      });
+
+      it('should return online when isOnline true and recently active', () => {
+        const user = { id: '1', isOnline: true, lastActiveAt: new Date().toISOString() };
+        expect(getUserStatus(user as any)).toBe('online');
+      });
+
+      it('should return away when isOnline true but inactive 10+ min', () => {
+        const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const user = { id: '1', isOnline: true, lastActiveAt: tenMinAgo.toISOString() };
+        expect(getUserStatus(user as any)).toBe('away');
+      });
+
+      it('should return away when isOnline true but inactive 30+ min', () => {
+        const thirtyMinAgo = new Date(Date.now() - 35 * 60 * 1000);
+        const user = { id: '1', isOnline: true, lastActiveAt: thirtyMinAgo.toISOString() };
+        // Connected but idle for 35 min => away (not offline since socket is connected)
+        expect(getUserStatus(user as any)).toBe('away');
+      });
+    });
+
+    describe('isOnline undefined (no socket info, time-based only)', () => {
       it('should return online when active within last 5 minutes', () => {
-        const now = new Date();
-        const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
-
-        const user = {
-          id: '1',
-          lastActiveAt: twoMinutesAgo.toISOString(),
-        };
-
+        const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+        const user = { id: '1', lastActiveAt: twoMinAgo.toISOString() };
         expect(getUserStatus(user as any)).toBe('online');
       });
 
       it('should return online when active exactly now', () => {
-        const user = {
-          id: '1',
-          lastActiveAt: new Date().toISOString(),
-        };
-
-        expect(getUserStatus(user as any)).toBe('online');
-      });
-
-      it('should return online when active 4 minutes ago', () => {
-        const now = new Date();
-        const fourMinutesAgo = new Date(now.getTime() - 4 * 60 * 1000);
-
-        const user = {
-          id: '1',
-          lastActiveAt: fourMinutesAgo.toISOString(),
-        };
-
+        const user = { id: '1', lastActiveAt: new Date().toISOString() };
         expect(getUserStatus(user as any)).toBe('online');
       });
 
       it('should return away when inactive for 5-30 minutes', () => {
-        const now = new Date();
-        const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
-
-        const user = {
-          id: '1',
-          lastActiveAt: tenMinutesAgo.toISOString(),
-        };
-
+        const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const user = { id: '1', lastActiveAt: tenMinAgo.toISOString() };
         expect(getUserStatus(user as any)).toBe('away');
       });
 
       it('should return away when inactive for exactly 5 minutes', () => {
-        const now = new Date();
-        const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-
-        const user = {
-          id: '1',
-          lastActiveAt: fiveMinutesAgo.toISOString(),
-        };
-
-        expect(getUserStatus(user as any)).toBe('away');
-      });
-
-      it('should return away when inactive for 29 minutes', () => {
-        const now = new Date();
-        const twentyNineMinutesAgo = new Date(now.getTime() - 29 * 60 * 1000);
-
-        const user = {
-          id: '1',
-          lastActiveAt: twentyNineMinutesAgo.toISOString(),
-        };
-
+        const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const user = { id: '1', lastActiveAt: fiveMinAgo.toISOString() };
         expect(getUserStatus(user as any)).toBe('away');
       });
 
       it('should return offline when inactive for 30+ minutes', () => {
-        const now = new Date();
-        const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
-
-        const user = {
-          id: '1',
-          lastActiveAt: thirtyMinutesAgo.toISOString(),
-        };
-
+        const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+        const user = { id: '1', lastActiveAt: thirtyMinAgo.toISOString() };
         expect(getUserStatus(user as any)).toBe('offline');
       });
 
       it('should return offline when inactive for hours', () => {
-        const now = new Date();
-        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-
-        const user = {
-          id: '1',
-          lastActiveAt: twoHoursAgo.toISOString(),
-        };
-
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        const user = { id: '1', lastActiveAt: twoHoursAgo.toISOString() };
         expect(getUserStatus(user as any)).toBe('offline');
       });
 
-      it('should return offline when inactive for days', () => {
-        const now = new Date();
-        const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-
-        const user = {
-          id: '1',
-          lastActiveAt: twoDaysAgo.toISOString(),
-        };
-
-        expect(getUserStatus(user as any)).toBe('offline');
-      });
-    });
-
-    describe('No lastActiveAt handling', () => {
-      it('should return offline when no lastActiveAt and no isOnline', () => {
-        const user = {
-          id: '1',
-        };
-
+      it('should return offline when no lastActiveAt', () => {
+        const user = { id: '1' };
         expect(getUserStatus(user as any)).toBe('offline');
       });
 
       it('should return offline when lastActiveAt is null', () => {
-        const user = {
-          id: '1',
-          lastActiveAt: null,
-        };
-
+        const user = { id: '1', lastActiveAt: null };
         expect(getUserStatus(user as any)).toBe('offline');
       });
     });
 
     describe('Edge cases', () => {
       it('should handle Date object for lastActiveAt', () => {
-        const now = new Date();
-        const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
-
-        const user = {
-          id: '1',
-          lastActiveAt: twoMinutesAgo,
-        };
-
+        const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+        const user = { id: '1', lastActiveAt: twoMinAgo };
         expect(getUserStatus(user as any)).toBe('online');
       });
 
       it('should handle timestamp number for lastActiveAt', () => {
-        const now = new Date();
-        const twoMinutesAgo = now.getTime() - 2 * 60 * 1000;
-
-        const user = {
-          id: '1',
-          lastActiveAt: twoMinutesAgo,
-        };
-
+        const twoMinAgo = Date.now() - 2 * 60 * 1000;
+        const user = { id: '1', lastActiveAt: twoMinAgo };
         expect(getUserStatus(user as any)).toBe('online');
       });
 
       it('should handle Participant type', () => {
-        const now = new Date();
-        const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
-
-        const participant = {
-          id: 'participant-123',
-          type: 'anonymous',
-          lastActiveAt: twoMinutesAgo.toISOString(),
-        };
-
+        const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+        const participant = { id: 'p-123', type: 'anonymous', lastActiveAt: twoMinAgo.toISOString() };
         expect(getUserStatus(participant as any)).toBe('online');
       });
 
-      it('should use lastActiveAt regardless of isOnline=false', () => {
-        const user = {
-          id: '1',
-          isOnline: false,
-          lastActiveAt: new Date().toISOString(), // Just now
-        };
-
-        expect(getUserStatus(user as any)).toBe('online');
-      });
-
-      it('should use lastActiveAt when isOnline is undefined', () => {
-        const now = new Date();
-        const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
-
-        const user = {
-          id: '1',
-          isOnline: undefined,
-          lastActiveAt: tenMinutesAgo.toISOString(),
-        };
-
+      it('should use time-based status when isOnline is undefined', () => {
+        const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const user = { id: '1', isOnline: undefined, lastActiveAt: tenMinAgo.toISOString() };
         expect(getUserStatus(user as any)).toBe('away');
       });
     });
 
     describe('Boundary testing', () => {
       it('should return online at 4 minutes 59 seconds', () => {
-        const now = new Date();
-        const almostFiveMinutes = new Date(now.getTime() - (5 * 60 * 1000 - 1000));
-
-        const user = {
-          id: '1',
-          lastActiveAt: almostFiveMinutes.toISOString(),
-        };
-
+        const almostFiveMin = new Date(Date.now() - (5 * 60 * 1000 - 1000));
+        const user = { id: '1', lastActiveAt: almostFiveMin.toISOString() };
         expect(getUserStatus(user as any)).toBe('online');
       });
 
       it('should return away at 29 minutes 59 seconds', () => {
-        const now = new Date();
-        const almostThirtyMinutes = new Date(now.getTime() - (30 * 60 * 1000 - 1000));
-
-        const user = {
-          id: '1',
-          lastActiveAt: almostThirtyMinutes.toISOString(),
-        };
-
+        const almostThirtyMin = new Date(Date.now() - (30 * 60 * 1000 - 1000));
+        const user = { id: '1', lastActiveAt: almostThirtyMin.toISOString() };
         expect(getUserStatus(user as any)).toBe('away');
       });
     });

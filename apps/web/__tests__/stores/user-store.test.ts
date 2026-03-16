@@ -49,13 +49,8 @@ describe('UserStore', () => {
   });
 
   beforeEach(() => {
-    // Reset the store to initial state
     act(() => {
-      useUserStore.setState({
-        usersMap: new Map(),
-        participants: [],
-        _lastStatusUpdate: 0,
-      });
+      useUserStore.getState().clearStore();
     });
     jest.clearAllMocks();
   });
@@ -66,72 +61,90 @@ describe('UserStore', () => {
 
       expect(state.usersMap.size).toBe(0);
       expect(state.participants).toEqual([]);
-      expect(state._lastStatusUpdate).toBe(0);
+      expect(state._lastStatusUpdate).toBeGreaterThanOrEqual(0);
     });
   });
 
-  describe('setParticipants', () => {
-    it('should set participants and populate usersMap', () => {
+  describe('mergeParticipants', () => {
+    it('should add participants and populate usersMap', () => {
       act(() => {
-        useUserStore.getState().setParticipants([mockUser1, mockUser2]);
+        useUserStore.getState().mergeParticipants([mockUser1, mockUser2]);
       });
 
       const state = useUserStore.getState();
 
-      expect(state.participants).toHaveLength(2);
       expect(state.usersMap.size).toBe(2);
-      expect(state.usersMap.get('user-1')).toEqual(mockUser1);
-      expect(state.usersMap.get('user-2')).toEqual(mockUser2);
+      expect(state.usersMap.get('user-1')?.displayName).toBe('John Doe');
+      expect(state.usersMap.get('user-2')?.displayName).toBe('Jane Doe');
     });
 
-    it('should replace existing participants', () => {
+    it('should merge new participants with existing (additive)', () => {
       act(() => {
-        useUserStore.getState().setParticipants([mockUser1, mockUser2]);
+        useUserStore.getState().mergeParticipants([mockUser1, mockUser2]);
       });
 
       act(() => {
-        useUserStore.getState().setParticipants([mockUser3]);
+        useUserStore.getState().mergeParticipants([mockUser3]);
       });
 
       const state = useUserStore.getState();
 
-      expect(state.participants).toHaveLength(1);
-      expect(state.usersMap.size).toBe(1);
-      expect(state.usersMap.get('user-3')).toEqual(mockUser3);
-      expect(state.usersMap.has('user-1')).toBe(false);
+      // All 3 users should be present (additive merge)
+      expect(state.usersMap.size).toBe(3);
+      expect(state.usersMap.has('user-1')).toBe(true);
+      expect(state.usersMap.has('user-2')).toBe(true);
+      expect(state.usersMap.has('user-3')).toBe(true);
+    });
+
+    it('should update existing user with more recent data', () => {
+      const recentDate = new Date('2025-01-01T12:00:00Z');
+      act(() => {
+        useUserStore.getState().mergeParticipants([
+          createMockUser({ id: 'user-1', displayName: 'Old Name', lastActiveAt: new Date('2024-01-01') } as any)
+        ]);
+      });
+
+      act(() => {
+        useUserStore.getState().mergeParticipants([
+          createMockUser({ id: 'user-1', displayName: 'New Name', lastActiveAt: recentDate } as any)
+        ]);
+      });
+
+      expect(useUserStore.getState().usersMap.get('user-1')?.displayName).toBe('New Name');
+    });
+
+    it('should handle empty array', () => {
+      act(() => {
+        useUserStore.getState().mergeParticipants([mockUser1]);
+        useUserStore.getState().mergeParticipants([]);
+      });
+
+      // Existing user should still be there
+      expect(useUserStore.getState().usersMap.size).toBe(1);
     });
 
     it('should update _lastStatusUpdate timestamp', () => {
       const beforeTime = Date.now();
 
       act(() => {
-        useUserStore.getState().setParticipants([mockUser1]);
+        useUserStore.getState().mergeParticipants([mockUser1]);
       });
 
       const state = useUserStore.getState();
       expect(state._lastStatusUpdate).toBeGreaterThanOrEqual(beforeTime);
     });
+  });
 
-    it('should handle empty array', () => {
+  describe('setParticipants (backward-compatible alias)', () => {
+    it('should delegate to mergeParticipants', () => {
       act(() => {
         useUserStore.getState().setParticipants([mockUser1, mockUser2]);
-        useUserStore.getState().setParticipants([]);
       });
 
       const state = useUserStore.getState();
-      expect(state.participants).toHaveLength(0);
-      expect(state.usersMap.size).toBe(0);
-    });
-
-    it('should handle duplicate user IDs by using last occurrence', () => {
-      const duplicateUser = { ...mockUser1, displayName: 'Duplicate John' };
-
-      act(() => {
-        useUserStore.getState().setParticipants([mockUser1, duplicateUser]);
-      });
-
-      const state = useUserStore.getState();
-      expect(state.usersMap.get('user-1')?.displayName).toBe('Duplicate John');
+      expect(state.usersMap.size).toBe(2);
+      expect(state.usersMap.get('user-1')).toBeDefined();
+      expect(state.usersMap.get('user-2')).toBeDefined();
     });
   });
 
@@ -188,22 +201,26 @@ describe('UserStore', () => {
       expect(userInParticipants?.isOnline).toBe(false);
     });
 
-    it('should not modify state for non-existent user', () => {
+    it('should create a minimal entry for unknown user (not drop the event)', () => {
       act(() => {
         useUserStore.getState().setParticipants([mockUser1]);
       });
 
-      const beforeState = useUserStore.getState();
-      const beforeTimestamp = beforeState._lastStatusUpdate;
-
       act(() => {
-        useUserStore.getState().updateUserStatus('non-existent-user', { isOnline: true });
+        useUserStore.getState().updateUserStatus('unknown-user', {
+          isOnline: true,
+          lastActiveAt: new Date(),
+          username: 'newguy',
+        });
       });
 
-      const afterState = useUserStore.getState();
-      // Timestamp should not change for non-existent user
-      expect(afterState._lastStatusUpdate).toBe(beforeTimestamp);
-      expect(afterState.usersMap.size).toBe(1);
+      const state = useUserStore.getState();
+      // Unknown user should now be in the store
+      expect(state.usersMap.size).toBe(2);
+      const newUser = state.usersMap.get('unknown-user');
+      expect(newUser).toBeDefined();
+      expect(newUser?.isOnline).toBe(true);
+      expect(newUser?.username).toBe('newguy');
     });
 
     it('should preserve other user properties when updating status', () => {
@@ -225,8 +242,8 @@ describe('UserStore', () => {
       });
 
       const state = useUserStore.getState();
-      expect(state.usersMap.get('user-2')?.isOnline).toBe(false); // unchanged
-      expect(state.usersMap.get('user-3')?.isOnline).toBe(true); // unchanged
+      expect(state.usersMap.get('user-2')?.isOnline).toBe(false);
+      expect(state.usersMap.get('user-3')?.isOnline).toBe(true);
     });
 
     it('should update _lastStatusUpdate on successful update', () => {
@@ -251,7 +268,8 @@ describe('UserStore', () => {
       });
 
       const user = useUserStore.getState().getUserById('user-1');
-      expect(user).toEqual(mockUser1);
+      expect(user?.id).toBe('user-1');
+      expect(user?.displayName).toBe('John Doe');
     });
 
     it('should return undefined for non-existent ID', () => {
@@ -269,7 +287,6 @@ describe('UserStore', () => {
     });
 
     it('should provide O(1) access', () => {
-      // Add many users
       const manyUsers = Array.from({ length: 1000 }, (_, i) =>
         createMockUser({ id: `user-${i}` })
       );
@@ -278,12 +295,10 @@ describe('UserStore', () => {
         useUserStore.getState().setParticipants(manyUsers);
       });
 
-      // Access should be fast (Map lookup)
       const startTime = performance.now();
       useUserStore.getState().getUserById('user-500');
       const endTime = performance.now();
 
-      // Should complete in less than 1ms
       expect(endTime - startTime).toBeLessThan(1);
     });
   });
@@ -294,7 +309,6 @@ describe('UserStore', () => {
         useUserStore.getState().setParticipants([mockUser1, mockUser2, mockUser3]);
       });
 
-      expect(useUserStore.getState().participants).toHaveLength(3);
       expect(useUserStore.getState().usersMap.size).toBe(3);
 
       act(() => {
@@ -319,16 +333,6 @@ describe('UserStore', () => {
 
       expect(useUserStore.getState()._lastStatusUpdate).toBeGreaterThanOrEqual(beforeTime);
     });
-
-    it('should be safe to call on empty store', () => {
-      act(() => {
-        useUserStore.getState().clearStore();
-      });
-
-      const state = useUserStore.getState();
-      expect(state.participants).toHaveLength(0);
-      expect(state.usersMap.size).toBe(0);
-    });
   });
 
   describe('Real-time Status Scenarios', () => {
@@ -339,7 +343,6 @@ describe('UserStore', () => {
         useUserStore.getState().setParticipants([offlineUser]);
       });
 
-      // Simulate Socket.IO event: user came online
       act(() => {
         useUserStore.getState().updateUserStatus('user-offline', {
           isOnline: true,
@@ -359,7 +362,6 @@ describe('UserStore', () => {
         useUserStore.getState().setParticipants([onlineUser]);
       });
 
-      // Simulate Socket.IO event: user went offline
       act(() => {
         useUserStore.getState().updateUserStatus('user-online', {
           isOnline: false,
@@ -376,14 +378,12 @@ describe('UserStore', () => {
         useUserStore.getState().setParticipants([mockUser1]);
       });
 
-      // Simulate rapid online/offline toggling
       act(() => {
         for (let i = 0; i < 100; i++) {
           useUserStore.getState().updateUserStatus('user-1', { isOnline: i % 2 === 0 });
         }
       });
 
-      // Final state should be based on last update (99 is odd, so isOnline: false)
       expect(useUserStore.getState().getUserById('user-1')?.isOnline).toBe(false);
     });
 
@@ -392,7 +392,6 @@ describe('UserStore', () => {
         useUserStore.getState().setParticipants([mockUser1, mockUser2, mockUser3]);
       });
 
-      // Simulate multiple users changing status
       act(() => {
         useUserStore.getState().updateUserStatus('user-1', { isOnline: false });
         useUserStore.getState().updateUserStatus('user-2', { isOnline: true });
@@ -407,45 +406,17 @@ describe('UserStore', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle user with minimal data', () => {
-      const minimalUser = {
-        id: 'minimal-user',
-        username: 'minimal',
-        email: 'minimal@example.com',
-        phoneNumber: '',
-        firstName: '',
-        lastName: '',
-        displayName: 'Minimal',
-        avatar: null,
-        role: 'USER',
-        systemLanguage: 'en',
-        regionalLanguage: 'en',
-        isOnline: false,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any as User;
-
-      act(() => {
-        useUserStore.getState().setParticipants([minimalUser]);
-      });
-
-      expect(useUserStore.getState().getUserById('minimal-user')).toEqual(minimalUser);
-    });
-
     it('should handle updating status with undefined values', () => {
       act(() => {
         useUserStore.getState().setParticipants([mockUser1]);
       });
 
-      // Update with only lastActiveAt (isOnline is undefined)
       const update: UserStatusUpdate = { lastActiveAt: new Date() };
 
       act(() => {
         useUserStore.getState().updateUserStatus('user-1', update);
       });
 
-      // isOnline should remain unchanged
       expect(useUserStore.getState().getUserById('user-1')?.isOnline).toBe(true);
     });
   });

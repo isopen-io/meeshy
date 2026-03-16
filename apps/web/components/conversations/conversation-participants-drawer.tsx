@@ -47,7 +47,6 @@ type ParticipantUser = SocketIOUser & { type?: string; sessionToken?: string; sh
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { InviteUserModal } from './invite-user-modal';
 import { getUserInitials } from '@/lib/avatar-utils';
-import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 import { useUserStore } from '@/stores/user-store';
 import { useManualStatusRefresh } from '@/hooks/use-manual-status-refresh';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
@@ -96,8 +95,7 @@ export function ConversationParticipantsDrawer({
   const [backendSearchResults, setBackendSearchResults] = useState<Participant[] | null>(null);
   const [isFilterSearching, setIsFilterSearching] = useState(false);
 
-  // TEMPS RÉEL: Activer les listeners Socket.IO pour les statuts utilisateur
-  useUserStatusRealtime();
+  // TEMPS RÉEL: les listeners Socket.IO sont activés par ConversationLayout
 
   // FALLBACK: Hook de rafraîchissement manuel si WebSocket down
   const { refresh: manualRefresh, isRefreshing } = useManualStatusRefresh(conversationId);
@@ -257,9 +255,17 @@ export function ConversationParticipantsDrawer({
         );
       });
 
-  // Séparer en ligne / hors ligne
-  const onlineParticipants = filteredParticipants.filter(p => (p.user as ParticipantUser)?.isOnline);
-  const offlineParticipants = filteredParticipants.filter(p => !(p.user as ParticipantUser)?.isOnline);
+  // Separer en ligne / hors ligne via getUserStatus (temps reel)
+  const _tick = useUserStore(state => state._lastStatusUpdate);
+  const getUserByIdFn = useUserStore(state => state.getUserById);
+  const onlineParticipants = filteredParticipants.filter(p => {
+    const storeUser = p.userId ? getUserByIdFn(p.userId) : undefined;
+    return getUserStatus(storeUser || p.user as ParticipantUser) === 'online';
+  });
+  const offlineParticipants = filteredParticipants.filter(p => {
+    const storeUser = p.userId ? getUserByIdFn(p.userId) : undefined;
+    return getUserStatus(storeUser || p.user as ParticipantUser) !== 'online';
+  });
 
   // Pagination : limiter le rendu
   const displayedOnline = onlineParticipants.slice(0, displayLimit);
@@ -377,7 +383,8 @@ export function ConversationParticipantsDrawer({
 
   // Rendu d'une carte participant (partagé online/offline)
   const renderParticipantCard = (participant: Participant, index: number, isOnline: boolean) => {
-    const user = participant.user as ParticipantUser;
+    const rawUser = participant.user as ParticipantUser;
+    const user = (participant.userId ? getUserByIdFn(participant.userId) as ParticipantUser : undefined) || rawUser;
     const isCurrentUser = user.id === currentUser.id;
     const prefix = isOnline ? 'online' : 'offline';
 

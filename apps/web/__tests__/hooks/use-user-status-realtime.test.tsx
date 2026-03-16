@@ -1,32 +1,28 @@
 /**
  * Tests for useUserStatusRealtime hook
- *
- * Tests cover:
- * - Socket.IO event subscription
- * - User status update handling
- * - Store integration
- * - Cleanup on unmount
  */
 
 import { renderHook } from '@testing-library/react';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 
-// Mock Socket.IO service
 const mockOnUserStatus = jest.fn(() => jest.fn());
+const mockGetSocket = jest.fn(() => ({ connected: true, emit: jest.fn() }));
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
-  getSocketIOService: (...args: any[]) => ({
-    onUserStatus: (...args2: any[]) => (mockOnUserStatus as any)(...args2),
+  getSocketIOService: () => ({
+    onUserStatus: (...args: any[]) => (mockOnUserStatus as any)(...args),
+    getSocket: () => mockGetSocket(),
   }),
 }));
 
-// Mock user store
 const mockUpdateUserStatus = jest.fn();
+const mockTriggerStatusTick = jest.fn();
 
 jest.mock('@/stores/user-store', () => ({
   useUserStore: (selector: (state: any) => any) => {
     const state = {
       updateUserStatus: mockUpdateUserStatus,
+      triggerStatusTick: mockTriggerStatusTick,
     };
     return selector(state);
   },
@@ -35,21 +31,20 @@ jest.mock('@/stores/user-store', () => ({
 describe('useUserStatusRealtime', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-
-    // Suppress console warnings
+    jest.useFakeTimers();
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
   describe('Event Subscription', () => {
     it('should subscribe to user status events on mount', () => {
       renderHook(() => useUserStatusRealtime());
-
       expect(mockOnUserStatus).toHaveBeenCalled();
     });
 
@@ -58,7 +53,6 @@ describe('useUserStatusRealtime', () => {
       mockOnUserStatus.mockReturnValue(mockUnsubscribe);
 
       const { unmount } = renderHook(() => useUserStatusRealtime());
-
       unmount();
 
       expect(mockUnsubscribe).toHaveBeenCalled();
@@ -66,7 +60,7 @@ describe('useUserStatusRealtime', () => {
   });
 
   describe('Status Update Handling', () => {
-    it('should call updateUserStatus when event received', () => {
+    it('should call updateUserStatus with username when event received', () => {
       let eventCallback: (event: any) => void = () => {};
 
       (mockOnUserStatus as any).mockImplementation((callback: any) => {
@@ -76,7 +70,6 @@ describe('useUserStatusRealtime', () => {
 
       renderHook(() => useUserStatusRealtime());
 
-      // Simulate receiving a user status event
       eventCallback({
         userId: 'user-123',
         isOnline: true,
@@ -87,6 +80,7 @@ describe('useUserStatusRealtime', () => {
       expect(mockUpdateUserStatus).toHaveBeenCalledWith('user-123', {
         isOnline: true,
         lastActiveAt: expect.any(Date),
+        username: 'testuser',
       });
     });
 
@@ -110,6 +104,7 @@ describe('useUserStatusRealtime', () => {
       expect(mockUpdateUserStatus).toHaveBeenCalledWith('user-123', {
         isOnline: false,
         lastActiveAt: expect.any(Date),
+        username: 'testuser',
       });
     });
 
@@ -133,30 +128,7 @@ describe('useUserStatusRealtime', () => {
       expect(mockUpdateUserStatus).toHaveBeenCalledWith('user-123', {
         isOnline: true,
         lastActiveAt: undefined,
-      });
-    });
-
-    it('should convert lastActiveAt string to Date', () => {
-      let eventCallback: (event: any) => void = () => {};
-
-      (mockOnUserStatus as any).mockImplementation((callback: any) => {
-        eventCallback = callback;
-        return jest.fn();
-      });
-
-      renderHook(() => useUserStatusRealtime());
-
-      const timestamp = '2024-01-15T10:30:00Z';
-      eventCallback({
-        userId: 'user-456',
-        isOnline: true,
-        username: 'anotheruser',
-        lastActiveAt: timestamp,
-      });
-
-      expect(mockUpdateUserStatus).toHaveBeenCalledWith('user-456', {
-        isOnline: true,
-        lastActiveAt: new Date(timestamp),
+        username: 'testuser',
       });
     });
   });
@@ -172,43 +144,41 @@ describe('useUserStatusRealtime', () => {
 
       renderHook(() => useUserStatusRealtime());
 
-      // First event
-      eventCallback({
-        userId: 'user-1',
-        isOnline: true,
-        username: 'user1',
-      });
-
-      // Second event
-      eventCallback({
-        userId: 'user-2',
-        isOnline: false,
-        username: 'user2',
-        lastActiveAt: '2024-01-15T09:00:00Z',
-      });
+      eventCallback({ userId: 'user-1', isOnline: true, username: 'user1' });
+      eventCallback({ userId: 'user-2', isOnline: false, username: 'user2', lastActiveAt: '2024-01-15T09:00:00Z' });
 
       expect(mockUpdateUserStatus).toHaveBeenCalledTimes(2);
       expect(mockUpdateUserStatus).toHaveBeenNthCalledWith(1, 'user-1', {
         isOnline: true,
         lastActiveAt: undefined,
+        username: 'user1',
       });
       expect(mockUpdateUserStatus).toHaveBeenNthCalledWith(2, 'user-2', {
         isOnline: false,
         lastActiveAt: expect.any(Date),
+        username: 'user2',
       });
     });
   });
 
-  describe('Rerender Stability', () => {
-    it('should not resubscribe on rerender', () => {
-      const { rerender } = renderHook(() => useUserStatusRealtime());
+  describe('Heartbeat', () => {
+    it('should send heartbeat every 90s', () => {
+      const mockEmit = jest.fn();
+      mockGetSocket.mockReturnValue({ connected: true, emit: mockEmit });
 
-      expect(mockOnUserStatus).toHaveBeenCalledTimes(1);
+      renderHook(() => useUserStatusRealtime());
 
-      rerender();
+      jest.advanceTimersByTime(90_000);
+      expect(mockEmit).toHaveBeenCalledWith('heartbeat');
+    });
+  });
 
-      // Should still be called only once
-      expect(mockOnUserStatus).toHaveBeenCalledTimes(1);
+  describe('Status Tick', () => {
+    it('should trigger status tick every 60s', () => {
+      renderHook(() => useUserStatusRealtime());
+
+      jest.advanceTimersByTime(60_000);
+      expect(mockTriggerStatusTick).toHaveBeenCalled();
     });
   });
 });

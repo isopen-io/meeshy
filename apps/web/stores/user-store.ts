@@ -1,6 +1,10 @@
 /**
- * User Store - Gestion centralisée des statuts utilisateur en temps réel
- * Écoute les événements Socket.IO USER_STATUS pour mettre à jour les statuts
+ * User Store - Gestion centralisee des statuts utilisateur en temps reel
+ * Ecoute les evenements Socket.IO USER_STATUS pour mettre a jour les statuts
+ *
+ * IMPORTANT: Ce store est ADDITIF — les utilisateurs sont merges, jamais ecrases.
+ * Cela permet d'afficher la presence de tous les utilisateurs dans la liste
+ * de conversations, pas seulement ceux de la conversation active.
  */
 
 'use client';
@@ -11,19 +15,16 @@ import type { User } from '@/types';
 export interface UserStatusUpdate {
   isOnline?: boolean;
   lastActiveAt?: Date;
+  username?: string;
 }
 
 interface UserStoreState {
-  // Map userId -> User pour un accès O(1)
   usersMap: Map<string, User>;
-
-  // Liste des participants pour compatibilité
   participants: User[];
-
-  // Timestamp de la dernière mise à jour (pour forcer re-render)
   _lastStatusUpdate: number;
 
-  // Actions
+  mergeParticipants: (participants: User[]) => void;
+  /** @deprecated Use mergeParticipants instead */
   setParticipants: (participants: User[]) => void;
   updateUserStatus: (userId: string, updates: UserStatusUpdate) => void;
   triggerStatusTick: () => void;
@@ -37,76 +38,98 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
   _lastStatusUpdate: 0,
 
   /**
-   * Initialiser/remplacer la liste des participants
+   * Merge des participants dans le store existant (additif).
+   * Les donnees plus recentes ecrasent les anciennes pour un meme userId.
    */
-  setParticipants: (participants: User[]) => {
-    const usersMap = new Map<string, User>();
-    participants.forEach(user => {
-      usersMap.set(user.id, user);
-    });
+  mergeParticipants: (participants: User[]) => {
+    const state = get();
+    const newMap = new Map(state.usersMap);
+
+    for (const user of participants) {
+      if (!user.id) continue;
+      const existing = newMap.get(user.id);
+      if (existing) {
+        const existingTime = existing.lastActiveAt ? new Date(existing.lastActiveAt).getTime() : 0;
+        const incomingTime = user.lastActiveAt ? new Date(user.lastActiveAt).getTime() : 0;
+        newMap.set(user.id, incomingTime >= existingTime ? { ...existing, ...user } : existing);
+      } else {
+        newMap.set(user.id, user);
+      }
+    }
 
     set({
-      participants,
-      usersMap,
+      usersMap: newMap,
+      participants: Array.from(newMap.values()),
       _lastStatusUpdate: Date.now()
     });
   },
 
   /**
-   * Mettre à jour le statut d'un utilisateur spécifique
-   * Appelé par le hook useUserStatusRealtime lors de réception d'événements Socket.IO
+   * Backward-compatible alias — delegates to mergeParticipants
+   */
+  setParticipants: (participants: User[]) => {
+    get().mergeParticipants(participants);
+  },
+
+  /**
+   * Met a jour le statut d'un utilisateur.
+   * Si l'utilisateur n'est pas dans le store, cree une entree minimale
+   * pour ne pas perdre l'evenement Socket.IO.
    */
   updateUserStatus: (userId: string, updates: UserStatusUpdate) => {
     const state = get();
-    const user = state.usersMap.get(userId);
+    const existing = state.usersMap.get(userId);
 
-    if (!user) {
-      // L'utilisateur n'est pas dans le store, ignorer silencieusement
-      return;
-    }
+    const updatedUser: User = existing
+      ? {
+          ...existing,
+          ...(updates.isOnline !== undefined && { isOnline: updates.isOnline }),
+          ...(updates.lastActiveAt && { lastActiveAt: updates.lastActiveAt })
+        }
+      : {
+          id: userId,
+          username: updates.username || '',
+          displayName: updates.username || '',
+          firstName: '',
+          lastName: '',
+          email: '',
+          phoneNumber: '',
+          role: 'USER' as const,
+          systemLanguage: 'fr',
+          regionalLanguage: 'fr',
+          autoTranslateEnabled: true,
+          translateToSystemLanguage: true,
+          translateToRegionalLanguage: false,
+          useCustomDestination: false,
+          isOnline: updates.isOnline ?? false,
+          lastActiveAt: updates.lastActiveAt || new Date(),
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as User;
 
-    // Créer l'utilisateur mis à jour
-    const updatedUser: User = {
-      ...user,
-      ...(updates.isOnline !== undefined && { isOnline: updates.isOnline }),
-      ...(updates.lastActiveAt && { lastActiveAt: updates.lastActiveAt })
-    };
+    const newMap = new Map(state.usersMap);
+    newMap.set(userId, updatedUser);
 
-    // Mettre à jour la map
-    const newUsersMap = new Map(state.usersMap);
-    newUsersMap.set(userId, updatedUser);
-
-    // Mettre à jour la liste des participants
-    const newParticipants = state.participants.map(p =>
-      p.id === userId ? updatedUser : p
-    );
-
+    const newParticipants = existing
+      ? state.participants.map(p => p.id === userId ? updatedUser : p)
+      : [...state.participants, updatedUser];
 
     set({
-      usersMap: newUsersMap,
+      usersMap: newMap,
       participants: newParticipants,
       _lastStatusUpdate: Date.now()
     });
   },
 
-  /**
-   * Tick local : force un re-render pour que getUserStatus() recalcule
-   * les transitions temporelles (VERT→ORANGE→GRIS) sans appel réseau.
-   */
   triggerStatusTick: () => {
     set({ _lastStatusUpdate: Date.now() });
   },
 
-  /**
-   * Récupérer un utilisateur par son ID (O(1))
-   */
   getUserById: (userId: string) => {
     return get().usersMap.get(userId);
   },
 
-  /**
-   * Nettoyer le store (lors de déconnexion par exemple)
-   */
   clearStore: () => {
     set({
       usersMap: new Map(),

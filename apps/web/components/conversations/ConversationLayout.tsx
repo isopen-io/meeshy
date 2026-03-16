@@ -43,6 +43,7 @@ import { useReplyStore } from '@/stores/reply-store';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
+import { useUserStore } from '@/stores/user-store';
 import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
 
 import type { Conversation, Message, UserRoleEnum } from '@meeshy/shared/types';
@@ -117,6 +118,22 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   } = useConversationsPaginationRQ({ limit: 50, enabled: !!user });
 
   const conversations = paginatedConversations;
+
+  // Seed presence store from conversation participant data
+  const mergeParticipants = useUserStore(state => state.mergeParticipants);
+  useEffect(() => {
+    if (!conversations.length) return;
+    const users: any[] = [];
+    for (const conv of conversations) {
+      const participants = (conv as any).participants;
+      if (!Array.isArray(participants)) continue;
+      for (const p of participants) {
+        const u = p.user || p;
+        if (u?.id) users.push(u);
+      }
+    }
+    if (users.length > 0) mergeParticipants(users);
+  }, [conversations, mergeParticipants]);
 
   // Derived stable value for effect deps - avoids re-runs when conversation objects change but IDs don't (#10, #11)
   const conversationIdSet = useMemo(() => new Set(conversations.map(c => c.id)), [conversations]);

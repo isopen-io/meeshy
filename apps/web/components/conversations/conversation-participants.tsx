@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { SocketIOUser as User, MemberRole } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
+import { getUserStatus } from '@/lib/user-status';
+import { useUserStore } from '@/stores/user-store';
 
 /** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
 type ParticipantUser = User & { type?: string; sessionToken?: string; shareLinkId?: string };
@@ -68,9 +70,19 @@ export function ConversationParticipants({
 
 
 
-  // Listes en ligne / hors-ligne (inclure l'utilisateur actuel)
-  const onlineAll = participants.filter(p => (p.user as ParticipantUser)?.isOnline);
-  const offlineAll = participants.filter(p => !(p.user as ParticipantUser)?.isOnline);
+  // Store global pour statuts temps reel
+  const userStore = useUserStore();
+  const _tick = userStore._lastStatusUpdate;
+
+  // Listes en ligne / hors-ligne via getUserStatus (temps reel)
+  const onlineAll = participants.filter(p => {
+    const storeUser = p.userId ? userStore.getUserById(p.userId) : undefined;
+    return getUserStatus(storeUser || p.user as ParticipantUser) === 'online';
+  });
+  const offlineAll = participants.filter(p => {
+    const storeUser = p.userId ? userStore.getUserById(p.userId) : undefined;
+    return getUserStatus(storeUser || p.user as ParticipantUser) !== 'online';
+  });
   const recentActiveParticipants = onlineAll.slice(0, 3);
 
 
