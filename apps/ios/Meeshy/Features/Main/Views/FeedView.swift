@@ -381,6 +381,9 @@ struct FeedView: View {
             }
             viewModel.subscribeToSocketEvents()
         }
+        .onDisappear {
+            viewModel.unsubscribeFromSocketEvents()
+        }
         .sheet(isPresented: $showAudioComposer) {
             AudioPostComposerView { audioURL, mimeType, transcription in
                 showAudioComposer = false
