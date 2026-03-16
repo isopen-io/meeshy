@@ -100,13 +100,13 @@ export const MessageContent = memo(function MessageContent({
     )}>
       <Card
         className={cn(
-          "relative transition-colors duration-200 border shadow-none overflow-hidden py-0 w-full",
+          "relative transition-colors duration-200 border overflow-hidden py-0 w-full rounded-2xl",
           isOwnMessage
-            ? 'bg-gradient-to-br from-blue-400 to-blue-500 dark:from-gray-700 dark:to-gray-800 border-blue-400 dark:border-gray-600 text-white'
-            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+            ? 'bg-gradient-to-br from-indigo-500 to-indigo-700 dark:from-indigo-600 dark:to-indigo-800 border-indigo-400 dark:border-indigo-600 text-white shadow-md shadow-indigo-500/30 dark:shadow-indigo-900/40'
+            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm shadow-gray-200/50 dark:shadow-gray-900/30'
         )}
       >
-        <CardContent className="p-1 w-full break-words overflow-hidden overflow-wrap-anywhere">
+        <CardContent className="px-3.5 py-2.5 w-full break-words overflow-hidden overflow-wrap-anywhere">
           {/* Message de réponse (replyTo) */}
           {message.replyTo && (
             <MessageReplyPreview

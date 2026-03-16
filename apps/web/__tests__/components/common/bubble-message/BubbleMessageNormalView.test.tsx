@@ -912,6 +912,64 @@ describe('BubbleMessageNormalView', () => {
     });
   });
 
+  describe('iOS Parity — Visual styling', () => {
+    it('devrait appliquer le gradient indigo brand sur les messages propres', () => {
+      renderNormalView({
+        message: createMockMessage({ senderId: 'user-456' }),
+        currentUser: createMockUser({ id: 'user-456' }),
+      });
+
+      const card = screen.getByTestId('message-card');
+      expect(card.className).toContain('from-indigo-500');
+      expect(card.className).toContain('to-indigo-700');
+    });
+
+    it('devrait garder le gradient indigo en dark mode (pas gray)', () => {
+      renderNormalView({
+        message: createMockMessage({ senderId: 'user-456' }),
+        currentUser: createMockUser({ id: 'user-456' }),
+      });
+
+      const card = screen.getByTestId('message-card');
+      expect(card.className).toContain('dark:from-indigo-600');
+      expect(card.className).toContain('dark:to-indigo-800');
+    });
+
+    it('devrait appliquer le border-radius iOS (rounded-2xl)', () => {
+      renderNormalView({
+        message: createMockMessage({ senderId: 'user-456' }),
+        currentUser: createMockUser({ id: 'user-456' }),
+      });
+
+      const card = screen.getByTestId('message-card');
+      expect(card.className).toContain('rounded-2xl');
+    });
+
+    it('devrait appliquer une shadow sur les messages propres', () => {
+      renderNormalView({
+        message: createMockMessage({ senderId: 'user-456' }),
+        currentUser: createMockUser({ id: 'user-456' }),
+      });
+
+      const card = screen.getByTestId('message-card');
+      expect(card.className).toContain('shadow-md');
+    });
+
+    it('devrait appliquer rounded-2xl et shadow-sm sur les messages des autres', () => {
+      renderNormalView({
+        message: createMockMessage({
+          senderId: 'other-user',
+          sender: { id: 'other-user', firstName: 'Jane', avatar: null },
+        }),
+        currentUser: createMockUser({ id: 'user-456' }),
+      });
+
+      const card = screen.getByTestId('message-card');
+      expect(card.className).toContain('rounded-2xl');
+      expect(card.className).toContain('shadow-sm');
+    });
+  });
+
   describe('Performance', () => {
     it('devrait etre enveloppe dans memo pour eviter les re-renders inutiles', () => {
       const { rerender } = renderNormalView();
