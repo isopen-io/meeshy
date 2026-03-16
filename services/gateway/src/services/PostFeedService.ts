@@ -95,9 +95,10 @@ export class PostFeedService {
       isDeleted: false,
       type: 'POST',
       visibility: { in: ['PUBLIC', 'FRIENDS'] },
-      // Exclude expired
+      // Exclude expired (isSet: false matches MongoDB docs where field is absent)
       OR: [
-        { expiresAt: null },
+        { expiresAt: { isSet: false } },
+        { expiresAt: { equals: null } },
         { expiresAt: { gt: new Date() } },
       ],
     };
@@ -180,7 +181,7 @@ export class PostFeedService {
       type: 'STORY',
       AND: [
         visibilityFilter,
-        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        { OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }] },
       ],
     };
 
@@ -209,7 +210,7 @@ export class PostFeedService {
       type: 'STATUS',
       AND: [
         visibilityFilter,
-        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        { OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }] },
       ],
     };
 
@@ -249,7 +250,7 @@ export class PostFeedService {
       type: 'STATUS',
       visibility: 'PUBLIC',
       AND: [
-        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        { OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }] },
       ],
     };
 

@@ -645,7 +645,8 @@ export async function getAffiliateToken(fastify: FastifyInstance) {
           createdBy: userId,
           isActive: true,
           OR: [
-            { expiresAt: null },
+            { expiresAt: { isSet: false } },
+            { expiresAt: { equals: null } },
             { expiresAt: { gt: new Date() } }
           ]
         },
