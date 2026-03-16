@@ -90,9 +90,11 @@ public struct CreatePostRequest: Encodable {
 
 public struct CreateCommentRequest: Encodable {
     public let content: String
+    public let parentId: String?
 
-    public init(content: String) {
+    public init(content: String, parentId: String? = nil) {
         self.content = content
+        self.parentId = parentId
     }
 }
 

@@ -183,22 +183,13 @@ class FeedViewModel: ObservableObject {
     }
 
     func sendComment(postId: String, content: String, parentId: String? = nil) async {
-        var body: [String: String] = ["content": content]
-        if let parentId { body["parentId"] = parentId }
-
         do {
-            let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let _: APIResponse<[String: AnyCodable]> = try await api.request(
-                endpoint: "/posts/\(postId)/comments",
-                method: "POST",
-                body: bodyData
-            )
-            // Update local comment count
+            _ = try await postService.addComment(postId: postId, content: content, parentId: parentId)
             if let index = posts.firstIndex(where: { $0.id == postId }) {
                 posts[index].commentCount += 1
             }
         } catch {
-            // Silent failure
+            // Silent failure — comment count will update via socket event
         }
     }
 

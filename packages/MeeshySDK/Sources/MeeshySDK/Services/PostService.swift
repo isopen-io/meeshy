@@ -9,7 +9,7 @@ public protocol PostServiceProviding: Sendable {
     func like(postId: String) async throws
     func unlike(postId: String) async throws
     func bookmark(postId: String) async throws
-    func addComment(postId: String, content: String) async throws -> APIPostComment
+    func addComment(postId: String, content: String, parentId: String?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
     func repost(postId: String, quote: String?) async throws
     func share(postId: String) async throws
@@ -51,8 +51,8 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/bookmark", method: "POST")
     }
 
-    public func addComment(postId: String, content: String) async throws -> APIPostComment {
-        let body = CreateCommentRequest(content: content)
+    public func addComment(postId: String, content: String, parentId: String? = nil) async throws -> APIPostComment {
+        let body = CreateCommentRequest(content: content, parentId: parentId)
         let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
         return response.data
     }
@@ -105,17 +105,6 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     public func deleteComment(postId: String, commentId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/comments/\(commentId)")
-    }
-
-    public func addReply(postId: String, parentId: String, content: String) async throws -> APIPostComment {
-        let body: [String: String] = ["content": content, "parentId": parentId]
-        let bodyData = try JSONSerialization.data(withJSONObject: body)
-        let response: APIResponse<APIPostComment> = try await api.request(
-            endpoint: "/posts/\(postId)/comments",
-            method: "POST",
-            body: bodyData
-        )
-        return response.data
     }
 
     public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", mediaIds: [String]? = nil) async throws -> APIPost {

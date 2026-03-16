@@ -308,6 +308,34 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts.count, 1)
     }
 
+    // MARK: - sendComment() Tests
+
+    func test_sendComment_withParentId_callsPostServiceAddComment() async {
+        mockAPI.stub("/posts/feed", result: Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "p1")]
+        ))
+        await sut.loadFeed()
+
+        await sut.sendComment(postId: "p1", content: "reply text", parentId: "c1")
+
+        XCTAssertEqual(mockPostService.addCommentCallCount, 1)
+        XCTAssertEqual(mockPostService.lastAddCommentPostId, "p1")
+        XCTAssertEqual(mockPostService.lastAddCommentContent, "reply text")
+        XCTAssertEqual(mockPostService.lastAddCommentParentId, "c1")
+    }
+
+    func test_sendComment_withoutParentId_callsPostServiceAddComment() async {
+        mockAPI.stub("/posts/feed", result: Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "p1")]
+        ))
+        await sut.loadFeed()
+
+        await sut.sendComment(postId: "p1", content: "top-level comment")
+
+        XCTAssertEqual(mockPostService.addCommentCallCount, 1)
+        XCTAssertNil(mockPostService.lastAddCommentParentId)
+    }
+
     // MARK: - subscribeToSocketEvents() connection
 
     func test_subscribeToSocketEvents_callsConnect() {
