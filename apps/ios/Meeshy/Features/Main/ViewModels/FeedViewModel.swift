@@ -16,6 +16,7 @@ class FeedViewModel: ObservableObject {
     /// Reset to 0 when the user taps the "New posts" banner or pulls to refresh.
     @Published var newPostsCount: Int = 0
     @Published var publishError: String?
+    @Published var publishSuccess: Bool = false
 
     private var nextCursor: String?
     private let api: APIClientProviding
@@ -164,6 +165,7 @@ class FeedViewModel: ObservableObject {
 
     func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) async {
         publishError = nil
+        publishSuccess = false
         do {
             let apiPost = try await postService.create(
                 content: content,
@@ -177,6 +179,7 @@ class FeedViewModel: ObservableObject {
             )
             let feedPost = apiPost.toFeedPost(userLanguage: userLanguage)
             posts.insert(feedPost, at: 0)
+            publishSuccess = true
         } catch {
             publishError = error.localizedDescription
         }
@@ -193,7 +196,7 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func likeComment(postId: String, commentId: String, emoji: String = "heart") async {
+    func likeComment(postId: String, commentId: String, emoji: String = "❤️") async {
         let body: [String: String] = ["emoji": emoji]
         do {
             let bodyData = try JSONSerialization.data(withJSONObject: body)
@@ -208,18 +211,10 @@ class FeedViewModel: ObservableObject {
     }
 
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
-        var body: [String: Any] = ["isQuote": isQuote]
-        if let content { body["content"] = content }
-
         do {
-            let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let _: APIResponse<[String: AnyCodable]> = try await api.request(
-                endpoint: "/posts/\(postId)/repost",
-                method: "POST",
-                body: bodyData
-            )
+            try await postService.repost(postId: postId, quote: isQuote ? content : nil)
         } catch {
-            // Silent failure
+            // Silent failure — repost will appear via socket event
         }
     }
 

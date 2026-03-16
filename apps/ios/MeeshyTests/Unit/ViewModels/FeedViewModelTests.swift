@@ -295,6 +295,43 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertNotNil(sut.publishError)
     }
 
+    func test_createPost_success_setsPublishSuccess() async {
+        mockPostService.createResult = .success(Self.makeAPIPost(id: "new-post"))
+
+        await sut.createPost(content: "Hello world")
+
+        XCTAssertTrue(sut.publishSuccess)
+        XCTAssertNil(sut.publishError)
+        XCTAssertEqual(sut.posts.count, 1)
+    }
+
+    func test_createPost_failure_doesNotSetPublishSuccess() async {
+        mockPostService.createResult = .failure(NSError(domain: "test", code: 500))
+
+        await sut.createPost(content: "Hello world")
+
+        XCTAssertFalse(sut.publishSuccess)
+        XCTAssertNotNil(sut.publishError)
+        XCTAssertTrue(sut.posts.isEmpty)
+    }
+
+    // MARK: - repostPost() Tests
+
+    func test_repostPost_callsPostService() async {
+        await sut.repostPost("post1", content: "My quote", isQuote: true)
+
+        XCTAssertEqual(mockPostService.repostCallCount, 1)
+        XCTAssertEqual(mockPostService.lastRepostPostId, "post1")
+        XCTAssertEqual(mockPostService.lastRepostQuote, "My quote")
+    }
+
+    func test_repostPost_simpleRepost_passesNilQuote() async {
+        await sut.repostPost("post1")
+
+        XCTAssertEqual(mockPostService.repostCallCount, 1)
+        XCTAssertNil(mockPostService.lastRepostQuote)
+    }
+
     // MARK: - loadFeed() with pagination
 
     func test_loadFeed_storesNextCursorAndHasMore() async {
