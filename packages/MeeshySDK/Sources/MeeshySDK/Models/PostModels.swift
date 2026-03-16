@@ -94,6 +94,7 @@ public struct APIPost: Decodable, Sendable {
     public let audioDuration: Int?
     public let storyEffects: StoryEffects?
     public let translations: [String: APIPostTranslationEntry]?
+    public let isLikedByMe: Bool?
 }
 
 // MARK: - Conversion helpers
@@ -113,7 +114,9 @@ private func formatFileSize(_ bytes: Int) -> String {
 }
 
 extension APIPost {
-    public func toFeedPost(userLanguage: String? = nil) -> FeedPost {
+    public func toFeedPost(userLanguage: String? = nil, preferredLanguages: [String] = []) -> FeedPost {
+        let langs = preferredLanguages.isEmpty ? (userLanguage.map { [$0] } ?? []) : preferredLanguages
+
         let feedMedia: [FeedMedia] = (media ?? []).map { m in
             let transcription: MessageTranscription? = m.transcription.map { t in
                 let segments: [MessageTranscriptionSegment] = (t.segments ?? []).map { seg in
@@ -146,7 +149,9 @@ extension APIPost {
         }
 
         let feedComments: [FeedComment] = (comments ?? []).map { c in
-            let commentTranslatedContent: String? = userLanguage.flatMap { lang in c.translations?[lang]?.text }
+            let commentTranslatedContent: String? = Self.resolveTranslation(
+                translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
+            )
             return FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
                         authorAvatarURL: c.author.avatar,
                         content: c.content,
@@ -166,9 +171,11 @@ extension APIPost {
         let postTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
             PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
         }
-        let postTranslatedContent: String? = userLanguage.flatMap { lang in translations?[lang]?.text }
+        let postTranslatedContent: String? = Self.resolveTranslation(
+            translations: translations, originalLanguage: originalLanguage, preferredLanguages: langs
+        )
 
-        return FeedPost(id: id, author: author.name, authorId: author.id,
+        var feedPost = FeedPost(id: id, author: author.name, authorId: author.id,
                         authorAvatarURL: author.avatar,
                         type: type, content: content ?? "",
                         timestamp: createdAt, likes: likeCount ?? 0,
@@ -177,5 +184,26 @@ extension APIPost {
                         isQuote: isQuote ?? false,
                         media: feedMedia,
                         originalLanguage: originalLanguage, translations: postTranslations, translatedContent: postTranslatedContent)
+        feedPost.isLiked = isLikedByMe ?? false
+        return feedPost
+    }
+
+    /// Prisme Linguistique resolution: walk preferred languages in order.
+    /// If original is already in a preferred language, return nil (no translation needed).
+    private static func resolveTranslation(
+        translations: [String: APIPostTranslationEntry]?,
+        originalLanguage: String?,
+        preferredLanguages: [String]
+    ) -> String? {
+        guard let translations, !translations.isEmpty else { return nil }
+        let origLower = originalLanguage?.lowercased()
+        for lang in preferredLanguages {
+            let langLower = lang.lowercased()
+            if let orig = origLower, orig == langLower { return nil }
+            if let match = translations.first(where: { $0.key.lowercased() == langLower }) {
+                return match.value.text
+            }
+        }
+        return nil
     }
 }

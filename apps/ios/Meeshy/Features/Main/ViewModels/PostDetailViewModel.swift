@@ -15,10 +15,12 @@ class PostDetailViewModel: ObservableObject {
     private let socialSocket = SocialSocketManager.shared
     private var cancellables = Set<AnyCancellable>()
 
+    var preferredLanguages: [String] {
+        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+    }
+
     var userLanguage: String {
-        AuthManager.shared.currentUser?.systemLanguage
-            ?? Locale.current.language.languageCode?.identifier
-            ?? "en"
+        preferredLanguages.first ?? "en"
     }
 
     func loadPost(_ postId: String) async {
@@ -26,7 +28,7 @@ class PostDetailViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             let apiPost = try await PostService.shared.getPost(postId: postId)
-            post = apiPost.toFeedPost(userLanguage: userLanguage)
+            post = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
         } catch {
             self.error = error.localizedDescription
         }
@@ -38,11 +40,11 @@ class PostDetailViewModel: ObservableObject {
         defer { isLoadingComments = false }
         do {
             let response = try await PostService.shared.getComments(postId: postId, cursor: commentCursor)
+            let langs = preferredLanguages
             let newComments = response.data.map { c -> FeedComment in
-                var translatedContent: String?
-                if let translations = c.translations, let entry = translations[userLanguage] {
-                    translatedContent = entry.text
-                }
+                let translatedContent: String? = Self.resolveCommentTranslation(
+                    translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
+                )
                 return FeedComment(
                     id: c.id, author: c.author.name, authorId: c.author.id,
                     authorAvatarURL: c.author.avatar,
@@ -134,10 +136,30 @@ class PostDetailViewModel: ObservableObject {
                 var translations = self.post?.translations ?? [:]
                 translations[data.language] = translation
                 self.post?.translations = translations
-                if data.language == self.userLanguage {
-                    self.post?.translatedContent = data.translation.text
+                let langs = self.preferredLanguages
+                if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
+                    if self.post?.translatedContent == nil {
+                        self.post?.translatedContent = data.translation.text
+                    }
                 }
             }
             .store(in: &cancellables)
+    }
+
+    private static func resolveCommentTranslation(
+        translations: [String: APIPostTranslationEntry]?,
+        originalLanguage: String?,
+        preferredLanguages: [String]
+    ) -> String? {
+        guard let translations, !translations.isEmpty else { return nil }
+        let origLower = originalLanguage?.lowercased()
+        for lang in preferredLanguages {
+            let langLower = lang.lowercased()
+            if let orig = origLower, orig == langLower { return nil }
+            if let match = translations.first(where: { $0.key.lowercased() == langLower }) {
+                return match.value.text
+            }
+        }
+        return nil
     }
 }

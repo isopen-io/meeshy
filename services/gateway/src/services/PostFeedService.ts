@@ -45,6 +45,8 @@ const feedPostInclude = {
     select: {
       id: true,
       content: true,
+      originalLanguage: true,
+      translations: true,
       author: { select: authorSelect },
       media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
       createdAt: true,
@@ -161,7 +163,7 @@ export class PostFeedService {
       : null;
 
     return {
-      items: items.map((s) => s.post),
+      items: items.map((s) => this.enrichWithLikeStatus(s.post, userId)),
       nextCursor,
       hasMore,
     };
@@ -192,7 +194,7 @@ export class PostFeedService {
       take: 50,
     });
 
-    return stories;
+    return stories.map((s) => this.enrichWithLikeStatus(s, userId));
   }
 
   async getStatuses(userId: string, cursor?: string, limit: number = 20) {
@@ -315,7 +317,7 @@ export class PostFeedService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
-    return { items, nextCursor, hasMore };
+    return { items: viewerUserId ? items.map((p) => this.enrichWithLikeStatus(p, viewerUserId)) : items, nextCursor, hasMore };
   }
 
   async getCommunityFeed(communityId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20) {
@@ -348,7 +350,7 @@ export class PostFeedService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
-    return { items, nextCursor, hasMore };
+    return { items: viewerUserId ? items.map((p) => this.enrichWithLikeStatus(p, viewerUserId)) : items, nextCursor, hasMore };
   }
 
   async getBookmarks(userId: string, cursor?: string, limit: number = 20) {
@@ -445,6 +447,11 @@ export class PostFeedService {
     } catch {
       return [];
     }
+  }
+
+  private enrichWithLikeStatus(post: any, userId: string) {
+    const reactions = (post.reactions as any[] | null) ?? [];
+    return { ...post, isLikedByMe: reactions.some((r: any) => r.userId === userId) };
   }
 
   private affinityScore(authorId: string, viewerId: string, friendIds: string[]): number {

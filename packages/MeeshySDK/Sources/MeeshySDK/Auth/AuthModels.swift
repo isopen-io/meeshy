@@ -282,6 +282,23 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.profileCompletionRate = profileCompletionRate
         self.signalIdentityKeyPublic = signalIdentityKeyPublic
     }
+
+    /// Ordered list of preferred content languages for the Prisme Linguistique.
+    /// Resolution order: custom override → systemLanguage → regionalLanguage.
+    /// Device locale (Locale.current) is NEVER included — it is the UI language, not content.
+    public var preferredContentLanguages: [String] {
+        var preferred: [String] = []
+        if useCustomDestination == true, let custom = customDestinationLanguage {
+            preferred.append(custom)
+        }
+        if let sys = systemLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(sys) == .orderedSame }) {
+            preferred.append(sys)
+        }
+        if let reg = regionalLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(reg) == .orderedSame }) {
+            preferred.append(reg)
+        }
+        return preferred
+    }
 }
 
 // MARK: - /auth/me Response

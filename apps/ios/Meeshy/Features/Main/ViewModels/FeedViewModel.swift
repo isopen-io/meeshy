@@ -35,10 +35,12 @@ class FeedViewModel: ObservableObject {
         self.postService = postService
     }
 
+    private var preferredLanguages: [String] {
+        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+    }
+
     private var userLanguage: String {
-        AuthManager.shared.currentUser?.systemLanguage
-            ?? Locale.current.language.languageCode?.identifier
-            ?? "en"
+        preferredLanguages.first ?? "en"
     }
 
     // MARK: - Initial Load
@@ -56,7 +58,7 @@ class FeedViewModel: ObservableObject {
             )
 
             if response.success {
-                posts = response.data.map { $0.toFeedPost(userLanguage: self.userLanguage) }
+                posts = response.data.map { $0.toFeedPost(preferredLanguages: self.preferredLanguages) }
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
             } else {
@@ -94,7 +96,7 @@ class FeedViewModel: ObservableObject {
             )
 
             if response.success {
-                let newPosts = response.data.map { $0.toFeedPost(userLanguage: self.userLanguage) }
+                let newPosts = response.data.map { $0.toFeedPost(preferredLanguages: self.preferredLanguages) }
                 // Deduplicate
                 let existingIds = Set(posts.map(\.id))
                 let uniqueNew = newPosts.filter { !existingIds.contains($0.id) }
@@ -177,7 +179,7 @@ class FeedViewModel: ObservableObject {
                 audioDuration: audioDuration,
                 mobileTranscription: mobileTranscription
             )
-            let feedPost = apiPost.toFeedPost(userLanguage: userLanguage)
+            let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             posts.insert(feedPost, at: 0)
             publishSuccess = true
         } catch {
@@ -270,7 +272,7 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
                 guard let self else { return }
-                let feedPost = apiPost.toFeedPost(userLanguage: userLanguage)
+                let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
                 if !self.posts.contains(where: { $0.id == feedPost.id }) {
                     self.posts.insert(feedPost, at: 0)
                     self.newPostsCount += 1
@@ -283,7 +285,7 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
                 guard let self else { return }
-                let updatedFeedPost = apiPost.toFeedPost(userLanguage: userLanguage)
+                let updatedFeedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
                 if let index = self.posts.firstIndex(where: { $0.id == updatedFeedPost.id }) {
                     // Preserve local-only state (isLiked) across the update
                     var merged = updatedFeedPost
@@ -324,7 +326,7 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
                 guard let self else { return }
-                let repostFeedPost = data.repost.toFeedPost(userLanguage: self.userLanguage)
+                let repostFeedPost = data.repost.toFeedPost(preferredLanguages: self.preferredLanguages)
                 if !self.posts.contains(where: { $0.id == repostFeedPost.id }) {
                     self.posts.insert(repostFeedPost, at: 0)
                     self.newPostsCount += 1
@@ -363,8 +365,12 @@ class FeedViewModel: ObservableObject {
                 var translations = self.posts[index].translations ?? [:]
                 translations[data.language] = translation
                 self.posts[index].translations = translations
-                if data.language == self.userLanguage {
-                    self.posts[index].translatedContent = data.translation.text
+                let langs = self.preferredLanguages
+                if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
+                    // Only update if no translation was already set from a higher-priority language
+                    if self.posts[index].translatedContent == nil {
+                        self.posts[index].translatedContent = data.translation.text
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -377,9 +383,11 @@ class FeedViewModel: ObservableObject {
                       let postIndex = self.posts.firstIndex(where: { $0.id == data.postId }),
                       let commentIndex = self.posts[postIndex].comments.firstIndex(where: { $0.id == data.commentId })
                 else { return }
-                let lang = self.userLanguage
-                if data.language == lang {
-                    self.posts[postIndex].comments[commentIndex].translatedContent = data.translation.text
+                let langs = self.preferredLanguages
+                if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
+                    if self.posts[postIndex].comments[commentIndex].translatedContent == nil {
+                        self.posts[postIndex].comments[commentIndex].translatedContent = data.translation.text
+                    }
                 }
             }
             .store(in: &cancellables)

@@ -9,10 +9,8 @@ class BookmarksViewModel: ObservableObject {
 
     private var nextCursor: String?
 
-    private var userLanguage: String {
-        AuthManager.shared.currentUser?.systemLanguage
-            ?? Locale.current.language.languageCode?.identifier
-            ?? "en"
+    private var preferredLanguages: [String] {
+        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
     }
 
     func loadBookmarks() async {
@@ -21,7 +19,7 @@ class BookmarksViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             let response = try await PostService.shared.getBookmarks(cursor: nextCursor)
-            let newPosts = response.data.map { $0.toFeedPost(userLanguage: userLanguage) }
+            let newPosts = response.data.map { $0.toFeedPost(preferredLanguages: preferredLanguages) }
             let existingIds = Set(posts.map(\.id))
             let unique = newPosts.filter { !existingIds.contains($0.id) }
             posts.append(contentsOf: unique)

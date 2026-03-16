@@ -21,7 +21,6 @@ struct FeedPostCard: View {
 
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var isLiked = false
     @State private var showCommentsSheet = false
     @State private var showTranslationSheet = false
     @State private var showRepostOptions = false
@@ -238,7 +237,6 @@ struct FeedPostCard: View {
             // Like with heart burst animation
             Button {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
-                    isLiked.toggle()
                     likeAnimating = true
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -250,28 +248,28 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         // Burst ring behind heart
-                        if isLiked {
+                        if post.isLiked {
                             Circle()
                                 .stroke(MeeshyColors.error.opacity(likeAnimating ? 0.6 : 0), lineWidth: likeAnimating ? 2 : 0)
                                 .frame(width: likeAnimating ? 32 : 18, height: likeAnimating ? 32 : 18)
                                 .animation(.easeOut(duration: 0.4), value: likeAnimating)
                         }
 
-                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                        Image(systemName: post.isLiked ? "heart.fill" : "heart")
                             .font(.system(size: 18))
-                            .foregroundColor(isLiked ? MeeshyColors.error : theme.textSecondary)
-                            .scaleEffect(likeAnimating ? 1.3 : (isLiked ? 1.1 : 1.0))
+                            .foregroundColor(post.isLiked ? MeeshyColors.error : theme.textSecondary)
+                            .scaleEffect(likeAnimating ? 1.3 : (post.isLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
                     }
 
-                    Text("\(post.likes + (isLiked ? 1 : 0))")
+                    Text("\(post.likes)")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(isLiked ? MeeshyColors.error : theme.textSecondary)
+                        .foregroundColor(post.isLiked ? MeeshyColors.error : theme.textSecondary)
                         .contentTransition(.numericText())
                 }
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isLiked)
-            .accessibilityLabel("\(post.likes + (isLiked ? 1 : 0)) j'aime")
+            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: post.isLiked)
+            .accessibilityLabel("\(post.likes) j'aime")
 
             Spacer()
 

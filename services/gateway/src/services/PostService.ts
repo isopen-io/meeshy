@@ -88,6 +88,8 @@ const postInclude = {
     select: {
       id: true,
       content: true,
+      originalLanguage: true,
+      translations: true,
       author: { select: authorSelect },
       media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
       createdAt: true,
