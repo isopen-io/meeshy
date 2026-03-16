@@ -43,15 +43,17 @@ export function useMessageInteractions({
   t,
 }: UseMessageInteractionsProps) {
   // Détermine si c'est le message de l'utilisateur connecté
-  // senderId is a Participant ID; use sender.userId or sender.user.id for User ID comparison
+  // iOS logic: (sender?.resolvedUserId ?? senderId) == currentUserId
+  // senderId is a Participant ID; getSenderUserId extracts the real User ID from sender.userId or sender.user.id
   const isOwnMessage = useMemo(() => {
-    return Boolean(isAnonymous
-      ? (currentAnonymousUserId && message.senderId === currentAnonymousUserId)
-      : (currentUserId && (
-          message.senderId === currentUserId
-          || (message.sender as any)?.id === currentUserId
-          || getSenderUserId(message.sender as Record<string, unknown>) === currentUserId
-        )));
+    if (isAnonymous) {
+      return Boolean(currentAnonymousUserId && message.senderId === currentAnonymousUserId);
+    }
+    if (!currentUserId) return false;
+    const senderUserId = getSenderUserId(message.sender as Record<string, unknown>);
+    if (senderUserId) return senderUserId === currentUserId;
+    // Fallback: senderId might be User ID in legacy/optimistic messages
+    return message.senderId === currentUserId;
   }, [isAnonymous, currentAnonymousUserId, currentUserId, message.sender, message.senderId]);
 
   // Permissions de modification (edit)

@@ -104,16 +104,18 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
   } = useMessageView(message.id);
 
   // Déterminer si c'est notre message
-  // sender.id = Participant record ID, sender.userId = User ID, sender.user.id = User ID
+  // iOS logic: (sender?.resolvedUserId ?? senderId) == currentUserId
+  // sender.id = Participant ID, sender.userId = User ID, sender.user.id = User ID
   const isOwnMessage = useMemo(() => {
     if (!currentUser) return false;
     if (isAnonymous && currentAnonymousUserId) {
       return message.sender?.id === currentAnonymousUserId;
     }
-    return message.senderId === currentUser.id
-      || message.sender?.id === currentUser.id
-      || getSenderUserId(message.sender as Record<string, unknown>) === currentUser.id;
-  }, [message.sender, currentUser, isAnonymous, currentAnonymousUserId]);
+    const senderUserId = getSenderUserId(message.sender as Record<string, unknown>);
+    if (senderUserId) return senderUserId === currentUser.id;
+    // Fallback: senderId might be User ID in legacy/optimistic messages
+    return message.senderId === currentUser.id;
+  }, [message.sender, message.senderId, currentUser, isAnonymous, currentAnonymousUserId]);
 
   // Permissions
   const canEdit = useMemo(() => {
