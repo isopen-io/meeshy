@@ -45,6 +45,7 @@ public struct APIRepostOf: Decodable, Sendable {
     public let createdAt: Date
     public let likeCount: Int?
     public let commentCount: Int?
+    public let isQuote: Bool?
 }
 
 public struct APIPostComment: Decodable, Sendable {
@@ -158,7 +159,8 @@ extension APIPost {
             repost = RepostContent(id: r.id, author: r.author.name, authorId: r.author.id,
                                    authorAvatarURL: r.author.avatar,
                                    content: r.content ?? "",
-                                   timestamp: r.createdAt, likes: r.likeCount ?? 0)
+                                   timestamp: r.createdAt, likes: r.likeCount ?? 0,
+                                   isQuote: r.isQuote ?? false)
         }
 
         let postTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
@@ -172,6 +174,7 @@ extension APIPost {
                         timestamp: createdAt, likes: likeCount ?? 0,
                         comments: feedComments, commentCount: commentCount ?? feedComments.count,
                         repost: repost, repostAuthor: repostOf != nil ? author.name : nil,
+                        isQuote: isQuote ?? false,
                         media: feedMedia,
                         originalLanguage: originalLanguage, translations: postTranslations, translatedContent: postTranslatedContent)
     }

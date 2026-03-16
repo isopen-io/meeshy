@@ -227,4 +227,77 @@ final class PostModelsTests: XCTestCase {
         let post = FeedPost(author: "A", content: "B", media: [.image(url: "https://example.com/img.jpg")])
         XCTAssertEqual(post.mediaUrl, "https://example.com/img.jpg")
     }
+
+    // MARK: - APIRepostOf isQuote
+
+    func test_APIRepostOf_decodesIsQuote() throws {
+        let json = """
+        {
+            "id": "repost1",
+            "content": "Original post content",
+            "author": {"id": "a1", "username": "alice"},
+            "createdAt": "2026-01-15T10:30:00.000Z",
+            "isQuote": true
+        }
+        """.data(using: .utf8)!
+        let result = try makeDecoder().decode(APIRepostOf.self, from: json)
+        XCTAssertEqual(result.isQuote, true)
+    }
+
+    func test_APIRepostOf_decodesWithoutIsQuote() throws {
+        let json = """
+        {
+            "id": "repost2",
+            "content": "Original post content",
+            "author": {"id": "a2", "username": "bob"},
+            "createdAt": "2026-01-15T10:30:00.000Z"
+        }
+        """.data(using: .utf8)!
+        let result = try makeDecoder().decode(APIRepostOf.self, from: json)
+        XCTAssertNil(result.isQuote)
+    }
+
+    func test_toFeedPost_quotedRepost_setsIsQuote() throws {
+        let json = """
+        {
+            "id": "post3",
+            "type": "QUOTE",
+            "content": "My commentary on this",
+            "createdAt": "2026-01-15T10:30:00.000Z",
+            "author": {"id": "a3", "username": "charlie"},
+            "isQuote": true,
+            "repostOf": {
+                "id": "repost3",
+                "content": "The quoted post",
+                "author": {"id": "a1", "username": "alice"},
+                "createdAt": "2026-01-14T10:30:00.000Z",
+                "isQuote": true
+            }
+        }
+        """.data(using: .utf8)!
+        let apiPost = try makeDecoder().decode(APIPost.self, from: json)
+        let feedPost = apiPost.toFeedPost()
+        XCTAssertTrue(feedPost.isQuote)
+    }
+
+    func test_toFeedPost_simpleRepost_isQuoteFalse() throws {
+        let json = """
+        {
+            "id": "post4",
+            "type": "REPOST",
+            "content": "",
+            "createdAt": "2026-01-15T10:30:00.000Z",
+            "author": {"id": "a4", "username": "dave"},
+            "repostOf": {
+                "id": "repost4",
+                "content": "The reposted post",
+                "author": {"id": "a1", "username": "alice"},
+                "createdAt": "2026-01-14T10:30:00.000Z"
+            }
+        }
+        """.data(using: .utf8)!
+        let apiPost = try makeDecoder().decode(APIPost.self, from: json)
+        let feedPost = apiPost.toFeedPost()
+        XCTAssertFalse(feedPost.isQuote)
+    }
 }

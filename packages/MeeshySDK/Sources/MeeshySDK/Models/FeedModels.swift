@@ -87,13 +87,15 @@ public struct RepostContent: Identifiable, Sendable {
     public let content: String
     public let timestamp: Date
     public var likes: Int
+    public let isQuote: Bool
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
-                content: String, timestamp: Date = Date(), likes: Int = 0) {
+                content: String, timestamp: Date = Date(), likes: Int = 0, isQuote: Bool = false) {
         self.id = id; self.author = author; self.authorId = authorId
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL
         self.content = content; self.timestamp = timestamp; self.likes = likes
+        self.isQuote = isQuote
     }
 }
 
@@ -140,6 +142,7 @@ public struct FeedPost: Identifiable, Sendable {
     public var commentCount: Int = 0
     public var repost: RepostContent? = nil
     public var repostAuthor: String? = nil
+    public var isQuote: Bool = false
     public var media: [FeedMedia] = []
     public var originalLanguage: String?
     public var translations: [String: PostTranslation]?
@@ -154,7 +157,7 @@ public struct FeedPost: Identifiable, Sendable {
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
                 type: String? = nil, content: String, timestamp: Date = Date(), likes: Int = 0,
                 comments: [FeedComment] = [], commentCount: Int? = nil, repost: RepostContent? = nil, repostAuthor: String? = nil,
-                media: [FeedMedia] = [], mediaUrl: String? = nil,
+                isQuote: Bool = false, media: [FeedMedia] = [], mediaUrl: String? = nil,
                 originalLanguage: String? = nil, translations: [String: PostTranslation]? = nil, translatedContent: String? = nil) {
         self.id = id; self.author = author; self.authorId = authorId
         let stableId = authorId.isEmpty ? author : authorId
@@ -163,6 +166,7 @@ public struct FeedPost: Identifiable, Sendable {
         self.content = content; self.timestamp = timestamp; self.likes = likes
         self.comments = comments; self.commentCount = commentCount ?? comments.count
         self.repost = repost; self.repostAuthor = repostAuthor
+        self.isQuote = isQuote
         if !media.isEmpty { self.media = media }
         else if mediaUrl != nil { self.media = [.image()] }
         self.originalLanguage = originalLanguage; self.translations = translations; self.translatedContent = translatedContent
