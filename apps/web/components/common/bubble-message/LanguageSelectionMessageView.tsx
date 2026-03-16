@@ -76,7 +76,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
     switch (model?.toLowerCase()) {
       case 'basic': return <Zap className={`${size} text-yellow-500`} />;
       case 'medium': 
-      case 'standard': return <Star className={`${size} text-blue-500`} />;
+      case 'standard': return <Star className={`${size} text-indigo-500`} />;
       case 'premium': return <Gem className={`${size} text-purple-500`} />;
       default: return <Cpu className={`${size} text-gray-500`} />;
     }
@@ -243,9 +243,9 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
       {/* Header avec recherche */}
       <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="flex items-center gap-2 mb-2">
-          <Languages className="h-4 w-4 text-blue-600" />
+          <Languages className="h-4 w-4 text-indigo-600" />
           <span className="font-medium text-sm">{t('selectLanguage')}</span>
-          {translatingLanguages.size > 0 && <Loader2 className="h-3 w-3 animate-spin text-blue-600" />}
+          {translatingLanguages.size > 0 && <Loader2 className="h-3 w-3 animate-spin text-indigo-600" />}
           
           {/* Statistiques globales */}
           <div className="flex items-center gap-2 ml-2">
@@ -356,7 +356,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 w-7 p-0 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                              className="h-7 w-7 p-0 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
                               disabled={translatingLanguages.has(lang.code)}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -364,7 +364,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                                 onRequestTranslation(lang.code, 'medium');
                               }}
                             >
-                              <Star className="h-4 w-4 text-blue-500" />
+                              <Star className="h-4 w-4 text-indigo-500" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
@@ -420,7 +420,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                     className={cn(
                       "flex items-start gap-2 p-2 rounded-md cursor-pointer transition-colors text-left group",
                       isCurrentlyDisplayed
-                        ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700"
+                        ? "bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700"
                         : "hover:bg-gray-50 dark:hover:bg-gray-700"
                     )}
                   >
@@ -442,7 +442,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                           </Badge>
                         )}
                         {isCurrentlyDisplayed && (
-                          <CheckCircle2 className="h-3 w-3 text-blue-600" />
+                          <CheckCircle2 className="h-3 w-3 text-indigo-600" />
                         )}
                         
                         {/* Boutons pour changer de modèle */}

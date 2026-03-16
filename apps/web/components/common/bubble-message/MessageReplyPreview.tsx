@@ -53,7 +53,7 @@ export const MessageReplyPreview = memo(function MessageReplyPreview({
           "relative overflow-hidden rounded-md border-l-2 px-2 py-1.5 cursor-pointer transition-colors duration-200 group text-xs",
           isOwnMessage
             ? "bg-white/20 border-white/40 backdrop-blur-sm hover:bg-white/30"
-            : "bg-gray-50/90 dark:bg-gray-700/40 border-blue-400 dark:border-blue-500 hover:bg-gray-100/90 dark:hover:bg-gray-700/60"
+            : "bg-gray-50/90 dark:bg-gray-700/40 border-indigo-400 dark:border-indigo-500 hover:bg-gray-100/90 dark:hover:bg-gray-700/60"
         )}
       >
         <div className="flex items-start justify-between gap-1">
@@ -74,7 +74,7 @@ export const MessageReplyPreview = memo(function MessageReplyPreview({
                     "text-xs font-semibold truncate hover:underline transition-colors cursor-pointer",
                     isOwnMessage
                       ? "text-white/90 hover:text-white"
-                      : "text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400"
+                      : "text-gray-700 dark:text-gray-200 hover:text-indigo-500 dark:hover:text-indigo-400"
                   )}
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -110,7 +110,7 @@ export const MessageReplyPreview = memo(function MessageReplyPreview({
           </div>
           <MessageCircle className={cn(
             "h-3 w-3 flex-shrink-0 mt-0.5",
-            isOwnMessage ? "text-white/50" : "text-blue-500/50 dark:text-blue-400/50"
+            isOwnMessage ? "text-white/50" : "text-indigo-500/50 dark:text-indigo-400/50"
           )} />
         </div>
       </div>

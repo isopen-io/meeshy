@@ -195,7 +195,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
         "relative w-full mx-auto rounded-lg border shadow-lg overflow-hidden",
         "max-w-[320px] sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl",
         isOwnMessage 
-          ? "bg-gradient-to-br from-blue-400/95 to-blue-500/95 border-blue-400 backdrop-blur-sm" 
+          ? "bg-gradient-to-br from-indigo-500/95 to-indigo-700/95 border-indigo-400 backdrop-blur-sm" 
           : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
       )}
       onKeyDown={handleKeyDown}
@@ -209,7 +209,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
       )}>
         <h3 className={cn(
           "text-sm font-semibold",
-          isOwnMessage ? "text-blue-900" : "text-gray-800 dark:text-gray-100"
+          isOwnMessage ? "text-indigo-900" : "text-gray-800 dark:text-gray-100"
         )}>
           {t('chooseReaction')}
         </h3>
@@ -220,7 +220,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
           className={cn(
             "h-6 w-6 p-0 rounded-full",
             isOwnMessage 
-              ? "text-blue-900 hover:text-blue-950 hover:bg-blue-900/20" 
+              ? "text-indigo-900 hover:text-indigo-950 hover:bg-indigo-900/20" 
               : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700"
           )}
           aria-label={t('close')}
@@ -239,7 +239,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
         )}>
           <p className={cn(
             "text-xs mb-2 font-medium",
-            isOwnMessage ? "text-blue-900" : "text-gray-600 dark:text-gray-300"
+            isOwnMessage ? "text-indigo-900" : "text-gray-600 dark:text-gray-300"
           )}>
             {t('mostUsedReactions')}
           </p>
@@ -257,7 +257,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
                     isReacted
                       ? isOwnMessage
                         ? "bg-white/40 border-2 border-white/70 shadow-md focus:ring-white/50"
-                        : "bg-blue-100 border-2 border-blue-500 shadow-md dark:bg-blue-900/60 dark:border-blue-500 focus:ring-blue-400"
+                        : "bg-indigo-100 border-2 border-indigo-500 shadow-md dark:bg-indigo-900/60 dark:border-indigo-500 focus:ring-indigo-400"
                       : isOwnMessage 
                         ? "hover:bg-white/20 border border-transparent" 
                         : "hover:bg-gray-100 border border-transparent dark:hover:bg-gray-700"
@@ -274,8 +274,8 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
                       className={cn(
                         "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm",
                         isOwnMessage 
-                          ? "bg-white text-blue-600" 
-                          : "bg-blue-600 text-white"
+                          ? "bg-white text-indigo-600" 
+                          : "bg-indigo-600 text-white"
                       )}
                     >
                       ✓
@@ -303,7 +303,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
             className={cn(
               "pl-10 pr-4 h-9 text-sm",
               isOwnMessage 
-                ? "bg-white border-blue-300 text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-blue-500" 
+                ? "bg-white border-indigo-300 text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-indigo-500" 
                 : "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
             )}
             autoFocus
@@ -348,7 +348,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
         {filteredEmojis.length === 0 ? (
           <div className={cn(
             "flex flex-col items-center justify-center h-full py-12 text-center",
-            isOwnMessage ? "text-blue-900" : "text-gray-500 dark:text-gray-400"
+            isOwnMessage ? "text-indigo-900" : "text-gray-500 dark:text-gray-400"
           )}>
             <Search className="h-12 w-12 mb-3 opacity-50" />
             <p className="text-sm font-medium">{t('noEmojisFound')}</p>
@@ -360,7 +360,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
               className={cn(
                 "mt-4",
                 isOwnMessage 
-                  ? "text-blue-900 hover:text-blue-950 hover:bg-blue-900/20" 
+                  ? "text-indigo-900 hover:text-indigo-950 hover:bg-indigo-900/20" 
                   : "text-gray-600 hover:text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200"
               )}
             >
@@ -384,7 +384,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
                     isReacted
                       ? isOwnMessage
                         ? "bg-white/40 border-2 border-white/70 shadow-md focus:ring-white/50"
-                        : "bg-blue-100 border-2 border-blue-500 shadow-md dark:bg-blue-900/60 dark:border-blue-500 focus:ring-blue-400"
+                        : "bg-indigo-100 border-2 border-indigo-500 shadow-md dark:bg-indigo-900/60 dark:border-indigo-500 focus:ring-indigo-400"
                       : hoveredEmoji === emoji 
                         ? isOwnMessage 
                           ? "bg-white/30 border border-white/50" 
@@ -409,8 +409,8 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
                       className={cn(
                         "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm",
                         isOwnMessage 
-                          ? "bg-white text-blue-600" 
-                          : "bg-blue-600 text-white"
+                          ? "bg-white text-indigo-600" 
+                          : "bg-indigo-600 text-white"
                       )}
                     >
                       ✓

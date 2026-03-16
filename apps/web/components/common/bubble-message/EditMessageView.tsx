@@ -224,7 +224,7 @@ export const EditMessageView = memo(function EditMessageView({
         className={cn(
           "relative w-full rounded-xl border-2 overflow-hidden shadow-xl",
           isOwnMessage
-            ? "bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700"
+            ? "bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700"
             : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
         )}
         onKeyDown={handleKeyDown}
@@ -238,7 +238,7 @@ export const EditMessageView = memo(function EditMessageView({
           className={cn(
             "min-h-[120px] resize-none text-base border-0 focus-visible:ring-0 p-4",
             isOwnMessage
-              ? "bg-blue-50 dark:bg-blue-950 text-gray-900 dark:text-gray-100"
+              ? "bg-indigo-50 dark:bg-indigo-950 text-gray-900 dark:text-gray-100"
               : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           )}
           disabled={isSaving}
@@ -256,7 +256,7 @@ export const EditMessageView = memo(function EditMessageView({
         <div className={cn(
           "flex items-center justify-between gap-3 p-4 border-t",
           isOwnMessage
-            ? "border-blue-200 dark:border-blue-800 bg-blue-100/50 dark:bg-blue-900/30"
+            ? "border-indigo-200 dark:border-indigo-800 bg-indigo-100/50 dark:bg-indigo-900/30"
             : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
         )}>
           {/* Language selector mobile */}
@@ -265,7 +265,7 @@ export const EditMessageView = memo(function EditMessageView({
               <button type="button" className={cn(
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/10",
                 isOwnMessage
-                  ? "border-blue-700 dark:border-blue-300 text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-white/10"
+                  ? "border-indigo-700 dark:border-indigo-300 text-indigo-900 dark:text-indigo-100 bg-white/50 dark:bg-white/10"
                   : "border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-400"
               )}>
                 <span>{selectedLanguageInfo.flag}</span>
@@ -308,7 +308,7 @@ export const EditMessageView = memo(function EditMessageView({
               className={cn(
                 "h-12 w-12 p-0 rounded-full",
                 isOwnMessage
-                  ? "bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                  ? "bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
                   : "bg-green-600 hover:bg-green-700"
               )}
             >
@@ -344,7 +344,7 @@ export const EditMessageView = memo(function EditMessageView({
       className={cn(
         "relative w-full max-w-2xl mx-auto rounded-lg border shadow-lg overflow-visible",
         isOwnMessage
-          ? "bg-gradient-to-br from-blue-400/95 to-blue-500/95 dark:from-blue-600/90 dark:to-blue-700/90 border-blue-400 dark:border-blue-500 backdrop-blur-sm"
+          ? "bg-gradient-to-br from-indigo-500/95 to-indigo-700/95 dark:from-indigo-600/90 dark:to-indigo-700/90 border-indigo-400 dark:border-indigo-500 backdrop-blur-sm"
           : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
       )}
       onKeyDown={handleKeyDown}
@@ -359,7 +359,7 @@ export const EditMessageView = memo(function EditMessageView({
         <div className="flex items-center gap-2">
           <h3 className={cn(
             "text-sm font-semibold",
-            isOwnMessage ? "text-blue-900 dark:text-blue-100" : "text-gray-800 dark:text-gray-100"
+            isOwnMessage ? "text-indigo-900 dark:text-indigo-100" : "text-gray-800 dark:text-gray-100"
           )}>
             {t('editMessage')}
           </h3>
@@ -368,7 +368,7 @@ export const EditMessageView = memo(function EditMessageView({
               <button type="button" className={cn(
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/10",
                 isOwnMessage
-                  ? "border-blue-700 dark:border-blue-300 text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-white/10"
+                  ? "border-indigo-700 dark:border-indigo-300 text-indigo-900 dark:text-indigo-100 bg-white/50 dark:bg-white/10"
                   : "border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-400"
               )}>
                 <span>{selectedLanguageInfo.flag}</span>
@@ -400,7 +400,7 @@ export const EditMessageView = memo(function EditMessageView({
           className={cn(
             "h-6 w-6 p-0 rounded-full",
             isOwnMessage
-              ? "text-blue-900 dark:text-blue-100 hover:text-blue-950 dark:hover:text-white hover:bg-blue-900/20 dark:hover:bg-white/20"
+              ? "text-indigo-900 dark:text-indigo-100 hover:text-indigo-950 dark:hover:text-white hover:bg-indigo-900/20 dark:hover:bg-white/20"
               : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700"
           )}
           aria-label={t('cancel')}
@@ -415,7 +415,7 @@ export const EditMessageView = memo(function EditMessageView({
           <div>
             <label className={cn(
               "block text-sm font-medium mb-2",
-              isOwnMessage ? "text-blue-900 dark:text-blue-100" : "text-gray-700 dark:text-gray-300"
+              isOwnMessage ? "text-indigo-900 dark:text-indigo-100" : "text-gray-700 dark:text-gray-300"
             )}>
               {t('messageContent')}:
             </label>
@@ -427,7 +427,7 @@ export const EditMessageView = memo(function EditMessageView({
               className={cn(
                 "min-h-[120px] resize-none text-sm leading-relaxed",
                 isOwnMessage
-                  ? "bg-white dark:bg-gray-800 border-blue-300 dark:border-blue-400 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:bg-white dark:focus:bg-gray-800 focus:border-blue-500 dark:focus:border-blue-300"
+                  ? "bg-white dark:bg-gray-800 border-indigo-300 dark:border-indigo-400 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:bg-white dark:focus:bg-gray-800 focus:border-indigo-500 dark:focus:border-indigo-300"
                   : "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
               )}
               disabled={isSaving}
@@ -502,7 +502,7 @@ export const EditMessageView = memo(function EditMessageView({
             className={cn(
               "h-8 px-3 text-xs",
               isOwnMessage
-                ? "border-blue-700 dark:border-blue-400 bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100 hover:bg-blue-50 dark:hover:bg-gray-700"
+                ? "border-indigo-700 dark:border-indigo-400 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100 hover:bg-indigo-50 dark:hover:bg-gray-700"
                 : "border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
             )}
           >
@@ -516,8 +516,8 @@ export const EditMessageView = memo(function EditMessageView({
             className={cn(
               "h-8 px-3 text-xs",
               isOwnMessage
-                ? "bg-blue-700 dark:bg-blue-600 hover:bg-blue-800 dark:hover:bg-blue-500 text-white border-blue-800 dark:border-blue-500"
-                : "bg-blue-600 hover:bg-blue-700 text-white"
+                ? "bg-indigo-700 dark:bg-indigo-600 hover:bg-indigo-800 dark:hover:bg-indigo-500 text-white border-indigo-800 dark:border-indigo-500"
+                : "bg-indigo-600 hover:bg-indigo-700 text-white"
             )}
           >
             {isSaving ? (

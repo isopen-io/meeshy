@@ -267,13 +267,13 @@ export const ReportMessageView = memo(function ReportMessageView({
           </div>
 
           {/* Info notice */}
-          <div className="flex items-start gap-2 p-3 rounded-md border bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
-            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+          <div className="flex items-start gap-2 p-3 rounded-md border bg-indigo-50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800">
+            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-indigo-600 dark:text-indigo-400" />
             <div>
-              <p className="text-xs font-medium mb-1 text-blue-800 dark:text-blue-200">
+              <p className="text-xs font-medium mb-1 text-indigo-800 dark:text-indigo-200">
                 {t('confidentialNotice')}
               </p>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
+              <p className="text-xs text-indigo-700 dark:text-indigo-300">
                 {t('confidentialDescription')}
               </p>
             </div>

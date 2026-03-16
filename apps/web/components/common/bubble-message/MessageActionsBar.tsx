@@ -195,7 +195,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                           minWidth: '24px',
                           minHeight: '24px'
                         }}
-                        className="p-0 rounded-full transition-colors text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                        className="p-0 rounded-full transition-colors text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-indigo-900/30"
                         aria-label={t('selectLanguage')}
                       >
                         <Languages className="h-3 w-3" />
@@ -203,7 +203,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
 
                       {/* Badge du nombre de traductions */}
                       {message.translations && message.translations.length > 0 && (
-                        <div className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm bg-blue-600 text-white">
+                        <div className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm bg-indigo-600 text-white">
                           {message.translations.length}
                         </div>
                       )}
@@ -228,7 +228,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                     className={cn(
                       "w-full flex items-start gap-2 p-2 rounded-md text-left transition-colors",
                       currentDisplayLanguage === originalLanguage
-                        ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700"
+                        ? "bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700"
                         : "hover:bg-gray-50 dark:hover:bg-gray-700"
                     )}
                   >
@@ -240,7 +240,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                           {t('original')}
                         </Badge>
                         {currentDisplayLanguage === originalLanguage && (
-                          <CheckCircle2 className="h-3 w-3 text-blue-600" />
+                          <CheckCircle2 className="h-3 w-3 text-indigo-600" />
                         )}
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1 leading-snug">
@@ -263,7 +263,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                           className={cn(
                             "w-full flex items-start gap-2 p-2 rounded-md text-left transition-colors",
                             isCurrentlyDisplayed
-                              ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700"
+                              ? "bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700"
                               : "hover:bg-gray-50 dark:hover:bg-gray-700"
                           )}
                         >
@@ -272,7 +272,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                             <div className="flex items-center gap-2 mb-0.5">
                               <span className="font-medium text-sm">{langInfo.name}</span>
                               {isCurrentlyDisplayed && (
-                                <CheckCircle2 className="h-3 w-3 text-blue-600" />
+                                <CheckCircle2 className="h-3 w-3 text-indigo-600" />
                               )}
                             </div>
                             <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1 leading-snug">
@@ -292,7 +292,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                           setIsTranslationMenuOpen(false);
                           onEnterLanguageMode();
                         }}
-                        className="w-full flex items-center justify-center gap-2 p-2 rounded-md text-sm font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                        className="w-full flex items-center justify-center gap-2 p-2 rounded-md text-sm font-medium text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
                       >
                         <Languages className="h-3.5 w-3.5" />
                         <span>{t('moreTranslationOptions')}</span>
@@ -320,7 +320,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                   minHeight: '24px'
                 }}
                 aria-label={t('replyToMessage')}
-                className="p-0 rounded-full transition-colors text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                className="p-0 rounded-full transition-colors text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-indigo-900/30"
               >
                 <Reply className="h-3.5 w-3.5" />
               </Button>
@@ -378,7 +378,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                   whileHover={{ scale: 1.2 }}
                   whileTap={{ scale: 0.9 }}
                   transition={{ duration: 0.1 }}
-                  className="w-9 h-9 flex items-center justify-center rounded-md text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                  className="w-9 h-9 flex items-center justify-center rounded-md text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   aria-label={`Réagir avec ${emoji}`}
                 >
                   {emoji}
@@ -393,7 +393,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                   setIsReactionMenuOpen(false);
                   onReaction();
                 }}
-                className="w-full flex items-center justify-center gap-2 p-2 rounded-md text-sm font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                className="w-full flex items-center justify-center gap-2 p-2 rounded-md text-sm font-medium text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
               >
                 <Smile className="h-3.5 w-3.5" />
                 <span>{t('moreReactions')}</span>
