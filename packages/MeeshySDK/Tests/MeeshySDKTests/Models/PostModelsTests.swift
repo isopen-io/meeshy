@@ -280,6 +280,26 @@ final class PostModelsTests: XCTestCase {
         XCTAssertTrue(feedPost.isQuote)
     }
 
+    // MARK: - RepostRequest encoding
+
+    func test_RepostRequest_alwaysEncodesIsQuoteKey() throws {
+        let request = RepostRequest()
+        let data = try JSONEncoder().encode(request)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+
+        XCTAssertNotNil(json["isQuote"], "isQuote key must always be present in encoded JSON")
+        XCTAssertEqual(json["isQuote"] as? Bool, false)
+    }
+
+    func test_RepostRequest_encodesIsQuoteTrueWithContent() throws {
+        let request = RepostRequest(content: "My quote", isQuote: true)
+        let data = try JSONEncoder().encode(request)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+
+        XCTAssertEqual(json["isQuote"] as? Bool, true)
+        XCTAssertEqual(json["content"] as? String, "My quote")
+    }
+
     func test_toFeedPost_simpleRepost_isQuoteFalse() throws {
         let json = """
         {

@@ -64,7 +64,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func repost(postId: String, quote: String? = nil) async throws {
-        let body = RepostRequest(content: quote, isQuote: quote != nil ? true : nil)
+        let body = RepostRequest(content: quote, isQuote: quote != nil)
         let _: APIResponse<[String: String]> = try await api.post(endpoint: "/posts/\(postId)/repost", body: body)
     }
 

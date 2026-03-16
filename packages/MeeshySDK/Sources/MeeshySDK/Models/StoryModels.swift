@@ -770,8 +770,8 @@ public struct ReactionRequest: Encodable {
 
 public struct RepostRequest: Encodable {
     public let content: String?
-    public let isQuote: Bool?
-    public init(content: String? = nil, isQuote: Bool? = nil) { self.content = content; self.isQuote = isQuote }
+    public let isQuote: Bool
+    public init(content: String? = nil, isQuote: Bool = false) { self.content = content; self.isQuote = isQuote }
 }
 
 public struct StatusCreateRequest: Encodable {
