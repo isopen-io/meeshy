@@ -575,8 +575,10 @@ export async function requireEmailVerification(request: FastifyRequest, reply: F
 
   if (!authContext.registeredUser.emailVerifiedAt) {
     reply.code(403).send({ success: false, error: { code: 'EMAIL_NOT_VERIFIED', message: 'Email verification required' } });
+    return;
   }
 }
 
+/** @deprecated Not used by any route — stub kept for backward compatibility */
 export async function requireActiveAccount(_request: FastifyRequest, _reply: FastifyReply) {
 }
