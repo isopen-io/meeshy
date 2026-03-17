@@ -26,7 +26,7 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
-import { conversationListCache, invalidateConversationCacheAsync } from '../../services/ConversationListCache';
+import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 
 /**
@@ -165,31 +165,6 @@ export function registerCoreRoutes(
       const typeFilter = request.query.type;
       const withUserId = request.query.withUserId;
       const beforeCursor = request.query.before;
-
-      // === CACHE DISABLED ===
-      // Le cache des conversations causait des problèmes de synchronisation
-      // avec les lastMessage qui n'étaient pas à jour après nouveaux messages.
-      // Désactivé jusqu'à implémentation d'une meilleure stratégie d'invalidation.
-      const canUseCache = false; // DISABLED
-      const cacheKey = userId;
-
-      if (canUseCache) {
-        const cached = await conversationListCache.get(cacheKey);
-        if (cached) {
-          console.log(`[CACHE-HIT] 🚀 Conversations servies depuis cache pour user ${userId} (${Date.now() - cached.cachedAt}ms old)`);
-          return reply.send({
-            success: true,
-            data: cached.conversations,
-            pagination: {
-              limit,
-              offset,
-              total: cached.total,
-              hasMore: cached.hasMore
-            }
-          });
-        }
-        console.log(`[CACHE-MISS] 💾 Cache miss pour user ${userId}, query DB...`);
-      }
 
       // === PERFORMANCE INSTRUMENTATION ===
       const perfStart = performance.now();
@@ -516,16 +491,6 @@ export function registerCoreRoutes(
       console.log(`  - parallelQueries (users+unread+count): ${perfTimings.parallelQueries?.toFixed(2)}ms`);
       console.log(`  TOTAL: ${totalTime.toFixed(2)}ms`);
       console.log('===============================================');
-
-      // === CACHE: Sauvegarder en cache si applicable (fire-and-forget) ===
-      if (canUseCache) {
-        conversationListCache.set(cacheKey, {
-          conversations: conversationsWithUnreadCount,
-          hasMore,
-          total: totalCount,
-          cachedAt: Date.now()
-        }).catch(err => console.error('[CACHE-SAVE] Erreur sauvegarde cache:', err));
-      }
 
       // Build cursor pagination meta
       const lastConversation = conversationsWithUnreadCount.length > 0
