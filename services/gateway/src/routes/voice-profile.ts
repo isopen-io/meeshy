@@ -11,7 +11,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { VoiceProfileService, ConsentRequest, RegisterProfileRequest, UpdateProfileRequest } from '../services/VoiceProfileService';
-import { createUnifiedAuthMiddleware, UnifiedAuthContext } from '../middleware/auth';
+import { createUnifiedAuthMiddleware, UnifiedAuthContext, UnifiedAuthRequest} from '../middleware/auth';
 import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
@@ -114,7 +114,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = (request as any).authContext;
+    const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
@@ -184,7 +184,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = (request as any).authContext;
+    const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
@@ -405,7 +405,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = (request as any).authContext;
+    const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
@@ -591,7 +591,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest<{ Params: { profileId: string } }>, reply: FastifyReply) => {
-    const auth = (request as any).authContext;
+    const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
@@ -725,7 +725,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = (request as any).authContext;
+    const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
@@ -828,7 +828,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = (request as any).authContext;
+    const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }

@@ -49,7 +49,7 @@ import { UserManagementService } from '../../services/admin/user-management.serv
 import { UserAuditService } from '../../services/admin/user-audit.service';
 import { sanitizationService } from '../../services/admin/user-sanitization.service';
 import { permissionsService } from '../../services/admin/permissions.service';
-import { UnifiedAuthContext } from '../../middleware/auth';
+import { UnifiedAuthContext, UnifiedAuthRequest} from '../../middleware/auth';
 import {
   requireUserViewAccess,
   requireUserModifyAccess,
@@ -79,7 +79,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const viewerRole = authContext.registeredUser!.role as UserRoleEnum;
 
       const filters: UserFilters = {
@@ -153,7 +153,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const viewerRole = authContext.registeredUser!.role as UserRoleEnum;
 
       const user = await userManagementService.getUserById(request.params.userId);
@@ -202,7 +202,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
       // Valider les donnees
@@ -274,7 +274,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
       // Valider les donnees
@@ -370,7 +370,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
       // Valider les donnees
@@ -461,7 +461,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
       // Valider les donnees
@@ -548,7 +548,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
       // Valider les donnees
@@ -625,7 +625,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserDeleteAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
       // Recuperer l'utilisateur cible
@@ -689,7 +689,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
 
       // Récupérer l'utilisateur cible
       const targetUser = await userManagementService.getUserById(request.params.userId);
@@ -743,7 +743,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
 
       // Récupérer l'utilisateur cible
       const targetUser = await userManagementService.getUserById(request.params.userId);
@@ -798,7 +798,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
 
       // Récupérer l'utilisateur cible
       const targetUser = await userManagementService.getUserById(request.params.userId);
@@ -853,7 +853,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
       // Valider les données
@@ -938,7 +938,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
       // Valider les données
@@ -1023,7 +1023,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
       // Valider les données
@@ -1113,7 +1113,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserModifyAccess]
   }, async (request, reply) => {
     try {
-      const authContext = (request as any).authContext as UnifiedAuthContext;
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const adminRole = authContext.registeredUser!.role as UserRoleEnum;
 
       // Valider les données

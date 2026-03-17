@@ -15,6 +15,7 @@ import type {
   ConversationParams,
   ConversationAttachmentsQuery,
 } from './types';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 export async function registerMetadataRoutes(
   fastify: FastifyInstance,
@@ -158,7 +159,7 @@ export async function registerMetadataRoutes(
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
 
         if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
           return reply.status(401).send({
@@ -292,7 +293,7 @@ export async function registerMetadataRoutes(
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
 
         if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
           console.error('[AttachmentRoutes] Authentification requise');

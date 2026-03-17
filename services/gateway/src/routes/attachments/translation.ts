@@ -8,6 +8,7 @@ import { AttachmentTranslateService } from '../../services/AttachmentTranslateSe
 import { ConsentValidationService } from '../../services/ConsentValidationService';
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { AttachmentParams, TranslateBody } from './types';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 export async function registerTranslationRoutes(
   fastify: FastifyInstance,
@@ -139,7 +140,7 @@ export async function registerTranslationRoutes(
           });
         }
 
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext?.isAuthenticated) {
           return reply.status(401).send({
             success: false,
@@ -354,7 +355,7 @@ export async function registerTranslationRoutes(
           });
         }
 
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext?.isAuthenticated) {
           return reply.status(401).send({
             success: false,

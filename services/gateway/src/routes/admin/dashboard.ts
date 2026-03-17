@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 // Middleware pour vérifier les permissions dashboard
 const requireDashboardPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as any).authContext;
+  const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
     return reply.status(401).send({
       success: false,
@@ -112,7 +113,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
       const messagesByType: Record<string, number> = {};
 
       // Récupérer les permissions de l'utilisateur
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const userPermissions = {
         role: authContext.registeredUser.role,
         canManageUsers: ['BIGBOSS', 'ADMIN'].includes(authContext.registeredUser.role),

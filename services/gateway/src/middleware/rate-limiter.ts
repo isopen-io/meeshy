@@ -10,6 +10,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { isLocalIp } from '../utils/rate-limiter';
+import { UnifiedAuthRequest } from './auth';
 
 /**
  * Rate limiter pour les messages
@@ -21,7 +22,7 @@ export async function registerMessageRateLimiter(fastify: FastifyInstance) {
     timeWindow: '1 minute',
     keyGenerator: (request: FastifyRequest) => {
       // Rate limit par utilisateur
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (authContext && authContext.userId) {
         return `msg:${authContext.userId}`;
       }
@@ -140,7 +141,7 @@ export function createSignalProtocolRateLimitConfig(
       max: 30,
       timeWindow: '1 minute',
       keyGenerator: (request: FastifyRequest) => {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (authContext && authContext.userId) {
           return `signal:keys:get:${authContext.userId}`;
         }
@@ -156,7 +157,7 @@ export function createSignalProtocolRateLimitConfig(
       max: 5,
       timeWindow: '1 minute',
       keyGenerator: (request: FastifyRequest) => {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (authContext && authContext.userId) {
           return `signal:keys:post:${authContext.userId}`;
         }
@@ -172,7 +173,7 @@ export function createSignalProtocolRateLimitConfig(
       max: 20,
       timeWindow: '1 minute',
       keyGenerator: (request: FastifyRequest) => {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (authContext && authContext.userId) {
           return `signal:session:${authContext.userId}`;
         }

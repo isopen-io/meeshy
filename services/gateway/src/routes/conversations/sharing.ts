@@ -821,7 +821,7 @@ export function registerSharingRoutes(
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,

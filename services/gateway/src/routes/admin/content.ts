@@ -3,16 +3,18 @@ import { logError } from '../../utils/logger';
 import { permissionsService } from './services/PermissionsService';
 import {
   validatePagination,
+  type UserRole,
   type MessageListQuery,
   type CommunityListQuery,
   type TranslationListQuery,
   type ShareLinkListQuery
 } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as any).authContext;
+  const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
     return reply.status(401).send({
       success: false,
@@ -20,7 +22,7 @@ const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
     });
   }
 
-  const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role);
+  const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role as UserRole);
   if (!permissions.canAccessAdmin) {
     return reply.status(403).send({
       success: false,
@@ -73,9 +75,9 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const user = authContext.registeredUser;
-      const permissions = permissionsService.getUserPermissions(user.role);
+      const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canModerateContent) {
         return reply.status(403).send({
@@ -256,9 +258,9 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const user = authContext.registeredUser;
-      const permissions = permissionsService.getUserPermissions(user.role);
+      const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canManageCommunities) {
         return reply.status(403).send({
@@ -381,9 +383,9 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const user = authContext.registeredUser;
-      const permissions = permissionsService.getUserPermissions(user.role);
+      const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canManageTranslations) {
         return reply.status(403).send({
@@ -589,9 +591,9 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const user = authContext.registeredUser;
-      const permissions = permissionsService.getUserPermissions(user.role);
+      const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canManageConversations) {
         return reply.status(403).send({

@@ -14,7 +14,7 @@ import {
   validateSessionRequestSchema
 } from '@meeshy/shared/types';
 import { AuthSchemas, SessionSchemas, validateSchema } from '@meeshy/shared/utils/validation';
-import { createUnifiedAuthMiddleware } from '../../middleware/auth';
+import { createUnifiedAuthMiddleware, UnifiedAuthRequest} from '../../middleware/auth';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
@@ -56,7 +56,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
     preValidation: [createUnifiedAuthMiddleware((fastify as any).prisma, { requireAuth: true })]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
 
       if (!authContext.isAuthenticated) {
         return reply.status(401).send({

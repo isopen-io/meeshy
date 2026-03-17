@@ -11,6 +11,7 @@ import {
   affiliateRelationSchema,
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
+import { UnifiedAuthRequest } from '../middleware/auth';
 
 // Schémas de validation Zod
 const createAffiliateTokenSchema = z.object({
@@ -117,7 +118,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -261,7 +262,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -393,7 +394,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -876,7 +877,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,

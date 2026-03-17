@@ -731,7 +731,7 @@ export function registerCoreRoutes(
       const { type, title, description, participantIds = [], communityId, identifier } = validatedData;
 
       // Utiliser le nouveau système d'authentification unifié
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         throw createError(ErrorCode.UNAUTHORIZED, 'Authentication required to create conversation');
       }

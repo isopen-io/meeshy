@@ -11,6 +11,7 @@ import {
   UpdateCommunitySchema,
   generateIdentifier
 } from './types';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 export async function registerSettingsRoutes(fastify: FastifyInstance) {
   // Route pour mettre a jour une communaute
@@ -68,7 +69,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       const validatedData = UpdateCommunitySchema.parse(request.body);
 
       // Utiliser le nouveau systeme d'authentification unifie
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -215,7 +216,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
 
       // Utiliser le nouveau systeme d'authentification unifie
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,

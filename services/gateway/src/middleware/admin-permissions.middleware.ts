@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { permissionsService } from '../services/admin/permissions.service';
-import { UnifiedAuthContext } from './auth';
+import { UnifiedAuthContext, UnifiedAuthRequest} from './auth';
 
 /**
  * Generic admin permission middleware factory
@@ -12,7 +12,7 @@ export function createAdminPermissionMiddleware(
   errorMessage?: string
 ) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const authContext = (request as any).authContext as UnifiedAuthContext;
+    const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
 
     if (!authContext?.isAuthenticated || !authContext.registeredUser || authContext.isAnonymous) {
       reply.status(401).send({
@@ -105,7 +105,7 @@ export function requireRole(allowedRoles: UserRoleEnum | UserRoleEnum[]) {
   const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
 
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const authContext = (request as any).authContext as UnifiedAuthContext;
+    const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
 
     if (!authContext?.isAuthenticated || !authContext.registeredUser || authContext.isAnonymous) {
       reply.status(401).send({
@@ -134,7 +134,7 @@ export async function canManageTargetUser(
   request: FastifyRequest,
   targetUserId: string
 ): Promise<{ canManage: boolean; error?: string }> {
-  const authContext = (request as any).authContext as UnifiedAuthContext;
+  const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
 
   if (!authContext?.isAuthenticated || !authContext.registeredUser) {
     return { canManage: false, error: 'Authentication required' };
@@ -180,7 +180,7 @@ export async function logAdminAction(
   changes?: Record<string, any>,
   metadata?: Record<string, any>
 ): Promise<void> {
-  const authContext = (request as any).authContext as UnifiedAuthContext;
+  const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
 
   if (!authContext?.isAuthenticated || !authContext.registeredUser) {
     return;

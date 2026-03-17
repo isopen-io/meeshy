@@ -9,6 +9,7 @@ import { FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { logger } from '../utils/logger.js';
 import { isLocalIp } from '../utils/rate-limiter';
+import { UnifiedAuthRequest } from './auth';
 
 /**
  * Rate limit configuration per endpoint
@@ -67,7 +68,7 @@ export async function registerRateLimiting(fastify: FastifyInstance): Promise<vo
     skipOnError: true, // Don't block requests if Redis is down
     keyGenerator: (request) => {
       // Use user ID if authenticated, otherwise IP address
-      const userId = (request as any).authContext?.userId;
+      const userId = (request as UnifiedAuthRequest).authContext?.userId;
       if (userId) {
         return `user:${userId}`;
       }
@@ -76,7 +77,7 @@ export async function registerRateLimiting(fastify: FastifyInstance): Promise<vo
     errorResponseBuilder: (request, context) => {
       logger.warn('Rate limit exceeded', {
         ip: request.ip,
-        userId: (request as any).authContext?.userId,
+        userId: (request as UnifiedAuthRequest).authContext?.userId,
         path: request.url,
         limit: context.max,
         after: context.after

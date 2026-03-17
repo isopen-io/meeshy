@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { permissionsService } from '../services/admin/permissions.service';
-import { UnifiedAuthContext } from './auth';
+import { UnifiedAuthContext, UnifiedAuthRequest} from './auth';
 
 /**
  * Middleware: Requiert accès admin à l'espace utilisateurs
@@ -10,7 +10,7 @@ export async function requireUserViewAccess(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
-  const authContext = (request as any).authContext as UnifiedAuthContext;
+  const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
 
   if (!authContext?.isAuthenticated || !authContext.registeredUser || authContext.isAnonymous) {
     reply.status(401).send({
@@ -38,7 +38,7 @@ export async function requireUserModifyAccess(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
-  const authContext = (request as any).authContext as UnifiedAuthContext;
+  const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
 
   if (!authContext?.isAuthenticated || !authContext.registeredUser || authContext.isAnonymous) {
     reply.status(401).send({
@@ -66,7 +66,7 @@ export async function requireUserDeleteAccess(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
-  const authContext = (request as any).authContext as UnifiedAuthContext;
+  const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
 
   if (!authContext?.isAuthenticated || !authContext.registeredUser || authContext.isAnonymous) {
     reply.status(401).send({

@@ -8,6 +8,7 @@ import type {
   UpdateReportDTO,
   ReportFilters
 } from '@meeshy/shared/types';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 // Schemas de validation Zod
 const createReportSchema = z.object({
@@ -27,7 +28,7 @@ const updateReportSchema = z.object({
 
 // Middleware pour verifier les permissions de moderation
 const requireModeratorPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as any).authContext;
+  const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
     return reply.status(401).send({
       success: false,
@@ -57,7 +58,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const body = createReportSchema.parse(request.body);
 
       // Si l'utilisateur est authentifie, utiliser son ID
@@ -237,7 +238,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate, requireModeratorPermission]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const moderatorId = authContext.registeredUser.id;
       const { id } = request.params as { id: string };
       const body = updateReportSchema.parse(request.body);
@@ -324,7 +325,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate, requireModeratorPermission]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const moderatorId = authContext.registeredUser.id;
       const { id } = request.params as { id: string };
 
@@ -352,7 +353,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate, requireModeratorPermission]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const moderatorId = authContext.registeredUser.id;
 
       const reports = await reportService.getModeratorReports(moderatorId);

@@ -7,7 +7,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AttachmentTranslateService } from '../services/AttachmentTranslateService';
-import { createUnifiedAuthMiddleware } from '../middleware/auth';
+import { createUnifiedAuthMiddleware, UnifiedAuthRequest} from '../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 // =============================================================================
@@ -216,7 +216,7 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
           });
         }
 
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext?.isAuthenticated) {
           return reply.status(401).send({
             success: false,
@@ -304,7 +304,7 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
           });
         }
 
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext?.isAuthenticated) {
           return reply.status(401).send({
             success: false,

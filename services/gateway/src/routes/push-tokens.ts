@@ -13,6 +13,7 @@ import { logError } from '../utils/logger';
 import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
+import { UnifiedAuthRequest } from '../middleware/auth';
 
 // ============================================
 // VALIDATION SCHEMAS
@@ -136,7 +137,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -277,7 +278,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -376,7 +377,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -453,7 +454,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{ Params: { deviceId: string } }>, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,

@@ -3,6 +3,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { BroadcastTranslationService } from '../../services/admin/broadcast-translation.service';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { EmailService } from '../../services/EmailService';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 
@@ -11,7 +12,7 @@ const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 // ---------------------------------------------------------------------------
 
 const requireBroadcastPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as any).authContext;
+  const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
     return reply.status(401).send({ success: false, message: 'Authentification requise' });
   }
@@ -88,7 +89,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate, requireBroadcastPermission]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const adminId = authContext.registeredUser.id;
 
       const { name, subject, body, sourceLanguage, targeting } = request.body as {
@@ -383,7 +384,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const adminId = authContext.registeredUser.id;
 
       const broadcast = await fastify.prisma.adminBroadcast.findUnique({
@@ -457,7 +458,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const adminId = authContext.registeredUser.id;
 
       const broadcast = await fastify.prisma.adminBroadcast.findUnique({

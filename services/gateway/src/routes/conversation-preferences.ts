@@ -16,6 +16,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { CONVERSATION_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
+import { UnifiedAuthRequest } from '../middleware/auth';
 
 interface ConversationPreferencesBody {
   isPinned?: boolean;
@@ -244,7 +245,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
     },
     async (request: FastifyRequest<{ Params: ConversationIdParams }>, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
           return reply.status(401).send({
             success: false,
@@ -334,7 +335,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
           return reply.status(401).send({
             success: false,
@@ -423,7 +424,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
     },
     async (request: FastifyRequest<{ Params: ConversationIdParams; Body: ConversationPreferencesBody }>, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
           return reply.status(401).send({
             success: false,
@@ -510,7 +511,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
     },
     async (request: FastifyRequest<{ Params: ConversationIdParams }>, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
           return reply.status(401).send({
             success: false,
@@ -572,7 +573,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
     },
     async (request: FastifyRequest<{ Body: { updates: Array<{ conversationId: string; orderInCategory: number }> } }>, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
           return reply.status(401).send({
             success: false,

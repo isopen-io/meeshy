@@ -14,6 +14,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { COMMUNITY_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
+import { UnifiedAuthRequest } from '../middleware/auth';
 
 interface CommunityPreferencesBody {
   isPinned?: boolean;
@@ -175,7 +176,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
     },
     async (request: FastifyRequest<{ Params: CommunityIdParams }>, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
           return reply.status(401).send({
             success: false,
@@ -261,7 +262,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
           return reply.status(401).send({
             success: false,
@@ -347,7 +348,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
     },
     async (request: FastifyRequest<{ Params: CommunityIdParams; Body: CommunityPreferencesBody }>, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
           return reply.status(401).send({
             success: false,
@@ -431,7 +432,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
     },
     async (request: FastifyRequest<{ Params: CommunityIdParams }>, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
           return reply.status(401).send({
             success: false,
@@ -493,7 +494,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
     },
     async (request: FastifyRequest<{ Body: { updates: Array<{ communityId: string; orderInCategory: number }> } }>, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
           return reply.status(401).send({
             success: false,

@@ -10,6 +10,7 @@ import {
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
 import type { UploadedFile, UploadTextBody } from './types';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 export async function registerUploadRoutes(
   fastify: FastifyInstance,
@@ -69,7 +70,7 @@ export async function registerUploadRoutes(
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
           return reply.status(401).send({
             success: false,
@@ -237,7 +238,7 @@ export async function registerUploadRoutes(
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated) {
           return reply.status(401).send({
             success: false,

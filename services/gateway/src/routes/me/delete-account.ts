@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import crypto from 'crypto';
 import { EmailService } from '../../services/EmailService';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 const logger = enhancedLogger.child({ module: 'DeleteAccount' });
 
@@ -85,7 +86,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
 
       if (!authContext?.isAuthenticated || !authContext?.registeredUser) {
         return reply.status(401).send({

@@ -12,6 +12,7 @@ import {
   CommunityRole,
   validatePagination
 } from './types';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 export async function registerMemberRoutes(fastify: FastifyInstance) {
   // Route pour obtenir les membres d'une communaute
@@ -92,7 +93,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
 
       // Utiliser le nouveau systeme d'authentification unifie
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -239,7 +240,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       const validatedData = AddMemberSchema.parse(request.body);
 
       // Utiliser le nouveau systeme d'authentification unifie
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -403,7 +404,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       const validatedData = UpdateMemberRoleSchema.parse(request.body);
 
       // Utiliser le nouveau systeme d'authentification unifie
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -530,7 +531,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       const { id, memberId } = request.params as { id: string; memberId: string };
 
       // Utiliser le nouveau systeme d'authentification unifie
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,

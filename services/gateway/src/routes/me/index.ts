@@ -12,6 +12,7 @@
 import { FastifyInstance } from 'fastify';
 import { userPreferencesRoutes } from './preferences';
 import { deleteAccountRoutes } from './delete-account';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 export default async function meRoutes(fastify: FastifyInstance) {
   // Register preferences routes under /me/preferences
@@ -68,7 +69,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
 
       if (!authContext?.isAuthenticated || !authContext?.registeredUser) {
         return reply.status(401).send({

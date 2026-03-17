@@ -669,7 +669,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const authContext = (request as any).authContext;
+        const authContext = (request as UnifiedAuthRequest).authContext;
         const userId = authContext.userId;
 
         const deletedPrefs = await prisma.userConversationPreferences.findMany({

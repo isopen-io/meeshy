@@ -9,10 +9,11 @@ import {
 } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UserRole as PrismaUserRole } from '@meeshy/shared/prisma/client';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as any).authContext;
+  const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
     return reply.status(401).send({
       success: false,
@@ -20,7 +21,7 @@ const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
     });
   }
 
-  const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role);
+  const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role as UserRole);
   if (!permissions.canAccessAdmin) {
     return reply.status(403).send({
       success: false,
@@ -107,11 +108,11 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const user = authContext.registeredUser;
       const { id } = request.params as { id: string };
       const body = updateUserRoleSchema.parse(request.body);
-      const permissions = permissionsService.getUserPermissions(user.role);
+      const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canManageUsers) {
         return reply.status(403).send({
@@ -133,14 +134,14 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
       }
 
       // Verifier si l'admin peut modifier ce role
-      if (!permissionsService.canManageUser(user.role, targetUser.role as UserRole)) {
+      if (!permissionsService.canManageUser(user.role as UserRole, targetUser.role as UserRole)) {
         return reply.status(403).send({
           success: false,
           message: 'Vous ne pouvez pas modifier le role de cet utilisateur'
         });
       }
 
-      if (!permissionsService.canManageUser(user.role, body.role)) {
+      if (!permissionsService.canManageUser(user.role as UserRole, body.role as UserRole)) {
         return reply.status(403).send({
           success: false,
           message: 'Vous ne pouvez pas attribuer ce role'
@@ -258,11 +259,11 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const user = authContext.registeredUser;
       const { id } = request.params as { id: string };
       const body = updateUserStatusSchema.parse(request.body);
-      const permissions = permissionsService.getUserPermissions(user.role);
+      const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canManageUsers) {
         return reply.status(403).send({
@@ -284,7 +285,7 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
       }
 
       // Verifier les permissions
-      if (!permissionsService.canManageUser(user.role, targetUser.role as UserRole)) {
+      if (!permissionsService.canManageUser(user.role as UserRole, targetUser.role as UserRole)) {
         return reply.status(403).send({
           success: false,
           message: 'Vous ne pouvez pas modifier le statut de cet utilisateur'

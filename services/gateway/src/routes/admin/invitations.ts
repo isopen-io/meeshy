@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 // Middleware pour vérifier les permissions admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as any).authContext;
+  const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
     return reply.status(401).send({
       success: false,

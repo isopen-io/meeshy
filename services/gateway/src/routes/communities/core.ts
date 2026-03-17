@@ -15,6 +15,7 @@ import {
   validatePagination,
   generateIdentifier
 } from './types';
+import { UnifiedAuthRequest } from '../../middleware/auth';
 
 export async function registerCoreRoutes(fastify: FastifyInstance) {
   // Route pour verifier la disponibilite d'un identifiant de communaute
@@ -148,7 +149,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       // Utiliser le nouveau systeme d'authentification unifie
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -288,7 +289,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
 
       // Utiliser le nouveau systeme d'authentification unifie
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -435,7 +436,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       const validatedData = CreateCommunitySchema.parse(request.body);
 
       // Utiliser le nouveau systeme d'authentification unifie
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -597,7 +598,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
 
       // Utiliser le nouveau systeme d'authentification unifie
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
@@ -721,7 +722,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
     try {
       const { id, conversationId } = request.params as { id: string; conversationId: string };
 
-      const authContext = (request as any).authContext;
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return reply.status(401).send({
           success: false,
