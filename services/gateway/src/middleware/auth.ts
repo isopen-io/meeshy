@@ -6,6 +6,9 @@ import jwt from 'jsonwebtoken';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
 import { PermissionDeniedError } from '../errors/custom-errors';
+import { getRedisWrapper } from '../services/RedisWrapper';
+
+const AUTH_USER_CACHE_TTL = 300; // 5 minutes
 
 // ===== TYPES =====
 
@@ -136,28 +139,81 @@ export class AuthMiddleware {
         });
       }
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: jwtUserId },
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          role: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          isOnline: true,
-          lastActiveAt: true,
-          isActive: true,
-          emailVerifiedAt: true,
-          createdAt: true,
-          updatedAt: true
+      const cacheKey = `auth:user:${jwtUserId}`;
+      const redis = getRedisWrapper();
+
+      type UserRow = {
+        id: string;
+        username: string;
+        email: string;
+        firstName: string | null;
+        lastName: string | null;
+        displayName: string | null;
+        avatar: string | null;
+        role: string;
+        systemLanguage: string;
+        regionalLanguage: string;
+        customDestinationLanguage: string | null;
+        isOnline: boolean;
+        lastActiveAt: string | Date;
+        isActive: boolean;
+        emailVerifiedAt: string | Date | null;
+        createdAt: string | Date;
+        updatedAt: string | Date;
+      };
+
+      let user: UserRow | null = null;
+
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached) as UserRow;
+          // Rehydrate Date fields that JSON.stringify serialized as ISO strings
+          user = {
+            ...parsed,
+            lastActiveAt: new Date(parsed.lastActiveAt),
+            emailVerifiedAt: parsed.emailVerifiedAt ? new Date(parsed.emailVerifiedAt) : null,
+            createdAt: new Date(parsed.createdAt),
+            updatedAt: new Date(parsed.updatedAt),
+          };
         }
-      });
+      } catch {
+        // Redis unavailable or parse error — fall through to Prisma
+        user = null;
+      }
+
+      if (!user) {
+        user = await this.prisma.user.findUnique({
+          where: { id: jwtUserId },
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true,
+            role: true,
+            systemLanguage: true,
+            regionalLanguage: true,
+            customDestinationLanguage: true,
+            isOnline: true,
+            lastActiveAt: true,
+            isActive: true,
+            emailVerifiedAt: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        }) as UserRow | null;
+
+        if (user?.isActive) {
+          try {
+            await redis.set(cacheKey, JSON.stringify(user), AUTH_USER_CACHE_TTL);
+          } catch {
+            // Redis write failure is non-fatal
+          }
+        }
+      }
 
       if (!user || !user.isActive) {
         throw new Error('User not found or inactive');
