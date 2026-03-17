@@ -38,10 +38,12 @@ export interface RequestSenderStats {
 export class ZmqRequestSender {
   private connectionManager: ZmqConnectionManager;
 
-  // Cache des requêtes en cours (pour traçabilité)
+  // Cache des requêtes en cours (pour traçabilité + timeout)
   private pendingRequests: Map<string, {
     request: any;
     timestamp: number;
+    timeoutId?: NodeJS.Timeout;
+    onTimeout?: () => void;
   }> = new Map();
 
   private stats: RequestSenderStats = {
@@ -417,9 +419,31 @@ export class ZmqRequestSender {
   }
 
   /**
-   * Retire une requête du cache des requêtes en cours
+   * Enregistre un timeout pour une requête en cours.
+   * Doit être appelé après que la requête a été ajoutée via pendingRequests.set().
+   */
+  registerTimeout(taskId: string, timeoutMs: number, onTimeout: () => void): void {
+    const entry = this.pendingRequests.get(taskId);
+    if (!entry) return;
+
+    const timeoutId = setTimeout(() => {
+      if (this.pendingRequests.has(taskId)) {
+        this.pendingRequests.delete(taskId);
+        onTimeout();
+      }
+    }, timeoutMs);
+
+    this.pendingRequests.set(taskId, { ...entry, timeoutId, onTimeout });
+  }
+
+  /**
+   * Retire une requête du cache des requêtes en cours et annule son timeout.
    */
   removePendingRequest(taskId: string): void {
+    const entry = this.pendingRequests.get(taskId);
+    if (entry?.timeoutId) {
+      clearTimeout(entry.timeoutId);
+    }
     this.pendingRequests.delete(taskId);
   }
 
@@ -438,9 +462,14 @@ export class ZmqRequestSender {
   }
 
   /**
-   * Nettoie les ressources
+   * Nettoie les ressources et annule tous les timeouts en cours
    */
   clear(): void {
+    for (const entry of this.pendingRequests.values()) {
+      if (entry.timeoutId) {
+        clearTimeout(entry.timeoutId);
+      }
+    }
     this.pendingRequests.clear();
   }
 }

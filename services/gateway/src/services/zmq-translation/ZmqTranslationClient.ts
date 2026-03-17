@@ -48,6 +48,11 @@ export interface ZMQClientStats {
   memory_usage_mb: number;
 }
 
+// Timeout for ZMQ translation requests (30 seconds)
+const ZMQ_REQUEST_TIMEOUT_MS = 30_000;
+// Maximum number of retries before emitting an error
+const ZMQ_MAX_RETRIES = 1;
+
 export class ZmqTranslationClient extends EventEmitter {
   private connectionManager: ZmqConnectionManager;
   private messageHandler: ZmqMessageHandler;
@@ -62,6 +67,9 @@ export class ZmqTranslationClient extends EventEmitter {
 
   // Polling interval ID (pour compatibilité Jest)
   private pollingIntervalId: NodeJS.Timeout | null = null;
+
+  // Retry counts per taskId (cleaned up on completion or final timeout)
+  private retryCount: Map<string, number> = new Map();
 
   // Statistiques
   private stats: ZMQClientStats = {
@@ -100,12 +108,52 @@ export class ZmqTranslationClient extends EventEmitter {
   }
 
   /**
+   * Registers a 30-second timeout for a pending ZMQ request.
+   * On first timeout: retries the send once.
+   * On second timeout: emits a synthetic error event and cleans up.
+   *
+   * @param taskId - Correlation ID for the request
+   * @param errorEvent - The error event payload to emit if all retries fail
+   * @param errorEventName - The EventEmitter event name to emit on final failure
+   * @param resend - Async function that re-sends the request and returns the new taskId
+   */
+  private _registerRequestTimeout(
+    taskId: string,
+    errorEventName: string,
+    errorEvent: Record<string, unknown>,
+    resend: () => Promise<string>
+  ): void {
+    this.requestSender.registerTimeout(taskId, ZMQ_REQUEST_TIMEOUT_MS, async () => {
+      const retries = this.retryCount.get(taskId) ?? 0;
+      this.retryCount.delete(taskId);
+
+      if (retries < ZMQ_MAX_RETRIES) {
+        logger.warn(`⏱️ ZMQ timeout for taskId=${taskId} (attempt ${retries + 1}/${ZMQ_MAX_RETRIES + 1}), retrying...`);
+        try {
+          const newTaskId = await resend();
+          this.retryCount.set(newTaskId, retries + 1);
+          this._registerRequestTimeout(newTaskId, errorEventName, { ...errorEvent, taskId: newTaskId }, resend);
+        } catch (err) {
+          logger.error(`❌ ZMQ retry failed for taskId=${taskId}: ${err}`);
+          this.stats.errors_received++;
+          this.emit(errorEventName, { ...errorEvent, taskId });
+        }
+      } else {
+        logger.error(`❌ ZMQ timeout after ${ZMQ_MAX_RETRIES + 1} attempt(s) for taskId=${taskId}, giving up`);
+        this.stats.errors_received++;
+        this.emit(errorEventName, { ...errorEvent, taskId });
+      }
+    });
+  }
+
+  /**
    * Configure le forwarding des événements du handler vers le client
    */
   private setupEventForwarding(): void {
     // Translation events
     this.messageHandler.on('translationCompleted', (event) => {
       this.stats.results_received++;
+      this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('translationCompleted', event);
     });
@@ -115,28 +163,33 @@ export class ZmqTranslationClient extends EventEmitter {
       if (event.error === 'translation pool full') {
         this.stats.pool_full_rejections++;
       }
+      this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('translationError', event);
     });
 
     // Audio events
     this.messageHandler.on('audioProcessCompleted', (event) => {
+      this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('audioProcessCompleted', event);
     });
 
     this.messageHandler.on('audioProcessError', (event) => {
+      this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('audioProcessError', event);
     });
 
     // Voice API events
     this.messageHandler.on('voiceAPISuccess', (event) => {
+      this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('voiceAPISuccess', event);
     });
 
     this.messageHandler.on('voiceAPIError', (event) => {
+      this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('voiceAPIError', event);
     });
@@ -147,32 +200,38 @@ export class ZmqTranslationClient extends EventEmitter {
 
     // Voice Profile events
     this.messageHandler.on('voiceProfileAnalyzeResult', (event) => {
+      this.retryCount.delete(event.request_id);
       this.requestSender.removePendingRequest(event.request_id);
       this.emit('voiceProfileAnalyzeResult', event);
     });
 
     this.messageHandler.on('voiceProfileVerifyResult', (event) => {
+      this.retryCount.delete(event.request_id);
       this.requestSender.removePendingRequest(event.request_id);
       this.emit('voiceProfileVerifyResult', event);
     });
 
     this.messageHandler.on('voiceProfileCompareResult', (event) => {
+      this.retryCount.delete(event.request_id);
       this.requestSender.removePendingRequest(event.request_id);
       this.emit('voiceProfileCompareResult', event);
     });
 
     this.messageHandler.on('voiceProfileError', (event) => {
+      this.retryCount.delete(event.request_id);
       this.requestSender.removePendingRequest(event.request_id);
       this.emit('voiceProfileError', event);
     });
 
     // Transcription events
     this.messageHandler.on('transcriptionCompleted', (event) => {
+      this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('transcriptionCompleted', event);
     });
 
     this.messageHandler.on('transcriptionError', (event) => {
+      this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('transcriptionError', event);
     });
@@ -294,6 +353,16 @@ export class ZmqTranslationClient extends EventEmitter {
   async sendTranslationRequest(request: TranslationRequest): Promise<string> {
     const taskId = await this.requestSender.sendTranslationRequest(request);
     this.stats.requests_sent++;
+    this._registerRequestTimeout(
+      taskId,
+      'translationError',
+      { taskId, messageId: request.messageId, error: 'ZMQ timeout: no response from translator', conversationId: request.conversationId },
+      async () => {
+        const newTaskId = await this.requestSender.sendTranslationRequest(request);
+        this.stats.requests_sent++;
+        return newTaskId;
+      }
+    );
     return taskId;
   }
 
@@ -303,6 +372,16 @@ export class ZmqTranslationClient extends EventEmitter {
   async sendAudioProcessRequest(request: Omit<AudioProcessRequest, 'type'>): Promise<string> {
     const taskId = await this.requestSender.sendAudioProcessRequest(request);
     this.stats.requests_sent++;
+    this._registerRequestTimeout(
+      taskId,
+      'audioProcessError',
+      { taskId, messageId: request.messageId, attachmentId: request.attachmentId, error: 'ZMQ timeout: no response from translator' },
+      async () => {
+        const newTaskId = await this.requestSender.sendAudioProcessRequest(request);
+        this.stats.requests_sent++;
+        return newTaskId;
+      }
+    );
     return taskId;
   }
 
@@ -314,6 +393,16 @@ export class ZmqTranslationClient extends EventEmitter {
   ): Promise<string> {
     const taskId = await this.requestSender.sendTranscriptionOnlyRequest(request);
     this.stats.requests_sent++;
+    this._registerRequestTimeout(
+      taskId,
+      'transcriptionError',
+      { taskId, messageId: request.messageId, attachmentId: request.attachmentId, error: 'ZMQ timeout: no response from translator' },
+      async () => {
+        const newTaskId = await this.requestSender.sendTranscriptionOnlyRequest(request);
+        this.stats.requests_sent++;
+        return newTaskId;
+      }
+    );
     return taskId;
   }
 
@@ -323,6 +412,16 @@ export class ZmqTranslationClient extends EventEmitter {
   async sendVoiceAPIRequest(request: VoiceAPIRequest): Promise<string> {
     const taskId = await this.requestSender.sendVoiceAPIRequest(request);
     this.stats.requests_sent++;
+    this._registerRequestTimeout(
+      taskId,
+      'voiceAPIError',
+      { taskId, requestType: request.type, error: 'ZMQ timeout: no response from translator', errorCode: 'TIMEOUT' },
+      async () => {
+        const newTaskId = await this.requestSender.sendVoiceAPIRequest(request);
+        this.stats.requests_sent++;
+        return newTaskId;
+      }
+    );
     return taskId;
   }
 
@@ -332,6 +431,16 @@ export class ZmqTranslationClient extends EventEmitter {
   async sendVoiceProfileRequest(request: VoiceProfileRequest): Promise<string> {
     const taskId = await this.requestSender.sendVoiceProfileRequest(request);
     this.stats.requests_sent++;
+    this._registerRequestTimeout(
+      taskId,
+      'voiceProfileError',
+      { request_id: taskId, error: 'ZMQ timeout: no response from translator', success: false },
+      async () => {
+        const newTaskId = await this.requestSender.sendVoiceProfileRequest(request);
+        this.stats.requests_sent++;
+        return newTaskId;
+      }
+    );
     return taskId;
   }
 
@@ -444,9 +553,10 @@ export class ZmqTranslationClient extends EventEmitter {
       // Fermer le connection manager
       await this.connectionManager.close();
 
-      // Nettoyer les composants
+      // Nettoyer les composants (requestSender.clear() annule aussi les timeouts)
       this.requestSender.clear();
       this.messageHandler.clear();
+      this.retryCount.clear();
 
       logger.info('✅ ZmqTranslationClient arrêté');
 
