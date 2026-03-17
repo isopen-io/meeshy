@@ -193,5 +193,29 @@ logger.info('message', { userId, conversationId }); // PII auto-redacted
 - Anonymous users have NO encryption
 - Admin audit trail required for all admin actions
 
+## Caching Patterns (Obligatoire)
+
+Reference: `docs/superpowers/specs/2026-03-17-architecture-bible-design.md` Patterns G1-G7
+
+### Auth User Cache
+Auth middleware Prisma query should be cached in Redis (5min TTL).
+Invalidate on: profile update, role change, language change.
+
+### ConversationId Cache
+`normalizeConversationId` MUST cache identifier→ObjectId mapping in memory (immutable data).
+
+### HTTP Cache-Control
+Read-heavy endpoints MUST return `Cache-Control` + `ETag` headers.
+Client sends `If-None-Match`, gateway responds 304 if unchanged.
+
+### Response Format
+ALL routes MUST use `sendSuccess()`/`sendError()` from `utils/response.ts`.
+Pagination under `meta.pagination`, NOT top-level.
+Errors under `error: { code, message }`, NOT `error: "string"`.
+
+### Language Resolution
+ALWAYS use `resolveUserLanguage()` from `@meeshy/shared` for language resolution.
+NEVER reimplement the priority order locally.
+
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (Fastify, Socket.IO, ZeroMQ, auth unifie, Prisma/MongoDB, Redis fallback, erreurs types, rate limiting, Signal Protocol, logging PII, audio pipeline, push notifications) avec contexte, alternatives rejetes et consquences.
