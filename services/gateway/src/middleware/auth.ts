@@ -185,25 +185,6 @@ export class AuthMiddleware {
       if (!user) {
         user = await this.prisma.user.findUnique({
           where: { id: jwtUserId },
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            displayName: true,
-            avatar: true,
-            role: true,
-            systemLanguage: true,
-            regionalLanguage: true,
-            customDestinationLanguage: true,
-            isOnline: true,
-            lastActiveAt: true,
-            isActive: true,
-            emailVerifiedAt: true,
-            createdAt: true,
-            updatedAt: true
-          }
         }) as UserRow | null;
 
         if (user?.isActive) {
