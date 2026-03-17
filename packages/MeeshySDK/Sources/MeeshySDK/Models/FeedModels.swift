@@ -1,12 +1,12 @@
 import Foundation
 
 // MARK: - Feed Media Type
-public enum FeedMediaType: String, Sendable {
+public enum FeedMediaType: String, Sendable, Codable {
     case image, video, audio, document, location
 }
 
 // MARK: - Post Translation
-public struct PostTranslation: Sendable {
+public struct PostTranslation: Sendable, Codable {
     public let text: String
     public let translationModel: String?
     public let confidenceScore: Double?
@@ -19,7 +19,7 @@ public struct PostTranslation: Sendable {
 }
 
 // MARK: - Feed Media Model
-public struct FeedMedia: Identifiable, Sendable {
+public struct FeedMedia: Identifiable, Sendable, Codable {
     public let id: String
     public let type: FeedMediaType
     public let url: String?
@@ -99,6 +99,37 @@ public struct RepostContent: Identifiable, Sendable {
     }
 }
 
+extension RepostContent: Codable {
+    enum CodingKeys: String, CodingKey {
+        case id, author, authorId, authorAvatarURL, content, timestamp, likes, isQuote
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        author = try c.decode(String.self, forKey: .author)
+        authorId = try c.decode(String.self, forKey: .authorId)
+        authorAvatarURL = try c.decodeIfPresent(String.self, forKey: .authorAvatarURL)
+        content = try c.decode(String.self, forKey: .content)
+        timestamp = try c.decode(Date.self, forKey: .timestamp)
+        likes = try c.decode(Int.self, forKey: .likes)
+        isQuote = try c.decode(Bool.self, forKey: .isQuote)
+        authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(author, forKey: .author)
+        try c.encode(authorId, forKey: .authorId)
+        try c.encodeIfPresent(authorAvatarURL, forKey: .authorAvatarURL)
+        try c.encode(content, forKey: .content)
+        try c.encode(timestamp, forKey: .timestamp)
+        try c.encode(likes, forKey: .likes)
+        try c.encode(isQuote, forKey: .isQuote)
+    }
+}
+
 // MARK: - Feed Comment Model
 public struct FeedComment: Identifiable, Sendable {
     public let id: String
@@ -123,6 +154,42 @@ public struct FeedComment: Identifiable, Sendable {
         self.authorAvatarURL = authorAvatarURL
         self.content = content; self.timestamp = timestamp; self.likes = likes; self.replies = replies
         self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
+    }
+}
+
+extension FeedComment: Codable {
+    enum CodingKeys: String, CodingKey {
+        case id, author, authorId, authorAvatarURL, content, timestamp, likes, replies
+        case originalLanguage, translatedContent
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        author = try c.decode(String.self, forKey: .author)
+        authorId = try c.decode(String.self, forKey: .authorId)
+        authorAvatarURL = try c.decodeIfPresent(String.self, forKey: .authorAvatarURL)
+        content = try c.decode(String.self, forKey: .content)
+        timestamp = try c.decode(Date.self, forKey: .timestamp)
+        likes = try c.decode(Int.self, forKey: .likes)
+        replies = try c.decode(Int.self, forKey: .replies)
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
+        translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(author, forKey: .author)
+        try c.encode(authorId, forKey: .authorId)
+        try c.encodeIfPresent(authorAvatarURL, forKey: .authorAvatarURL)
+        try c.encode(content, forKey: .content)
+        try c.encode(timestamp, forKey: .timestamp)
+        try c.encode(likes, forKey: .likes)
+        try c.encode(replies, forKey: .replies)
+        try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
+        try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
     }
 }
 
@@ -172,3 +239,59 @@ public struct FeedPost: Identifiable, Sendable {
         self.originalLanguage = originalLanguage; self.translations = translations; self.translatedContent = translatedContent
     }
 }
+
+extension FeedPost: Codable {
+    enum CodingKeys: String, CodingKey {
+        case id, author, authorId, authorAvatarURL, type, content, timestamp, likes, isLiked
+        case comments, commentCount, repost, repostAuthor, isQuote, media
+        case originalLanguage, translations, translatedContent
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        author = try c.decode(String.self, forKey: .author)
+        authorId = try c.decode(String.self, forKey: .authorId)
+        authorAvatarURL = try c.decodeIfPresent(String.self, forKey: .authorAvatarURL)
+        type = try c.decodeIfPresent(String.self, forKey: .type)
+        content = try c.decode(String.self, forKey: .content)
+        timestamp = try c.decode(Date.self, forKey: .timestamp)
+        likes = try c.decode(Int.self, forKey: .likes)
+        isLiked = try c.decode(Bool.self, forKey: .isLiked)
+        comments = try c.decode([FeedComment].self, forKey: .comments)
+        commentCount = try c.decode(Int.self, forKey: .commentCount)
+        repost = try c.decodeIfPresent(RepostContent.self, forKey: .repost)
+        repostAuthor = try c.decodeIfPresent(String.self, forKey: .repostAuthor)
+        isQuote = try c.decode(Bool.self, forKey: .isQuote)
+        media = try c.decode([FeedMedia].self, forKey: .media)
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
+        translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
+        translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        let stableId = authorId.isEmpty ? author : authorId
+        authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(author, forKey: .author)
+        try c.encode(authorId, forKey: .authorId)
+        try c.encodeIfPresent(authorAvatarURL, forKey: .authorAvatarURL)
+        try c.encodeIfPresent(type, forKey: .type)
+        try c.encode(content, forKey: .content)
+        try c.encode(timestamp, forKey: .timestamp)
+        try c.encode(likes, forKey: .likes)
+        try c.encode(isLiked, forKey: .isLiked)
+        try c.encode(comments, forKey: .comments)
+        try c.encode(commentCount, forKey: .commentCount)
+        try c.encodeIfPresent(repost, forKey: .repost)
+        try c.encodeIfPresent(repostAuthor, forKey: .repostAuthor)
+        try c.encode(isQuote, forKey: .isQuote)
+        try c.encode(media, forKey: .media)
+        try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
+        try c.encodeIfPresent(translations, forKey: .translations)
+        try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+    }
+}
+
+extension FeedPost: CacheIdentifiable {}

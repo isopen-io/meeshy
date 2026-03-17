@@ -50,6 +50,36 @@ class FeedViewModel: ObservableObject {
         isLoading = true
         error = nil
 
+        let cacheResult = await CacheCoordinator.shared.feed.load(for: "main-feed")
+
+        switch cacheResult {
+        case .fresh(let cachedPosts, _):
+            posts = cachedPosts
+            isLoading = false
+            hasLoaded = true
+            return
+
+        case .stale(let cachedPosts, _):
+            posts = cachedPosts
+            isLoading = false
+            hasLoaded = true
+            Task {
+                await fetchFeedFromNetwork(showLoading: false)
+            }
+            return
+
+        case .expired, .empty:
+            break
+        }
+
+        await fetchFeedFromNetwork(showLoading: true)
+    }
+
+    private func fetchFeedFromNetwork(showLoading: Bool) async {
+        if showLoading {
+            isLoading = true
+        }
+
         do {
             let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(
                 endpoint: "/posts/feed",
@@ -58,16 +88,27 @@ class FeedViewModel: ObservableObject {
             )
 
             if response.success {
-                posts = response.data.map { $0.toFeedPost(preferredLanguages: self.preferredLanguages) }
+                let fetched = response.data.map { $0.toFeedPost(preferredLanguages: self.preferredLanguages) }
+                posts = fetched
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
+
+                Task.detached(priority: .utility) { [fetched] in
+                    await CacheCoordinator.shared.feed.save(fetched, for: "main-feed")
+                }
             } else {
-                error = response.error ?? String(localized: "Impossible de charger le fil", defaultValue: "Impossible de charger le fil")
+                if posts.isEmpty {
+                    error = response.error ?? String(localized: "Impossible de charger le fil", defaultValue: "Impossible de charger le fil")
+                }
             }
         } catch let apiError as APIError {
-            error = apiError.localizedDescription
+            if posts.isEmpty {
+                error = apiError.localizedDescription
+            }
         } catch {
-            self.error = error.localizedDescription
+            if posts.isEmpty {
+                self.error = error.localizedDescription
+            }
         }
 
         isLoading = false
@@ -118,6 +159,7 @@ class FeedViewModel: ObservableObject {
         nextCursor = nil
         hasMore = true
         newPostsCount = 0
+        Task.detached { await CacheCoordinator.shared.feed.invalidate(for: "main-feed") }
         await loadFeed()
     }
 

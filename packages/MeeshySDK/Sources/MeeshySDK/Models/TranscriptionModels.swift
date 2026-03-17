@@ -2,21 +2,22 @@ import Foundation
 
 // MARK: - Message Transcription Segment
 
-public struct MessageTranscriptionSegment: Identifiable, Sendable {
-    public let id = UUID()
+public struct MessageTranscriptionSegment: Identifiable, Sendable, Codable {
+    public let id: UUID
     public let text: String
     public let startTime: Double?
     public let endTime: Double?
     public let speakerId: String?
 
     public init(text: String, startTime: Double? = nil, endTime: Double? = nil, speakerId: String? = nil) {
+        self.id = UUID()
         self.text = text; self.startTime = startTime; self.endTime = endTime; self.speakerId = speakerId
     }
 }
 
 // MARK: - Message Transcription
 
-public struct MessageTranscription: Sendable {
+public struct MessageTranscription: Sendable, Codable {
     public let attachmentId: String
     public let text: String
     public let language: String

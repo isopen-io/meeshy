@@ -11,6 +11,7 @@ public actor CacheCoordinator {
     public let messages: GRDBCacheStore<String, MeeshyMessage>
     public let participants: GRDBCacheStore<String, PaginatedParticipant>
     public let profiles: GRDBCacheStore<String, MeeshyUser>
+    public let feed: GRDBCacheStore<String, FeedPost>
 
     public let images: DiskCacheStore
     public let audio: DiskCacheStore
@@ -36,6 +37,7 @@ public actor CacheCoordinator {
         self.messages = GRDBCacheStore(policy: .messages, db: db, namespace: "msg")
         self.participants = GRDBCacheStore(policy: .participants, db: db, namespace: "part")
         self.profiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "prof")
+        self.feed = GRDBCacheStore(policy: .feedPosts, db: db, namespace: "feed")
 
         self.images = DiskCacheStore(policy: .mediaImages)
         self.audio = DiskCacheStore(policy: .mediaAudio)
@@ -322,6 +324,7 @@ public actor CacheCoordinator {
         await messages.flushDirtyKeys()
         await participants.flushDirtyKeys()
         await profiles.flushDirtyKeys()
+        await feed.flushDirtyKeys()
     }
 
     public func evictUnderMemoryPressure() async {
@@ -337,6 +340,7 @@ public actor CacheCoordinator {
         await messages.invalidateAll()
         await participants.invalidateAll()
         await profiles.invalidateAll()
+        await feed.invalidateAll()
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()
