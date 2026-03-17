@@ -366,7 +366,7 @@ export interface ThreadMember {
 }
 
 /**
- * Traduction individuelle dans TranslationData
+ * Traduction individuelle dans MessageTranslationPayload
  */
 export interface TranslationItem {
   readonly targetLanguage: string;
@@ -378,8 +378,9 @@ export interface TranslationItem {
 
 /**
  * Donnees de traduction recues via Socket.IO
+ * @deprecated Use TranslationData from socketio-events.ts for socket payloads
  */
-export interface TranslationData {
+export interface MessageTranslationPayload {
   readonly messageId: string;
   readonly translations: readonly TranslationItem[];
   readonly timestamp: Date;

@@ -267,6 +267,28 @@ export interface NotificationEventData {
 }
 
 /**
+ * Notification marquée comme lue
+ */
+export interface NotificationReadEventData {
+  readonly notificationId: string;
+}
+
+/**
+ * Notification supprimée
+ */
+export interface NotificationDeletedEventData {
+  readonly notificationId: string;
+}
+
+/**
+ * Compteurs de notifications
+ */
+export interface NotificationCountsEventData {
+  readonly total: number;
+  readonly unread: number;
+}
+
+/**
  * Données de message système
  */
 export interface SystemMessageEventData {
@@ -626,6 +648,12 @@ export interface ServerToClientEvents {
   // Post/Comment Translations
   [SERVER_EVENTS.POST_TRANSLATION_UPDATED]: (data: PostTranslationUpdatedEventData) => void;
   [SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED]: (data: CommentTranslationUpdatedEventData) => void;
+
+  // Notifications
+  [SERVER_EVENTS.NOTIFICATION_NEW]: (data: NotificationEventData) => void;
+  [SERVER_EVENTS.NOTIFICATION_READ]: (data: NotificationReadEventData) => void;
+  [SERVER_EVENTS.NOTIFICATION_DELETED]: (data: NotificationDeletedEventData) => void;
+  [SERVER_EVENTS.NOTIFICATION_COUNTS]: (data: NotificationCountsEventData) => void;
 }
 
 /**

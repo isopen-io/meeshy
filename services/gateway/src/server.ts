@@ -93,6 +93,7 @@ import { BackgroundJobsManager } from './jobs';
 import { EmailService } from './services/EmailService';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
+import { AuthenticationError, ValidationError, TranslationError } from './errors/custom-errors';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -188,40 +189,6 @@ const logger = winston.createLogger({
     ] : [])
   ]
 });
-
-// ============================================================================
-// CUSTOM ERROR CLASSES
-// ============================================================================
-
-class AuthenticationError extends Error {
-  public statusCode: number;
-
-  constructor(message: string = 'Authentication failed') {
-    super(message);
-    this.name = 'AuthenticationError';
-    this.statusCode = 401;
-  }
-}
-
-class ValidationError extends Error {
-  public statusCode: number;
-
-  constructor(message: string = 'Validation failed') {
-    super(message);
-    this.name = 'ValidationError';
-    this.statusCode = 400;
-  }
-}
-
-class TranslationError extends Error {
-  public statusCode: number;
-
-  constructor(message: string = 'Translation failed') {
-    super(message);
-    this.name = 'TranslationError';
-    this.statusCode = 500;
-  }
-}
 
 // ============================================================================
 // TYPE DEFINITIONS

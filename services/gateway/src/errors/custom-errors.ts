@@ -174,6 +174,14 @@ export class TooManyLoginAttemptsError extends RateLimitError {
   }
 }
 
+// ========== TRADUCTION ==========
+
+export class TranslationError extends BaseAppError {
+  constructor(message = 'Translation failed') {
+    super(message, 500, 'TRANSLATION_ERROR');
+  }
+}
+
 // ========== SERVEUR ==========
 
 export class InternalServerError extends BaseAppError {

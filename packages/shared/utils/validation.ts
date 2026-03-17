@@ -63,8 +63,8 @@ export const CommonSchemas = {
   // Type de conversation
   conversationType: z.enum(['direct', 'group', 'public', 'global']),
   
-  // Type de message
-  messageType: z.enum(['text', 'image', 'file', 'system']),
+  // Type de message (aligned with messageTypeEnum)
+  messageType: z.enum(['text', 'image', 'file', 'audio', 'video', 'location', 'system']),
   
   // Contenu de message
   messageContent: z.string().min(1, 'Le message ne peut pas être vide').max(10000, 'Message trop long'),
