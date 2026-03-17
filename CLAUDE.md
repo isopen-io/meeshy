@@ -120,6 +120,35 @@ Each increment leaves the codebase in a working state.
 - Mock pattern: `Mock{ServiceName}` conforming to protocol, with `Result<T, Error>` stubs + call counts
 - Test naming: `test_{method}_{condition}_{expectedResult}`
 
+## Instant App Principles (Non-Negotiable)
+
+These principles are mandatory alongside TDD. Reference: `docs/superpowers/specs/2026-03-17-architecture-bible-design.md`
+
+### Cache-First, Network-Second
+Every screen MUST display cached data IMMEDIATELY if available.
+No spinner when cache has data (even stale). Skeleton/placeholder ONLY on empty cache (cold start).
+
+### Stale-While-Revalidate
+Use CacheResult<T> (.fresh/.stale/.expired/.empty) and distinguish each case.
+Serve .stale immediately + silent background refresh. NEVER call .value directly — handle each case.
+
+### Optimistic Updates
+Every user action gets instant feedback. Network confirms after.
+Capture snapshot → apply local → send network → rollback on failure.
+
+### Offline Graceful Degradation
+App MUST work offline for reads. Write actions queued (OfflineQueue). FIFO flush on reconnect.
+
+### Zero Unnecessary Re-render
+Leaf views: NO @ObservedObject on global singletons. Pass primitive values (isDark: Bool).
+Use @Environment(\.colorScheme) for simple dark/light. Equatable + .equatable() on list cell views.
+
+### Single Source of Truth
+Each data type has ONE source. No reimplementation.
+Language resolution: resolveUserLanguage() from packages/shared/.
+Types: packages/shared/types/. iOS models: packages/MeeshySDK/.
+Response format: sendSuccess()/sendError() from utils/response.ts.
+
 ## Workflow Orchestration
 
 ### 1. Plan Mode Default
