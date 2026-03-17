@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantType, ParticipantPermissions } from '@meeshy/shared/types/participant';
+import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import jwt from 'jsonwebtoken';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
@@ -176,10 +177,7 @@ export class AuthMiddleware {
         });
       }
 
-      const userLanguage = user.customDestinationLanguage
-        || user.regionalLanguage
-        || user.systemLanguage
-        || 'en';
+      const userLanguage = resolveUserLanguage(user as any);
 
       return {
         type: 'user',
