@@ -5,6 +5,7 @@ import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import jwt from 'jsonwebtoken';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
+import { PermissionDeniedError } from '../errors/custom-errors';
 
 // ===== TYPES =====
 
@@ -22,6 +23,7 @@ export type RegisteredUser = {
   readonly customDestinationLanguage?: string;
   readonly isOnline: boolean;
   readonly lastActiveAt: Date;
+  readonly emailVerifiedAt?: Date | null;
 }
 
 export type UnifiedAuthContext = {
@@ -151,6 +153,7 @@ export class AuthMiddleware {
           isOnline: true,
           lastActiveAt: true,
           isActive: true,
+          emailVerifiedAt: true,
           createdAt: true,
           updatedAt: true
         }
@@ -498,11 +501,25 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
 
 /** @deprecated Use getUserPermissions */
 export function requireRole(allowedRoles: string | string[]) {
-  return async (_request: FastifyRequest, reply: FastifyReply) => {
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+
+  return async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Role checking logic placeholder
+      const authContext = (request as UnifiedAuthRequest).authContext;
+
+      if (!authContext?.isAuthenticated || !authContext.registeredUser) {
+        throw new PermissionDeniedError('Authentication required');
+      }
+
+      if (!roles.includes(authContext.registeredUser.role)) {
+        throw new PermissionDeniedError('Insufficient role');
+      }
     } catch (error) {
-      reply.code(403).send({ error: 'Insufficient permissions' });
+      if (error instanceof PermissionDeniedError) {
+        reply.code(403).send({ success: false, error: { code: error.code, message: error.message } });
+        return;
+      }
+      reply.code(403).send({ success: false, error: { code: 'PERMISSION_DENIED', message: 'Insufficient permissions' } });
     }
   };
 }
@@ -511,7 +528,17 @@ export const requireAdmin = requireRole(['BIGBOSS', 'ADMIN']);
 export const requireModerator = requireRole(['BIGBOSS', 'ADMIN', 'MODERATOR']);
 export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 
-export async function requireEmailVerification(_request: FastifyRequest, _reply: FastifyReply) {
+export async function requireEmailVerification(request: FastifyRequest, reply: FastifyReply) {
+  const authContext = (request as UnifiedAuthRequest).authContext;
+
+  if (!authContext?.isAuthenticated || !authContext.registeredUser) {
+    reply.code(403).send({ success: false, error: { code: 'PERMISSION_DENIED', message: 'Authentication required' } });
+    return;
+  }
+
+  if (!authContext.registeredUser.emailVerifiedAt) {
+    reply.code(403).send({ success: false, error: { code: 'EMAIL_NOT_VERIFIED', message: 'Email verification required' } });
+  }
 }
 
 export async function requireActiveAccount(_request: FastifyRequest, _reply: FastifyReply) {
