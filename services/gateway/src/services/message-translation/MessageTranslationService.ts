@@ -603,15 +603,7 @@ export class MessageTranslationService extends EventEmitter {
           displayName: true,
           type: true,
           language: true,
-          user: {
-            select: {
-              id: true,
-              username: true,
-              systemLanguage: true,
-              regionalLanguage: true,
-              customDestinationLanguage: true
-            }
-          }
+          user: true
         }
       });
 
@@ -625,10 +617,10 @@ export class MessageTranslationService extends EventEmitter {
             `customDestinationLang=${participant.user.customDestinationLanguage}`
           );
 
-          if (participant.user.systemLanguage) {
+          if (participant.user.systemLanguage && (participant.user as any).translateToSystemLanguage !== false) {
             languages.add(participant.user.systemLanguage);
           }
-          if (participant.user.regionalLanguage) {
+          if (participant.user.regionalLanguage && (participant.user as any).translateToRegionalLanguage !== false) {
             languages.add(participant.user.regionalLanguage);
           }
           if ((participant.user as any).useCustomDestination && participant.user.customDestinationLanguage) {
