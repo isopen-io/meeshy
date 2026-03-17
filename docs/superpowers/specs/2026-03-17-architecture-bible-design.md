@@ -18,7 +18,12 @@
    - 3.5 Shared (types, validation, resolution)
 4. [Audit d'incoherences — 47 findings avec fixes](#4-audit-dincoherences)
 5. [Mises a jour CLAUDE.md](#5-mises-a-jour-claudemd)
-6. [Plan d'execution phase](#6-plan-dexecution)
+6. [Architecture Avancee — Vision Long Terme](#6-architecture-avancee)
+   - 6.1 HTTP Moderne (Request ID, Caching, HTTP/2-3)
+   - 6.2 Authentification Applicative (HMAC, Device Attestation)
+   - 6.3 VoIP Evolution (P2P → SFU → MLS E2EE)
+   - 6.4 Scalabilite 10-30 ans (Event Sourcing, CQRS, Federation, Edge, AI)
+7. [Plan d'execution phase](#7-plan-dexecution)
 
 ---
 
@@ -280,8 +285,8 @@ async normalizeConversationId(id: string): Promise<string> {
 #### Pattern G3 : HTTP Cache-Control sur endpoints read-heavy
 
 ```
-GET /conversations          → Cache-Control: private, max-age=0, must-revalidate + ETag
-GET /conversations/:id/messages → Cache-Control: private, max-age=0, must-revalidate + ETag
+GET /conversations          → Cache-Control: private, no-cache + ETag
+GET /conversations/:id/messages → Cache-Control: private, no-cache + ETag
 GET /posts/feed             → Cache-Control: private, max-age=30
 GET /users/:id              → Cache-Control: private, max-age=60
 GET /attachments/:id        → Cache-Control: public, max-age=31536000, immutable (deja fait)
@@ -936,7 +941,8 @@ Avantage:
 ```typescript
 // middleware/request-id.ts
 fastify.addHook('onRequest', (request, reply, done) => {
-  const requestId = request.headers['x-request-id'] ?? crypto.randomUUID()
+  // Note: crypto.randomUUID() genere du v4. Pour v7 (ordonne temporellement), utiliser `uuidv7` npm package
+  const requestId = request.headers['x-request-id'] ?? uuidv7()
   request.id = requestId
   reply.header('x-request-id', requestId)
   // Enrichir le logger Pino pour toute la requete
@@ -969,7 +975,7 @@ Le systeme a deja des headers `X-Meeshy-*` envoyes par les clients :
 | `X-App-ID` | Client → Server | Identification app officielle |
 | `X-App-Signature` | Client → Server | HMAC verification (section 6.2.1) |
 | `X-App-Timestamp` | Client → Server | Anti-replay pour signature |
-| `X-Device-ID` | Client → Server | Identification device persistant |
+| `X-Device-ID` | Client → Server | Identification device persistant (Keychain iOS, localStorage Web, SharedPreferences Android) |
 | `Cache-Control` | Server → Client | Politique cache HTTP (section 6.1.2) |
 | `ETag` | Server → Client | Validation conditionnelle |
 | `Vary` | Server → Client | `Authorization, Accept-Language` |
@@ -1078,6 +1084,7 @@ function verifyAppSignature(request: FastifyRequest): boolean {
   const secret = APP_SECRETS[appId]
   if (!secret) return false
 
+  // Note: Fastify n'expose pas rawBody par defaut. Installer `fastify-raw-body` plugin.
   const bodyHash = createHash('sha256').update(request.rawBody ?? '').digest('hex')
   const payload = `${request.method}${request.url}${timestamp}${bodyHash}`
   const expected = createHmac('sha256', secret).update(payload).digest('hex')
