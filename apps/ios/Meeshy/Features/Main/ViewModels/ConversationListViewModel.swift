@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import WidgetKit
+import os
 import MeeshySDK
 
 @MainActor
@@ -381,7 +382,7 @@ class ConversationListViewModel: ObservableObject {
                 }
             }
         } catch {
-            print("[ConversationListVM] Error loading conversations: \(error)")
+            Logger.messages.error("[ConversationListVM] Error loading conversations: \(error.localizedDescription)")
         }
 
         await categoriesTask

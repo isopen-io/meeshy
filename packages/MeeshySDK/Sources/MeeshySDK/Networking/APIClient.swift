@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import os
 
 // MARK: - Certificate Pinning
 
@@ -8,12 +9,13 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate, Sendable {
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge
     ) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+        let pinnedHost = URL(string: MeeshyConfig.shared.apiBaseURL)?.host ?? "gate.meeshy.me"
         guard let serverTrust = challenge.protectionSpace.serverTrust,
-              challenge.protectionSpace.host == "gate.meeshy.me" else {
+              challenge.protectionSpace.host == pinnedHost else {
             return (.performDefaultHandling, nil)
         }
 
-        let policies = [SecPolicyCreateSSL(true, "gate.meeshy.me" as CFString)]
+        let policies = [SecPolicyCreateSSL(true, pinnedHost as CFString)]
         SecTrustSetPolicies(serverTrust, policies as CFArray)
 
         var error: CFError?
@@ -157,6 +159,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
     private let session: URLSession
     private let decoder: JSONDecoder
+    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "network")
 
     private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -276,7 +279,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             let decodeMs = (CFAbsoluteTimeGetCurrent() - decodeStart) * 1000
             let totalMs = networkMs + decodeMs
             if totalMs > 1000 {
-                print("⏱️ [APIClient] \(method) \(endpoint) → \(statusCode) network=\(Int(networkMs))ms decode=\(Int(decodeMs))ms total=\(Int(totalMs))ms size=\(data.count)B")
+                logger.warning("Slow request: \(method) \(endpoint) → \(statusCode) network=\(Int(networkMs))ms decode=\(Int(decodeMs))ms total=\(Int(totalMs))ms size=\(data.count)B")
             }
             return result
         } catch let error as MeeshyError {
@@ -295,7 +298,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             @unknown default:
                 debugInfo += error.localizedDescription
             }
-            print("APIClient DecodingError:", debugInfo)
+            logger.error("DecodingError: \(debugInfo)")
             throw MeeshyError.server(statusCode: 0, message: debugInfo)
         } catch let error as URLError {
             switch error.code {

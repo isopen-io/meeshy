@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -753,7 +754,7 @@ struct ConversationListView: View {
             userCommunities = response.data.map { $0.toCommunity() }
             userCommunityLookup = Dictionary(uniqueKeysWithValues: userCommunities.map { ($0.id, $0) })
         } catch {
-            print("[ConversationListView] Error loading communities: \(error)")
+            Logger.messages.error("[ConversationListView] Error loading communities: \(error.localizedDescription)")
         }
     }
 
