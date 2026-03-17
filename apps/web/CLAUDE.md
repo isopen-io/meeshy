@@ -106,5 +106,28 @@ export const Component = memo(function Component({ prop }: Props) {
 - Never hardcode URLs - derive from `window.location` in `lib/config.ts`
 - Encryption handlers set on SocketIO service per conversation
 
+## React Query Patterns (Obligatoire)
+
+Reference: `docs/superpowers/specs/2026-03-17-architecture-bible-design.md` Patterns W1-W7
+
+### Cache Persistence
+React Query cache MUST be persisted to IndexedDB via `persistQueryClient`.
+Result: browser open = previous session data displayed immediately.
+
+### Hover Prefetch
+Clickable items (ConversationItem, PostCard) MUST prefetch destination data on hover
+via `queryClient.prefetchQuery()`.
+
+### Translation Cache
+Translation cache MUST be a bounded LRU (max 500 entries), not an unbounded Map.
+
+### Error Boundaries
+Each feature MUST have its own ErrorBoundary.
+A crash in message list MUST NOT crash the conversation list.
+
+### Dead Code
+`conversation-store.ts` is DEAD CODE — DO NOT use.
+Use React Query hooks (useConversationsQuery, useConversationMessages).
+
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (state management, data fetching, routing, auth, WebSocket, styling, i18n, build, encryption, audio/media, URL config) avec contexte, alternatives rejetes et consquences.
