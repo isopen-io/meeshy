@@ -5,6 +5,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
+import { sendSuccess } from '../../utils/response';
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,
@@ -63,7 +64,7 @@ export function registerCoreRoutes(
         }
       }
 
-      return reply.status(201).send({ success: true, data: post });
+      return sendSuccess(reply, post, { statusCode: 201 });
     } catch (error) {
       fastify.log.error(`[POST /posts] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -84,7 +85,7 @@ export function registerCoreRoutes(
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
 
-      return reply.send({ success: true, data: post });
+      return sendSuccess(reply, post);
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -112,7 +113,7 @@ export function registerCoreRoutes(
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
 
-      return reply.send({ success: true, data: post });
+      return sendSuccess(reply, post);
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return reply.status(403).send({ success: false, error: 'Not authorized to edit this post' });
@@ -148,7 +149,7 @@ export function registerCoreRoutes(
         }
       }
 
-      return reply.send({ success: true, data: { deleted: true } });
+      return sendSuccess(reply, { deleted: true });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return reply.status(403).send({ success: false, error: 'Not authorized to delete this post' });
@@ -186,7 +187,7 @@ export function registerCoreRoutes(
         return reply.status(503).send({ success: false, error: 'Translation service not available' });
       }
 
-      return reply.send({ success: true, data: { requested: true, targetLanguage: parsed.data.targetLanguage } });
+      return sendSuccess(reply, { requested: true, targetLanguage: parsed.data.targetLanguage });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/translate] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });

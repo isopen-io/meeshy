@@ -4,6 +4,7 @@ import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { LikeSchema, RepostSchema, PostParams } from './types';
+import { sendSuccess } from '../../utils/response';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -55,7 +56,7 @@ export function registerInteractionRoutes(
         }).catch(() => {});
       }
 
-      return reply.send({ success: true, data: { liked: true, reactionSummary: post.reactionSummary } });
+      return sendSuccess(reply, { liked: true, reactionSummary: post.reactionSummary });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/like] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -90,7 +91,7 @@ export function registerInteractionRoutes(
         }, post.authorId).catch(() => {});
       }
 
-      return reply.send({ success: true, data: { liked: false, reactionSummary: post.reactionSummary } });
+      return sendSuccess(reply, { liked: false, reactionSummary: post.reactionSummary });
     } catch (error) {
       fastify.log.error(`[DELETE /posts/:postId/like] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -109,7 +110,7 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
       await postService.bookmarkPost(postId, authContext.registeredUser.id);
-      return reply.send({ success: true, data: { bookmarked: true } });
+      return sendSuccess(reply, { bookmarked: true });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/bookmark] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -128,7 +129,7 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
       await postService.unbookmarkPost(postId, authContext.registeredUser.id);
-      return reply.send({ success: true, data: { bookmarked: false } });
+      return sendSuccess(reply, { bookmarked: false });
     } catch (error) {
       fastify.log.error(`[DELETE /posts/:postId/bookmark] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -164,7 +165,7 @@ export function registerInteractionRoutes(
         }
       }
 
-      return reply.send({ success: true, data: { viewed: true } });
+      return sendSuccess(reply, { viewed: true });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/view] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -188,7 +189,7 @@ export function registerInteractionRoutes(
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
 
-      return reply.send({ success: true, data: { shared: true, shareCount: post.shareCount } });
+      return sendSuccess(reply, { shared: true, shareCount: post.shareCount });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/share] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -211,7 +212,7 @@ export function registerInteractionRoutes(
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
 
-      return reply.send({ success: true, data: { pinned: true } });
+      return sendSuccess(reply, { pinned: true });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return reply.status(403).send({ success: false, error: 'Only the author can pin this post' });
@@ -237,7 +238,7 @@ export function registerInteractionRoutes(
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
 
-      return reply.send({ success: true, data: { pinned: false } });
+      return sendSuccess(reply, { pinned: false });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return reply.status(403).send({ success: false, error: 'Only the author can unpin this post' });
@@ -267,7 +268,9 @@ export function registerInteractionRoutes(
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
 
-      return reply.send({ success: true, data: result.items, pagination: { total: result.total, hasMore: result.hasMore, limit, offset } });
+      return sendSuccess(reply, result.items, {
+        pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
+      });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return reply.status(403).send({ success: false, error: 'Only the author can view this list' });
@@ -325,7 +328,7 @@ export function registerInteractionRoutes(
         }
       }
 
-      return reply.status(201).send({ success: true, data: repost });
+      return sendSuccess(reply, repost, { statusCode: 201 });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/repost] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });

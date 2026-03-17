@@ -4,6 +4,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostCommentService } from '../../services/PostCommentService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
+import { sendSuccess } from '../../utils/response';
 
 export function registerCommentRoutes(
   fastify: FastifyInstance,
@@ -23,14 +24,8 @@ export function registerCommentRoutes(
 
       const result = await commentService.getComments(postId, cursor, limit);
 
-      return reply.send({
-        success: true,
-        data: result.items,
-        pagination: {
-          nextCursor: result.nextCursor,
-          hasMore: result.hasMore,
-          limit,
-        },
+      return sendSuccess(reply, result.items, {
+        meta: { pagination: { total: 0, offset: 0, limit, hasMore: result.hasMore }, nextCursor: result.nextCursor } as any,
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId/comments] Error: ${error}`);
@@ -49,14 +44,8 @@ export function registerCommentRoutes(
 
       const result = await commentService.getReplies(commentId, cursor, limit);
 
-      return reply.send({
-        success: true,
-        data: result.items,
-        pagination: {
-          nextCursor: result.nextCursor,
-          hasMore: result.hasMore,
-          limit,
-        },
+      return sendSuccess(reply, result.items, {
+        meta: { pagination: { total: 0, offset: 0, limit, hasMore: result.hasMore }, nextCursor: result.nextCursor } as any,
       });
     } catch (error) {
       fastify.log.error(`[GET comments/:commentId/replies] Error: ${error}`);
@@ -150,7 +139,7 @@ export function registerCommentRoutes(
         }
       }
 
-      return reply.status(201).send({ success: true, data: comment });
+      return sendSuccess(reply, comment, { statusCode: 201 });
     } catch (error) {
       if (error instanceof Error && error.message === 'PARENT_NOT_FOUND') {
         return reply.status(404).send({ success: false, error: 'Parent comment not found' });
@@ -203,7 +192,7 @@ export function registerCommentRoutes(
         }).catch(() => {});
       }
 
-      return reply.send({ success: true, data: { liked: true, likeCount: result.likeCount, reactionSummary: result.reactionSummary } });
+      return sendSuccess(reply, { liked: true, likeCount: result.likeCount, reactionSummary: result.reactionSummary });
     } catch (error) {
       fastify.log.error(`[POST comments/:commentId/like] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -229,7 +218,7 @@ export function registerCommentRoutes(
         return reply.status(404).send({ success: false, error: 'Comment not found' });
       }
 
-      return reply.send({ success: true, data: { liked: false, likeCount: result.likeCount, reactionSummary: result.reactionSummary } });
+      return sendSuccess(reply, { liked: false, likeCount: result.likeCount, reactionSummary: result.reactionSummary });
     } catch (error) {
       fastify.log.error(`[DELETE comments/:commentId/like] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -269,7 +258,7 @@ export function registerCommentRoutes(
         }
       }
 
-      return reply.send({ success: true, data: { deleted: true } });
+      return sendSuccess(reply, { deleted: true });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return reply.status(403).send({ success: false, error: 'Not authorized to delete this comment' });

@@ -4,6 +4,8 @@ import { z } from 'zod';
 import path from 'path';
 import fs from 'fs/promises';
 import { randomUUID } from 'crypto';
+import { UnifiedAuthRequest } from '../../middleware/auth';
+import { sendSuccess } from '../../utils/response';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/tmp/meeshy-uploads';
 const MAX_AUDIO_DURATION_SEC = 60;
@@ -30,7 +32,7 @@ export function registerStoryAudioRoutes(
   fastify.post('/stories/audio', {
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const authContext = (request as any).authContext;
+    const authContext = (request as UnifiedAuthRequest).authContext;
     if (!authContext?.registeredUser) {
       return reply.status(401).send({ success: false, error: 'Authentication required' });
     }
@@ -69,7 +71,7 @@ export function registerStoryAudioRoutes(
       },
     });
 
-    return reply.status(201).send({ success: true, data: audio });
+    return sendSuccess(reply, audio, { statusCode: 201 });
   });
 
   // GET /stories/audio — Liste bibliothèque publique (triée par popularité)
@@ -94,7 +96,7 @@ export function registerStoryAudioRoutes(
       include: { uploader: { select: { username: true } } },
     });
 
-    return reply.send({ success: true, data: audios });
+    return sendSuccess(reply, audios);
   });
 
   // POST /stories/audio/:audioId/use — Incrémenter le compteur d'utilisation
@@ -107,6 +109,6 @@ export function registerStoryAudioRoutes(
       data: { usageCount: { increment: 1 } },
     }).catch(() => null); // Silencieux si l'audio n'existe pas
 
-    return reply.send({ success: true });
+    return sendSuccess(reply, null);
   });
 }

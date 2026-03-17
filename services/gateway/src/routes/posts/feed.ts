@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostFeedService } from '../../services/PostFeedService';
 import { FeedQuerySchema, UserParams, CommunityParams } from './types';
+import { sendSuccess } from '../../utils/response';
 
 export function registerFeedRoutes(
   fastify: FastifyInstance,
@@ -27,14 +28,8 @@ export function registerFeedRoutes(
 
       const result = await feedService.getFeed(authContext.registeredUser.id, cursor, limit);
 
-      return reply.send({
-        success: true,
-        data: result.items,
-        pagination: {
-          nextCursor: result.nextCursor,
-          hasMore: result.hasMore,
-          limit,
-        },
+      return sendSuccess(reply, result.items, {
+        meta: { pagination: { total: 0, offset: 0, limit, hasMore: result.hasMore }, nextCursor: result.nextCursor } as any,
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed] Error: ${error}`);
@@ -53,7 +48,7 @@ export function registerFeedRoutes(
       }
 
       const stories = await feedService.getStories(authContext.registeredUser.id);
-      return reply.send({ success: true, data: stories });
+      return sendSuccess(reply, stories);
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/stories] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -75,14 +70,8 @@ export function registerFeedRoutes(
 
       const result = await feedService.getStatuses(authContext.registeredUser.id, cursor, limit);
 
-      return reply.send({
-        success: true,
-        data: result.items,
-        pagination: {
-          nextCursor: result.nextCursor,
-          hasMore: result.hasMore,
-          limit,
-        },
+      return sendSuccess(reply, result.items, {
+        meta: { pagination: { total: 0, offset: 0, limit, hasMore: result.hasMore }, nextCursor: result.nextCursor } as any,
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/statuses] Error: ${error}`);
@@ -105,14 +94,8 @@ export function registerFeedRoutes(
 
       const result = await feedService.getDiscoverStatuses(authContext.registeredUser.id, cursor, limit);
 
-      return reply.send({
-        success: true,
-        data: result.items,
-        pagination: {
-          nextCursor: result.nextCursor,
-          hasMore: result.hasMore,
-          limit,
-        },
+      return sendSuccess(reply, result.items, {
+        meta: { pagination: { total: 0, offset: 0, limit, hasMore: result.hasMore }, nextCursor: result.nextCursor } as any,
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/statuses/discover] Error: ${error}`);
@@ -134,14 +117,8 @@ export function registerFeedRoutes(
 
       const result = await feedService.getUserPosts(userId, viewerUserId, cursor, limit);
 
-      return reply.send({
-        success: true,
-        data: result.items,
-        pagination: {
-          nextCursor: result.nextCursor,
-          hasMore: result.hasMore,
-          limit,
-        },
+      return sendSuccess(reply, result.items, {
+        meta: { pagination: { total: 0, offset: 0, limit, hasMore: result.hasMore }, nextCursor: result.nextCursor } as any,
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/user/:userId] Error: ${error}`);
@@ -163,14 +140,8 @@ export function registerFeedRoutes(
 
       const result = await feedService.getCommunityFeed(communityId, viewerUserId, cursor, limit);
 
-      return reply.send({
-        success: true,
-        data: result.items,
-        pagination: {
-          nextCursor: result.nextCursor,
-          hasMore: result.hasMore,
-          limit,
-        },
+      return sendSuccess(reply, result.items, {
+        meta: { pagination: { total: 0, offset: 0, limit, hasMore: result.hasMore }, nextCursor: result.nextCursor } as any,
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/community/:communityId] Error: ${error}`);
@@ -193,14 +164,8 @@ export function registerFeedRoutes(
 
       const result = await feedService.getBookmarks(authContext.registeredUser.id, cursor, limit);
 
-      return reply.send({
-        success: true,
-        data: result.items,
-        pagination: {
-          nextCursor: result.nextCursor,
-          hasMore: result.hasMore,
-          limit,
-        },
+      return sendSuccess(reply, result.items, {
+        meta: { pagination: { total: 0, offset: 0, limit, hasMore: result.hasMore }, nextCursor: result.nextCursor } as any,
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/bookmarks] Error: ${error}`);
