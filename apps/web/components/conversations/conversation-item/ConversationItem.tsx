@@ -14,6 +14,7 @@ import { getUserStatus } from '@/lib/user-status';
 import { formatConversationDate, formatRelativeDate } from '@/utils/date-format';
 import { useUserStore } from '@/stores/user-store';
 import { ConversationItemActions } from './ConversationItemActions';
+import { usePrefetchOnHover } from '@/hooks/use-prefetch-on-hover';
 import {
   getConversationAvatar,
   getConversationAvatarUrl,
@@ -179,6 +180,8 @@ export const ConversationItem = memo(function ConversationItem({
   const avatarUrl = getConversationAvatarUrl(conversation, getOtherParticipantUser);
   const icon = getConversationIcon(conversation);
 
+  const { onMouseEnter: prefetchOnMouseEnter, onMouseLeave: prefetchOnMouseLeave } = usePrefetchOnHover(conversation.id);
+
   const formatTime = useCallback((date: Date | string) => {
     return formatConversationDate(date, { t });
   }, [t]);
@@ -205,6 +208,8 @@ export const ConversationItem = memo(function ConversationItem({
   return (
     <div
       onClick={onClick}
+      onMouseEnter={prefetchOnMouseEnter}
+      onMouseLeave={prefetchOnMouseLeave}
       className={cn(
         "group flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors",
         "hover:bg-accent/50",

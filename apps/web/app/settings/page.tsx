@@ -23,6 +23,7 @@ import { authManager } from '@/services/auth-manager.service';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { ResponsiveTabs } from '@/components/ui/responsive-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 
 // Dynamic imports with loading skeletons for code splitting
 const ProfileSettings = dynamic(
@@ -385,13 +386,15 @@ export default function SettingsPage() {
           {/* Settings Content with modern card */}
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border-2 border-gray-200 dark:border-gray-800 overflow-hidden">
             <div className="p-6">
-              <ResponsiveTabs
-                items={tabItems}
-                value={activeTab}
-                onValueChange={setActiveTab}
-                className="w-full"
-                mobileBreakpoint="lg"
-              />
+              <FeatureErrorBoundary featureName="Settings">
+                <ResponsiveTabs
+                  items={tabItems}
+                  value={activeTab}
+                  onValueChange={setActiveTab}
+                  className="w-full"
+                  mobileBreakpoint="lg"
+                />
+              </FeatureErrorBoundary>
             </div>
           </div>
         </div>

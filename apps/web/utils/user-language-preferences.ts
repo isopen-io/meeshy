@@ -5,6 +5,7 @@
 import type { User } from '@/types';
 import type { LanguageChoice } from '@/types/bubble-stream';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
+import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 
 /**
  * Génère les choix de langues disponibles pour un utilisateur
@@ -47,22 +48,11 @@ export function getUserLanguageChoices(user: User): LanguageChoice[] {
 }
 
 /**
- * Détermine la langue préférée d'un utilisateur selon sa configuration
+ * Détermine la langue préférée d'un utilisateur selon sa configuration.
+ * Délègue à resolveUserLanguage() depuis @meeshy/shared — source de vérité unique.
  */
 export function resolveUserPreferredLanguage(user: User): string {
-  if (user.useCustomDestination && user.customDestinationLanguage) {
-    return user.customDestinationLanguage;
-  }
-  
-  if (user.translateToSystemLanguage) {
-    return user.systemLanguage || 'fr';
-  }
-  
-  if (user.translateToRegionalLanguage) {
-    return user.regionalLanguage || 'fr';
-  }
-  
-  return user.systemLanguage || 'fr'; // fallback
+  return resolveUserLanguage(user);
 }
 
 /**

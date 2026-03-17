@@ -45,6 +45,7 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 import { useUserStore } from '@/stores/user-store';
 import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
+import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 
 import type { Conversation, Message, UserRoleEnum } from '@meeshy/shared/types';
 import type { FailedMessage } from '@/stores/failed-messages-store';
@@ -856,23 +857,25 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
                 )}
                 aria-label={t('conversationLayout.conversationsList')}
               >
-                <ConversationList
-                  conversations={conversations}
-                  selectedConversation={selectedConversation}
-                  currentUser={user}
-                  isLoading={isLoadingConversations}
-                  isMobile={isMobile}
-                  showConversationList={showConversationList}
-                  onSelectConversation={handleSelectConversation}
-                  onShowDetails={handleShowDetails}
-                  onCreateConversation={() => setIsCreateModalOpen(true)}
-                  onLinkCreated={refreshConversations}
-                  t={t}
-                  hasMore={hasMoreConversations}
-                  isLoadingMore={isLoadingMoreConversations}
-                  onLoadMore={loadMoreConversations}
-                  tSearch={(key: string) => t(`search.${key}`)}
-                />
+                <FeatureErrorBoundary featureName="ConversationList">
+                  <ConversationList
+                    conversations={conversations}
+                    selectedConversation={selectedConversation}
+                    currentUser={user}
+                    isLoading={isLoadingConversations}
+                    isMobile={isMobile}
+                    showConversationList={showConversationList}
+                    onSelectConversation={handleSelectConversation}
+                    onShowDetails={handleShowDetails}
+                    onCreateConversation={() => setIsCreateModalOpen(true)}
+                    onLinkCreated={refreshConversations}
+                    t={t}
+                    hasMore={hasMoreConversations}
+                    isLoadingMore={isLoadingMoreConversations}
+                    onLoadMore={loadMoreConversations}
+                    tSearch={(key: string) => t(`search.${key}`)}
+                  />
+                </FeatureErrorBoundary>
               </aside>
 
               {/* Resize handle - Desktop only */}
@@ -913,51 +916,53 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
             }
           >
             {selectedConversation ? (
-              <ConversationView
-                conversation={selectedConversation}
-                currentUser={user}
-                messages={messages}
-                participants={participants}
-                isMobile={false}
-                isConnected={connectionStatus.isConnected}
-                selectedLanguage={selectedLanguage}
-                usedLanguages={usedLanguages}
-                userLanguage={user.systemLanguage}
-                isLoadingMessages={isLoadingMessages}
-                isLoadingMore={isLoadingMore}
-                hasMore={hasMore}
-                composerValue={newMessage}
-                languageChoices={languageChoices}
-                typingUsers={typingUsers}
-                addTranslatingState={addTranslatingState}
-                isTranslating={isTranslating}
-                onEditMessage={handleEditMessage}
-                onDeleteMessage={handleDeleteMessage}
-                onReplyMessage={handleReplyMessage}
-                onNavigateToMessage={handleNavigateToMessage}
-                onImageClick={handleImageClick}
-                onLoadMore={loadMore}
-                onComposerChange={handleTyping}
-                onSendMessage={handleSendMessage}
-                onLanguageChange={setSelectedLanguage}
-                onKeyPress={handleKeyPress}
-                onAttachmentsChange={handleAttachmentsChange}
-                onRetryFailedMessage={handleRetryFailedMessage}
-                onRestoreFailedMessage={handleRestoreFailedMessage}
-                onRetryMessage={handleRetryMessage}
-                onCancelMessage={handleCancelMessage}
-                onBackToList={handleBackToList}
-                onStartCall={handleStartCall}
-                onOpenGallery={() => setGalleryOpen(true)}
-                onParticipantAdded={() => effectiveSelectedId && loadParticipants(effectiveSelectedId)}
-                onParticipantRemoved={() => effectiveSelectedId && loadParticipants(effectiveSelectedId)}
-                onLinkCreated={() => {}}
-                scrollContainerRef={messagesScrollRef}
-                composerRef={messageComposerRef}
-                t={t}
-                tCommon={tCommon}
-                showBackButton={!!selectedConversationId}
-              />
+              <FeatureErrorBoundary featureName="Chat">
+                <ConversationView
+                  conversation={selectedConversation}
+                  currentUser={user}
+                  messages={messages}
+                  participants={participants}
+                  isMobile={false}
+                  isConnected={connectionStatus.isConnected}
+                  selectedLanguage={selectedLanguage}
+                  usedLanguages={usedLanguages}
+                  userLanguage={user.systemLanguage}
+                  isLoadingMessages={isLoadingMessages}
+                  isLoadingMore={isLoadingMore}
+                  hasMore={hasMore}
+                  composerValue={newMessage}
+                  languageChoices={languageChoices}
+                  typingUsers={typingUsers}
+                  addTranslatingState={addTranslatingState}
+                  isTranslating={isTranslating}
+                  onEditMessage={handleEditMessage}
+                  onDeleteMessage={handleDeleteMessage}
+                  onReplyMessage={handleReplyMessage}
+                  onNavigateToMessage={handleNavigateToMessage}
+                  onImageClick={handleImageClick}
+                  onLoadMore={loadMore}
+                  onComposerChange={handleTyping}
+                  onSendMessage={handleSendMessage}
+                  onLanguageChange={setSelectedLanguage}
+                  onKeyPress={handleKeyPress}
+                  onAttachmentsChange={handleAttachmentsChange}
+                  onRetryFailedMessage={handleRetryFailedMessage}
+                  onRestoreFailedMessage={handleRestoreFailedMessage}
+                  onRetryMessage={handleRetryMessage}
+                  onCancelMessage={handleCancelMessage}
+                  onBackToList={handleBackToList}
+                  onStartCall={handleStartCall}
+                  onOpenGallery={() => setGalleryOpen(true)}
+                  onParticipantAdded={() => effectiveSelectedId && loadParticipants(effectiveSelectedId)}
+                  onParticipantRemoved={() => effectiveSelectedId && loadParticipants(effectiveSelectedId)}
+                  onLinkCreated={() => {}}
+                  scrollContainerRef={messagesScrollRef}
+                  composerRef={messageComposerRef}
+                  t={t}
+                  tCommon={tCommon}
+                  showBackButton={!!selectedConversationId}
+                />
+              </FeatureErrorBoundary>
             ) : (
               <div className="flex-1 flex items-center justify-center p-4 bg-white dark:bg-gray-950 overflow-hidden">
                 <ConversationEmptyState
