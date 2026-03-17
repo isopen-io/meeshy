@@ -414,12 +414,12 @@ export const MediaVideoCard = memo(function MediaVideoCard({
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Find initial translation
+  // Find initial translation — no fallback to translations[0] per Prisme Linguistique
   const initialTranslation = defaultLanguage
-    ? translations.find(t => t.languageCode === defaultLanguage) || translations[0]
-    : translations.find(t => t.isOriginal) || translations[0];
+    ? translations.find(t => t.languageCode === defaultLanguage) ?? translations.find(t => t.isOriginal)
+    : translations.find(t => t.isOriginal);
 
-  const [selectedTranslation, setSelectedTranslation] = useState<VideoTranslation>(initialTranslation);
+  const [selectedTranslation, setSelectedTranslation] = useState<VideoTranslation | undefined>(initialTranslation);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -551,6 +551,8 @@ export const MediaVideoCard = memo(function MediaVideoCard({
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
+  if (!selectedTranslation) return null;
+
   return (
     <div
       className={cn(

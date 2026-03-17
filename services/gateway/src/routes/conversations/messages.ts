@@ -624,7 +624,7 @@ export function registerMessagesRoutes(
       // Déterminer la langue préférée de l'utilisateur
       const userPreferredLanguage = userPrefs
         ? resolveUserLanguage(userPrefs)
-        : 'en';
+        : 'fr';
 
       // DEBUG: Log détaillé pour vérifier les transcriptions audio
       if (messages.length > 0) {

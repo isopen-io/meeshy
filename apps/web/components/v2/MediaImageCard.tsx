@@ -132,12 +132,12 @@ export function MediaImageCard({
       );
       if (found) return found;
     }
-    // Fall back to original or first translation
-    return translations.find((t) => t.isOriginal) || translations[0];
+    // Return original if available, otherwise undefined — never fall back to translations[0]
+    return translations.find((t) => t.isOriginal);
   }, [translations, defaultLanguage]);
 
-  const [selectedTranslation, setSelectedTranslation] = useState<ImageTranslation>(
-    initialTranslation || { languageCode: 'en', languageName: 'English', caption: '' }
+  const [selectedTranslation, setSelectedTranslation] = useState<ImageTranslation | undefined>(
+    initialTranslation
   );
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -147,14 +147,14 @@ export function MediaImageCard({
   const remainingCount = images.length - maxVisible;
   const hasMore = remainingCount > 0;
 
-  const langColor = getLanguageColor(selectedTranslation.languageCode);
+  const langColor = getLanguageColor(selectedTranslation?.languageCode ?? '');
 
   // Get other available translations (excluding current)
   const otherTranslations = useMemo(() => {
     return translations.filter(
-      (t) => t.languageCode.toLowerCase() !== selectedTranslation.languageCode.toLowerCase()
+      (t) => t.languageCode.toLowerCase() !== (selectedTranslation?.languageCode ?? '').toLowerCase()
     );
-  }, [translations, selectedTranslation.languageCode]);
+  }, [translations, selectedTranslation?.languageCode]);
 
   // Handlers
   const handleSelectTranslation = useCallback((translation: ImageTranslation) => {
@@ -207,8 +207,11 @@ export function MediaImageCard({
     };
   }, [isLightboxOpen, closeLightbox, goToPrevious, goToNext]);
 
-  // Return null if no images
+  // Return null if no images or no matching translation for preferred language
   if (!images || images.length === 0) {
+    return null;
+  }
+  if (!selectedTranslation) {
     return null;
   }
 

@@ -186,7 +186,7 @@ export function MediaAudioCard({
   const progressRef = useRef<HTMLDivElement>(null);
   const isPlayingRef = useRef(false);
 
-  // Find default translation
+  // Find default translation — no fallback to translations[0] per Prisme Linguistique
   const defaultTranslation = useMemo(() => {
     if (defaultLanguage) {
       const found = translations.find(
@@ -194,11 +194,11 @@ export function MediaAudioCard({
       );
       if (found) return found;
     }
-    // Fall back to original or first
-    return translations.find(t => t.isOriginal) || translations[0];
+    // Return original if available, otherwise undefined — never fall back to translations[0]
+    return translations.find(t => t.isOriginal);
   }, [translations, defaultLanguage]);
 
-  const [selectedTranslation, setSelectedTranslation] = useState<AudioTranslation>(defaultTranslation);
+  const [selectedTranslation, setSelectedTranslation] = useState<AudioTranslation | undefined>(defaultTranslation);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -214,8 +214,8 @@ export function MediaAudioCard({
 
   // Waveform bars
   const waveformBars = useMemo(
-    () => generateWaveform(selectedTranslation.audioSrc, BAR_COUNT),
-    [selectedTranslation.audioSrc]
+    () => generateWaveform(selectedTranslation?.audioSrc ?? '', BAR_COUNT),
+    [selectedTranslation?.audioSrc]
   );
 
   // Progress percentage
@@ -223,12 +223,12 @@ export function MediaAudioCard({
 
   // Truncated transcription
   const { truncated: truncatedTranscription, isTruncated } = useMemo(
-    () => truncateText(selectedTranslation.transcription, TRANSCRIPTION_MAX_LENGTH),
-    [selectedTranslation.transcription]
+    () => truncateText(selectedTranslation?.transcription ?? '', TRANSCRIPTION_MAX_LENGTH),
+    [selectedTranslation?.transcription]
   );
 
   // Language color
-  const langColor = getLanguageColor(selectedTranslation.languageCode);
+  const langColor = getLanguageColor(selectedTranslation?.languageCode ?? '');
 
   // -------------------------------------------------------------------------
   // Audio Event Handlers
@@ -308,7 +308,7 @@ export function MediaAudioCard({
         audio.play().catch(console.error);
       }
     }
-  }, [selectedTranslation.audioSrc]);
+  }, [selectedTranslation?.audioSrc]);
 
   // -------------------------------------------------------------------------
   // Playback Controls
@@ -397,6 +397,8 @@ export function MediaAudioCard({
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
+  if (!selectedTranslation) return null;
+
   return (
     <div
       className={cn(
