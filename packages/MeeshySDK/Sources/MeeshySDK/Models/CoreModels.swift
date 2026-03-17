@@ -134,7 +134,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var theme: ConversationContext.ConversationTheme = .general
 
     public enum ConversationType: String, Codable, CaseIterable, Sendable {
-        case direct, group, `public`, global, community, channel, bot
+        case direct, group, `public`, global, community, channel, bot, broadcast
     }
 
     public let colorPalette: ConversationColorPalette
@@ -184,7 +184,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         switch type {
         case .direct: ctxType = .direct
         case .group: ctxType = .group
-        case .public, .global, .community: ctxType = .community
+        case .public, .global, .community, .broadcast: ctxType = .community
         case .channel: ctxType = .channel
         case .bot: ctxType = .bot
         }

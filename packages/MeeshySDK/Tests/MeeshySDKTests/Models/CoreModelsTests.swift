@@ -69,7 +69,7 @@ final class CoreModelsTests: XCTestCase {
 
     func testConversationTypeAllCasesRawValues() {
         let allCases = MeeshyConversation.ConversationType.allCases
-        let expected: [String] = ["direct", "group", "public", "global", "community", "channel", "bot"]
+        let expected: [String] = ["direct", "group", "public", "global", "community", "channel", "bot", "broadcast"]
         let actual = allCases.map { $0.rawValue }
         XCTAssertEqual(actual, expected)
     }
@@ -82,6 +82,7 @@ final class CoreModelsTests: XCTestCase {
         XCTAssertEqual(MeeshyConversation.ConversationType(rawValue: "community"), .community)
         XCTAssertEqual(MeeshyConversation.ConversationType(rawValue: "channel"), .channel)
         XCTAssertEqual(MeeshyConversation.ConversationType(rawValue: "bot"), .bot)
+        XCTAssertEqual(MeeshyConversation.ConversationType(rawValue: "broadcast"), .broadcast)
         XCTAssertNil(MeeshyConversation.ConversationType(rawValue: "unknown"))
     }
 

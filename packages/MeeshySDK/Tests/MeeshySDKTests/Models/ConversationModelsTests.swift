@@ -90,10 +90,11 @@ final class ConversationModelsTests: XCTestCase {
         XCTAssertEqual(MeeshyConversation.ConversationType.community.rawValue, "community")
         XCTAssertEqual(MeeshyConversation.ConversationType.channel.rawValue, "channel")
         XCTAssertEqual(MeeshyConversation.ConversationType.bot.rawValue, "bot")
+        XCTAssertEqual(MeeshyConversation.ConversationType.broadcast.rawValue, "broadcast")
     }
 
     func testConversationTypeAllCases() {
-        XCTAssertEqual(MeeshyConversation.ConversationType.allCases.count, 7)
+        XCTAssertEqual(MeeshyConversation.ConversationType.allCases.count, 8)
     }
 
     func testConversationNameReturnsTitle() {

@@ -307,6 +307,7 @@ struct SharePickerView: View {
         case .community: return "Communaut\u{00e9}"
         case .channel: return "Canal"
         case .bot: return "Bot"
+        case .broadcast: return "Broadcast"
         }
     }
 

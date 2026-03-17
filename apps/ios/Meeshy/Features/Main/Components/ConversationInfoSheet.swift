@@ -748,7 +748,7 @@ struct ConversationInfoSheet: View {
         switch conversation.type {
         case .direct: return "person.fill"
         case .group: return "person.3.fill"
-        case .public, .global: return "globe"
+        case .public, .global, .broadcast: return "globe"
         case .community: return "building.2.fill"
         case .channel: return "megaphone.fill"
         case .bot: return "cpu.fill"
@@ -764,6 +764,7 @@ struct ConversationInfoSheet: View {
         case .community: return "Communaute"
         case .channel: return "Canal"
         case .bot: return "Bot"
+        case .broadcast: return "Broadcast"
         }
     }
 

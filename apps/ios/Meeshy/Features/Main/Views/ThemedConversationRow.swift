@@ -296,7 +296,7 @@ struct ThemedConversationRow: View {
         case .community: return "person.3.fill"
         case .channel: return "megaphone.fill"
         case .bot: return "sparkles"
-        case .public, .global: return "globe"
+        case .public, .global, .broadcast: return "globe"
         case .direct: return "person.fill"
         }
     }

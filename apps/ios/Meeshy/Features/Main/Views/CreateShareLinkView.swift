@@ -628,6 +628,7 @@ private extension MeeshyConversation.ConversationType {
         case .community: "Communauté"
         case .channel:   "Canal"
         case .bot:       "Bot"
+        case .broadcast: "Broadcast"
         }
     }
 }

@@ -82,7 +82,7 @@ struct ConversationBackgroundConfig {
             return .group
         case .community:
             return .community
-        case .public, .global, .channel:
+        case .public, .global, .channel, .broadcast:
             return .global
         case .bot:
             return .intimate

@@ -119,6 +119,7 @@ extension APIConversation {
             case "public": return .public
             case "global": return .global
             case "bot": return .bot
+            case "broadcast": return .broadcast
             default: return .direct
             }
         }()

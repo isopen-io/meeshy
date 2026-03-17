@@ -644,7 +644,7 @@ struct GlobalSearchView: View {
         switch type {
         case .direct: return Image(systemName: "person.fill")
         case .group: return Image(systemName: "person.2.fill")
-        case .public, .global: return Image(systemName: "globe")
+        case .public, .global, .broadcast: return Image(systemName: "globe")
         case .community: return Image(systemName: "person.3.fill")
         case .channel: return Image(systemName: "megaphone.fill")
         case .bot: return Image(systemName: "cpu.fill")
@@ -660,6 +660,7 @@ struct GlobalSearchView: View {
         case .community: return String(localized: "conversation.type.community", defaultValue: "Communaute")
         case .channel: return String(localized: "conversation.type.channel", defaultValue: "Channel")
         case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot")
+        case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Broadcast")
         }
     }
 }

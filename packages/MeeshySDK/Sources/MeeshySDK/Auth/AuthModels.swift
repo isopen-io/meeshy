@@ -291,10 +291,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         if useCustomDestination == true, let custom = customDestinationLanguage {
             preferred.append(custom)
         }
-        if let sys = systemLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(sys) == .orderedSame }) {
+        if translateToSystemLanguage == true, let sys = systemLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(sys) == .orderedSame }) {
             preferred.append(sys)
         }
-        if let reg = regionalLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(reg) == .orderedSame }) {
+        if translateToRegionalLanguage == true, let reg = regionalLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(reg) == .orderedSame }) {
             preferred.append(reg)
         }
         return preferred
