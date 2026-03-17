@@ -267,6 +267,31 @@ final class SomeViewModelTests: XCTestCase {
 - `@MainActor` on ALL test classes that test `@MainActor` ViewModels
 - Default param trick for `@MainActor` mocks: use `Type? = nil` + coalescing inside function
 
+## Cache-First Pattern (Obligatoire)
+
+Reference: `docs/superpowers/specs/2026-03-17-architecture-bible-design.md` Pattern I1
+
+Every ViewModel loading data MUST:
+1. Call `CacheCoordinator.shared.{store}.load(for: key)` BEFORE any API request
+2. Distinguish `.fresh` / `.stale` / `.expired` / `.empty` in a switch
+3. Display `.stale` immediately + silent background refresh
+4. NO spinner when cached data exists
+5. Use SkeletonPlaceholder (not ProgressView) on empty cache
+
+### LoadState Enum
+Every data-loading ViewModel MUST expose `loadState: LoadState`:
+```swift
+enum LoadState {
+    case idle, cachedStale, cachedFresh, loading, loaded, offline, error(String)
+}
+```
+
+### Leaf Views — Zero @ObservedObject Singleton
+Views rendered in loops (ThemedMessageBubble, MeeshyAvatar, ThemedConversationRow)
+MUST NOT have `@ObservedObject` on global singletons.
+Pass `isDark: Bool`, `accentColor: String` as `let` parameters.
+Alternative: `@Environment(\.colorScheme)` for simple dark/light checks.
+
 ## App Extensions
 - MeeshyNotificationExtension (rich push)
 - MeeshyShareExtension (share to Meeshy)
