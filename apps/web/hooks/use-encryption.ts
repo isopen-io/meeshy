@@ -11,6 +11,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { SharedEncryptionService } from '@meeshy/shared/encryption';
 import { webCryptoAdapter } from '@/lib/encryption/adapters/web-crypto-adapter';
 import { indexedDBKeyStorageAdapter } from '@/lib/encryption/adapters/indexeddb-key-storage-adapter';
+import {
+  getEncryptionStatus,
+} from '@meeshy/shared/types/encryption';
 import type {
   EncryptedPayload,
   EncryptionMode,
@@ -248,9 +251,7 @@ export function useEncryption(): UseEncryptionReturn {
     encryptionMode: EncryptionMode | null;
     encryptionEnabledBy: string | null;
   }): EncryptionStatus => {
-    // Import the utility function from shared types
-    const { getEncryptionStatus: getStatus } = require('@meeshy/shared/types/encryption');
-    return getStatus(conversation);
+    return getEncryptionStatus(conversation);
   }, []);
 
   /**

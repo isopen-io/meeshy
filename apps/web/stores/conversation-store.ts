@@ -1,5 +1,7 @@
 /**
  * Conversation Store - Chat and messaging state with Zustand
+ * @deprecated Use React Query hooks instead (useConversationsQuery, useInfiniteMessagesQuery).
+ * This store remains for legacy compatibility with presence.service.ts and MessageContent.tsx.
  */
 
 import { create } from 'zustand';
@@ -399,6 +401,12 @@ export const useConversationStore = create<ConversationStore>()(
       },
 
       setTyping: (conversationId: string, isTyping: boolean) => {
+        const { meeshySocketIOService } = require('@/services/meeshy-socketio.service');
+        if (isTyping) {
+          meeshySocketIOService.startTyping(conversationId);
+        } else {
+          meeshySocketIOService.stopTyping(conversationId);
+        }
       },
 
       addTypingUser: (conversationId: string, userId: string) => {

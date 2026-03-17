@@ -182,7 +182,7 @@ class FeedViewModel: ObservableObject {
 
         do {
             if posts[index].isLiked {
-                let _: APIResponse<[String: AnyCodable]> = try await api.request(
+                let _: SimpleAPIResponse = try await api.request(
                     endpoint: "/posts/\(postId)/like",
                     method: "POST"
                 )
@@ -244,7 +244,7 @@ class FeedViewModel: ObservableObject {
         let body: [String: String] = ["emoji": emoji]
         do {
             let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let _: APIResponse<[String: AnyCodable]> = try await api.request(
+            let _: SimpleAPIResponse = try await api.request(
                 endpoint: "/posts/\(postId)/comments/\(commentId)/like",
                 method: "POST",
                 body: bodyData
@@ -268,7 +268,7 @@ class FeedViewModel: ObservableObject {
 
         do {
             let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let _: APIResponse<[String: AnyCodable]> = try await api.request(
+            let _: SimpleAPIResponse = try await api.request(
                 endpoint: "/posts/\(postId)/share",
                 method: "POST",
                 body: bodyData
@@ -297,7 +297,7 @@ class FeedViewModel: ObservableObject {
 
     func requestTranslation(postId: String, targetLanguage: String) async {
         do {
-            try await PostService.shared.requestTranslation(postId: postId, targetLanguage: targetLanguage)
+            try await postService.requestTranslation(postId: postId, targetLanguage: targetLanguage)
         } catch {
             // Translation will arrive via socket event
         }
@@ -442,29 +442,3 @@ class FeedViewModel: ObservableObject {
 
 }
 
-// MARK: - AnyCodable helper for flexible decoding
-
-struct AnyCodable: Codable {
-    let value: Any
-
-    init(_ value: Any) {
-        self.value = value
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if let b = try? container.decode(Bool.self) { value = b }
-        else if let i = try? container.decode(Int.self) { value = i }
-        else if let d = try? container.decode(Double.self) { value = d }
-        else if let s = try? container.decode(String.self) { value = s }
-        else { value = "" }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        if let b = value as? Bool { try container.encode(b) }
-        else if let i = value as? Int { try container.encode(i) }
-        else if let d = value as? Double { try container.encode(d) }
-        else if let s = value as? String { try container.encode(s) }
-    }
-}
