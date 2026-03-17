@@ -297,6 +297,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         if translateToRegionalLanguage == true, let reg = regionalLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(reg) == .orderedSame }) {
             preferred.append(reg)
         }
+        // Fallback: systemLanguage is ALWAYS included as last resort (Prisme Linguistique rule)
+        if preferred.isEmpty, let sys = systemLanguage {
+            preferred.append(sys)
+        }
         return preferred
     }
 }

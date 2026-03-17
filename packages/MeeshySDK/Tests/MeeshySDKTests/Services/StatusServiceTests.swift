@@ -28,7 +28,7 @@ final class StatusServiceTests: XCTestCase {
             viewCount: 0, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,
             isPinned: false, isEdited: false, media: nil, comments: nil,
             repostOf: nil, isQuote: false, moodEmoji: "smile", audioUrl: nil,
-            audioDuration: nil, storyEffects: nil, translations: nil
+            audioDuration: nil, storyEffects: nil, translations: nil, isLikedByMe: nil
         )
     }
 

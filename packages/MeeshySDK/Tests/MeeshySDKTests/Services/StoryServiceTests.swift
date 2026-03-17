@@ -29,7 +29,7 @@ final class StoryServiceTests: XCTestCase {
             bookmarkCount: 0, shareCount: 0, reactionSummary: nil, isPinned: false,
             isEdited: false, media: nil, comments: nil, repostOf: nil, isQuote: nil,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
-            translations: nil
+            translations: nil, isLikedByMe: nil
         )
     }
 

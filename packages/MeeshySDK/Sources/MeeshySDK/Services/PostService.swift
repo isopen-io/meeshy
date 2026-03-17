@@ -15,6 +15,7 @@ public protocol PostServiceProviding: Sendable {
     func share(postId: String) async throws
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, mediaIds: [String]?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
+    func requestTranslation(postId: String, targetLanguage: String) async throws
 }
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {

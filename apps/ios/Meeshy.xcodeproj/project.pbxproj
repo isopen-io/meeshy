@@ -80,6 +80,7 @@
 		ABTV002A002A002A002A0002 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABTV001A001A001A001A0001 /* AboutView.swift */; };
 		ACSV002A002A002A002A0002 /* ActiveSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACSV001A001A001A001A0001 /* ActiveSessionsView.swift */; };
 		ANONSC00000000002001 /* AnonymousSessionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANONSC00000000001001 /* AnonymousSessionContext.swift */; };
+		ANYCD00000000002001 /* AnyCodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANYCD00000000001001 /* AnyCodable.swift */; };
 		AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */; };
 		BB22CC33DD44EE55FF660058 /* StoryViewerView+Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */; };
 		BB7000000000002FB7 /* ImageEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB7000000000001FB7 /* ImageEditView.swift */; };
@@ -327,6 +328,7 @@
 		ABTV001A001A001A001A0001 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		ACSV001A001A001A001A0001 /* ActiveSessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveSessionsView.swift; sourceTree = "<group>"; };
 		ANONSC00000000001001 /* AnonymousSessionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionContext.swift; sourceTree = "<group>"; };
+		ANYCD00000000001001 /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
 		AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFullscreenView.swift; sourceTree = "<group>"; };
 		B3E242276EB00910AF9B59F7 /* ConversationListViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationListViewModelTests.swift; sourceTree = "<group>"; };
 		B907F9065200B3DDB62876DB /* AnonymousSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionStore.swift; sourceTree = "<group>"; };
@@ -799,6 +801,7 @@
 				AA00BB11CC22DD33EE44001A /* PostModels.swift */,
 				AA00BB11CC22DD33EE440018 /* AuthModels.swift */,
 				ANONSC00000000001001 /* AnonymousSessionContext.swift */,
+				ANYCD00000000001001 /* AnyCodable.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -1164,6 +1167,7 @@
 				AA00BB11CC22DD33EE44002A /* PostModels.swift in Sources */,
 				AA00BB11CC22DD33EE440028 /* AuthModels.swift in Sources */,
 				ANONSC00000000002001 /* AnonymousSessionContext.swift in Sources */,
+				ANYCD00000000002001 /* AnyCodable.swift in Sources */,
 				D41332567A1DF21830750E35 /* AnonymousSessionStore.swift in Sources */,
 				AA00BB11CC22DD33EE440004 /* SampleData.swift in Sources */,
 				AA00BB11CC22DD33EE440005 /* RootViewComponents.swift in Sources */,

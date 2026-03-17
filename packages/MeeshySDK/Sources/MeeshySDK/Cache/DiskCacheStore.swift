@@ -36,6 +36,15 @@ public actor DiskCacheStore: ReadableCacheStore {
         cache.totalCostLimit = 80 * 1024 * 1024
         self.memoryCache = cache
         try? FileManager.default.createDirectory(at: self.baseDirectory, withIntermediateDirectories: true)
+
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak cache] _ in
+            cache?.removeAllObjects()
+            DiskCacheStore._imageCache.removeAllObjects()
+        }
     }
 
     // MARK: - ReadableCacheStore
