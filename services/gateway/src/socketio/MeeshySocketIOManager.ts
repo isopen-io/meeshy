@@ -44,6 +44,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService } from '../services/MentionService';
 import { hashSessionToken } from '../utils/session-token';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -84,6 +85,7 @@ export class MeeshySocketIOManager {
   private privacyPreferencesService: PrivacyPreferencesService;
   private agentClient: ZmqAgentClient | null = null;
   private mentionService: MentionService;
+  private rateLimiter = getSocketRateLimiter();
 
   // Mapping des utilisateurs connectés
   private connectedUsers: Map<string, SocketUser> = new Map();
@@ -320,6 +322,21 @@ export class MeeshySocketIOManager {
           const user = userResult?.user;
           const userId = userResult?.realUserId || userIdOrToken;
 
+          // Rate limiting: 20 messages/min par utilisateur (P3-39)
+          const rateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
+          if (!rateLimitAllowed) {
+            const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
+            const errorResponse: SocketIOResponse<{ messageId: string }> = {
+              success: false,
+              error: 'Rate limit exceeded'
+            };
+            if (callback) callback(errorResponse);
+            socket.emit(SERVER_EVENTS.ERROR, {
+              message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+            });
+            return;
+          }
+
           // Validation de la longueur du message
           const validation = validateMessageLength(data.content);
           if (!validation.isValid) {
@@ -343,31 +360,10 @@ export class MeeshySocketIOManager {
             this.statusService.updateLastSeen(userId, isAnonymous);
           }
 
-          // Pour les utilisateurs anonymes, récupérer le nom d'affichage depuis la base de données
+          // Pour les utilisateurs anonymes, utiliser le displayName mis en cache lors de l'auth socket (P3-42)
           let anonymousDisplayName: string | undefined;
           if (isAnonymous) {
-            try {
-              // Utiliser le sessionToken stocké dans l'objet utilisateur
-              const userSessionToken = user?.sessionToken;
-              if (!userSessionToken) {
-                logger.error('SessionToken manquant pour utilisateur anonyme', userId);
-                anonymousDisplayName = 'Anonymous User';
-              } else {
-                const anonymousParticipant = await this.prisma.participant.findFirst({
-                  where: { id: userId, type: 'anonymous' },
-                  select: { displayName: true, nickname: true }
-                });
-              
-                if (anonymousParticipant) {
-                  anonymousDisplayName = anonymousParticipant.nickname || anonymousParticipant.displayName || 'Anonymous User';
-                } else {
-                  anonymousDisplayName = 'Anonymous User';
-                }
-              }
-            } catch (error) {
-              logger.error('Erreur lors de la récupération du nom anonyme', error);
-              anonymousDisplayName = 'Anonymous User';
-            }
+            anonymousDisplayName = user?.displayName || 'Anonymous User';
           }
 
           // Mapper les données vers le format MessageRequest

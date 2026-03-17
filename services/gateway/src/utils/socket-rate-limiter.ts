@@ -23,6 +23,11 @@ interface RateLimitEntry {
  * Socket.IO rate limit configurations
  */
 export const SOCKET_RATE_LIMITS = {
+  MESSAGE_SEND: {
+    maxRequests: 20,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:message:send'
+  },
   CALL_INITIATE: {
     maxRequests: 5,
     windowMs: 60000, // 1 minute
