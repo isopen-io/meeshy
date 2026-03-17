@@ -26,6 +26,10 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
+// NOTE: ConversationListCache is non-functional dead code (Architecture Bible finding #3).
+// Redis was never wired (`redis: undefined`) and the conversation list route below queries
+// Prisma directly — there is no cache read path. Only the invalidation helper is called here
+// as a no-op. The cache module is kept for future re-enablement. See ConversationListCache.ts.
 import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 

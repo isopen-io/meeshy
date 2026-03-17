@@ -1,6 +1,20 @@
 /**
  * Cache Multi-Niveaux pour les Listes de Conversations
  *
+ * @deprecated This cache was never functional and is effectively dead code.
+ * - `redis: undefined` on line ~44 means the Redis layer was never wired.
+ * - The conversation list route (`routes/conversations/core.ts`) queries Prisma
+ *   directly and never reads from this cache — only the invalidation helpers
+ *   (`invalidateConversationCacheAsync`) are imported but operate on a no-op cache.
+ * - Architecture Bible audit finding #3: "ConversationListCache — never functional,
+ *   Redis never wired, cache read path never implemented in route."
+ *
+ * Kept for reference: the invalidation logic and multi-level cache design are
+ * sound and can be re-enabled once Redis is properly injected and the route
+ * is updated to check the cache before querying the database.
+ *
+ * Original design doc (preserved below):
+ *
  * Architecture:
  * - Niveau 1: Mémoire (Map) - TTL 24h - Dernières conversations accédées
  * - Niveau 2: Redis - TTL 24h - Plus grande capacité
@@ -41,7 +55,7 @@ export const conversationListCache = new MultiLevelCache<ConversationListRespons
   name: 'conversations-list',
   memoryTtlMs: 24 * 60 * 60 * 1000,      // 24 heures
   redisTtlSeconds: 24 * 60 * 60,          // 24 heures
-  redis: undefined,                        // Redis sera ajouté plus tard si disponible
+  redis: undefined,                        // @deprecated Redis never wired — cache is non-functional (see file-level JSDoc)
   keyPrefix: 'conv-list:',
   cleanupIntervalMs: 10 * 60 * 1000       // Cleanup toutes les 10 minutes
 });
