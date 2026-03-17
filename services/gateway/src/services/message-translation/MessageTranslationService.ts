@@ -631,7 +631,7 @@ export class MessageTranslationService extends EventEmitter {
           if (participant.user.regionalLanguage) {
             languages.add(participant.user.regionalLanguage);
           }
-          if (participant.user.customDestinationLanguage) {
+          if ((participant.user as any).useCustomDestination && participant.user.customDestinationLanguage) {
             languages.add(participant.user.customDestinationLanguage);
           }
         } else {
