@@ -8,8 +8,35 @@ import { translationService } from '@/services/translation.service';
 // Service de traduction global
 // const translationService = translationService; // Déjà importé
 
-// Cache de traduction simple pour compatibilité
-const translationCache = new Map<string, string>();
+class LRUCache<K, V> {
+  private cache = new Map<K, V>();
+  constructor(private maxSize: number) {}
+
+  get(key: K): V | undefined {
+    const value = this.cache.get(key);
+    if (value !== undefined) {
+      this.cache.delete(key);
+      this.cache.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: K, value: V): void {
+    this.cache.delete(key);
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey !== undefined) this.cache.delete(firstKey);
+    }
+    this.cache.set(key, value);
+  }
+
+  has(key: K): boolean { return this.cache.has(key); }
+  get size(): number { return this.cache.size; }
+  clear(): void { this.cache.clear(); }
+  keys(): IterableIterator<K> { return this.cache.keys(); }
+}
+
+const translationCache = new LRUCache<string, string>(500);
 
 /**
  * Génère une clé de cache pour une traduction
