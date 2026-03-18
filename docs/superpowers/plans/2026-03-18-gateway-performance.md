@@ -1,32 +1,129 @@
-# Gateway Performance Optimization Plan
+# Gateway Performance & Correctness Plan (v2)
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Eliminate redundant database lookups on every socket event and REST request, add HTTP caching to read-heavy REST endpoints, and replace the fragile `permanentlyDisabled` Redis error handling with the existing circuit breaker.
+**Goal:** Fix 2 active correctness bugs (stale auth cache, message re-fetch) and 1 resilience issue (Redis permanent disable), then add in-memory caching to eliminate redundant DB lookups on every socket event and REST request. HTTP caching deferred — see Deferred section.
 
-**Architecture:** Three independent fixes across the gateway service. T1 extracts a shared cached `resolveConversationId` utility and wires it into all 7 call sites (5 REST route files + 2 socket files). T2 integrates the existing `CircuitBreaker` from `utils/circuitBreaker.ts` into `RedisWrapper`, replacing the `permanentlyDisabled` flag. T3 adds ETag + Cache-Control headers to 4 read-heavy REST endpoints. Each task is independent.
+**Architecture:** Five independent tasks. T1 adds cache invalidation after profile updates (P0 bug fix). T2 extracts a shared cached `resolveConversationId` and wires all 10 call sites. T3 integrates the existing `CircuitBreaker` into `RedisWrapper`. T4 enriches `MessagingService.handleMessage()` to return the full message, eliminating a re-fetch on every message send. T5 adds `Cache-Control` headers as a lightweight first step (no ETag — clients don't send `If-None-Match` yet).
 
-**Tech Stack:** TypeScript, Fastify 5, Socket.IO, ioredis, crypto (for ETag hashing)
+**Tech Stack:** TypeScript, Fastify 5, Socket.IO, ioredis, Prisma
+
+**Deferred (and why):**
+- **ETag responses**: Zero clients (iOS SDK, web) currently send `If-None-Match`. ETag infrastructure is dead code until clients are updated. Deferred to a cross-platform plan (gateway + iOS SDK + web fetch layer).
+- **G4 conversation routes → sendSuccess()**: 34 raw `reply.send()` calls — important for API consistency but not a performance concern. Separate refactoring plan.
+- **ZMQ timeout/retry**: Reliability concern in `ZmqTranslationClient` (no 30s timeout). Separate reliability plan.
+- **G7 remaining language divergences**: `participants.ts`, `contact-change.ts`, `anonymous.ts` use manual language resolution. Separate correctness plan.
 
 ---
 
-## Chunk 1: ConversationId Cache (Task 1)
+## Chunk 1: Auth Cache Bug Fix (Task 1)
 
-### Task 1: Extract shared `resolveConversationId` with in-memory cache
+### Task 1: Add auth cache invalidation on profile/language/role update
 
-`resolveConversationId` is duplicated in **5 REST route files** and `normalizeConversationId` in **2 socket files** — each doing a Prisma lookup every call. The identifier→ObjectId mapping is **immutable**, so it can be cached indefinitely in-memory.
+**Bug:** `auth.ts:142-197` caches the user in Redis under `auth:user:{userId}` with 5min TTL. But no `redis.del()` is ever called anywhere. When a user changes their language, avatar, displayName, or role via `PATCH /users/profile`, the cache serves stale data for up to 5 minutes.
 
-This task extracts a single shared utility with caching and wires all 7 call sites to use it.
+**Impact:** After changing language from `fr` to `en`, messages continue being translated to `fr` for 5 minutes. After avatar change, old avatar served to other users for 5 minutes via auth context.
+
+**Files:**
+- Modify: `services/gateway/src/routes/users/profile.ts:223-263` (add cache invalidation after update)
+- Modify: `services/gateway/src/middleware/auth.ts` (export cache key constant)
+
+- [ ] **Step 1: Read auth.ts to find the cache key pattern**
+
+Read `services/gateway/src/middleware/auth.ts`. Find the cache key constant (around line 142). It should be something like `auth:user:${userId}`. Note the exact pattern.
+
+- [ ] **Step 2: Export the cache key builder from auth.ts**
+
+Add an exported function near the cache key definition:
+
+```typescript
+export const AUTH_USER_CACHE_PREFIX = 'auth:user:';
+
+export function authUserCacheKey(userId: string): string {
+  return `${AUTH_USER_CACHE_PREFIX}${userId}`;
+}
+```
+
+- [ ] **Step 3: Read profile.ts to find all update paths**
+
+Read `services/gateway/src/routes/users/profile.ts`. Find all places that call `prisma.user.update()`. The main one is at line 223. Check for avatar update, language update, role update handlers.
+
+- [ ] **Step 4: Add cache invalidation after profile update**
+
+After `prisma.user.update()` at line 223 and before `return reply.send(...)` at line 263, add:
+
+```typescript
+// Invalidate auth cache so next request gets fresh data
+try {
+  const redis = getRedisWrapper();
+  await redis.del(authUserCacheKey(userId));
+} catch {
+  // Cache invalidation is best-effort — stale cache expires in 5min anyway
+}
+```
+
+Add the imports at the top of profile.ts:
+```typescript
+import { authUserCacheKey } from '../../middleware/auth';
+import { getRedisWrapper } from '../../services/RedisWrapper';
+```
+
+- [ ] **Step 5: Search for other user update paths that need invalidation**
+
+Search for `prisma.user.update` across `services/gateway/src/routes/` to find any other handler that modifies cached fields. Each must also invalidate. Common ones:
+- Admin role change routes
+- Avatar upload handler
+- Language preference update
+
+For each, add the same `redis.del(authUserCacheKey(userId))` after the update.
+
+- [ ] **Step 6: Build gateway**
+
+Run: `cd services/gateway && npx tsc --noEmit`
+Expected: No errors
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add services/gateway/src/middleware/auth.ts services/gateway/src/routes/users/profile.ts
+git commit -m "fix(gateway): add auth cache invalidation on profile/language/role update
+
+The auth middleware caches user data in Redis for 5min (auth:user:{userId}).
+No cache invalidation existed — after updating language preferences, avatar,
+or role, stale data was served for up to 5 minutes. Now deletes the cache
+key after every user.update() in profile routes."
+```
+
+---
+
+## Chunk 2: ConversationId Cache (Task 2)
+
+### Task 2: Extract shared `resolveConversationId` with in-memory cache
+
+`resolveConversationId` is duplicated in **10 independent locations** — each hitting Prisma on every call. The identifier→ObjectId mapping is **immutable** (confirmed: no API modifies identifiers post-creation, conversations are only soft-deleted).
+
+**All 10 call sites:**
+
+| # | File | Type | Currently |
+|---|------|------|-----------|
+| 1 | `routes/conversations/core.ts:39` | module function | `findFirst` |
+| 2 | `routes/conversations/messages.ts:33` | module function | `findFirst` |
+| 3 | `routes/conversations/messages-advanced.ts:31` | module function | `findFirst` |
+| 4 | `routes/conversations/participants.ts:16` | module function | `findFirst` |
+| 5 | `routes/conversations/sharing.ts:23` | module function | `findFirst` |
+| 6 | `socketio/MeeshySocketIOManager.ts:174` | private method | `findUnique` |
+| 7 | `socketio/utils/socket-helpers.ts:78` | exported helper | injected `findUnique` |
+| 8 | `services/messaging/MessageValidator.ts:285` | class method | `findFirst` |
+| 9 | `routes/translation-non-blocking.ts:354` | inline | `findFirst` |
+| 10 | `routes/translation-non-blocking.ts:496` | inline | `findFirst` |
 
 **Files:**
 - Create: `services/gateway/src/utils/conversation-id-cache.ts`
-- Modify: `services/gateway/src/routes/conversations/core.ts:39-51` (remove local `resolveConversationId`, import shared)
-- Modify: `services/gateway/src/routes/conversations/messages.ts:33-45` (remove local, import shared)
-- Modify: `services/gateway/src/routes/conversations/messages-advanced.ts:31-43` (remove local, import shared)
-- Modify: `services/gateway/src/routes/conversations/participants.ts:16-28` (remove local, import shared)
-- Modify: `services/gateway/src/routes/conversations/sharing.ts:23-35` (remove local, import shared)
-- Modify: `services/gateway/src/socketio/MeeshySocketIOManager.ts:174-199` (add cache to private method)
-- Modify: `services/gateway/src/socketio/utils/socket-helpers.ts:78-100` (add cache to exported helper)
+- Modify: 5 route files (remove local function, import shared)
+- Modify: `services/gateway/src/socketio/MeeshySocketIOManager.ts:174-199` (add cache)
+- Modify: `services/gateway/src/socketio/utils/socket-helpers.ts:78-100` (add cache)
+- Modify: `services/gateway/src/services/messaging/MessageValidator.ts:285-297` (replace with import)
+- Modify: `services/gateway/src/routes/translation-non-blocking.ts:354,496` (replace inline with import)
 
 - [ ] **Step 1: Create shared cached utility**
 
@@ -35,10 +132,7 @@ Create `services/gateway/src/utils/conversation-id-cache.ts`:
 ```typescript
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-// In-memory cache for identifier→ObjectId mapping
-// Conversation identifiers are immutable — cache indefinitely
 const cache = new Map<string, string>();
-
 const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
 export async function resolveConversationId(
@@ -64,50 +158,69 @@ export async function resolveConversationId(
 
   return null;
 }
-
-export function getCachedConversationId(identifier: string): string | undefined {
-  if (OBJECT_ID_REGEX.test(identifier)) return identifier;
-  return cache.get(identifier);
-}
-
-export function cacheConversationId(identifier: string, objectId: string): void {
-  cache.set(identifier, objectId);
-}
 ```
 
-- [ ] **Step 2: Replace `resolveConversationId` in all 5 route files**
+- [ ] **Step 2: Replace in 5 route files**
 
-For each file, remove the local `async function resolveConversationId(...)` definition and add the import:
-
+For each of these files, remove the local `async function resolveConversationId(...)` and add:
 ```typescript
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 ```
 
-Files to modify (remove local function, add import):
-1. `services/gateway/src/routes/conversations/core.ts:39-51` — also remove unused `isValidMongoId` import if it was only used by the local function
-2. `services/gateway/src/routes/conversations/messages.ts:33-45`
-3. `services/gateway/src/routes/conversations/messages-advanced.ts:31-43`
-4. `services/gateway/src/routes/conversations/participants.ts:16-28`
-5. `services/gateway/src/routes/conversations/sharing.ts:23-35`
+Files (same signature `(prisma, identifier) → string | null`):
+1. `services/gateway/src/routes/conversations/core.ts:39-51`
+2. `services/gateway/src/routes/conversations/messages.ts:33-41`
+3. `services/gateway/src/routes/conversations/messages-advanced.ts:31-39`
+4. `services/gateway/src/routes/conversations/participants.ts:16-24`
+5. `services/gateway/src/routes/conversations/sharing.ts:23-31`
 
-**IMPORTANT:** The local functions all have the same signature `(prisma: PrismaClient, identifier: string): Promise<string | null>` — the shared version matches. No call site changes needed, only the import.
+**IMPORTANT:** Verify each local function's signature before replacing. Also check if `isValidMongoId` import becomes unused after removing the local function — remove if so.
 
-Verify each file's local function signature matches before replacing. If any file has a different signature, adapt accordingly.
+- [ ] **Step 3: Replace in MessageValidator.ts**
 
-- [ ] **Step 3: Add cache to `MeeshySocketIOManager.normalizeConversationId`**
-
-Read `services/gateway/src/socketio/MeeshySocketIOManager.ts`. Add a private `Map` property and update the private method (lines 174-199):
+Read `services/gateway/src/services/messaging/MessageValidator.ts`. The class method at line 285 has the same logic. Replace with a call to the shared utility:
 
 ```typescript
-// Add as class property:
+import { resolveConversationId } from '../../utils/conversation-id-cache';
+
+// Replace the class method (line 285-297):
+async resolveConversationId(identifier: string): Promise<string | null> {
+  return resolveConversationId(this.prisma, identifier);
+}
+```
+
+Or better: remove the method entirely and have callers use the shared utility directly. Check what calls `this.resolveConversationId()` within MessageValidator and refactor accordingly.
+
+- [ ] **Step 4: Replace in translation-non-blocking.ts**
+
+Read `services/gateway/src/routes/translation-non-blocking.ts`. There are 2 inline resolution blocks (line 354 and 496). Replace each with:
+
+```typescript
+import { resolveConversationId } from '../utils/conversation-id-cache';
+
+// Replace inline block at ~line 354:
+const resolved = await resolveConversationId(fastify.prisma, validatedData.conversation_id);
+if (!resolved) {
+  return reply.status(404).send({
+    success: false,
+    error: `Conversation with identifier '${validatedData.conversation_id}' not found`
+  });
+}
+const resolvedConversationId = resolved;
+```
+
+Apply same pattern at ~line 496.
+
+- [ ] **Step 5: Add cache to MeeshySocketIOManager**
+
+Read `services/gateway/src/socketio/MeeshySocketIOManager.ts`. Add a private `Map` to the class and update the method:
+
+```typescript
 private conversationIdCache = new Map<string, string>();
 
-// Update method:
 private async normalizeConversationId(conversationId: string): Promise<string> {
   try {
-    if (/^[0-9a-fA-F]{24}$/.test(conversationId)) {
-      return conversationId;
-    }
+    if (/^[0-9a-fA-F]{24}$/.test(conversationId)) return conversationId;
 
     const cached = this.conversationIdCache.get(conversationId);
     if (cached) return cached;
@@ -121,7 +234,6 @@ private async normalizeConversationId(conversationId: string): Promise<string> {
       this.conversationIdCache.set(conversationId, conversation.id);
       return conversation.id;
     }
-
     return conversationId;
   } catch (error) {
     logger.error('❌ [NORMALIZE] Erreur normalisation', error);
@@ -130,9 +242,9 @@ private async normalizeConversationId(conversationId: string): Promise<string> {
 }
 ```
 
-- [ ] **Step 4: Add cache to `socket-helpers.ts` `normalizeConversationId`**
+- [ ] **Step 6: Add cache to socket-helpers.ts**
 
-Read `services/gateway/src/socketio/utils/socket-helpers.ts`. Add a module-level cache before the function:
+Read `services/gateway/src/socketio/utils/socket-helpers.ts`. Add module-level cache:
 
 ```typescript
 const conversationIdCache = new Map<string, string>();
@@ -142,20 +254,16 @@ export async function normalizeConversationId(
   prismaFindUnique: (where: { identifier: string }) => Promise<{ id: string; identifier: string } | null>
 ): Promise<string> {
   try {
-    if (/^[0-9a-fA-F]{24}$/.test(conversationId)) {
-      return conversationId;
-    }
+    if (/^[0-9a-fA-F]{24}$/.test(conversationId)) return conversationId;
 
     const cached = conversationIdCache.get(conversationId);
     if (cached) return cached;
 
     const conversation = await prismaFindUnique({ identifier: conversationId });
-
     if (conversation) {
       conversationIdCache.set(conversationId, conversation.id);
       return conversation.id;
     }
-
     return conversationId;
   } catch (error) {
     console.error('❌ [NORMALIZE] Erreur normalisation:', error);
@@ -164,55 +272,56 @@ export async function normalizeConversationId(
 }
 ```
 
-- [ ] **Step 5: Build gateway**
+- [ ] **Step 7: Build gateway**
 
 Run: `cd services/gateway && npx tsc --noEmit`
 Expected: No errors
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add services/gateway/src/utils/conversation-id-cache.ts services/gateway/src/routes/conversations/core.ts services/gateway/src/routes/conversations/messages.ts services/gateway/src/routes/conversations/messages-advanced.ts services/gateway/src/routes/conversations/participants.ts services/gateway/src/routes/conversations/sharing.ts services/gateway/src/socketio/MeeshySocketIOManager.ts services/gateway/src/socketio/utils/socket-helpers.ts
+git add services/gateway/src/utils/conversation-id-cache.ts services/gateway/src/routes/conversations/ services/gateway/src/socketio/ services/gateway/src/services/messaging/MessageValidator.ts services/gateway/src/routes/translation-non-blocking.ts
 git commit -m "perf(gateway): extract shared resolveConversationId with in-memory cache
 
-Deduplicates 5 identical resolveConversationId functions across route files
-into a single shared utility. Adds in-memory caching to all 7 call sites
-(5 REST + 2 socket). Identifier→ObjectId mapping is immutable — cached
-indefinitely, eliminating DB lookups after first access."
+Deduplicates 10 identical identifier→ObjectId resolution implementations
+across route files, socket handlers, and services. Adds in-memory caching
+(Map) — identifiers are immutable, cached indefinitely on first lookup.
+Eliminates 10+ Prisma calls per conversation join/message send."
 ```
 
 ---
 
-## Chunk 2: Redis Resilience (Task 2)
+## Chunk 3: Redis Resilience (Task 3)
 
-### Task 2: Replace `permanentlyDisabled` with existing `CircuitBreaker`
+### Task 3: Integrate existing `CircuitBreaker` into `RedisWrapper`
 
-`RedisWrapper` currently sets `permanentlyDisabled = true` on ANY error (connection close, operation timeout, connection failure). Once set, Redis is dead for the entire process lifetime — even if it recovers seconds later.
+`RedisWrapper` sets `permanentlyDisabled = true` on ANY error — killing Redis for the entire process lifetime. A `CircuitBreaker` class with `CircuitBreakerFactory.createRedisBreaker()` already exists at `utils/circuitBreaker.ts` but has **never been used in production** (dead code). This task activates it.
 
-A `CircuitBreaker` class with `CircuitBreakerFactory.createRedisBreaker()` already exists at `services/gateway/src/utils/circuitBreaker.ts`. It implements Closed→Open(20s)→Half-Open with configurable thresholds, timeout per operation (2s), and a `successThreshold` (3 successes to close from half-open). Use it instead of reimplementing.
+**Key integration notes:**
+- When circuit is OPEN, `execute()` calls fallback which **returns null** (doesn't throw). This means `get()` returns null = "not found" = falls through to memory cache. The catch block fires only on actual Redis errors, not OPEN state. This is correct cache behavior.
+- `createRedisBreaker()` config: failureThreshold=3, failureWindowMs=30s, resetTimeoutMs=20s, successThreshold=3, timeout=2s
+- ioredis has `maxRetriesPerRequest: 1` — it rejects fast. The CircuitBreaker's 2s timeout is a safety net that rarely fires.
+- Register the breaker in `circuitBreakerManager` so the health endpoint exposes real stats.
+- Keep `closeRedisConnection()` for graceful shutdown but remove from error paths.
 
 **Files:**
 - Modify: `services/gateway/src/services/RedisWrapper.ts`
 
-**Context:**
-- Existing `CircuitBreakerFactory.createRedisBreaker()` config: failureThreshold=3, failureWindowMs=30s, resetTimeoutMs=20s, successThreshold=3, timeout=2s
-- The `execute()` method wraps an async function with timeout + state management
-- On OPEN, it calls the fallback (returns `null` for Redis) — perfect for memory cache fallback
-- `closeRedisConnection()` should be KEPT for graceful shutdown but REMOVED from error paths
-
 - [ ] **Step 1: Read the full RedisWrapper.ts and circuitBreaker.ts**
 
-Read both files to understand the current error handling and the CircuitBreaker API.
+Read both files. Note every usage of `permanentlyDisabled`.
 
 - [ ] **Step 2: Add CircuitBreaker instance, remove `permanentlyDisabled`**
 
 ```typescript
-import { CircuitBreakerFactory, CircuitBreaker } from '../utils/circuitBreaker';
+import { CircuitBreakerFactory, circuitBreakerManager } from '../utils/circuitBreaker';
 
-// In the class:
-// REMOVE: private permanentlyDisabled: boolean = false;
-// ADD:
-private circuitBreaker: CircuitBreaker = CircuitBreakerFactory.createRedisBreaker();
+// Remove: private permanentlyDisabled: boolean = false;
+// Add:
+private circuitBreaker = CircuitBreakerFactory.createRedisBreaker();
+
+// In constructor, after initializeRedis():
+circuitBreakerManager.register('redis', this.circuitBreaker);
 ```
 
 - [ ] **Step 3: Update `get()` method**
@@ -221,19 +330,21 @@ private circuitBreaker: CircuitBreaker = CircuitBreakerFactory.createRedisBreake
 async get(key: string): Promise<string | null> {
   if (this.isRedisAvailable && this.redis) {
     try {
-      return await this.circuitBreaker.execute(() => this.redis!.get(key));
+      const value = await this.circuitBreaker.execute(() => this.redis!.get(key));
+      if (value !== null) return value; // CB returns null when OPEN (fallback) — treat as miss
+      // Check if this is a real null (key not found) vs circuit open
+      // When OPEN, fallback returns null without throwing
+      // We can't distinguish — fall through to memory (correct for cache)
+      return value;
     } catch {
-      // Circuit breaker handled the failure — fall through to memory
+      // Redis error — circuit breaker recorded the failure
+      // Fall through to memory cache
     }
   }
 
   const entry = this.memoryCache.get(key);
-  if (entry && entry.expiresAt > Date.now()) {
-    return entry.value;
-  }
-  if (entry) {
-    this.memoryCache.delete(key);
-  }
+  if (entry && entry.expiresAt > Date.now()) return entry.value;
+  if (entry) this.memoryCache.delete(key);
   return null;
 }
 ```
@@ -245,14 +356,12 @@ async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
   if (this.isRedisAvailable && this.redis) {
     try {
       await this.circuitBreaker.execute(() => {
-        if (ttlSeconds) {
-          return this.redis!.set(key, value, 'EX', ttlSeconds);
-        }
+        if (ttlSeconds) return this.redis!.set(key, value, 'EX', ttlSeconds);
         return this.redis!.set(key, value);
       });
       return;
     } catch {
-      // Circuit breaker handled the failure — fall through to memory
+      // Fall through to memory cache
     }
   }
 
@@ -267,25 +376,22 @@ async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
 
 Apply the same `this.circuitBreaker.execute(() => ...)` pattern to:
 
-| Method | Redis call to wrap | Fallback behavior |
-|--------|-------------------|-------------------|
-| `setnx()` | `this.redis.set(key, value, 'EX', ttl, 'NX')` | Memory cache set + return `'OK'` |
-| `expire()` | `this.redis.expire(key, ttlSeconds)` | No-op (memory cache uses expiresAt at set time) |
-| `del()` | `this.redis.del(key)` | `this.memoryCache.delete(key)` |
-| `keys()` | `this.redis.keys(pattern)` | `Array.from(this.memoryCache.keys()).filter(k => matchesPattern(k, pattern))` |
-
-For `isAvailable()`: return `this.isRedisAvailable && this.circuitBreaker.getStats().state !== 'OPEN'`
+| Method | Redis call to wrap | On error/OPEN fallback |
+|--------|-------------------|----------------------|
+| `setnx()` | `redis.set(key, value, 'EX', ttl, 'NX')` | Memory cache set |
+| `expire()` | `redis.expire(key, ttlSeconds)` | No-op |
+| `del()` | `redis.del(key)` | `this.memoryCache.delete(key)` |
+| `keys()` | `redis.keys(pattern)` | Filter from `memoryCache.keys()` |
+| `isAvailable()` | — | Return `this.isRedisAvailable && this.circuitBreaker.getStats().state !== 'OPEN'` |
 
 - [ ] **Step 6: Update connection event handlers**
 
-In `initializeRedis()`, remove all `this.permanentlyDisabled = true` assignments. Replace with just setting `this.isRedisAvailable = false`. The circuit breaker tracks failures via `execute()` — connection events should NOT directly trigger circuit state changes.
+Remove ALL `this.permanentlyDisabled = true` lines. Replace with `this.isRedisAvailable = false`. The circuit breaker manages retry timing via `execute()` — connection events should not directly change circuit state.
 
 ```typescript
 this.redis.on('close', () => {
   this.isRedisAvailable = false;
-  if (this.connectionAttempts > 0) {
-    logger.warn('⚠️ Redis connection lost — circuit breaker will manage retries');
-  }
+  logger.warn('⚠️ Redis connection lost — circuit breaker will manage retries');
 });
 
 this.redis.on('end', () => {
@@ -302,20 +408,10 @@ this.redis.on('error', (error) => {
 });
 ```
 
-Update `retryStrategy`:
-```typescript
-retryStrategy: (times: number) => {
-  if (times > this.maxConnectionAttempts) {
-    logger.warn('⚠️ Max connection attempts reached — circuit breaker will manage retries');
-    return null;
-  }
-  return 2000;
-},
-```
-
-Remove `this.permanentlyDisabled = true` from `connect().catch()` and the outer `try/catch` in `initializeRedis()`. Replace with `this.isRedisAvailable = false`.
-
-**Keep `closeRedisConnection()`** as a method (needed for graceful shutdown) but remove it from error paths — the circuit breaker handles retry timing without killing the connection.
+Update `retryStrategy` and `connect().catch()`:
+- Replace `this.permanentlyDisabled = true` with `this.isRedisAvailable = false`
+- Remove `this.closeRedisConnection()` from error paths (keep the method for shutdown)
+- Keep `return null` in retryStrategy to stop ioredis retries (circuit breaker handles retry timing)
 
 - [ ] **Step 7: Verify no remaining `permanentlyDisabled` references**
 
@@ -331,148 +427,131 @@ Expected: No errors
 
 ```bash
 git add services/gateway/src/services/RedisWrapper.ts
-git commit -m "perf(gateway): integrate existing CircuitBreaker into RedisWrapper
+git commit -m "fix(gateway): integrate CircuitBreaker into RedisWrapper, remove permanentlyDisabled
 
-Replaces permanentlyDisabled flag with CircuitBreakerFactory.createRedisBreaker().
 Previously, ANY Redis error permanently disabled Redis for the entire process.
-Now uses the existing circuit breaker (3 failures/30s → OPEN 20s → HALF-OPEN
-→ 3 successes to CLOSE) with 2s timeout per operation."
+Now wraps all Redis operations with CircuitBreakerFactory.createRedisBreaker():
+3 failures in 30s opens circuit (20s cooldown), 3 successes to re-close.
+Registered in circuitBreakerManager for health endpoint visibility."
 ```
 
 ---
 
-## Chunk 3: HTTP Caching (Task 3)
+## Chunk 4: Message Broadcast Enrichment (Task 4)
 
-### Task 3: Add ETag + Cache-Control to read-heavy endpoints
+### Task 4: Eliminate read-after-write in message send pipeline
 
-Four read-heavy REST endpoints return responses without HTTP caching headers. Adding appropriate headers enables:
-- **ETag endpoints** (conversations, messages): `If-None-Match` → 304 Not Modified (saves bandwidth)
-- **max-age endpoints** (posts/feed, users): simple time-based caching (reduces request frequency)
+**Bug:** `MessagingService.handleMessage()` returns a raw `Message` object (no sender, no attachments, no replyTo). `MessageHandler.ts:257` then calls `_fetchMessageForBroadcast(response.data.id)` — a full `prisma.message.findUnique` with nested includes. This is an **extra DB round-trip on every single message sent**.
+
+The fix: have `MessageProcessor.saveMessage()` return the enriched message (with sender + replyTo), or have `MessagingService` do the enrichment before returning.
 
 **Files:**
-- Create: `services/gateway/src/utils/etag.ts`
-- Modify: `services/gateway/src/routes/conversations/core.ts` (GET /conversations)
-- Modify: `services/gateway/src/routes/conversations/messages.ts` (GET /conversations/:id/messages)
-- Modify: `services/gateway/src/routes/posts/feed.ts` (GET /posts/feed)
-- Modify: `services/gateway/src/routes/users.ts` or equivalent (GET /users/:id)
+- Modify: `services/gateway/src/services/messaging/MessageProcessor.ts` (saveMessage return enriched)
+- Modify: `services/gateway/src/socketio/handlers/MessageHandler.ts:255-264` (use response.data directly)
 
 **Context:**
-- `Cache-Control: private, no-cache` = always revalidate but allow client-side caching for conditional requests
-- `Cache-Control: private, max-age=30` = cache for 30s without revalidation (for feed)
-- `Cache-Control: private, max-age=60` = cache for 60s (for user profiles)
-- ETag = MD5 hash of JSON body. Server computes full response to check ETag — savings are on bandwidth (no body in 304), not server computation
-- For active conversations, ETag will differ on every poll (new messages). The real win is on the **conversation list** endpoint when nothing changed.
+- `MessageProcessor.saveMessage()` currently calls `prisma.message.create()` and returns the raw `Message`
+- The `_fetchMessageForBroadcast()` include is: sender (with user), attachments, replyTo (with sender.user)
+- After `saveMessage()`, we know the senderId and replyToId — we can include them in the create query
 
-- [ ] **Step 1: Create ETag utility**
+- [ ] **Step 1: Read MessageProcessor.saveMessage()**
 
-Create `services/gateway/src/utils/etag.ts`:
+Read `services/gateway/src/services/messaging/MessageProcessor.ts`. Find `saveMessage()` and understand what it creates. Look at the `prisma.message.create()` call.
+
+- [ ] **Step 2: Read _fetchMessageForBroadcast() include shape**
+
+Read `services/gateway/src/socketio/handlers/MessageHandler.ts:495-540`. Copy the exact `include` structure used in `_fetchMessageForBroadcast()`.
+
+- [ ] **Step 3: Add `include` to `prisma.message.create()` in saveMessage()**
+
+In `MessageProcessor.saveMessage()`, change the `prisma.message.create()` to include the same relations:
 
 ```typescript
-import { createHash } from 'crypto';
-import { FastifyReply, FastifyRequest } from 'fastify';
-
-export function generateETag(payload: unknown): string {
-  const json = JSON.stringify(payload);
-  const hash = createHash('md5').update(json).digest('hex');
-  return `"${hash}"`;
-}
-
-export function sendWithETag(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  payload: unknown,
-  cacheControl: string = 'private, no-cache'
-): void {
-  const etag = generateETag(payload);
-
-  reply.header('Cache-Control', cacheControl);
-  reply.header('ETag', etag);
-
-  const ifNoneMatch = request.headers['if-none-match'];
-  if (ifNoneMatch === etag) {
-    reply.status(304).send();
-    return;
+const message = await this.prisma.message.create({
+  data: { /* existing data */ },
+  include: {
+    sender: {
+      select: {
+        id: true,
+        displayName: true,
+        avatar: true,
+        type: true,
+        nickname: true,
+        userId: true,
+        user: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            firstName: true,
+            lastName: true,
+            avatar: true
+          }
+        }
+      }
+    },
+    attachments: true,
+    replyTo: {
+      include: {
+        sender: {
+          select: {
+            id: true,
+            displayName: true,
+            avatar: true,
+            type: true,
+            nickname: true,
+            userId: true,
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                firstName: true,
+                lastName: true,
+                avatar: true
+              }
+            }
+          }
+        }
+      }
+    }
   }
-
-  reply.send(payload);
-}
-
-export function sendWithCacheControl(
-  reply: FastifyReply,
-  payload: unknown,
-  maxAgeSeconds: number
-): void {
-  reply.header('Cache-Control', `private, max-age=${maxAgeSeconds}`);
-  reply.send(payload);
-}
-```
-
-- [ ] **Step 2: Apply ETag to GET /conversations**
-
-In `services/gateway/src/routes/conversations/core.ts`, add import at top:
-```typescript
-import { sendWithETag } from '../../utils/etag';
-```
-
-Find the `reply.send(...)` at line 509 (the conversation list response). Replace:
-
-```typescript
-// BEFORE:
-reply.send({
-  success: true,
-  data: conversationsWithUnreadCount,
-  pagination: { limit, offset, total: totalCount, hasMore },
-  cursorPagination: cursorPaginationMeta
-});
-
-// AFTER:
-sendWithETag(request, reply, {
-  success: true,
-  data: conversationsWithUnreadCount,
-  pagination: { limit, offset, total: totalCount, hasMore },
-  cursorPagination: cursorPaginationMeta
 });
 ```
 
-- [ ] **Step 3: Apply ETag to GET /conversations/:id/messages**
+This makes `saveMessage()` return the enriched message in a single DB call instead of requiring a second fetch.
 
-In `services/gateway/src/routes/conversations/messages.ts`, add import at top:
-```typescript
-import { sendWithETag } from '../../utils/etag';
-```
+- [ ] **Step 4: Update MessageHandler to skip re-fetch**
 
-Find `reply.send(responsePayload)` at line 949. Replace:
+In `MessageHandler.ts`, around line 255-264, the code currently does:
 
 ```typescript
-// BEFORE:
-reply.send(responsePayload);
-
-// AFTER:
-sendWithETag(request, reply, responsePayload);
+if (response.success && response.data?.id) {
+  const message = await this._fetchMessageForBroadcast(response.data.id);
+  if (message) {
+    await invalidateConversationCacheAsync(message.conversationId, this.prisma);
+    await this.broadcastNewMessage(message, message.conversationId, socket);
+    await this._createMessageNotifications(message, resolvedParticipantId);
+  }
+}
 ```
 
-- [ ] **Step 4: Apply max-age to GET /posts/feed**
+Change to use `response.data` directly (it now has the enriched shape):
 
-Find the feed route file. Read it to locate the response `reply.send()`. Add:
 ```typescript
-import { sendWithCacheControl } from '../../utils/etag';
+if (response.success && response.data) {
+  const message = response.data;
+  await invalidateConversationCacheAsync(message.conversationId, this.prisma);
+  await this.broadcastNewMessage(message, message.conversationId, socket);
+  await this._createMessageNotifications(message, resolvedParticipantId);
+}
 ```
 
-Replace `reply.send(payload)` with `sendWithCacheControl(reply, payload, 30)`.
+**Note:** `response.data` is typed as `{ ...Message, timestamp }`. With the enriched include, it now has `sender`, `attachments`, `replyTo`. If TypeScript complains about the type, update the `MessageResponse` type in MessagingService to reflect the enriched shape, or cast appropriately.
 
-If the feed response is complex (multiple `reply.send` paths), just add the header before the existing `reply.send`:
-```typescript
-reply.header('Cache-Control', 'private, max-age=30');
-reply.send(payload); // existing line unchanged
-```
+- [ ] **Step 5: Keep `_fetchMessageForBroadcast()` but mark as fallback**
 
-- [ ] **Step 5: Apply max-age to GET /users/:id**
-
-Find the users route file. Read it to locate the GET /:id response. Add:
-```typescript
-reply.header('Cache-Control', 'private, max-age=60');
-```
-before the existing `reply.send()`.
+Don't delete `_fetchMessageForBroadcast()` yet — other call sites (forward handling at line 230-253) may still use it. Add a comment: `// Fallback — saveMessage now returns enriched message, prefer response.data`.
 
 - [ ] **Step 6: Build gateway**
 
@@ -482,24 +561,82 @@ Expected: No errors
 - [ ] **Step 7: Commit**
 
 ```bash
-git add services/gateway/src/utils/etag.ts services/gateway/src/routes/conversations/core.ts services/gateway/src/routes/conversations/messages.ts services/gateway/src/routes/posts/ services/gateway/src/routes/users.ts
-git commit -m "perf(gateway): add HTTP caching headers to read-heavy endpoints
+git add services/gateway/src/services/messaging/MessageProcessor.ts services/gateway/src/socketio/handlers/MessageHandler.ts
+git commit -m "perf(gateway): eliminate read-after-write in message send pipeline
 
-GET /conversations, /messages: ETag + Cache-Control: private, no-cache
-  → enables 304 Not Modified when data unchanged
-GET /posts/feed: Cache-Control: private, max-age=30
-GET /users/:id: Cache-Control: private, max-age=60"
+MessageProcessor.saveMessage() now returns the enriched message (with
+sender, attachments, replyTo) via include in prisma.message.create().
+MessageHandler no longer calls _fetchMessageForBroadcast() for the
+normal send path — saves 1 DB round-trip per message sent."
+```
+
+---
+
+## Chunk 5: Lightweight HTTP Caching (Task 5)
+
+### Task 5: Add `Cache-Control` headers to read-heavy endpoints
+
+**Scope:** Add `Cache-Control` headers only. No ETag (clients don't send `If-None-Match` yet). No `max-age` on dynamic endpoints (stale data bugs). This is the minimum useful first step.
+
+**Why not ETag now:** Zero clients (iOS SDK, web) send `If-None-Match`. The entire 304 path would be dead code. Adding `@fastify/etag` or custom ETag requires a coordinated cross-platform effort (gateway + SDK + web). Deferred.
+
+**Why not max-age on feed/users:** `max-age=30` on a social feed = user posts and doesn't see it for 30s. `max-age=60` on user profile = stale `isOnline` for 60s. Both are unacceptable product regressions.
+
+**Files:**
+- Modify: `services/gateway/src/routes/conversations/core.ts` (GET /conversations)
+- Modify: `services/gateway/src/routes/conversations/messages.ts` (GET /messages)
+
+- [ ] **Step 1: Add `Cache-Control: private, no-cache` to GET /conversations**
+
+In `services/gateway/src/routes/conversations/core.ts`, before the `reply.send(...)` at line 509:
+
+```typescript
+reply.header('Cache-Control', 'private, no-cache');
+reply.send({
+  success: true,
+  data: conversationsWithUnreadCount,
+  // ...
+});
+```
+
+`no-cache` means: the browser/proxy CAN cache the response, but MUST revalidate with the server before using it. This is preparation for when ETag is added later — the cache will have something to revalidate against.
+
+- [ ] **Step 2: Add `Cache-Control: private, no-cache` to GET /messages**
+
+In `services/gateway/src/routes/conversations/messages.ts`, before the `reply.send(responsePayload)` at line 949:
+
+```typescript
+reply.header('Cache-Control', 'private, no-cache');
+reply.send(responsePayload);
+```
+
+- [ ] **Step 3: Build gateway**
+
+Run: `cd services/gateway && npx tsc --noEmit`
+Expected: No errors
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add services/gateway/src/routes/conversations/core.ts services/gateway/src/routes/conversations/messages.ts
+git commit -m "perf(gateway): add Cache-Control headers to conversation/messages endpoints
+
+Adds Cache-Control: private, no-cache to GET /conversations and
+GET /conversations/:id/messages. Prepares for future ETag support —
+once clients send If-None-Match, these cached responses can be
+revalidated without full re-transfer."
 ```
 
 ---
 
 ## Post-Implementation Verification
 
-After all 3 tasks:
+After all 5 tasks:
 
 - [ ] **Build gateway:** `cd services/gateway && npx tsc --noEmit`
 - [ ] **Start gateway:** verify it starts without errors in tmux window 1
-- [ ] **Test ConversationId cache:** join a conversation via Socket.IO twice, verify second join doesn't log a Prisma query for identifier resolution
-- [ ] **Test RedisWrapper:** verify circuit breaker logs show `CLOSED` state during normal operation. Stop Redis briefly and verify it goes OPEN then recovers to CLOSED after restart.
-- [ ] **Test ETag:** `curl -v -H "Authorization: Bearer {token}" http://localhost:3000/api/v1/conversations` → verify `ETag` and `Cache-Control` headers. Resend with `-H "If-None-Match: {etag}"` → verify 304 response.
-- [ ] **Test max-age:** `curl -v http://localhost:3000/api/v1/posts/feed` → verify `Cache-Control: private, max-age=30`
+- [ ] **Test T1 (auth invalidation):** update user language via `PATCH /users/profile`, immediately `GET /conversations` and verify the auth context has the new language (check gateway logs for cache MISS after update)
+- [ ] **Test T2 (ConversationId cache):** join a conversation via Socket.IO, join again — verify no Prisma query on second join (grep logs for `[NORMALIZE]`)
+- [ ] **Test T3 (CircuitBreaker):** check `/health/metrics` endpoint — verify Redis circuit breaker stats are present (`state: CLOSED`)
+- [ ] **Test T4 (enriched message):** send a message via Socket.IO, verify the broadcast includes `sender.user.username` and `attachments` without a second DB fetch (grep logs for `_fetchMessageForBroadcast`)
+- [ ] **Test T5 (Cache-Control):** `curl -v -H "Authorization: Bearer {token}" http://localhost:3000/api/v1/conversations` → verify `Cache-Control: private, no-cache` header
