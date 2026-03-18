@@ -69,10 +69,12 @@ export class NotFoundError extends BaseAppError {
   }
 }
 
-export class UserNotFoundError extends NotFoundError {
+export class UserNotFoundError extends BaseAppError {
   constructor(identifier?: string) {
-    super('Utilisateur', identifier);
-    this.code = 'USER_NOT_FOUND';
+    const message = identifier
+      ? `Utilisateur avec l'identifiant ${identifier} non trouvé`
+      : `Utilisateur non trouvé`;
+    super(message, 404, 'USER_NOT_FOUND');
   }
 }
 
@@ -84,24 +86,21 @@ export class ConflictError extends BaseAppError {
   }
 }
 
-export class UserAlreadyExistsError extends ConflictError {
+export class UserAlreadyExistsError extends BaseAppError {
   constructor(field: 'email' | 'username', value: string) {
-    super(`Un utilisateur avec ${field === 'email' ? 'cet email' : 'ce nom d\'utilisateur'} existe déjà: ${value}`);
-    this.code = 'USER_ALREADY_EXISTS';
+    super(`Un utilisateur avec ${field === 'email' ? 'cet email' : 'ce nom d\'utilisateur'} existe déjà: ${value}`, 409, 'USER_ALREADY_EXISTS');
   }
 }
 
-export class DuplicateEmailError extends ConflictError {
+export class DuplicateEmailError extends BaseAppError {
   constructor(email: string) {
-    super(`Un compte avec l'email ${email} existe déjà`);
-    this.code = 'DUPLICATE_EMAIL';
+    super(`Un compte avec l'email ${email} existe déjà`, 409, 'DUPLICATE_EMAIL');
   }
 }
 
-export class DuplicateUsernameError extends ConflictError {
+export class DuplicateUsernameError extends BaseAppError {
   constructor(username: string) {
-    super(`Le nom d'utilisateur ${username} est déjà pris`);
-    this.code = 'DUPLICATE_USERNAME';
+    super(`Le nom d'utilisateur ${username} est déjà pris`, 409, 'DUPLICATE_USERNAME');
   }
 }
 
@@ -116,10 +115,12 @@ export class ValidationError extends BaseAppError {
   }
 }
 
-export class InvalidInputError extends ValidationError {
+export class InvalidInputError extends BaseAppError {
+  public readonly errors: Record<string, string>;
+
   constructor(field: string, message: string) {
-    super(`Champ invalide: ${field}`, { [field]: message });
-    this.code = 'INVALID_INPUT';
+    super(`Champ invalide: ${field}`, 400, 'INVALID_INPUT');
+    this.errors = { [field]: message };
   }
 }
 
@@ -166,11 +167,12 @@ export class RateLimitError extends BaseAppError {
   }
 }
 
-export class TooManyLoginAttemptsError extends RateLimitError {
+export class TooManyLoginAttemptsError extends BaseAppError {
+  public readonly retryAfter: number;
+
   constructor(retryAfter: number) {
-    super(retryAfter);
-    this.message = `Trop de tentatives de connexion échouées. Réessayez dans ${retryAfter} secondes`;
-    this.code = 'TOO_MANY_LOGIN_ATTEMPTS';
+    super(`Trop de tentatives de connexion échouées. Réessayez dans ${retryAfter} secondes`, 429, 'TOO_MANY_LOGIN_ATTEMPTS');
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -247,8 +249,8 @@ export function errorHandler(error: Error, request: any, reply: any) {
       error: {
         code: error.code,
         message: error.message,
-        ...(error instanceof ValidationError && { errors: error.errors }),
-        ...(error instanceof RateLimitError && { retryAfter: error.retryAfter }),
+        ...('errors' in error && { errors: (error as any).errors }),
+        ...('retryAfter' in error && { retryAfter: (error as any).retryAfter }),
         ...(error instanceof UserLockedError && error.lockedUntil && {
           lockedUntil: error.lockedUntil.toISOString()
         })
