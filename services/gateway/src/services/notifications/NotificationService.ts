@@ -32,12 +32,16 @@ type NotificationActor = {
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import type { Server as SocketIOServer } from 'socket.io';
+import { PushNotificationService } from '../PushNotificationService';
+import { EmailService } from '../EmailService';
 
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
   private recentMentions: Map<string, number[]> = new Map();
   private readonly MAX_MENTIONS_PER_MINUTE = 5;
   private readonly MENTION_WINDOW_MS = 60000; // 1 minute
+  private pushService?: PushNotificationService;
+  private emailService?: EmailService;
 
   constructor(
     private prisma: PrismaClient,
@@ -244,6 +248,63 @@ export class NotificationService {
       // Émettre via Socket.IO
       if (this.io) {
         this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, formatted);
+      }
+
+      // Send push notification if user is offline
+      if (this.pushService && this.io) {
+        try {
+          const sockets = await this.io.in(params.userId).fetchSockets();
+          if (sockets.length === 0) {
+            this.pushService.sendToUser({
+              userId: params.userId,
+              payload: {
+                title: params.actor?.displayName || 'Meeshy',
+                body: params.content.substring(0, 200),
+                data: {
+                  type: params.type,
+                  conversationId: params.context.conversationId || '',
+                  messageId: params.context.messageId || '',
+                },
+              },
+            }).catch(err => {
+              notificationLogger.error('Push notification failed', { error: err, userId: params.userId });
+            });
+          }
+        } catch (err) {
+          // fetchSockets can fail — non-blocking
+        }
+      }
+
+      // Send immediate email for high-priority notifications to offline users
+      if (this.emailService && params.priority === 'high') {
+        try {
+          const sockets = this.io ? await this.io.in(params.userId).fetchSockets() : [];
+          if (sockets.length === 0) {
+            const { getCacheStore } = await import('../CacheStore');
+            const cache = getCacheStore();
+            const throttleKey = `notif:email:throttle:${params.userId}`;
+            const canSend = await cache.setnx(throttleKey, '1', 300);
+            if (canSend) {
+              const user = await this.prisma.user.findUnique({
+                where: { id: params.userId },
+                select: { email: true, systemLanguage: true, username: true }
+              });
+              if (user?.email) {
+                this.emailService.sendSecurityAlertEmail({
+                  to: user.email,
+                  name: user.username || 'User',
+                  language: user.systemLanguage || 'fr',
+                  alertType: params.type,
+                  details: params.content.substring(0, 500),
+                }).catch(err => {
+                  notificationLogger.error('Immediate email failed', { error: err, userId: params.userId });
+                });
+              }
+            }
+          }
+        } catch (err) {
+          // Non-blocking
+        }
       }
 
       return formatted;
@@ -1611,5 +1672,15 @@ export class NotificationService {
       hasThisIo: !!this.io,
     });
     // userSocketsMap non utilisé dans V2 (utilise io.to(userId) directement)
+  }
+
+  setPushNotificationService(pushService: PushNotificationService): void {
+    this.pushService = pushService;
+    notificationLogger.info('✅ PushNotificationService configured');
+  }
+
+  setEmailService(emailService: EmailService): void {
+    this.emailService = emailService;
+    notificationLogger.info('✅ EmailService configured for immediate notifications');
   }
 }
