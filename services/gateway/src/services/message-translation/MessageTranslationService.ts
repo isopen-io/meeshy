@@ -10,7 +10,6 @@ import { EventEmitter } from 'events';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import * as crypto from 'crypto';
-import { Redis } from 'ioredis';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZmqTranslationClient, TranslationRequest, TranslationResult } from '../zmq-translation';
 import { ZMQSingleton } from '../ZmqSingleton';
@@ -51,7 +50,6 @@ export class MessageTranslationService extends EventEmitter {
   private readonly prisma: PrismaClient;
   private zmqClient: ZmqTranslationClient | null = null;
   private isInitialized: boolean = false;
-  private redis: Redis | null = null;
   private jobMappingService: MultiLevelJobMappingCache | null = null;
 
   // Composition de modules
@@ -64,17 +62,16 @@ export class MessageTranslationService extends EventEmitter {
   private readonly processedMessages = new Set<string>();
   private readonly processedTasks = new Set<string>();
 
-  constructor(prisma: PrismaClient, redis?: Redis, jobMappingCache?: MultiLevelJobMappingCache) {
+  constructor(prisma: PrismaClient, jobMappingCache?: MultiLevelJobMappingCache) {
     super();
     this.prisma = prisma;
-    this.redis = redis || null;
     this.translationCache = new TranslationCache(1000);
     this.languageCache = new LanguageCache(5 * 60 * 1000, 100);
     this.stats = new TranslationStats();
     this.encryptionHelper = new EncryptionHelper(prisma);
 
     // Utiliser le cache partagé si fourni, sinon en créer un (rétro-compatibilité)
-    this.jobMappingService = jobMappingCache || new MultiLevelJobMappingCache(this.redis || undefined);
+    this.jobMappingService = jobMappingCache || new MultiLevelJobMappingCache();
   }
 
   getZmqClient(): ZmqTranslationClient | null {

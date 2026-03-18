@@ -20,7 +20,6 @@ import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { Redis } from 'ioredis';
 import winston from 'winston';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -89,6 +88,7 @@ import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
 import { shutdownEncryptionService } from './services/EncryptionService';
 import { MultiLevelJobMappingCache } from './services/MultiLevelJobMappingCache';
+import { getCacheStore } from './services/CacheStore';
 import { BackgroundJobsManager } from './jobs';
 import { EmailService } from './services/EmailService';
 import { TusCleanupService } from './services/TusCleanupService';
@@ -256,7 +256,6 @@ declare module 'fastify' {
 class MeeshyServer {
   private server: FastifyInstance;
   private prisma: PrismaClient;
-  private redis: Redis | null = null;
   private translationService: MessageTranslationService;
   private messagingService: MessagingService;
   private mentionService: MentionService;
@@ -336,49 +335,6 @@ class MeeshyServer {
       },
     }) as unknown as PrismaClient;
 
-    // Initialiser Redis si l'URL est configurée (optionnel)
-    if (process.env.REDIS_URL) {
-      try {
-        this.redis = new Redis(process.env.REDIS_URL, {
-          maxRetriesPerRequest: 1,
-          enableReadyCheck: true,
-          lazyConnect: true,
-          enableOfflineQueue: false,
-          retryStrategy: (times: number) => {
-            if (times > 3) {
-              logger.warn('⚠️ Redis max retries reached — services will operate without Redis');
-              return null;
-            }
-            return Math.min(times * 1000, 3000);
-          },
-        });
-
-        this.redis.on('connect', () => {
-          logger.info('🔴 Redis connected successfully');
-        });
-
-        this.redis.on('error', (err) => {
-          const suppressedErrors = ['ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ETIMEDOUT'];
-          if (!suppressedErrors.some(code => err.message?.includes(code))) {
-            logger.error('❌ Redis connection error:', err);
-          }
-        });
-
-        this.redis.connect().catch(() => {
-          logger.warn('⚠️ Redis connection failed — services will use memory fallback');
-          this.redis = null;
-        });
-
-        logger.info('🔴 Redis initialization started...');
-      } catch (error) {
-        logger.error('❌ Failed to initialize Redis:', error);
-        logger.warn('⚠️ Continuing without Redis - cache will use memory only');
-        this.redis = null;
-      }
-    } else {
-      logger.info('ℹ️ REDIS_URL not configured - cache will use memory only');
-    }
-
     // NOUVEAU: Initialiser le StatusService en premier (requis par AuthMiddleware)
     this.statusService = new StatusService(this.prisma);
 
@@ -386,10 +342,10 @@ class MeeshyServer {
     this.authMiddleware = new AuthMiddleware(this.prisma, this.statusService);
 
     // Initialiser le cache multi-niveau partagé pour les mappings de jobs (avant MessageTranslationService)
-    this.jobMappingCache = new MultiLevelJobMappingCache(this.redis || undefined);
+    this.jobMappingCache = new MultiLevelJobMappingCache(getCacheStore());
 
-    // Initialiser le service de traduction avec Redis optionnel et le cache partagé
-    this.translationService = new MessageTranslationService(this.prisma, this.redis || undefined, this.jobMappingCache);
+    // Initialiser le service de traduction avec le cache partagé
+    this.translationService = new MessageTranslationService(this.prisma, this.jobMappingCache);
 
     // Initialiser le service de messaging
     this.messagingService = new MessagingService(this.prisma, this.translationService);
@@ -401,8 +357,7 @@ class MeeshyServer {
     this.socketIOHandler = new MeeshySocketIOHandler(
       this.prisma,
       config.jwtSecret,
-      this.translationService, // ← Instance initialisée qui reçoit les événements ZMQ
-      this.redis || undefined
+      this.translationService // ← Instance initialisée qui reçoit les événements ZMQ
     );
 
     // Initialiser le service de nettoyage automatique des appels
@@ -749,7 +704,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Decorators for dependency injection
     this.server.decorate('prisma', this.prisma);
-    this.server.decorate('redis', this.redis);
+    this.server.decorate('redis', getCacheStore().getNativeClient());
     this.server.decorate('translationService', this.translationService);
     this.server.decorate('mentionService', this.mentionService);
     this.server.decorate('socketIOHandler', this.socketIOHandler);

@@ -17,8 +17,7 @@ export class MeeshySocketIOHandler {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly jwtSecret: string,
-    private readonly translationService: MessageTranslationService,
-    private readonly redis?: any // Redis est optionnel
+    private readonly translationService: MessageTranslationService
   ) {
     // Ne pas initialiser le manager ici, attendre setupSocketIO
   }
@@ -30,8 +29,8 @@ export class MeeshySocketIOHandler {
     // Récupérer le serveur HTTP sous-jacent de Fastify
     const httpServer = fastify.server as HTTPServer;
 
-    // Initialiser Socket.IO avec le serveur HTTP, translationService et Redis optionnel
-    this.socketIOManager = new MeeshySocketIOManager(httpServer, this.prisma, this.translationService, this.redis);
+    // Initialiser Socket.IO avec le serveur HTTP et translationService
+    this.socketIOManager = new MeeshySocketIOManager(httpServer, this.prisma, this.translationService);
     await this.socketIOManager.initialize();
 
     // Ajouter une route pour les statistiques Socket.IO

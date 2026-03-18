@@ -107,8 +107,7 @@ export class MeeshySocketIOManager {
   constructor(
     httpServer: HTTPServer,
     prisma: PrismaClient,
-    translationService: MessageTranslationService,
-    redis?: any
+    translationService: MessageTranslationService
   ) {
     this.prisma = prisma;
     this.translationService = translationService;
