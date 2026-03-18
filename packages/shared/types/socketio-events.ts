@@ -851,6 +851,7 @@ export interface UserPermissions {
  */
 export interface SocketIOUser {
   readonly id: string;
+  readonly userId?: string; // User.id when sender is a Participant (post Participant model migration)
   readonly username: string;
   readonly firstName: string;
   readonly lastName: string;

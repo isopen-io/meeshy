@@ -431,6 +431,7 @@ class MeeshySocketIOService {
     const defaultSenderId = getSenderUserId(rawSender ?? null) || socketMessage.senderId || 'unknown';
     const defaultSender = {
       id: defaultSenderId,
+      userId: defaultSenderId, // Preserve for getSenderUserId() resolution
       username: '',
       firstName: '',
       lastName: '',

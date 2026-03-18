@@ -140,6 +140,7 @@ export class TransformersService {
   private createDefaultUser(id: string): User {
     return {
       id,
+      userId: id, // Preserve for getSenderUserId() resolution
       username: '',
       firstName: '',
       lastName: '',
@@ -185,6 +186,7 @@ export class TransformersService {
 
       return {
         id: String(id),
+        userId: String(id), // Preserve userId for getSenderUserId() resolution
         username: username ? String(username) : '',
         firstName: String(firstName),
         lastName: String(lastName),
