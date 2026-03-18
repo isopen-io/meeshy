@@ -83,10 +83,9 @@ export class RedisWrapper {
       });
 
       this.redis.on('error', (error) => {
-        // Ignorer les erreurs communes et ne logger qu'une fois
-        if (!error.message.includes('ECONNRESET') &&
-            !error.message.includes('ECONNREFUSED') &&
-            !error.message.includes('EPIPE')) {
+        // Suppress known transient errors that flood logs during Redis downtime
+        const suppressedErrors = ['ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ETIMEDOUT'];
+        if (!suppressedErrors.some(code => error.message.includes(code))) {
           logger.warn('⚠️ Redis error', { error: error.message });
         }
         this.isRedisAvailable = false;

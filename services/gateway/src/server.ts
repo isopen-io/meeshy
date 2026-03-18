@@ -340,9 +340,17 @@ class MeeshyServer {
     if (process.env.REDIS_URL) {
       try {
         this.redis = new Redis(process.env.REDIS_URL, {
-          maxRetriesPerRequest: 3,
+          maxRetriesPerRequest: 1,
           enableReadyCheck: true,
-          lazyConnect: false,
+          lazyConnect: true,
+          enableOfflineQueue: false,
+          retryStrategy: (times: number) => {
+            if (times > 3) {
+              logger.warn('⚠️ Redis max retries reached — services will operate without Redis');
+              return null;
+            }
+            return Math.min(times * 1000, 3000);
+          },
         });
 
         this.redis.on('connect', () => {
@@ -350,9 +358,15 @@ class MeeshyServer {
         });
 
         this.redis.on('error', (err) => {
-          logger.error('❌ Redis connection error:', err);
-          // Ne pas faire crash l'app si Redis est down
-          // Le cache multi-niveau fonctionnera en mode mémoire seule
+          const suppressedErrors = ['ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ETIMEDOUT'];
+          if (!suppressedErrors.some(code => err.message?.includes(code))) {
+            logger.error('❌ Redis connection error:', err);
+          }
+        });
+
+        this.redis.connect().catch(() => {
+          logger.warn('⚠️ Redis connection failed — services will use memory fallback');
+          this.redis = null;
         });
 
         logger.info('🔴 Redis initialization started...');
