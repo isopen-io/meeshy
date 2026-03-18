@@ -57,9 +57,6 @@ export interface UserResponseData {
   regionalLanguage: string;
   customDestinationLanguage: string | null;
   autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
   isOnline: boolean;
   lastActiveAt: Date | null;
   emailVerifiedAt: Date | null;
@@ -112,9 +109,6 @@ export function formatUserResponse(user: any, permissions?: any): UserResponseDa
     regionalLanguage: user.regionalLanguage,
     customDestinationLanguage: user.customDestinationLanguage,
     autoTranslateEnabled: user.autoTranslateEnabled,
-    translateToSystemLanguage: user.translateToSystemLanguage,
-    translateToRegionalLanguage: user.translateToRegionalLanguage,
-    useCustomDestination: user.useCustomDestination,
     isOnline: user.isOnline,
     lastActiveAt: user.lastActiveAt,
     emailVerifiedAt: user.emailVerifiedAt,

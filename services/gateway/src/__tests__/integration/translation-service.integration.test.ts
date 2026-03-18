@@ -578,9 +578,7 @@ describe('MessageTranslationService - Conversation Languages Integration', () =>
     await prisma.userFeature.create({
       data: {
         userId: user1.id,
-        autoTranslateEnabled: true,
-        translateToSystemLanguage: true,
-        translateToRegionalLanguage: true
+        autoTranslateEnabled: true
       }
     });
 
@@ -598,9 +596,7 @@ describe('MessageTranslationService - Conversation Languages Integration', () =>
     await prisma.userFeature.create({
       data: {
         userId: user2.id,
-        autoTranslateEnabled: true,
-        translateToSystemLanguage: true,
-        useCustomDestination: true
+        autoTranslateEnabled: true
       }
     });
 

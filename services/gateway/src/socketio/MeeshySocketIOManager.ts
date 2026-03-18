@@ -1471,9 +1471,6 @@ export class MeeshySocketIOManager {
               systemLanguage: 'fr',
               regionalLanguage: 'fr',
               autoTranslateEnabled: true,
-              translateToSystemLanguage: true,
-              translateToRegionalLanguage: false,
-              useCustomDestination: false,
               isActive: true,
               createdAt: new Date(),
               updatedAt: new Date()

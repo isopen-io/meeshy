@@ -169,9 +169,6 @@ const mockUser = {
   regionalLanguage: 'fr',
   customDestinationLanguage: null,
   autoTranslateEnabled: true,
-  translateToSystemLanguage: true,
-  translateToRegionalLanguage: false,
-  useCustomDestination: false,
   isActive: true,
   deactivatedAt: null,
   createdAt: new Date(),
@@ -205,9 +202,6 @@ const mockSocketIOUser = {
   regionalLanguage: 'fr',
   customDestinationLanguage: null,
   autoTranslateEnabled: true,
-  translateToSystemLanguage: true,
-  translateToRegionalLanguage: false,
-  useCustomDestination: false,
   isActive: true,
   deactivatedAt: null,
   createdAt: expect.any(Date),
@@ -958,9 +952,6 @@ describe('AuthService', () => {
         systemLanguage: mockUser.systemLanguage,
         regionalLanguage: mockUser.regionalLanguage,
         autoTranslateEnabled: mockUser.autoTranslateEnabled,
-        translateToSystemLanguage: mockUser.translateToSystemLanguage,
-        translateToRegionalLanguage: mockUser.translateToRegionalLanguage,
-        useCustomDestination: mockUser.useCustomDestination,
         isActive: mockUser.isActive
       });
     });

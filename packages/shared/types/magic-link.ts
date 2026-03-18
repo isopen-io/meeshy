@@ -100,9 +100,6 @@ export interface MagicLinkUser {
   readonly regionalLanguage: string | null;
   readonly customDestinationLanguage: string | null;
   readonly autoTranslateEnabled: boolean;
-  readonly translateToSystemLanguage: boolean;
-  readonly translateToRegionalLanguage: boolean;
-  readonly useCustomDestination: boolean;
   readonly isActive: boolean;
   readonly createdAt: Date;
   readonly updatedAt: Date;

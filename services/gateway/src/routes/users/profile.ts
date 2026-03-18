@@ -170,20 +170,6 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       const featureUpdateData: any = {};
       if (body.autoTranslateEnabled !== undefined) featureUpdateData.autoTranslateEnabled = body.autoTranslateEnabled;
-      if (body.translateToSystemLanguage !== undefined) featureUpdateData.translateToSystemLanguage = body.translateToSystemLanguage;
-      if (body.translateToRegionalLanguage !== undefined) featureUpdateData.translateToRegionalLanguage = body.translateToRegionalLanguage;
-      if (body.useCustomDestination !== undefined) featureUpdateData.useCustomDestination = body.useCustomDestination;
-
-      if (body.translateToSystemLanguage === true) {
-        featureUpdateData.translateToRegionalLanguage = false;
-        featureUpdateData.useCustomDestination = false;
-      } else if (body.translateToRegionalLanguage === true) {
-        featureUpdateData.translateToSystemLanguage = false;
-        featureUpdateData.useCustomDestination = false;
-      } else if (body.useCustomDestination === true) {
-        featureUpdateData.translateToSystemLanguage = false;
-        featureUpdateData.translateToRegionalLanguage = false;
-      }
 
       if (body.email) {
         const normalizedEmail = normalizeEmail(body.email);
@@ -258,10 +244,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       const responseUser = {
         ...updatedUser,
         // TODO: Load from UserPreferences.application
-        autoTranslateEnabled: true,
-        translateToSystemLanguage: true,
-        translateToRegionalLanguage: false,
-        useCustomDestination: false
+        autoTranslateEnabled: true
       };
 
       return reply.send({
@@ -980,9 +963,6 @@ export async function getUserById(fastify: FastifyInstance) {
                 regionalLanguage: { type: 'string' },
                 customDestinationLanguage: { type: 'string', nullable: true },
                 autoTranslateEnabled: { type: 'boolean' },
-                translateToSystemLanguage: { type: 'boolean' },
-                translateToRegionalLanguage: { type: 'boolean' },
-                useCustomDestination: { type: 'boolean' },
                 isActive: { type: 'boolean' },
                 deactivatedAt: { type: 'string', format: 'date-time', nullable: true },
                 createdAt: { type: 'string', format: 'date-time' },
@@ -1053,9 +1033,6 @@ export async function getUserById(fastify: FastifyInstance) {
         ...user,
         // TODO: Load from UserPreferences.application
         autoTranslateEnabled: true,
-        translateToSystemLanguage: true,
-        translateToRegionalLanguage: false,
-        useCustomDestination: false,
         email: '',
         phoneNumber: undefined,
         permissions: undefined,
@@ -1104,9 +1081,6 @@ function buildPublicProfile(user: Record<string, unknown>) {
   return {
     ...user,
     autoTranslateEnabled: true,
-    translateToSystemLanguage: true,
-    translateToRegionalLanguage: false,
-    useCustomDestination: false,
     email: '',
     phoneNumber: undefined,
     permissions: undefined,

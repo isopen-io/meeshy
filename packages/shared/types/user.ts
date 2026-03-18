@@ -46,9 +46,6 @@ export interface UserLanguageConfig {
   regionalLanguage: string;
   customDestinationLanguage?: string;
   autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
 }
 
 /**
@@ -106,9 +103,6 @@ export interface UserPreference {
 export interface UserFeatureData {
   twoFactorEnabledAt: Date | null;
   autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
   encryptionPreference: string;
   audioTranscriptionEnabledAt: Date | null;
 }

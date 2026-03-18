@@ -107,9 +107,6 @@ const mockUser = {
   userFeature: {
     twoFactorEnabledAt: null,
     autoTranslateEnabled: true,
-    translateToSystemLanguage: true,
-    translateToRegionalLanguage: false,
-    useCustomDestination: false,
     encryptionPreference: null
   }
 };
@@ -667,9 +664,6 @@ describe('MagicLinkService', () => {
 
         expect(result.user).toMatchObject({
           autoTranslateEnabled: true,
-          translateToSystemLanguage: true,
-          translateToRegionalLanguage: false,
-          useCustomDestination: false,
           twoFactorEnabledAt: null
         });
       });

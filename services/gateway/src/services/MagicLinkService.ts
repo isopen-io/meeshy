@@ -295,9 +295,6 @@ export class MagicLinkService {
         customDestinationLanguage: user.customDestinationLanguage,
         // TODO: Load from UserPreferences.application
         autoTranslateEnabled: true,
-        translateToSystemLanguage: true,
-        translateToRegionalLanguage: false,
-        useCustomDestination: false,
         isActive: user.isActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,

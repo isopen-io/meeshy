@@ -610,18 +610,15 @@ export class MessageTranslationService extends EventEmitter {
         if (participant.type === 'user' && participant.user) {
           logger.info(
             `   [LANG-TRACE] Registered: ${participant.user.username} (${participant.user.id}) | ` +
-            `systemLang=${participant.user.systemLanguage} | regionalLang=${participant.user.regionalLanguage} | ` +
-            `customDestinationLang=${participant.user.customDestinationLanguage}`
+            `systemLang=${participant.user.systemLanguage} | regionalLang=${participant.user.regionalLanguage}`
           );
 
-          if (participant.user.systemLanguage && participant.user.translateToSystemLanguage !== false) {
+          // autoTranslate ON → systemLanguage (toujours) + regionalLanguage (si configurée)
+          if (participant.user.systemLanguage) {
             languages.add(participant.user.systemLanguage);
           }
-          if (participant.user.regionalLanguage && participant.user.translateToRegionalLanguage !== false) {
+          if (participant.user.regionalLanguage) {
             languages.add(participant.user.regionalLanguage);
-          }
-          if (participant.user.useCustomDestination && participant.user.customDestinationLanguage) {
-            languages.add(participant.user.customDestinationLanguage);
           }
         } else {
           // Anonymous or bot participant — use participant.language

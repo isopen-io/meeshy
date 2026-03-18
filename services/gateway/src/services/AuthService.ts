@@ -1214,9 +1214,6 @@ export class AuthService {
       customDestinationLanguage: user.customDestinationLanguage,
       // TODO: Load from UserPreferences.application
       autoTranslateEnabled: true,
-      translateToSystemLanguage: true,
-      translateToRegionalLanguage: false,
-      useCustomDestination: false,
       isActive: user.isActive,
       deactivatedAt: user.deactivatedAt,
       createdAt: user.createdAt,

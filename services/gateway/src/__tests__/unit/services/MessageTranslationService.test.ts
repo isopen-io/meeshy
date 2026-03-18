@@ -1108,10 +1108,7 @@ describe('MessageTranslationService - Language Extraction and Filtering', () => 
           regionalLanguage: 'de',
           customDestinationLanguage: null,
           userFeature: {
-            autoTranslateEnabled: true,
-            translateToSystemLanguage: true,
-            translateToRegionalLanguage: true,
-            useCustomDestination: false
+            autoTranslateEnabled: true
           }
         }
       },
@@ -1121,10 +1118,7 @@ describe('MessageTranslationService - Language Extraction and Filtering', () => 
           regionalLanguage: null,
           customDestinationLanguage: 'pt',
           userFeature: {
-            autoTranslateEnabled: true,
-            translateToSystemLanguage: true,
-            translateToRegionalLanguage: false,
-            useCustomDestination: true
+            autoTranslateEnabled: true
           }
         }
       }

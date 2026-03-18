@@ -875,9 +875,6 @@ export interface SocketIOUser {
   readonly regionalLanguage: string;
   readonly customDestinationLanguage?: string;
   readonly autoTranslateEnabled: boolean;
-  readonly translateToSystemLanguage: boolean;
-  readonly translateToRegionalLanguage: boolean;
-  readonly useCustomDestination: boolean;
 
   // Account status
   readonly isActive: boolean;
@@ -996,9 +993,6 @@ export interface UserLanguageConfig {
   readonly regionalLanguage: string;
   readonly customDestinationLanguage?: string;
   readonly autoTranslateEnabled: boolean;
-  readonly translateToSystemLanguage: boolean;
-  readonly translateToRegionalLanguage: boolean;
-  readonly useCustomDestination: boolean;
 }
 
 // ===== HELPERS POUR LA GESTION DES TRADUCTIONS =====

@@ -110,9 +110,6 @@ interface LegacyUser {
   updatedAt?: Date;
   // Anciens champs à ignorer
   autoTranslateEnabled?: boolean;
-  translateToSystemLanguage?: boolean;
-  translateToRegionalLanguage?: boolean;
-  useCustomDestination?: boolean;
 }
 
 function transformUser(doc: LegacyUser) {
