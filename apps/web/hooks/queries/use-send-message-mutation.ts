@@ -12,6 +12,8 @@ interface SendMessageParams {
 
 interface OptimisticMessage {
   id: string;
+  _tempId: string;
+  _localStatus: 'sending' | 'failed';
   conversationId: string;
   content: string;
   senderId?: string;
@@ -60,9 +62,12 @@ export function useSendMessageMutation() {
         queryKeys.messages.infinite(conversationId)
       );
 
-      // Create an optimistic message
+      // Create an optimistic message with _tempId + _localStatus for dedup
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const optimisticMessage: OptimisticMessage = {
-        id: `temp-${Date.now()}`,
+        id: tempId,
+        _tempId: tempId,
+        _localStatus: 'sending',
         conversationId,
         content: data.content,
         messageType: 'text',

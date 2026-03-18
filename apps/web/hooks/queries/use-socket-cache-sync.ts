@@ -230,12 +230,67 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
+    // W6: Handler for transcription results — updates attachment transcription in cache
+    const handleTranscription = (data: { messageId: string; transcription: string; language?: string; [key: string]: unknown }) => {
+      if (!conversationId) return;
+
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(conversationId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) => {
+                if (m.id !== data.messageId) return m;
+                // Attach transcription to the first audio attachment or at message level
+                const attachments = Array.isArray((m as any).attachments) ? [...(m as any).attachments] : [];
+                const audioIdx = attachments.findIndex((a: any) => a.mimeType?.startsWith('audio/'));
+                if (audioIdx >= 0) {
+                  attachments[audioIdx] = { ...attachments[audioIdx], transcription: data.transcription, transcriptionLanguage: data.language };
+                }
+                return { ...m, attachments, transcription: data.transcription, transcriptionLanguage: data.language };
+              }),
+            })),
+          };
+        }
+      );
+    };
+
+    // W6: Handler for audio translation ready — updates attachment with translated audio URL
+    const handleAudioTranslation = (data: { messageId: string; targetLanguage: string; audioUrl?: string; [key: string]: unknown }) => {
+      if (!conversationId) return;
+
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(conversationId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) => {
+                if (m.id !== data.messageId) return m;
+                // Store translated audio metadata on the message
+                const translatedAudios = { ...((m as any).translatedAudios || {}) };
+                translatedAudios[data.targetLanguage] = { audioUrl: data.audioUrl, ...data };
+                return { ...m, translatedAudios };
+              }),
+            })),
+          };
+        }
+      );
+    };
+
     // Register listeners
     const unsubscribeMessage = meeshySocketIOService.onNewMessage(handleNewMessage);
     const unsubscribeEdit = meeshySocketIOService.onMessageEdited(handleMessageEdited);
     const unsubscribeDelete = meeshySocketIOService.onMessageDeleted(handleMessageDeleted);
     const unsubscribeTranslation = meeshySocketIOService.onTranslation(handleTranslation);
     const unsubscribeUnread = meeshySocketIOService.onUnreadUpdated(handleUnreadUpdated);
+    const unsubscribeTranscription = meeshySocketIOService.onTranscription(handleTranscription);
+    const unsubscribeAudioTranslation = meeshySocketIOService.onAudioTranslation(handleAudioTranslation);
 
     // Cleanup on unmount
     return () => {
@@ -244,6 +299,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeDelete?.();
       unsubscribeTranslation?.();
       unsubscribeUnread?.();
+      unsubscribeTranscription?.();
+      unsubscribeAudioTranslation?.();
     };
   }, [conversationId, enabled, queryClient]);
 }
