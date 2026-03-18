@@ -53,6 +53,16 @@ final class ClientInfoProviderTests: XCTestCase {
         XCTAssertFalse(version.isEmpty)
     }
 
+    // MARK: - Caching
+
+    func test_buildHeaders_returnsCachedResult() async {
+        let headers1 = await ClientInfoProvider.shared.buildHeaders()
+        let headers2 = await ClientInfoProvider.shared.buildHeaders()
+        XCTAssertEqual(headers1["X-Meeshy-Version"], headers2["X-Meeshy-Version"])
+        XCTAssertEqual(headers1["X-Meeshy-Device"], headers2["X-Meeshy-Device"])
+        XCTAssertEqual(headers1["X-Meeshy-OS"], headers2["X-Meeshy-OS"])
+    }
+
     // MARK: - Consistency
 
     func testHeadersAreConsistentAcrossCalls() async {
