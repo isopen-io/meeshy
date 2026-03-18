@@ -4,7 +4,9 @@
  */
 
 /**
- * Résout la langue préférée d'un utilisateur selon ses préférences
+ * Résout la langue préférée d'un utilisateur pour l'affichage de contenu.
+ * Retourne systemLanguage (toujours). customDestinationLanguage est réservé
+ * aux overrides manuels on-demand (onglet Language), pas à la résolution auto.
  */
 export function resolveUserLanguage(user: {
   systemLanguage?: string;
@@ -17,16 +19,30 @@ export function resolveUserLanguage(user: {
   if (user.useCustomDestination && user.customDestinationLanguage) {
     return user.customDestinationLanguage;
   }
-  
+
   if (user.translateToSystemLanguage && user.systemLanguage) {
     return user.systemLanguage;
   }
-  
+
   if (user.translateToRegionalLanguage && user.regionalLanguage) {
     return user.regionalLanguage;
   }
-  
-  return user.systemLanguage || 'fr'; // fallback
+
+  return user.systemLanguage || 'fr';
+}
+
+/**
+ * Collecte toutes les langues cibles pour la traduction automatique d'un utilisateur.
+ * autoTranslate ON → systemLanguage (toujours) + regionalLanguage (si configurée)
+ */
+export function resolveUserTranslationLanguages(user: {
+  systemLanguage?: string;
+  regionalLanguage?: string;
+}): string[] {
+  const languages: string[] = [];
+  if (user.systemLanguage) languages.push(user.systemLanguage);
+  if (user.regionalLanguage) languages.push(user.regionalLanguage);
+  return languages.length > 0 ? languages : ['fr'];
 }
 
 /**
