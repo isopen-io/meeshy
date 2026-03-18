@@ -10,7 +10,7 @@
 'use client';
 
 import { useCallback, useMemo, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
@@ -75,6 +75,48 @@ async function fetchReactions(messageId: string): Promise<ReactionState> {
       }
     );
   });
+}
+
+/**
+ * W4: Update reactionSummary on the message object inside messages.infinite cache.
+ * Scans all cached infinite message queries to find the message by ID.
+ */
+function updateReactionSummaryInMessageCache(
+  qc: QueryClient,
+  messageId: string,
+  emoji: string,
+  aggregation: ReactionAggregation,
+) {
+  const allQueries = qc.getQueriesData<{
+    pages: { messages: Array<{ id: string; reactionSummary?: Record<string, number> }> }[];
+  }>({ queryKey: queryKeys.messages.all });
+
+  for (const [queryKey, data] of allQueries) {
+    if (!data?.pages) continue;
+
+    let found = false;
+    const updated = {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        messages: page.messages.map((msg) => {
+          if (msg.id !== messageId) return msg;
+          found = true;
+          const summary = { ...(msg.reactionSummary || {}) };
+          if (aggregation.count === 0) {
+            delete summary[emoji];
+          } else {
+            summary[emoji] = aggregation.count;
+          }
+          return { ...msg, reactionSummary: summary };
+        }),
+      })),
+    };
+
+    if (found) {
+      qc.setQueryData(queryKey, updated);
+    }
+  }
 }
 
 export function useReactionsQuery({
@@ -365,6 +407,9 @@ export function useReactionsQuery({
 
       // Invalidate conversations lists (réaction ajoutée = conversation modifiée)
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
+
+      // W4: Update reactionSummary on the message object in messages.infinite cache
+      updateReactionSummaryInMessageCache(queryClient, event.messageId, event.emoji, event.aggregation);
     };
 
     const handleReactionRemoved = (event: ReactionUpdateEvent) => {
@@ -393,6 +438,9 @@ export function useReactionsQuery({
 
       // Invalidate conversations lists (réaction supprimée = conversation modifiée)
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
+
+      // W4: Update reactionSummary on the message object in messages.infinite cache
+      updateReactionSummaryInMessageCache(queryClient, event.messageId, event.emoji, event.aggregation);
     };
 
     const unsubAdded = meeshySocketIOService.onReactionAdded(handleReactionAdded);

@@ -158,8 +158,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
 
     // Handler for deleted messages
     const handleMessageDeleted = (messageId: string) => {
-      // We need to find which conversation this message belongs to
-      // For now, update messages if we have a conversationId
       if (conversationId) {
         queryClient.setQueryData(
           queryKeys.messages.infinite(conversationId),
@@ -174,13 +172,12 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
             };
           }
         );
+      } else {
+        // No conversationId available — invalidate all message queries so stale
+        // data is refetched. This handles the case where delete events arrive
+        // without a conversationId context.
+        queryClient.invalidateQueries({ queryKey: queryKeys.messages.all });
       }
-
-      // Note: If the deleted message was the lastMessage of a conversation,
-      // we would need to fetch the new lastMessage. For now, the conversation
-      // will show the deleted message until next refresh. This is acceptable
-      // since message deletion is rare. A full refresh would be needed to get
-      // the previous message as the new lastMessage.
     };
 
     // Handler for message translations — merges as Translation[] array (not Record)
