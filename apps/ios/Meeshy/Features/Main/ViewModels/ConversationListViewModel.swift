@@ -262,6 +262,49 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Edited message → update last message preview if it was the last message
+        messageSocket.messageEdited
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] apiMsg in
+                guard let self else { return }
+                let editedContent = apiMsg.content ?? ""
+                let convId = apiMsg.conversationId
+                guard let idx = self.convIndex(for: convId) else { return }
+                guard self.conversations[idx].lastMessageId == apiMsg.id else { return }
+                self.conversations[idx].lastMessagePreview = editedContent
+                self.invalidateCache()
+                // Fast-path: mise à jour directe de groupedConversations
+                for i in 0..<self.groupedConversations.count {
+                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == convId }) {
+                        self.groupedConversations[i].conversations[rowIdx].lastMessagePreview = editedContent
+                        break
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        // Deleted message → clear last message preview if it was the last message
+        messageSocket.messageDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                let convId = event.conversationId
+                guard let idx = self.convIndex(for: convId) else { return }
+                guard self.conversations[idx].lastMessageId == event.messageId else { return }
+                self.conversations[idx].lastMessagePreview = ""
+                self.conversations[idx].lastMessageId = nil
+                self.invalidateCache()
+                // Fast-path: mise à jour directe de groupedConversations
+                for i in 0..<self.groupedConversations.count {
+                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == convId }) {
+                        self.groupedConversations[i].conversations[rowIdx].lastMessagePreview = ""
+                        self.groupedConversations[i].conversations[rowIdx].lastMessageId = nil
+                        break
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
         // Typing indicator — affiche "<Auteur> écrit..." dans le row
         messageSocket.typingStarted
             .receive(on: DispatchQueue.main)
