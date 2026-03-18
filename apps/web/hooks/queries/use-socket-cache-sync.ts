@@ -183,7 +183,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // the previous message as the new lastMessage.
     };
 
-    // Handler for message translations
+    // Handler for message translations — merges as Translation[] array (not Record)
     const handleTranslation = (data: TranslationEvent) => {
       if (!conversationId) return;
 
@@ -198,15 +198,20 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               messages: page.messages.map((m) => {
                 if (m.id !== data.messageId) return m;
 
-                // Build translations object from the array
-                const newTranslations = data.translations.reduce((acc, t) => ({
-                  ...acc,
-                  [t.targetLanguage]: t.translatedContent,
-                }), m.translations || {});
+                // Merge translations as array, dedup by targetLanguage
+                const existingTranslations = Array.isArray(m.translations) ? [...m.translations] : [];
+                for (const t of data.translations) {
+                  const targetLang = (t as any).language || t.targetLanguage;
+                  const idx = existingTranslations.findIndex((et: any) =>
+                    ((et as any).language || et.targetLanguage) === targetLang
+                  );
+                  if (idx >= 0) existingTranslations[idx] = t;
+                  else existingTranslations.push(t);
+                }
 
                 return {
                   ...m,
-                  translations: newTranslations,
+                  translations: existingTranslations,
                 };
               }),
             })),
