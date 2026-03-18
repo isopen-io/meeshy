@@ -1,4 +1,4 @@
-import { getRedisWrapper, RedisWrapper } from './RedisWrapper';
+import { getCacheStore, type CacheStore } from './CacheStore';
 import crypto from 'crypto';
 
 export interface TranslationCacheEntry {
@@ -11,16 +11,13 @@ export interface TranslationCacheEntry {
 }
 
 export class TranslationCache {
-  private redis: RedisWrapper;
+  private cache: CacheStore;
   private readonly TTL = 3600; // 1 heure par défaut
 
-  constructor(redisUrl?: string) {
-    // Use shared singleton instance to avoid multiple Redis connections
-    const url = redisUrl || process.env.REDIS_URL || 'redis://localhost:6379';
-    this.redis = getRedisWrapper(url);
+  constructor() {
+    this.cache = getCacheStore();
 
-    const stats = this.redis.getCacheStats();
-    console.log(`[TranslationCache] Cache initialized in ${stats.mode} mode (Redis available: ${stats.redisAvailable})`);
+    console.log(`[TranslationCache] Cache initialized (available: ${this.cache.isAvailable()})`);
   }
 
   /**
@@ -76,7 +73,7 @@ export class TranslationCache {
   ): Promise<TranslationCacheEntry | null> {
     try {
       const cacheKey = this.generateCacheKey(text, sourceLang, targetLang, modelType);
-      const cached = await this.redis.get(cacheKey);
+      const cached = await this.cache.get(cacheKey);
       
       if (cached) {
         const entry: TranslationCacheEntry = JSON.parse(cached);
@@ -87,7 +84,7 @@ export class TranslationCache {
           return entry;
         } else {
           // Supprimer l'entrée expirée
-          await this.redis.del(cacheKey);
+          await this.cache.del(cacheKey);
         }
       }
       
@@ -115,7 +112,7 @@ export class TranslationCache {
         timestamp: Date.now()
       };
       
-      await this.redis.setex(cacheKey, this.TTL, JSON.stringify(entry));
+      await this.cache.set(cacheKey, JSON.stringify(entry), this.TTL);
     } catch (error) {
       console.error(`❌ [Cache] Erreur mise en cache: ${error}`);
     }
@@ -135,11 +132,11 @@ export class TranslationCache {
       const normalizedText = this.normalizeText(text);
       const pattern = `translation:*`;
       
-      const keys = await this.redis.keys(pattern);
+      const keys = await this.cache.keys(pattern);
       const similarEntries: TranslationCacheEntry[] = [];
       
       for (const key of keys) {
-        const cached = await this.redis.get(key);
+        const cached = await this.cache.get(key);
         if (cached) {
           const entry: TranslationCacheEntry = JSON.parse(cached);
           
@@ -186,8 +183,8 @@ export class TranslationCache {
     hitRate: number;
   }> {
     try {
-      const keys = await this.redis.keys('translation:*');
-      const info = await this.redis.info('memory');
+      const keys = await this.cache.keys('translation:*');
+      const info = await this.cache.info('memory');
       
       // Calculer l'utilisation mémoire (approximatif)
       const memoryMatch = info.match(/used_memory_human:(\S+)/);
@@ -213,17 +210,17 @@ export class TranslationCache {
    */
   async cleanupCache(): Promise<number> {
     try {
-      const keys = await this.redis.keys('translation:*');
+      const keys = await this.cache.keys('translation:*');
       let deletedCount = 0;
       
       for (const key of keys) {
-        const cached = await this.redis.get(key);
+        const cached = await this.cache.get(key);
         if (cached) {
           const entry: TranslationCacheEntry = JSON.parse(cached);
           const now = Date.now();
           
           if (now - entry.timestamp > this.TTL * 1000) {
-            await this.redis.del(key);
+            await this.cache.del(key);
             deletedCount++;
           }
         }
@@ -240,6 +237,6 @@ export class TranslationCache {
    * Ferme la connexion Redis
    */
   async close(): Promise<void> {
-    await this.redis.close();
+    await this.cache.close();
   }
 }

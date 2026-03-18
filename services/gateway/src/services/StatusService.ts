@@ -22,7 +22,7 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
-import { getRedisWrapper, RedisWrapper } from './RedisWrapper';
+import { getCacheStore, type CacheStore } from './CacheStore';
 
 export interface StatusUpdateMetrics {
   totalRequests: number;
@@ -45,7 +45,7 @@ export class StatusService {
   private readonly DISCONNECT_GUARD_MAX_AGE_MS = 60000; // 60s avant purge auto
 
   // Redis presence keys (TTL-based, survit aux crashs)
-  private redis: RedisWrapper;
+  private cache: CacheStore;
   private readonly PRESENCE_TTL_SECONDS = 120; // 2 minutes
 
   // Throttling différencié
@@ -72,7 +72,7 @@ export class StatusService {
   };
 
   constructor(private prisma: PrismaClient) {
-    this.redis = getRedisWrapper();
+    this.cache = getCacheStore();
     this.startCacheCleanup();
     logger.info('✅ StatusService initialisé (activity: 5s, connection: 60s, Redis presence TTL: 120s)');
   }
@@ -142,7 +142,7 @@ export class StatusService {
 
     // Supprimer la clé Redis de présence
     const redisKey = `presence:${isAnonymous ? 'anon' : 'user'}:${userId}`;
-    this.redis.del(redisKey).catch(err => {
+    this.cache.del(redisKey).catch(err => {
       logger.debug(`Failed to delete Redis presence key ${redisKey}:`, err);
     });
   }
@@ -159,7 +159,7 @@ export class StatusService {
 
     // Créer la clé Redis de présence avec TTL
     const redisKey = `presence:${isAnonymous ? 'anon' : 'user'}:${userId}`;
-    this.redis.setex(redisKey, this.PRESENCE_TTL_SECONDS, String(Date.now())).catch(err => {
+    this.cache.set(redisKey, String(Date.now()), this.PRESENCE_TTL_SECONDS).catch(err => {
       logger.debug(`Failed to set Redis presence key ${redisKey}:`, err);
     });
   }
@@ -188,7 +188,7 @@ export class StatusService {
     this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
 
     // Renouveler le TTL Redis de présence
-    this.redis.setex(`presence:user:${userId}`, this.PRESENCE_TTL_SECONDS, String(now)).catch(() => {});
+    this.cache.set(`presence:user:${userId}`, String(now), this.PRESENCE_TTL_SECONDS).catch(() => {});
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
@@ -270,7 +270,7 @@ export class StatusService {
     this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
 
     // Renouveler le TTL Redis de présence
-    this.redis.setex(`presence:anon:${participantId}`, this.PRESENCE_TTL_SECONDS, String(now)).catch(() => {});
+    this.cache.set(`presence:anon:${participantId}`, String(now), this.PRESENCE_TTL_SECONDS).catch(() => {});
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.participant.update({

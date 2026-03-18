@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
 import { PermissionDeniedError } from '../errors/custom-errors';
-import { getRedisWrapper } from '../services/RedisWrapper';
+import { getCacheStore } from '../services/CacheStore';
 
 const AUTH_USER_CACHE_TTL = 300; // 5 minutes
 
@@ -140,7 +140,7 @@ export class AuthMiddleware {
       }
 
       const cacheKey = `auth:user:${jwtUserId}`;
-      const redis = getRedisWrapper();
+      const cache = getCacheStore();
 
       type UserRow = {
         id: string;
@@ -165,7 +165,7 @@ export class AuthMiddleware {
       let user: UserRow | null = null;
 
       try {
-        const cached = await redis.get(cacheKey);
+        const cached = await cache.get(cacheKey);
         if (cached) {
           const parsed = JSON.parse(cached) as UserRow;
           // Rehydrate Date fields that JSON.stringify serialized as ISO strings
@@ -189,7 +189,7 @@ export class AuthMiddleware {
 
         if (user?.isActive) {
           try {
-            await redis.set(cacheKey, JSON.stringify(user), AUTH_USER_CACHE_TTL);
+            await cache.set(cacheKey, JSON.stringify(user), AUTH_USER_CACHE_TTL);
           } catch {
             // Redis write failure is non-fatal
           }

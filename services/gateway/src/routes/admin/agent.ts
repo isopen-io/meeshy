@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { listArchetypes, getArchetype } from '@meeshy/shared/agent/archetypes';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { logError } from '../../utils/logger';
-import { getRedisWrapper } from '../../services/RedisWrapper';
+import { getCacheStore } from '../../services/CacheStore';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 
 const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
@@ -321,8 +321,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         update: parsed.data,
       });
 
-      const redis = getRedisWrapper();
-      await redis.publish('agent:config-invalidated', JSON.stringify({ conversationId }));
+      const cache = getCacheStore();
+      await cache.publish('agent:config-invalidated', JSON.stringify({ conversationId }));
 
       return reply.send({ success: true, data: config });
     } catch (error) {
@@ -598,18 +598,18 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         fastify.prisma.agentAnalytic.deleteMany({ where: { conversationId } }),
       ]);
 
-      const redis = getRedisWrapper();
+      const cache = getCacheStore();
       const keysToDelete = [
         `agent:messages:${conversationId}`,
         `agent:summary:${conversationId}`,
         `agent:profiles:${conversationId}`,
       ];
-      const cooldownKeys = await redis.keys(`agent:cooldown:${conversationId}:*`);
+      const cooldownKeys = await cache.keys(`agent:cooldown:${conversationId}:*`);
       keysToDelete.push(...cooldownKeys);
 
       let redisKeysDeleted = 0;
       for (const key of keysToDelete) {
-        await redis.del(key);
+        await cache.del(key);
         redisKeysDeleted++;
       }
 
@@ -658,25 +658,25 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         fastify.prisma.agentGlobalProfile.deleteMany({ where: { userId } }),
       ]);
 
-      const redis = getRedisWrapper();
-      const profileKeys = await redis.keys('agent:profiles:*');
+      const cache = getCacheStore();
+      const profileKeys = await cache.keys('agent:profiles:*');
       let profilesCleaned = 0;
       for (const key of profileKeys) {
-        const raw = await redis.get(key);
+        const raw = await cache.get(key);
         if (!raw) continue;
         try {
           const profiles = JSON.parse(raw) as Record<string, unknown>;
           if (userId in profiles) {
             delete profiles[userId];
-            await redis.set(key, JSON.stringify(profiles));
+            await cache.set(key, JSON.stringify(profiles));
             profilesCleaned++;
           }
         } catch { /* skip malformed */ }
       }
 
-      const cooldownKeys = await redis.keys(`agent:cooldown:*:${userId}`);
+      const cooldownKeys = await cache.keys(`agent:cooldown:*:${userId}`);
       for (const key of cooldownKeys) {
-        await redis.del(key);
+        await cache.del(key);
       }
 
       return reply.send({
@@ -718,11 +718,11 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         fastify.prisma.agentGlobalProfile.deleteMany(),
       ]);
 
-      const redis = getRedisWrapper();
-      const agentKeys = await redis.keys('agent:*');
+      const cache = getCacheStore();
+      const agentKeys = await cache.keys('agent:*');
       let redisKeysDeleted = 0;
       for (const key of agentKeys) {
-        await redis.del(key);
+        await cache.del(key);
         redisKeysDeleted++;
       }
 
@@ -787,12 +787,12 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     try {
       const { conversationId } = request.params as { conversationId: string };
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
-      const redis = getRedisWrapper();
+      const cache = getCacheStore();
 
       const [profilesRaw, summaryRaw, messagesRaw, analytics, summaryRecord, roles] = await Promise.all([
-        redis.get(`agent:profiles:${conversationId}`),
-        redis.get(`agent:summary:${conversationId}`),
-        redis.get(`agent:messages:${conversationId}`),
+        cache.get(`agent:profiles:${conversationId}`),
+        cache.get(`agent:summary:${conversationId}`),
+        cache.get(`agent:messages:${conversationId}`),
         fastify.prisma.agentAnalytic.findUnique({ where: { conversationId } }),
         fastify.prisma.agentConversationSummary.findUnique({ where: { conversationId } }),
         fastify.prisma.agentUserRole.findMany({
@@ -920,8 +920,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         config = await fastify.prisma.agentGlobalConfig.create({ data: parsed.data });
       }
 
-      const redis = getRedisWrapper();
-      await redis.publish('agent:config-invalidated', JSON.stringify({ global: true }));
+      const cache = getCacheStore();
+      await cache.publish('agent:config-invalidated', JSON.stringify({ global: true }));
 
       return reply.send({ success: true, data: config });
     } catch (error) {

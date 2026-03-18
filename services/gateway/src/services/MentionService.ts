@@ -6,7 +6,7 @@
  */
 
 import { PrismaClient, User } from '@meeshy/shared/prisma/client';
-import { getRedisWrapper, RedisWrapper } from './RedisWrapper';
+import { getCacheStore, type CacheStore } from './CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { parseMentions, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 
@@ -49,18 +49,14 @@ export class MentionService {
 
   // Cache Redis pour l'autocomplete (TTL: 5 minutes)
   private readonly CACHE_TTL = 300; // 5 minutes en secondes
-  private redis: RedisWrapper;
+  private cache: CacheStore;
 
   constructor(
     private readonly prisma: PrismaClient,
-    redisUrl?: string
   ) {
-    // Use shared singleton instance to avoid multiple Redis connections
-    const url = redisUrl || process.env.REDIS_URL || 'redis://localhost:6379';
-    this.redis = getRedisWrapper(url);
+    this.cache = getCacheStore();
 
-    const stats = this.redis.getCacheStats();
-    logger.info(`[MentionService] Cache initialized in ${stats.mode} mode (Redis available: ${stats.redisAvailable})`);
+    logger.info(`[MentionService] Cache initialized (available: ${this.cache.isAvailable()})`);
   }
 
   /**
@@ -81,7 +77,7 @@ export class MentionService {
   ): Promise<MentionSuggestion[] | null> {
     try {
       const cacheKey = this.generateCacheKey(conversationId, currentUserId, query);
-      const cached = await this.redis.get(cacheKey);
+      const cached = await this.cache.get(cacheKey);
 
       if (cached) {
         const suggestions: MentionSuggestion[] = JSON.parse(cached);
@@ -108,7 +104,7 @@ export class MentionService {
   ): Promise<void> {
     try {
       const cacheKey = this.generateCacheKey(conversationId, currentUserId, query);
-      await this.redis.setex(cacheKey, this.CACHE_TTL, JSON.stringify(suggestions));
+      await this.cache.set(cacheKey, JSON.stringify(suggestions), this.CACHE_TTL);
       logger.info(`[MentionService] Cached ${suggestions.length} suggestions for ${cacheKey} (TTL: ${this.CACHE_TTL}s)`);
     } catch (error) {
       logger.error('[MentionService] Error writing cache', error);
@@ -122,12 +118,12 @@ export class MentionService {
 
     try {
       const pattern = `mentions:suggestions:${conversationId}:*`;
-      const keys = await this.redis.keys(pattern);
+      const keys = await this.cache.keys(pattern);
 
       if (keys.length > 0) {
         // Supprimer les clés une par une
         for (const key of keys) {
-          await this.redis.del(key);
+          await this.cache.del(key);
         }
         logger.info(`[MentionService] Invalidated ${keys.length} cache entries for conversation ${conversationId}`);
       }
