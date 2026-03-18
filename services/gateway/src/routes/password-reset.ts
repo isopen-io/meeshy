@@ -7,7 +7,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { PasswordResetService } from '../services/PasswordResetService';
 import { PhonePasswordResetService } from '../services/PhonePasswordResetService';
-import { getRedisWrapper } from '../services/RedisWrapper';
+import { getCacheStore } from '../services/CacheStore';
 import { EmailService } from '../services/EmailService';
 import { SmsService } from '../services/SmsService';
 import { GeoIPService } from '../services/GeoIPService';
@@ -64,7 +64,7 @@ const phoneResendCodeSchema = z.object({
 
 export async function passwordResetRoutes(fastify: FastifyInstance) {
   // Use shared singleton instance to avoid multiple Redis connections
-  const redisWrapper = getRedisWrapper();
+  const cacheStore = getCacheStore();
   const emailService = new EmailService();
   const geoIPService = new GeoIPService();
 
@@ -85,7 +85,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
 
   const passwordResetService = new PasswordResetService(
     fastify.prisma,
-    redisWrapper,
+    cacheStore,
     emailService,
     geoIPService,
     process.env.HCAPTCHA_SECRET || '' // Optional now - rate limiting provides protection
@@ -94,7 +94,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
   // Phone password reset service
   const phonePasswordResetService = new PhonePasswordResetService(
     fastify.prisma,
-    redisWrapper,
+    cacheStore,
     smsService,
     geoIPService
   );

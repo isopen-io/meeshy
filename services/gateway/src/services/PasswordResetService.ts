@@ -20,7 +20,7 @@ import speakeasy from 'speakeasy';
 import zxcvbn from 'zxcvbn';
 import axios from 'axios';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { RedisWrapper } from './RedisWrapper';
+import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -56,7 +56,7 @@ export interface PasswordResetCompletion {
 export class PasswordResetService {
   constructor(
     private prisma: PrismaClient,
-    private redis: RedisWrapper,
+    private cache: CacheStore,
     private emailService: EmailService,
     private geoIPService: GeoIPService,
     private captchaSecret: string
@@ -497,28 +497,28 @@ export class PasswordResetService {
     const ipKey = `ratelimit:password-reset:ip:${ipAddress}`;
 
     // Check email rate limit (3 requests per hour)
-    const emailCount = await this.redis.get(emailKey);
+    const emailCount = await this.cache.get(emailKey);
     if (emailCount && parseInt(emailCount) >= 3) {
       return true; // Rate limited
     }
 
     // Check IP rate limit (5 requests per hour)
-    const ipCount = await this.redis.get(ipKey);
+    const ipCount = await this.cache.get(ipKey);
     if (ipCount && parseInt(ipCount) >= 5) {
       return true; // Rate limited
     }
 
     // Increment counters
     if (emailCount) {
-      await this.redis.setex(emailKey, 3600, (parseInt(emailCount) + 1).toString());
+      await this.cache.set(emailKey, (parseInt(emailCount) + 1).toString(), 3600);
     } else {
-      await this.redis.setex(emailKey, 3600, '1');
+      await this.cache.set(emailKey, '1', 3600);
     }
 
     if (ipCount) {
-      await this.redis.setex(ipKey, 3600, (parseInt(ipCount) + 1).toString());
+      await this.cache.set(ipKey, (parseInt(ipCount) + 1).toString(), 3600);
     } else {
-      await this.redis.setex(ipKey, 3600, '1');
+      await this.cache.set(ipKey, '1', 3600);
     }
 
     return false; // Not rate limited
@@ -588,13 +588,9 @@ export class PasswordResetService {
     const lockValue = crypto.randomUUID();
 
     try {
-      // Use SETNX with EXPIRE pattern (atomic enough for this use case)
-      const acquired = await this.redis.setnx(lockKey, lockValue);
-      if (acquired === 1) {
-        await this.redis.expire(lockKey, 10);
-        return true;
-      }
-      return false;
+      // Atomic SET NX EX via CacheStore.setnx
+      const acquired = await this.cache.setnx(lockKey, lockValue, 10);
+      return acquired;
     } catch (error) {
       logger.error('[PasswordResetService] Failed to acquire lock', error);
       return false;
@@ -603,7 +599,7 @@ export class PasswordResetService {
 
   private async releaseLock(userId: string): Promise<void> {
     const lockKey = `lock:password-reset:${userId}`;
-    await this.redis.del(lockKey);
+    await this.cache.del(lockKey);
   }
 
   private async revokeExistingTokens(userId: string): Promise<void> {

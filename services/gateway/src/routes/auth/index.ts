@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { AuthService } from '../../services/AuthService';
 import { PhoneTransferService } from '../../services/PhoneTransferService';
 import { SmsService } from '../../services/SmsService';
-import { getRedisWrapper } from '../../services/RedisWrapper';
+import { getCacheStore } from '../../services/CacheStore';
 import { AuthRouteContext } from './types';
 import { registerLoginRoutes } from './login';
 import { registerRegistrationRoutes } from './register';
@@ -21,13 +21,13 @@ export async function authRoutes(fastify: FastifyInstance) {
   );
 
   // Use shared singleton instance to avoid multiple Redis connections
-  const redisWrapper = getRedisWrapper();
+  const cacheStore = getCacheStore();
   const smsService = new SmsService();
 
   // Initialize phone transfer service for registration flow
   const phoneTransferService = new PhoneTransferService(
     (fastify as any).prisma,
-    redisWrapper,
+    cacheStore,
     smsService
   );
 
@@ -37,7 +37,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     authService,
     phoneTransferService,
     smsService,
-    redisWrapper,
+    cacheStore,
     redis: (fastify as any).redis, // Keep for backward compatibility
     prisma: (fastify as any).prisma
   };

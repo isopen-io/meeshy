@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AuthService } from '../../services/AuthService';
 import { PhoneTransferService } from '../../services/PhoneTransferService';
 import { SmsService } from '../../services/SmsService';
-import { RedisWrapper } from '../../services/RedisWrapper';
+import type { CacheStore } from '../../services/CacheStore';
 
 /**
  * Context shared across all auth route modules
@@ -13,7 +13,7 @@ export interface AuthRouteContext {
   authService: AuthService;
   phoneTransferService: PhoneTransferService;
   smsService: SmsService;
-  redisWrapper: RedisWrapper;
+  cacheStore: CacheStore;
   redis: any;
   prisma: any;
 }

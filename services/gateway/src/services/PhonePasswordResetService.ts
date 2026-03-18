@@ -17,7 +17,7 @@
 
 import crypto from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { RedisWrapper } from './RedisWrapper';
+import type { CacheStore } from './CacheStore';
 import { SmsService } from './SmsService';
 import { GeoIPService } from './GeoIPService';
 import { normalizePhoneWithCountry } from '../utils/normalize';
@@ -172,7 +172,7 @@ export function maskDisplayName(displayName: string | null | undefined): string 
 export class PhonePasswordResetService {
   constructor(
     private prisma: PrismaClient,
-    private redis: RedisWrapper,
+    private cache: CacheStore,
     private smsService: SmsService,
     private geoIPService: GeoIPService
   ) {}
@@ -540,7 +540,7 @@ export class PhonePasswordResetService {
 
       // Rate limit resend (1 per 60 seconds)
       const resendKey = `ratelimit:phone-reset:resend:${tokenId}`;
-      const lastResend = await this.redis.get(resendKey);
+      const lastResend = await this.cache.get(resendKey);
       if (lastResend) {
         return { success: false, error: 'rate_limited' };
       }
@@ -570,7 +570,7 @@ export class PhonePasswordResetService {
       }
 
       // Set rate limit for resend
-      await this.redis.setex(resendKey, 60, '1');
+      await this.cache.set(resendKey, '1', 60);
 
       await this.logSecurityEvent(token.userId, 'PHONE_RESET_CODE_RESENT', 'LOW', {
         tokenId,
@@ -679,16 +679,16 @@ export class PhonePasswordResetService {
 
   private async checkLookupRateLimit(ipAddress: string): Promise<boolean> {
     const key = `ratelimit:phone-reset:lookup:${ipAddress}`;
-    const count = await this.redis.get(key);
+    const count = await this.cache.get(key);
 
     if (count && parseInt(count) >= RATE_LIMIT_LOOKUP_PER_HOUR) {
       return true;
     }
 
     if (count) {
-      await this.redis.setex(key, RATE_LIMIT_WINDOW_SECONDS, (parseInt(count) + 1).toString());
+      await this.cache.set(key, (parseInt(count) + 1).toString(), RATE_LIMIT_WINDOW_SECONDS);
     } else {
-      await this.redis.setex(key, RATE_LIMIT_WINDOW_SECONDS, '1');
+      await this.cache.set(key, '1', RATE_LIMIT_WINDOW_SECONDS);
     }
 
     return false;

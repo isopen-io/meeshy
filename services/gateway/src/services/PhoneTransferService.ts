@@ -19,7 +19,7 @@
 
 import crypto from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { RedisWrapper } from './RedisWrapper';
+import type { CacheStore } from './CacheStore';
 import { SmsService } from './SmsService';
 import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -103,7 +103,7 @@ export interface PhoneTransferVerifyForRegistrationResult {
 export class PhoneTransferService {
   constructor(
     private prisma: PrismaClient,
-    private redis: RedisWrapper,
+    private cache: CacheStore,
     private smsService: SmsService
   ) {}
 
@@ -205,10 +205,10 @@ export class PhoneTransferService {
       };
 
       // Store in Redis with 10 min expiry
-      await this.redis.setex(
+      await this.cache.set(
         `phone-transfer:${transferId}`,
-        CODE_EXPIRY_MINUTES * 60,
-        JSON.stringify(transferData)
+        JSON.stringify(transferData),
+        CODE_EXPIRY_MINUTES * 60
       );
 
       // 5. Send SMS
@@ -216,7 +216,7 @@ export class PhoneTransferService {
 
       if (!smsResult.success) {
         logger.error('[PhoneTransfer] ❌ SMS send failed', smsResult.error);
-        await this.redis.del(`phone-transfer:${transferId}`);
+        await this.cache.del(`phone-transfer:${transferId}`);
         return { success: false, error: 'sms_send_failed' };
       }
 
@@ -254,7 +254,7 @@ export class PhoneTransferService {
 
     try {
       // 1. Get transfer data from Redis
-      const transferDataRaw = await this.redis.get(`phone-transfer:${transferId}`);
+      const transferDataRaw = await this.cache.get(`phone-transfer:${transferId}`);
       if (!transferDataRaw) {
         return { success: false, error: 'transfer_expired' };
       }
@@ -263,7 +263,7 @@ export class PhoneTransferService {
 
       // 2. Check attempts
       if (transferData.attempts >= MAX_CODE_ATTEMPTS) {
-        await this.redis.del(`phone-transfer:${transferId}`);
+        await this.cache.del(`phone-transfer:${transferId}`);
         return { success: false, error: 'max_attempts_exceeded' };
       }
 
@@ -277,10 +277,10 @@ export class PhoneTransferService {
       if (!isValid) {
         // Increment attempts
         transferData.attempts += 1;
-        await this.redis.setex(
+        await this.cache.set(
           `phone-transfer:${transferId}`,
-          CODE_EXPIRY_MINUTES * 60,
-          JSON.stringify(transferData)
+          JSON.stringify(transferData),
+          CODE_EXPIRY_MINUTES * 60
         );
 
         await this.logSecurityEvent(transferData.toUserId, 'PHONE_TRANSFER_CODE_FAILED', 'MEDIUM', {
@@ -353,7 +353,7 @@ export class PhoneTransferService {
       });
 
       // 5. Clean up Redis
-      await this.redis.del(`phone-transfer:${transferId}`);
+      await this.cache.del(`phone-transfer:${transferId}`);
 
       logger.info('[PhoneTransfer] ✅ Phone transferred successfully');
       return { success: true, transferred: true };
@@ -367,7 +367,7 @@ export class PhoneTransferService {
    * Cancel a pending transfer
    */
   async cancelTransfer(transferId: string): Promise<void> {
-    await this.redis.del(`phone-transfer:${transferId}`);
+    await this.cache.del(`phone-transfer:${transferId}`);
   }
 
   /**
@@ -379,7 +379,7 @@ export class PhoneTransferService {
   ): Promise<{ success: boolean; error?: string }> {
     try {
       // 1. Get transfer data
-      const transferDataRaw = await this.redis.get(`phone-transfer:${transferId}`);
+      const transferDataRaw = await this.cache.get(`phone-transfer:${transferId}`);
       if (!transferDataRaw) {
         return { success: false, error: 'transfer_expired' };
       }
@@ -388,7 +388,7 @@ export class PhoneTransferService {
 
       // 2. Rate limit resend (1 per 60 seconds)
       const resendKey = `ratelimit:phone-transfer:resend:${transferId}`;
-      const lastResend = await this.redis.get(resendKey);
+      const lastResend = await this.cache.get(resendKey);
       if (lastResend) {
         return { success: false, error: 'rate_limited' };
       }
@@ -400,10 +400,10 @@ export class PhoneTransferService {
       // 4. Update transfer data
       transferData.codeHash = codeHash;
       transferData.attempts = 0;
-      await this.redis.setex(
+      await this.cache.set(
         `phone-transfer:${transferId}`,
-        CODE_EXPIRY_MINUTES * 60,
-        JSON.stringify(transferData)
+        JSON.stringify(transferData),
+        CODE_EXPIRY_MINUTES * 60
       );
 
       // 5. Send SMS
@@ -417,7 +417,7 @@ export class PhoneTransferService {
       }
 
       // 6. Set resend rate limit
-      await this.redis.setex(resendKey, 60, '1');
+      await this.cache.set(resendKey, '1', 60);
 
       return { success: true };
     } catch (error) {
@@ -488,10 +488,10 @@ export class PhoneTransferService {
       };
 
       // Store in Redis with 10 min expiry
-      await this.redis.setex(
+      await this.cache.set(
         `phone-transfer:${transferId}`,
-        CODE_EXPIRY_MINUTES * 60,
-        JSON.stringify(transferData)
+        JSON.stringify(transferData),
+        CODE_EXPIRY_MINUTES * 60
       );
 
       // 4. Send SMS
@@ -499,7 +499,7 @@ export class PhoneTransferService {
 
       if (!smsResult.success) {
         logger.error('[PhoneTransfer] ❌ SMS send failed', smsResult.error);
-        await this.redis.del(`phone-transfer:${transferId}`);
+        await this.cache.del(`phone-transfer:${transferId}`);
         return { success: false, error: 'sms_send_failed' };
       }
 
@@ -536,7 +536,7 @@ export class PhoneTransferService {
 
     try {
       // 1. Get transfer data from Redis
-      const transferDataRaw = await this.redis.get(`phone-transfer:${transferId}`);
+      const transferDataRaw = await this.cache.get(`phone-transfer:${transferId}`);
       if (!transferDataRaw) {
         return { success: false, error: 'transfer_expired' };
       }
@@ -550,7 +550,7 @@ export class PhoneTransferService {
 
       // 3. Check attempts
       if (transferData.attempts >= MAX_CODE_ATTEMPTS) {
-        await this.redis.del(`phone-transfer:${transferId}`);
+        await this.cache.del(`phone-transfer:${transferId}`);
         return { success: false, error: 'max_attempts_exceeded' };
       }
 
@@ -564,10 +564,10 @@ export class PhoneTransferService {
       if (!isValid) {
         // Increment attempts
         transferData.attempts += 1;
-        await this.redis.setex(
+        await this.cache.set(
           `phone-transfer:${transferId}`,
-          CODE_EXPIRY_MINUTES * 60,
-          JSON.stringify(transferData)
+          JSON.stringify(transferData),
+          CODE_EXPIRY_MINUTES * 60
         );
 
         return { success: false, error: 'invalid_code' };
@@ -584,17 +584,17 @@ export class PhoneTransferService {
       transferData.verifiedAt = Date.now();
 
       // Extend expiry for 30 minutes to allow registration completion
-      await this.redis.setex(
+      await this.cache.set(
         `phone-transfer:${transferId}`,
-        30 * 60, // 30 minutes
-        JSON.stringify(transferData)
+        JSON.stringify(transferData),
+        30 * 60 // 30 minutes
       );
 
       // Also store the transfer token → transferId mapping for quick lookup
-      await this.redis.setex(
+      await this.cache.set(
         `phone-transfer-token:${transferTokenHash}`,
-        30 * 60,
-        transferId
+        transferId,
+        30 * 60
       );
 
       logger.info('[PhoneTransfer] ✅ Registration transfer verified');
@@ -621,14 +621,14 @@ export class PhoneTransferService {
     try {
       // 1. Find transfer by token
       const tokenHash = crypto.createHash('sha256').update(transferToken).digest('hex');
-      const transferId = await this.redis.get(`phone-transfer-token:${tokenHash}`);
+      const transferId = await this.cache.get(`phone-transfer-token:${tokenHash}`);
 
       if (!transferId) {
         return { success: false, error: 'invalid_transfer_token' };
       }
 
       // 2. Get transfer data
-      const transferDataRaw = await this.redis.get(`phone-transfer:${transferId}`);
+      const transferDataRaw = await this.cache.get(`phone-transfer:${transferId}`);
       if (!transferDataRaw) {
         return { success: false, error: 'transfer_expired' };
       }
@@ -701,8 +701,8 @@ export class PhoneTransferService {
       });
 
       // 5. Clean up Redis
-      await this.redis.del(`phone-transfer:${transferId}`);
-      await this.redis.del(`phone-transfer-token:${tokenHash}`);
+      await this.cache.del(`phone-transfer:${transferId}`);
+      await this.cache.del(`phone-transfer-token:${tokenHash}`);
 
       logger.info('[PhoneTransfer] ✅ Registration transfer executed successfully');
       return { success: true };
@@ -725,13 +725,13 @@ export class PhoneTransferService {
   }> {
     try {
       const tokenHash = crypto.createHash('sha256').update(transferToken).digest('hex');
-      const transferId = await this.redis.get(`phone-transfer-token:${tokenHash}`);
+      const transferId = await this.cache.get(`phone-transfer-token:${tokenHash}`);
 
       if (!transferId) {
         return { valid: false };
       }
 
-      const transferDataRaw = await this.redis.get(`phone-transfer:${transferId}`);
+      const transferDataRaw = await this.cache.get(`phone-transfer:${transferId}`);
       if (!transferDataRaw) {
         return { valid: false };
       }

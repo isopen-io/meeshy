@@ -13,7 +13,7 @@
 
 import crypto from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { RedisWrapper } from './RedisWrapper';
+import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService, RequestContext } from './GeoIPService';
 import { createSession, initSessionService, generateSessionToken } from './SessionService';
@@ -38,7 +38,7 @@ export interface MagicLinkValidation {
 export class MagicLinkService {
   constructor(
     private prisma: PrismaClient,
-    private redis: RedisWrapper,
+    private cache: CacheStore,
     private emailService: EmailService,
     private geoIPService: GeoIPService
   ) {
@@ -329,16 +329,16 @@ export class MagicLinkService {
 
     try {
       // Check email rate limit
-      const emailCount = await this.redis.get(emailKey);
+      const emailCount = await this.cache.get(emailKey);
       const count = emailCount ? parseInt(emailCount) : 0;
 
       if (count >= MAX_REQUESTS_PER_HOUR) {
         return true;
       }
 
-      // Increment counter using setex (set with expiry)
+      // Increment counter using set with expiry
       const newCount = count + 1;
-      await this.redis.setex(emailKey, 3600, newCount.toString()); // 1 hour
+      await this.cache.set(emailKey, newCount.toString(), 3600); // 1 hour
 
       return false;
     } catch (error) {
@@ -400,9 +400,9 @@ export class MagicLinkService {
  */
 export function createMagicLinkService(
   prisma: PrismaClient,
-  redis: RedisWrapper,
+  cache: CacheStore,
   emailService: EmailService,
   geoIPService: GeoIPService
 ): MagicLinkService {
-  return new MagicLinkService(prisma, redis, emailService, geoIPService);
+  return new MagicLinkService(prisma, cache, emailService, geoIPService);
 }

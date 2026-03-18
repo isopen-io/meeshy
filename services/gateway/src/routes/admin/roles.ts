@@ -10,7 +10,7 @@ import {
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UserRole as PrismaUserRole } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
-import { getRedisWrapper } from '../../services/RedisWrapper';
+import { getCacheStore } from '../../services/CacheStore';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -163,7 +163,7 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
         }
       });
 
-      try { await getRedisWrapper().del(authUserCacheKey(id)); } catch { /* best-effort */ }
+      try { await getCacheStore().del(authUserCacheKey(id)); } catch { /* best-effort */ }
 
       return reply.send({
         success: true,
@@ -313,7 +313,7 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
         }
       });
 
-      try { await getRedisWrapper().del(authUserCacheKey(id)); } catch { /* best-effort */ }
+      try { await getCacheStore().del(authUserCacheKey(id)); } catch { /* best-effort */ }
 
       return reply.send({
         success: true,
