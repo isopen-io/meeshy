@@ -10,10 +10,7 @@
  */
 
 import { useCallback, useRef, useEffect } from 'react';
-import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
-import { useNotificationStore } from '@/stores/notification-store';
 import type { Message, Conversation, User } from '@meeshy/shared/types';
-import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 interface Translation {
   id?: string;
@@ -121,11 +118,11 @@ interface UseSocketCallbacksReturn {
 export function useSocketCallbacks({
   conversationId,
   currentUser,
-  addMessage,
-  updateMessage,
-  removeMessage,
-  setConversations,
-  refreshConversations,
+  addMessage: _addMessage,
+  updateMessage: _updateMessage,
+  removeMessage: _removeMessage,
+  setConversations: _setConversations,
+  refreshConversations: _refreshConversations,
   removeTranslatingState,
   addUsedLanguages,
 }: UseSocketCallbacksOptions): UseSocketCallbacksReturn {
@@ -138,153 +135,57 @@ export function useSocketCallbacks({
 
   /**
    * Callback pour les nouveaux messages
+   * NOTE: Cache mutations (addMessage, setConversations) removed — useSocketCacheSync is the single cache writer.
+   * This callback only handles UI side-effects (scroll, mark-as-received, etc.)
    */
   const onNewMessage = useCallback(
-    (message: Message) => {
-      const currentConvId = conversationIdRef.current;
-      const normalizedConvId = meeshySocketIOService.getCurrentConversationId();
-
-      const isForCurrentConversation =
-        message.conversationId === normalizedConvId &&
-        message.conversationId === currentConvId;
-
-      // Mettre à jour la liste des conversations
-      setConversations(prevConversations => {
-        const conversationIndex = prevConversations.findIndex(
-          c => c.id === message.conversationId
-        );
-
-        if (conversationIndex === -1) {
-          // Conversation non trouvée, rafraîchir la liste
-          setTimeout(() => refreshConversations(), 100);
-          return prevConversations;
-        }
-
-        const currentConversation = prevConversations[conversationIndex];
-        const senderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id;
-        const isMessageFromCurrentUser = currentUser && senderUserId === currentUser.id;
-        const activeConvId = useNotificationStore.getState().activeConversationId;
-        const isCurrentlyViewingThisConversation =
-          message.conversationId === currentConvId ||
-          message.conversationId === activeConvId;
-
-        const shouldIncrementUnread =
-          !isMessageFromCurrentUser && !isCurrentlyViewingThisConversation;
-
-        const updatedConversation = {
-          ...currentConversation,
-          lastMessage: message,
-          lastMessageAt: message.createdAt || new Date(),
-          lastActivityAt: message.createdAt || new Date(),
-          unreadCount: shouldIncrementUnread
-            ? (currentConversation.unreadCount || 0) + 1
-            : currentConversation.unreadCount || 0,
-        };
-
-        // Déplacer la conversation en haut de la liste
-        const updatedConversations = prevConversations.filter(
-          (_, index) => index !== conversationIndex
-        );
-
-        return [updatedConversation, ...updatedConversations];
-      });
-
-      // Ajouter le message si c'est la conversation courante
-      if (isForCurrentConversation) {
-        addMessage(message);
-      }
+    (_message: Message) => {
+      // All cache mutations (addMessage, setConversations with lastMessage/unreadCount/reorder)
+      // are handled by useSocketCacheSync to avoid dual-write duplicates.
+      // UI-only effects (scroll-to-bottom, mark-as-received) are handled in ConversationLayout.
     },
-    [addMessage, setConversations, refreshConversations, currentUser]
+    []
   );
 
   /**
    * Callback pour les messages édités
+   * NOTE: Cache mutation (updateMessage) removed — useSocketCacheSync is the single cache writer.
    */
   const onMessageEdited = useCallback(
-    (message: Message) => {
-      if (message.conversationId === conversationIdRef.current) {
-        updateMessage(message.id, message);
-      }
+    (_message: Message) => {
+      // Cache mutation handled by useSocketCacheSync.
     },
-    [updateMessage]
+    []
   );
 
   /**
    * Callback pour les messages supprimés
+   * NOTE: Cache mutation (removeMessage) removed — useSocketCacheSync is the single cache writer.
    */
   const onMessageDeleted = useCallback(
-    (messageId: string) => {
-      removeMessage(messageId);
+    (_messageId: string) => {
+      // Cache mutation handled by useSocketCacheSync.
     },
-    [removeMessage]
+    []
   );
 
   /**
    * Callback pour les traductions
+   * NOTE: Cache mutation (updateMessage) removed — useSocketCacheSync is the single cache writer.
+   * Keeps: removeTranslatingState + addUsedLanguages (UI state, not cache).
    */
   const onTranslation = useCallback(
     (messageId: string, translations: Translation[]) => {
-      updateMessage(messageId, prevMessage => {
-        const existingTranslations = Array.isArray(prevMessage.translations)
-          ? prevMessage.translations
-          : [];
+      // Cache mutation (updateMessage with translations merge) handled by useSocketCacheSync.
 
-        const updatedTranslations = [...existingTranslations];
-
-        for (const newTranslation of translations) {
-          const targetLang =
-            newTranslation.targetLanguage || newTranslation.language;
-          const content =
-            newTranslation.translatedContent || newTranslation.content;
-
-          if (!targetLang || !content) continue;
-
-          const existingIndex = updatedTranslations.findIndex(
-            t => t.targetLanguage === targetLang
-          );
-
-          const translationObject = {
-            id: newTranslation.id || `${messageId}_${targetLang}`,
-            messageId,
-            sourceLanguage:
-              newTranslation.sourceLanguage ||
-              prevMessage.originalLanguage ||
-              'fr',
-            targetLanguage: targetLang,
-            translatedContent: content,
-            translationModel:
-              newTranslation.translationModel ||
-              newTranslation.model ||
-              'basic',
-            cacheKey: newTranslation.cacheKey || `${messageId}_${targetLang}`,
-            cached: newTranslation.cached || newTranslation.fromCache || false,
-            confidenceScore:
-              newTranslation.confidenceScore ||
-              newTranslation.confidence ||
-              0.9,
-            createdAt: newTranslation.createdAt
-              ? new Date(newTranslation.createdAt)
-              : new Date(),
-          };
-
-          if (existingIndex >= 0) {
-            updatedTranslations[existingIndex] = translationObject;
-          } else {
-            updatedTranslations.push(translationObject);
-          }
-        }
-
-        return { ...prevMessage, translations: updatedTranslations };
-      });
-
-      // Mettre à jour les langues utilisées
+      // Update UI-only state: used languages
       const newLanguages = translations
         .map(t => t.targetLanguage || t.language)
         .filter((lang): lang is string => Boolean(lang));
 
       addUsedLanguages(newLanguages);
 
-      // Supprimer les états de traduction en cours
+      // Remove translating spinners
       for (const translation of translations) {
         const targetLang =
           translation.targetLanguage || translation.language;
@@ -293,7 +194,7 @@ export function useSocketCallbacks({
         }
       }
     },
-    [updateMessage, removeTranslatingState, addUsedLanguages]
+    [removeTranslatingState, addUsedLanguages]
   );
 
   /**

@@ -57,6 +57,12 @@ export function useMessagesQueryHelpers(conversationId: string) {
       queryKeys.messages.infinite(conversationId),
       (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
         if (!old) return old;
+
+        // Dedup: skip if message ID already exists in any page
+        for (const page of old.pages) {
+          if (page.messages.some((m: Message) => m.id === message.id)) return old;
+        }
+
         return {
           ...old,
           pages: old.pages.map((page, index) =>
@@ -71,7 +77,11 @@ export function useMessagesQueryHelpers(conversationId: string) {
     // Update simple query cache
     queryClient.setQueryData<Message[]>(
       queryKeys.messages.list(conversationId),
-      (old) => (old ? [message, ...old] : [message])
+      (old) => {
+        if (!old) return [message];
+        if (old.some((m) => m.id === message.id)) return old;
+        return [message, ...old];
+      }
     );
   };
 
