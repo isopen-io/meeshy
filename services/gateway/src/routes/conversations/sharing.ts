@@ -16,7 +16,7 @@ import {
   generateFinalLinkId,
   ensureUniqueShareLinkIdentifier
 } from './utils/identifier-generator';
-import { sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendConflict, sendInternalError, sendError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendConflict, sendInternalError, sendError } from '../../utils/response';
 
 /**
  * Enregistre les routes de partage et d'invitation
@@ -217,25 +217,22 @@ export function registerSharingRoutes(
 
       // Retour compatible avec le frontend de service conversations (string du lien complet)
       const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3100'}/join/${finalLinkId}`;
-      reply.send({
-        success: true,
-        data: {
-          link: inviteLink,
-          code: finalLinkId,
-          shareLink: {
-            id: shareLink.id,
-            linkId: finalLinkId,
-            name: shareLink.name,
-            description: shareLink.description,
-            maxUses: shareLink.maxUses,
-            expiresAt: shareLink.expiresAt,
-            allowAnonymousMessages: shareLink.allowAnonymousMessages,
-            allowAnonymousFiles: shareLink.allowAnonymousFiles,
-            allowAnonymousImages: shareLink.allowAnonymousImages,
-            allowViewHistory: shareLink.allowViewHistory,
-            requireNickname: shareLink.requireNickname,
-            requireEmail: shareLink.requireEmail
-          }
+      return sendSuccess(reply, {
+        link: inviteLink,
+        code: finalLinkId,
+        shareLink: {
+          id: shareLink.id,
+          linkId: finalLinkId,
+          name: shareLink.name,
+          description: shareLink.description,
+          maxUses: shareLink.maxUses,
+          expiresAt: shareLink.expiresAt,
+          allowAnonymousMessages: shareLink.allowAnonymousMessages,
+          allowAnonymousFiles: shareLink.allowAnonymousFiles,
+          allowAnonymousImages: shareLink.allowAnonymousImages,
+          allowViewHistory: shareLink.allowViewHistory,
+          requireNickname: shareLink.requireNickname,
+          requireEmail: shareLink.requireEmail
         }
       });
 
@@ -372,10 +369,7 @@ export function registerSharingRoutes(
         }
       });
 
-      reply.send({
-        success: true,
-        data: updatedConversation
-      });
+      return sendSuccess(reply, updatedConversation);
 
     } catch (error) {
       console.error('Error updating conversation:', error);
@@ -499,6 +493,7 @@ export function registerSharingRoutes(
         orderBy: { createdAt: 'desc' }
       });
 
+      // TODO: Phase 3 — migrate to sendPaginatedSuccess after client update
       return reply.send({
         success: true,
         data: links.map(l => ({ ...l, participantCount: l.currentUses })),
@@ -585,10 +580,7 @@ export function registerSharingRoutes(
 
       if (existingMember) {
         console.log('[JOIN_CONVERSATION] Utilisateur déjà membre, conversationId:', shareLink.conversationId);
-        return reply.send({
-          success: true,
-          data: { message: 'Vous êtes déjà membre de cette conversation', conversationId: shareLink.conversationId }
-        });
+        return sendSuccess(reply, { message: 'Vous êtes déjà membre de cette conversation', conversationId: shareLink.conversationId });
       }
 
       // Ajouter l'utilisateur à la conversation
@@ -683,12 +675,8 @@ export function registerSharingRoutes(
         }
       }
 
-      const responseData = {
-        success: true,
-        data: { message: 'Vous avez rejoint la conversation avec succès', conversationId: shareLink.conversationId }
-      };
-      console.log('[JOIN_CONVERSATION] Envoi réponse succès:', JSON.stringify(responseData, null, 2));
-      return reply.send(responseData);
+      console.log('[JOIN_CONVERSATION] Envoi réponse succès: conversationId =', shareLink.conversationId);
+      return sendSuccess(reply, { message: 'Vous avez rejoint la conversation avec succès', conversationId: shareLink.conversationId });
 
     } catch (error) {
       console.error('[JOIN_CONVERSATION] Error joining conversation via link:', error);
@@ -893,12 +881,9 @@ export function registerSharingRoutes(
         }
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          member: newMember,
-          message: `${userToInvite.displayName || userToInvite.username} a été invité à la conversation`
-        }
+      return sendSuccess(reply, {
+        member: newMember,
+        message: `${userToInvite.displayName || userToInvite.username} a été invité à la conversation`
       });
 
     } catch (error) {

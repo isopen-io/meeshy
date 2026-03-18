@@ -9,7 +9,7 @@ import {
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import { sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 
 /**
  * Enregistre les routes de gestion des participants
@@ -200,6 +200,7 @@ export function registerParticipantsRoutes(
         }
       }));
 
+      // TODO: Phase 3 — migrate to sendPaginatedSuccess after client update
       reply.send({
         success: true,
         data: formattedParticipants,
@@ -351,10 +352,7 @@ export function registerParticipantsRoutes(
         }
       }
 
-      reply.send({
-        success: true,
-        data: { message: 'Participant ajouté avec succès' }
-      });
+      return sendSuccess(reply, { message: 'Participant ajouté avec succès' });
 
     } catch (error) {
       console.error('Error adding participant:', error);
@@ -475,10 +473,7 @@ export function registerParticipantsRoutes(
         }
       }
 
-      reply.send({
-        success: true,
-        data: { message: 'Participant supprimé avec succès' }
-      });
+      return sendSuccess(reply, { message: 'Participant supprimé avec succès' });
 
     } catch (error) {
       console.error('Error removing participant:', error);
@@ -638,14 +633,11 @@ export function registerParticipantsRoutes(
         }).catch((err: unknown) => console.error('[Participants] Notification error (role_changed):', err));
       }
 
-      reply.send({
-        success: true,
-        data: {
-          message: 'Rôle du participant mis à jour avec succès',
-          userId,
-          role: newRole,
-          participant: updatedParticipant
-        }
+      return sendSuccess(reply, {
+        message: 'Rôle du participant mis à jour avec succès',
+        userId,
+        role: newRole,
+        participant: updatedParticipant
       });
 
     } catch (error) {

@@ -18,7 +18,7 @@ import {
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
-import { sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
   generateConversationIdentifier,
   ensureUniqueConversationIdentifier
@@ -84,12 +84,9 @@ export function registerCoreRoutes(
         }
       });
 
-      return reply.send({
-        success: true,
-        data: {
-          available: !existingConversation,
-          identifier
-        }
+      return sendSuccess(reply, {
+        available: !existingConversation,
+        identifier
       });
     } catch (error) {
       console.error('[CONVERSATIONS] Error checking identifier availability:', error);
@@ -480,6 +477,7 @@ export function registerCoreRoutes(
       );
 
       reply.header('Cache-Control', 'private, no-cache');
+      // TODO: Phase 3 — migrate to sendPaginatedSuccess after client update
       reply.send({
         success: true,
         data: conversationsWithUnreadCount,
@@ -639,14 +637,11 @@ export function registerCoreRoutes(
         console.error(`❌ Erreur lors du marquage auto des notifications pour conversation ${conversationId}:`, notifError);
       }
 
-      reply.send({
-        success: true,
-        data: {
-          ...conversation,
-          title: displayTitle,
-          meta: {
-            conversationStats: stats
-          }
+      return sendSuccess(reply, {
+        ...conversation,
+        title: displayTitle,
+        meta: {
+          conversationStats: stats
         }
       });
 
@@ -884,13 +879,10 @@ export function registerCoreRoutes(
         }
       }
 
-      reply.status(201).send({
-        success: true,
-        data: {
-          ...conversation,
-          title: displayTitle
-        }
-      });
+      return sendSuccess(reply, {
+        ...conversation,
+        title: displayTitle
+      }, { statusCode: 201 });
 
     } catch (error) {
       sendErrorResponse(reply, error as Error, 'create-conversation');
@@ -971,10 +963,7 @@ export function registerCoreRoutes(
         }
       });
 
-      reply.send({
-        success: true,
-        data: updatedConversation
-      });
+      return sendSuccess(reply, updatedConversation);
 
     } catch (error) {
       console.error('Error updating conversation:', error);
@@ -1052,10 +1041,7 @@ export function registerCoreRoutes(
         data: { isActive: false }
       });
 
-      reply.send({
-        success: true,
-        data: { message: 'Conversation supprimée avec succès' }
-      });
+      return sendSuccess(reply, { message: 'Conversation supprimée avec succès' });
 
     } catch (error) {
       console.error('Error deleting conversation:', error);

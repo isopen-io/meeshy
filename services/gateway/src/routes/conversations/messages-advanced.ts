@@ -20,7 +20,7 @@ import type {
   EditMessageBody
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
 
@@ -480,10 +480,7 @@ export function registerMessagesAdvancedRoutes(
         // Ne pas faire échouer l'édition si la diffusion échoue
       }
 
-      reply.send({
-        success: true,
-        data: messageResponse
-      });
+      return sendSuccess(reply, messageResponse);
 
     } catch (error) {
       logger.error('Error updating message', error);
@@ -647,10 +644,7 @@ export function registerMessagesAdvancedRoutes(
         // Ne pas faire échouer la suppression si la diffusion échoue
       }
 
-      reply.send({
-        success: true,
-        data: { messageId, deleted: true, meta: { conversationStats: stats } }
-      });
+      return sendSuccess(reply, { messageId, deleted: true, meta: { conversationStats: stats } });
 
     } catch (error) {
       logger.error('Error deleting message', error);
@@ -788,10 +782,7 @@ export function registerMessagesAdvancedRoutes(
       // Note: Les traductions existantes restent inchangées
       // Le service de traduction sera notifié si nécessaire via WebSocket
 
-      reply.send({
-        success: true,
-        data: updatedMessage
-      });
+      return sendSuccess(reply, updatedMessage);
 
     } catch (error) {
       logger.error('Error updating message', error);
@@ -913,12 +904,9 @@ export function registerMessagesAdvancedRoutes(
         reactions: Object.values(emojis)
       }));
 
-      return reply.send({
-        success: true,
-        data: {
-          reactions: reactionsArray,
-          total: reactions.length
-        }
+      return sendSuccess(reply, {
+        reactions: reactionsArray,
+        total: reactions.length
       });
 
     } catch (error) {
@@ -1083,10 +1071,7 @@ export function registerMessagesAdvancedRoutes(
         // Do not fail the response if broadcast fails
       }
 
-      return reply.send({
-        success: true,
-        data: { added: true, emoji }
-      });
+      return sendSuccess(reply, { added: true, emoji });
 
     } catch (error: any) {
       logger.error('Error adding reaction via REST', error);
@@ -1247,10 +1232,7 @@ export function registerMessagesAdvancedRoutes(
         // Do not fail the response if broadcast fails
       }
 
-      return reply.send({
-        success: true,
-        data: { removed: true }
-      });
+      return sendSuccess(reply, { removed: true });
 
     } catch (error: any) {
       logger.error('Error removing reaction via REST', error);
@@ -1380,12 +1362,9 @@ export function registerMessagesAdvancedRoutes(
         }))
       }));
 
-      return reply.send({
-        success: true,
-        data: {
-          statuses,
-          total: messages.length
-        }
+      return sendSuccess(reply, {
+        statuses,
+        total: messages.length
       });
 
     } catch (error) {

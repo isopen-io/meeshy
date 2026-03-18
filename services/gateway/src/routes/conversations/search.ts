@@ -8,7 +8,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { SearchQuery } from './types';
-import { sendInternalError } from '../../utils/response';
+import { sendSuccess, sendInternalError } from '../../utils/response';
 
 /**
  * Enregistre les routes de recherche de conversations
@@ -54,7 +54,7 @@ export function registerSearchRoutes(
       const userId = authRequest.authContext.userId;
 
       if (!q || q.trim().length === 0) {
-        return reply.send({ success: true, data: [] });
+        return sendSuccess(reply, []);
       }
 
       // Step 1: Find matching user IDs by name search
@@ -193,7 +193,7 @@ export function registerSearchRoutes(
         };
       });
 
-      reply.send({ success: true, data: conversationsWithTitle });
+      return sendSuccess(reply, conversationsWithTitle);
     } catch (error) {
       console.error('Error searching conversations:', error);
       sendInternalError(reply, 'Erreur lors de la recherche de conversations');

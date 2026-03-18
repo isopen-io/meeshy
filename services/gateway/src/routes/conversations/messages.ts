@@ -23,7 +23,7 @@ import type {
   MessagesQuery
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
@@ -888,6 +888,7 @@ export function registerMessagesRoutes(
       // Aligné avec MessagesListResponse de @meeshy/shared/types
       // Note: pagination offset-based uniquement pour les requêtes sans curseur.
       // Quand before/around est utilisé, seul cursorPagination est pertinent.
+      // TODO: Phase 3 — migrate to sendPaginatedSuccess after client update
       const responsePayload: any = {
         success: true,
         data: mappedMessages,
@@ -1034,10 +1035,7 @@ export function registerMessagesRoutes(
       });
 
       if (unreadMessages.length === 0) {
-        return reply.send({
-          success: true,
-          data: { message: 'Aucun message non lu à marquer', markedCount: 0 }
-        });
+        return sendSuccess(reply, { message: 'Aucun message non lu à marquer', markedCount: 0 });
       }
 
       // Marquer tous les messages comme lus (utiliser le nouveau système de curseur)
@@ -1051,10 +1049,7 @@ export function registerMessagesRoutes(
         logger.warn('Error marking messages as read:', err);
       }
 
-      return reply.send({
-        success: true,
-        data: { message: `${unreadMessages.length} message(s) marqué(s) comme lu(s)`, markedCount: unreadMessages.length }
-      });
+      return sendSuccess(reply, { message: `${unreadMessages.length} message(s) marqué(s) comme lu(s)`, markedCount: unreadMessages.length });
 
     } catch (error) {
       logger.error('Error marking conversation as read', error);
@@ -1651,13 +1646,10 @@ export function registerMessagesRoutes(
         () => []
       );
 
-      reply.status(201).send({
-        success: true,
-        data: {
-          ...message,
-          meta: { conversationStats: stats }
-        }
-      });
+      return sendSuccess(reply, {
+        ...message,
+        meta: { conversationStats: stats }
+      }, { statusCode: 201 });
 
     } catch (error) {
       logger.error('Error sending message', error);
@@ -1736,7 +1728,7 @@ export function registerMessagesRoutes(
       // Marquer la conversation comme lue (déplace le curseur au dernier message)
       await readStatusService.markMessagesAsRead(userId, conversationId);
 
-      reply.send({ success: true, data: { markedCount: unreadCount } });
+      return sendSuccess(reply, { markedCount: unreadCount });
     } catch (error) {
       logger.error('Error marking conversation as read', error);
       sendInternalError(reply, 'Erreur lors du marquage comme lu');
@@ -1817,10 +1809,7 @@ export function registerMessagesRoutes(
 
       if (!latestMessage) {
         // No messages from other users to mark as unread
-        return reply.send({
-          success: true,
-          data: { unreadCount: 0 }
-        });
+        return sendSuccess(reply, { unreadCount: 0 });
       }
 
       // Move the read cursor to 1ms before the latest message's createdAt.
@@ -1870,10 +1859,7 @@ export function registerMessagesRoutes(
 
       logger.info(`[MARK-UNREAD] User ${userId} marked conversation ${conversationId} as unread (cursor moved before message ${latestMessage.id})`);
 
-      return reply.send({
-        success: true,
-        data: { unreadCount: 1 }
-      });
+      return sendSuccess(reply, { unreadCount: 1 });
 
     } catch (error) {
       logger.error('Error marking conversation as unread', error);
@@ -1965,10 +1951,7 @@ export function registerMessagesRoutes(
         });
       }
 
-      return reply.send({
-        success: true,
-        data: { pinnedAt: now.toISOString(), pinnedBy: userId }
-      });
+      return sendSuccess(reply, { pinnedAt: now.toISOString(), pinnedBy: userId });
     } catch (error) {
       logger.error('Error pinning message', error);
       sendInternalError(reply, 'Error pinning message');
@@ -2035,7 +2018,7 @@ export function registerMessagesRoutes(
         });
       }
 
-      return reply.send({ success: true });
+      return sendSuccess(reply, null);
     } catch (error) {
       logger.error('Error unpinning message', error);
       sendInternalError(reply, 'Error unpinning message');
@@ -2149,10 +2132,7 @@ export function registerMessagesRoutes(
         });
       }
 
-      return reply.send({
-        success: true,
-        data: { messageId, viewOnceCount: newViewOnceCount, maxViewOnceCount, isFullyConsumed }
-      });
+      return sendSuccess(reply, { messageId, viewOnceCount: newViewOnceCount, maxViewOnceCount, isFullyConsumed });
     } catch (error) {
       logger.error('Error consuming view-once message', error);
       sendInternalError(reply, 'Error consuming view-once message');
@@ -2314,6 +2294,7 @@ export function registerMessagesRoutes(
           : undefined
       }));
 
+      // TODO: Phase 3 — migrate to sendPaginatedSuccess after client update
       reply.send({
         success: true,
         data: mappedResults,
