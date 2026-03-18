@@ -65,8 +65,12 @@ class ConversationViewModel: ObservableObject {
 
     /// Real-time translation/transcription/audio data keyed by messageId
     @Published var messageTranslations: [String: [MessageTranslation]] = [:]
-    @Published var messageTranscriptions: [String: MessageTranscription] = [:]
-    @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
+    @Published var messageTranscriptions: [String: MessageTranscription] = [:] {
+        didSet { _allAudioItems = nil }
+    }
+    @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:] {
+        didSet { _allAudioItems = nil }
+    }
 
     /// Manual translation override per message (user selected a specific language in Language tab)
     /// nil value means user chose "show original"
