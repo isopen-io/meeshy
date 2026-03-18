@@ -12,17 +12,12 @@
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import type { ReadStatusSummary } from '@meeshy/shared/types/socketio-events';
 
 interface DraftMessage {
   content: string;
   attachments?: string[];
   replyToId?: string;
-}
-
-interface ReadStatusSummary {
-  totalMembers: number;
-  deliveredCount: number;
-  readCount: number;
 }
 
 interface ConversationUIState {
@@ -191,6 +186,11 @@ export const useConversationUIStore = create<ConversationUIStore>()(
 
         // Read status
         updateReadStatusSummary: (conversationId, summary) => {
+          const current = get().readStatusSummaries[conversationId];
+          if (current
+            && current.totalMembers === summary.totalMembers
+            && current.deliveredCount === summary.deliveredCount
+            && current.readCount === summary.readCount) return;
           set((state) => ({
             readStatusSummaries: { ...state.readStatusSummaries, [conversationId]: summary },
           }));

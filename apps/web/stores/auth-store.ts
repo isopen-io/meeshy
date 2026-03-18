@@ -113,6 +113,10 @@ export const useAuthStore = create<AuthStore>()(
           const { resetUserPreferences } = await import('./user-preferences-store');
           resetUserPreferences();
 
+          // Reset conversation UI store (typing, drafts, read status)
+          const { useConversationUIStore } = await import('./conversation-ui-store');
+          useConversationUIStore.getState().reset();
+
           // Redirect to home page
           if (typeof window !== 'undefined') {
             // Petit délai pour s'assurer que tout est nettoyé

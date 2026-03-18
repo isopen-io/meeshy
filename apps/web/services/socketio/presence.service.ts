@@ -12,6 +12,7 @@
 
 import { logger } from '@/utils/logger';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { useConversationUIStore } from '@/stores/conversation-ui-store';
 import type { UserStatusEvent } from '@/types';
 import type {
   TypedSocket,
@@ -91,8 +92,6 @@ export class PresenceService {
     }) => {
       this.readStatusListeners.forEach(listener => listener(data));
 
-      // Update conversation UI store with summary
-      const { useConversationUIStore } = require('@/stores/conversation-ui-store');
       useConversationUIStore.getState().updateReadStatusSummary(data.conversationId, data.summary);
     });
   }

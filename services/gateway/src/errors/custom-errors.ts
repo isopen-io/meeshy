@@ -61,46 +61,43 @@ export class InsufficientPermissionsError extends BaseAppError {
 // ========== RESSOURCES ==========
 
 export class NotFoundError extends BaseAppError {
-  constructor(resource: string, identifier?: string) {
+  constructor(resource: string, identifier?: string, code = 'NOT_FOUND') {
     const message = identifier
       ? `${resource} avec l'identifiant ${identifier} non trouvé`
       : `${resource} non trouvé`;
-    super(message, 404, 'NOT_FOUND');
+    super(message, 404, code);
   }
 }
 
-export class UserNotFoundError extends BaseAppError {
+export class UserNotFoundError extends NotFoundError {
   constructor(identifier?: string) {
-    const message = identifier
-      ? `Utilisateur avec l'identifiant ${identifier} non trouvé`
-      : `Utilisateur non trouvé`;
-    super(message, 404, 'USER_NOT_FOUND');
+    super('Utilisateur', identifier, 'USER_NOT_FOUND');
   }
 }
 
 // ========== CONFLITS ==========
 
 export class ConflictError extends BaseAppError {
-  constructor(message: string) {
-    super(message, 409, 'CONFLICT');
+  constructor(message: string, code = 'CONFLICT') {
+    super(message, 409, code);
   }
 }
 
-export class UserAlreadyExistsError extends BaseAppError {
+export class UserAlreadyExistsError extends ConflictError {
   constructor(field: 'email' | 'username', value: string) {
-    super(`Un utilisateur avec ${field === 'email' ? 'cet email' : 'ce nom d\'utilisateur'} existe déjà: ${value}`, 409, 'USER_ALREADY_EXISTS');
+    super(`Un utilisateur avec ${field === 'email' ? 'cet email' : 'ce nom d\'utilisateur'} existe déjà: ${value}`, 'USER_ALREADY_EXISTS');
   }
 }
 
-export class DuplicateEmailError extends BaseAppError {
+export class DuplicateEmailError extends ConflictError {
   constructor(email: string) {
-    super(`Un compte avec l'email ${email} existe déjà`, 409, 'DUPLICATE_EMAIL');
+    super(`Un compte avec l'email ${email} existe déjà`, 'DUPLICATE_EMAIL');
   }
 }
 
-export class DuplicateUsernameError extends BaseAppError {
+export class DuplicateUsernameError extends ConflictError {
   constructor(username: string) {
-    super(`Le nom d'utilisateur ${username} est déjà pris`, 409, 'DUPLICATE_USERNAME');
+    super(`Le nom d'utilisateur ${username} est déjà pris`, 'DUPLICATE_USERNAME');
   }
 }
 
@@ -109,18 +106,15 @@ export class DuplicateUsernameError extends BaseAppError {
 export class ValidationError extends BaseAppError {
   public readonly errors: Record<string, string>;
 
-  constructor(message: string, errors: Record<string, string> = {}) {
-    super(message, 400, 'VALIDATION_ERROR');
+  constructor(message: string, errors: Record<string, string> = {}, code = 'VALIDATION_ERROR') {
+    super(message, 400, code);
     this.errors = errors;
   }
 }
 
-export class InvalidInputError extends BaseAppError {
-  public readonly errors: Record<string, string>;
-
+export class InvalidInputError extends ValidationError {
   constructor(field: string, message: string) {
-    super(`Champ invalide: ${field}`, 400, 'INVALID_INPUT');
-    this.errors = { [field]: message };
+    super(`Champ invalide: ${field}`, { [field]: message }, 'INVALID_INPUT');
   }
 }
 
@@ -159,20 +153,17 @@ export class EmailNotVerifiedError extends BaseAppError {
 // ========== RATE LIMITING ==========
 
 export class RateLimitError extends BaseAppError {
-  public readonly retryAfter: number; // seconds
+  public readonly retryAfter: number;
 
-  constructor(retryAfter: number) {
-    super(`Trop de requêtes. Réessayez dans ${retryAfter} secondes`, 429, 'RATE_LIMIT_EXCEEDED');
+  constructor(retryAfter: number, message?: string, code = 'RATE_LIMIT_EXCEEDED') {
+    super(message ?? `Trop de requêtes. Réessayez dans ${retryAfter} secondes`, 429, code);
     this.retryAfter = retryAfter;
   }
 }
 
-export class TooManyLoginAttemptsError extends BaseAppError {
-  public readonly retryAfter: number;
-
+export class TooManyLoginAttemptsError extends RateLimitError {
   constructor(retryAfter: number) {
-    super(`Trop de tentatives de connexion échouées. Réessayez dans ${retryAfter} secondes`, 429, 'TOO_MANY_LOGIN_ATTEMPTS');
-    this.retryAfter = retryAfter;
+    super(retryAfter, `Trop de tentatives de connexion échouées. Réessayez dans ${retryAfter} secondes`, 'TOO_MANY_LOGIN_ATTEMPTS');
   }
 }
 
@@ -249,8 +240,8 @@ export function errorHandler(error: Error, request: any, reply: any) {
       error: {
         code: error.code,
         message: error.message,
-        ...('errors' in error && { errors: (error as any).errors }),
-        ...('retryAfter' in error && { retryAfter: (error as any).retryAfter }),
+        ...(error instanceof ValidationError && { errors: error.errors }),
+        ...(error instanceof RateLimitError && { retryAfter: error.retryAfter }),
         ...(error instanceof UserLockedError && error.lockedUntil && {
           lockedUntil: error.lockedUntil.toISOString()
         })
