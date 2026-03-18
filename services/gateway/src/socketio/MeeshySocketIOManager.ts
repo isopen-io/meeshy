@@ -17,6 +17,7 @@ import { SocialEventsHandler } from './handlers/SocialEventsHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { EmailService } from '../services/EmailService';
+import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
 import { PostAudioService } from '../services/posts/PostAudioService';
@@ -230,6 +231,14 @@ export class MeeshySocketIOManager {
 
       // Initialiser le service de notifications avec Socket.IO
       this.notificationService.setSocketIO(this.io, this.userSockets);
+
+      // Wire push notifications
+      const pushService = new PushNotificationService(this.prisma);
+      this.notificationService.setPushNotificationService(pushService);
+
+      // Wire email for immediate high-priority notifications
+      const emailService = new EmailService();
+      this.notificationService.setEmailService(emailService);
 
       // Initialiser le service de notifications pour CallEventsHandler
       this.callEventsHandler.setNotificationService(this.notificationService);
@@ -3216,6 +3225,26 @@ export class MeeshySocketIOManager {
           attachmentCount: messageAttachments.length,
           firstAttachmentType: messageAttachments[0]?.mimeType?.startsWith('image/') ? 'image' : 'document',
         });
+      }
+
+      // Create mention notifications for mentioned users
+      for (const mentionedUserId of mentionedUserIds) {
+        if (mentionedUserId === senderUserIdForNotif) continue;
+        // Only process user IDs that match actual conversation members
+        const isMember = conversationMembers.some(m => m.userId === mentionedUserId);
+        if (!isMember) continue;
+
+        try {
+          await this.notificationService.createMentionNotification({
+            mentionedUserId,
+            mentionerUserId: senderUserIdForNotif,
+            messageId: message.id,
+            conversationId: message.conversationId,
+            messagePreview: message.content?.substring(0, 200) || '',
+          });
+        } catch (err) {
+          logger.error(`❌ [NOTIFICATIONS] Erreur mention notification pour ${mentionedUserId}`, err);
+        }
       }
 
     } catch (error) {

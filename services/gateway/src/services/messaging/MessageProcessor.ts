@@ -530,8 +530,18 @@ export class MessageProcessor {
     if (!this.notificationService) return;
 
     try {
-      const sender = await this.prisma.user.findUnique({
+      // senderId may be a Participant.id — resolve to User.id first
+      let senderUserId = senderId;
+      const senderParticipant = await this.prisma.participant.findUnique({
         where: { id: senderId },
+        select: { userId: true }
+      });
+      if (senderParticipant?.userId) {
+        senderUserId = senderParticipant.userId;
+      }
+
+      const sender = await this.prisma.user.findUnique({
+        where: { id: senderUserId },
         select: { username: true, avatar: true }
       });
 
@@ -585,7 +595,7 @@ export class MessageProcessor {
       const count = await this.notificationService.createMentionNotificationsBatch(
         mentionedUserIds,
         {
-          senderId,
+          senderId: senderUserId,
           senderUsername: sender.username,
           senderAvatar: sender.avatar || undefined,
           messageContent,
