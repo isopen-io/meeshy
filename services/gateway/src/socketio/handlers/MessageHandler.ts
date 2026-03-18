@@ -253,15 +253,14 @@ export class MessageHandler {
       }
 
       // Broadcaster le message si succès
-      if (response.success && response.data?.id) {
-        const message = await this._fetchMessageForBroadcast(response.data.id);
-        if (message) {
-          // Invalider le cache AVANT de broadcaster pour éviter les race conditions
-          await invalidateConversationCacheAsync(message.conversationId, this.prisma);
+      // response.data is already enriched (sender.user, attachments, replyTo) from saveMessage include
+      if (response.success && response.data) {
+        const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
+        // Invalider le cache AVANT de broadcaster pour éviter les race conditions
+        await invalidateConversationCacheAsync(message.conversationId, this.prisma);
 
-          await this.broadcastNewMessage(message, message.conversationId, socket);
-          await this._createMessageNotifications(message, resolvedParticipantId);
-        }
+        await this.broadcastNewMessage(message, message.conversationId, socket);
+        await this._createMessageNotifications(message, resolvedParticipantId);
       }
 
       this.stats.messages_processed++;
@@ -491,6 +490,7 @@ export class MessageHandler {
   /**
    * Récupère un message complet pour le broadcast
    * Unified Participant: sender is a Participant, no anonymousSender
+   * Still needed for attachment and forward paths where relations are added post-create
    */
   private async _fetchMessageForBroadcast(messageId: string): Promise<Message | null> {
     return this.prisma.message.findUnique({

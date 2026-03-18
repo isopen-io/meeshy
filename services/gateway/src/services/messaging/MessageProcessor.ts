@@ -345,40 +345,22 @@ export class MessageProcessor {
             id: true,
             displayName: true,
             avatar: true,
-            role: true,
-            isOnline: true,
             type: true,
+            nickname: true,
             userId: true,
-            language: true
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                firstName: true,
+                lastName: true,
+                avatar: true
+              }
+            }
           }
         },
-        attachments: {
-          select: {
-            id: true,
-            messageId: true,
-            fileName: true,
-            originalName: true,
-            mimeType: true,
-            fileSize: true,
-            fileUrl: true,
-            thumbnailUrl: true,
-            width: true,
-            height: true,
-            duration: true,
-            bitrate: true,
-            sampleRate: true,
-            codec: true,
-            channels: true,
-            fps: true,
-            videoCodec: true,
-            pageCount: true,
-            lineCount: true,
-            metadata: true,
-            uploadedBy: true,
-            isAnonymous: true,
-            createdAt: true
-          }
-        },
+        attachments: true,
         replyTo: {
           include: {
             sender: {
@@ -387,7 +369,18 @@ export class MessageProcessor {
                 displayName: true,
                 avatar: true,
                 type: true,
-                userId: true
+                nickname: true,
+                userId: true,
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    firstName: true,
+                    lastName: true,
+                    avatar: true
+                  }
+                }
               }
             }
           }
