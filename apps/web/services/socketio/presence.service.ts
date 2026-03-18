@@ -37,6 +37,7 @@ export class PresenceService {
   private reactionRemovedListeners: Set<ReactionListener> = new Set();
   private conversationJoinedListeners: Set<ConversationJoinedListener> = new Set();
   private readStatusListeners: Set<ReadStatusListener> = new Set();
+  private unreadUpdatedListeners: Set<(data: { conversationId: string; unreadCount: number }) => void> = new Set();
 
   /**
    * Setup presence event listeners on socket
@@ -63,9 +64,7 @@ export class PresenceService {
         conversationId: data.conversationId,
         unreadCount: data.unreadCount
       });
-      // Unread count is included in GET /conversations response.
-      // React Query invalidates conversation list on message:new events,
-      // which picks up the updated unread count automatically.
+      this.unreadUpdatedListeners.forEach(listener => listener(data));
     });
 
     // Reactions
@@ -80,6 +79,16 @@ export class PresenceService {
     // Conversation joined
     socket.on(SERVER_EVENTS.CONVERSATION_JOINED, (data: { conversationId: string; userId: string }) => {
       this.conversationJoinedListeners.forEach(listener => listener(data));
+    });
+
+    // Conversation left
+    socket.on(SERVER_EVENTS.CONVERSATION_LEFT as any, (data: any) => {
+      this.conversationJoinedListeners.forEach(listener => listener(data));
+    });
+
+    // Reaction sync (full state reconciliation after reconnect)
+    socket.on(SERVER_EVENTS.REACTION_SYNC as any, (data: any) => {
+      this.reactionAddedListeners.forEach(listener => listener(data));
     });
 
     // Read status
@@ -153,6 +162,14 @@ export class PresenceService {
   }
 
   /**
+   * Event listener: Unread count updated
+   */
+  onUnreadUpdated(listener: (data: { conversationId: string; unreadCount: number }) => void): UnsubscribeFn {
+    this.unreadUpdatedListeners.add(listener);
+    return () => this.unreadUpdatedListeners.delete(listener);
+  }
+
+  /**
    * Cleanup all listeners
    */
   cleanup(): void {
@@ -163,6 +180,7 @@ export class PresenceService {
     this.reactionRemovedListeners.clear();
     this.conversationJoinedListeners.clear();
     this.readStatusListeners.clear();
+    this.unreadUpdatedListeners.clear();
   }
 
   /**

@@ -522,6 +522,10 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationJoined(listener);
   }
 
+  onUnreadUpdated(listener: (data: { conversationId: string; unreadCount: number }) => void): UnsubscribeFn {
+    return this.presenceService.onUnreadUpdated(listener);
+  }
+
   // ============ CLEANUP ============
 
   cleanup(): void {

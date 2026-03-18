@@ -37,6 +37,9 @@ export class MessagingService {
   private messageListeners: Set<MessageListener> = new Set();
   private editListeners: Set<MessageEditListener> = new Set();
   private deleteListeners: Set<MessageDeleteListener> = new Set();
+  private mentionListeners: Set<(data: any) => void> = new Set();
+  private consumedListeners: Set<(data: any) => void> = new Set();
+  private attachmentStatusListeners: Set<(data: any) => void> = new Set();
 
   private encryptionHandlers: EncryptionHandlers | null = null;
   private getMessageByIdCallback: GetMessageByIdCallback | null = null;
@@ -105,6 +108,26 @@ export class MessagingService {
     socket.on(SERVER_EVENTS.MESSAGE_DELETED, (data) => {
       logger.debug('[MessagingService]', 'Message deleted', { messageId: data.messageId });
       this.deleteListeners.forEach(listener => listener(data.messageId));
+    });
+
+    // Mention created
+    socket.on(SERVER_EVENTS.MENTION_CREATED as any, (data: any) => {
+      this.mentionListeners.forEach(listener => listener(data));
+    });
+
+    // Message consumed (view-once)
+    socket.on(SERVER_EVENTS.MESSAGE_CONSUMED as any, (data: any) => {
+      this.consumedListeners.forEach(listener => listener(data));
+    });
+
+    // System message (join, leave, etc.)
+    socket.on(SERVER_EVENTS.SYSTEM_MESSAGE as any, (data: any) => {
+      this.messageListeners.forEach(listener => listener(convertMessageFn(data)));
+    });
+
+    // Attachment status updated
+    socket.on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED as any, (data: any) => {
+      this.attachmentStatusListeners.forEach(listener => listener(data));
     });
   }
 
@@ -405,12 +428,39 @@ export class MessagingService {
   }
 
   /**
+   * Event listener: Mention created
+   */
+  onMentionCreated(listener: (data: any) => void): UnsubscribeFn {
+    this.mentionListeners.add(listener);
+    return () => this.mentionListeners.delete(listener);
+  }
+
+  /**
+   * Event listener: Message consumed (view-once)
+   */
+  onMessageConsumed(listener: (data: any) => void): UnsubscribeFn {
+    this.consumedListeners.add(listener);
+    return () => this.consumedListeners.delete(listener);
+  }
+
+  /**
+   * Event listener: Attachment status updated
+   */
+  onAttachmentStatusUpdated(listener: (data: any) => void): UnsubscribeFn {
+    this.attachmentStatusListeners.add(listener);
+    return () => this.attachmentStatusListeners.delete(listener);
+  }
+
+  /**
    * Cleanup all listeners
    */
   cleanup(): void {
     this.messageListeners.clear();
     this.editListeners.clear();
     this.deleteListeners.clear();
+    this.mentionListeners.clear();
+    this.consumedListeners.clear();
+    this.attachmentStatusListeners.clear();
   }
 
   /**

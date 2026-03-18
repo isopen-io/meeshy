@@ -307,6 +307,10 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationJoined(listener);
   }
 
+  public onUnreadUpdated(listener: (data: { conversationId: string; unreadCount: number }) => void): () => void {
+    return this.orchestrator.onUnreadUpdated(listener);
+  }
+
   /**
    * Obtient le statut de connexion
    */

@@ -53,6 +53,11 @@ export class TranslationService {
       this.handleTranslationEvent(data);
     });
 
+    // Message translated (same payload, alternate event channel)
+    socket.on(SERVER_EVENTS.MESSAGE_TRANSLATED, (data: any) => {
+      this.handleTranslationEvent(data);
+    });
+
     // Audio translation ready
     socket.on(SERVER_EVENTS.AUDIO_TRANSLATION_READY, (data: AudioTranslationReadyEventData) => {
       logger.debug('[TranslationService]', 'Audio translation ready', {
