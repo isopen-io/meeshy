@@ -18,6 +18,24 @@ public actor CacheCoordinator {
     public let video: DiskCacheStore
     public let thumbnails: DiskCacheStore
 
+    // MARK: - In-Memory Translation/Transcription/Audio Caches (keyed by messageId)
+
+    private var translationCache: [String: [TranslationData]] = [:]
+    private var transcriptionCache: [String: TranscriptionReadyEvent] = [:]
+    private var audioTranslationCache: [String: [AudioTranslationEvent]] = [:]
+
+    public func cachedTranslations(for messageId: String) -> [TranslationData]? {
+        translationCache[messageId]
+    }
+
+    public func cachedTranscription(for messageId: String) -> TranscriptionReadyEvent? {
+        transcriptionCache[messageId]
+    }
+
+    public func cachedAudioTranslations(for messageId: String) -> [AudioTranslationEvent]? {
+        audioTranslationCache[messageId]
+    }
+
     private let messageSocket: any MessageSocketProviding
     private let socialSocket: any SocialSocketProviding
     private var cancellables = Set<AnyCancellable>()
@@ -153,6 +171,41 @@ public actor CacheCoordinator {
             }
             .store(in: &cancellables)
 
+        msgSocket.translationReceived
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleTranslationReceived(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.transcriptionReady
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleTranscriptionReady(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.audioTranslationReady
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleAudioTranslation(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.audioTranslationProgressive
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleAudioTranslation(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.audioTranslationCompleted
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleAudioTranslation(event) }
+            }
+            .store(in: &cancellables)
+
         msgSocket.didReconnect
             .sink { [weak self] in
                 guard let self else { return }
@@ -179,7 +232,13 @@ public actor CacheCoordinator {
 
     private func handleMessageDeleted(_ event: MessageDeletedEvent) async {
         await messages.update(for: event.conversationId) { existing in
-            existing.filter { $0.id != event.messageId }
+            existing.map { msg in
+                guard msg.id == event.messageId else { return msg }
+                var updated = msg
+                updated.deletedAt = Date()
+                updated.content = ""
+                return updated
+            }
         }
     }
 
@@ -266,6 +325,34 @@ public actor CacheCoordinator {
         }
     }
 
+    private func handleTranslationReceived(_ event: TranslationEvent) async {
+        let msgId = event.messageId
+        var existing = translationCache[msgId] ?? []
+        for translation in event.translations {
+            if let idx = existing.firstIndex(where: { $0.targetLanguage == translation.targetLanguage }) {
+                existing[idx] = translation
+            } else {
+                existing.append(translation)
+            }
+        }
+        translationCache[msgId] = existing
+    }
+
+    private func handleTranscriptionReady(_ event: TranscriptionReadyEvent) async {
+        transcriptionCache[event.messageId] = event
+    }
+
+    private func handleAudioTranslation(_ event: AudioTranslationEvent) async {
+        let msgId = event.messageId
+        var existing = audioTranslationCache[msgId] ?? []
+        if let idx = existing.firstIndex(where: { $0.translatedAudio.targetLanguage == event.translatedAudio.targetLanguage }) {
+            existing[idx] = event
+        } else {
+            existing.append(event)
+        }
+        audioTranslationCache[msgId] = existing
+    }
+
     private func handleReconnect() async {
         await conversations.invalidate(for: "list")
         logger.info("Reconnected — invalidated conversations cache")
@@ -346,5 +433,8 @@ public actor CacheCoordinator {
         await video.invalidateAll()
         await thumbnails.invalidateAll()
         await UserColorCache.shared.invalidateAll()
+        translationCache.removeAll()
+        transcriptionCache.removeAll()
+        audioTranslationCache.removeAll()
     }
 }
