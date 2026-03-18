@@ -25,6 +25,7 @@
 'use client';
 
 import { EventEmitter } from 'events';
+import { LRUCache } from '@/lib/lru-cache';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { TranslationModel, MessagePriority } from '@meeshy/shared/types';
@@ -85,7 +86,7 @@ class AdvancedTranslationService extends EventEmitter {
   private isEnabled = true;
   private pendingRequests: Map<string, BatchTranslationRequest> = new Map();
   private activeBatches: Map<string, TranslationBatch> = new Map();
-  private translationCache: Map<string, TranslationData> = new Map();
+  private translationCache: LRUCache<string, TranslationData> = new LRUCache(500);
   
   // Timers et queues
   private batchTimer: NodeJS.Timeout | null = null;

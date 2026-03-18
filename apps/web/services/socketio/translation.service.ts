@@ -10,6 +10,7 @@
 'use client';
 
 import { logger } from '@/utils/logger';
+import { LRUCache } from '@/lib/lru-cache';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   TranslationEvent,
@@ -40,7 +41,7 @@ export class TranslationService {
   private transcriptionListeners: Set<TranscriptionListener> = new Set();
 
   // Translation caching and deduplication
-  private translationCache: Map<string, any> = new Map();
+  private translationCache: LRUCache<string, any> = new LRUCache(500);
   private processedTranslationEvents: Set<string> = new Set();
 
   /**
