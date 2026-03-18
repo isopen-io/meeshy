@@ -18,6 +18,8 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, PaginationParams, UserIdParams, UsernameParams } from './types';
+import { authUserCacheKey } from '../../middleware/auth';
+import { getRedisWrapper } from '../../services/RedisWrapper';
 
 /**
  * Validate and sanitize pagination parameters
@@ -246,6 +248,8 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         }
       });
 
+      try { await getRedisWrapper().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
       // TODO: Migrate feature preferences to UserPreferences.application JSON
       if (Object.keys(featureUpdateData).length > 0) {
         console.warn('[Profile] Feature update data not saved - needs migration to UserPreferences:', featureUpdateData);
@@ -375,6 +379,8 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
         }
       });
 
+      try { await getRedisWrapper().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
 
       return reply.send({
@@ -488,6 +494,8 @@ export async function updateUserBanner(fastify: FastifyInstance) {
           updatedAt: true
         }
       });
+
+      try { await getRedisWrapper().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
       fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
 
@@ -798,6 +806,8 @@ export async function updateUsername(fastify: FastifyInstance) {
           username: true
         }
       });
+
+      try { await getRedisWrapper().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
       fastify.log.info(`[USERNAME_CHANGE] User ${userId} changed username from "${user.username}" to "${body.newUsername}"`);
 

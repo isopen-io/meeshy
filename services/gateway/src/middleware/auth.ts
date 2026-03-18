@@ -434,6 +434,14 @@ export function createUnifiedAuthMiddleware(
   };
 }
 
+// ===== CACHE HELPERS =====
+
+export const AUTH_USER_CACHE_PREFIX = 'auth:user:';
+
+export function authUserCacheKey(userId: string): string {
+  return `${AUTH_USER_CACHE_PREFIX}${userId}`;
+}
+
 // ===== HELPER FUNCTIONS =====
 
 export function isRegisteredUser(authContext: UnifiedAuthContext): boolean {
