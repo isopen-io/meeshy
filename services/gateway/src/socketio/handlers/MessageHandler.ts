@@ -30,7 +30,7 @@ import type {
 import type { Message } from '@meeshy/shared/types/index';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
+
 
 export interface MessageHandlerDependencies {
   io: SocketIOServer;
@@ -256,9 +256,6 @@ export class MessageHandler {
       // response.data is already enriched (sender.user, attachments, replyTo) from saveMessage include
       if (response.success && response.data) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
-        // Invalider le cache AVANT de broadcaster pour éviter les race conditions
-        await invalidateConversationCacheAsync(message.conversationId, this.prisma);
-
         await this.broadcastNewMessage(message, message.conversationId, socket);
         await this._createMessageNotifications(message, resolvedParticipantId);
       }
@@ -354,9 +351,6 @@ export class MessageHandler {
 
         const message = await this._fetchMessageForBroadcast(response.data.id);
         if (message) {
-          // Invalider le cache AVANT de broadcaster pour éviter les race conditions
-          await invalidateConversationCacheAsync(message.conversationId, this.prisma);
-
           await this.broadcastNewMessage(message, message.conversationId, socket);
         }
       }

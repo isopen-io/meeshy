@@ -17,22 +17,26 @@
  * @jest-environment node
  */
 
-// Mock RedisWrapper FIRST before imports
+// Mock CacheStore FIRST before imports
 // NOTE: jest.mock factories are hoisted before any const/let definitions,
 // so we keep the factory self-contained and wire up the shared instance in beforeEach.
-jest.mock('../../../services/RedisWrapper', () => {
-  const sharedMockRedis = {
+jest.mock('../../../services/CacheStore', () => {
+  const sharedMockCache = {
     get: jest.fn().mockResolvedValue(null),
     set: jest.fn().mockResolvedValue(undefined),
-    setex: jest.fn().mockResolvedValue(undefined),
     del: jest.fn().mockResolvedValue(undefined),
     keys: jest.fn().mockResolvedValue([]),
-    getCacheStats: jest.fn().mockReturnValue({ mode: 'Memory', redisAvailable: false }),
+    setnx: jest.fn().mockResolvedValue(true),
+    expire: jest.fn().mockResolvedValue(true),
+    publish: jest.fn().mockResolvedValue(0),
+    info: jest.fn().mockResolvedValue(''),
+    isAvailable: jest.fn().mockReturnValue(false),
+    close: jest.fn().mockResolvedValue(undefined),
+    getNativeClient: jest.fn().mockReturnValue(null),
   };
   return {
-    RedisWrapper: jest.fn().mockImplementation(() => sharedMockRedis),
-    getRedisWrapper: jest.fn().mockReturnValue(sharedMockRedis),
-    __sharedMockRedis: sharedMockRedis,
+    getCacheStore: jest.fn().mockReturnValue(sharedMockCache),
+    __sharedMockCache: sharedMockCache,
   };
 });
 
@@ -76,7 +80,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
 
 import { MentionService, MentionSuggestion, MentionValidationResult } from '../../../services/MentionService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { RedisWrapper, getRedisWrapper } from '../../../services/RedisWrapper';
+import { getCacheStore } from '../../../services/CacheStore';
 
 describe('MentionService', () => {
   let service: MentionService;
@@ -84,24 +88,21 @@ describe('MentionService', () => {
   let mockRedis: any;
 
   beforeEach(() => {
-    // Retrieve the shared mock redis instance created inside the jest.mock factory
-    const redisWrapperMod = jest.requireMock('../../../services/RedisWrapper') as any;
-    mockRedis = redisWrapperMod.__sharedMockRedis;
+    // Retrieve the shared mock cache instance created inside the jest.mock factory
+    const cacheStoreMod = jest.requireMock('../../../services/CacheStore') as any;
+    mockRedis = cacheStoreMod.__sharedMockCache;
 
     jest.clearAllMocks();
 
-    // Re-initialise mockRedis fns after clearAllMocks() reset them
+    // Re-initialise mock fns after clearAllMocks() reset them
     mockRedis.get.mockResolvedValue(null);
     mockRedis.set.mockResolvedValue(undefined);
-    mockRedis.setex.mockResolvedValue(undefined);
     mockRedis.del.mockResolvedValue(undefined);
     mockRedis.keys.mockResolvedValue([]);
-    mockRedis.getCacheStats.mockReturnValue({ mode: 'Memory', redisAvailable: false });
+    mockRedis.isAvailable.mockReturnValue(false);
 
-    // Ensure getRedisWrapper returns the shared mock instance
-    (getRedisWrapper as jest.Mock).mockReturnValue(mockRedis);
-    // Also keep RedisWrapper constructor mock consistent
-    (RedisWrapper as jest.Mock).mockImplementation(() => mockRedis);
+    // Ensure getCacheStore returns the shared mock instance
+    (getCacheStore as jest.Mock).mockReturnValue(mockRedis);
 
     // Create new Prisma instance
     prisma = new PrismaClient();
@@ -120,15 +121,8 @@ describe('MentionService', () => {
       expect(newService).toBeInstanceOf(MentionService);
     });
 
-    it('should initialize Redis wrapper via getRedisWrapper', () => {
-      expect(getRedisWrapper).toHaveBeenCalled();
-    });
-
-    it('should accept optional Redis URL', () => {
-      const customRedisUrl = 'redis://custom:6380';
-      const newService = new MentionService(prisma, customRedisUrl);
-      expect(newService).toBeInstanceOf(MentionService);
-      expect(getRedisWrapper).toHaveBeenCalledWith(customRedisUrl);
+    it('should initialize cache via getCacheStore', () => {
+      expect(getCacheStore).toHaveBeenCalled();
     });
   });
 
@@ -458,7 +452,7 @@ describe('MentionService', () => {
       expect(result[0].username).toBe('john');
       expect(result[0].badge).toBe('conversation');
       expect(result[0].inConversation).toBe(true);
-      expect(mockRedis.setex).toHaveBeenCalled();
+      expect(mockRedis.set).toHaveBeenCalled();
     });
 
     it('should prioritize conversation members over friends', async () => {
@@ -1349,7 +1343,7 @@ describe('MentionService', () => {
 
     it('should handle cache write errors gracefully', async () => {
       mockRedis.get.mockResolvedValue(null);
-      mockRedis.setex.mockRejectedValue(new Error('Cache write error'));
+      mockRedis.set.mockRejectedValue(new Error('Cache write error'));
 
       prisma.participant.findMany.mockResolvedValue([
         {

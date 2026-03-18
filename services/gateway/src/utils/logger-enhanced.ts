@@ -487,7 +487,7 @@ export function requestLogger() {
 
 /**
  * Helper function for direct console.log replacement
- * Usage: gwLog('info', 'RedisWrapper', 'Message', { context: 'data' })
+ * Usage: gwLog('info', 'CacheStore', 'Message', { context: 'data' })
  * Format: [YYYY-MM-DD HH:MM:SS UTC] [LEVEL] [GWY] [Module] {msg="...", data={...}}
  */
 export function gwLog(

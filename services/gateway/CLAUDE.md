@@ -36,7 +36,7 @@ src/
 │   ├── MessagingService.ts
 │   ├── NotificationService.ts
 │   ├── EncryptionService.ts
-│   └── RedisWrapper.ts          → Singleton Redis
+│   └── CacheStore.ts             → Unified cache (Redis + memory fallback)
 ├── socketio/                    → WebSocket layer
 │   ├── MeeshySocketIOManager.ts → Main orchestrator (119KB)
 │   ├── handlers/                → Auth, Message, Reaction, Status, Conversation

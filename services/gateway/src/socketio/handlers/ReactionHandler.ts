@@ -10,7 +10,7 @@ import { NotificationService } from '../../services/NotificationService';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
+
 
 export interface ReactionHandlerDependencies {
   io: SocketIOServer;
@@ -107,7 +107,6 @@ export class ReactionHandler {
       // Broadcaster l'événement
       if (message) {
         await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED);
-        await invalidateConversationCacheAsync(message.conversationId, this.prisma);
       }
 
       // Créer une notification
@@ -192,7 +191,6 @@ export class ReactionHandler {
 
       if (message) {
         await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED);
-        await invalidateConversationCacheAsync(message.conversationId, this.prisma);
       }
     } catch (error: unknown) {
       console.error('❌ Erreur lors de la suppression de réaction:', error);

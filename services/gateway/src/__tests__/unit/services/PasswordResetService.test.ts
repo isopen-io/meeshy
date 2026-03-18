@@ -82,15 +82,19 @@ const mockPrisma = {
   $transaction: jest.fn((callback: Function) => callback(mockPrisma))
 } as any;
 
-// Mock Redis Wrapper
+// Mock CacheStore
 const mockRedis = {
   get: jest.fn() as jest.Mock<any>,
   set: jest.fn() as jest.Mock<any>,
-  setex: jest.fn() as jest.Mock<any>,
   setnx: jest.fn() as jest.Mock<any>,
   expire: jest.fn() as jest.Mock<any>,
   del: jest.fn() as jest.Mock<any>,
-  close: jest.fn() as jest.Mock<any>
+  keys: jest.fn() as jest.Mock<any>,
+  publish: jest.fn() as jest.Mock<any>,
+  info: jest.fn() as jest.Mock<any>,
+  isAvailable: jest.fn() as jest.Mock<any>,
+  close: jest.fn() as jest.Mock<any>,
+  getNativeClient: jest.fn() as jest.Mock<any>
 };
 
 // Mock Email Service
@@ -164,10 +168,10 @@ describe('PasswordResetService', () => {
     mockAxiosPost.mockResolvedValue({ data: { success: true } });
 
     mockRedis.get.mockResolvedValue(null);
-    mockRedis.setex.mockResolvedValue('OK');
-    mockRedis.setnx.mockResolvedValue(1);
-    mockRedis.expire.mockResolvedValue(1);
-    mockRedis.del.mockResolvedValue(1);
+    mockRedis.set.mockResolvedValue(undefined);
+    mockRedis.setnx.mockResolvedValue(true);
+    mockRedis.expire.mockResolvedValue(true);
+    mockRedis.del.mockResolvedValue(undefined);
 
     mockGeoIPService.lookup.mockResolvedValue(mockGeoData);
 
@@ -275,15 +279,15 @@ describe('PasswordResetService', () => {
 
         await service.requestPasswordReset(validResetRequest);
 
-        expect(mockRedis.setex).toHaveBeenCalledWith(
+        expect(mockRedis.set).toHaveBeenCalledWith(
           expect.stringContaining('email:'),
-          3600,
-          '1'
+          '1',
+          3600
         );
-        expect(mockRedis.setex).toHaveBeenCalledWith(
+        expect(mockRedis.set).toHaveBeenCalledWith(
           expect.stringContaining('ip:'),
-          3600,
-          '1'
+          '1',
+          3600
         );
       });
 
@@ -297,15 +301,15 @@ describe('PasswordResetService', () => {
 
         await service.requestPasswordReset(validResetRequest);
 
-        expect(mockRedis.setex).toHaveBeenCalledWith(
+        expect(mockRedis.set).toHaveBeenCalledWith(
           expect.stringContaining('email:'),
-          3600,
-          '2'
+          '2',
+          3600
         );
-        expect(mockRedis.setex).toHaveBeenCalledWith(
+        expect(mockRedis.set).toHaveBeenCalledWith(
           expect.stringContaining('ip:'),
-          3600,
-          '3'
+          '3',
+          3600
         );
       });
     });
@@ -385,7 +389,7 @@ describe('PasswordResetService', () => {
         mockPrisma.user.findFirst.mockResolvedValue(expiredLockUser);
         mockPrisma.user.findUnique.mockResolvedValue(expiredLockUser);
         mockPrisma.passwordResetToken.count.mockResolvedValue(0);
-        mockRedis.setnx.mockResolvedValue(1);
+        mockRedis.setnx.mockResolvedValue(true);
 
         await service.requestPasswordReset(validResetRequest);
 
@@ -430,7 +434,7 @@ describe('PasswordResetService', () => {
         mockPrisma.user.findFirst.mockResolvedValue(mockUser);
         mockPrisma.user.findUnique.mockResolvedValue({ lockedUntil: null });
         mockPrisma.passwordResetToken.count.mockResolvedValue(0);
-        mockRedis.setnx.mockResolvedValue(0); // Lock not acquired
+        mockRedis.setnx.mockResolvedValue(false); // Lock not acquired
 
         const result = await service.requestPasswordReset(validResetRequest);
 
@@ -442,7 +446,7 @@ describe('PasswordResetService', () => {
         mockPrisma.user.findFirst.mockResolvedValue(mockUser);
         mockPrisma.user.findUnique.mockResolvedValue({ lockedUntil: null });
         mockPrisma.passwordResetToken.count.mockResolvedValue(0);
-        mockRedis.setnx.mockResolvedValue(1);
+        mockRedis.setnx.mockResolvedValue(true);
 
         await service.requestPasswordReset(validResetRequest);
 
@@ -469,7 +473,7 @@ describe('PasswordResetService', () => {
         mockPrisma.user.findFirst.mockResolvedValue(mockUser);
         mockPrisma.user.findUnique.mockResolvedValue({ lockedUntil: null });
         mockPrisma.passwordResetToken.count.mockResolvedValue(0);
-        mockRedis.setnx.mockResolvedValue(1);
+        mockRedis.setnx.mockResolvedValue(true);
       });
 
       it('should revoke existing tokens before creating new one', async () => {
@@ -1244,10 +1248,10 @@ describe('PasswordResetService - Edge Cases', () => {
     mockAxiosPost.mockResolvedValue({ data: { success: true } });
 
     mockRedis.get.mockResolvedValue(null);
-    mockRedis.setex.mockResolvedValue('OK');
-    mockRedis.setnx.mockResolvedValue(1);
-    mockRedis.expire.mockResolvedValue(1);
-    mockRedis.del.mockResolvedValue(1);
+    mockRedis.set.mockResolvedValue(undefined);
+    mockRedis.setnx.mockResolvedValue(true);
+    mockRedis.expire.mockResolvedValue(true);
+    mockRedis.del.mockResolvedValue(undefined);
 
     mockGeoIPService.lookup.mockResolvedValue(null);
 
@@ -1376,10 +1380,10 @@ describe('PasswordResetService - Security Tests', () => {
     mockAxiosPost.mockResolvedValue({ data: { success: true } });
 
     mockRedis.get.mockResolvedValue(null);
-    mockRedis.setex.mockResolvedValue('OK');
-    mockRedis.setnx.mockResolvedValue(1);
-    mockRedis.expire.mockResolvedValue(1);
-    mockRedis.del.mockResolvedValue(1);
+    mockRedis.set.mockResolvedValue(undefined);
+    mockRedis.setnx.mockResolvedValue(true);
+    mockRedis.expire.mockResolvedValue(true);
+    mockRedis.del.mockResolvedValue(undefined);
 
     mockGeoIPService.lookup.mockResolvedValue(mockGeoData);
 

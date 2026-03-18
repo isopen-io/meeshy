@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { PasswordResetService } from '../services/PasswordResetService';
-import { RedisWrapper } from '../services/RedisWrapper';
+import type { CacheStore } from '../services/CacheStore';
 import { EmailService } from '../services/EmailService';
 import { GeoIPService } from '../services/GeoIPService';
 
@@ -40,21 +40,53 @@ const mockPrisma = {
 
 describe('PasswordResetService', () => {
   let service: PasswordResetService;
-  let redis: RedisWrapper;
+  let cache: CacheStore;
   let emailService: EmailService;
   let geoIPService: GeoIPService;
+
+  function createMockCacheStore(): CacheStore {
+    const store = new Map<string, { value: string; expiresAt: number }>();
+    return {
+      get: async (key) => {
+        const entry = store.get(key);
+        if (entry && entry.expiresAt > Date.now()) return entry.value;
+        if (entry) store.delete(key);
+        return null;
+      },
+      set: async (key, value, ttl) => {
+        store.set(key, { value, expiresAt: Date.now() + (ttl || 3600) * 1000 });
+      },
+      del: async (key) => { store.delete(key); },
+      keys: async (pattern) => {
+        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+        return [...store.keys()].filter(k => regex.test(k));
+      },
+      setnx: async (key, value, ttl) => {
+        const existing = store.get(key);
+        if (existing && existing.expiresAt > Date.now()) return false;
+        store.set(key, { value, expiresAt: Date.now() + (ttl || 3600) * 1000 });
+        return true;
+      },
+      expire: async () => true,
+      publish: async () => 0,
+      info: async () => '',
+      isAvailable: () => false,
+      close: async () => { store.clear(); },
+      getNativeClient: () => null,
+    };
+  }
 
   beforeEach(() => {
     // Reset all mocks
     jest.clearAllMocks();
 
-    redis = new RedisWrapper();
+    cache = createMockCacheStore();
     emailService = new EmailService();
     geoIPService = new GeoIPService();
 
     service = new PasswordResetService(
       mockPrisma as any,
-      redis,
+      cache,
       emailService,
       geoIPService,
       'test-captcha-secret'
@@ -62,7 +94,7 @@ describe('PasswordResetService', () => {
   });
 
   afterEach(async () => {
-    await redis.close();
+    await cache.close();
   });
 
   describe('requestPasswordReset', () => {

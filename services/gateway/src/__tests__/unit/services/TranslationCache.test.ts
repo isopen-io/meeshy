@@ -20,111 +20,85 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
-import { EventEmitter } from 'events';
 
-// Mock RedisWrapper
-class MockRedisWrapper extends EventEmitter {
+// Mock CacheStore with a functional in-memory implementation
+class MockCacheStore {
   private mockData: Map<string, string> = new Map();
   private shouldFailGet = false;
-  private shouldFailSetex = false;
+  private shouldFailSet = false;
   private shouldFailDel = false;
   private shouldFailKeys = false;
   private shouldFailInfo = false;
-  private mockRedisAvailable = true;
-
-  constructor(public url: string) {
-    super();
-  }
 
   async get(key: string): Promise<string | null> {
-    if (this.shouldFailGet) {
-      throw new Error('Redis get error');
-    }
+    if (this.shouldFailGet) throw new Error('Redis get error');
     return this.mockData.get(key) || null;
   }
 
-  async setex(key: string, seconds: number, value: string): Promise<void> {
-    if (this.shouldFailSetex) {
-      throw new Error('Redis setex error');
-    }
+  async set(key: string, value: string, _ttlSeconds?: number): Promise<void> {
+    if (this.shouldFailSet) throw new Error('Redis set error');
     this.mockData.set(key, value);
   }
 
   async del(key: string): Promise<void> {
-    if (this.shouldFailDel) {
-      throw new Error('Redis del error');
-    }
+    if (this.shouldFailDel) throw new Error('Redis del error');
     this.mockData.delete(key);
   }
 
   async keys(pattern: string): Promise<string[]> {
-    if (this.shouldFailKeys) {
-      throw new Error('Redis keys error');
-    }
+    if (this.shouldFailKeys) throw new Error('Redis keys error');
     const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
     const matchingKeys: string[] = [];
     for (const key of this.mockData.keys()) {
-      if (regex.test(key)) {
-        matchingKeys.push(key);
-      }
+      if (regex.test(key)) matchingKeys.push(key);
     }
     return matchingKeys;
   }
 
-  async info(section?: string): Promise<string> {
-    if (this.shouldFailInfo) {
-      throw new Error('Redis info error');
-    }
+  async setnx(key: string, value: string, _ttl?: number): Promise<boolean> {
+    if (this.mockData.has(key)) return false;
+    this.mockData.set(key, value);
+    return true;
+  }
+
+  async expire(_key: string, _seconds: number): Promise<boolean> { return true; }
+  async publish(_channel: string, _message: string): Promise<number> { return 0; }
+
+  async info(_section?: string): Promise<string> {
+    if (this.shouldFailInfo) throw new Error('Redis info error');
     return '# Server\nredis_version:7.0.0\n# Memory\nused_memory_human:1.00MB';
   }
 
-  async close(): Promise<void> {
-    this.mockData.clear();
-  }
+  isAvailable(): boolean { return false; }
 
-  getCacheStats(): { mode: string; entries: number; redisAvailable: boolean } {
-    return {
-      mode: this.mockRedisAvailable ? 'Redis' : 'Memory',
-      entries: this.mockData.size,
-      redisAvailable: this.mockRedisAvailable,
-    };
-  }
+  async close(): Promise<void> { this.mockData.clear(); }
+
+  getNativeClient(): null { return null; }
 
   // Helper methods for tests
-  setMockData(key: string, value: string): void {
-    this.mockData.set(key, value);
-  }
-
-  clearMockData(): void {
-    this.mockData.clear();
-  }
+  setMockData(key: string, value: string): void { this.mockData.set(key, value); }
+  clearMockData(): void { this.mockData.clear(); }
 
   enableGetError(): void { this.shouldFailGet = true; }
-  enableSetexError(): void { this.shouldFailSetex = true; }
+  enableSetError(): void { this.shouldFailSet = true; }
   enableDelError(): void { this.shouldFailDel = true; }
   enableKeysError(): void { this.shouldFailKeys = true; }
   enableInfoError(): void { this.shouldFailInfo = true; }
 
   disableGetError(): void { this.shouldFailGet = false; }
-  disableSetexError(): void { this.shouldFailSetex = false; }
+  disableSetError(): void { this.shouldFailSet = false; }
   disableDelError(): void { this.shouldFailDel = false; }
   disableKeysError(): void { this.shouldFailKeys = false; }
   disableInfoError(): void { this.shouldFailInfo = false; }
-
-  setRedisAvailable(available: boolean): void { this.mockRedisAvailable = available; }
 }
 
 // Store mock instance for test access
-let mockRedisInstance: MockRedisWrapper | null = null;
+let mockRedisInstance: MockCacheStore | null = null;
 
-// Mock RedisWrapper module
-jest.mock('../../../services/RedisWrapper', () => ({
-  RedisWrapper: jest.fn().mockImplementation((url: string) => {
-    mockRedisInstance = new MockRedisWrapper(url);
-    return mockRedisInstance;
-  }),
-  getRedisWrapper: jest.fn().mockImplementation((url: string) => {
-    mockRedisInstance = new MockRedisWrapper(url);
+// Mock CacheStore module
+jest.mock('../../../services/CacheStore', () => ({
+  getCacheStore: jest.fn().mockImplementation(() => {
+    mockRedisInstance = new MockCacheStore();
     return mockRedisInstance;
   })
 }));
@@ -158,31 +132,14 @@ describe('TranslationCache', () => {
       expect(translationCache).toBeInstanceOf(TranslationCache);
     });
 
-    it('should create TranslationCache with custom URL', () => {
-      const customUrl = 'redis://custom-host:6380';
-      translationCache = new TranslationCache(customUrl);
-
-      expect(translationCache).toBeDefined();
-      expect(mockRedisInstance?.url).toBe(customUrl);
-    });
-
-    it('should use environment variable REDIS_URL if no URL provided', () => {
-      const originalEnv = process.env.REDIS_URL;
-      process.env.REDIS_URL = 'redis://env-host:6381';
-
+    it('should use shared CacheStore singleton', () => {
       translationCache = new TranslationCache();
 
-      expect(mockRedisInstance?.url).toBe('redis://env-host:6381');
-
-      // Restore original env
-      if (originalEnv !== undefined) {
-        process.env.REDIS_URL = originalEnv;
-      } else {
-        delete process.env.REDIS_URL;
-      }
+      expect(translationCache).toBeDefined();
+      expect(mockRedisInstance).not.toBeNull();
     });
 
-    it('should log cache initialization with mode', () => {
+    it('should log cache initialization', () => {
       const consoleSpy = jest.spyOn(console, 'log');
 
       translationCache = new TranslationCache();
@@ -347,7 +304,7 @@ describe('TranslationCache', () => {
     });
 
     it('should handle Redis setex error gracefully', async () => {
-      mockRedisInstance?.enableSetexError();
+      mockRedisInstance?.enableSetError();
 
       const entry: TranslationCacheEntry = {
         translatedText: 'Test',
