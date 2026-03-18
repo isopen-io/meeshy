@@ -285,6 +285,7 @@ class ConversationViewModel: ObservableObject {
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
     private var currentUsername: String? { authManager.currentUser?.username }
+    private var _resolvedParticipantId: String?
 
     // MARK: - Mention Display Names (username → displayName) — cached
 
@@ -825,23 +826,35 @@ class ConversationViewModel: ObservableObject {
     func toggleReaction(messageId: String, emoji: String) {
         guard let idx = messageIndex(for: messageId) else { return }
 
-        let userId = currentUserId
-        let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == userId }
+        let participantId = _resolvedParticipantId ?? currentUserId
+        let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == participantId }
 
         if alreadyReacted {
             // Optimistic remove
-            messages[idx].reactions.removeAll { $0.emoji == emoji && $0.participantId == userId }
+            messages[idx].reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
             // API call
             Task {
                 try? await reactionService.remove(messageId: messageId, emoji: emoji)
             }
         } else {
             // Optimistic add
-            let reaction = Reaction(messageId: messageId, participantId: userId, emoji: emoji)
+            let reaction = Reaction(messageId: messageId, participantId: participantId, emoji: emoji)
             messages[idx].reactions.append(reaction)
             // API call
             Task {
                 try? await reactionService.add(messageId: messageId, emoji: emoji)
+            }
+        }
+
+        // Resolve participantId lazily for future reactions
+        if _resolvedParticipantId == nil {
+            let convId = conversationId
+            let userId = currentUserId
+            Task {
+                let cached = await CacheCoordinator.shared.participants.load(for: convId).value ?? []
+                if let match = cached.first(where: { $0.userId == userId }) {
+                    self._resolvedParticipantId = match.id
+                }
             }
         }
     }
