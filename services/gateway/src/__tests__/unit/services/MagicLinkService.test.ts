@@ -59,10 +59,19 @@ const mockPrisma = {
   }
 } as any;
 
-// Mock Redis Wrapper
+// Mock CacheStore
 const mockRedis = {
   get: jest.fn() as jest.Mock<any>,
-  setex: jest.fn() as jest.Mock<any>
+  set: jest.fn() as jest.Mock<any>,
+  del: jest.fn() as jest.Mock<any>,
+  keys: jest.fn() as jest.Mock<any>,
+  setnx: jest.fn() as jest.Mock<any>,
+  expire: jest.fn() as jest.Mock<any>,
+  publish: jest.fn() as jest.Mock<any>,
+  info: jest.fn() as jest.Mock<any>,
+  isAvailable: jest.fn() as jest.Mock<any>,
+  close: jest.fn() as jest.Mock<any>,
+  getNativeClient: jest.fn() as jest.Mock<any>,
 };
 
 // Mock Email Service
@@ -183,7 +192,7 @@ describe('MagicLinkService', () => {
 
     // Default mock implementations
     mockRedis.get.mockResolvedValue(null);
-    mockRedis.setex.mockResolvedValue('OK');
+    mockRedis.set.mockResolvedValue(undefined);
 
     mockGeoIPService.lookup.mockResolvedValue(mockGeoData);
 
@@ -236,10 +245,10 @@ describe('MagicLinkService', () => {
 
         await service.requestMagicLink(validMagicLinkRequest);
 
-        expect(mockRedis.setex).toHaveBeenCalledWith(
+        expect(mockRedis.set).toHaveBeenCalledWith(
           expect.stringContaining('ratelimit:magic-link:email:'),
-          3600,
-          '1'
+          '1',
+          3600
         );
       });
 
@@ -249,10 +258,10 @@ describe('MagicLinkService', () => {
 
         await service.requestMagicLink(validMagicLinkRequest);
 
-        expect(mockRedis.setex).toHaveBeenCalledWith(
+        expect(mockRedis.set).toHaveBeenCalledWith(
           expect.stringContaining('ratelimit:magic-link:email:'),
-          3600,
-          '6'
+          '6',
+          3600
         );
       });
 
@@ -728,7 +737,7 @@ describe('MagicLinkService - Edge Cases', () => {
     jest.clearAllMocks();
 
     mockRedis.get.mockResolvedValue(null);
-    mockRedis.setex.mockResolvedValue('OK');
+    mockRedis.set.mockResolvedValue(undefined);
     mockGeoIPService.lookup.mockResolvedValue(null);
     mockJwtSign.mockReturnValue('mock-jwt-token');
     mockGenerateSessionToken.mockReturnValue('mock-session-token');
@@ -835,7 +844,7 @@ describe('MagicLinkService - Security Tests', () => {
     jest.clearAllMocks();
 
     mockRedis.get.mockResolvedValue(null);
-    mockRedis.setex.mockResolvedValue('OK');
+    mockRedis.set.mockResolvedValue(undefined);
     mockGeoIPService.lookup.mockResolvedValue(mockGeoData);
     mockJwtSign.mockReturnValue('mock-jwt-token');
     mockGenerateSessionToken.mockReturnValue('mock-session-token');
@@ -861,7 +870,7 @@ describe('MagicLinkService - Security Tests', () => {
 
     jest.clearAllMocks();
     mockRedis.get.mockResolvedValue(null);
-    mockRedis.setex.mockResolvedValue('OK');
+    mockRedis.set.mockResolvedValue(undefined);
 
     // Test with non-existing user
     mockPrisma.user.findFirst.mockResolvedValue(null);

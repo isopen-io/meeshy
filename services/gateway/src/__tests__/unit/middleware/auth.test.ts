@@ -3,6 +3,36 @@ import jwt from 'jsonwebtoken'
 import { AuthMiddleware } from '../../../middleware/auth'
 import { hashSessionToken } from '../../../utils/session-token'
 
+// Mock CacheStore to prevent cross-test cache pollution
+jest.mock('../../../services/CacheStore', () => {
+  const store = new Map<string, { value: string; expiresAt: number }>();
+  const mockStore = {
+    get: jest.fn(async (key: string) => {
+      const entry = store.get(key);
+      if (entry && entry.expiresAt > Date.now()) return entry.value;
+      return null;
+    }),
+    set: jest.fn(async (key: string, value: string, ttl?: number) => {
+      store.set(key, { value, expiresAt: Date.now() + (ttl || 3600) * 1000 });
+    }),
+    del: jest.fn(async (key: string) => { store.delete(key); }),
+    keys: jest.fn(async () => []),
+    setnx: jest.fn(async () => true),
+    expire: jest.fn(async () => true),
+    publish: jest.fn(async () => 0),
+    info: jest.fn(async () => ''),
+    isAvailable: jest.fn(() => false),
+    close: jest.fn(async () => {}),
+    getNativeClient: jest.fn(() => null),
+  };
+  return {
+    getCacheStore: jest.fn(() => mockStore),
+    resetCacheStore: jest.fn(() => { store.clear(); }),
+    __mockStore: mockStore,
+    __mockStoreMap: store,
+  };
+});
+
 const JWT_SECRET = 'test-secret-key'
 
 function createMockPrisma(overrides: Record<string, unknown> = {}) {
@@ -30,9 +60,12 @@ function createTestUser(overrides: Record<string, unknown> = {}) {
     displayName: 'Test User',
     avatar: null,
     role: 'USER',
-    systemLanguage: 'en',
-    regionalLanguage: 'fr',
+    systemLanguage: 'fr',
+    regionalLanguage: 'en',
     customDestinationLanguage: null,
+    translateToSystemLanguage: true,
+    translateToRegionalLanguage: true,
+    useCustomDestination: false,
     isOnline: true,
     lastActiveAt: new Date(),
     isActive: true,
@@ -88,6 +121,9 @@ function signJwt(userId: string): string {
 describe('AuthMiddleware', () => {
   beforeEach(() => {
     process.env.JWT_SECRET = JWT_SECRET
+    // Clear mock cache between tests
+    const { __mockStoreMap } = require('../../../services/CacheStore');
+    __mockStoreMap.clear();
   })
 
   describe('createAuthContext with no tokens', () => {
@@ -132,7 +168,7 @@ describe('AuthMiddleware', () => {
     })
 
     it('uses customDestinationLanguage when available', async () => {
-      const user = createTestUser({ customDestinationLanguage: 'de' })
+      const user = createTestUser({ customDestinationLanguage: 'de', useCustomDestination: true })
       const prisma = createMockPrisma({
         userFindUnique: jest.fn().mockResolvedValue(user),
       })
