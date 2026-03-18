@@ -507,7 +507,7 @@ export default function V2ChatsPage() {
               <div key={msg.id}>
                 {showTimestamp && <MessageTimestamp timestamp={msg.createdAt.toString()} format="date" showSeparators />}
 
-                <div className="group relative">
+                <div className={`group relative ${isSent ? 'flex justify-end' : ''}`}>
                   {repliedMessage && (
                     <div className={`mb-1 ${isSent ? 'flex justify-end' : ''}`}>
                       <div className="max-w-[60%] opacity-80">
