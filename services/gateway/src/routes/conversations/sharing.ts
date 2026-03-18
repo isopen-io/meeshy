@@ -16,6 +16,7 @@ import {
   generateFinalLinkId,
   ensureUniqueShareLinkIdentifier
 } from './utils/identifier-generator';
+import { sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendConflict, sendInternalError, sendError } from '../../utils/response';
 
 /**
  * Enregistre les routes de partage et d'invitation
@@ -108,10 +109,7 @@ export function registerSharingRoutes(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // Récupérer les informations de la conversation et du membre
@@ -130,17 +128,11 @@ export function registerSharingRoutes(
       ]);
 
       if (!conversation) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Conversation not found'
-        });
+        return sendNotFound(reply, 'Conversation not found');
       }
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // Récupérer le rôle de l'utilisateur
@@ -150,10 +142,7 @@ export function registerSharingRoutes(
       });
 
       if (!user) {
-        return reply.status(403).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendForbidden(reply, 'User not found');
       }
 
       // Vérifier les permissions pour créer des liens de partage
@@ -162,19 +151,13 @@ export function registerSharingRoutes(
 
       // Interdire la création de liens pour les conversations directes
       if (conversationType === 'direct') {
-        return reply.status(403).send({
-          success: false,
-          error: 'Cannot create share links for direct conversations'
-        });
+        return sendForbidden(reply, 'Cannot create share links for direct conversations');
       }
 
       // Pour les conversations globales, seuls les BIGBOSS peuvent créer des liens
       if (conversationType === 'global') {
         if (userRole !== UserRoleEnum.BIGBOSS) {
-          return reply.status(403).send({
-            success: false,
-            error: 'You do not have the necessary rights to perform this operation'
-          });
+          return sendForbidden(reply, 'You do not have the necessary rights to perform this operation');
         }
       }
 
@@ -258,10 +241,7 @@ export function registerSharingRoutes(
 
     } catch (error) {
       console.error('Error creating new conversation link:', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Error creating link'
-      });
+      sendInternalError(reply, 'Error creating link');
     }
   });
 
@@ -311,10 +291,7 @@ export function registerSharingRoutes(
     try {
       // Vérifier que l'utilisateur est authentifié
       if (!authRequest.authContext.isAuthenticated) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentification requise'
-        });
+        return sendUnauthorized(reply, 'Authentification requise');
       }
       
       const currentUserId = authRequest.authContext.userId;
@@ -323,10 +300,7 @@ export function registerSharingRoutes(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // Vérifier que l'utilisateur a accès à cette conversation
@@ -342,10 +316,7 @@ export function registerSharingRoutes(
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
 
@@ -356,10 +327,7 @@ export function registerSharingRoutes(
         const isCreator = membership.role === 'CREATOR';
         
         if (!isAdmin && !isCreator) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Seuls les administrateurs peuvent modifier le type de conversation'
-          });
+          return sendForbidden(reply, 'Seuls les administrateurs peuvent modifier le type de conversation');
         }
       }
 
@@ -413,23 +381,6 @@ export function registerSharingRoutes(
       console.error('Error updating conversation:', error);
       
       // Gestion d'erreur améliorée avec détails spécifiques
-      let errorMessage = 'Erreur lors de la mise à jour de la conversation';
-      let statusCode = 500;
-      
-      if (error.code === 'P2002') {
-        errorMessage = 'Une conversation avec ce nom existe déjà';
-        statusCode = 409;
-      } else if (error.code === 'P2025') {
-        errorMessage = 'Conversation non trouvée';
-        statusCode = 404;
-      } else if (error.code === 'P2003') {
-        errorMessage = 'Erreur de référence - conversation invalide';
-        statusCode = 400;
-      } else if (error.name === 'ValidationError') {
-        errorMessage = 'Données de mise à jour invalides';
-        statusCode = 400;
-      }
-      
       console.error('Detailed error info:', {
         code: error.code,
         message: error.message,
@@ -438,16 +389,18 @@ export function registerSharingRoutes(
         currentUserId: authRequest.authContext.userId,
         updateData: { title, description, type }
       });
-      
-      reply.status(statusCode).send({
-        success: false,
-        error: errorMessage,
-        details: process.env.NODE_ENV === 'development' ? {
-          code: error.code,
-          message: error.message,
-          meta: error.meta
-        } : undefined
-      });
+
+      if (error.code === 'P2002') {
+        return sendConflict(reply, 'Une conversation avec ce nom existe déjà');
+      } else if (error.code === 'P2025') {
+        return sendNotFound(reply, 'Conversation non trouvée');
+      } else if (error.code === 'P2003') {
+        return sendBadRequest(reply, 'Erreur de référence - conversation invalide');
+      } else if (error.name === 'ValidationError') {
+        return sendBadRequest(reply, 'Données de mise à jour invalides');
+      }
+
+      sendInternalError(reply, 'Erreur lors de la mise à jour de la conversation');
     }
   });
 
@@ -510,10 +463,7 @@ export function registerSharingRoutes(
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: 'You must be a member of this conversation to see its sharing links'
-        });
+        return sendForbidden(reply, 'You must be a member of this conversation to see its sharing links');
       }
 
       // Vérifier si l'utilisateur est modérateur/admin de la conversation
@@ -556,10 +506,7 @@ export function registerSharingRoutes(
       });
     } catch (error) {
       console.error('Error fetching conversation links:', error);
-      return reply.status(500).send({ 
-        success: false, 
-        error: 'Error retrieving conversation links' 
-      });
+      return sendInternalError(reply, 'Error retrieving conversation links');
     }
   });
 
@@ -605,10 +552,7 @@ export function registerSharingRoutes(
       const userToken = authRequest.authContext;
 
       if (!userToken) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentification requise'
-        });
+        return sendUnauthorized(reply, 'Authentification requise');
       }
 
       // Vérifier que le lien existe et est valide
@@ -620,24 +564,15 @@ export function registerSharingRoutes(
       });
 
       if (!shareLink) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Lien de conversation introuvable'
-        });
+        return sendNotFound(reply, 'Lien de conversation introuvable');
       }
 
       if (!shareLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          error: 'Ce lien n\'est plus actif'
-        });
+        return sendError(reply, 410, 'Ce lien n\'est plus actif');
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return reply.status(410).send({
-          success: false,
-          error: 'This link has expired'
-        });
+        return sendError(reply, 410, 'This link has expired');
       }
 
       // Vérifier si l'utilisateur est déjà membre de la conversation
@@ -757,10 +692,7 @@ export function registerSharingRoutes(
 
     } catch (error) {
       console.error('[JOIN_CONVERSATION] Error joining conversation via link:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la jointure de la conversation'
-      });
+      return sendInternalError(reply, 'Erreur lors de la jointure de la conversation');
     }
   });
 
@@ -810,10 +742,7 @@ export function registerSharingRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User not authenticated'
-        });
+        return sendUnauthorized(reply, 'User not authenticated');
       }
 
       const { id: conversationId } = request.params as { id: string };
@@ -843,19 +772,13 @@ export function registerSharingRoutes(
       });
 
       if (!conversation) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Conversation not found'
-        });
+        return sendNotFound(reply, 'Conversation not found');
       }
 
       // Vérifier que l'inviteur est membre de la conversation
       const inviterMember = conversation.participants.find(m => m.userId === inviterId);
       if (!inviterMember) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Vous n\'êtes pas membre de cette conversation'
-        });
+        return sendForbidden(reply, 'Vous n\'êtes pas membre de cette conversation');
       }
 
       // Vérifier que l'inviteur a les permissions pour inviter
@@ -866,10 +789,7 @@ export function registerSharingRoutes(
         authContext.registeredUser.role === 'BIGBOSS';
 
       if (!canInvite) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Vous n\'avez pas les permissions pour inviter des utilisateurs'
-        });
+        return sendForbidden(reply, 'Vous n\'avez pas les permissions pour inviter des utilisateurs');
       }
 
       // Vérifier que l'utilisateur à inviter existe
@@ -885,19 +805,13 @@ export function registerSharingRoutes(
       });
 
       if (!userToInvite) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       // Vérifier que l'utilisateur n'est pas déjà membre
       const existingMember = conversation.participants.find(m => m.userId === userId);
       if (existingMember) {
-        return reply.status(400).send({
-          success: false,
-          error: 'This user is already a member of the conversation'
-        });
+        return sendBadRequest(reply, 'This user is already a member of the conversation');
       }
 
       // Ajouter l'utilisateur à la conversation
@@ -989,10 +903,7 @@ export function registerSharingRoutes(
 
     } catch (error) {
       console.error('Erreur lors de l\'invitation:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }

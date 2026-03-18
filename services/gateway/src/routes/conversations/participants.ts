@@ -9,6 +9,7 @@ import {
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 
 /**
  * Enregistre les routes de gestion des participants
@@ -84,19 +85,12 @@ export function registerParticipantsRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!canAccess) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Access denied: you are not a member of this conversation or it no longer exists',
-          code: 'CONVERSATION_ACCESS_DENIED'
-        });
+        return sendForbidden(reply, 'Access denied: you are not a member of this conversation or it no longer exists', { code: 'CONVERSATION_ACCESS_DENIED' });
       }
 
       const whereConditions: any = {
@@ -218,10 +212,7 @@ export function registerParticipantsRoutes(
 
     } catch (error) {
       console.error('Error fetching conversation participants:', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Error retrieving participants'
-      });
+      sendInternalError(reply, 'Error retrieving participants');
     }
   });
 
@@ -279,10 +270,7 @@ export function registerParticipantsRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       const currentUserParticipant = await prisma.participant.findFirst({
@@ -294,10 +282,7 @@ export function registerParticipantsRoutes(
       });
 
       if (!currentUserParticipant) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       const userToAdd = await prisma.user.findFirst({
@@ -305,10 +290,7 @@ export function registerParticipantsRoutes(
       });
 
       if (!userToAdd) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       const existingParticipant = await prisma.participant.findFirst({
@@ -320,10 +302,7 @@ export function registerParticipantsRoutes(
       });
 
       if (existingParticipant) {
-        return reply.status(400).send({
-          success: false,
-          error: 'L\'utilisateur est déjà membre de cette conversation'
-        });
+        return sendBadRequest(reply, 'L\'utilisateur est déjà membre de cette conversation');
       }
 
       await prisma.participant.create({
@@ -379,10 +358,7 @@ export function registerParticipantsRoutes(
 
     } catch (error) {
       console.error('Error adding participant:', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de l\'ajout du participant'
-      });
+      sendInternalError(reply, 'Erreur lors de l\'ajout du participant');
     }
   });
 
@@ -430,10 +406,7 @@ export function registerParticipantsRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       const currentUserParticipant = await prisma.participant.findFirst({
@@ -448,27 +421,18 @@ export function registerParticipantsRoutes(
       });
 
       if (!currentUserParticipant) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       const isAdmin = currentUserParticipant.user?.role === 'ADMIN' || currentUserParticipant.user?.role === 'BIGBOSS';
       const isCreator = currentUserParticipant.role === 'creator';
 
       if (!isAdmin && !isCreator) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Vous n\'avez pas les droits pour supprimer des participants'
-        });
+        return sendForbidden(reply, 'Vous n\'avez pas les droits pour supprimer des participants');
       }
 
       if (userId === currentUserId) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Vous ne pouvez pas vous supprimer de la conversation'
-        });
+        return sendBadRequest(reply, 'Vous ne pouvez pas vous supprimer de la conversation');
       }
 
       await prisma.participant.updateMany({
@@ -518,10 +482,7 @@ export function registerParticipantsRoutes(
 
     } catch (error) {
       console.error('Error removing participant:', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la suppression du participant'
-      });
+      sendInternalError(reply, 'Erreur lors de la suppression du participant');
     }
   });
 
@@ -579,18 +540,12 @@ export function registerParticipantsRoutes(
       const currentUserId = authRequest.authContext.userId;
 
       if (!['ADMIN', 'MODERATOR', 'MEMBER'].includes(role)) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid role. Accepted roles are: ADMIN, MODERATOR, MEMBER'
-        });
+        return sendBadRequest(reply, 'Invalid role. Accepted roles are: ADMIN, MODERATOR, MEMBER');
       }
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       const currentUserParticipant = await prisma.participant.findFirst({
@@ -605,27 +560,18 @@ export function registerParticipantsRoutes(
       });
 
       if (!currentUserParticipant) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       const isAdmin = currentUserParticipant.user?.role === 'ADMIN' || currentUserParticipant.user?.role === 'BIGBOSS';
       const isCreator = currentUserParticipant.role === 'creator';
 
       if (!isAdmin && !isCreator) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Vous n\'avez pas les droits pour modifier les rôles des participants'
-        });
+        return sendForbidden(reply, 'Vous n\'avez pas les droits pour modifier les rôles des participants');
       }
 
       if (userId === currentUserId) {
-        return reply.status(400).send({
-          success: false,
-          error: 'You cannot modify your own role'
-        });
+        return sendBadRequest(reply, 'You cannot modify your own role');
       }
 
       const targetParticipant = await prisma.participant.findFirst({
@@ -637,17 +583,11 @@ export function registerParticipantsRoutes(
       });
 
       if (!targetParticipant) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Participant not found or inactive'
-        });
+        return sendNotFound(reply, 'Participant not found or inactive');
       }
 
       if (targetParticipant.role === 'creator') {
-        return reply.status(403).send({
-          success: false,
-          error: 'Cannot modify the conversation creator\'s role'
-        });
+        return sendForbidden(reply, 'Cannot modify the conversation creator\'s role');
       }
 
       const newRole = role.toLowerCase();
@@ -710,10 +650,7 @@ export function registerParticipantsRoutes(
 
     } catch (error) {
       console.error('Error updating participant role:', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Error updating participant role'
-      });
+      sendInternalError(reply, 'Error updating participant role');
     }
   });
 

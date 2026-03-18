@@ -8,6 +8,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { SearchQuery } from './types';
+import { sendInternalError } from '../../utils/response';
 
 /**
  * Enregistre les routes de recherche de conversations
@@ -195,7 +196,7 @@ export function registerSearchRoutes(
       reply.send({ success: true, data: conversationsWithTitle });
     } catch (error) {
       console.error('Error searching conversations:', error);
-      reply.status(500).send({ success: false, error: 'Erreur lors de la recherche de conversations' });
+      sendInternalError(reply, 'Erreur lors de la recherche de conversations');
     }
   });
 }

@@ -18,6 +18,7 @@ import {
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import { sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
   generateConversationIdentifier,
   ensureUniqueConversationIdentifier
@@ -26,11 +27,6 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
-// NOTE: ConversationListCache is non-functional dead code (Architecture Bible finding #3).
-// Redis was never wired (`redis: undefined`) and the conversation list route below queries
-// Prisma directly — there is no cache read path. Only the invalidation helper is called here
-// as a no-op. The cache module is kept for future re-enablement. See ConversationListCache.ts.
-import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 
 /**
@@ -97,10 +93,7 @@ export function registerCoreRoutes(
       });
     } catch (error) {
       console.error('[CONVERSATIONS] Error checking identifier availability:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to check identifier availability'
-      });
+      return sendInternalError(reply, 'Failed to check identifier availability');
     }
   });
 
@@ -135,10 +128,7 @@ export function registerCoreRoutes(
 
       // Vérifier que l'utilisateur est authentifié
       if (!authRequest.authContext.isAuthenticated) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Authentication required to access conversations'
-        });
+        return sendForbidden(reply, 'Authentication required to access conversations');
       }
 
       const userId = authRequest.authContext.userId;
@@ -504,10 +494,7 @@ export function registerCoreRoutes(
 
     } catch (error) {
       console.error('Error fetching conversations:', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Error retrieving conversations'
-      });
+      sendInternalError(reply, 'Error retrieving conversations');
     }
   });
 
@@ -539,10 +526,7 @@ export function registerCoreRoutes(
 
       // Vérifier que l'utilisateur est authentifié
       if (!authRequest.authContext.isAuthenticated) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Authentication required to access this conversation'
-        });
+        return sendForbidden(reply, 'Authentication required to access this conversation');
       }
 
       const { id } = request.params;
@@ -551,22 +535,14 @@ export function registerCoreRoutes(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Conversation not found'
-        });
+        return sendNotFound(reply, 'Conversation not found');
       }
 
       // Vérifier les permissions d'accès
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
 
       if (!canAccess) {
-          return reply.status(403).send({
-          success: false,
-          error: 'Access denied: you are not a member of this conversation or it no longer exists',
-          code: 'CONVERSATION_ACCESS_DENIED',
-          suggestion: 'Please return to the home page to see your available conversations'
-        });
+          return sendForbidden(reply, 'Access denied: you are not a member of this conversation or it no longer exists', { code: 'CONVERSATION_ACCESS_DENIED' });
       }
 
       const conversation = await prisma.conversation.findFirst({
@@ -606,10 +582,7 @@ export function registerCoreRoutes(
       });
 
       if (!conversation) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Conversation not found'
-        });
+        return sendNotFound(reply, 'Conversation not found');
       }
 
       // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur
@@ -679,10 +652,7 @@ export function registerCoreRoutes(
 
     } catch (error) {
       console.error('Error fetching conversation:', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Error retrieving conversation'
-      });
+      sendInternalError(reply, 'Error retrieving conversation');
     }
   });
 
@@ -742,10 +712,7 @@ export function registerCoreRoutes(
         });
 
         if (!community) {
-          return reply.status(404).send({
-            success: false,
-            error: 'Community not found'
-          });
+          return sendNotFound(reply, 'Community not found');
         }
 
         // Check if user is member of the community
@@ -753,10 +720,7 @@ export function registerCoreRoutes(
                         community.members.some(member => member.userId === userId);
 
         if (!isMember) {
-          return reply.status(403).send({
-            success: false,
-            error: 'You must be a member of this community to create a conversation'
-          });
+          return sendForbidden(reply, 'You must be a member of this community to create a conversation');
         }
       }
 
@@ -920,9 +884,6 @@ export function registerCoreRoutes(
         }
       }
 
-      // Invalider le cache des conversations pour tous les membres (nouvelle conversation créée)
-      await invalidateConversationCacheAsync(conversation.id, prisma);
-
       reply.status(201).send({
         success: true,
         data: {
@@ -980,18 +941,12 @@ export function registerCoreRoutes(
       });
 
       if (!membership && id !== "meeshy") {
-        return reply.status(403).send({
-          success: false,
-          error: 'Vous n\'êtes pas autorisé à modifier cette conversation'
-        });
+        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier cette conversation');
       }
 
       // Interdire la modification de la conversation globale
       if (id === "meeshy") {
-        return reply.status(403).send({
-          success: false,
-          error: 'The global conversation cannot be modified'
-        });
+        return sendForbidden(reply, 'The global conversation cannot be modified');
       }
 
       const updatedConversation = await prisma.conversation.update({
@@ -1016,9 +971,6 @@ export function registerCoreRoutes(
         }
       });
 
-      // Invalider le cache des conversations pour tous les membres (conversation modifiée)
-      await invalidateConversationCacheAsync(id, prisma);
-
       reply.send({
         success: true,
         data: updatedConversation
@@ -1026,10 +978,7 @@ export function registerCoreRoutes(
 
     } catch (error) {
       console.error('Error updating conversation:', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Error updating conversation'
-      });
+      sendInternalError(reply, 'Error updating conversation');
     }
   });
 
@@ -1074,19 +1023,13 @@ export function registerCoreRoutes(
 
       // Interdire la suppression de la conversation globale
       if (id === "meeshy") {
-        return reply.status(403).send({
-          success: false,
-          error: 'The global conversation cannot be deleted'
-        });
+        return sendForbidden(reply, 'The global conversation cannot be deleted');
       }
 
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // Vérifier les permissions d'administration
@@ -1100,10 +1043,7 @@ export function registerCoreRoutes(
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Vous n\'êtes pas autorisé à supprimer cette conversation'
-        });
+        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer cette conversation');
       }
 
       // Marquer la conversation comme inactive plutôt que de la supprimer
@@ -1112,9 +1052,6 @@ export function registerCoreRoutes(
         data: { isActive: false }
       });
 
-      // Invalider le cache des conversations pour tous les membres (conversation supprimée)
-      await invalidateConversationCacheAsync(conversationId, prisma);
-
       reply.send({
         success: true,
         data: { message: 'Conversation supprimée avec succès' }
@@ -1122,10 +1059,7 @@ export function registerCoreRoutes(
 
     } catch (error) {
       console.error('Error deleting conversation:', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la suppression de la conversation'
-      });
+      sendInternalError(reply, 'Erreur lors de la suppression de la conversation');
     }
   });
 }

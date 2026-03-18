@@ -23,8 +23,8 @@ import type {
   MessagesQuery
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
-import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
 
@@ -1012,7 +1012,7 @@ export function registerMessagesRoutes(
       });
 
       if (!currentParticipant) {
-        return reply.status(403).send({ success: false, error: 'Not a participant' });
+        return sendForbidden(reply, 'Not a participant');
       }
 
       // Récupérer tous les messages non lus de cette conversation pour cet utilisateur
@@ -1267,14 +1267,14 @@ export function registerMessagesRoutes(
       if (expiresAt) {
         const expiryDate = new Date(expiresAt);
         if (isNaN(expiryDate.getTime())) {
-          return reply.status(400).send({ success: false, error: 'Invalid expiresAt date format' });
+          return sendBadRequest(reply, 'Invalid expiresAt date format');
         }
         if (expiryDate <= new Date()) {
-          return reply.status(400).send({ success: false, error: 'expiresAt must be in the future' });
+          return sendBadRequest(reply, 'expiresAt must be in the future');
         }
         const maxFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
         if (expiryDate > maxFuture) {
-          return reply.status(400).send({ success: false, error: 'expiresAt cannot exceed 1 year' });
+          return sendBadRequest(reply, 'expiresAt cannot exceed 1 year');
         }
         messageData.expiresAt = expiryDate;
       }
@@ -1651,9 +1651,6 @@ export function registerMessagesRoutes(
         () => []
       );
 
-      // Invalider le cache des conversations pour tous les membres
-      await invalidateConversationCacheAsync(conversationId, prisma);
-
       reply.status(201).send({
         success: true,
         data: {
@@ -1725,7 +1722,7 @@ export function registerMessagesRoutes(
       }
 
       if (!canAccess) {
-        return reply.status(403).send({ success: false, error: 'Unauthorized access to this conversation' });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // ✅ FIX: Utiliser uniquement le nouveau système de curseur
@@ -1742,7 +1739,7 @@ export function registerMessagesRoutes(
       reply.send({ success: true, data: { markedCount: unreadCount } });
     } catch (error) {
       logger.error('Error marking conversation as read', error);
-      reply.status(500).send({ success: false, error: 'Erreur lors du marquage comme lu' });
+      sendInternalError(reply, 'Erreur lors du marquage comme lu');
     }
   });
 
@@ -1848,7 +1845,7 @@ export function registerMessagesRoutes(
       });
 
       if (!participantForCursor) {
-        return reply.status(403).send({ success: false, error: 'Not a participant' });
+        return sendForbidden(reply, 'Not a participant');
       }
 
       await prisma.conversationReadCursor.upsert({
@@ -1935,19 +1932,19 @@ export function registerMessagesRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(404).send({ success: false, error: 'Conversation not found' });
+        return sendNotFound(reply, 'Conversation not found');
       }
 
       const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!hasAccess) {
-        return reply.status(403).send({ success: false, error: 'Access denied' });
+        return sendForbidden(reply, 'Access denied');
       }
 
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId }
       });
       if (!message) {
-        return reply.status(404).send({ success: false, error: 'Message not found' });
+        return sendNotFound(reply, 'Message not found');
       }
 
       const now = new Date();
@@ -1974,7 +1971,7 @@ export function registerMessagesRoutes(
       });
     } catch (error) {
       logger.error('Error pinning message', error);
-      reply.status(500).send({ success: false, error: 'Error pinning message' });
+      sendInternalError(reply, 'Error pinning message');
     }
   });
 
@@ -2015,12 +2012,12 @@ export function registerMessagesRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(404).send({ success: false, error: 'Conversation not found' });
+        return sendNotFound(reply, 'Conversation not found');
       }
 
       const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!hasAccess) {
-        return reply.status(403).send({ success: false, error: 'Access denied' });
+        return sendForbidden(reply, 'Access denied');
       }
 
       await prisma.message.update({
@@ -2041,7 +2038,7 @@ export function registerMessagesRoutes(
       return reply.send({ success: true });
     } catch (error) {
       logger.error('Error unpinning message', error);
-      reply.status(500).send({ success: false, error: 'Error unpinning message' });
+      sendInternalError(reply, 'Error unpinning message');
     }
   });
 
@@ -2096,23 +2093,23 @@ export function registerMessagesRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(404).send({ success: false, error: 'Conversation not found' });
+        return sendNotFound(reply, 'Conversation not found');
       }
 
       const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!hasAccess) {
-        return reply.status(403).send({ success: false, error: 'Access denied' });
+        return sendForbidden(reply, 'Access denied');
       }
 
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId }
       });
       if (!message) {
-        return reply.status(404).send({ success: false, error: 'Message not found' });
+        return sendNotFound(reply, 'Message not found');
       }
 
       if (!message.isViewOnce) {
-        return reply.status(400).send({ success: false, error: 'Message is not view-once' });
+        return sendBadRequest(reply, 'Message is not view-once');
       }
 
       const now = new Date();
@@ -2158,7 +2155,7 @@ export function registerMessagesRoutes(
       });
     } catch (error) {
       logger.error('Error consuming view-once message', error);
-      reply.status(500).send({ success: false, error: 'Error consuming view-once message' });
+      sendInternalError(reply, 'Error consuming view-once message');
     }
   });
 
@@ -2221,12 +2218,12 @@ export function registerMessagesRoutes(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(403).send({ success: false, error: 'Conversation not found' });
+        return sendForbidden(reply, 'Conversation not found');
       }
 
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!canAccess) {
-        return reply.status(403).send({ success: false, error: 'Unauthorized' });
+        return sendForbidden(reply, 'Unauthorized');
       }
 
       const queryLower = q.toLowerCase().trim();
@@ -2329,7 +2326,7 @@ export function registerMessagesRoutes(
 
     } catch (error) {
       logger.error('Error searching messages', error);
-      reply.status(500).send({ success: false, error: 'Error searching messages' });
+      sendInternalError(reply, 'Error searching messages');
     }
   });
 

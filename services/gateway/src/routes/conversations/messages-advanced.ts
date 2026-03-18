@@ -20,7 +20,7 @@ import type {
   EditMessageBody
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
+import { sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
 
@@ -487,10 +487,7 @@ export function registerMessagesAdvancedRoutes(
 
     } catch (error) {
       logger.error('Error updating message', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la modification du message'
-      });
+      sendInternalError(reply, 'Erreur lors de la modification du message');
     }
   });
 
@@ -634,9 +631,6 @@ export function registerMessagesAdvancedRoutes(
         () => []
       );
 
-      // Invalider le cache des conversations pour tous les membres
-      await invalidateConversationCacheAsync(conversationId, prisma);
-
       // Diffuser la suppression via Socket.IO
       try {
         logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
@@ -660,10 +654,7 @@ export function registerMessagesAdvancedRoutes(
 
     } catch (error) {
       logger.error('Error deleting message', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la suppression du message'
-      });
+      sendInternalError(reply, 'Erreur lors de la suppression du message');
     }
   });
 
@@ -797,9 +788,6 @@ export function registerMessagesAdvancedRoutes(
       // Note: Les traductions existantes restent inchangées
       // Le service de traduction sera notifié si nécessaire via WebSocket
 
-      // Invalider le cache des conversations pour tous les membres
-      await invalidateConversationCacheAsync(message.conversationId, prisma);
-
       reply.send({
         success: true,
         data: updatedMessage
@@ -807,10 +795,7 @@ export function registerMessagesAdvancedRoutes(
 
     } catch (error) {
       logger.error('Error updating message', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la modification du message'
-      });
+      sendInternalError(reply, 'Erreur lors de la modification du message');
     }
   });
 
@@ -938,10 +923,7 @@ export function registerMessagesAdvancedRoutes(
 
     } catch (error) {
       logger.error('Error fetching conversation reactions', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Error retrieving reactions'
-      });
+      return sendInternalError(reply, 'Error retrieving reactions');
     }
   });
 
@@ -1101,9 +1083,6 @@ export function registerMessagesAdvancedRoutes(
         // Do not fail the response if broadcast fails
       }
 
-      // Invalidate conversation cache
-      await invalidateConversationCacheAsync(conversationId, prisma);
-
       return reply.send({
         success: true,
         data: { added: true, emoji }
@@ -1114,22 +1093,19 @@ export function registerMessagesAdvancedRoutes(
 
       // Handle specific error messages from ReactionService
       if (error.message === 'Invalid emoji format') {
-        return reply.status(400).send({ success: false, error: 'Invalid emoji format' });
+        return sendBadRequest(reply, 'Invalid emoji format');
       }
       if (error.message === 'Message not found') {
-        return reply.status(404).send({ success: false, error: 'Message not found' });
+        return sendNotFound(reply, 'Message not found');
       }
       if (error.message?.includes('not a member') || error.message?.includes('not a participant')) {
-        return reply.status(403).send({ success: false, error: 'Access denied to this conversation' });
+        return sendForbidden(reply, 'Access denied to this conversation');
       }
       if (error.message?.includes('Maximum')) {
-        return reply.status(400).send({ success: false, error: error.message });
+        return sendBadRequest(reply, error.message);
       }
 
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to add reaction'
-      });
+      return sendInternalError(reply, 'Failed to add reaction');
     }
   });
 
@@ -1271,9 +1247,6 @@ export function registerMessagesAdvancedRoutes(
         // Do not fail the response if broadcast fails
       }
 
-      // Invalidate conversation cache
-      await invalidateConversationCacheAsync(conversationId, prisma);
-
       return reply.send({
         success: true,
         data: { removed: true }
@@ -1283,13 +1256,10 @@ export function registerMessagesAdvancedRoutes(
       logger.error('Error removing reaction via REST', error);
 
       if (error.message === 'Invalid emoji format') {
-        return reply.status(400).send({ success: false, error: 'Invalid emoji format' });
+        return sendBadRequest(reply, 'Invalid emoji format');
       }
 
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to remove reaction'
-      });
+      return sendInternalError(reply, 'Failed to remove reaction');
     }
   });
 
@@ -1420,10 +1390,7 @@ export function registerMessagesAdvancedRoutes(
 
     } catch (error) {
       logger.error('Error fetching conversation statuses', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Error retrieving statuses'
-      });
+      return sendInternalError(reply, 'Error retrieving statuses');
     }
   });
 
