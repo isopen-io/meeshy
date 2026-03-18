@@ -8,7 +8,7 @@
  * Garantit le fonctionnement en dev/prod même sans Redis grâce au cache mémoire.
  */
 
-import { Redis } from 'ioredis';
+import type { CacheStore } from './CacheStore';
 import { MultiLevelCache } from './MultiLevelCache';
 
 export interface JobMetadata {
@@ -24,13 +24,13 @@ export interface JobMetadata {
 export class MultiLevelJobMappingCache {
   private cache: MultiLevelCache<JobMetadata>;
 
-  constructor(redis?: Redis) {
+  constructor(store?: CacheStore) {
     this.cache = new MultiLevelCache<JobMetadata>({
       name: 'JobMapping',
       memoryTtlMs: 30 * 60 * 1000, // 30 minutes
-      redisTtlSeconds: 3600, // 1 heure
+      remoteTtlSeconds: 3600, // 1 heure
       keyPrefix: 'backend_job:',
-      redis
+      store
     });
   }
 
