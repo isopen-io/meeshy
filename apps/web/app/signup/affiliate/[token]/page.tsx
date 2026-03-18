@@ -34,7 +34,7 @@ export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps
     params.then(({ token }) => {
       if (token) {
         localStorage.setItem('meeshy_affiliate_token', token);
-        document.cookie = `meeshy_affiliate_token=${token}; max-age=${30 * 24 * 60 * 60}; path=/; samesite=lax`;
+        document.cookie = `meeshy_affiliate_token=${token}; max-age=${30 * 24 * 60 * 60}; path=/; samesite=lax; secure`;
 
         // Fetch inviter details
         fetch(buildApiUrl(`/affiliate/validate/${token}`))

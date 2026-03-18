@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { Lock, Eye, EyeOff, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,8 @@ export const SecurityStep = forwardRef<HTMLInputElement, SecurityStepProps>(({
   onTogglePassword,
 }, ref) => {
   const { t } = useI18n('auth');
+  const passwordId = useId();
+  const confirmId = useId();
 
   return (
     <div className="space-y-4">
@@ -41,11 +43,14 @@ export const SecurityStep = forwardRef<HTMLInputElement, SecurityStepProps>(({
       <div className="space-y-3">
         {/* Password field */}
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">{t('register.passwordLabel')}</label>
+          <label htmlFor={passwordId} className="text-xs font-medium text-muted-foreground">{t('register.passwordLabel')}</label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500" />
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500" aria-hidden="true" />
             <Input
               ref={ref}
+              id={passwordId}
+              name="password"
+              autoComplete="new-password"
               type={showPassword ? 'text' : 'password'}
               placeholder={t('register.passwordPlaceholder')}
               value={formData.password}
@@ -56,19 +61,23 @@ export const SecurityStep = forwardRef<HTMLInputElement, SecurityStepProps>(({
             <button
               type="button"
               onClick={onTogglePassword}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
             >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
             </button>
           </div>
         </div>
 
         {/* Confirm password field */}
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">{t('register.confirmPasswordLabel')}</label>
+          <label htmlFor={confirmId} className="text-xs font-medium text-muted-foreground">{t('register.confirmPasswordLabel')}</label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500" />
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500" aria-hidden="true" />
             <Input
+              id={confirmId}
+              name="confirm-password"
+              autoComplete="new-password"
               type={showPassword ? 'text' : 'password'}
               placeholder={t('register.confirmPasswordPlaceholder')}
               value={confirmPassword}
@@ -93,7 +102,7 @@ export const SecurityStep = forwardRef<HTMLInputElement, SecurityStepProps>(({
         </div>
 
         {/* Password strength */}
-        <div className="flex gap-1">
+        <div className="flex gap-1" role="meter" aria-label={t('register.wizard.passwordStrength') || 'Password strength'} aria-valuemin={0} aria-valuemax={4} aria-valuenow={Math.min(4, Math.floor(formData.password.length / 2))}>
           {[1, 2, 3, 4].map((level) => (
             <div
               key={level}

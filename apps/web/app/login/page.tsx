@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { LoginForm } from '@/components/auth/login-form';
 import { LargeLogo } from '@/components/branding';
 import { useI18n } from '@/hooks/useI18n';
@@ -17,6 +17,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get('returnUrl');
+  const shouldReduceMotion = useReducedMotion();
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -40,7 +41,7 @@ function LoginPageContent() {
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-          className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full"
+          className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full"
         />
       </div>
     );
@@ -64,45 +65,45 @@ function LoginPageContent() {
 
       {/* Animated decorative blobs */}
       <motion.div
-        animate={{
+        animate={shouldReduceMotion ? {} : {
           scale: [1, 1.2, 1],
           x: [0, 30, 0],
           y: [0, -20, 0],
         }}
         transition={{
-          duration: 8,
+          duration: 12,
           repeat: Infinity,
           ease: "easeInOut",
         }}
-        className="absolute top-0 -left-40 w-96 h-96 bg-gradient-to-br from-blue-400/30 to-indigo-500/30 dark:from-blue-600/20 dark:to-indigo-700/20 rounded-full blur-3xl"
+        className="absolute top-0 -left-40 w-96 h-96 bg-gradient-to-br from-indigo-400/30 to-indigo-600/30 dark:from-indigo-600/20 dark:to-indigo-800/20 rounded-full blur-3xl"
       />
       <motion.div
-        animate={{
+        animate={shouldReduceMotion ? {} : {
           scale: [1, 1.1, 1],
           x: [0, -20, 0],
           y: [0, 30, 0],
         }}
         transition={{
-          duration: 10,
+          duration: 14,
           repeat: Infinity,
           ease: "easeInOut",
           delay: 1,
         }}
-        className="absolute top-1/3 -right-40 w-96 h-96 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 dark:from-cyan-600/20 dark:to-blue-700/20 rounded-full blur-3xl"
+        className="absolute top-1/3 -right-40 w-96 h-96 bg-gradient-to-br from-cyan-400/30 to-indigo-500/30 dark:from-cyan-600/20 dark:to-indigo-700/20 rounded-full blur-3xl"
       />
       <motion.div
-        animate={{
+        animate={shouldReduceMotion ? {} : {
           scale: [1, 1.3, 1],
           x: [0, 20, 0],
           y: [0, -30, 0],
         }}
         transition={{
-          duration: 12,
+          duration: 16,
           repeat: Infinity,
           ease: "easeInOut",
           delay: 2,
         }}
-        className="absolute -bottom-20 left-1/3 w-80 h-80 bg-gradient-to-br from-purple-400/30 to-violet-500/30 dark:from-purple-600/20 dark:to-violet-700/20 rounded-full blur-3xl"
+        className="absolute -bottom-20 left-1/3 w-80 h-80 bg-gradient-to-br from-violet-400/30 to-indigo-500/30 dark:from-violet-600/20 dark:to-indigo-700/20 rounded-full blur-3xl"
       />
 
       {/* Main content */}
@@ -156,7 +157,7 @@ function LoginPageContent() {
               className="w-full"
               onClick={() => router.push('/auth/magic-link' + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''))}
             >
-              <Sparkles className="h-4 w-4 mr-2" />
+              <Sparkles className="h-4 w-4 mr-2" aria-hidden="true" />
               {t('login.magicLinkButton')}
             </Button>
           </div>
@@ -205,7 +206,7 @@ function LoadingFallback() {
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-        className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full"
+        className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full"
       />
     </div>
   );

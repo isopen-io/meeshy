@@ -26,7 +26,6 @@ export const PreferencesStep = forwardRef<HTMLDivElement, PreferencesStepProps>(
   onAcceptTermsChange,
 }, ref) => {
   const { t } = useI18n('auth');
-
   return (
     <div className="space-y-4" ref={ref}>
       <div className="text-center">
@@ -37,10 +36,10 @@ export const PreferencesStep = forwardRef<HTMLDivElement, PreferencesStepProps>(
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-            <Globe className="w-3 h-3" />
+          <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <Globe className="w-3 h-3" aria-hidden="true" />
             {t('register.systemLanguageLabel')}
-          </label>
+          </span>
           <LanguageSelector
             value={formData.systemLanguage}
             onValueChange={onSystemLanguageChange}
@@ -50,10 +49,10 @@ export const PreferencesStep = forwardRef<HTMLDivElement, PreferencesStepProps>(
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-            <Globe className="w-3 h-3" />
+          <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <Globe className="w-3 h-3" aria-hidden="true" />
             {t('register.regionalLanguageLabel')}
-          </label>
+          </span>
           <LanguageSelector
             value={formData.regionalLanguage}
             onValueChange={onRegionalLanguageChange}
@@ -79,11 +78,11 @@ export const PreferencesStep = forwardRef<HTMLDivElement, PreferencesStepProps>(
           />
           <label htmlFor="acceptTerms" className="text-xs text-muted-foreground cursor-pointer leading-relaxed">
             {t('register.acceptTerms')}{' '}
-            <a href="/terms" target="_blank" className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium">
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium">
               {t('register.termsOfService')}
             </a>
             {' '}{t('register.and')}{' '}
-            <a href="/privacy" target="_blank" className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium">
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-emerald-600 dark:text-emerald-400 hover:underline font-medium">
               {t('register.privacyPolicy')}
             </a>
             <span className="text-red-500 ml-1">*</span>

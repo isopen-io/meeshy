@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { Check, AlertCircle, Mail, Phone, User as UserIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -39,6 +39,8 @@ export const ContactStep = forwardRef<HTMLInputElement, ContactStepProps>(({
   onCountryChange,
 }, ref) => {
   const { t } = useI18n('auth');
+  const emailId = useId();
+  const phoneId = useId();
 
   return (
     <div className="space-y-4">
@@ -52,14 +54,18 @@ export const ContactStep = forwardRef<HTMLInputElement, ContactStepProps>(({
       <div className="space-y-3">
         {/* Email */}
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-            <Mail className="w-3.5 h-3.5" />
+          <label htmlFor={emailId} className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <Mail className="w-3.5 h-3.5" aria-hidden="true" />
             {t('register.emailLabel')} <span className="text-red-500">*</span>
           </label>
           <div className="relative">
             <Input
               ref={ref}
+              id={emailId}
               type="email"
+              name="email"
+              autoComplete="email"
+              spellCheck={false}
               placeholder={t('register.emailPlaceholder')}
               value={formData.email}
               onChange={(e) => onEmailChange(e.target.value)}
@@ -86,8 +92,8 @@ export const ContactStep = forwardRef<HTMLInputElement, ContactStepProps>(({
 
         {/* Phone */}
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-            <Phone className="w-3.5 h-3.5" />
+          <label htmlFor={phoneId} className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <Phone className="w-3.5 h-3.5" aria-hidden="true" />
             {t('register.phoneLabel')}
           </label>
           <div className="flex gap-2">
@@ -99,9 +105,11 @@ export const ContactStep = forwardRef<HTMLInputElement, ContactStepProps>(({
                 if (country) onCountryChange(country);
               }}
               disabled={disabled}
+              aria-label={t('register.countryCodeLabel') || 'Country code'}
               className={cn(
                 "w-[90px] px-2 py-2 rounded-md text-sm border-2 bg-white/70 dark:bg-gray-800/70 sm:bg-white/50 sm:dark:bg-gray-800/50 sm:backdrop-blur-sm",
                 "text-gray-900 dark:text-gray-100",
+                "bg-white dark:bg-gray-800",
                 "focus:outline-none focus:ring-0 focus:ring-offset-0",
                 "border-gray-200 dark:border-gray-700 focus:border-cyan-500"
               )}
@@ -119,8 +127,11 @@ export const ContactStep = forwardRef<HTMLInputElement, ContactStepProps>(({
             {/* Phone number input */}
             <div className="relative flex-1">
               <Input
+                id={phoneId}
                 type="tel"
+                name="phone"
                 inputMode="tel"
+                autoComplete="tel"
                 placeholder="6 12 34 56 78"
                 value={formData.phoneNumber}
                 onChange={(e) => onPhoneChange(e.target.value)}

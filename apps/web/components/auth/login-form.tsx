@@ -80,16 +80,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       const errorMsg = t('login.validation.required');
       setError(errorMsg);
       toast.error(errorMsg);
-      console.warn('[LOGIN_FORM] Validation échouée: champs requis vides');
+
       return;
     }
 
     setIsLoading(true);
-    console.log('[LOGIN_FORM] Tentative de connexion pour:', formData.username.trim());
 
     try {
       const apiUrl = buildApiUrl(API_ENDPOINTS.AUTH.LOGIN);
-      console.log('[LOGIN_FORM] URL API:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -104,25 +102,18 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         }),
       });
 
-      console.log('[LOGIN_FORM] Réponse HTTP:', response.status, response.statusText);
-
-      // Gérer les erreurs HTTP avec messages spécifiques
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         let errorMessage = errorData.error || t('login.errors.loginFailed');
 
         if (response.status === 401) {
           errorMessage = t('login.errors.invalidCredentials');
-          console.error('[LOGIN_FORM] Échec 401: Identifiants invalides');
         } else if (response.status === 500) {
           errorMessage = t('login.errors.serverError');
-          console.error('[LOGIN_FORM] Échec 500: Erreur serveur');
         } else if (response.status === 400) {
           errorMessage = t('login.errors.loginFailed');
-          console.error('[LOGIN_FORM] Échec 400: Données invalides');
         } else if (response.status >= 400) {
           errorMessage = t('login.errors.unknownError');
-          console.error('[LOGIN_FORM] Échec', response.status, ':', response.statusText, errorData);
         }
 
         setError(errorMessage);
@@ -132,33 +123,22 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       }
 
       const result = await response.json();
-      console.log('[LOGIN_FORM] Données reçues:', {
-        success: result.success,
-        hasToken: !!(result.data?.token || result.token || result.access_token),
-        hasUser: !!(result.data?.user || result.user)
-      });
 
-      // Gérer les différents formats de réponse
       let userData, token, sessionToken, expiresIn;
 
       if (result.success && result.data?.user && result.data?.token) {
-        // Format standardisé: { success: true, data: { user: {...}, token: "...", sessionToken: "...", expiresIn: 86400 } }
         userData = result.data.user;
         token = result.data.token;
         sessionToken = result.data.sessionToken;
         expiresIn = result.data.expiresIn;
       } else if (result.user && result.access_token) {
-        // Format alternatif: { user: {...}, access_token: "..." }
         userData = result.user;
         token = result.access_token;
       } else if (result.user && result.token) {
-        // Format alternatif: { user: {...}, token: "..." }
         userData = result.user;
         token = result.token;
       } else {
-        console.error('[LOGIN_FORM] ❌ Format de réponse inattendu:', result);
-        console.error('[LOGIN_FORM] URL appelée:', buildApiUrl(API_ENDPOINTS.AUTH.LOGIN));
-        const errorMsg = 'Format de réponse invalide - vérifiez la configuration du serveur';
+        const errorMsg = t('login.errors.unknownError');
         setError(errorMsg);
         toast.error(errorMsg);
         setIsLoading(false);
@@ -166,46 +146,33 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       }
 
       if (userData && token) {
-        console.log('[LOGIN_FORM] ✅ Connexion réussie pour utilisateur:', userData.username);
-        console.log('[LOGIN_FORM] Session token présent:', !!sessionToken, '| Expires in:', expiresIn, 'secondes');
         toast.success(t('login.success.loginSuccess'));
-
-        // Mettre à jour le store d'authentification avec le sessionToken
         login(userData, token, sessionToken, expiresIn);
 
-        // Appeler le callback de succès si fourni
         if (onSuccess) {
           onSuccess(userData, token);
         } else {
-          // Comportement par défaut : redirection
           const currentPath = window.location.pathname;
           const urlParams = new URLSearchParams(window.location.search);
           const returnUrl = urlParams.get('returnUrl');
 
-          console.log('[LOGIN_FORM] Redirection après connexion...');
-          // Petit délai pour permettre à l'état d'être mis à jour
           setTimeout(() => {
             if (currentPath === '/') {
-              console.log('[LOGIN_FORM] Rechargement de la page d\'accueil');
               window.location.reload();
             } else if (returnUrl) {
-              console.log('[LOGIN_FORM] Redirection vers:', returnUrl);
               window.location.href = returnUrl;
             } else {
-              console.log('[LOGIN_FORM] Redirection vers dashboard');
               window.location.href = '/dashboard';
             }
           }, 100);
         }
       } else {
-        const errorMsg = 'Données utilisateur ou token manquantes';
-        console.error('[LOGIN_FORM] ❌', errorMsg);
+        const errorMsg = t('login.errors.unknownError');
         setError(errorMsg);
         toast.error(errorMsg);
         setIsLoading(false);
       }
     } catch (error) {
-      console.error('[LOGIN_FORM] ❌ Erreur réseau ou exception:', error);
       const errorMsg = error instanceof Error
         ? `${t('login.errors.networkError')}: ${error.message}`
         : t('login.errors.networkError');
@@ -222,7 +189,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
       {/* Message d'erreur visible */}
       {error && (
-        <div role="alert" className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+        <div role="alert" aria-live="polite" className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
           <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
         </div>
       )}
@@ -237,12 +204,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           <Input
             id="login-form-username"
             type="text"
+            name="username"
             placeholder={t('login.usernamePlaceholder')}
             value={formData.username}
             onChange={(e) => handleUsernameChange(e.target.value)}
             disabled={isLoading}
             required
             autoComplete="username"
+            spellCheck={false}
             className="pl-10 h-11"
           />
         </div>
@@ -257,6 +226,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
           <Input
             id="login-form-password"
+            name="password"
             type={showPassword ? 'text' : 'password'}
             placeholder={t('login.passwordPlaceholder')}
             value={formData.password}
