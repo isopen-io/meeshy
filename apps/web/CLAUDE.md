@@ -126,8 +126,7 @@ Each feature MUST have its own ErrorBoundary.
 A crash in message list MUST NOT crash the conversation list.
 
 ### Dead Code
-`conversation-store.ts` is DEAD CODE — DO NOT use.
-Use React Query hooks (useConversationsQuery, useConversationMessages).
+`conversation-store.ts` has been removed. Use React Query hooks (`useConversationsQuery`, `useConversationMessages`) for all conversation data.
 
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (state management, data fetching, routing, auth, WebSocket, styling, i18n, build, encryption, audio/media, URL config) avec contexte, alternatives rejetes et consquences.
