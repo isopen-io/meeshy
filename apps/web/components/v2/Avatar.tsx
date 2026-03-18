@@ -1,6 +1,7 @@
 'use client';
 
 import { forwardRef } from 'react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 export interface AvatarProps {
@@ -19,18 +20,29 @@ const sizeMap = {
   xl: { container: 'w-32 h-32', text: 'text-5xl', dot: 'w-6 h-6 border-4', dotPos: 'bottom-2 right-2' },
 };
 
+const pixelSizeMap: Record<keyof typeof sizeMap, number> = {
+  sm: 32,
+  md: 40,
+  lg: 48,
+  xl: 128,
+};
+
 const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
   ({ src, name, size = 'md', isOnline, languageOrb, className }, ref) => {
     const s = sizeMap[size];
+    const px = pixelSizeMap[size];
     const initial = name.charAt(0).toUpperCase();
 
     return (
       <div ref={ref} className={cn('relative inline-flex flex-shrink-0', className)}>
         {src ? (
-          <img
+          <Image
             src={src}
             alt={name}
+            width={px}
+            height={px}
             className={cn(s.container, 'rounded-full object-cover')}
+            unoptimized={src.startsWith('data:')}
           />
         ) : (
           <div
