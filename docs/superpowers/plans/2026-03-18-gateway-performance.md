@@ -4,7 +4,9 @@
 
 **Goal:** Fix 2 active correctness bugs (stale auth cache, message re-fetch) and 1 resilience issue (Redis permanent disable), then add in-memory caching to eliminate redundant DB lookups on every socket event and REST request. HTTP caching deferred — see Deferred section.
 
-**Architecture:** Five independent tasks. T1 adds cache invalidation after profile updates (P0 bug fix). T2 extracts a shared cached `resolveConversationId` and wires all 10 call sites. T3 integrates the existing `CircuitBreaker` into `RedisWrapper`. T4 enriches `MessagingService.handleMessage()` to return the full message, eliminating a re-fetch on every message send. T5 adds `Cache-Control` headers as a lightweight first step (no ETag — clients don't send `If-None-Match` yet).
+**Architecture:** Five tasks in 4 chunks. T1 adds cache invalidation after profile updates (P0 bug fix). T2 extracts a shared cached `resolveConversationId` and wires all 10 call sites. T3 integrates the existing `CircuitBreaker` into `RedisWrapper`. T4 enriches `MessagingService.handleMessage()` to return the full message, eliminating a re-fetch on every message send. T5 adds `Cache-Control` headers as a lightweight first step (no ETag — clients don't send `If-None-Match` yet).
+
+**Task dependencies:** T1, T2, T3, T4 are independent and can run in parallel. **T5 must run after T2** (both modify `conversations/core.ts` and `messages.ts`).
 
 **Tech Stack:** TypeScript, Fastify 5, Socket.IO, ioredis, Prisma
 
@@ -68,12 +70,21 @@ import { authUserCacheKey } from '../../middleware/auth';
 import { getRedisWrapper } from '../../services/RedisWrapper';
 ```
 
-- [ ] **Step 5: Search for other user update paths that need invalidation**
+- [ ] **Step 5: Add cache invalidation to other user update endpoints**
 
-Search for `prisma.user.update` across `services/gateway/src/routes/` to find any other handler that modifies cached fields. Each must also invalidate. Common ones:
-- Admin role change routes
-- Avatar upload handler
-- Language preference update
+These 4 additional endpoints modify cached auth fields and need `redis.del(authUserCacheKey(userId))`:
+
+| Endpoint | File | Line | Field modified |
+|----------|------|------|----------------|
+| `updateUserAvatar` | `routes/users/profile.ts` | ~352 | `avatar` |
+| `updateUsername` | `routes/users/profile.ts` | ~790 | `username` |
+| Admin role change | `routes/admin/roles.ts` | ~152 | `role` |
+| Admin deactivation | `routes/admin/roles.ts` | ~296 | `isActive` |
+
+For each, add the same pattern after `prisma.user.update()`:
+```typescript
+try { await getRedisWrapper().del(authUserCacheKey(targetUserId)); } catch { /* best-effort */ }
+```
 
 For each, add the same `redis.del(authUserCacheKey(userId))` after the update.
 
@@ -85,7 +96,7 @@ Expected: No errors
 - [ ] **Step 7: Commit**
 
 ```bash
-git add services/gateway/src/middleware/auth.ts services/gateway/src/routes/users/profile.ts
+git add services/gateway/src/middleware/auth.ts services/gateway/src/routes/users/profile.ts services/gateway/src/routes/admin/roles.ts
 git commit -m "fix(gateway): add auth cache invalidation on profile/language/role update
 
 The auth middleware caches user data in Redis for 5min (auth:user:{userId}).
@@ -303,6 +314,7 @@ Eliminates 10+ Prisma calls per conversation join/message send."
 - ioredis has `maxRetriesPerRequest: 1` — it rejects fast. The CircuitBreaker's 2s timeout is a safety net that rarely fires.
 - Register the breaker in `circuitBreakerManager` so the health endpoint exposes real stats.
 - Keep `closeRedisConnection()` for graceful shutdown but remove from error paths.
+- **CRITICAL: Do NOT guard with `isRedisAvailable`** in get/set/del methods. Use `this.redis !== null` only. The CircuitBreaker must be the sole decision-maker. If `isRedisAvailable = false` blocks the call, the HALF-OPEN test request never reaches `execute()` → Redis stays dead forever (same bug as `permanentlyDisabled`). The `isRedisAvailable` flag may still be used for initial connection status logging, but NOT as a gate in operation methods.
 
 **Files:**
 - Modify: `services/gateway/src/services/RedisWrapper.ts`
@@ -328,7 +340,7 @@ circuitBreakerManager.register('redis', this.circuitBreaker);
 
 ```typescript
 async get(key: string): Promise<string | null> {
-  if (this.isRedisAvailable && this.redis) {
+  if (this.redis) {
     try {
       const value = await this.circuitBreaker.execute(() => this.redis!.get(key));
       if (value !== null) return value; // CB returns null when OPEN (fallback) — treat as miss
@@ -353,7 +365,7 @@ async get(key: string): Promise<string | null> {
 
 ```typescript
 async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
-  if (this.isRedisAvailable && this.redis) {
+  if (this.redis) {
     try {
       await this.circuitBreaker.execute(() => {
         if (ttlSeconds) return this.redis!.set(key, value, 'EX', ttlSeconds);
@@ -462,9 +474,9 @@ Read `services/gateway/src/services/messaging/MessageProcessor.ts`. Find `saveMe
 
 Read `services/gateway/src/socketio/handlers/MessageHandler.ts:495-540`. Copy the exact `include` structure used in `_fetchMessageForBroadcast()`.
 
-- [ ] **Step 3: Add `include` to `prisma.message.create()` in saveMessage()**
+- [ ] **Step 3: Update the existing `include` in `prisma.message.create()` in saveMessage()**
 
-In `MessageProcessor.saveMessage()`, change the `prisma.message.create()` to include the same relations:
+`saveMessage()` already has an include on the create call, but it's incomplete (sender without `.user` sub-relation, sender without `nickname`, attachments with explicit select instead of `true`). Update it to match `_fetchMessageForBroadcast()`'s include exactly:
 
 ```typescript
 const message = await this.prisma.message.create({
@@ -572,7 +584,9 @@ normal send path — saves 1 DB round-trip per message sent."
 
 ---
 
-## Chunk 5: Lightweight HTTP Caching (Task 5)
+## Chunk 5: Lightweight HTTP Caching (Task 5) — AFTER T2
+
+> **Dependency:** T5 modifies `conversations/core.ts` and `messages.ts`, which T2 also modifies. Run T5 **after** T2 to avoid merge conflicts.
 
 ### Task 5: Add `Cache-Control` headers to read-heavy endpoints
 
