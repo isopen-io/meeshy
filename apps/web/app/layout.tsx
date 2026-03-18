@@ -18,6 +18,7 @@ import { TabNotificationManager } from "@/components/common/TabNotificationManag
 import { GoogleAnalytics } from "@/components/analytics";
 import { FirebaseInitializer } from "@/components/providers/FirebaseInitializer";
 import { HtmlLangSync } from "@/components/common/HtmlLangSync";
+import { OfflineBanner } from "@/components/common/OfflineBanner";
 import "@/utils/console-override"; // 🔇 Désactive console.log en production
 
 export const metadata: Metadata = {
@@ -107,6 +108,7 @@ export default function RootLayout({
               <MessageViewProvider>
                 <ErrorBoundary>
                   <ClientOnly>
+                    <OfflineBanner />
                     <main id="main-content">
                       {children}
                     </main>

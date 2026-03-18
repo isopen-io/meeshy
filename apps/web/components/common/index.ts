@@ -23,3 +23,4 @@ export { BubbleMessage } from './BubbleMessage';
 export { MessagesDisplay } from './messages-display';
 export { LanguageSwitcher } from './language-switcher';
 export { TranslationProvider } from './translation-provider';
+export { OfflineBanner } from './OfflineBanner';
