@@ -82,9 +82,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         }
       );
 
-      // Update conversations list with latest message AND move to top (single pass)
-      queryClient.setQueryData<Conversation[]>(
-        queryKeys.conversations.list(),
+      // Update ALL conversation list variants with latest message AND move to top
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
         (old) => {
           if (!old) return old;
 
@@ -141,9 +141,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         }
       );
 
-      // Update lastMessage if this edited message is the last one
-      queryClient.setQueryData<Conversation[]>(
-        queryKeys.conversations.list(),
+      // Update lastMessage in ALL conversation list variants if this edited message is the last one
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
         (old) => {
           if (!old) return old;
           return old.map((conv) => {
@@ -217,10 +217,10 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
-    // Handler for unread count updates
+    // Handler for unread count updates — applies to ALL conversation list variants (filtered, unfiltered)
     const handleUnreadUpdated = (data: { conversationId: string; unreadCount: number }) => {
-      queryClient.setQueryData<Conversation[]>(
-        queryKeys.conversations.list(),
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
         (old) =>
           old?.map((conv) =>
             conv.id === data.conversationId
