@@ -11,6 +11,7 @@ import type {
   AuthenticationContext
 } from '@meeshy/shared/types';
 import { MESSAGE_LIMITS } from '../../config/message-limits';
+import { resolveConversationId as resolveConvId } from '../../utils/conversation-id-cache';
 
 export class MessageValidator {
   constructor(private readonly prisma: PrismaClient) {}
@@ -283,17 +284,7 @@ export class MessageValidator {
    * Résout l'ID de conversation réel à partir de différents formats
    */
   async resolveConversationId(identifier: string): Promise<string | null> {
-    // Si c'est déjà un ObjectId MongoDB, on le retourne
-    if (/^[0-9a-fA-F]{24}$/.test(identifier)) {
-      return identifier;
-    }
-
-    // Sinon, chercher par le champ identifier
-    const conversation = await this.prisma.conversation.findFirst({
-      where: { identifier: identifier }
-    });
-
-    return conversation ? conversation.id : null;
+    return resolveConvId(this.prisma, identifier);
   }
 
   /**

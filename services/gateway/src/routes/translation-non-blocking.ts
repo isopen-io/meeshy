@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logger } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { resolveConversationId } from '../utils/conversation-id-cache';
 
 // ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
@@ -348,23 +349,14 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         }
 
         // Resoudre l'ID de conversation reel
-        let resolvedConversationId = validatedData.conversation_id;
-
-        // Si ce n'est pas un ObjectId MongoDB, chercher par identifier
-        if (!/^[0-9a-fA-F]{24}$/.test(validatedData.conversation_id)) {
-          const conversation = await fastify.prisma.conversation.findFirst({
-            where: { identifier: validatedData.conversation_id }
+        const resolved = await resolveConversationId(fastify.prisma, validatedData.conversation_id);
+        if (!resolved) {
+          return reply.status(404).send({
+            success: false,
+            error: `Conversation with identifier '${validatedData.conversation_id}' not found`
           });
-
-          if (!conversation) {
-            return reply.status(404).send({
-              success: false,
-              error: `Conversation with identifier '${validatedData.conversation_id}' not found`
-            });
-          }
-
-          resolvedConversationId = conversation.id;
         }
+        const resolvedConversationId = resolved;
 
         // Utiliser le MessagingService pour sauvegarder le message (meme pipeline que WebSocket)
         const messageRequest = {

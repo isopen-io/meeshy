@@ -92,6 +92,9 @@ export class MeeshySocketIOManager {
   private socketToUser: Map<string, string> = new Map();
   private userSockets: Map<string, Set<string>> = new Map();
 
+  // Cache immutable identifier → ObjectId (populated on first lookup)
+  private conversationIdCache = new Map<string, string>();
+
   // Statistiques
   private stats = {
     total_connections: 0,
@@ -173,27 +176,20 @@ export class MeeshySocketIOManager {
    */
   private async normalizeConversationId(conversationId: string): Promise<string> {
     try {
-      // Si c'est un ObjectId MongoDB (24 caractères hex)
-      if (/^[0-9a-fA-F]{24}$/.test(conversationId)) {
-        // C'est déjà un ObjectId, le retourner directement
-        return conversationId;
-      }
-      
-      // C'est un identifier, chercher l'ObjectId correspondant
+      if (/^[0-9a-fA-F]{24}$/.test(conversationId)) return conversationId;
+      const cached = this.conversationIdCache.get(conversationId);
+      if (cached) return cached;
       const conversation = await this.prisma.conversation.findUnique({
         where: { identifier: conversationId },
         select: { id: true, identifier: true }
       });
-      
       if (conversation) {
-        return conversation.id; // Retourner l'ObjectId
+        this.conversationIdCache.set(conversationId, conversation.id);
+        return conversation.id;
       }
-      
-      // Si non trouvé, retourner tel quel (peut-être un ObjectId invalide ou identifier inconnu)
       return conversationId;
     } catch (error) {
       logger.error('❌ [NORMALIZE] Erreur normalisation', error);
-      // En cas d'erreur, retourner l'identifiant original
       return conversationId;
     }
   }

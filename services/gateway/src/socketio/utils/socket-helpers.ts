@@ -72,6 +72,8 @@ export function getConnectedUser(
   return { user, realUserId: user.id };
 }
 
+const conversationIdCache = new Map<string, string>();
+
 /**
  * Normalise un identifiant de conversation (ObjectId ou identifier)
  */
@@ -80,18 +82,14 @@ export async function normalizeConversationId(
   prismaFindUnique: (where: { identifier: string }) => Promise<{ id: string; identifier: string } | null>
 ): Promise<string> {
   try {
-    // Si c'est un ObjectId MongoDB (24 caractères hex)
-    if (/^[0-9a-fA-F]{24}$/.test(conversationId)) {
-      return conversationId;
-    }
-
-    // C'est un identifier, chercher l'ObjectId correspondant
+    if (/^[0-9a-fA-F]{24}$/.test(conversationId)) return conversationId;
+    const cached = conversationIdCache.get(conversationId);
+    if (cached) return cached;
     const conversation = await prismaFindUnique({ identifier: conversationId });
-
     if (conversation) {
+      conversationIdCache.set(conversationId, conversation.id);
       return conversation.id;
     }
-
     return conversationId;
   } catch (error) {
     console.error('❌ [NORMALIZE] Erreur normalisation:', error);

@@ -10,25 +10,12 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
-import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
   generateInitialLinkId,
   generateFinalLinkId,
   ensureUniqueShareLinkIdentifier
 } from './utils/identifier-generator';
-
-/**
- * Résout l'ID de conversation réel à partir d'un identifiant
- */
-async function resolveConversationId(prisma: PrismaClient, identifier: string): Promise<string | null> {
-  if (isValidMongoId(identifier)) {
-    return identifier;
-  }
-  const conversation = await prisma.conversation.findFirst({
-    where: { identifier: identifier }
-  });
-  return conversation ? conversation.id : null;
-}
 
 /**
  * Enregistre les routes de partage et d'invitation

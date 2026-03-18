@@ -7,7 +7,8 @@ import { AttachmentService } from '../../services/attachments';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
-import { resolveUserLanguage, isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
 import { messageValidationHook } from '../../middleware/rate-limiter';
@@ -26,19 +27,6 @@ import { transformTranslationsToArray } from '../../utils/translation-transforme
 import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
-
-/**
- * Résout l'ID de conversation réel à partir d'un identifiant
- */
-async function resolveConversationId(prisma: PrismaClient, identifier: string): Promise<string | null> {
-  if (isValidMongoId(identifier)) {
-    return identifier;
-  }
-  const conversation = await prisma.conversation.findFirst({
-    where: { identifier: identifier }
-  });
-  return conversation ? conversation.id : null;
-}
 
 /**
  * Nettoie les attachments pour l'API en transformant les valeurs invalides

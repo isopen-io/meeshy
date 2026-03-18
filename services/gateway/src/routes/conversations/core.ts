@@ -6,9 +6,9 @@ import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
-  generateDefaultConversationTitle,
-  isValidMongoId
+  generateDefaultConversationTitle
 } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationListResponseSchema,
@@ -32,23 +32,6 @@ import type {
 // as a no-op. The cache module is kept for future re-enablement. See ConversationListCache.ts.
 import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 import { buildCursorPaginationMeta } from '../../utils/pagination';
-
-/**
- * Résout l'ID de conversation réel à partir d'un identifiant (peut être un ObjectID ou un identifier)
- */
-async function resolveConversationId(prisma: PrismaClient, identifier: string): Promise<string | null> {
-  // Si c'est déjà un ObjectID valide (24 caractères hexadécimaux), le retourner directement
-  if (isValidMongoId(identifier)) {
-    return identifier;
-  }
-
-  // Sinon, chercher par le champ identifier
-  const conversation = await prisma.conversation.findFirst({
-    where: { identifier: identifier }
-  });
-
-  return conversation ? conversation.id : null;
-}
 
 /**
  * Enregistre les routes CRUD de base pour les conversations
