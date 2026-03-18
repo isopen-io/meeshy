@@ -113,6 +113,12 @@ model User {
   regionalLanguage          String?
   /// Custom destination language for translations (if set, takes priority)
   customDestinationLanguage String?
+  /// Whether to translate incoming messages to systemLanguage
+  translateToSystemLanguage    Boolean @default(true)
+  /// Whether to translate incoming messages to regionalLanguage
+  translateToRegionalLanguage  Boolean @default(false)
+  /// Whether to use customDestinationLanguage instead of system/regional
+  useCustomDestination         Boolean @default(false)
 
   /// Rôle global de l'utilisateur (enum typé fort)
   role          UserRole  @default(USER)

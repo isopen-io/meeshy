@@ -614,13 +614,13 @@ export class MessageTranslationService extends EventEmitter {
             `customDestinationLang=${participant.user.customDestinationLanguage}`
           );
 
-          if (participant.user.systemLanguage && (participant.user as any).translateToSystemLanguage !== false) {
+          if (participant.user.systemLanguage && participant.user.translateToSystemLanguage !== false) {
             languages.add(participant.user.systemLanguage);
           }
-          if (participant.user.regionalLanguage && (participant.user as any).translateToRegionalLanguage !== false) {
+          if (participant.user.regionalLanguage && participant.user.translateToRegionalLanguage !== false) {
             languages.add(participant.user.regionalLanguage);
           }
-          if ((participant.user as any).useCustomDestination && participant.user.customDestinationLanguage) {
+          if (participant.user.useCustomDestination && participant.user.customDestinationLanguage) {
             languages.add(participant.user.customDestinationLanguage);
           }
         } else {

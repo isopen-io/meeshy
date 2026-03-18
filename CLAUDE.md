@@ -332,13 +332,7 @@ docker exec meeshy-local-redis redis-cli DEL "ratelimit:auth:login:ip:{ip}:{pref
 ```
 
 ### Prisma Schema vs MongoDB Reality
-**IMPORTANT**: Certains champs existent dans MongoDB mais PAS dans le schema Prisma (`packages/shared/prisma/schema.prisma`). Exemples sur le model `User`:
-- `translateToSystemLanguage`, `translateToRegionalLanguage`, `useCustomDestination` — booleans de preferences de traduction
-- `autoTranslateEnabled`, `profileCompletionRate`, `registrationCountry`
-
-Ces champs sont accessibles sur les objets retournes par `findFirst()`/`findMany()` **SANS `select`**, mais ne peuvent PAS etre utilises dans un `select: {}` Prisma (erreur de compilation TS). **Toujours verifier le schema Prisma avant d'ajouter des champs dans un `select`.**
-
-Pour acceder a ces champs non-modélisés: utiliser un cast `(user as any).translateToSystemLanguage` ou ne pas utiliser `select` sur la requete.
+Les champs de preferences de traduction (`translateToSystemLanguage`, `translateToRegionalLanguage`, `useCustomDestination`) sont maintenant modélisés dans le schema Prisma et utilisables dans `select`. Les champs `autoTranslateEnabled` (sur Conversation) et `profileCompletionRate`, `registrationCountry` (sur User) sont aussi modélisés. Plus besoin de casts `(user as any)`.
 
 ## Key Patterns
 
