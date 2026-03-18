@@ -6,9 +6,39 @@ private struct TestItem: Codable, Equatable {
     let name: String
 }
 
+private struct TestDated: Decodable, Equatable {
+    let id: String
+    let createdAt: Date
+}
+
 final class APIResponseTests: XCTestCase {
 
     private let decoder = JSONDecoder()
+
+    /// Mirrors the date decoding strategy used by APIClient (static cached formatters).
+    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private nonisolated(unsafe) static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private func makeDateDecoder() -> JSONDecoder {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateStr = try container.decode(String.self)
+            if let date = APIResponseTests.isoFormatterWithFractional.date(from: dateStr) { return date }
+            if let date = APIResponseTests.isoFormatter.date(from: dateStr) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
+        }
+        return d
+    }
 
     // MARK: - APIResponse<T>
 
@@ -215,6 +245,74 @@ final class APIResponseTests: XCTestCase {
         XCTAssertFalse(response.success)
         XCTAssertTrue(response.data.isEmpty)
         XCTAssertEqual(response.error, "Forbidden")
+    }
+
+    // MARK: - Date Decoding (ISO8601 — static cached formatters in APIClient)
+
+    func test_dateDecoding_withFractionalSeconds_decodesCorrectly() throws {
+        let json = makeJSON("""
+        {"id": "msg1", "createdAt": "2024-03-15T10:30:45.123Z"}
+        """)
+        let dateDecoder = makeDateDecoder()
+
+        let item = try dateDecoder.decode(TestDated.self, from: json)
+
+        XCTAssertEqual(item.id, "msg1")
+        // Verify the date components are correct (UTC)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(cal.component(.year, from: item.createdAt), 2024)
+        XCTAssertEqual(cal.component(.month, from: item.createdAt), 3)
+        XCTAssertEqual(cal.component(.day, from: item.createdAt), 15)
+        XCTAssertEqual(cal.component(.hour, from: item.createdAt), 10)
+        XCTAssertEqual(cal.component(.minute, from: item.createdAt), 30)
+        XCTAssertEqual(cal.component(.second, from: item.createdAt), 45)
+    }
+
+    func test_dateDecoding_withoutFractionalSeconds_decodesCorrectly() throws {
+        let json = makeJSON("""
+        {"id": "msg2", "createdAt": "2024-03-15T10:30:45Z"}
+        """)
+        let dateDecoder = makeDateDecoder()
+
+        let item = try dateDecoder.decode(TestDated.self, from: json)
+
+        XCTAssertEqual(item.id, "msg2")
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(cal.component(.year, from: item.createdAt), 2024)
+        XCTAssertEqual(cal.component(.month, from: item.createdAt), 3)
+        XCTAssertEqual(cal.component(.day, from: item.createdAt), 15)
+        XCTAssertEqual(cal.component(.hour, from: item.createdAt), 10)
+        XCTAssertEqual(cal.component(.minute, from: item.createdAt), 30)
+        XCTAssertEqual(cal.component(.second, from: item.createdAt), 45)
+    }
+
+    func test_dateDecoding_withInvalidDate_throwsDecodingError() throws {
+        let json = makeJSON("""
+        {"id": "msg3", "createdAt": "not-a-date"}
+        """)
+        let dateDecoder = makeDateDecoder()
+
+        XCTAssertThrowsError(try dateDecoder.decode(TestDated.self, from: json)) { error in
+            XCTAssertTrue(error is DecodingError, "Expected DecodingError, got \(error)")
+        }
+    }
+
+    func test_dateDecoding_fractionalAndWholeSecondsAreEqual() throws {
+        // "2024-06-01T12:00:00.000Z" and "2024-06-01T12:00:00Z" must map to the same instant
+        let jsonFractional = makeJSON("{\"id\":\"a\",\"createdAt\":\"2024-06-01T12:00:00.000Z\"}")
+        let jsonWhole      = makeJSON("{\"id\":\"b\",\"createdAt\":\"2024-06-01T12:00:00Z\"}")
+        let dateDecoder = makeDateDecoder()
+
+        let itemFractional = try dateDecoder.decode(TestDated.self, from: jsonFractional)
+        let itemWhole      = try dateDecoder.decode(TestDated.self, from: jsonWhole)
+
+        XCTAssertEqual(
+            itemFractional.createdAt.timeIntervalSince1970,
+            itemWhole.createdAt.timeIntervalSince1970,
+            accuracy: 0.001
+        )
     }
 
     // MARK: - Helpers
