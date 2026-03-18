@@ -62,10 +62,9 @@ export class PresenceService {
         conversationId: data.conversationId,
         unreadCount: data.unreadCount
       });
-
-      // Update store
-      const { useConversationStore } = require('@/stores/conversation-store');
-      useConversationStore.getState().updateUnreadCount(data.conversationId, data.unreadCount);
+      // Unread count is included in GET /conversations response.
+      // React Query invalidates conversation list on message:new events,
+      // which picks up the updated unread count automatically.
     });
 
     // Reactions
@@ -92,9 +91,9 @@ export class PresenceService {
     }) => {
       this.readStatusListeners.forEach(listener => listener(data));
 
-      // Update conversation store with summary
-      const { useConversationStore } = require('@/stores/conversation-store');
-      useConversationStore.getState().updateReadStatusSummary(data.conversationId, data.summary);
+      // Update conversation UI store with summary
+      const { useConversationUIStore } = require('@/stores/conversation-ui-store');
+      useConversationUIStore.getState().updateReadStatusSummary(data.conversationId, data.summary);
     });
   }
 

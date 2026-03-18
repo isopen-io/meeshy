@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { MarkdownMessage } from '@/components/messages/MarkdownMessage';
 import { MessageReactions } from '@/components/common/message-reactions';
 import { MessageReplyPreview } from './MessageReplyPreview';
-import { useReadStatusSummary } from '@/stores/conversation-store';
+import { useReadStatusSummary } from '@/stores/conversation-ui-store';
 import type { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 
 type UseReactionsQueryReturn = ReturnType<typeof useReactionsQuery>;

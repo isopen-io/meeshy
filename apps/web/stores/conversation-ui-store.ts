@@ -5,10 +5,9 @@
  * React Query handles all server state (conversations, messages, etc.)
  * This store handles only ephemeral UI state.
  *
- * Migration guide:
- * - Use useConversationsQuery() instead of conversations from conversation-store
- * - Use useInfiniteMessagesQuery() instead of messages from conversation-store
- * - Use this store for: currentConversationId, typingUsers, draftMessages, replyingTo
+ * Usage:
+ * - Server state (conversations, messages): useConversationsQuery(), useInfiniteMessagesQuery()
+ * - UI state (selection, typing, drafts, reply, read status): this store
  */
 
 import { create } from 'zustand';
@@ -18,6 +17,12 @@ interface DraftMessage {
   content: string;
   attachments?: string[];
   replyToId?: string;
+}
+
+interface ReadStatusSummary {
+  totalMembers: number;
+  deliveredCount: number;
+  readCount: number;
 }
 
 interface ConversationUIState {
@@ -32,6 +37,9 @@ interface ConversationUIState {
 
   // Reply state (local UI)
   replyingTo: Map<string, string | null>; // conversationId -> messageId
+
+  // Read status summaries (real-time from socket)
+  readStatusSummaries: Record<string, ReadStatusSummary>;
 
   // UI preferences
   isCompactView: boolean;
@@ -58,6 +66,9 @@ interface ConversationUIActions {
   getReplyingTo: (conversationId: string) => string | null;
   clearReplyingTo: (conversationId: string) => void;
 
+  // Read status
+  updateReadStatusSummary: (conversationId: string, summary: ReadStatusSummary) => void;
+
   // UI preferences
   setCompactView: (isCompact: boolean) => void;
   setShowTranslations: (show: boolean) => void;
@@ -73,6 +84,7 @@ const initialState: ConversationUIState = {
   typingUsers: new Map(),
   draftMessages: new Map(),
   replyingTo: new Map(),
+  readStatusSummaries: {},
   isCompactView: false,
   showTranslations: true,
 };
@@ -177,6 +189,13 @@ export const useConversationUIStore = create<ConversationUIStore>()(
           });
         },
 
+        // Read status
+        updateReadStatusSummary: (conversationId, summary) => {
+          set((state) => ({
+            readStatusSummaries: { ...state.readStatusSummaries, [conversationId]: summary },
+          }));
+        },
+
         // UI preferences
         setCompactView: (isCompact) => {
           set({ isCompactView: isCompact });
@@ -219,3 +238,6 @@ export const useDraftMessage = (conversationId: string) =>
 
 export const useReplyingTo = (conversationId: string) =>
   useConversationUIStore((state) => state.replyingTo.get(conversationId) || null);
+
+export const useReadStatusSummary = (conversationId: string) =>
+  useConversationUIStore((state) => state.readStatusSummaries[conversationId]);

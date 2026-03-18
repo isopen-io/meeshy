@@ -31,16 +31,15 @@ export {
   useLanguageActions,
 } from './language-store';
 
-// Conversation Store
+// Conversation UI Store
 export {
-  useConversationStore,
-  useConversations,
-  useCurrentConversation,
-  useConversationMessages,
-  useConversationLoading,
-  useTypingUsers,
-  useConversationActions,
-} from './conversation-store';
+  useConversationUIStore,
+  useCurrentConversationId,
+  useTypingUsersForConversation,
+  useDraftMessage,
+  useReplyingTo,
+  useReadStatusSummary,
+} from './conversation-ui-store';
 
 // User Preferences Store (Unified)
 export {
