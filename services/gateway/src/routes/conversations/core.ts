@@ -477,7 +477,10 @@ export function registerCoreRoutes(
       );
 
       reply.header('Cache-Control', 'private, no-cache');
-      // TODO: Phase 3 — migrate to sendPaginatedSuccess after client update
+      // NOTE: Cannot use sendSuccess() — response includes top-level `pagination` and
+      // `cursorPagination` fields that iOS SDK (ConversationListResponse) and web
+      // (conversations.service.ts) parse at root level. Migration to sendSuccess requires
+      // a coordinated client update (breaking change).
       reply.send({
         success: true,
         data: conversationsWithUnreadCount,

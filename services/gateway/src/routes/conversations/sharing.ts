@@ -493,7 +493,9 @@ export function registerSharingRoutes(
         orderBy: { createdAt: 'desc' }
       });
 
-      // TODO: Phase 3 — migrate to sendPaginatedSuccess after client update
+      // NOTE: Cannot use sendSuccess() — response includes a top-level `isModerator`
+      // field that iOS SDK (ConversationLinksResponse) and web parse at root level.
+      // Migration to sendSuccess requires a coordinated client update (breaking change).
       return reply.send({
         success: true,
         data: links.map(l => ({ ...l, participantCount: l.currentUses })),

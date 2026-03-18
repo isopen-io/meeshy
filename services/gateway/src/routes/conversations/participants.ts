@@ -200,7 +200,10 @@ export function registerParticipantsRoutes(
         }
       }));
 
-      // TODO: Phase 3 — migrate to sendPaginatedSuccess after client update
+      // NOTE: Cannot use sendSuccess() — response includes a top-level `pagination` field
+      // (with cursor-based shape: nextCursor/hasMore/totalCount) that iOS SDK
+      // (ParticipantsListResponse) and web parse at root level. Migration to sendSuccess
+      // requires a coordinated client update (breaking change).
       reply.send({
         success: true,
         data: formattedParticipants,

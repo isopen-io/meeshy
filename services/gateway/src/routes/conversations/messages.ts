@@ -888,7 +888,10 @@ export function registerMessagesRoutes(
       // Aligné avec MessagesListResponse de @meeshy/shared/types
       // Note: pagination offset-based uniquement pour les requêtes sans curseur.
       // Quand before/around est utilisé, seul cursorPagination est pertinent.
-      // TODO: Phase 3 — migrate to sendPaginatedSuccess after client update
+      // NOTE: Cannot use sendSuccess() — response includes top-level `cursorPagination`,
+      // optional top-level `pagination`, and a `meta.userLanguage` field that iOS SDK
+      // (MessagesListResponse / MessagesAPIResponse) and web parse at root level.
+      // Migration to sendSuccess requires a coordinated client update (breaking change).
       const responsePayload: any = {
         success: true,
         data: mappedMessages,
@@ -2294,7 +2297,10 @@ export function registerMessagesRoutes(
           : undefined
       }));
 
-      // TODO: Phase 3 — migrate to sendPaginatedSuccess after client update
+      // NOTE: Cannot use sendSuccess() — response includes a top-level `cursorPagination`
+      // field that iOS SDK (MessagesSearchResponse) and web (crud.service.ts) parse at
+      // root level. Migration to sendSuccess requires a coordinated client update
+      // (breaking change).
       reply.send({
         success: true,
         data: mappedResults,
