@@ -347,6 +347,14 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       const userId = authContext.userId;
 
+      const rawBody = request.body as { avatar?: unknown };
+      if (typeof rawBody.avatar === 'string' && rawBody.avatar.startsWith('data:')) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Avatar must be a file URL. Data URI (base64) avatars are not accepted.'
+        });
+      }
+
       fastify.log.info(`[AVATAR_UPDATE] User ${userId} updating avatar. Body: ${JSON.stringify(request.body)}`);
 
       const body = updateAvatarSchema.parse(request.body);

@@ -240,13 +240,15 @@ export const updateUserProfileSchema = z.object({
  * Schéma de validation pour l'upload d'avatar
  */
 export const updateAvatarSchema = z.object({
-  avatar: z.string().refine(
-    (data) => {
-      return data.startsWith('http://') ||
-             data.startsWith('https://');
-    },
-    'Format avatar invalide. Doit être une URL HTTP(S)'
-  )
+  avatar: z.string()
+    .refine(
+      (val) => !val.startsWith('data:'),
+      'Avatar must be a file URL, not a base64 data URI'
+    )
+    .refine(
+      (val) => val.startsWith('http://') || val.startsWith('https://'),
+      'Avatar must be an HTTP or HTTPS URL'
+    )
 }).strict();
 
 /**
