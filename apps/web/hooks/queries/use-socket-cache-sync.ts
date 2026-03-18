@@ -233,6 +233,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeEdit = meeshySocketIOService.onMessageEdited(handleMessageEdited);
     const unsubscribeDelete = meeshySocketIOService.onMessageDeleted(handleMessageDeleted);
     const unsubscribeTranslation = meeshySocketIOService.onTranslation(handleTranslation);
+    const unsubscribeUnread = meeshySocketIOService.onUnreadUpdated(handleUnreadUpdated);
 
     // Cleanup on unmount
     return () => {
@@ -240,6 +241,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeEdit?.();
       unsubscribeDelete?.();
       unsubscribeTranslation?.();
+      unsubscribeUnread?.();
     };
   }, [conversationId, enabled, queryClient]);
 }
