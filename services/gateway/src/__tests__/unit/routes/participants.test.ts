@@ -46,6 +46,7 @@ function createMockPrisma() {
       update: jest.fn<any>(),
       updateMany: jest.fn<any>(),
       findUnique: jest.fn<any>(),
+      count: jest.fn<any>().mockResolvedValue(0),
     },
     user: {
       findFirst: jest.fn<any>(),
@@ -266,7 +267,7 @@ describe('registerParticipantsRoutes', () => {
               canSendImages: true,
             }),
           ]),
-          pagination: { nextCursor: null, hasMore: false },
+          pagination: expect.objectContaining({ nextCursor: null, hasMore: false }),
         })
       );
     });
@@ -392,7 +393,9 @@ describe('registerParticipantsRoutes', () => {
 
       expect(mockPrisma.participant.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ id: { gt: cursorId } }),
+          cursor: { id: cursorId },
+          skip: 1,
+          orderBy: { id: 'asc' },
         })
       );
     });
@@ -542,6 +545,7 @@ describe('registerParticipantsRoutes', () => {
 
       expect(mockPrisma.conversation.findFirst).toHaveBeenCalledWith({
         where: { identifier: IDENTIFIER },
+        select: { id: true },
       });
     });
 
@@ -555,7 +559,7 @@ describe('registerParticipantsRoutes', () => {
 
       expect(mockPrisma.participant.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          orderBy: [{ isOnline: 'desc' }, { displayName: 'asc' }, { id: 'asc' }],
+          orderBy: { id: 'asc' },
         })
       );
     });
@@ -610,8 +614,10 @@ describe('registerParticipantsRoutes', () => {
             isOnline: true,
             role: 'moderator',
             displayName: { contains: 'bob', mode: 'insensitive' },
-            id: { gt: PARTICIPANT_ID },
           }),
+          cursor: { id: PARTICIPANT_ID },
+          skip: 1,
+          orderBy: { id: 'asc' },
           take: 11,
         })
       );

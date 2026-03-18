@@ -122,6 +122,12 @@ describe('MessagingService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    // Mock global fetch for language detection (MessageValidator.detectLanguage)
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ language: 'en' })
+    }) as any;
+
     // Reset mock implementations
     mockHandleNewMessage.mockResolvedValue(undefined);
     mockUpdateOnNewMessage.mockResolvedValue({ messageCount: 10, participantCount: 2 });
@@ -772,7 +778,8 @@ describe('MessagingService', () => {
 
       expect(response.success).toBe(true);
       expect(mockPrisma.conversation.findFirst).toHaveBeenCalledWith({
-        where: { identifier: identifier }
+        where: { identifier: identifier },
+        select: { id: true }
       });
     });
   });
@@ -836,6 +843,12 @@ describe('MessagingService', () => {
     });
 
     it('should use provided originalLanguage when matching detected language', async () => {
+      // Override fetch mock to return 'fr' so it matches the provided originalLanguage
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ language: 'fr' })
+      }) as any;
+
       const request: MessageRequest = {
         ...validRequest,
         originalLanguage: 'fr'
@@ -1119,6 +1132,10 @@ describe('MessagingService - Tracking Links Processing', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ language: 'en' })
+    }) as any;
     mockHandleNewMessage.mockResolvedValue(undefined);
     mockFindExistingTrackingLink.mockResolvedValue(null);
     mockCreateTrackingLink.mockResolvedValue({ token: 'xyz789' });
@@ -1493,6 +1510,12 @@ describe('MessagingService - Edge Cases', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Mock global fetch for language detection (MessageValidator.detectLanguage)
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ language: 'en' })
+    }) as any;
 
     // Reset mock implementations
     mockHandleNewMessage.mockResolvedValue(undefined);
