@@ -10,10 +10,12 @@
  * - Pas d'erreurs non gérées
  * - Transition transparente entre les modes
  * - Logs clairs pour identifier le mode actif
+ * - Circuit Breaker : auto-récupération après panne (3 échecs → OPEN 20s → HALF_OPEN → test)
  */
 
 import Redis from 'ioredis';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { CircuitBreakerFactory, circuitBreakerManager, CircuitState } from '../utils/circuitBreaker';
 
 interface CacheEntry {
   value: string;
@@ -31,30 +33,25 @@ export class RedisWrapper {
   private cleanupInterval: NodeJS.Timeout | null = null;
   private connectionAttempts: number = 0;
   private maxConnectionAttempts: number = 3;
-  private permanentlyDisabled: boolean = false;
+  private circuitBreaker = CircuitBreakerFactory.createRedisBreaker();
 
   constructor(redisUrl?: string) {
     this.redisUrl = redisUrl || process.env.REDIS_URL || 'redis://localhost:6379';
     this.initializeRedis();
     this.startMemoryCacheCleanup();
+    circuitBreakerManager.register('redis', this.circuitBreaker);
   }
 
   /**
    * Initialise Redis avec gestion d'erreur complète
    */
   private initializeRedis(): void {
-    if (this.permanentlyDisabled) {
-      logger.info('💾 Using memory cache only (Redis disabled)');
-      return;
-    }
-
     try {
       this.redis = new Redis(this.redisUrl, {
         retryStrategy: (times: number) => {
           // Arrêter complètement après max tentatives
           if (times > this.maxConnectionAttempts) {
-            this.permanentlyDisabled = true;
-            logger.warn('⚠️ Max connection attempts reached, permanently switching to memory cache');
+            logger.warn('⚠️ Max connection attempts reached, switching to memory cache');
             return null; // Arrête de réessayer définitivement
           }
           // Réessayer après 2 secondes
@@ -90,37 +87,25 @@ export class RedisWrapper {
         if (!error.message.includes('ECONNRESET') &&
             !error.message.includes('ECONNREFUSED') &&
             !error.message.includes('EPIPE')) {
-          if (!this.permanentlyDisabled) {
-            logger.warn('⚠️ Redis error', { error: error.message });
-          }
+          logger.warn('⚠️ Redis error', { error: error.message });
         }
         this.isRedisAvailable = false;
-
-        // Désactiver définitivement après trop d'erreurs
-        if (this.connectionAttempts >= this.maxConnectionAttempts) {
-          this.permanentlyDisabled = true;
-          this.closeRedisConnection();
-        }
       });
 
       this.redis.on('close', () => {
-        if (!this.permanentlyDisabled && this.connectionAttempts > 0) {
-          logger.warn('⚠️ Redis connection lost - switching to memory cache');
-          this.permanentlyDisabled = true;
-          this.closeRedisConnection();
+        if (this.connectionAttempts > 0) {
+          logger.warn('⚠️ Redis connection lost - falling back to memory cache');
         }
         this.isRedisAvailable = false;
       });
 
       this.redis.on('end', () => {
         this.isRedisAvailable = false;
-        this.permanentlyDisabled = true;
       });
 
       // Tenter de se connecter (lazy connect)
-      this.redis.connect().catch((error) => {
+      this.redis.connect().catch((_error) => {
         logger.warn('⚠️ Redis connection failed - using memory cache only');
-        this.permanentlyDisabled = true;
         this.isRedisAvailable = false;
       });
 
@@ -128,12 +113,11 @@ export class RedisWrapper {
       logger.warn('⚠️ Redis initialization failed - using memory cache only');
       this.redis = null;
       this.isRedisAvailable = false;
-      this.permanentlyDisabled = true;
     }
   }
 
   /**
-   * Ferme la connexion Redis proprement
+   * Ferme la connexion Redis proprement (graceful shutdown uniquement)
    */
   private closeRedisConnection(): void {
     if (this.redis) {
@@ -172,15 +156,12 @@ export class RedisWrapper {
    * Récupère une valeur (Redis ou mémoire)
    */
   async get(key: string): Promise<string | null> {
-    // Utiliser Redis seulement s'il est disponible ET pas définitivement désactivé
-    if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
+    if (this.redis) {
       try {
-        const value = await this.redis.get(key);
+        const value = await this.circuitBreaker.execute(() => this.redis!.get(key));
         return value;
-      } catch (error) {
-        // Erreur silencieuse - basculer vers cache mémoire
-        this.permanentlyDisabled = true;
-        this.closeRedisConnection();
+      } catch {
+        // Redis error — CB recorded failure, fall through to memory cache
       }
     }
 
@@ -202,19 +183,17 @@ export class RedisWrapper {
    * Définit une valeur (Redis ou mémoire)
    */
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
-    // Utiliser Redis seulement s'il est disponible ET pas définitivement désactivé
-    if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
+    if (this.redis) {
       try {
-        if (ttlSeconds) {
-          await this.redis.set(key, value, 'EX', ttlSeconds);
-        } else {
-          await this.redis.set(key, value);
-        }
+        await this.circuitBreaker.execute(() => {
+          if (ttlSeconds) {
+            return this.redis!.set(key, value, 'EX', ttlSeconds);
+          }
+          return this.redis!.set(key, value);
+        });
         return;
-      } catch (error) {
-        // Erreur silencieuse - basculer vers cache mémoire
-        this.permanentlyDisabled = true;
-        this.closeRedisConnection();
+      } catch {
+        // Redis error — CB recorded failure, fall through to memory cache
       }
     }
 
@@ -235,15 +214,12 @@ export class RedisWrapper {
    * Returns 1 if set, 0 if key already exists
    */
   async setnx(key: string, value: string): Promise<number> {
-    // Utiliser Redis seulement s'il est disponible ET pas définitivement désactivé
-    if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
+    if (this.redis) {
       try {
-        const result = await this.redis.setnx(key, value);
-        return result;
-      } catch (error) {
-        // Erreur silencieuse - basculer vers cache mémoire
-        this.permanentlyDisabled = true;
-        this.closeRedisConnection();
+        const result = await this.circuitBreaker.execute(() => this.redis!.setnx(key, value));
+        return result as number;
+      } catch {
+        // Redis error — CB recorded failure, fall through to memory cache
       }
     }
 
@@ -268,15 +244,12 @@ export class RedisWrapper {
    * Returns 1 if expiration was set, 0 if key does not exist
    */
   async expire(key: string, seconds: number): Promise<number> {
-    // Utiliser Redis seulement s'il est disponible ET pas définitivement désactivé
-    if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
+    if (this.redis) {
       try {
-        const result = await this.redis.expire(key, seconds);
-        return result;
-      } catch (error) {
-        // Erreur silencieuse - basculer vers cache mémoire
-        this.permanentlyDisabled = true;
-        this.closeRedisConnection();
+        const result = await this.circuitBreaker.execute(() => this.redis!.expire(key, seconds));
+        return result as number;
+      } catch {
+        // Redis error — CB recorded failure, fall through to memory cache
       }
     }
 
@@ -298,15 +271,12 @@ export class RedisWrapper {
    * Supprime une clé (Redis ou mémoire)
    */
   async del(key: string): Promise<void> {
-    // Utiliser Redis seulement s'il est disponible ET pas définitivement désactivé
-    if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
+    if (this.redis) {
       try {
-        await this.redis.del(key);
+        await this.circuitBreaker.execute(() => this.redis!.del(key));
         return;
-      } catch (error) {
-        // Erreur silencieuse - basculer vers cache mémoire
-        this.permanentlyDisabled = true;
-        this.closeRedisConnection();
+      } catch {
+        // Redis error — CB recorded failure, fall through to memory cache
       }
     }
 
@@ -315,9 +285,10 @@ export class RedisWrapper {
   }
 
   async publish(channel: string, message: string): Promise<number> {
-    if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
+    if (this.redis) {
       try {
-        return await this.redis.publish(channel, message);
+        const result = await this.circuitBreaker.execute(() => this.redis!.publish(channel, message));
+        return result as number;
       } catch {
         return 0;
       }
@@ -329,15 +300,12 @@ export class RedisWrapper {
    * Récupère toutes les clés correspondant à un pattern (Redis ou mémoire)
    */
   async keys(pattern: string): Promise<string[]> {
-    // Utiliser Redis seulement s'il est disponible ET pas définitivement désactivé
-    if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
+    if (this.redis) {
       try {
-        const keys = await this.redis.keys(pattern);
-        return keys;
-      } catch (error) {
-        // Erreur silencieuse - basculer vers cache mémoire
-        this.permanentlyDisabled = true;
-        this.closeRedisConnection();
+        const result = await this.circuitBreaker.execute(() => this.redis!.keys(pattern));
+        return result as string[];
+      } catch {
+        // Redis error — CB recorded failure, fall through to memory cache
       }
     }
 
@@ -358,14 +326,12 @@ export class RedisWrapper {
    * Récupère les informations Redis (Redis uniquement)
    */
   async info(section?: string): Promise<string> {
-    if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
+    if (this.redis) {
       try {
-        const info = await this.redis.info(section);
-        return info;
-      } catch (error) {
-        // Erreur silencieuse - basculer vers cache mémoire
-        this.permanentlyDisabled = true;
-        this.closeRedisConnection();
+        const result = await this.circuitBreaker.execute(() => this.redis!.info(section));
+        return result as string;
+      } catch {
+        // Redis error — CB recorded failure, fall through to simulated info
       }
     }
 
@@ -391,17 +357,18 @@ export class RedisWrapper {
    * Vérifie si Redis est disponible
    */
   isAvailable(): boolean {
-    return !this.permanentlyDisabled && this.isRedisAvailable;
+    return this.redis !== null && this.circuitBreaker.getStats().state !== CircuitState.OPEN;
   }
 
   /**
    * Statistiques du cache
    */
   getCacheStats(): { mode: string; entries: number; redisAvailable: boolean } {
+    const redisAvailable = this.isAvailable();
     return {
-      mode: (!this.permanentlyDisabled && this.isRedisAvailable) ? 'Redis' : 'Memory',
+      mode: redisAvailable ? 'Redis' : 'Memory',
       entries: this.memoryCache.size,
-      redisAvailable: !this.permanentlyDisabled && this.isRedisAvailable,
+      redisAvailable,
     };
   }
 }
