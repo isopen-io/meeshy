@@ -8,6 +8,7 @@ import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
+import type { AudioTranslationReadyEventData } from '@meeshy/shared/types/socketio-events';
 
 interface UseSocketCacheSyncOptions {
   conversationId?: string | null;
@@ -259,9 +260,10 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     };
 
     // W6: Handler for audio translation ready — updates attachment with translated audio URL
-    const handleAudioTranslation = (data: { messageId: string; targetLanguage: string; audioUrl?: string; [key: string]: unknown }) => {
+    const handleAudioTranslation = (data: AudioTranslationReadyEventData) => {
       if (!conversationId) return;
 
+      const targetLang = data.translatedAudio.targetLanguage;
       queryClient.setQueryData(
         queryKeys.messages.infinite(conversationId),
         (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
@@ -272,9 +274,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               ...page,
               messages: page.messages.map((m) => {
                 if (m.id !== data.messageId) return m;
-                // Store translated audio metadata on the message
+                // Store translated audio metadata keyed by target language
                 const translatedAudios = { ...((m as any).translatedAudios || {}) };
-                translatedAudios[data.targetLanguage] = { audioUrl: data.audioUrl, ...data };
+                translatedAudios[targetLang] = {
+                  url: data.translatedAudio.url,
+                  targetLanguage: targetLang,
+                  transcription: data.translatedAudio.transcription,
+                  durationMs: data.translatedAudio.durationMs,
+                  format: data.translatedAudio.format,
+                  cloned: data.translatedAudio.cloned,
+                  segments: data.translatedAudio.segments,
+                };
                 return { ...m, translatedAudios };
               }),
             })),
