@@ -489,6 +489,7 @@ export function registerCoreRoutes(
         lastConversation?.id ?? null
       );
 
+      reply.header('Cache-Control', 'private, no-cache');
       reply.send({
         success: true,
         data: conversationsWithUnreadCount,

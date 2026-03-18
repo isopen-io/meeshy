@@ -934,6 +934,7 @@ export function registerMessagesRoutes(
         timings: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)]))
       });
 
+      reply.header('Cache-Control', 'private, no-cache');
       reply.send(responsePayload);
 
     } catch (error) {
