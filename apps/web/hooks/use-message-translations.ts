@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { BubbleTranslation, User, Message, TranslationModel } from '@meeshy/shared/types';
-import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveUserPreferredLanguage as resolveUserPreferredLanguageUtil } from '@/utils/user-language-preferences';
 
 interface BubbleStreamMessage extends Omit<Message, 'translations'> {
   location?: string;
@@ -38,10 +38,10 @@ export function useMessageTranslations({
   
   /**
    * Résout la langue préférée de l'utilisateur selon la logique Meeshy.
-   * Délègue à resolveUserLanguage() depuis @meeshy/shared — source de vérité unique.
+   * Délègue à resolveUserPreferredLanguage() depuis utils/user-language-preferences — source de vérité unique.
    */
   const resolveUserPreferredLanguage = useCallback((): string => {
-    return resolveUserLanguage(currentUser);
+    return resolveUserPreferredLanguageUtil(currentUser);
   }, [currentUser]);
 
   /**

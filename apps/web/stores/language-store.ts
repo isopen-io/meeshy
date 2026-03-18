@@ -19,14 +19,12 @@ interface UserLanguageConfig {
 
 interface LanguageState {
   currentInterfaceLanguage: string;
-  currentMessageLanguage: string;
   availableLanguages: string[];
   userLanguageConfig: UserLanguageConfig;
 }
 
 interface LanguageActions {
   setInterfaceLanguage: (language: string) => void;
-  setMessageLanguage: (language: string) => void;
   setCustomDestinationLanguage: (language: string) => void;
   updateLanguageConfig: (config: Partial<UserLanguageConfig>) => void;
   detectAndSetBrowserLanguage: () => void;
@@ -57,7 +55,6 @@ const DEFAULT_LANGUAGE_CONFIG: UserLanguageConfig = {
 
 const initialState: LanguageState = {
   currentInterfaceLanguage: 'fr', // Will be overridden by persisted state or browser detection
-  currentMessageLanguage: 'fr', // Will be overridden by persisted state or browser detection
   availableLanguages: INTERFACE_LANGUAGES.map(lang => lang.code), // Langues d'interface avec traductions complètes
   userLanguageConfig: DEFAULT_LANGUAGE_CONFIG,
 };
@@ -79,19 +76,6 @@ export const useLanguageStore = create<LanguageStore>()(
           if (process.env.NODE_ENV === 'development') {
           }
           set({ currentInterfaceLanguage: language });
-        },
-
-        setMessageLanguage: (language: string) => {
-          if (!get().isLanguageSupported(language)) {
-            if (process.env.NODE_ENV === 'development') {
-              console.warn(`[LANGUAGE_STORE] Unsupported message language: ${language}`);
-            }
-            return;
-          }
-          
-          if (process.env.NODE_ENV === 'development') {
-          }
-          set({ currentMessageLanguage: language });
         },
 
         setCustomDestinationLanguage: (language: string) => {
@@ -123,7 +107,6 @@ export const useLanguageStore = create<LanguageStore>()(
           
           set({
             currentInterfaceLanguage: browserLang,
-            currentMessageLanguage: browserLang,
           });
         },
 
@@ -136,7 +119,6 @@ export const useLanguageStore = create<LanguageStore>()(
         version: 1, // Increment this to force re-initialization if needed
         partialize: (state) => ({
           currentInterfaceLanguage: state.currentInterfaceLanguage,
-          currentMessageLanguage: state.currentMessageLanguage,
           userLanguageConfig: state.userLanguageConfig,
         }),
         migrate: (persistedState: any, version: number) => {
@@ -168,7 +150,6 @@ export const useLanguageStore = create<LanguageStore>()(
 
 // Selector hooks
 export const useCurrentInterfaceLanguage = () => useLanguageStore((state) => state.currentInterfaceLanguage);
-export const useCurrentMessageLanguage = () => useLanguageStore((state) => state.currentMessageLanguage);
 export const useAvailableLanguages = () => useLanguageStore((state) => state.availableLanguages);
 export const useUserLanguageConfig = () => useLanguageStore((state) => state.userLanguageConfig);
 
@@ -176,7 +157,6 @@ export const useUserLanguageConfig = () => useLanguageStore((state) => state.use
 export const useLanguageActions = () => useLanguageStore(
   useShallow((state) => ({
     setInterfaceLanguage: state.setInterfaceLanguage,
-    setMessageLanguage: state.setMessageLanguage,
     setCustomDestinationLanguage: state.setCustomDestinationLanguage,
     updateLanguageConfig: state.updateLanguageConfig,
     detectAndSetBrowserLanguage: state.detectAndSetBrowserLanguage,

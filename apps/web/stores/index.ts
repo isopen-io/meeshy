@@ -25,7 +25,6 @@ export {
 export {
   useLanguageStore,
   useCurrentInterfaceLanguage,
-  useCurrentMessageLanguage,
   useAvailableLanguages,
   useUserLanguageConfig,
   useLanguageActions,

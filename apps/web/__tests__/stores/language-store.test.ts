@@ -25,7 +25,6 @@ describe('LanguageStore', () => {
     act(() => {
       useLanguageStore.setState({
         currentInterfaceLanguage: 'fr',
-        currentMessageLanguage: 'fr',
         availableLanguages: ['en', 'es', 'fr', 'pt'],
         userLanguageConfig: {
           systemLanguage: 'fr',
@@ -55,7 +54,6 @@ describe('LanguageStore', () => {
       const state = useLanguageStore.getState();
 
       expect(state.currentInterfaceLanguage).toBe('fr');
-      expect(state.currentMessageLanguage).toBe('fr');
       expect(state.availableLanguages).toEqual(['en', 'es', 'fr', 'pt']);
       expect(state.userLanguageConfig).toEqual({
         systemLanguage: 'fr',
@@ -105,24 +103,6 @@ describe('LanguageStore', () => {
 
         expect(useLanguageStore.getState().currentInterfaceLanguage).toBe(lang);
       });
-    });
-  });
-
-  describe('setMessageLanguage', () => {
-    it('should set message language for supported language', () => {
-      act(() => {
-        useLanguageStore.getState().setMessageLanguage('en');
-      });
-
-      expect(useLanguageStore.getState().currentMessageLanguage).toBe('en');
-    });
-
-    it('should not change language for unsupported language', () => {
-      act(() => {
-        useLanguageStore.getState().setMessageLanguage('zh'); // Chinese not in list
-      });
-
-      expect(useLanguageStore.getState().currentMessageLanguage).toBe('fr');
     });
   });
 
@@ -198,7 +178,6 @@ describe('LanguageStore', () => {
 
       const state = useLanguageStore.getState();
       expect(state.currentInterfaceLanguage).toBe('en');
-      expect(state.currentMessageLanguage).toBe('en');
     });
 
     it('should detect Spanish browser language', () => {
@@ -213,7 +192,6 @@ describe('LanguageStore', () => {
 
       const state = useLanguageStore.getState();
       expect(state.currentInterfaceLanguage).toBe('es');
-      expect(state.currentMessageLanguage).toBe('es');
     });
 
     it('should fall back to English for unsupported browser language', () => {
@@ -228,7 +206,6 @@ describe('LanguageStore', () => {
 
       const state = useLanguageStore.getState();
       expect(state.currentInterfaceLanguage).toBe('en');
-      expect(state.currentMessageLanguage).toBe('en');
     });
 
     it('should handle language without region code', () => {
@@ -274,14 +251,6 @@ describe('LanguageStore', () => {
       expect(useLanguageStore.getState().currentInterfaceLanguage).toBe('en');
     });
 
-    it('useCurrentMessageLanguage should return current message language', () => {
-      act(() => {
-        useLanguageStore.getState().setMessageLanguage('es');
-      });
-
-      expect(useLanguageStore.getState().currentMessageLanguage).toBe('es');
-    });
-
     it('useAvailableLanguages should return available languages', () => {
       const available = useLanguageStore.getState().availableLanguages;
       expect(available).toEqual(['en', 'es', 'fr', 'pt']);
@@ -307,15 +276,6 @@ describe('LanguageStore', () => {
 
       const state = useLanguageStore.getState();
       expect(state.currentInterfaceLanguage).toBe('en');
-    });
-
-    it('should persist message language', () => {
-      act(() => {
-        useLanguageStore.getState().setMessageLanguage('es');
-      });
-
-      const state = useLanguageStore.getState();
-      expect(state.currentMessageLanguage).toBe('es');
     });
 
     it('should persist user language config', () => {
@@ -351,7 +311,7 @@ describe('LanguageStore', () => {
       expect(useLanguageStore.getState().currentInterfaceLanguage).toBe('fr');
     });
 
-    it('should update both interface and message language in browser detection', () => {
+    it('should update interface language in browser detection', () => {
       Object.defineProperty(global, 'navigator', {
         value: { language: 'pt-BR' },
         writable: true,
@@ -363,7 +323,6 @@ describe('LanguageStore', () => {
 
       const state = useLanguageStore.getState();
       expect(state.currentInterfaceLanguage).toBe('pt');
-      expect(state.currentMessageLanguage).toBe('pt');
     });
   });
 });
