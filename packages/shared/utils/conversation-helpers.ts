@@ -12,23 +12,10 @@ export function resolveUserLanguage(user: {
   systemLanguage?: string;
   regionalLanguage?: string;
   customDestinationLanguage?: string;
-  translateToSystemLanguage?: boolean;
-  translateToRegionalLanguage?: boolean;
-  useCustomDestination?: boolean;
 }): string {
-  if (user.useCustomDestination && user.customDestinationLanguage) {
-    return user.customDestinationLanguage;
-  }
-
-  if (user.translateToSystemLanguage && user.systemLanguage) {
-    return user.systemLanguage;
-  }
-
-  if (user.translateToRegionalLanguage && user.regionalLanguage) {
-    return user.regionalLanguage;
-  }
-
-  return user.systemLanguage || 'fr';
+  if (user.customDestinationLanguage) return user.customDestinationLanguage;
+  if (user.systemLanguage) return user.systemLanguage;
+  return 'fr';
 }
 
 /**
