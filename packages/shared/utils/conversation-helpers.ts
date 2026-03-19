@@ -5,16 +5,16 @@
 
 /**
  * Résout la langue préférée d'un utilisateur pour l'affichage de contenu.
- * Retourne systemLanguage (toujours). customDestinationLanguage est réservé
- * aux overrides manuels on-demand (onglet Language), pas à la résolution auto.
+ * Ordre de priorité : systemLanguage → regionalLanguage → customDestinationLanguage → 'fr'
  */
 export function resolveUserLanguage(user: {
   systemLanguage?: string;
   regionalLanguage?: string;
   customDestinationLanguage?: string;
 }): string {
-  if (user.customDestinationLanguage) return user.customDestinationLanguage;
   if (user.systemLanguage) return user.systemLanguage;
+  if (user.regionalLanguage) return user.regionalLanguage;
+  if (user.customDestinationLanguage) return user.customDestinationLanguage;
   return 'fr';
 }
 

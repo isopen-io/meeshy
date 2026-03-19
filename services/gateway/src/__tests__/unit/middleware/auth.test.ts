@@ -164,8 +164,12 @@ describe('AuthMiddleware', () => {
       expect(ctx.participantId).toBeUndefined()
     })
 
-    it('uses customDestinationLanguage when available', async () => {
-      const user = createTestUser({ customDestinationLanguage: 'de' })
+    it('uses customDestinationLanguage when systemLanguage and regionalLanguage are absent', async () => {
+      const user = createTestUser({
+        systemLanguage: null,
+        regionalLanguage: null,
+        customDestinationLanguage: 'de',
+      })
       const prisma = createMockPrisma({
         userFindUnique: jest.fn().mockResolvedValue(user),
       })

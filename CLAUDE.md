@@ -25,9 +25,9 @@ Message recu → Detection langue originale → Traduction auto (NLLB-200 via tr
 ### Resolution de langue
 La resolution pour le contenu utilisateur (messages, transcriptions) :
 1. Override manuel utilisateur (selection explicite dans l'onglet Language)
-2. `customDestinationLanguage` (si `useCustomDestination` = true)
-3. `systemLanguage` — langue primaire configuree dans l'app (TOUJOURS incluse)
-4. `regionalLanguage` — langue secondaire configuree dans l'app (TOUJOURS incluse)
+2. `systemLanguage` — langue primaire configuree dans l'app (priorite la plus haute)
+3. `regionalLanguage` — langue secondaire configuree dans l'app
+4. `customDestinationLanguage` — langue de destination personnalisee (si configuree)
 
 **La locale appareil (`Locale.current`) ne doit JAMAIS etre utilisee pour la resolution de contenu.** C'est la langue d'interface (UI), pas la langue de contenu. Un utilisateur francophone avec un iPhone en anglais veut lire ses messages en francais, pas en anglais.
 
