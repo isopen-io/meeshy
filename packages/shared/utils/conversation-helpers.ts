@@ -5,16 +5,16 @@
 
 /**
  * Résout la langue préférée d'un utilisateur pour l'affichage de contenu.
- * Ordre de priorité : systemLanguage → regionalLanguage → customDestinationLanguage → 'fr'
+ * Prisme Linguistique : customDestinationLanguage > systemLanguage > 'fr'
+ * regionalLanguage n'est PAS inclus ici — c'est pour la production de traductions
+ * (resolveUserTranslationLanguages), pas pour la résolution d'affichage.
  */
 export function resolveUserLanguage(user: {
   systemLanguage?: string;
-  regionalLanguage?: string;
   customDestinationLanguage?: string;
 }): string {
-  if (user.systemLanguage) return user.systemLanguage;
-  if (user.regionalLanguage) return user.regionalLanguage;
   if (user.customDestinationLanguage) return user.customDestinationLanguage;
+  if (user.systemLanguage) return user.systemLanguage;
   return 'fr';
 }
 
