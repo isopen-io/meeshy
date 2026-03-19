@@ -275,18 +275,18 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     }
 
     /// Ordered list of preferred content languages for the Prisme Linguistique.
-    /// Resolution order: systemLanguage → regionalLanguage → customDestinationLanguage → "fr"
+    /// Prisme Linguistique resolution order: customDestinationLanguage → systemLanguage → regionalLanguage → "fr"
     /// Device locale (Locale.current) is NEVER included — it is the UI language, not content.
     public var preferredContentLanguages: [String] {
         var preferred: [String] = []
-        if let sys = systemLanguage {
+        if let custom = customDestinationLanguage {
+            preferred.append(custom)
+        }
+        if let sys = systemLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(sys) == .orderedSame }) {
             preferred.append(sys)
         }
         if let reg = regionalLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(reg) == .orderedSame }) {
             preferred.append(reg)
-        }
-        if let custom = customDestinationLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(custom) == .orderedSame }) {
-            preferred.append(custom)
         }
         if preferred.isEmpty {
             preferred.append("fr")
