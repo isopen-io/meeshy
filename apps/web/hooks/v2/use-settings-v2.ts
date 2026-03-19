@@ -223,7 +223,6 @@ export function useSettingsV2(options: UseSettingsV2Options = {}): SettingsV2Ret
     async (code: string) => {
       await updateProfileMutation.mutateAsync({
         customDestinationLanguage: code,
-        useCustomDestination: true,
       } as any);
     },
     [updateProfileMutation]

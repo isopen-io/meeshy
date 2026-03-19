@@ -119,10 +119,7 @@ export const updateUserProfileValidationSchema = z.object({
   systemLanguage: z.string().length(2).optional(),
   regionalLanguage: z.string().length(2).optional(),
   customDestinationLanguage: z.string().length(2).optional(),
-  autoTranslateEnabled: z.boolean().optional(),
-  translateToSystemLanguage: z.boolean().optional(),
-  translateToRegionalLanguage: z.boolean().optional(),
-  useCustomDestination: z.boolean().optional()
+  autoTranslateEnabled: z.boolean().optional()
 }).strict();
 
 /**

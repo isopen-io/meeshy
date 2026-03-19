@@ -25,9 +25,6 @@ export function UserSettingsModal({ user, onUserUpdate, onClose, children }: Use
         regionalLanguage: user.regionalLanguage,
         customDestinationLanguage: user.customDestinationLanguage,
         autoTranslateEnabled: user.autoTranslateEnabled,
-        translateToSystemLanguage: user.translateToSystemLanguage,
-        translateToRegionalLanguage: user.translateToRegionalLanguage,
-        useCustomDestination: user.useCustomDestination,
       });
     }
   }, [user, open]);

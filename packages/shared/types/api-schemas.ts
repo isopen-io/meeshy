@@ -67,9 +67,6 @@ export const userSchema = {
     regionalLanguage: { type: 'string', description: 'Regional language for translations' },
     customDestinationLanguage: { type: 'string', nullable: true, description: 'Custom destination language' },
     autoTranslateEnabled: { type: 'boolean', description: 'Auto-translate messages' },
-    translateToSystemLanguage: { type: 'boolean', description: 'Translate to system language' },
-    translateToRegionalLanguage: { type: 'boolean', description: 'Translate to regional language' },
-    useCustomDestination: { type: 'boolean', description: 'Use custom destination language' },
 
     // Presence
     isOnline: { type: 'boolean', description: 'Current online status' },
@@ -828,9 +825,6 @@ export const conversationParticipantSchema = {
     regionalLanguage: { type: 'string', nullable: true, description: 'Regional language' },
     customDestinationLanguage: { type: 'string', nullable: true, description: 'Custom destination language' },
     autoTranslateEnabled: { type: 'boolean', nullable: true, description: 'Auto-translate enabled' },
-    translateToSystemLanguage: { type: 'boolean', nullable: true, description: 'Translate to system language' },
-    translateToRegionalLanguage: { type: 'boolean', nullable: true, description: 'Translate to regional language' },
-    useCustomDestination: { type: 'boolean', nullable: true, description: 'Use custom destination language' },
     isActive: { type: 'boolean', description: 'Participant is active' },
     createdAt: { type: 'string', format: 'date-time', description: 'User creation timestamp' },
     updatedAt: { type: 'string', format: 'date-time', description: 'User last update timestamp' },
@@ -3117,9 +3111,6 @@ export const updateUserRequestSchema = {
     regionalLanguage: { type: 'string', minLength: 2, maxLength: 5, description: 'Regional language code' },
     customDestinationLanguage: { type: 'string', maxLength: 5, nullable: true, description: 'Custom destination language (empty string allowed)' },
     autoTranslateEnabled: { type: 'boolean', description: 'Enable auto-translation' },
-    translateToSystemLanguage: { type: 'boolean', description: 'Translate to system language' },
-    translateToRegionalLanguage: { type: 'boolean', description: 'Translate to regional language' },
-    useCustomDestination: { type: 'boolean', description: 'Use custom destination language' },
     timezone: { type: 'string', description: 'User timezone (IANA format)' }
   }
 } as const;

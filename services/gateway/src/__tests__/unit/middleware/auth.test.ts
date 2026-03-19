@@ -63,9 +63,6 @@ function createTestUser(overrides: Record<string, unknown> = {}) {
     systemLanguage: 'fr',
     regionalLanguage: 'en',
     customDestinationLanguage: null,
-    translateToSystemLanguage: true,
-    translateToRegionalLanguage: true,
-    useCustomDestination: false,
     isOnline: true,
     lastActiveAt: new Date(),
     isActive: true,
@@ -168,7 +165,7 @@ describe('AuthMiddleware', () => {
     })
 
     it('uses customDestinationLanguage when available', async () => {
-      const user = createTestUser({ customDestinationLanguage: 'de', useCustomDestination: true })
+      const user = createTestUser({ customDestinationLanguage: 'de' })
       const prisma = createMockPrisma({
         userFindUnique: jest.fn().mockResolvedValue(user),
       })

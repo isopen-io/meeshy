@@ -32,9 +32,6 @@ export interface MagicLinkUser {
   regionalLanguage?: string;
   customDestinationLanguage?: string;
   autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

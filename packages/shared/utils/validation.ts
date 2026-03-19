@@ -147,9 +147,6 @@ export const UserSchemas = {
     regionalLanguage: z.string().optional(),
     customDestinationLanguage: z.string().nullable().optional(),
     autoTranslateEnabled: z.boolean().optional(),
-    translateToSystemLanguage: z.boolean().optional(),
-    translateToRegionalLanguage: z.boolean().optional(),
-    useCustomDestination: z.boolean().optional(),
     isOnline: z.boolean().optional(),
     lastActiveAt: z.string().datetime().nullable().optional(),
     emailVerifiedAt: z.string().datetime().nullable().optional(),
@@ -177,9 +174,6 @@ export const UserSchemas = {
     regionalLanguage: z.string().min(2).max(5).optional(),
     customDestinationLanguage: z.string().min(2).max(5).nullable().optional(),
     autoTranslateEnabled: z.boolean().optional(),
-    translateToSystemLanguage: z.boolean().optional(),
-    translateToRegionalLanguage: z.boolean().optional(),
-    useCustomDestination: z.boolean().optional(),
     timezone: z.string().optional(),
   }),
 };
@@ -231,9 +225,6 @@ export const updateUserProfileSchema = z.object({
   regionalLanguage: z.string().min(2).max(5).optional(),
   customDestinationLanguage: z.union([z.literal(''), z.null(), z.string().min(2).max(5)]).optional(),
   autoTranslateEnabled: z.boolean().optional(),
-  translateToSystemLanguage: z.boolean().optional(),
-  translateToRegionalLanguage: z.boolean().optional(),
-  useCustomDestination: z.boolean().optional(),
 }).strict();
 
 /**

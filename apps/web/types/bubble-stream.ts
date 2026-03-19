@@ -39,7 +39,4 @@ export interface UserLanguageConfig {
   regionalLanguage: string;
   customDestinationLanguage?: string;
   autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
 }

@@ -53,15 +53,14 @@ export function useMessageTranslations({
     // Langue système (toujours incluse)
     languages.add(currentUser.systemLanguage);
     
-    // Langue régionale si différente et activée
-    if (currentUser.translateToRegionalLanguage && 
+    // Langue régionale si différente
+    if (currentUser.regionalLanguage &&
         currentUser.regionalLanguage !== currentUser.systemLanguage) {
       languages.add(currentUser.regionalLanguage);
     }
-    
-    // Langue personnalisée si différente et activée
-    if (currentUser.useCustomDestination && 
-        currentUser.customDestinationLanguage &&
+
+    // Langue personnalisée si différente
+    if (currentUser.customDestinationLanguage &&
         currentUser.customDestinationLanguage !== currentUser.systemLanguage &&
         currentUser.customDestinationLanguage !== currentUser.regionalLanguage) {
       languages.add(currentUser.customDestinationLanguage);

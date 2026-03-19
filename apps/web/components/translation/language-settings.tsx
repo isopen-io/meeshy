@@ -28,9 +28,6 @@ export function LanguageSettings({ user, onUserUpdate }: LanguageSettingsProps) 
     regionalLanguage: 'fr',
     customDestinationLanguage: '',
     autoTranslateEnabled: true,
-    translateToSystemLanguage: true,
-    translateToRegionalLanguage: false,
-    useCustomDestination: false,
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -41,32 +38,15 @@ export function LanguageSettings({ user, onUserUpdate }: LanguageSettingsProps) 
         regionalLanguage: user.regionalLanguage,
         customDestinationLanguage: user.customDestinationLanguage || '',
         autoTranslateEnabled: user.autoTranslateEnabled,
-        translateToSystemLanguage: user.translateToSystemLanguage,
-        translateToRegionalLanguage: user.translateToRegionalLanguage,
-        useCustomDestination: user.useCustomDestination,
       });
     }
   }, [user]);
 
   const handleSettingChange = (key: string, value: boolean | string) => {
-    const newSettings = {
-      ...settings,
+    setSettings(prev => ({
+      ...prev,
       [key]: value
-    };
-
-    // Logique exclusive pour les options de traduction
-    if (key === 'translateToSystemLanguage' && value === true) {
-      newSettings.translateToRegionalLanguage = false;
-      newSettings.useCustomDestination = false;
-    } else if (key === 'translateToRegionalLanguage' && value === true) {
-      newSettings.translateToSystemLanguage = false;
-      newSettings.useCustomDestination = false;
-    } else if (key === 'useCustomDestination' && value === true) {
-      newSettings.translateToSystemLanguage = false;
-      newSettings.translateToRegionalLanguage = false;
-    }
-
-    setSettings(newSettings);
+    }));
   };
 
   const handleSave = async () => {
@@ -208,83 +188,6 @@ export function LanguageSettings({ user, onUserUpdate }: LanguageSettingsProps) 
             />
           </div>
 
-          {settings.autoTranslateEnabled && (
-            <div className="space-y-4 sm:space-y-6">
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs sm:text-sm text-blue-800 font-medium">
-                  ⚠️ {t('translation.autoTranslation.exclusiveMode')}
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1 flex-1">
-                  <Label htmlFor="translateToSystemLanguage" className="text-sm sm:text-base font-medium">
-                    {t('translation.autoTranslation.translateToSystem')}
-                  </Label>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    {t('translation.autoTranslation.translateToSystemDescription', { 
-                      flag: getLanguageFlag(settings.systemLanguage), 
-                      language: getLanguageName(settings.systemLanguage) 
-                    })}
-                  </p>
-                </div>
-                <Switch
-                  id="translateToSystemLanguage"
-                  checked={settings.translateToSystemLanguage}
-                  onCheckedChange={(checked) => handleSettingChange('translateToSystemLanguage', checked)}
-                />
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1 flex-1">
-                  <Label htmlFor="translateToRegionalLanguage" className="text-sm sm:text-base font-medium">
-                    {t('translation.autoTranslation.translateToRegional')}
-                  </Label>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    {t('translation.autoTranslation.translateToRegionalDescription', { 
-                      flag: getLanguageFlag(settings.regionalLanguage), 
-                      language: getLanguageName(settings.regionalLanguage) 
-                    })}
-                  </p>
-                </div>
-                <Switch
-                  id="translateToRegionalLanguage"
-                  checked={settings.translateToRegionalLanguage}
-                  onCheckedChange={(checked) => handleSettingChange('translateToRegionalLanguage', checked)}
-                />
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1 flex-1">
-                  <Label htmlFor="useCustomDestination" className="text-sm sm:text-base font-medium">
-                    {t('translation.autoTranslation.translateToCustom')}
-                  </Label>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    {settings.customDestinationLanguage ? (
-                      t('translation.autoTranslation.translateToCustomDescription', { 
-                        flag: getLanguageFlag(settings.customDestinationLanguage), 
-                        language: getLanguageName(settings.customDestinationLanguage) 
-                      })
-                    ) : (
-                      t('translation.autoTranslation.noCustomLanguage')
-                    )}
-                  </p>
-                </div>
-                <Switch
-                  id="useCustomDestination"
-                  checked={settings.useCustomDestination && !!settings.customDestinationLanguage}
-                  onCheckedChange={(checked) => handleSettingChange('useCustomDestination', checked)}
-                  disabled={!settings.customDestinationLanguage}
-                />
-              </div>
-
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-xs sm:text-sm text-amber-800">
-                  <strong>💡 {t('translation.autoTranslation.tip')}</strong> {t('translation.autoTranslation.tipDescription')}
-                </p>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -338,9 +241,6 @@ export function LanguageSettings({ user, onUserUpdate }: LanguageSettingsProps) 
                 regionalLanguage: user.regionalLanguage,
                 customDestinationLanguage: user.customDestinationLanguage || '',
                 autoTranslateEnabled: user.autoTranslateEnabled,
-                translateToSystemLanguage: user.translateToSystemLanguage,
-                translateToRegionalLanguage: user.translateToRegionalLanguage,
-                useCustomDestination: user.useCustomDestination,
               });
             }
           }}

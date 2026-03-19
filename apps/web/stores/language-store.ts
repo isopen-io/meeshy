@@ -12,9 +12,6 @@ interface UserLanguageConfig {
   regionalLanguage: string;
   customDestinationLanguage?: string;
   autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
 }
 
 interface LanguageState {
@@ -48,9 +45,6 @@ const DEFAULT_LANGUAGE_CONFIG: UserLanguageConfig = {
   regionalLanguage: 'fr',
   customDestinationLanguage: undefined,
   autoTranslateEnabled: true,
-  translateToSystemLanguage: true,
-  translateToRegionalLanguage: false,
-  useCustomDestination: false,
 };
 
 const initialState: LanguageState = {

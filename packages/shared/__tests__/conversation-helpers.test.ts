@@ -12,43 +12,24 @@ import {
 } from '../utils/conversation-helpers';
 
 describe('resolveUserLanguage', () => {
-  it('should return custom destination language when enabled', () => {
+  it('should return custom destination language when set', () => {
     const user = {
-      useCustomDestination: true,
       customDestinationLanguage: 'de',
-      translateToSystemLanguage: true,
       systemLanguage: 'en',
     };
     expect(resolveUserLanguage(user)).toBe('de');
   });
 
-  it('should return system language when translateToSystemLanguage is true', () => {
+  it('should return system language when no custom destination', () => {
     const user = {
-      useCustomDestination: false,
-      translateToSystemLanguage: true,
       systemLanguage: 'en',
-      translateToRegionalLanguage: true,
       regionalLanguage: 'es',
     };
     expect(resolveUserLanguage(user)).toBe('en');
   });
 
-  it('should return regional language when translateToRegionalLanguage is true', () => {
+  it('should fallback to system language when only system set', () => {
     const user = {
-      useCustomDestination: false,
-      translateToSystemLanguage: false,
-      translateToRegionalLanguage: true,
-      regionalLanguage: 'es',
-      systemLanguage: 'en',
-    };
-    expect(resolveUserLanguage(user)).toBe('es');
-  });
-
-  it('should fallback to system language', () => {
-    const user = {
-      useCustomDestination: false,
-      translateToSystemLanguage: false,
-      translateToRegionalLanguage: false,
       systemLanguage: 'en',
     };
     expect(resolveUserLanguage(user)).toBe('en');
@@ -59,11 +40,9 @@ describe('resolveUserLanguage', () => {
     expect(resolveUserLanguage(user)).toBe('fr');
   });
 
-  it('should handle useCustomDestination true but no customDestinationLanguage', () => {
+  it('should fallback to system language when customDestinationLanguage is undefined', () => {
     const user = {
-      useCustomDestination: true,
       customDestinationLanguage: undefined,
-      translateToSystemLanguage: true,
       systemLanguage: 'en',
     };
     expect(resolveUserLanguage(user)).toBe('en');
@@ -307,9 +286,9 @@ describe('generateDefaultConversationTitle', () => {
 describe('getRequiredLanguages', () => {
   it('should return unique languages from all members', () => {
     const members = [
-      { systemLanguage: 'en', translateToSystemLanguage: true },
-      { systemLanguage: 'fr', translateToSystemLanguage: true },
-      { systemLanguage: 'de', translateToSystemLanguage: true },
+      { systemLanguage: 'en' },
+      { systemLanguage: 'fr' },
+      { systemLanguage: 'de' },
     ];
     const languages = getRequiredLanguages(members);
     expect(languages).toHaveLength(3);
@@ -320,9 +299,9 @@ describe('getRequiredLanguages', () => {
 
   it('should deduplicate languages', () => {
     const members = [
-      { systemLanguage: 'en', translateToSystemLanguage: true },
-      { systemLanguage: 'en', translateToSystemLanguage: true },
-      { systemLanguage: 'fr', translateToSystemLanguage: true },
+      { systemLanguage: 'en' },
+      { systemLanguage: 'en' },
+      { systemLanguage: 'fr' },
     ];
     const languages = getRequiredLanguages(members);
     expect(languages).toHaveLength(2);
@@ -332,8 +311,8 @@ describe('getRequiredLanguages', () => {
 
   it('should respect user language preferences', () => {
     const members = [
-      { systemLanguage: 'en', customDestinationLanguage: 'de', useCustomDestination: true },
-      { systemLanguage: 'en', regionalLanguage: 'es', translateToRegionalLanguage: true },
+      { systemLanguage: 'en', customDestinationLanguage: 'de' },
+      { systemLanguage: 'es' },
     ];
     const languages = getRequiredLanguages(members);
     expect(languages).toContain('de');

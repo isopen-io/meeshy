@@ -88,14 +88,12 @@ export function getRequiredLanguagesForConversation(users: User[]): string[] {
   const languages = new Set<string>();
   
   users.forEach(user => {
-    if (user.useCustomDestination && user.customDestinationLanguage) {
+    if (user.customDestinationLanguage) {
       languages.add(user.customDestinationLanguage);
-    } else if (user.translateToSystemLanguage) {
-      languages.add(user.systemLanguage || 'fr');
-    } else if (user.translateToRegionalLanguage) {
-      languages.add(user.regionalLanguage || 'fr');
+    } else if (user.systemLanguage) {
+      languages.add(user.systemLanguage);
     } else {
-      languages.add(user.systemLanguage || 'fr');
+      languages.add('fr');
     }
   });
   

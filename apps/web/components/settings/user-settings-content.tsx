@@ -101,61 +101,6 @@ export function UserSettingsContent({ user, localSettings, onSettingUpdate, chil
                 />
               </div>
 
-              {localSettings.autoTranslateEnabled && (
-                <div className="space-y-4 pl-4 border-l-2 border-primary/20">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label htmlFor="translateToSystem" className="text-sm font-medium">
-                        Traduire vers la langue système
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Traduire les messages vers {getLanguageDisplay(localSettings.systemLanguage || 'fr')}
-                      </p>
-                    </div>
-                    <Switch
-                      id="translateToSystem"
-                      checked={localSettings.translateToSystemLanguage || false}
-                      onCheckedChange={(checked) => onSettingUpdate('translateToSystemLanguage', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label htmlFor="translateToRegional" className="text-sm font-medium">
-                        Traduire vers la langue régionale
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Traduire les messages vers {getLanguageDisplay(localSettings.regionalLanguage || 'fr')}
-                      </p>
-                    </div>
-                    <Switch
-                      id="translateToRegional"
-                      checked={localSettings.translateToRegionalLanguage || false}
-                      onCheckedChange={(checked) => onSettingUpdate('translateToRegionalLanguage', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label htmlFor="useCustomDestination" className="text-sm font-medium">
-                        Utiliser la destination personnalisée
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Traduire vers {localSettings.customDestinationLanguage ? 
-                          getLanguageDisplay(localSettings.customDestinationLanguage) : 
-                          'aucune langue sélectionnée'
-                        }
-                      </p>
-                    </div>
-                    <Switch
-                      id="useCustomDestination"
-                      checked={localSettings.useCustomDestination || false}
-                      onCheckedChange={(checked) => onSettingUpdate('useCustomDestination', checked)}
-                      disabled={!localSettings.customDestinationLanguage}
-                    />
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         </TabsContent>

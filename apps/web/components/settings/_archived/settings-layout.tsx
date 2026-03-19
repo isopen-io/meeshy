@@ -95,9 +95,6 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
       regionalLanguage: currentUser.regionalLanguage,
       customDestinationLanguage: currentUser.customDestinationLanguage,
       autoTranslateEnabled: currentUser.autoTranslateEnabled,
-      translateToSystemLanguage: currentUser.translateToSystemLanguage,
-      translateToRegionalLanguage: currentUser.translateToRegionalLanguage,
-      useCustomDestination: currentUser.useCustomDestination,
       // Encryption & Transcription
       encryptionPreference: currentUser.encryptionPreference || 'optional',
       autoTranscriptionEnabled: (currentUser as { autoTranscriptionEnabled?: boolean }).autoTranscriptionEnabled ?? true,
@@ -139,9 +136,6 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
       regionalLanguage: currentUser.regionalLanguage,
       customDestinationLanguage: currentUser.customDestinationLanguage,
       autoTranslateEnabled: currentUser.autoTranslateEnabled,
-      translateToSystemLanguage: currentUser.translateToSystemLanguage,
-      translateToRegionalLanguage: currentUser.translateToRegionalLanguage,
-      useCustomDestination: currentUser.useCustomDestination,
       // Encryption & Transcription
       encryptionPreference: currentUser.encryptionPreference || 'optional',
       autoTranscriptionEnabled: (currentUser as { autoTranscriptionEnabled?: boolean }).autoTranscriptionEnabled ?? true,
@@ -311,54 +305,20 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
                       />
                     </div>
 
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <Label className="text-sm font-medium">Traduire vers la langue système</Label>
-                        <p className="text-xs text-gray-500">Traduire vers votre langue système</p>
-                      </div>
-                      <Switch
-                        checked={localSettings.translateToSystemLanguage}
-                        onCheckedChange={(checked) => updateSetting('translateToSystemLanguage', checked)}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <Label className="text-sm font-medium">Traduire vers la langue régionale</Label>
-                        <p className="text-xs text-gray-500">Traduire vers votre langue régionale</p>
-                      </div>
-                      <Switch
-                        checked={localSettings.translateToRegionalLanguage}
-                        onCheckedChange={(checked) => updateSetting('translateToRegionalLanguage', checked)}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <Label className="text-sm font-medium">Utiliser une langue personnalisée</Label>
-                        <p className="text-xs text-gray-500">Définir une langue de destination spécifique</p>
-                      </div>
-                      <Switch
-                        checked={localSettings.useCustomDestination}
-                        onCheckedChange={(checked) => updateSetting('useCustomDestination', checked)}
-                      />
-                    </div>
                   </div>
                 </div>
 
                 {/* Section Langue personnalisée */}
-                {localSettings.useCustomDestination && (
-                  <div>
-                    <Label htmlFor="customDestinationLanguage" className="text-sm">Langue de destination personnalisée</Label>
-                    <LanguageSelector
-                      value={localSettings.customDestinationLanguage || ''}
-                      onValueChange={(value) => updateSetting('customDestinationLanguage', value)}
-                      languages={[...SUPPORTED_LANGUAGES]}
-                      placeholder="Choisir une langue de destination"
-                      className="mt-1"
-                    />
-                  </div>
-                )}
+                <div>
+                  <Label htmlFor="customDestinationLanguage" className="text-sm">Langue de destination personnalisée</Label>
+                  <LanguageSelector
+                    value={localSettings.customDestinationLanguage || ''}
+                    onValueChange={(value) => updateSetting('customDestinationLanguage', value)}
+                    languages={[...SUPPORTED_LANGUAGES]}
+                    placeholder="Choisir une langue de destination"
+                    className="mt-1"
+                  />
+                </div>
               </div>
             </div>
           </div>

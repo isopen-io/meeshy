@@ -211,8 +211,6 @@ async function main() {
       systemLanguage: 'en',  // Admin default: English
       regionalLanguage: 'fr',
       autoTranslateEnabled: true,
-      translateToSystemLanguage: true,
-      translateToRegionalLanguage: false
     }
   });
 
@@ -230,8 +228,6 @@ async function main() {
       regionalLanguage: 'es',
       customDestinationLanguage: 'fr', // Correction pour le champ régional
       autoTranslateEnabled: true,
-      translateToSystemLanguage: true,
-      translateToRegionalLanguage: false
     }
   });
 
@@ -248,8 +244,6 @@ async function main() {
       systemLanguage: 'es',
       regionalLanguage: 'en',
       autoTranslateEnabled: true,
-      translateToSystemLanguage: true,
-      translateToRegionalLanguage: false
     }
   });
 
@@ -266,8 +260,6 @@ async function main() {
       systemLanguage: 'de',
       regionalLanguage: 'fr',
       autoTranslateEnabled: true,
-      translateToSystemLanguage: true,
-      translateToRegionalLanguage: false
     }
   });
 
@@ -285,8 +277,6 @@ async function main() {
       regionalLanguage: 'en',
       customDestinationLanguage: 'fr', // Correction pour le champ régional
       autoTranslateEnabled: true,
-      translateToSystemLanguage: true,
-      translateToRegionalLanguage: false
     }
   });
 
@@ -304,8 +294,6 @@ async function main() {
       regionalLanguage: 'fr',
       customDestinationLanguage: 'ru', // Correction pour le champ régional
       autoTranslateEnabled: true,
-      translateToSystemLanguage: true,
-      translateToRegionalLanguage: false
     }
   });
 
@@ -322,8 +310,6 @@ async function main() {
       systemLanguage: 'pt',
       regionalLanguage: 'ar',
       autoTranslateEnabled: true,
-      translateToSystemLanguage: true,
-      translateToRegionalLanguage: false
     }
   });
 

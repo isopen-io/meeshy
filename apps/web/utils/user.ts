@@ -6,9 +6,7 @@ type ParticipantUser = {
   lastName?: string;
   username?: string;
   systemLanguage?: string;
-  useCustomDestination?: boolean;
   customDestinationLanguage?: string;
-  translateToRegionalLanguage?: boolean;
   regionalLanguage?: string;
 };
 
@@ -168,9 +166,9 @@ export function formatConversationTitle(
       // Déterminer la langue de lecture selon les préférences de l'utilisateur
       let readingLanguage = memberInfo.systemLanguage; // Par défaut
       
-      if (memberInfo.useCustomDestination && memberInfo.customDestinationLanguage) {
+      if (memberInfo.customDestinationLanguage) {
         readingLanguage = memberInfo.customDestinationLanguage;
-      } else if (memberInfo.translateToRegionalLanguage) {
+      } else if (memberInfo.regionalLanguage) {
         readingLanguage = memberInfo.regionalLanguage;
       }
       
@@ -213,9 +211,9 @@ export function formatConversationTitleFromMembers(
     // Déterminer la langue de lecture selon les préférences de l'utilisateur
     let readingLanguage = participant.language || user?.systemLanguage || 'en';
 
-    if (user?.useCustomDestination && user?.customDestinationLanguage) {
+    if (user?.customDestinationLanguage) {
       readingLanguage = user.customDestinationLanguage;
-    } else if (user?.translateToRegionalLanguage && user?.regionalLanguage) {
+    } else if (user?.regionalLanguage) {
       readingLanguage = user.regionalLanguage;
     }
 

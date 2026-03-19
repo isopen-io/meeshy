@@ -177,9 +177,6 @@ export function getRequiredLanguages(
     systemLanguage?: string;
     regionalLanguage?: string;
     customDestinationLanguage?: string;
-    translateToSystemLanguage?: boolean;
-    translateToRegionalLanguage?: boolean;
-    useCustomDestination?: boolean;
   }>
 ): string[] {
   const languages = new Set<string>();
