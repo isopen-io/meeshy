@@ -1,10 +1,17 @@
-# Language System Fixes — 8 Correctness Issues
+# Language System Fixes — 6 Correctness Issues (v2 — post-review)
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix 8 language system issues: autoTranslateEnabled stub, customDestinationLanguage ignored in web display, socket translations not reaching display, autoTranslate conversation flag not checked, iOS Locale.current fallback, language code validation, and missing translation indicator.
+**Goal:** Fix 6 language system issues: autoTranslateEnabled stub, customDestinationLanguage ignored in web display, autoTranslate conversation flag not checked in translation pipeline, iOS Locale.current fallback, language code validation, and translation language cache staleness.
 
-**Architecture:** 6 independent tasks across gateway, web, iOS, and shared. Each fix is surgical — modify 1-3 files with minimal blast radius. The web socket/display fix (T3) is the most complex and highest impact.
+**Architecture:** 6 independent tasks across gateway, web, iOS, and shared. Each fix is surgical — modify 1-3 files with minimal blast radius.
+
+**PRE-REQUISITE ALREADY DONE:** `resolveUserLanguage()` priority order corrected to `customDestinationLanguage > systemLanguage > 'fr'` (commit `fbfa9d1d`).
+
+**Review corrections applied (v2):**
+- T1: Keep `autoTranslateEnabled: true` in response for backward compat (41 web files depend on it). Remove only the featureUpdateData stub. Migration to per-conversation in separate plan.
+- T3: REWRITTEN — real cause is React Query useMemo not recalculating on nested translation changes, not a local-state vs React-Query split.
+- T4: Use cached approach (extend languageCache to include autoTranslateEnabled) instead of separate DB query.
 
 **Tech Stack:** TypeScript (gateway + web), Swift (iOS), Zod (validation)
 
@@ -12,50 +19,28 @@
 
 ---
 
-## Task 1: Fix autoTranslateEnabled — persist to Conversation model
+## Task 1: Clean up autoTranslateEnabled stub in profile route
 
-**Problem:** `autoTranslateEnabled` is on the `Conversation` model but the profile update route stubs it to `true` and never saves user preference changes. The field is per-conversation, not per-user — the gateway should not be accepting it in user profile updates.
+**Problem:** `profile.ts:172` maps `body.autoTranslateEnabled` into `featureUpdateData` which is logged as a warning and dropped. `autoTranslateEnabled` belongs on the Conversation model (per-conversation toggle), not on User.
 
-**Root cause:** `profile.ts:172` maps `body.autoTranslateEnabled` into `featureUpdateData` which is logged as warning and dropped. Line 247 hardcodes `autoTranslateEnabled: true` in every response.
-
-**Fix:** Remove the stub. `autoTranslateEnabled` belongs on Conversation (it's already there in Prisma schema). The profile route should not handle it at all — it's a conversation setting.
+**Fix:** Remove the dead `featureUpdateData` mapping. **Keep `autoTranslateEnabled: true` in responses** for backward compatibility (41 web files depend on it). Full migration to per-conversation is a separate plan.
 
 **Files:**
-- Modify: `services/gateway/src/routes/users/profile.ts:172,247`
+- Modify: `services/gateway/src/routes/users/profile.ts`
 
 - [ ] **Step 1: Read profile.ts to find all autoTranslateEnabled references**
 
 Read `services/gateway/src/routes/users/profile.ts`. Find:
 - Line ~172: `if (body.autoTranslateEnabled !== undefined) featureUpdateData.autoTranslateEnabled = body.autoTranslateEnabled;`
-- Line ~247: `autoTranslateEnabled: true`
-- Any other references
+- Line ~241: `console.warn('[Profile] Feature update data not saved...')`
 
-- [ ] **Step 2: Remove the featureUpdateData mapping**
+- [ ] **Step 2: Remove the dead featureUpdateData block**
 
-Delete the line that maps `autoTranslateEnabled` into `featureUpdateData` (~line 172).
+Delete the line mapping `autoTranslateEnabled` into `featureUpdateData` (~line 172). If `featureUpdateData` is now empty (no other fields mapped), remove the entire block including the `const featureUpdateData = {}`, the `if (Object.keys...)` check, and the `console.warn`.
 
-- [ ] **Step 3: Remove the hardcoded response stub**
+**DO NOT remove `autoTranslateEnabled: true` from responses** — 41 web files depend on it. Leave the hardcoded `true` as-is.
 
-At ~line 247, remove `autoTranslateEnabled: true` from the response. The client should get this from the Conversation object, not the user profile.
-
-```typescript
-// BEFORE:
-const responseUser = {
-  ...updatedUser,
-  autoTranslateEnabled: true
-};
-
-// AFTER:
-const responseUser = updatedUser;
-```
-
-Check if there are other places that hardcode `autoTranslateEnabled: true` in profile.ts (search the file). Remove all of them.
-
-- [ ] **Step 4: Check if the featureUpdateData block is now empty**
-
-After removing `autoTranslateEnabled` (and the previous removal of `translateTo*` booleans), `featureUpdateData` should have nothing mapped into it. If the entire block is empty, remove it and the `console.warn` at ~line 241.
-
-- [ ] **Step 5: Build**
+- [ ] **Step 3: Build**
 
 `cd services/gateway && npx tsc --noEmit`
 
@@ -122,66 +107,50 @@ customDestinationLanguage override. Now uses resolveUserLanguage() from
 
 ---
 
-## Task 3: Fix socket translations not reaching message display
+## Task 3: Investigate and fix React Query translation propagation
 
-**Problem:** Two parallel message state systems exist:
-1. `useConversationMessages` — local React state (what `MessagesDisplay` reads)
-2. `useSocketCacheSync` — React Query cache (where socket translations are written)
+**Problem (revised after review):** `ConversationLayout` uses `useConversationMessagesRQ` which reads from React Query cache. `useSocketCacheSync` writes translations to that same cache. In theory, translations should propagate. But they may not trigger re-renders because:
+1. A `useMemo` in the RQ hook may not recalculate when nested `translations` arrays change
+2. React Query's structural sharing may not detect nested array mutations
 
-When a translation arrives via Socket.IO, it's written to React Query but `MessagesDisplay` reads from the local state → **translations don't appear until page refresh**.
-
-**Fix:** When socket translations arrive, ALSO update the local state via `useConversationMessages.updateMessage()`.
+**Fix approach:** This requires investigation, not a blind fix. The implementer must:
 
 **Files:**
-- Modify: `apps/web/hooks/conversations/use-socket-callbacks.ts:177-189`
+- Read: `apps/web/hooks/queries/use-conversation-messages-rq.ts` (find the `useMemo` or `select`)
+- Read: `apps/web/hooks/queries/use-socket-cache-sync.ts:184-218` (translation merge logic)
+- Read: `apps/web/components/common/messages-display.tsx:275-313` (auto-switch effect)
+- Read: `apps/web/components/conversations/ConversationLayout.tsx` (verify it uses `useConversationMessagesRQ`)
 
-- [ ] **Step 1: Read use-socket-callbacks.ts**
+- [ ] **Step 1: Verify which message hook ConversationLayout uses**
 
-Read the file. Find the `onTranslation` callback (~line 177). Note the comment: "Cache mutation (updateMessage) removed — useSocketCacheSync is the single cache writer."
+Read `ConversationLayout.tsx`. Search for `useConversationMessages` — which variant? (`useConversationMessagesRQ` or `useConversationMessages`). Confirm it reads from React Query.
 
-- [ ] **Step 2: Read useConversationMessages to understand updateMessage**
+- [ ] **Step 2: Trace the translation write path**
 
-Read `apps/web/hooks/use-conversation-messages.ts`. Find the `updateMessage` function. Understand its signature — it should accept a message ID and update function/partial.
+In `use-socket-cache-sync.ts`, `handleTranslation` calls `queryClient.setQueryData(queryKeys.messages.infinite(...))`. Verify the mutation creates a NEW page object (not mutating in-place) so React Query detects the change.
 
-- [ ] **Step 3: Restore translation update in onTranslation callback**
+- [ ] **Step 3: Check if the RQ hook's select/useMemo recalculates**
 
-The `onTranslation` callback must merge translations into the local message state. The React Query sync remains as-is (useSocketCacheSync handles it). But we also need to update the local state for `MessagesDisplay`:
+In the RQ hook used by ConversationLayout, check if there's a `select` or `useMemo` that flattens pages. If the memo depends on `data` reference and `setQueryData` creates a new reference, it should recalculate. If it depends on `data?.messages` (which may be the same array reference after structural sharing), it won't.
 
-```typescript
-const onTranslation = useCallback(
-  (messageId: string, translations: Translation[]) => {
-    // Update local message state so MessagesDisplay sees it immediately
-    updateMessage(messageId, (msg: Message) => {
-      const existingTranslations = Array.isArray(msg.translations) ? [...msg.translations] : [];
-      for (const t of translations) {
-        const targetLang = t.targetLanguage || t.language;
-        const idx = existingTranslations.findIndex((et: any) =>
-          (et.targetLanguage || et.language) === targetLang
-        );
-        if (idx >= 0) {
-          existingTranslations[idx] = t;
-        } else {
-          existingTranslations.push(t);
-        }
-      }
-      return { ...msg, translations: existingTranslations };
-    });
+- [ ] **Step 4: Apply fix based on findings**
 
-    // UI state updates (existing)
-    const newLanguages = translations
-      .map(t => t.targetLanguage || t.language)
-      .filter((lang): lang is string => Boolean(lang));
-    addUsedLanguages(newLanguages);
+If the issue is structural sharing: add `structuralSharing: false` to the query options for messages.
+If the issue is useMemo deps: fix the deps to include the full data reference.
+If translations actually DO propagate (no bug): close this task as "verified working".
 
-    for (const translation of translations) {
-      // ... existing removeTranslatingState logic
-    }
-  },
-  [updateMessage, addUsedLanguages]
-);
+- [ ] **Step 5: Build and verify**
+
+`cd apps/web && pnpm tsc --noEmit`
+Then test: send a message in conversation → verify translation appears in real-time.
+
+- [ ] **Step 6: Commit (if changes needed)**
+
 ```
+fix(web): ensure React Query translation updates trigger re-renders in message display
 
-**IMPORTANT:** Check if `updateMessage` is available in the callback's scope. It may need to be passed as a parameter from the parent component or via a ref. Read how `useSocketCallbacks` receives its dependencies.
+[Describe the specific fix based on investigation findings]
+```
 
 - [ ] **Step 4: Build**
 
