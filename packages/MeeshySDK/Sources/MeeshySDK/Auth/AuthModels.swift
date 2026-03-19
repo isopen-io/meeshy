@@ -215,9 +215,6 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     // Translation preferences (from GET /users/:id)
     public let customDestinationLanguage: String?
     public let autoTranslateEnabled: Bool?
-    public let translateToSystemLanguage: Bool?
-    public let translateToRegionalLanguage: Bool?
-    public let useCustomDestination: Bool?
 
     // Profile enrichment
     public let timezone: String?
@@ -240,9 +237,6 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         emailVerifiedAt: String? = nil, phoneVerifiedAt: String? = nil,
         customDestinationLanguage: String? = nil,
         autoTranslateEnabled: Bool? = nil,
-        translateToSystemLanguage: Bool? = nil,
-        translateToRegionalLanguage: Bool? = nil,
-        useCustomDestination: Bool? = nil,
         timezone: String? = nil,
         registrationCountry: String? = nil,
         profileCompletionRate: Int? = nil,
@@ -274,9 +268,6 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.phoneVerifiedAt = phoneVerifiedAt
         self.customDestinationLanguage = customDestinationLanguage
         self.autoTranslateEnabled = autoTranslateEnabled
-        self.translateToSystemLanguage = translateToSystemLanguage
-        self.translateToRegionalLanguage = translateToRegionalLanguage
-        self.useCustomDestination = useCustomDestination
         self.timezone = timezone
         self.registrationCountry = registrationCountry
         self.profileCompletionRate = profileCompletionRate
@@ -288,16 +279,15 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     /// Device locale (Locale.current) is NEVER included — it is the UI language, not content.
     public var preferredContentLanguages: [String] {
         var preferred: [String] = []
-        if useCustomDestination == true, let custom = customDestinationLanguage {
+        if let custom = customDestinationLanguage {
             preferred.append(custom)
         }
-        if translateToSystemLanguage == true, let sys = systemLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(sys) == .orderedSame }) {
+        if let sys = systemLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(sys) == .orderedSame }) {
             preferred.append(sys)
         }
-        if translateToRegionalLanguage == true, let reg = regionalLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(reg) == .orderedSame }) {
+        if let reg = regionalLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(reg) == .orderedSame }) {
             preferred.append(reg)
         }
-        // Fallback: systemLanguage is ALWAYS included as last resort (Prisme Linguistique rule)
         if preferred.isEmpty, let sys = systemLanguage {
             preferred.append(sys)
         }

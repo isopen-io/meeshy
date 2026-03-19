@@ -306,9 +306,6 @@ public final class AuthManager: ObservableObject, AuthManaging {
             emailVerifiedAt: user.emailVerifiedAt, phoneVerifiedAt: user.phoneVerifiedAt,
             customDestinationLanguage: user.customDestinationLanguage,
             autoTranslateEnabled: user.autoTranslateEnabled,
-            translateToSystemLanguage: user.translateToSystemLanguage,
-            translateToRegionalLanguage: user.translateToRegionalLanguage,
-            useCustomDestination: user.useCustomDestination,
             timezone: user.timezone, registrationCountry: user.registrationCountry,
             profileCompletionRate: user.profileCompletionRate,
             signalIdentityKeyPublic: user.signalIdentityKeyPublic
