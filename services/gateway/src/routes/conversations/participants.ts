@@ -425,10 +425,12 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      const isAdmin = currentUserParticipant.user?.role === 'ADMIN' || currentUserParticipant.user?.role === 'BIGBOSS';
+      const isPlatformAdmin = currentUserParticipant.user?.role === 'ADMIN' || currentUserParticipant.user?.role === 'BIGBOSS';
       const isCreator = currentUserParticipant.role === 'creator';
+      const isConversationAdmin = currentUserParticipant.role === 'admin';
+      const isConversationModerator = currentUserParticipant.role === 'moderator';
 
-      if (!isAdmin && !isCreator) {
+      if (!isPlatformAdmin && !isCreator && !isConversationAdmin && !isConversationModerator) {
         return sendForbidden(reply, 'Vous n\'avez pas les droits pour supprimer des participants');
       }
 
@@ -561,10 +563,11 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      const isAdmin = currentUserParticipant.user?.role === 'ADMIN' || currentUserParticipant.user?.role === 'BIGBOSS';
+      const isPlatformAdmin = currentUserParticipant.user?.role === 'ADMIN' || currentUserParticipant.user?.role === 'BIGBOSS';
       const isCreator = currentUserParticipant.role === 'creator';
+      const isConversationAdmin = currentUserParticipant.role === 'admin';
 
-      if (!isAdmin && !isCreator) {
+      if (!isPlatformAdmin && !isCreator && !isConversationAdmin) {
         return sendForbidden(reply, 'Vous n\'avez pas les droits pour modifier les rôles des participants');
       }
 
