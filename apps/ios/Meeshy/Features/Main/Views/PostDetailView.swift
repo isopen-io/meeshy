@@ -87,6 +87,7 @@ struct PostDetailView: View {
                 name: post.author,
                 context: .postAuthor,
                 accentColor: post.authorColor,
+                avatarURL: post.authorAvatarURL,
                 moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
                 onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                 onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
@@ -118,7 +119,8 @@ struct PostDetailView: View {
                     .padding(8)
             }
         }
-        .padding(16)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
     }
 
     // MARK: - Post Content
@@ -146,7 +148,7 @@ struct PostDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.bottom, 12)
     }
 
@@ -164,9 +166,8 @@ struct PostDetailView: View {
                     .fill(theme.inputBackground)
                     .overlay(ProgressView())
             }
-            .frame(maxHeight: 300)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, maxHeight: 400)
+            .clipShape(RoundedRectangle(cornerRadius: 0))
             .padding(.bottom, 12)
 
             if post.media.count > 1 {
