@@ -23,12 +23,14 @@ Message recu → Detection langue originale → Traduction auto (NLLB-200 via tr
 ```
 
 ### Resolution de langue
-La resolution pour l'affichage de contenu (quel traduction montrer par defaut) :
-1. `customDestinationLanguage` — override explicite utilisateur (onglet Language, priorite la plus haute)
-2. `systemLanguage` — langue primaire configuree dans l'app
-3. Fallback : `'fr'`
+Ordre de resolution pour le contenu (messages, transcriptions) — identique partout :
+1. `systemLanguage` — langue primaire configuree dans l'app (priorite la plus haute)
+2. `regionalLanguage` — langue secondaire configuree dans l'app
+3. `customDestinationLanguage` — langue de destination personnalisee
+4. Fallback : `'fr'`
 
-La production de traductions (quelles langues generer) : `systemLanguage` (toujours) + `regionalLanguage` (si configuree). `customDestinationLanguage` n'est PAS inclus dans la production auto — c'est un override d'affichage.
+Source de verite : `resolveUserLanguage()` dans `packages/shared/utils/conversation-helpers.ts`
+iOS : `MeeshyUser.preferredContentLanguages` dans `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift`
 
 **La locale appareil (`Locale.current`) ne doit JAMAIS etre utilisee pour la resolution de contenu.** C'est la langue d'interface (UI), pas la langue de contenu. Un utilisateur francophone avec un iPhone en anglais veut lire ses messages en francais, pas en anglais.
 
