@@ -18,6 +18,7 @@ struct FeedPostCard: View {
     var onLikeComment: ((String, String) -> Void)? = nil // (postId, commentId)
     var onSelectLanguage: ((String, String) -> Void)? = nil // (postId, language)
     var onTapPost: ((String) -> Void)? = nil
+    var onTapRepost: ((String) -> Void)? = nil
 
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @ObservedObject private var theme = ThemeManager.shared
@@ -178,54 +179,60 @@ struct FeedPostCard: View {
 
     // MARK: - Repost View
     private func repostView(_ repost: RepostContent) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Original author
-            HStack(spacing: 8) {
-                MeeshyAvatar(
-                    name: repost.author,
-                    context: .postComment,
-                    accentColor: repost.authorColor,
-                    avatarURL: repost.authorAvatarURL
-                )
+        Button {
+            HapticFeedback.light()
+            onTapRepost?(repost.id)
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                // Original author
+                HStack(spacing: 8) {
+                    MeeshyAvatar(
+                        name: repost.author,
+                        context: .postComment,
+                        accentColor: repost.authorColor,
+                        avatarURL: repost.authorAvatarURL
+                    )
 
-                Text(repost.author)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(theme.accentText(repost.authorColor))
+                    Text(repost.author)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.accentText(repost.authorColor))
 
-                Text("·")
-                    .foregroundColor(theme.textMuted)
+                    Text("·")
+                        .foregroundColor(theme.textMuted)
 
-                Text(timeAgo(from: repost.timestamp))
-                    .font(.system(size: 11))
-                    .foregroundColor(theme.textMuted)
-            }
-
-            // Original content
-            Text(repost.content)
-                .font(.system(size: 14))
-                .foregroundColor(theme.textSecondary)
-                .lineLimit(4)
-
-            // Original stats
-            HStack(spacing: 12) {
-                HStack(spacing: 4) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 10))
-                    Text("\(repost.likes)")
-                        .font(.system(size: 11, weight: .medium))
+                    Text(timeAgo(from: repost.timestamp))
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.textMuted)
                 }
-                .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
+
+                // Original content
+                Text(repost.content)
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(4)
+
+                // Original stats
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 10))
+                        Text("\(repost.likes)")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
+                }
             }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(theme.accentText(repost.authorColor).opacity(0.2), lineWidth: 1)
+                    )
+            )
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(theme.accentText(repost.authorColor).opacity(0.2), lineWidth: 1)
-                )
-        )
+        .buttonStyle(PlainButtonStyle())
     }
 
     // MARK: - Media Preview

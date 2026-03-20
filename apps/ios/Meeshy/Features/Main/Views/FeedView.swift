@@ -316,6 +316,9 @@ struct FeedView: View {
                             },
                             onTapPost: { postId in
                                 router.push(.postDetail(postId))
+                            },
+                            onTapRepost: { repostId in
+                                router.push(.postDetail(repostId))
                             }
                         )
                         .onAppear {
