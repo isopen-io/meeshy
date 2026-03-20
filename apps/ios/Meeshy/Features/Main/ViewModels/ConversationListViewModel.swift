@@ -100,14 +100,8 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] (convs, text, filter) in
                 guard let self else { return }
                 
-                // Traitement lourd en arrière-plan
-                Task.detached(priority: .userInitiated) {
-                    let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
-                    
-                    await MainActor.run { [weak self] in
-                        self?.filteredConversations = filtered
-                    }
-                }
+                let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
+                self.filteredConversations = filtered
             }
             .store(in: &cancellables)
 
@@ -865,7 +859,8 @@ class ConversationListViewModel: ObservableObject {
     /// - Télécharge et met en cache localement pour affichage instantané
     nonisolated private static func prefetchStoryMedia(_ story: StoryItem) async {
         // Télécharger l'image ou la vidéo
-        guard let media = story.media, !media.isEmpty else { return }
+        let media = story.media
+        guard !media.isEmpty else { return }
         
         for mediaItem in media {
             guard let urlString = mediaItem.url, !urlString.isEmpty, let url = URL(string: urlString) else { continue }

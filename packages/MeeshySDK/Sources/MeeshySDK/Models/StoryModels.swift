@@ -632,7 +632,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
 }
 
 // MARK: - Story Group
-public struct StoryGroup: Identifiable, Codable, Sendable {
+public struct StoryGroup: Identifiable, Codable, Sendable, CacheIdentifiable {
     public let id: String
     public let username: String
     public let avatarColor: String
