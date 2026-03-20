@@ -126,6 +126,7 @@ struct FeedPostCard: View {
                 name: post.author,
                 context: .postAuthor,
                 accentColor: accentColor,
+                avatarURL: post.authorAvatarURL,
                 moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
                 onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                 onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
@@ -183,7 +184,8 @@ struct FeedPostCard: View {
                 MeeshyAvatar(
                     name: repost.author,
                     context: .postComment,
-                    accentColor: repost.authorColor
+                    accentColor: repost.authorColor,
+                    avatarURL: repost.authorAvatarURL
                 )
 
                 Text(repost.author)
@@ -369,7 +371,8 @@ struct FeedPostCard: View {
                                     MeeshyAvatar(
                                         name: comment.author,
                                         context: .postReaction,
-                                        accentColor: comment.authorColor
+                                        accentColor: comment.authorColor,
+                                        avatarURL: comment.authorAvatarURL
                                     )
                                         .overlay(
                                             Circle()
@@ -407,6 +410,7 @@ struct FeedPostCard: View {
                     name: comment.author,
                     context: .postComment,
                     accentColor: comment.authorColor,
+                    avatarURL: comment.authorAvatarURL,
                     moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                     onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
                     onMoodTap: statusViewModel.moodTapHandler(for: comment.authorId),
