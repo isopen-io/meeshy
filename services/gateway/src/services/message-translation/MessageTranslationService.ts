@@ -589,20 +589,32 @@ export class MessageTranslationService extends EventEmitter {
       const startTime = Date.now();
       const languages = new Set<string>();
 
-      // Single query: all active participants with their user data (if registered)
-      const participants = await this.prisma.participant.findMany({
-        where: {
-          conversationId: conversationId,
-          isActive: true
-        },
-        select: {
-          id: true,
-          displayName: true,
-          type: true,
-          language: true,
-          user: true
-        }
-      });
+      // Check conversation autoTranslateEnabled alongside participants query
+      const [conversation, participants] = await Promise.all([
+        this.prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { autoTranslateEnabled: true }
+        }),
+        this.prisma.participant.findMany({
+          where: {
+            conversationId: conversationId,
+            isActive: true
+          },
+          select: {
+            id: true,
+            displayName: true,
+            type: true,
+            language: true,
+            user: true
+          }
+        })
+      ]);
+
+      if (conversation?.autoTranslateEnabled === false) {
+        logger.info(`⛔ [LANG-TRACE] autoTranslateEnabled=false pour ${conversationId} — traduction désactivée`);
+        this.languageCache.set(conversationId, []);
+        return [];
+      }
 
       logger.info(`[LANG-TRACE] Participants: ${participants.length}`);
 
