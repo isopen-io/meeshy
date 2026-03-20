@@ -168,9 +168,6 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         updateData.customDestinationLanguage = body.customDestinationLanguage === '' ? null : body.customDestinationLanguage;
       }
 
-      const featureUpdateData: any = {};
-      if (body.autoTranslateEnabled !== undefined) featureUpdateData.autoTranslateEnabled = body.autoTranslateEnabled;
-
       if (body.email) {
         const normalizedEmail = normalizeEmail(body.email);
         const existingUser = await fastify.prisma.user.findFirst({
@@ -235,11 +232,6 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
-
-      // TODO: Migrate feature preferences to UserPreferences.application JSON
-      if (Object.keys(featureUpdateData).length > 0) {
-        console.warn('[Profile] Feature update data not saved - needs migration to UserPreferences:', featureUpdateData);
-      }
 
       const responseUser = {
         ...updatedUser,
