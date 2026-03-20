@@ -683,10 +683,7 @@ struct ProfileView: View {
                     bio: bio.isEmpty ? nil : bio,
                     systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
                     regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
-                    customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage,
-                    translateToSystemLanguage: !systemLanguage.isEmpty,
-                    translateToRegionalLanguage: !regionalLanguage.isEmpty,
-                    useCustomDestination: !customDestinationLanguage.isEmpty
+                    customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage
                 )
                 let updatedUser = try await UserService.shared.updateProfile(request)
                 authManager.currentUser = updatedUser

@@ -822,8 +822,7 @@ struct ThemedMessageBubble: View {
             all.append(reg); seen.insert(reg)
         }
 
-        if user?.useCustomDestination == true,
-           let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom), hasTranslation(custom) {
+        if let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom), hasTranslation(custom) {
             all.append(custom); seen.insert(custom)
         }
 

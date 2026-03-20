@@ -1292,17 +1292,17 @@ class ConversationViewModel: ObservableObject {
         }
         let user = authManager.currentUser
         var preferred: [String] = []
-        // 1. Custom destination (explicit override)
-        if user?.useCustomDestination == true, let custom = user?.customDestinationLanguage {
-            preferred.append(custom)
-        }
-        // 2. Primary language (systemLanguage) — always included for content
+        // 1. Primary language (systemLanguage) — highest priority
         if let sys = user?.systemLanguage, !preferred.contains(where: { $0.lowercased() == sys.lowercased() }) {
             preferred.append(sys)
         }
-        // 3. Secondary language (regionalLanguage) — always included for content
+        // 2. Secondary language (regionalLanguage)
         if let reg = user?.regionalLanguage, !preferred.contains(where: { $0.lowercased() == reg.lowercased() }) {
             preferred.append(reg)
+        }
+        // 3. Custom destination language (lowest auto-priority)
+        if let custom = user?.customDestinationLanguage, !preferred.contains(where: { $0.lowercased() == custom.lowercased() }) {
+            preferred.append(custom)
         }
         // NOTE: Device locale (Locale.current) is NOT added here — it is the UI interface
         // language, not the user's content language preference. Content languages are
