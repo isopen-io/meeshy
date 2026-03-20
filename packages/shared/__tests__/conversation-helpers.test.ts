@@ -12,10 +12,17 @@ import {
 } from '../utils/conversation-helpers';
 
 describe('resolveUserLanguage', () => {
-  it('should return custom destination language when set', () => {
+  it('should return systemLanguage over customDestinationLanguage', () => {
     const user = {
       customDestinationLanguage: 'de',
       systemLanguage: 'en',
+    };
+    expect(resolveUserLanguage(user)).toBe('en');
+  });
+
+  it('should return customDestinationLanguage when no systemLanguage or regionalLanguage', () => {
+    const user = {
+      customDestinationLanguage: 'de',
     };
     expect(resolveUserLanguage(user)).toBe('de');
   });
@@ -309,15 +316,24 @@ describe('getRequiredLanguages', () => {
     expect(languages).toContain('fr');
   });
 
-  it('should respect user language preferences', () => {
+  it('should respect user language preferences (systemLanguage prioritaire)', () => {
     const members = [
       { systemLanguage: 'en', customDestinationLanguage: 'de' },
       { systemLanguage: 'es' },
     ];
     const languages = getRequiredLanguages(members);
+    expect(languages).toContain('en');
+    expect(languages).toContain('es');
+  });
+
+  it('should use customDestinationLanguage when no systemLanguage', () => {
+    const members = [
+      { customDestinationLanguage: 'de' },
+      { systemLanguage: 'es' },
+    ];
+    const languages = getRequiredLanguages(members);
     expect(languages).toContain('de');
     expect(languages).toContain('es');
-    expect(languages).not.toContain('en');
   });
 
   it('should return empty array for no members', () => {
