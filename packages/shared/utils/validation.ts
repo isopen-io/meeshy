@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
 import { createError } from './errors.js';
+import { isSupportedLanguage } from './languages.js';
 
 /**
  * Valider un schéma Zod et retourner une erreur standardisée
@@ -170,8 +171,14 @@ export const UserSchemas = {
     bio: z.string().max(500).optional(),
     avatar: z.string().url().optional(),
     phoneNumber: z.string().optional(),
-    systemLanguage: z.string().min(2).max(5).optional(),
-    regionalLanguage: z.string().min(2).max(5).optional(),
+    systemLanguage: z.string().min(2).max(5).refine(
+      code => isSupportedLanguage(code),
+      { message: 'Unsupported language code' }
+    ).optional(),
+    regionalLanguage: z.string().min(2).max(5).refine(
+      code => isSupportedLanguage(code),
+      { message: 'Unsupported language code' }
+    ).optional(),
     customDestinationLanguage: z.string().min(2).max(5).nullable().optional(),
     autoTranslateEnabled: z.boolean().optional(),
     timezone: z.string().optional(),
@@ -221,8 +228,14 @@ export const updateUserProfileSchema = z.object({
   email: z.string().email().optional(),
   phoneNumber: z.union([z.string(), z.null()]).optional(),
   bio: z.string().max(500).optional(),
-  systemLanguage: z.string().min(2).max(5).optional(),
-  regionalLanguage: z.string().min(2).max(5).optional(),
+  systemLanguage: z.string().min(2).max(5).refine(
+    code => isSupportedLanguage(code),
+    { message: 'Unsupported language code' }
+  ).optional(),
+  regionalLanguage: z.string().min(2).max(5).refine(
+    code => isSupportedLanguage(code),
+    { message: 'Unsupported language code' }
+  ).optional(),
   customDestinationLanguage: z.union([z.literal(''), z.null(), z.string().min(2).max(5)]).optional(),
   autoTranslateEnabled: z.boolean().optional(),
 }).strict();
@@ -308,8 +321,14 @@ export const AuthSchemas = {
     email: z.string().email('Email invalide'),
     phoneNumber: z.string().optional(),
     phoneCountryCode: z.string().length(2).optional(),
-    systemLanguage: z.string().min(2).max(5).default('fr'),
-    regionalLanguage: z.string().min(2).max(5).default('fr'),
+    systemLanguage: z.string().min(2).max(5).refine(
+      code => isSupportedLanguage(code),
+      { message: 'Unsupported language code' }
+    ).default('fr'),
+    regionalLanguage: z.string().min(2).max(5).refine(
+      code => isSupportedLanguage(code),
+      { message: 'Unsupported language code' }
+    ).default('fr'),
     phoneTransferToken: z.string().optional(), // Token proving SMS verification for phone transfer
   }),
 
