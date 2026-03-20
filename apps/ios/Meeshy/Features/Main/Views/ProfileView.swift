@@ -654,8 +654,7 @@ struct ProfileView: View {
         lastName = user?.lastName ?? ""
         displayName = user?.displayName ?? user?.username ?? ""
         bio = user?.bio ?? ""
-        let deviceLang = Locale.current.language.languageCode?.identifier ?? "fr"
-        systemLanguage = user?.systemLanguage ?? deviceLang
+        systemLanguage = user?.systemLanguage ?? "fr"
         regionalLanguage = user?.regionalLanguage ?? ""
         customDestinationLanguage = user?.customDestinationLanguage ?? ""
     }
