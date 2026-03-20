@@ -542,7 +542,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       replyToId,
       replyTo: replyToMessage,
       messageType: resolvedMessageType,
-      sender: { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
+      sender: { id: user.id, userId: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
       sendPayload: {
         attachmentIds: hasAttachments ? currentAttachmentIds : undefined,
         attachmentMimeTypes: hasAttachments ? currentAttachmentMimeTypes : undefined,
@@ -647,7 +647,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       forwardedFromId,
       forwardedFromConversationId,
       messageType: (failedMessage as any)?.messageType,
-      sender: { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
+      sender: { id: user.id, userId: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
       sendPayload,
     });
     addOptimisticMessage(optimistic);

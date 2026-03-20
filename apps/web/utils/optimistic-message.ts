@@ -22,7 +22,7 @@ interface OptimisticMessageOptions {
   replyTo?: Message;
   forwardedFromId?: string;
   forwardedFromConversationId?: string;
-  sender?: { id: string; username: string; displayName: string; avatar?: string };
+  sender?: { id: string; userId: string; username: string; displayName: string; avatar?: string };
   sendPayload?: SendPayload;
   attachments?: readonly Attachment[];
   messageType?: MessageType;
@@ -35,7 +35,7 @@ export function createOptimisticMessage(
   conversationId: string,
   language: string,
   replyToId?: string,
-  sender?: { id: string; username: string; displayName: string; avatar?: string },
+  sender?: { id: string; userId: string; username: string; displayName: string; avatar?: string },
   sendPayload?: SendPayload,
 ): OptimisticMessage;
 export function createOptimisticMessage(
@@ -44,7 +44,7 @@ export function createOptimisticMessage(
   conversationId?: string,
   language?: string,
   replyToId?: string,
-  sender?: { id: string; username: string; displayName: string; avatar?: string },
+  sender?: { id: string; userId: string; username: string; displayName: string; avatar?: string },
   sendPayload?: SendPayload,
 ): OptimisticMessage {
   const opts: OptimisticMessageOptions = typeof contentOrOpts === 'string'
@@ -83,6 +83,7 @@ export function createOptimisticMessage(
     translations: [] as readonly [],
     sender: opts.sender ? {
       id: opts.sender.id,
+      userId: opts.sender.userId,
       displayName: opts.sender.displayName,
       avatar: opts.sender.avatar,
       isOnline: true,
@@ -93,7 +94,7 @@ export function createOptimisticMessage(
       permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true },
       isActive: true,
       joinedAt: new Date(),
-      user: { id: opts.sender.id, username: opts.sender.username, displayName: opts.sender.displayName, avatar: opts.sender.avatar },
+      user: { id: opts.sender.userId, username: opts.sender.username, displayName: opts.sender.displayName, avatar: opts.sender.avatar },
     } satisfies Participant : undefined,
   };
 }

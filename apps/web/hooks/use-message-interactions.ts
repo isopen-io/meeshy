@@ -52,8 +52,11 @@ export function useMessageInteractions({
     if (!currentUserId) return false;
     const senderUserId = getSenderUserId(message.sender as Record<string, unknown>);
     if (senderUserId) return senderUserId === currentUserId;
-    // Fallback: senderId might be User ID in legacy/optimistic messages
-    return message.senderId === currentUserId;
+    // Fallback for legacy server messages where sender has no userId/user.id.
+    // Optimistic messages always populate sender.userId so this branch is not reached for them.
+    // NOTE: senderId is a Participant ID in normal server messages — this comparison will
+    // fail for those. Only reliable when senderId happens to equal userId (legacy data).
+    return false;
   }, [isAnonymous, currentAnonymousUserId, currentUserId, message.sender, message.senderId]);
 
   // Permissions de modification (edit)

@@ -12,6 +12,7 @@ import { createOptimisticMessage, OptimisticMessage } from '../../../utils/optim
 describe('createOptimisticMessage', () => {
   const baseSender = {
     id: 'user-123',
+    userId: 'user-123',
     username: 'testuser',
     displayName: 'Test User',
     avatar: 'https://example.com/avatar.jpg',
