@@ -28,12 +28,12 @@ enum JSONStub {
 
     static func decode<T: Decodable>(_ json: String) -> T {
         guard let data = json.data(using: .utf8) else {
-            fatalError("JSONStub: invalid UTF-8 string")
+            preconditionFailure("JSONStub: invalid UTF-8 string")
         }
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
-            fatalError("JSONStub: failed to decode \(T.self) from JSON: \(error)")
+            preconditionFailure("JSONStub: failed to decode \(T.self) from JSON: \(error)")
         }
     }
 }

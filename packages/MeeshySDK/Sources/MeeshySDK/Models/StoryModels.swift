@@ -592,7 +592,7 @@ public enum PostType: String, CaseIterable, Sendable {
 }
 
 // MARK: - Story Item
-public struct StoryItem: Identifiable {
+public struct StoryItem: Identifiable, Codable, Sendable {
     public let id: String
     public let content: String?
     public let media: [FeedMedia]
@@ -632,7 +632,7 @@ public struct StoryItem: Identifiable {
 }
 
 // MARK: - Story Group
-public struct StoryGroup: Identifiable {
+public struct StoryGroup: Identifiable, Codable, Sendable {
     public let id: String
     public let username: String
     public let avatarColor: String

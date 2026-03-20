@@ -34,11 +34,16 @@ class ConversationListViewModel: ObservableObject {
     private let messageSocket: MessageSocketProviding
     private let messageService: MessageServiceProviding
     private let authManager: AuthManaging
+    private let storyService: StoryServiceProviding
     private let pageLimit = 100
     /// Au-delà de ce seuil le scroll infini (loadMore) reprend la main
     private let autoLoadCap = 1000
     private var currentOffset = 0
     private var cancellables = Set<AnyCancellable>()
+    
+    // Story prefetch state
+    @Published var storiesPrefetched = false
+    private var storyPrefetchTask: Task<Void, Never>?
 
     // O(1) conversation lookup by ID
     private var _convIdIndex: [String: Int]?
@@ -70,7 +75,8 @@ class ConversationListViewModel: ObservableObject {
         preferenceService: PreferenceServiceProviding = PreferenceService.shared,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         messageService: MessageServiceProviding = MessageService.shared,
-        authManager: AuthManaging = AuthManager.shared
+        authManager: AuthManaging = AuthManager.shared,
+        storyService: StoryServiceProviding = StoryService.shared
     ) {
         self.api = api
         self.conversationService = conversationService
@@ -78,6 +84,7 @@ class ConversationListViewModel: ObservableObject {
         self.messageSocket = messageSocket
         self.messageService = messageService
         self.authManager = authManager
+        self.storyService = storyService
         observeSocketReconnect()
         subscribeToSocketEvents()
         syncBadgeOnUnreadChange()
@@ -87,75 +94,111 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Background Processing
     private func setupBackgroundProcessing() {
+        // Pipeline 1: Filtrage optimisé en arrière-plan
         Publishers.CombineLatest3($conversations, $searchText, $selectedFilter)
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.global(qos: .userInitiated))
-            .map { (convs, text, filter) -> [Conversation] in
-                convs.filter { c in
-                    let filterMatch: Bool
-                    switch filter {
-                    case .all: filterMatch = c.isActive
-                    case .unread: filterMatch = c.unreadCount > 0
-                    case .personnel: filterMatch = c.type == .direct && c.isActive
-                    case .privee: filterMatch = c.type == .group && c.isActive
-                    case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive
-                    case .globales: filterMatch = c.type == .global && c.isActive
-                    case .channels: filterMatch = c.isAnnouncementChannel && c.isActive
-                    case .favoris: filterMatch = c.reaction != nil && c.isActive
-                    case .archived: filterMatch = !c.isActive
-                    }
-                    let searchMatch = text.isEmpty || c.name.localizedCaseInsensitiveContains(text)
-                    return filterMatch && searchMatch
-                }
-            }
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$filteredConversations)
-
-        Publishers.CombineLatest($filteredConversations, $userCategories)
-            .subscribe(on: DispatchQueue.global(qos: .userInitiated))
-            .map { (filtered, categories) -> [(section: ConversationSection, conversations: [Conversation])] in
-                var result: [(section: ConversationSection, conversations: [Conversation])] = []
-
-                // O(1) lookup sets
-                let categoryIds = Set(categories.map(\.id))
-
-                // Groupement O(n) unique — remplace les k passes filter O(n×k)
-                let bySection = Dictionary(grouping: filtered) { conv -> String in
-                    if conv.isPinned && conv.sectionId == nil { return "__pinned__" }
-                    return conv.sectionId ?? "__other__"
-                }
-
-                // Pinned section
-                if let pinned = bySection["__pinned__"], !pinned.isEmpty {
-                    result.append((ConversationSection.pinned, pinned.sorted { $0.lastMessageAt > $1.lastMessageAt }))
-                }
-
-                // User categories (order preserved)
-                for category in categories {
-                    if let sectionConvs = bySection[category.id], !sectionConvs.isEmpty {
-                        let sorted = sectionConvs.sorted { a, b in
-                            if a.isPinned != b.isPinned { return a.isPinned }
-                            return a.lastMessageAt > b.lastMessageAt
-                        }
-                        result.append((category, sorted))
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+            .sink { [weak self] (convs, text, filter) in
+                guard let self else { return }
+                
+                // Traitement lourd en arrière-plan
+                Task.detached(priority: .userInitiated) {
+                    let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
+                    
+                    await MainActor.run { [weak self] in
+                        self?.filteredConversations = filtered
                     }
                 }
-
-                // Orphaned (catégorie supprimée) + non-catégorisées → section "other"
-                let otherConvs = (bySection["__other__"] ?? []) + filtered.filter { conv in
-                    guard let sid = conv.sectionId else { return false }
-                    return !categoryIds.contains(sid)
-                }
-                if !otherConvs.isEmpty {
-                    result.append((ConversationSection.other, otherConvs.sorted { $0.lastMessageAt > $1.lastMessageAt }))
-                }
-
-                return result
-            }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] newGroups in
-                self?.groupedConversations = newGroups
             }
             .store(in: &cancellables)
+
+        // Pipeline 2: Groupement optimisé en arrière-plan
+        Publishers.CombineLatest($filteredConversations, $userCategories)
+            .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
+            .sink { [weak self] (filtered, categories) in
+                guard let self else { return }
+                
+                // Traitement lourd en arrière-plan
+                Task.detached(priority: .userInitiated) {
+                    let grouped = Self.groupConversations(filtered, categories: categories)
+                    
+                    await MainActor.run { [weak self] in
+                        self?.groupedConversations = grouped
+                    }
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Static Processing Methods (thread-safe)
+
+    /// Filtre les conversations selon le texte de recherche et le filtre sélectionné
+    /// - Peut s'exécuter sur n'importe quel thread (pas d'accès à self)
+    nonisolated private static func filterConversations(
+        _ conversations: [Conversation],
+        searchText: String,
+        filter: ConversationFilter
+    ) -> [Conversation] {
+        return conversations.filter { c in
+            let filterMatch: Bool
+            switch filter {
+            case .all: filterMatch = c.isActive
+            case .unread: filterMatch = c.unreadCount > 0
+            case .personnel: filterMatch = c.type == .direct && c.isActive
+            case .privee: filterMatch = c.type == .group && c.isActive
+            case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive
+            case .globales: filterMatch = c.type == .global && c.isActive
+            case .channels: filterMatch = c.isAnnouncementChannel && c.isActive
+            case .favoris: filterMatch = c.reaction != nil && c.isActive
+            case .archived: filterMatch = !c.isActive
+            }
+            let searchMatch = searchText.isEmpty || c.name.localizedCaseInsensitiveContains(searchText)
+            return filterMatch && searchMatch
+        }
+    }
+
+    /// Groupe les conversations par section et les trie
+    /// - Peut s'exécuter sur n'importe quel thread (pas d'accès à self)
+    nonisolated private static func groupConversations(
+        _ filtered: [Conversation],
+        categories: [ConversationSection]
+    ) -> [(section: ConversationSection, conversations: [Conversation])] {
+        var result: [(section: ConversationSection, conversations: [Conversation])] = []
+
+        // O(1) lookup sets
+        let categoryIds = Set(categories.map(\.id))
+
+        // Groupement O(n) unique — remplace les k passes filter O(n×k)
+        let bySection = Dictionary(grouping: filtered) { conv -> String in
+            if conv.isPinned && conv.sectionId == nil { return "__pinned__" }
+            return conv.sectionId ?? "__other__"
+        }
+
+        // Pinned section
+        if let pinned = bySection["__pinned__"], !pinned.isEmpty {
+            result.append((ConversationSection.pinned, pinned.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+        }
+
+        // User categories (order preserved)
+        for category in categories {
+            if let sectionConvs = bySection[category.id], !sectionConvs.isEmpty {
+                let sorted = sectionConvs.sorted { a, b in
+                    if a.isPinned != b.isPinned { return a.isPinned }
+                    return a.lastMessageAt > b.lastMessageAt
+                }
+                result.append((category, sorted))
+            }
+        }
+
+        // Orphaned (catégorie supprimée) + non-catégorisées → section "other"
+        let otherConvs = (bySection["__other__"] ?? []) + filtered.filter { conv in
+            guard let sid = conv.sectionId else { return false }
+            return !categoryIds.contains(sid)
+        }
+        if !otherConvs.isEmpty {
+            result.append((ConversationSection.other, otherConvs.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+        }
+
+        return result
     }
 
     // Re-seed presence when Socket.IO reconnects (online → offline → online)
@@ -382,6 +425,10 @@ class ConversationListViewModel: ObservableObject {
 
     func loadConversations() async {
         if isCacheValid && !conversations.isEmpty {
+            // Cache valide, précharger les stories en arrière-plan
+            if !storiesPrefetched {
+                prefetchRecentStories()
+            }
             return
         }
 
@@ -389,12 +436,12 @@ class ConversationListViewModel: ObservableObject {
         isLoading = true
         currentOffset = 0
 
-        // Afficher le cache immédiatement
-        if conversations.isEmpty {
-            let cached = await CacheCoordinator.shared.conversations.load(for: "list").value ?? []
-            if !cached.isEmpty {
-                conversations = cached
-            }
+        // Afficher le cache immédiatement (AVANT le réseau)
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").value ?? []
+        if !cached.isEmpty {
+            conversations = cached
+            // Déclencher la mise à jour de l'UI immédiatement
+            await MainActor.run { }
         }
 
         async let categoriesTask: () = loadCategories()
@@ -424,6 +471,9 @@ class ConversationListViewModel: ObservableObject {
                 if hasMore {
                     Task { await self.loadAllRemainingBackground() }
                 }
+                
+                // Précharger les stories en arrière-plan (optimisé)
+                prefetchRecentStories()
             }
         } catch {
             Logger.messages.error("[ConversationListVM] Error loading conversations: \(error.localizedDescription)")
@@ -731,6 +781,138 @@ class ConversationListViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - Story Prefetch
+
+    /// Précharge les stories de manière optimisée :
+    /// - Les 2 premières stories de TOUS les groupes (aperçu rapide pour tous)
+    /// - Les 3 premiers groupes ENTIÈREMENT (preview complète pour les plus récents)
+    /// - Télécharge les métadonnées + médias
+    /// - Met en cache pour affichage instantané
+    private func prefetchRecentStories() {
+        // Annuler le préchargement précédent s'il existe
+        storyPrefetchTask?.cancel()
+        
+        storyPrefetchTask = Task.detached(priority: .utility) { [weak self, storyService = self.storyService] in
+            guard let self else { return }
+            
+            do {
+                // 1. Récupérer la liste des stories (limite augmentée pour plus de groupes)
+                let response = try await storyService.list(cursor: nil, limit: 30)
+                guard response.success else { return }
+                
+                // 2. Convertir en groupes de stories
+                let storyGroups = response.data.toStoryGroups()
+                
+                guard !storyGroups.isEmpty else { return }
+                
+                Logger.messages.info("[ConversationListVM] 🎬 Starting story prefetch: \(storyGroups.count) groups")
+                
+                // 3. Préparer les 3 premiers groupes pour statistiques
+                let topThreeGroups = Array(storyGroups.prefix(3))
+                
+                // 4. Stratégie de préchargement optimisée
+                await withTaskGroup(of: Void.self) { group in
+                    
+                    // PARTIE 1: Précharger les 2 premières stories de TOUS les groupes
+                    // → Permet un affichage rapide de tous les utilisateurs dans la tray
+                    for storyGroup in storyGroups {
+                        let firstTwoStories = Array(storyGroup.stories.prefix(2))
+                        
+                        for story in firstTwoStories {
+                            group.addTask {
+                                await Self.prefetchStoryMedia(story)
+                            }
+                        }
+                    }
+                    
+                    // PARTIE 2: Précharger les 3 premiers groupes ENTIÈREMENT
+                    // → Permet une navigation fluide dans les stories les plus récentes
+                    for storyGroup in topThreeGroups {
+                        // On a déjà préchargé les 2 premières, on prend les suivantes
+                        let remainingStories = Array(storyGroup.stories.dropFirst(2))
+                        
+                        for story in remainingStories {
+                            group.addTask {
+                                await Self.prefetchStoryMedia(story)
+                            }
+                        }
+                    }
+                }
+                
+                // 5. Mettre en cache les métadonnées complètes
+                await CacheCoordinator.shared.stories.save(storyGroups, for: "recent_tray")
+                
+                // 6. Marquer comme préchargé
+                await MainActor.run { [weak self] in
+                    self?.storiesPrefetched = true
+                }
+                
+                // 7. Log des statistiques
+                let totalStories = storyGroups.reduce(0) { $0 + $1.stories.count }
+                let prefetchedCount = min(storyGroups.count * 2 + topThreeGroups.reduce(0) { $0 + max(0, $1.stories.count - 2) }, totalStories)
+                
+                Logger.messages.info("[ConversationListVM] ✅ Stories prefetched: \(storyGroups.count) groups, \(prefetchedCount)/\(totalStories) stories cached (2 per group + 3 full groups)")
+                
+            } catch {
+                Logger.messages.error("[ConversationListVM] ❌ Story prefetch failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Précharge les médias d'une story (image/vidéo)
+    /// - Télécharge et met en cache localement pour affichage instantané
+    nonisolated private static func prefetchStoryMedia(_ story: StoryItem) async {
+        // Télécharger l'image ou la vidéo
+        guard let media = story.media, !media.isEmpty else { return }
+        
+        for mediaItem in media {
+            guard let urlString = mediaItem.url, !urlString.isEmpty, let url = URL(string: urlString) else { continue }
+            
+            do {
+                // Télécharger le fichier principal
+                let (data, response) = try await URLSession.shared.data(from: url)
+                
+                // Déterminer le bon cache selon le type de média
+                let cache: DiskCacheStore
+                if let mimeType = response.mimeType {
+                    if mimeType.hasPrefix("image/") {
+                        cache = await CacheCoordinator.shared.images
+                    } else if mimeType.hasPrefix("video/") {
+                        cache = await CacheCoordinator.shared.video
+                    } else {
+                        cache = await CacheCoordinator.shared.media
+                    }
+                } else {
+                    // Déterminer selon le type FeedMedia
+                    switch mediaItem.type {
+                    case .image:
+                        cache = await CacheCoordinator.shared.images
+                    case .video:
+                        cache = await CacheCoordinator.shared.video
+                    default:
+                        cache = await CacheCoordinator.shared.media
+                    }
+                }
+                
+                // Sauvegarder dans le cache approprié
+                await cache.save(data, for: urlString)
+                
+                let sizeKB = data.count / 1024
+                Logger.messages.debug("[StoryPrefetch] ✅ Cached \(String(describing: mediaItem.type)) (\(sizeKB)KB): \(urlString)")
+                
+            } catch {
+                // Échec silencieux - la story sera chargée à la demande
+                Logger.messages.debug("[StoryPrefetch] ⚠️ Failed to prefetch: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Force le rechargement des stories (appelé si l'utilisateur ouvre la tray)
+    func refreshStoriesPrefetch() {
+        storiesPrefetched = false
+        prefetchRecentStories()
     }
 
     // MARK: - Mark as Read (local update from ConversationView)

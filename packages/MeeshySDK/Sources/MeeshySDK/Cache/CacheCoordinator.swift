@@ -12,11 +12,13 @@ public actor CacheCoordinator {
     public let participants: GRDBCacheStore<String, PaginatedParticipant>
     public let profiles: GRDBCacheStore<String, MeeshyUser>
     public let feed: GRDBCacheStore<String, FeedPost>
+    public let stories: GRDBCacheStore<String, StoryGroup>
 
     public let images: DiskCacheStore
     public let audio: DiskCacheStore
     public let video: DiskCacheStore
     public let thumbnails: DiskCacheStore
+    public let media: DiskCacheStore
 
     // MARK: - In-Memory Translation/Transcription/Audio Caches (keyed by messageId)
 
@@ -56,11 +58,13 @@ public actor CacheCoordinator {
         self.participants = GRDBCacheStore(policy: .participants, db: db, namespace: "part")
         self.profiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "prof")
         self.feed = GRDBCacheStore(policy: .feedPosts, db: db, namespace: "feed")
+        self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories")
 
         self.images = DiskCacheStore(policy: .mediaImages)
         self.audio = DiskCacheStore(policy: .mediaAudio)
         self.video = DiskCacheStore(policy: .mediaVideo)
         self.thumbnails = DiskCacheStore(policy: .thumbnails)
+        self.media = DiskCacheStore(policy: .media)
     }
 
     public func start() {
@@ -428,10 +432,12 @@ public actor CacheCoordinator {
         await participants.invalidateAll()
         await profiles.invalidateAll()
         await feed.invalidateAll()
+        await stories.invalidateAll()
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()
         await thumbnails.invalidateAll()
+        await media.invalidateAll()
         await UserColorCache.shared.invalidateAll()
         translationCache.removeAll()
         transcriptionCache.removeAll()
