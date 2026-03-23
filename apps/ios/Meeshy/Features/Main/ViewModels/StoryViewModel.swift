@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 
 @MainActor
@@ -10,6 +11,8 @@ class StoryViewModel: ObservableObject {
     @Published var isPublishing = false
     @Published var publishError: String?
     @Published var showStoryComposer = false
+    @Published var activeUpload: StoryUploadState?
+    private var uploadTask: Task<Void, Never>?
 
     private let storyService: StoryServiceProviding
     private let postService: PostServiceProviding
@@ -29,6 +32,30 @@ class StoryViewModel: ObservableObject {
         self.api = api
     }
 
+    // MARK: - Background Upload State
+
+    struct StoryUploadState: Identifiable {
+        let id: String
+        let thumbnailImage: UIImage
+        var progress: Double
+        var phase: UploadPhase
+
+        let authorId: String
+        let authorName: String
+        let authorAvatar: String?
+
+        let slides: [StorySlide]
+        let slideImages: [String: UIImage]
+        let loadedImages: [String: UIImage]
+        let loadedVideoURLs: [String: URL]
+
+        enum UploadPhase: Sendable {
+            case uploading
+            case publishing
+            case failed(String)
+        }
+    }
+
     // MARK: - Load Stories
 
     func loadStories() async {
@@ -40,11 +67,9 @@ class StoryViewModel: ObservableObject {
 
             if response.success {
                 storyGroups = response.data.toStoryGroups()
-            } else {
-                fallbackToSampleData()
             }
         } catch {
-            fallbackToSampleData()
+            Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
         }
 
         isLoading = false
@@ -75,13 +100,7 @@ class StoryViewModel: ObservableObject {
                     expiresAt: updated[j].expiresAt,
                     isViewed: true
                 )
-                storyGroups[i] = StoryGroup(
-                    id: storyGroups[i].id,
-                    username: storyGroups[i].username,
-                    avatarColor: storyGroups[i].avatarColor,
-                    avatarURL: storyGroups[i].avatarURL,
-                    stories: updated
-                )
+                storyGroups[i] = storyGroups[i].with(stories: updated)
                 return
             }
         }
@@ -141,44 +160,10 @@ class StoryViewModel: ObservableObject {
                 mediaIds: uploadResult.map { [$0.id] }
             )
 
-            // Toujours utiliser post.media (l'API retourne tous les médias associés).
-            let apiMedia = (post.media ?? []).map { m in
-                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
-                          width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
-            }
-            let media: [FeedMedia]
-            if !apiMedia.isEmpty {
-                media = apiMedia
-            } else if let uploaded = uploadResult {
-                media = [FeedMedia(id: uploaded.id, type: .image, url: uploaded.fileUrl,
-                                   thumbnailColor: "4ECDC4", width: uploaded.width, height: uploaded.height)]
-            } else {
-                media = []
-            }
+            let media = buildFeedMedia(from: post, fallback: uploadResult)
             let newItem = StoryItem(id: post.id, content: post.content, media: media,
                                      storyEffects: effects, createdAt: post.createdAt, isViewed: true)
-
-            if let idx = storyGroups.firstIndex(where: { $0.id == post.author.id }) {
-                var updated = storyGroups[idx].stories
-                updated.append(newItem)
-                storyGroups[idx] = StoryGroup(
-                    id: storyGroups[idx].id,
-                    username: storyGroups[idx].username,
-                    avatarColor: storyGroups[idx].avatarColor,
-                    avatarURL: storyGroups[idx].avatarURL,
-                    stories: updated
-                )
-            } else {
-                let newGroup = StoryGroup(
-                    id: post.author.id,
-                    username: post.author.name,
-                    avatarColor: DynamicColorGenerator.colorForName(post.author.name),
-                    avatarURL: post.author.avatar,
-                    stories: [newItem]
-                )
-                storyGroups.insert(newGroup, at: 0)
-            }
-
+            insertOrAppendStoryItem(newItem, forAuthor: post.author)
             showStoryComposer = false
         } catch {
             publishError = "Failed to publish story"
@@ -252,11 +237,6 @@ class StoryViewModel: ObservableObject {
         if let id = uploadResult?.id { allMediaIds.append(id) }
         allMediaIds.append(contentsOf: foregroundMediaIds)
 
-        // DEBUG Bug3: log effects just before sending to server
-        if let objects = updatedEffects.mediaObjects, !objects.isEmpty {
-            NSLog("[Bug3][publishStorySingle] SENDING mediaObjects=%@", objects.map { "id=\($0.id) x=\($0.x) y=\($0.y) scale=\($0.scale) rotation=\($0.rotation) postMediaId=\($0.postMediaId)" }.joined(separator: " | "))
-        }
-
         let post = try await postService.createStory(
             content: content,
             storyEffects: updatedEffects,
@@ -264,43 +244,158 @@ class StoryViewModel: ObservableObject {
             mediaIds: allMediaIds.isEmpty ? nil : allMediaIds
         )
 
-        // Toujours utiliser post.media (l'API retourne tous les médias associés).
-        // Fallback local uniquement si l'API ne retourne rien.
-        let apiMedia = (post.media ?? []).map { m in
-            FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
-                      width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
-        }
-        let media: [FeedMedia]
-        if !apiMedia.isEmpty {
-            media = apiMedia
-        } else if let uploaded = uploadResult {
-            media = [FeedMedia(id: uploaded.id, type: .image, url: uploaded.fileUrl,
-                               thumbnailColor: "4ECDC4", width: uploaded.width, height: uploaded.height)]
-        } else {
-            media = []
-        }
+        let media = buildFeedMedia(from: post, fallback: uploadResult)
         let newItem = StoryItem(id: post.id, content: post.content, media: media,
                                  storyEffects: updatedEffects, createdAt: post.createdAt, isViewed: true)
+        insertOrAppendStoryItem(newItem, forAuthor: post.author)
+    }
 
-        if let idx = storyGroups.firstIndex(where: { $0.id == post.author.id }) {
-            var updated = storyGroups[idx].stories
-            updated.append(newItem)
-            storyGroups[idx] = StoryGroup(
-                id: storyGroups[idx].id,
-                username: storyGroups[idx].username,
-                avatarColor: storyGroups[idx].avatarColor,
-                avatarURL: storyGroups[idx].avatarURL,
-                stories: updated
-            )
-        } else {
-            storyGroups.insert(StoryGroup(
-                id: post.author.id,
-                username: post.author.name,
-                avatarColor: DynamicColorGenerator.colorForName(post.author.name),
-                avatarURL: post.author.avatar,
-                stories: [newItem]
-            ), at: 0)
+    // MARK: - Background Publishing
+
+    func publishStoryInBackground(
+        slides: [StorySlide],
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL]
+    ) {
+        guard activeUpload == nil else { return }
+
+        let user = AuthManager.shared.currentUser
+        let thumbnail = slideImages.values.first?.preparingThumbnail(of: CGSize(width: 100, height: 178))
+            ?? UIImage()
+
+        let upload = StoryUploadState(
+            id: UUID().uuidString,
+            thumbnailImage: thumbnail,
+            progress: 0,
+            phase: .uploading,
+            authorId: user?.id ?? "",
+            authorName: user?.displayName ?? user?.username ?? "",
+            authorAvatar: user?.avatar,
+            slides: slides,
+            slideImages: slideImages,
+            loadedImages: loadedImages,
+            loadedVideoURLs: loadedVideoURLs
+        )
+        activeUpload = upload
+        showStoryComposer = false
+
+        launchUploadTask()
+    }
+
+    private func launchUploadTask() {
+        guard let upload = activeUpload else { return }
+
+        let serverOrigin = MeeshyConfig.shared.serverOrigin
+        guard let baseURL = URL(string: serverOrigin),
+              let token = api.authToken else {
+            activeUpload?.phase = .failed("Authentication required")
+            return
         }
+
+        uploadTask = Task {
+            let uploader = TusUploadManager(baseURL: baseURL)
+            let slideCount = upload.slides.count
+            let slideShare = 1.0 / Double(max(1, slideCount))
+
+            do {
+                for (slideIdx, slide) in upload.slides.enumerated() {
+                    guard !Task.isCancelled else { return }
+                    let baseProgress = Double(slideIdx) * slideShare
+
+                    var uploadResult: TusUploadResult? = nil
+                    if let bgImage = upload.slideImages[slide.id] {
+                        let compressed = await MediaCompressor.shared.compressImage(bgImage)
+                        let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
+                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                        try compressed.data.write(to: tempURL)
+                        defer { try? FileManager.default.removeItem(at: tempURL) }
+                        uploadResult = try await uploader.uploadFile(
+                            fileURL: tempURL, mimeType: compressed.mimeType,
+                            token: token, uploadContext: "story"
+                        )
+                    }
+                    activeUpload?.progress = baseProgress + 0.30 * slideShare
+
+                    var updatedEffects = slide.effects
+                    var foregroundMediaIds: [String] = []
+                    if var mediaObjects = updatedEffects.mediaObjects {
+                        let mediaCount = mediaObjects.filter({ $0.postMediaId.isEmpty }).count
+                        var mediaIdx = 0
+                        for i in mediaObjects.indices where mediaObjects[i].postMediaId.isEmpty {
+                            guard !Task.isCancelled else { return }
+                            let obj = mediaObjects[i]
+                            if obj.mediaType == "video", let videoURL = upload.loadedVideoURLs[obj.id] {
+                                let result = try await uploader.uploadFile(
+                                    fileURL: videoURL, mimeType: "video/mp4",
+                                    token: token, uploadContext: "story"
+                                )
+                                mediaObjects[i].postMediaId = result.id
+                                foregroundMediaIds.append(result.id)
+                            } else if obj.mediaType == "image", let uiImage = upload.loadedImages[obj.id] {
+                                let compressed = await MediaCompressor.shared.compressImage(uiImage)
+                                let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
+                                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                                try compressed.data.write(to: tempURL)
+                                defer { try? FileManager.default.removeItem(at: tempURL) }
+                                let result = try await uploader.uploadFile(
+                                    fileURL: tempURL, mimeType: compressed.mimeType,
+                                    token: token, uploadContext: "story"
+                                )
+                                mediaObjects[i].postMediaId = result.id
+                                foregroundMediaIds.append(result.id)
+                            }
+                            mediaIdx += 1
+                            let mediaProgress = Double(mediaIdx) / Double(max(1, mediaCount))
+                            activeUpload?.progress = baseProgress + (0.30 + mediaProgress * 0.50) * slideShare
+                        }
+                        updatedEffects.mediaObjects = mediaObjects
+                    }
+
+                    activeUpload?.phase = .publishing
+                    var allMediaIds: [String] = []
+                    if let id = uploadResult?.id { allMediaIds.append(id) }
+                    allMediaIds.append(contentsOf: foregroundMediaIds)
+
+                    let post = try await postService.createStory(
+                        content: slide.content,
+                        storyEffects: updatedEffects,
+                        visibility: "PUBLIC",
+                        mediaIds: allMediaIds.isEmpty ? nil : allMediaIds
+                    )
+
+                    let media = buildFeedMedia(from: post, fallback: uploadResult)
+                    let newItem = StoryItem(
+                        id: post.id, content: post.content, media: media,
+                        storyEffects: updatedEffects, createdAt: post.createdAt, isViewed: true
+                    )
+                    insertOrAppendStoryItem(newItem, forAuthor: post.author)
+                    activeUpload?.progress = Double(slideIdx + 1) * slideShare
+                    activeUpload?.phase = .uploading
+                }
+
+                activeUpload = nil
+                uploadTask = nil
+                HapticFeedback.success()
+            } catch {
+                if !Task.isCancelled {
+                    activeUpload?.phase = .failed(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func retryUpload() {
+        guard case .failed = activeUpload?.phase else { return }
+        activeUpload?.progress = 0
+        activeUpload?.phase = .uploading
+        launchUploadTask()
+    }
+
+    func cancelUpload() {
+        uploadTask?.cancel()
+        uploadTask = nil
+        activeUpload = nil
     }
 
     // MARK: - Delete Story
@@ -317,13 +412,7 @@ class StoryViewModel: ObservableObject {
                     if updated.isEmpty {
                         storyGroups.remove(at: i)
                     } else {
-                        storyGroups[i] = StoryGroup(
-                            id: storyGroups[i].id,
-                            username: storyGroups[i].username,
-                            avatarColor: storyGroups[i].avatarColor,
-                            avatarURL: storyGroups[i].avatarURL,
-                            stories: updated
-                        )
+                        storyGroups[i] = storyGroups[i].with(stories: updated)
                     }
                     break
                 }
@@ -344,18 +433,11 @@ class StoryViewModel: ObservableObject {
                 let groups = [apiPost].toStoryGroups()
                 for newGroup in groups {
                     if let idx = self.storyGroups.firstIndex(where: { $0.id == newGroup.id }) {
-                        // Existing author — append stories
                         var updated = self.storyGroups[idx].stories
                         for story in newGroup.stories where !updated.contains(where: { $0.id == story.id }) {
                             updated.append(story)
                         }
-                        self.storyGroups[idx] = StoryGroup(
-                            id: self.storyGroups[idx].id,
-                            username: self.storyGroups[idx].username,
-                            avatarColor: self.storyGroups[idx].avatarColor,
-                            avatarURL: self.storyGroups[idx].avatarURL,
-                            stories: updated
-                        )
+                        self.storyGroups[idx] = self.storyGroups[idx].with(stories: updated)
                     } else {
                         // New author — insert at beginning
                         self.storyGroups.insert(newGroup, at: 0)
@@ -366,138 +448,38 @@ class StoryViewModel: ObservableObject {
 
         socialSocket.storyViewed
             .receive(on: DispatchQueue.main)
-            .sink { _ in
-                // Story view counts are shown in the story viewer, refresh if needed
-                // For now this is a no-op — the seen-by list is fetched on demand
-            }
+            .sink { _ in }
             .store(in: &cancellables)
     }
 
-    // MARK: - Sample Data Fallback
+    // MARK: - Helpers
 
-    private func fallbackToSampleData() {
-        // No-op: sample data disabled, show empty state instead
+    private func buildFeedMedia(from post: APIPost, fallback uploadResult: TusUploadResult?) -> [FeedMedia] {
+        let apiMedia = (post.media ?? []).map { m in
+            FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
+                      width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
+        }
+        if !apiMedia.isEmpty { return apiMedia }
+        if let uploaded = uploadResult {
+            return [FeedMedia(id: uploaded.id, type: .image, url: uploaded.fileUrl,
+                              thumbnailColor: "4ECDC4", width: uploaded.width, height: uploaded.height)]
+        }
+        return []
     }
 
-    static let sampleGroups: [StoryGroup] = {
-        let now = Date()
-        return [
-            StoryGroup(
-                id: "user_me",
-                username: "Moi",
-                avatarColor: "FF2E63",
-                stories: [
-                    StoryItem(
-                        id: "s1",
-                        content: "Premier jour de vacances!",
-                        media: [.image(url: "https://picsum.photos/id/1035/1080/1920", color: "FF6B6B")],
-                        storyEffects: StoryEffects(textStyle: "bold", textColor: "FFFFFF", textPosition: "center", textSize: 30, textBg: "000000"),
-                        createdAt: now.addingTimeInterval(-3600),
-                        expiresAt: now.addingTimeInterval(72000),
-                        isViewed: true
-                    )
-                ]
-            ),
-            StoryGroup(
-                id: "user_alice",
-                username: "Alice",
-                avatarColor: DynamicColorGenerator.colorForName("Alice"),
-                stories: [
-                    StoryItem(
-                        id: "s2",
-                        content: nil,
-                        media: [.image(url: "https://picsum.photos/id/1015/1080/1920", color: "4ECDC4")],
-                        storyEffects: nil,
-                        createdAt: now.addingTimeInterval(-7200),
-                        expiresAt: now.addingTimeInterval(68400),
-                        isViewed: false
-                    ),
-                    StoryItem(
-                        id: "s3",
-                        content: "Sunset vibes",
-                        media: [.image(url: "https://picsum.photos/id/1040/1080/1920", color: "FF6B6B")],
-                        storyEffects: StoryEffects(background: nil, textStyle: "bold", textColor: "FFFFFF", textPosition: "bottom", filter: "warm", stickers: nil),
-                        createdAt: now.addingTimeInterval(-3600),
-                        expiresAt: now.addingTimeInterval(72000),
-                        isViewed: false
-                    )
-                ]
-            ),
-            StoryGroup(
-                id: "user_bob",
-                username: "Bob",
-                avatarColor: DynamicColorGenerator.colorForName("Bob"),
-                stories: [
-                    StoryItem(
-                        id: "s4",
-                        content: "New project launch!",
-                        media: [],
-                        storyEffects: StoryEffects(background: "9B59B6", textStyle: "neon", textColor: "FFFFFF", textPosition: "center", filter: nil, stickers: ["🚀"], textBg: "000000"),
-                        createdAt: now.addingTimeInterval(-5400),
-                        expiresAt: now.addingTimeInterval(70200),
-                        isViewed: true
-                    )
-                ]
-            ),
-            StoryGroup(
-                id: "user_sarah",
-                username: "Sarah",
-                avatarColor: DynamicColorGenerator.colorForName("Sarah"),
-                stories: [
-                    StoryItem(
-                        id: "s5",
-                        content: nil,
-                        media: [.image(url: "https://picsum.photos/id/1025/1080/1920", color: "F8B500")],
-                        storyEffects: StoryEffects(background: nil, textStyle: nil, textColor: nil, textPosition: nil, filter: "vintage", stickers: nil),
-                        createdAt: now.addingTimeInterval(-1800),
-                        expiresAt: now.addingTimeInterval(73800),
-                        isViewed: false
-                    ),
-                    StoryItem(
-                        id: "s6",
-                        content: "Cooking time 🍝",
-                        media: [.image(url: "https://picsum.photos/id/292/1080/1920", color: "2ECC71")],
-                        storyEffects: StoryEffects(textStyle: "bold", textColor: "FFFFFF", textPosition: "bottom", textBg: "000000"),
-                        createdAt: now.addingTimeInterval(-900),
-                        expiresAt: now.addingTimeInterval(74700),
-                        isViewed: false
-                    )
-                ]
-            ),
-            StoryGroup(
-                id: "user_emma",
-                username: "Emma",
-                avatarColor: DynamicColorGenerator.colorForName("Emma"),
-                stories: [
-                    StoryItem(
-                        id: "s7",
-                        content: "Morning run done!",
-                        media: [],
-                        storyEffects: StoryEffects(background: "08D9D6", textStyle: nil, textColor: "0F0C29", textPosition: "top", filter: nil, stickers: ["💪", "🏃‍♀️"]),
-                        createdAt: now.addingTimeInterval(-10800),
-                        expiresAt: now.addingTimeInterval(64800),
-                        isViewed: false
-                    ),
-                    StoryItem(
-                        id: "s8",
-                        content: nil,
-                        media: [.image(url: "https://picsum.photos/id/1069/1080/1920", color: "E91E63")],
-                        storyEffects: nil,
-                        createdAt: now.addingTimeInterval(-7200),
-                        expiresAt: now.addingTimeInterval(68400),
-                        isViewed: false
-                    ),
-                    StoryItem(
-                        id: "s9",
-                        content: "Best coffee ever ☕",
-                        media: [],
-                        storyEffects: StoryEffects(background: "F8B500", textStyle: "handwriting", textColor: "FFFFFF", textPosition: "center", filter: "warm", stickers: nil, textAlign: "right", textSize: 28),
-                        createdAt: now.addingTimeInterval(-3600),
-                        expiresAt: now.addingTimeInterval(72000),
-                        isViewed: false
-                    )
-                ]
-            )
-        ]
-    }()
+    private func insertOrAppendStoryItem(_ item: StoryItem, forAuthor author: APIAuthor) {
+        if let idx = storyGroups.firstIndex(where: { $0.id == author.id }) {
+            var updated = storyGroups[idx].stories
+            updated.append(item)
+            storyGroups[idx] = storyGroups[idx].with(stories: updated)
+        } else {
+            storyGroups.insert(StoryGroup(
+                id: author.id,
+                username: author.name,
+                avatarColor: DynamicColorGenerator.colorForName(author.name),
+                avatarURL: author.avatar,
+                stories: [item]
+            ), at: 0)
+        }
+    }
 }

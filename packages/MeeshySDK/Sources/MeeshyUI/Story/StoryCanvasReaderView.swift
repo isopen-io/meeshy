@@ -336,9 +336,6 @@ public struct StoryCanvasReaderView: View {
                 )
                 .opacity(state.mediaObjectOpacity(for: media, at: time))
                 .animation(.easeInOut(duration: 0.15), value: state.mediaObjectOpacity(for: media, at: time))
-                .onAppear {
-                    NSLog("[Bug3][ReaderView] storyId=%@ mediaId=%@ x=%f y=%f scale=%f rotation=%f postMediaId=%@", story.id, media.id, media.x, media.y, media.scale, media.rotation, media.postMediaId)
-                }
             }
         }
     }

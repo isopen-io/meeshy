@@ -385,4 +385,75 @@ final class StoryViewModelTests: XCTestCase {
 
         XCTAssertNil(sut.groupIndex(forUserId: "unknown"))
     }
+
+    // MARK: - Background Publishing
+
+    func test_publishStoryInBackground_setsActiveUpload() async {
+        mockAPI.authToken = "token"
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
+
+        sut.publishStoryInBackground(
+            slides: [StorySlide()],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:]
+        )
+
+        XCTAssertNotNil(sut.activeUpload)
+        XCTAssertEqual(sut.activeUpload?.progress, 0)
+    }
+
+    func test_publishStoryInBackground_closesComposer() async {
+        mockAPI.authToken = "token"
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
+        sut.showStoryComposer = true
+
+        sut.publishStoryInBackground(
+            slides: [StorySlide()],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:]
+        )
+
+        XCTAssertFalse(sut.showStoryComposer)
+    }
+
+    func test_publishStoryInBackground_blocksSecondPublish() async {
+        mockAPI.authToken = "token"
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
+
+        sut.publishStoryInBackground(
+            slides: [StorySlide()],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:]
+        )
+
+        let firstId = sut.activeUpload?.id
+
+        sut.publishStoryInBackground(
+            slides: [StorySlide()],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:]
+        )
+
+        XCTAssertEqual(sut.activeUpload?.id, firstId)
+    }
+
+    func test_cancelUpload_clearsActiveUpload() async {
+        mockAPI.authToken = "token"
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
+
+        sut.publishStoryInBackground(
+            slides: [StorySlide()],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:]
+        )
+
+        XCTAssertNotNil(sut.activeUpload)
+        sut.cancelUpload()
+        XCTAssertNil(sut.activeUpload)
+    }
 }

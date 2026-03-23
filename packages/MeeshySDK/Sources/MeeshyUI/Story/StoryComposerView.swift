@@ -5,12 +5,6 @@ import UniformTypeIdentifiers
 import AVFoundation
 import MeeshySDK
 
-// MARK: - Story Composer Active Panel (legacy — kept for StoryComposerPanel references)
-
-public enum StoryComposerPanel: Equatable {
-    case none, text, stickers, drawing, filter, background, transition, content
-}
-
 // MARK: - Story Background Picker Palette
 
 public enum StoryBackgroundPalette {
@@ -91,11 +85,6 @@ public struct StoryComposerView: View {
 
     // MARK: - Publication
 
-    @State private var isPublishingAll = false
-    @State private var publishProgressText: String?
-    @State private var slidePublishError: String?
-    @State private var slidePublishContinuation: CheckedContinuation<SlidePublishAction, Never>?
-    @State private var showPublishError = false
     @State private var publishTask: Task<Void, Never>?
 
     // MARK: - Canvas viewport (pinch-to-zoom + drag-to-pan when zoomed)
@@ -165,15 +154,23 @@ public struct StoryComposerView: View {
     // MARK: - Callbacks (public API preserved)
 
     public var onPublishSlide: (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void
+    public var onPublishAllInBackground: (
+        _ slides: [StorySlide],
+        _ slideImages: [String: UIImage],
+        _ loadedImages: [String: UIImage],
+        _ loadedVideoURLs: [String: URL]
+    ) -> Void
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
     public init(
-        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void,
+        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void = { _, _, _, _ in },
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL]) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
         self.onPublishSlide = onPublishSlide
+        self.onPublishAllInBackground = onPublishAllInBackground
         self.onPreview = onPreview
         self.onDismiss = onDismiss
     }
@@ -258,7 +255,8 @@ public struct StoryComposerView: View {
         .statusBarHidden()
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
-            cancelPublishIfNeeded()
+            publishTask?.cancel()
+            publishTask = nil
         }
         .onChange(of: bgPhotoItem) { _, item in loadBackgroundPhoto(from: item) }
         .onChange(of: fgPhotoItem) { _, item in addForegroundMedia(from: item, type: "image") }
@@ -343,13 +341,6 @@ public struct StoryComposerView: View {
                 onCancel: { editingElementVideo = nil }
             )
         }
-        .alert("Erreur de publication", isPresented: $showPublishError) {
-            Button("Reessayer") { resumePublish(.retry) }
-            Button("Ignorer", role: .cancel) { resumePublish(.skip) }
-            Button("Annuler tout", role: .destructive) { resumePublish(.cancel) }
-        } message: {
-            Text(slidePublishError ?? "")
-        }
         .alert("Reprendre votre story ?", isPresented: $showRestoreDraftAlert) {
             Button("Reprendre") { restoreDraft() }
             Button("Effacer le brouillon", role: .destructive) { clearAllDrafts() }
@@ -426,26 +417,16 @@ public struct StoryComposerView: View {
 
     private var publishButton: some View {
         Button { publishAllSlides() } label: {
-            Group {
-                if let progress = publishProgressText {
-                    HStack(spacing: 4) {
-                        ProgressView().progressViewStyle(.circular).scaleEffect(0.65).tint(.white)
-                        Text(progress).font(.system(size: 11, weight: .bold))
-                    }
-                } else {
-                    HStack(spacing: 4) {
-                        Text("Publier").font(.system(size: 13, weight: .bold)).lineLimit(1)
-                        Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
-                    }
-                    .fixedSize()
-                }
+            HStack(spacing: 4) {
+                Text("Publier").font(.system(size: 13, weight: .bold)).lineLimit(1)
+                Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
             }
+            .fixedSize()
             .foregroundColor(.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Capsule().fill(MeeshyColors.brandGradient))
         }
-        .disabled(isPublishingAll)
     }
 
     private var overflowMenu: some View {
@@ -1165,71 +1146,12 @@ public struct StoryComposerView: View {
     // MARK: - Publication
 
     private func publishAllSlides() {
-        isPublishingAll = true
         syncCurrentSlideEffects()
-        publishTask = Task {
-            let snapshot = snapshotAllSlides()
-            var index = 0
-            while index < snapshot.slides.count {
-                guard !Task.isCancelled else { break }
-                let slide = snapshot.slides[index]
-                let image = snapshot.bgImages[slide.id]
-                publishProgressText = snapshot.slides.count > 1
-                    ? "\(index + 1)/\(snapshot.slides.count)..."
-                    : "Publication..."
-
-                var retrying = true
-                while retrying {
-                    do {
-                        let allMediaURLs = viewModel.loadedVideoURLs.merging(viewModel.loadedAudioURLs) { v, _ in v }
-                        try await onPublishSlide(slide, image, viewModel.loadedImages, allMediaURLs)
-                        retrying = false
-                        index += 1
-                    } catch {
-                        let action = await withCheckedContinuation { (cont: CheckedContinuation<SlidePublishAction, Never>) in
-                            slidePublishContinuation = cont
-                            slidePublishError = "Erreur slide \(index + 1)/\(snapshot.slides.count) : \(error.localizedDescription)"
-                            showPublishError = true
-                        }
-                        slidePublishError = nil
-                        showPublishError = false
-                        switch action {
-                        case .retry: break
-                        case .skip: retrying = false; index += 1
-                        case .cancel:
-                            isPublishingAll = false
-                            publishProgressText = nil
-                            return
-                        }
-                    }
-                }
-            }
-            guard !Task.isCancelled else {
-                isPublishingAll = false; publishProgressText = nil; return
-            }
-            clearAllDrafts()
-            isPublishingAll = false
-            publishProgressText = nil
-            HapticFeedback.success()
-            onDismiss()
-        }
-    }
-
-    private func resumePublish(_ action: SlidePublishAction) {
-        let cont = slidePublishContinuation
-        slidePublishContinuation = nil
-        cont?.resume(returning: action)
-    }
-
-    private func cancelPublishIfNeeded() {
-        if let cont = slidePublishContinuation {
-            slidePublishContinuation = nil
-            cont.resume(returning: .cancel)
-        }
-        publishTask?.cancel()
-        publishTask = nil
-        isPublishingAll = false
-        publishProgressText = nil
+        let snapshot = snapshotAllSlides()
+        let allMediaURLs = viewModel.loadedVideoURLs.merging(viewModel.loadedAudioURLs) { v, _ in v }
+        clearAllDrafts()
+        HapticFeedback.success()
+        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, allMediaURLs)
     }
 
     private func snapshotAllSlides() -> (slides: [StorySlide], bgImages: [String: UIImage]) {
@@ -1253,7 +1175,7 @@ public struct StoryComposerView: View {
         } || !stickerObjects.isEmpty || viewModel.drawingData != nil
 
         if hasContent { showDiscardAlert = true }
-        else { cancelPublishIfNeeded(); clearAllDrafts(); onDismiss() }
+        else { publishTask?.cancel(); publishTask = nil; clearAllDrafts(); onDismiss() }
     }
 
     private func saveDraftAndDismiss() {
@@ -1262,7 +1184,8 @@ public struct StoryComposerView: View {
     }
 
     private func cancelAndDismiss() {
-        cancelPublishIfNeeded()
+        publishTask?.cancel()
+        publishTask = nil
         clearAllDrafts()
         onDismiss()
     }

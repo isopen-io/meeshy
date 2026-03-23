@@ -645,6 +645,10 @@ public struct StoryGroup: Identifiable, Codable, Sendable, CacheIdentifiable {
     public init(id: String, username: String, avatarColor: String, avatarURL: String? = nil, stories: [StoryItem]) {
         self.id = id; self.username = username; self.avatarColor = avatarColor; self.avatarURL = avatarURL; self.stories = stories
     }
+
+    public func with(stories: [StoryItem]) -> StoryGroup {
+        StoryGroup(id: id, username: username, avatarColor: avatarColor, avatarURL: avatarURL, stories: stories)
+    }
 }
 
 // MARK: - Status Entry

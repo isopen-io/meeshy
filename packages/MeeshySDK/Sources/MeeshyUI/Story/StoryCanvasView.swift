@@ -169,7 +169,12 @@ struct StoryCanvasView: View {
     }
 
     private func updateFilteredImage() {
-        filteredImage = selectedImage.map { StoryFilterProcessor.apply(selectedFilter, to: $0) }
+        let filter = selectedFilter
+        let source = selectedImage
+        Task.detached(priority: .userInitiated) {
+            let result = source.map { StoryFilterProcessor.apply(filter, to: $0) }
+            await MainActor.run { filteredImage = result }
+        }
     }
 
     // MARK: - Empty Canvas Tap
@@ -485,68 +490,6 @@ struct StoryCanvasView: View {
                 viewModel.currentEffects = effects
             }
         )
-    }
-}
-
-// MARK: - Legacy Binding Bridge
-
-/// Backward-compatible initializer for StoryComposerView (pre-ViewModel migration).
-/// Creates a thin bridge ViewModel that reads/writes through the provided bindings.
-extension StoryCanvasView {
-    @MainActor
-    init(
-        textObjects: Binding<[StoryTextObject]>,
-        onSelectText: ((String) -> Void)?,
-        onEditText: ((String) -> Void)?,
-        stickerObjects: Binding<[StorySticker]>,
-        selectedFilter: Binding<StoryFilter?>,
-        drawingData: Binding<Data?>,
-        isDrawingActive: Binding<Bool>,
-        backgroundColor: Binding<Color>,
-        selectedImage: Binding<UIImage?>,
-        drawingCanvas: Binding<PKCanvasView>,
-        drawingColor: Binding<Color>,
-        drawingWidth: Binding<CGFloat>,
-        drawingTool: Binding<DrawingTool>,
-        mediaObjects: Binding<[StoryMediaObject]> = .constant([]),
-        audioPlayerObjects: Binding<[StoryAudioPlayerObject]> = .constant([]),
-        loadedImages: Binding<[String: UIImage]> = .constant([:]),
-        loadedVideoURLs: Binding<[String: URL]> = .constant([:]),
-        loadedAudioURLs: Binding<[String: URL]> = .constant([:]),
-        onSelectMedia: ((String) -> Void)? = nil,
-        onBackgroundTap: (() -> Void)? = nil
-    ) {
-        let vm = StoryComposerViewModel()
-        // Seed the ViewModel with initial values from the bindings
-        var effects = vm.currentEffects
-        effects.textObjects = textObjects.wrappedValue
-        effects.mediaObjects = mediaObjects.wrappedValue
-        effects.audioPlayerObjects = audioPlayerObjects.wrappedValue
-        vm.currentEffects = effects
-        vm.drawingData = drawingData.wrappedValue
-        vm.drawingColor = drawingColor.wrappedValue
-        vm.drawingWidth = drawingWidth.wrappedValue
-        vm.loadedImages = loadedImages.wrappedValue
-        vm.loadedVideoURLs = loadedVideoURLs.wrappedValue
-        vm.loadedAudioURLs = loadedAudioURLs.wrappedValue
-        if isDrawingActive.wrappedValue {
-            vm.activeTool = .drawing
-        }
-
-        // Convert Color binding to hex string for the ViewModel
-        let uiColor = UIColor(backgroundColor.wrappedValue)
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-        vm.backgroundColor = String(format: "#%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
-
-        self.viewModel = vm
-        self._drawingCanvas = drawingCanvas
-        self._drawingTool = drawingTool
-        self._selectedFilter = selectedFilter
-        self._selectedImage = selectedImage
-        self._stickerObjects = stickerObjects
-        self.onEditText = onEditText
-        self.onEditMedia = nil
     }
 }
 

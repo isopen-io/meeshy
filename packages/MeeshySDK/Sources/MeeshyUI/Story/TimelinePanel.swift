@@ -64,7 +64,6 @@ struct TimelinePanel: View {
             buildTracks()
             configureEngine()
         }
-        .onChange(of: viewModel.currentSlideIndex) { buildTracks(); configureEngine() }
         .onChange(of: trackFingerprint) { buildTracks(); configureEngine() }
         .onDisappear {
             engine.stop()

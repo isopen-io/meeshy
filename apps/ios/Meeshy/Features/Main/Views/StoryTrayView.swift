@@ -46,11 +46,10 @@ struct StoryTrayView: View {
         .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
             ZStack {
                 StoryComposerView(
-                    onPublishSlide: { slide, image, loadedImages, loadedVideoURLs in
-                        try await viewModel.publishStorySingle(
-                            effects: slide.effects,
-                            content: slide.content,
-                            image: image,
+                    onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs in
+                        viewModel.publishStoryInBackground(
+                            slides: slides,
+                            slideImages: slideImages,
                             loadedImages: loadedImages,
                             loadedVideoURLs: loadedVideoURLs
                         )
@@ -266,21 +265,25 @@ private struct MyStoryButton: View {
                         onAddStatus?()
                         HapticFeedback.medium()
                     },
-                    contextMenuItems: [
-                        hasMyStory
-                            ? AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
+                    contextMenuItems: {
+                        var items: [AvatarContextMenuItem] = []
+                        if hasMyStory {
+                            items.append(AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
                                 showOwnStoryViewer = true
                                 HapticFeedback.medium()
-                            }
-                            : AvatarContextMenuItem(label: "Ajouter une story", icon: "plus.circle.fill") {
-                                viewModel.showStoryComposer = true
-                                HapticFeedback.medium()
-                            },
-                        AvatarContextMenuItem(label: "Changer mon mood", icon: "face.smiling.inverse") {
+                            })
+                        }
+                        items.append(AvatarContextMenuItem(label: "Ajouter une story", icon: "plus.circle.fill") {
+                            guard viewModel.activeUpload == nil else { return }
+                            viewModel.showStoryComposer = true
+                            HapticFeedback.medium()
+                        })
+                        items.append(AvatarContextMenuItem(label: "Changer mon mood", icon: "face.smiling.inverse") {
                             onAddStatus?()
                             HapticFeedback.medium()
-                        }
-                    ]
+                        })
+                        return items
+                    }()
                 )
                 .overlay(alignment: .bottomTrailing) {
                     if myMoodEmoji == nil {
@@ -294,6 +297,15 @@ private struct MyStoryButton: View {
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
                         .buttonStyle(.plain)
+                    }
+                }
+                .overlay {
+                    if let upload = viewModel.activeUpload {
+                        StoryUploadOverlay(
+                            upload: upload,
+                            onRetry: { viewModel.retryUpload() },
+                            onCancel: { viewModel.cancelUpload() }
+                        )
                     }
                 }
 
@@ -320,5 +332,70 @@ private struct MyStoryButton: View {
                 .foregroundColor(.white.opacity(0.8))
         }
         .accessibilityLabel(hasMyStory ? "Ma story" : "Changer mon mood")
+    }
+}
+
+// MARK: - Story Upload Overlay
+
+private struct StoryUploadOverlay: View {
+    let upload: StoryUploadState
+    let onRetry: () -> Void
+    let onCancel: () -> Void
+
+    private var isFailed: Bool {
+        if case .failed = upload.phase { return true }
+        return false
+    }
+
+    var body: some View {
+        ZStack {
+            Image(uiImage: upload.thumbnailImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
+                .opacity(0.2)
+
+            Circle()
+                .stroke(Color.white.opacity(0.1), lineWidth: 3)
+                .frame(width: 50, height: 50)
+
+            if isFailed {
+                Circle()
+                    .stroke(MeeshyColors.error, lineWidth: 3)
+                    .frame(width: 50, height: 50)
+
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+            } else {
+                Circle()
+                    .trim(from: 0, to: upload.progress)
+                    .stroke(
+                        MeeshyColors.brandGradient,
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                    )
+                    .frame(width: 50, height: 50)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 0.3), value: upload.progress)
+
+                Text("\(Int(upload.progress * 100))%")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+        .onTapGesture {
+            if isFailed { onRetry() }
+        }
+        .contextMenu {
+            if isFailed {
+                Button { onRetry() } label: {
+                    Label("Reessayer", systemImage: "arrow.clockwise")
+                }
+                Button(role: .destructive) { onCancel() } label: {
+                    Label("Annuler", systemImage: "trash")
+                }
+            }
+        }
     }
 }
