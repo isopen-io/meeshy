@@ -202,6 +202,8 @@
 		WDMGR001B001B001B00002 /* WidgetDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = WDMGR001A001A001A00001 /* WidgetDataManager.swift */; };
 		WP3500000000002F35 /* WidgetPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WP3500000000001F35 /* WidgetPreviewView.swift */; };
 		WR3700000000002F37 /* WebRTCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WR3700000000001F37 /* WebRTCService.swift */; };
+		WRTYPES000000002F01 /* WebRTCTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = WRTYPES000000001F01 /* WebRTCTypes.swift */; };
+		P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = P2PWRTC000000001F01 /* P2PWebRTCClient.swift */; };
 		07C7DC41C6D41D9141CDA4B6 /* EmailVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F66FA34FBEE79DA54D82826E /* EmailVerificationView.swift */; };
 		EVVM001B001B001B001B0002 /* EmailVerificationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVVM001A001A001A001A0001 /* EmailVerificationViewModel.swift */; };
 		VP01000000000002F001 /* VoiceProfileWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP01000000000001F001 /* VoiceProfileWizardView.swift */; };
@@ -454,6 +456,8 @@
 		WDMGR001A001A001A00001 /* WidgetDataManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetDataManager.swift; sourceTree = "<group>"; };
 		WP3500000000001F35 /* WidgetPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetPreviewView.swift; sourceTree = "<group>"; };
 		WR3700000000001F37 /* WebRTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCService.swift; sourceTree = "<group>"; };
+		WRTYPES000000001F01 /* WebRTCTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCTypes.swift; sourceTree = "<group>"; };
+		P2PWRTC000000001F01 /* P2PWebRTCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2PWebRTCClient.swift; sourceTree = "<group>"; };
 		F66FA34FBEE79DA54D82826E /* EmailVerificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationView.swift; sourceTree = "<group>"; };
 		EVVM001A001A001A001A0001 /* EmailVerificationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationViewModel.swift; sourceTree = "<group>"; };
 		VP01000000000001F001 /* VoiceProfileWizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardView.swift; sourceTree = "<group>"; };
@@ -697,6 +701,15 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		WEBRTCGRP00000001 /* WebRTC */ = {
+			isa = PBXGroup;
+			children = (
+				WRTYPES000000001F01 /* WebRTCTypes.swift */,
+				P2PWRTC000000001F01 /* P2PWebRTCClient.swift */,
+			);
+			path = WebRTC;
+			sourceTree = "<group>";
+		};
 		AABB00110022DD01 /* Services */ = {
 			isa = PBXGroup;
 			children = (
@@ -711,6 +724,7 @@
 				TM2800000000001F28 /* ToastManager.swift */,
 				CM3600000000001F36 /* CallManager.swift */,
 				WR3700000000001F37 /* WebRTCService.swift */,
+				WEBRTCGRP00000001 /* WebRTC */,
 				WDMGR001A001A001A00001 /* WidgetDataManager.swift */,
 				83A0A6FF273C6066A08F5632 /* E2ESessionManager.swift */,
 				409C08F1FC8A1E6C810690CF /* E2EAPI.swift */,
@@ -1213,6 +1227,8 @@
 				LGCT0100000002F001 /* Logger+Categories.swift in Sources */,
 				CM3600000000002F36 /* CallManager.swift in Sources */,
 				WR3700000000002F37 /* WebRTCService.swift in Sources */,
+				WRTYPES000000002F01 /* WebRTCTypes.swift in Sources */,
+				P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */,
 				CV3800000000002F38 /* CallView.swift in Sources */,
 				IC3900000000002F39 /* IncomingCallView.swift in Sources */,
 				CC4000000000002F40 /* ContactCardView.swift in Sources */,
