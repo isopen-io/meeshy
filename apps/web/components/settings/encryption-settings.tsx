@@ -20,6 +20,7 @@ import {
 } from '@/stores';
 import { useAuthStore } from '@/stores/auth-store';
 import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
+import { TwoFactorSettings } from './TwoFactorSettings';
 
 export function EncryptionSettings() {
   const { t } = useI18n('settings');
@@ -141,6 +142,9 @@ export function EncryptionSettings() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Two-Factor Authentication */}
+      <TwoFactorSettings />
+
       {/* Encryption Status */}
       <Card>
         <CardHeader>
