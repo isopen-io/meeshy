@@ -18,7 +18,6 @@ public actor CacheCoordinator {
     public let audio: DiskCacheStore
     public let video: DiskCacheStore
     public let thumbnails: DiskCacheStore
-    public let media: DiskCacheStore
 
     // MARK: - In-Memory Translation/Transcription/Audio Caches (keyed by messageId)
 
@@ -64,7 +63,6 @@ public actor CacheCoordinator {
         self.audio = DiskCacheStore(policy: .mediaAudio)
         self.video = DiskCacheStore(policy: .mediaVideo)
         self.thumbnails = DiskCacheStore(policy: .thumbnails)
-        self.media = DiskCacheStore(policy: .media)
     }
 
     public func start() {
@@ -437,7 +435,6 @@ public actor CacheCoordinator {
         await audio.invalidateAll()
         await video.invalidateAll()
         await thumbnails.invalidateAll()
-        await media.invalidateAll()
         await UserColorCache.shared.invalidateAll()
         translationCache.removeAll()
         transcriptionCache.removeAll()

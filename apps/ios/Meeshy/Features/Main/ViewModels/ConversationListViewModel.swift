@@ -40,9 +40,6 @@ class ConversationListViewModel: ObservableObject {
     private let autoLoadCap = 1000
     private var currentOffset = 0
     private var cancellables = Set<AnyCancellable>()
-    
-    // Story prefetch state
-    @Published var storiesPrefetched = false
     private var storyPrefetchTask: Task<Void, Never>?
 
     // O(1) conversation lookup by ID
@@ -92,29 +89,31 @@ class ConversationListViewModel: ObservableObject {
         observeMarkAsRead()
     }
 
+    private var groupingTask: Task<Void, Never>?
+
     // MARK: - Background Processing
     private func setupBackgroundProcessing() {
-        // Pipeline 1: Filtrage optimisé en arrière-plan
+        // Pipeline 1: Filtrage en arrière-plan
         Publishers.CombineLatest3($conversations, $searchText, $selectedFilter)
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.global(qos: .userInitiated))
             .sink { [weak self] (convs, text, filter) in
-                guard let self else { return }
-                
                 let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
-                self.filteredConversations = filtered
+                DispatchQueue.main.async { [weak self] in
+                    self?.filteredConversations = filtered
+                }
             }
             .store(in: &cancellables)
 
-        // Pipeline 2: Groupement optimisé en arrière-plan
+        // Pipeline 2: Groupement en arrière-plan
         Publishers.CombineLatest($filteredConversations, $userCategories)
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] (filtered, categories) in
                 guard let self else { return }
-                
-                // Traitement lourd en arrière-plan
-                Task.detached(priority: .userInitiated) {
+                self.groupingTask?.cancel()
+                self.groupingTask = Task.detached(priority: .userInitiated) {
+                    guard !Task.isCancelled else { return }
                     let grouped = Self.groupConversations(filtered, categories: categories)
-                    
+                    guard !Task.isCancelled else { return }
                     await MainActor.run { [weak self] in
                         self?.groupedConversations = grouped
                     }
@@ -419,10 +418,6 @@ class ConversationListViewModel: ObservableObject {
 
     func loadConversations() async {
         if isCacheValid && !conversations.isEmpty {
-            // Cache valide, précharger les stories en arrière-plan
-            if !storiesPrefetched {
-                prefetchRecentStories()
-            }
             return
         }
 
@@ -434,8 +429,6 @@ class ConversationListViewModel: ObservableObject {
         let cached = await CacheCoordinator.shared.conversations.load(for: "list").value ?? []
         if !cached.isEmpty {
             conversations = cached
-            // Déclencher la mise à jour de l'UI immédiatement
-            await MainActor.run { }
         }
 
         async let categoriesTask: () = loadCategories()
@@ -779,134 +772,52 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Story Prefetch
 
-    /// Précharge les stories de manière optimisée :
-    /// - Les 2 premières stories de TOUS les groupes (aperçu rapide pour tous)
-    /// - Les 3 premiers groupes ENTIÈREMENT (preview complète pour les plus récents)
-    /// - Télécharge les métadonnées + médias
-    /// - Met en cache pour affichage instantané
+    /// Précharge les stories : 2 premières de chaque groupe + 3 premiers groupes complets.
+    /// Utilise les DiskCacheStore existants (images/video) avec cache-hit check.
     private func prefetchRecentStories() {
-        // Annuler le préchargement précédent s'il existe
         storyPrefetchTask?.cancel()
-        
-        storyPrefetchTask = Task.detached(priority: .utility) { [weak self, storyService = self.storyService] in
-            guard let self else { return }
-            
+
+        storyPrefetchTask = Task.detached(priority: .utility) { [storyService = self.storyService] in
             do {
-                // 1. Récupérer la liste des stories (limite augmentée pour plus de groupes)
                 let response = try await storyService.list(cursor: nil, limit: 30)
-                guard response.success else { return }
-                
-                // 2. Convertir en groupes de stories
+                guard response.success, !Task.isCancelled else { return }
+
                 let storyGroups = response.data.toStoryGroups()
-                
                 guard !storyGroups.isEmpty else { return }
-                
-                Logger.messages.info("[ConversationListVM] 🎬 Starting story prefetch: \(storyGroups.count) groups")
-                
-                // 3. Préparer les 3 premiers groupes pour statistiques
-                let topThreeGroups = Array(storyGroups.prefix(3))
-                
-                // 4. Stratégie de préchargement optimisée
-                await withTaskGroup(of: Void.self) { group in
-                    
-                    // PARTIE 1: Précharger les 2 premières stories de TOUS les groupes
-                    // → Permet un affichage rapide de tous les utilisateurs dans la tray
-                    for storyGroup in storyGroups {
-                        let firstTwoStories = Array(storyGroup.stories.prefix(2))
-                        
-                        for story in firstTwoStories {
-                            group.addTask {
-                                await Self.prefetchStoryMedia(story)
-                            }
-                        }
+
+                // Collecter les URLs à précharger (2 par groupe + reste des 3 premiers)
+                var urls: [String] = []
+                for (i, group) in storyGroups.enumerated() {
+                    let limit = i < 3 ? group.stories.count : min(2, group.stories.count)
+                    for story in group.stories.prefix(limit) {
+                        urls.append(contentsOf: story.media.compactMap(\.url).filter { !$0.isEmpty })
                     }
-                    
-                    // PARTIE 2: Précharger les 3 premiers groupes ENTIÈREMENT
-                    // → Permet une navigation fluide dans les stories les plus récentes
-                    for storyGroup in topThreeGroups {
-                        // On a déjà préchargé les 2 premières, on prend les suivantes
-                        let remainingStories = Array(storyGroup.stories.dropFirst(2))
-                        
-                        for story in remainingStories {
-                            group.addTask {
-                                await Self.prefetchStoryMedia(story)
+                }
+
+                // Précharger par lots de 8 via image(for:) qui gère le cache-hit en interne
+                let imageStore = await CacheCoordinator.shared.images
+                let uniqueURLs = Array(Set(urls))
+                for chunk in stride(from: 0, to: uniqueURLs.count, by: 8) {
+                    guard !Task.isCancelled else { return }
+                    let end = min(chunk + 8, uniqueURLs.count)
+                    await withTaskGroup(of: Void.self) { taskGroup in
+                        for urlString in uniqueURLs[chunk..<end] {
+                            taskGroup.addTask {
+                                _ = await imageStore.image(for: urlString)
                             }
                         }
                     }
                 }
-                
-                // 5. Mettre en cache les métadonnées complètes
+
                 await CacheCoordinator.shared.stories.save(storyGroups, for: "recent_tray")
-                
-                // 6. Marquer comme préchargé
-                await MainActor.run { [weak self] in
-                    self?.storiesPrefetched = true
-                }
-                
-                // 7. Log des statistiques
-                let totalStories = storyGroups.reduce(0) { $0 + $1.stories.count }
-                let prefetchedCount = min(storyGroups.count * 2 + topThreeGroups.reduce(0) { $0 + max(0, $1.stories.count - 2) }, totalStories)
-                
-                Logger.messages.info("[ConversationListVM] ✅ Stories prefetched: \(storyGroups.count) groups, \(prefetchedCount)/\(totalStories) stories cached (2 per group + 3 full groups)")
-                
+                Logger.messages.info("[ConversationListVM] Stories prefetched: \(storyGroups.count) groups, \(uniqueURLs.count) media URLs")
             } catch {
-                Logger.messages.error("[ConversationListVM] ❌ Story prefetch failed: \(error.localizedDescription)")
+                Logger.messages.error("[ConversationListVM] Story prefetch failed: \(error.localizedDescription)")
             }
         }
     }
 
-    /// Précharge les médias d'une story (image/vidéo)
-    /// - Télécharge et met en cache localement pour affichage instantané
-    nonisolated private static func prefetchStoryMedia(_ story: StoryItem) async {
-        // Télécharger l'image ou la vidéo
-        let media = story.media
-        guard !media.isEmpty else { return }
-        
-        for mediaItem in media {
-            guard let urlString = mediaItem.url, !urlString.isEmpty, let url = URL(string: urlString) else { continue }
-            
-            do {
-                // Télécharger le fichier principal
-                let (data, response) = try await URLSession.shared.data(from: url)
-                
-                // Déterminer le bon cache selon le type de média
-                let cache: DiskCacheStore
-                if let mimeType = response.mimeType {
-                    if mimeType.hasPrefix("image/") {
-                        cache = await CacheCoordinator.shared.images
-                    } else if mimeType.hasPrefix("video/") {
-                        cache = await CacheCoordinator.shared.video
-                    } else {
-                        cache = await CacheCoordinator.shared.media
-                    }
-                } else {
-                    // Déterminer selon le type FeedMedia
-                    switch mediaItem.type {
-                    case .image:
-                        cache = await CacheCoordinator.shared.images
-                    case .video:
-                        cache = await CacheCoordinator.shared.video
-                    default:
-                        cache = await CacheCoordinator.shared.media
-                    }
-                }
-                
-                // Sauvegarder dans le cache approprié
-                await cache.save(data, for: urlString)
-                
-                let sizeKB = data.count / 1024
-                Logger.messages.debug("[StoryPrefetch] ✅ Cached \(String(describing: mediaItem.type)) (\(sizeKB)KB): \(urlString)")
-                
-            } catch {
-                // Échec silencieux - la story sera chargée à la demande
-                Logger.messages.debug("[StoryPrefetch] ⚠️ Failed to prefetch: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    /// Force le rechargement des stories (appelé si l'utilisateur ouvre la tray)
     func refreshStoriesPrefetch() {
-        storiesPrefetched = false
         prefetchRecentStories()
     }
 

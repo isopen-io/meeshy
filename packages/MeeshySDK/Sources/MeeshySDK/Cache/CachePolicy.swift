@@ -57,7 +57,6 @@ extension CachePolicy {
     public static let thumbnails = CachePolicy(ttl: .days(7), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Thumbnails", maxBytes: 50_000_000))
     public static let feedPosts = CachePolicy(ttl: .hours(6), staleTTL: .minutes(2), maxItemCount: 100, storageLocation: .grdb)
     public static let stories = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
-    public static let media = CachePolicy(ttl: .months(3), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Media", maxBytes: 400_000_000))
 }
 
 // MARK: - TimeInterval Helpers
