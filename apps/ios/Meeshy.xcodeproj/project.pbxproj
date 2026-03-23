@@ -204,6 +204,9 @@
 		WR3700000000002F37 /* WebRTCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WR3700000000001F37 /* WebRTCService.swift */; };
 		07C7DC41C6D41D9141CDA4B6 /* EmailVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F66FA34FBEE79DA54D82826E /* EmailVerificationView.swift */; };
 		EVVM001B001B001B001B0002 /* EmailVerificationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVVM001A001A001A001A0001 /* EmailVerificationViewModel.swift */; };
+		VP01000000000002F001 /* VoiceProfileWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP01000000000001F001 /* VoiceProfileWizardView.swift */; };
+		VP02000000000002F002 /* VoiceProfileManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP02000000000001F002 /* VoiceProfileManageView.swift */; };
+		LGCT0100000002F001 /* Logger+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = LGCT0100000001F001 /* Logger+Categories.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -453,6 +456,9 @@
 		WR3700000000001F37 /* WebRTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCService.swift; sourceTree = "<group>"; };
 		F66FA34FBEE79DA54D82826E /* EmailVerificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationView.swift; sourceTree = "<group>"; };
 		EVVM001A001A001A001A0001 /* EmailVerificationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationViewModel.swift; sourceTree = "<group>"; };
+		VP01000000000001F001 /* VoiceProfileWizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardView.swift; sourceTree = "<group>"; };
+		VP02000000000001F002 /* VoiceProfileManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageView.swift; sourceTree = "<group>"; };
+		LGCT0100000001F001 /* Logger+Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Logger+Categories.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -658,6 +664,8 @@
 				PP2500000000001F25 /* ParticipantsView.swift */,
 				GS3200000000001F32 /* GlobalSearchView.swift */,
 				WP3500000000001F35 /* WidgetPreviewView.swift */,
+				VP01000000000001F001 /* VoiceProfileWizardView.swift */,
+				VP02000000000001F002 /* VoiceProfileManageView.swift */,
 				CV3800000000001F38 /* CallView.swift */,
 				IC3900000000001F39 /* IncomingCallView.swift */,
 				FRRL001A001A001A001A0001 /* FriendRequestListView.swift */,
@@ -707,6 +715,7 @@
 				83A0A6FF273C6066A08F5632 /* E2ESessionManager.swift */,
 				409C08F1FC8A1E6C810690CF /* E2EAPI.swift */,
 				A35C370F515C4807CB86FA5E /* E2EEService.swift */,
+				LGCT0100000001F001 /* Logger+Categories.swift */,
 				PS3900000000001F39 /* ParticipantService.swift */,
 			);
 			path = Services;
@@ -1199,6 +1208,9 @@
 				GS3300000000002F33 /* GlobalSearchViewModel.swift in Sources */,
 				SP3400000000002F34 /* SharePickerView.swift in Sources */,
 				WP3500000000002F35 /* WidgetPreviewView.swift in Sources */,
+				VP01000000000002F001 /* VoiceProfileWizardView.swift in Sources */,
+				VP02000000000002F002 /* VoiceProfileManageView.swift in Sources */,
+				LGCT0100000002F001 /* Logger+Categories.swift in Sources */,
 				CM3600000000002F36 /* CallManager.swift in Sources */,
 				WR3700000000002F37 /* WebRTCService.swift in Sources */,
 				CV3800000000002F38 /* CallView.swift in Sources */,

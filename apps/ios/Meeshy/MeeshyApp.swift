@@ -1,6 +1,7 @@
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
+import os
 
 @main
 struct MeeshyApp: App {
@@ -101,6 +102,23 @@ struct MeeshyApp: App {
                 }
                 .task {
                     MeeshyConfig.shared.restoreEnvironment()
+                    await OfflineQueue.shared.setRetrySend { @Sendable item in
+                        do {
+                            let request = SendMessageRequest(
+                                content: item.content,
+                                replyToId: item.replyToId,
+                                forwardedFromId: item.forwardedFromId,
+                                forwardedFromConversationId: item.forwardedFromConversationId,
+                                attachmentIds: item.attachmentIds
+                            )
+                            _ = try await MessageService.shared.send(
+                                conversationId: item.conversationId, request: request
+                            )
+                            return true
+                        } catch {
+                            return false
+                        }
+                    }
                     await authManager.checkExistingSession()
                     hasCheckedSession = true
                     if authManager.isAuthenticated {
@@ -120,6 +138,14 @@ struct MeeshyApp: App {
                         Task { await requestPushPermissionIfNeeded() }
                         Task { await NotificationManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
+                        Task {
+                            do {
+                                let bundle = try E2EEService.shared.generatePublicBundle()
+                                try await E2EAPI.shared.uploadBundle(bundle: bundle)
+                            } catch {
+                                Logger.e2ee.error("E2EE bundle upload failed: \(error)")
+                            }
+                        }
                     } else {
                         NotificationManager.shared.reset()
                     }

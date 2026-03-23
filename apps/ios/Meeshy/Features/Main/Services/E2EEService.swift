@@ -232,6 +232,4 @@ public final class E2EEService: @unchecked Sendable {
     }
 }
 
-private extension Logger {
-    static let e2ee = Logger(subsystem: "me.meeshy.app", category: "e2ee")
-}
+// Logger.e2ee is defined in Logger+Categories.swift

@@ -61,6 +61,10 @@ public actor OfflineQueue {
     /// Called when retrying a queued message. Set by the app layer.
     public var onRetrySend: ((OfflineQueueItem) async -> Bool)?
 
+    public func setRetrySend(_ handler: @escaping @Sendable (OfflineQueueItem) async -> Bool) {
+        onRetrySend = handler
+    }
+
     private init() {
         items = Self.loadItemsFromDisk()
         Task { await self.observeConnection() }

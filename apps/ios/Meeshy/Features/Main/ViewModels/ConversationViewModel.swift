@@ -629,6 +629,21 @@ class ConversationViewModel: ObservableObject {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
 
+        // Offline: enqueue for later delivery instead of failing
+        if NetworkMonitor.shared.isOffline {
+            let queueItem = OfflineQueueItem(
+                conversationId: conversationId,
+                content: text,
+                replyToId: replyToId,
+                forwardedFromId: forwardedFromId,
+                forwardedFromConversationId: forwardedFromConversationId,
+                attachmentIds: attachmentIds
+            )
+            Task { await OfflineQueue.shared.enqueue(queueItem) }
+            Logger.messages.info("Message enqueued for offline delivery")
+            return true
+        }
+
         // Stop typing emission on send
         socketHandler?.stopTypingEmission()
 
