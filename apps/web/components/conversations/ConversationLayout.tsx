@@ -46,6 +46,7 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 import { useUserStore } from '@/stores/user-store';
 import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
+import { useFCMNotifications } from '@/hooks/use-fcm-notifications';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 
 import type { Conversation, Message, UserRoleEnum } from '@meeshy/shared/types';
@@ -220,6 +221,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // Activer les mises à jour de statut utilisateur en temps réel
   useUserStatusRealtime();
+
+  // Activer les notifications push FCM
+  useFCMNotifications({ autoSyncToken: true });
 
   // Sync Socket.IO events avec le cache React Query
   useSocketCacheSync({ conversationId: effectiveSelectedId, enabled: !!effectiveSelectedId });

@@ -45,6 +45,13 @@ export class MessagingService {
   private getMessageByIdCallback: GetMessageByIdCallback | null = null;
 
   /**
+   * Check if encryption handlers are already configured
+   */
+  hasEncryptionHandlers(): boolean {
+    return this.encryptionHandlers !== null;
+  }
+
+  /**
    * Set encryption handlers for E2EE support
    */
   setEncryptionHandlers(handlers: EncryptionHandlers): void {

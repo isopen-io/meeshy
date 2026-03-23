@@ -1,6 +1,12 @@
 'use client';
 
 import { AuthGuardV2, SplitViewLayout } from '@/components/v2';
+import { useFCMNotifications } from '@/hooks/use-fcm-notifications';
+
+function PushNotificationProvider() {
+  useFCMNotifications({ autoSyncToken: true });
+  return null;
+}
 
 /**
  * Protected Layout for V2 routes
@@ -18,6 +24,7 @@ export default function ProtectedLayout({
 }) {
   return (
     <AuthGuardV2>
+      <PushNotificationProvider />
       <SplitViewLayout>{children}</SplitViewLayout>
     </AuthGuardV2>
   );

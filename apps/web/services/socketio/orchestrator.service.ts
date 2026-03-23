@@ -131,6 +131,15 @@ export class SocketIOOrchestrator {
     logger.debug('[SocketIOOrchestrator]', 'Authenticated successfully');
     // Auto-join logic is handled by connection service callback
 
+    // Wire pass-through E2EE handlers (no real crypto yet — ready for future implementation)
+    if (!this.messagingService.hasEncryptionHandlers()) {
+      this.messagingService.setEncryptionHandlers({
+        encrypt: async () => null,
+        decrypt: async (payload) => typeof payload === 'string' ? payload : '',
+        getConversationMode: async () => null,
+      });
+    }
+
     // Process pending messages queue
     this.processPendingMessages();
   }
