@@ -30,51 +30,6 @@ enum CallEndReason: Equatable {
     case failed(String)
 }
 
-// MARK: - Call Signaling Events (Socket.IO)
-
-struct CallOfferEvent: Decodable {
-    let callId: String
-    let fromUserId: String
-    let fromUsername: String
-    let isVideo: Bool
-    let sdp: [String: String]
-}
-
-struct CallAnswerEvent: Decodable {
-    let callId: String
-    let fromUserId: String
-    let sdp: [String: String]
-}
-
-struct CallICECandidateEvent: Decodable {
-    let callId: String
-    let fromUserId: String
-    let candidate: [String: Any]
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        callId = try container.decode(String.self, forKey: .callId)
-        fromUserId = try container.decode(String.self, forKey: .fromUserId)
-        // candidate is a flexible dict, decode as raw
-        candidate = [:]
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case callId, fromUserId, candidate
-    }
-}
-
-struct CallRejectEvent: Decodable {
-    let callId: String
-    let fromUserId: String
-    let reason: String?
-}
-
-struct CallEndEvent: Decodable {
-    let callId: String
-    let fromUserId: String
-}
-
 // MARK: - Call Manager
 
 @MainActor
@@ -91,10 +46,11 @@ final class CallManager: ObservableObject {
     @Published var isSpeaker: Bool = false
     @Published private(set) var callDuration: TimeInterval = 0
     @Published private(set) var currentCallId: String?
+    @Published private(set) var connectionQuality: PeerConnectionState = .new
 
     // MARK: - Internal
 
-    private let webRTCService = WebRTCService()
+    private let webRTCService: WebRTCService
     private var durationTimer: Timer?
     private var callStartDate: Date?
     private var cancellables = Set<AnyCancellable>()
@@ -104,7 +60,9 @@ final class CallManager: ObservableObject {
     private let callController = CXCallController()
     private var activeCallUUID: UUID?
 
-    private init() {
+    private init(webRTCService: WebRTCService? = nil) {
+        self.webRTCService = webRTCService ?? WebRTCService()
+
         let config = CXProviderConfiguration()
         config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
@@ -118,11 +76,12 @@ final class CallManager: ObservableObject {
         callProvider.setDelegate(delegateProxy, queue: nil)
         self.callKitDelegate = delegateProxy
 
+        self.webRTCService.delegate = self
+
         setupSocketListeners()
         Logger.calls.info("CallManager initialized")
     }
 
-    // Must retain strong reference to proxy
     private var callKitDelegate: CallKitDelegateProxy?
 
     // MARK: - Outgoing Call
@@ -139,13 +98,12 @@ final class CallManager: ObservableObject {
         remoteUsername = username
         isVideoEnabled = isVideo
         isMuted = false
-        isSpeaker = isVideo // Default speaker on for video calls
+        isSpeaker = isVideo
         callState = .ringing(isOutgoing: true)
 
         webRTCService.configure(isVideo: isVideo)
         webRTCService.configureAudioSession(speaker: isSpeaker)
 
-        // Report to CallKit
         let uuid = UUID()
         activeCallUUID = uuid
         let handle = CXHandle(type: .generic, value: userId)
@@ -160,9 +118,9 @@ final class CallManager: ObservableObject {
             }
         }
 
-        // Create and send offer via Socket.IO
         Task { [weak self] in
             guard let self else { return }
+            await webRTCService.startLocalMedia(isVideo: isVideo)
             guard let offer = await webRTCService.createOffer() else {
                 endCallInternal(reason: .failed("Impossible de creer l'offre"))
                 return
@@ -176,7 +134,7 @@ final class CallManager: ObservableObject {
 
     // MARK: - Incoming Call
 
-    func handleIncomingOffer(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, sdp: RTCSessionDescription) {
+    func handleIncomingOffer(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, sdp: SessionDescription) {
         guard callState == .idle else {
             Logger.calls.warning("Rejecting incoming call: already busy")
             emitCallReject(callId: callId, toUserId: fromUserId)
@@ -193,7 +151,6 @@ final class CallManager: ObservableObject {
 
         webRTCService.configure(isVideo: isVideo)
 
-        // Report incoming call to CallKit
         let uuid = UUID()
         activeCallUUID = uuid
         let update = CXCallUpdate()
@@ -210,9 +167,10 @@ final class CallManager: ObservableObject {
             }
         }
 
-        // Store remote SDP for when user answers
         Task { [weak self] in
-            await self?.webRTCService.setRemoteDescription(sdp)
+            guard let self else { return }
+            await webRTCService.startLocalMedia(isVideo: isVideo)
+            await webRTCService.setRemoteDescription(sdp)
         }
 
         Logger.calls.info("Incoming call from \(fromUsername): \(callId)")
@@ -226,7 +184,6 @@ final class CallManager: ObservableObject {
 
         callState = .connecting
 
-        // Answer via CallKit
         if let uuid = activeCallUUID {
             let answerAction = CXAnswerCallAction(call: uuid)
             let transaction = CXTransaction(action: answerAction)
@@ -239,12 +196,9 @@ final class CallManager: ObservableObject {
 
         Task { [weak self] in
             guard let self, let callId = currentCallId, let userId = remoteUserId else { return }
-            guard let remoteOffer = webRTCService.remoteDescription else {
+            let offer = SessionDescription(type: .offer, sdp: "")
+            guard let answer = await webRTCService.createAnswer(from: offer) else {
                 endCallInternal(reason: .failed("Pas d'offre distante"))
-                return
-            }
-            guard let answer = await webRTCService.createAnswer(from: remoteOffer) else {
-                endCallInternal(reason: .failed("Impossible de creer la reponse"))
                 return
             }
             emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
@@ -329,7 +283,7 @@ final class CallManager: ObservableObject {
 
     // MARK: - Remote Events
 
-    func handleRemoteAnswer(callId: String, sdp: RTCSessionDescription) {
+    func handleRemoteAnswer(callId: String, sdp: SessionDescription) {
         guard currentCallId == callId else { return }
         Task { [weak self] in
             guard let self else { return }
@@ -339,7 +293,7 @@ final class CallManager: ObservableObject {
         }
     }
 
-    func handleRemoteICECandidate(callId: String, candidate: RTCIceCandidate) {
+    func handleRemoteICECandidate(callId: String, candidate: IceCandidate) {
         guard currentCallId == callId else { return }
         webRTCService.addICECandidate(candidate)
     }
@@ -387,9 +341,9 @@ final class CallManager: ObservableObject {
         callStartDate = nil
         webRTCService.close()
         callState = .ended(reason: reason)
+        connectionQuality = .new
         activeCallUUID = nil
 
-        // Reset after a brief delay so the UI shows the end screen
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard let self else { return }
@@ -415,7 +369,7 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 let isVideo = event.mode == "video" || event.mode == nil
-                guard let sdp = RTCSessionDescription(type: .offer, sdp: "") as RTCSessionDescription? else { return }
+                let sdp = SessionDescription(type: .offer, sdp: "")
                 self?.handleIncomingOffer(
                     callId: event.callId,
                     fromUserId: event.initiator.userId,
@@ -430,7 +384,7 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let sdpString = event.signal.sdp else { return }
-                let sdp = RTCSessionDescription(type: .answer, sdp: sdpString)
+                let sdp = SessionDescription(type: .answer, sdp: sdpString)
                 self?.handleRemoteAnswer(callId: event.callId, sdp: sdp)
             }
             .store(in: &cancellables)
@@ -439,10 +393,10 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let candidateString = event.signal.candidate else { return }
-                let candidate = RTCIceCandidate(
-                    sdp: candidateString,
+                let candidate = IceCandidate(
+                    sdpMid: event.signal.sdpMid,
                     sdpMLineIndex: Int32(event.signal.sdpMLineIndex ?? 0),
-                    sdpMid: event.signal.sdpMid
+                    candidate: candidateString
                 )
                 self?.handleRemoteICECandidate(callId: event.callId, candidate: candidate)
             }
@@ -458,7 +412,7 @@ final class CallManager: ObservableObject {
 
     // MARK: - Socket Emit Helpers
 
-    private nonisolated func emitCallOffer(callId: String, toUserId: String, isVideo: Bool, sdp: RTCSessionDescription) {
+    private nonisolated func emitCallOffer(callId: String, toUserId: String, isVideo: Bool, sdp: SessionDescription) {
         MessageSocketManager.shared.emitCallSignal(
             callId: callId,
             type: "offer",
@@ -466,7 +420,7 @@ final class CallManager: ObservableObject {
         )
     }
 
-    private nonisolated func emitCallAnswer(callId: String, toUserId: String, sdp: RTCSessionDescription) {
+    private nonisolated func emitCallAnswer(callId: String, toUserId: String, sdp: SessionDescription) {
         MessageSocketManager.shared.emitCallSignal(
             callId: callId,
             type: "answer",
@@ -488,6 +442,54 @@ final class CallManager: ObservableObject {
         let minutes = Int(callDuration) / 60
         let seconds = Int(callDuration) % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - WebRTCServiceDelegate
+
+extension CallManager: WebRTCServiceDelegate {
+    nonisolated func webRTCService(_ service: WebRTCService, didGenerateCandidate candidate: IceCandidate) {
+        Task { @MainActor [weak self] in
+            guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
+            var payload: [String: String] = [
+                "candidate": candidate.candidate,
+                "sdpMLineIndex": String(candidate.sdpMLineIndex),
+                "to": userId
+            ]
+            if let sdpMid = candidate.sdpMid {
+                payload["sdpMid"] = sdpMid
+            }
+            MessageSocketManager.shared.emitCallSignal(
+                callId: callId,
+                type: "ice-candidate",
+                payload: payload
+            )
+            Logger.calls.debug("Sent ICE candidate for call: \(callId)")
+        }
+    }
+
+    nonisolated func webRTCService(_ service: WebRTCService, didChangeConnectionState state: PeerConnectionState) {
+        Task { @MainActor [weak self] in
+            self?.connectionQuality = state
+        }
+    }
+
+    nonisolated func webRTCServiceDidConnect(_ service: WebRTCService) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if case .connecting = self.callState {
+                self.transitionToConnected()
+            }
+        }
+    }
+
+    nonisolated func webRTCServiceDidDisconnect(_ service: WebRTCService) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if case .connected = self.callState {
+                Logger.calls.warning("WebRTC disconnected during active call")
+            }
+        }
     }
 }
 
