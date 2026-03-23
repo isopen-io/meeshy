@@ -11,6 +11,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/socketio/socket.io-client-swift", exact: "16.1.1"),
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "6.29.3"),
+        // WebRTC: uncomment when a Xcode 26 compatible build is available
+        // .package(url: "https://github.com/stasel/WebRTC", exact: "141.0.0"),
     ],
     targets: [
         .target(
@@ -18,6 +20,7 @@ let package = Package(
             dependencies: [
                 .product(name: "SocketIO", package: "socket.io-client-swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),
+                // .product(name: "WebRTC", package: "WebRTC"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
