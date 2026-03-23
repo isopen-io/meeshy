@@ -25,6 +25,7 @@ import { MessagingService } from './messaging.service';
 import { TypingService } from './typing.service';
 import { PresenceService } from './presence.service';
 import { TranslationService } from './translation.service';
+import { e2eeCrypto } from '@/lib/encryption/e2ee-crypto';
 
 /**
  * Pending message in the queue
@@ -61,6 +62,9 @@ export class SocketIOOrchestrator {
 
   // Message conversion helper
   private messageConverter: ((msg: SocketIOMessage) => Message) | null = null;
+
+  // Current user ID for E2EE initialization
+  private currentUserId: string | null = null;
 
   // Message queue for messages sent before socket is ready
   private pendingMessages: PendingMessage[] = [];
@@ -131,12 +135,15 @@ export class SocketIOOrchestrator {
     logger.debug('[SocketIOOrchestrator]', 'Authenticated successfully');
     // Auto-join logic is handled by connection service callback
 
-    // Wire pass-through E2EE handlers (no real crypto yet — ready for future implementation)
+    // Wire real E2EE handlers using Web Crypto API (AES-256-GCM)
     if (!this.messagingService.hasEncryptionHandlers()) {
-      this.messagingService.setEncryptionHandlers({
-        encrypt: async () => null,
-        decrypt: async (payload) => typeof payload === 'string' ? payload : '',
-        getConversationMode: async () => null,
+      this.messagingService.setEncryptionHandlers(e2eeCrypto.createEncryptionHandlers());
+    }
+
+    // Initialize E2EE keys for the current user
+    if (this.currentUserId) {
+      e2eeCrypto.initializeForUser(this.currentUserId).catch((err) => {
+        logger.error('[SocketIOOrchestrator]', 'E2EE initialization failed', { error: err });
       });
     }
 
@@ -227,6 +234,7 @@ export class SocketIOOrchestrator {
    * Set current user
    */
   setCurrentUser(user: User): void {
+    this.currentUserId = user.id;
     this.connectionService.setCurrentUser(user);
 
     // Check if we have tokens
