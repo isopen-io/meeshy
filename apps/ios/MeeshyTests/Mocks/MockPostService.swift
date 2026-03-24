@@ -161,6 +161,8 @@ final class MockPostService: PostServiceProviding {
         return try createWithTypeResult.get()
     }
 
+    func requestTranslation(postId: String, targetLanguage: String) async throws {}
+
     // MARK: - Reset
 
     func reset() {

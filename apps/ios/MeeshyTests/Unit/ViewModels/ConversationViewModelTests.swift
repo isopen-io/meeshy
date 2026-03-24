@@ -485,8 +485,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_preferredTranslation_respectsSystemLanguagePreference() {
         let currentUser = MeeshyUser(
             id: testUserId, username: "testuser",
-            systemLanguage: "es",
-            translateToSystemLanguage: true
+            systemLanguage: "es"
         )
         mockAuthManager.simulateLoggedIn(user: currentUser)
         let sut = ConversationViewModel(
@@ -523,9 +522,7 @@ final class ConversationViewModelTests: XCTestCase {
         let currentUser = MeeshyUser(
             id: testUserId, username: "testuser",
             systemLanguage: "en",
-            customDestinationLanguage: "de",
-            translateToSystemLanguage: true,
-            useCustomDestination: true
+            customDestinationLanguage: "de"
         )
         mockAuthManager.simulateLoggedIn(user: currentUser)
         let sut = ConversationViewModel(

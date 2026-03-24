@@ -338,7 +338,7 @@ private struct MyStoryButton: View {
 // MARK: - Story Upload Overlay
 
 private struct StoryUploadOverlay: View {
-    let upload: StoryUploadState
+    let upload: StoryViewModel.StoryUploadState
     let onRetry: () -> Void
     let onCancel: () -> Void
 

@@ -1056,6 +1056,9 @@
     "Code envoye par SMS" : {
 
     },
+    "Coming soon — record your voice to enable personalized voice cloning for translated audio messages." : {
+
+    },
     "Commencer" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2252,6 +2255,9 @@
     "Maintenir pour voir" : {
 
     },
+    "Manage Voice Profile" : {
+
+    },
     "Marquer comme lu" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3445,6 +3451,9 @@
     "Vocal" : {
 
     },
+    "Voice Profile" : {
+
+    },
     "Voir le profil" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3542,6 +3551,9 @@
 
     },
     "Widgets Meeshy" : {
+
+    },
+    "Your voice profiles will appear here once created." : {
 
     }
   },
