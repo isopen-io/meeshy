@@ -39,6 +39,7 @@ export interface SendMessageBody {
   // Ephemeral/blurred message fields
   isBlurred?: boolean;
   expiresAt?: string;
+  mentionedUserIds?: string[];
 }
 
 export interface MessagesQuery {

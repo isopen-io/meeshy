@@ -22,6 +22,7 @@ export interface PushNotificationPayload {
   title: string;
   body: string;
   data?: Record<string, string>;
+  link?: string;
   badge?: number;
   sound?: string;
   // For iOS
@@ -365,11 +366,19 @@ export class PushNotificationService {
           },
         };
       } else if (tokenRecord.platform === 'web') {
+        const link = payload.link || (payload.data?.conversationId ? `/conversations/${payload.data.conversationId}` : undefined);
         message.webpush = {
           notification: {
+            title: payload.title,
+            body: payload.body,
             icon: '/android-chrome-192x192.png',
             badge: '/badge-72x72.png',
           },
+          ...(link && {
+            fcmOptions: {
+              link
+            }
+          })
         };
       }
 

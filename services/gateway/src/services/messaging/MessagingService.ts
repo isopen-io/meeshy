@@ -27,7 +27,7 @@ export class MessagingService {
     notificationService?: NotificationService
   ) {
     this.validator = new MessageValidator(prisma);
-    this.processor = new MessageProcessor(prisma, notificationService);
+    this.processor = new MessageProcessor(prisma, notificationService, translationService);
     this.readStatusService = new MessageReadStatusService(prisma);
   }
 
@@ -98,7 +98,7 @@ export class MessagingService {
         ...request,
         originalLanguage,
         conversationId,
-        senderId: participantId,
+        senderId: participant!.id,
         mentionedUserIds: request.mentionedUserIds,
         encryptedContent: request.encryptedPayload?.ciphertext,
         encryptionMetadata: request.encryptedPayload ? {
@@ -112,7 +112,7 @@ export class MessagingService {
 
       // 7. Marquer comme reçu ET lu pour l'expéditeur
       await this.readStatusService.markMessagesAsRead(
-        participantId,
+        participant!.id,
         conversationId,
         message.id
       );

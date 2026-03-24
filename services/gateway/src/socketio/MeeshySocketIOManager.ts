@@ -419,90 +419,10 @@ export class MeeshySocketIOManager {
           }
 
           // Broadcast temps réel vers tous les clients de la conversation (y compris l'auteur)
-          if (response.success && response.data?.id) {
-            // Récupérer le message depuis la base de données pour le broadcast
-            const message = await this.prisma.message.findUnique({
-              where: { id: response.data.id },
-              include: {
-                sender: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                    avatar: true,
-                    type: true,
-                    nickname: true,
-                    userId: true,
-                    user: {
-                      select: {
-                        id: true,
-                        username: true,
-                        displayName: true,
-                        firstName: true,
-                        lastName: true,
-                        avatar: true
-                      }
-                    }
-                  }
-                },
-                attachments: {
-                  select: {
-                    id: true,
-                    messageId: true,
-                    fileName: true,
-                    originalName: true,
-                    mimeType: true,
-                    fileSize: true,
-                    fileUrl: true,
-                    thumbnailUrl: true,
-                    width: true,
-                    height: true,
-                    duration: true,
-                    bitrate: true,
-                    sampleRate: true,
-                    codec: true,
-                    channels: true,
-                    metadata: true, // Inclure le champ metadata pour audioEffectsTimeline
-                    uploadedBy: true,
-                    isAnonymous: true,
-                    createdAt: true
-                  }
-                },
-                // NOTE: validatedMentions est un champ String[] et est automatiquement inclus (pas besoin de include)
-                replyTo: {
-                  include: {
-                    sender: {
-                      select: {
-                        id: true,
-                        displayName: true,
-                        avatar: true,
-                        type: true,
-                        nickname: true,
-                        userId: true,
-                        user: {
-                          select: {
-                            id: true,
-                            username: true,
-                            displayName: true,
-                            firstName: true,
-                            lastName: true,
-                            avatar: true
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            });
-
-            if (message) {
-              // Ajouter le champ timestamp requis par le type Message
-              const messageWithTimestamp = {
-                ...message,
-                timestamp: message.createdAt
-              } as any; // Cast temporaire pour éviter les conflits de types
+          if (response.success && response.data) {
+              const message = response.data as any;
               // FIX: Utiliser message.conversationId (déjà normalisé en base) au lieu de data.conversationId (peut être un identifier)
-              await this._broadcastNewMessage(messageWithTimestamp, message.conversationId, socket);
+              await this._broadcastNewMessage(message, message.conversationId, socket);
 
               // Notifier le service agent (fire-and-forget)
               this._notifyAgent({
@@ -517,10 +437,6 @@ export class MeeshySocketIOManager {
                 mentionedUserIds: await this._resolveMentionUserIds(message.validatedMentions ?? []),
                 createdAt: message.createdAt,
               });
-
-              // Créer des notifications pour les autres participants de la conversation
-              await this._createMessageNotifications(message, userId);
-            }
           }
 
           this.stats.messages_processed++;
@@ -644,88 +560,20 @@ export class MeeshySocketIOManager {
             replyToId: data.replyToId,
             isAnonymous: isAnonymous,
             anonymousDisplayName: anonymousDisplayName,
-            // IMPORTANT: Inclure les attachmentIds pour la validation
-            attachments: data.attachmentIds.map(id => ({ id } as any)),
+            // Aligner avec GatewayMessage: attachments are passed as IDs for linking
+            attachmentIds: data.attachmentIds,
             metadata: {
               source: 'websocket',
               socketId: socket.id,
               clientTimestamp: Date.now()
             }
-          };
+          } as any;
 
 
           const response: MessageResponse = await this.messagingService.handleMessage(
             messageRequest,
             userId
           );
-
-          // Associer les attachments au message
-          if (response.success && response.data?.id) {
-            await attachmentService.associateAttachmentsToMessage(data.attachmentIds, response.data.id);
-
-            // ═══════════════════════════════════════════════════════════════
-            // AUDIO PROCESSING: Envoyer les attachements audio au Translator
-            // ═══════════════════════════════════════════════════════════════
-            try {
-              // Récupérer les détails des attachments pour vérifier s'il y a des audios
-              const attachmentsDetails = await this.prisma.messageAttachment.findMany({
-                where: { id: { in: data.attachmentIds } },
-                select: {
-                  id: true,
-                  mimeType: true,
-                  fileUrl: true,
-                  filePath: true,
-                  duration: true,
-                  metadata: true
-                }
-              });
-
-              // Filtrer les attachements audio
-              const audioAttachments = attachmentsDetails.filter(att =>
-                att.mimeType && att.mimeType.startsWith('audio/')
-              );
-
-              // Pour chaque audio, envoyer au Translator
-              for (const audioAtt of audioAttachments) {
-                logger.info(`🎤 [WEBSOCKET] Envoi audio au Translator: ${audioAtt.id}`);
-
-                // Extraire la transcription mobile si présente dans les metadata
-                let mobileTranscription: any = undefined;
-                if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
-                  const metadata = audioAtt.metadata as any;
-                  if (metadata.transcription) {
-                    mobileTranscription = metadata.transcription;
-                    logger.info(`   📝 Transcription mobile trouvée: "${mobileTranscription.text?.substring(0, 50)}..."`);
-                  }
-                }
-
-                // Envoyer au Translator pour transcription, traduction et clonage vocal
-                // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
-                const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
-                const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
-
-                await this.translationService.processAudioAttachment({
-                  messageId: response.data.id,
-                  attachmentId: audioAtt.id,
-                  conversationId: data.conversationId,
-                  senderId: userId,
-                  audioUrl: audioAtt.fileUrl || '',
-                  audioPath: audioPath,
-                  audioDurationMs: audioAtt.duration || 0,
-                  mobileTranscription: mobileTranscription,
-                  generateVoiceClone: true,
-                  modelType: 'medium'
-                });
-              }
-
-              if (audioAttachments.length > 0) {
-                logger.info(`✅ [WEBSOCKET] ${audioAttachments.length} audio(s) envoyé(s) au Translator`);
-              }
-            } catch (audioError) {
-              logger.error('⚠️ [WEBSOCKET] Erreur envoi audio au Translator', audioError);
-              // Ne pas bloquer l'envoi du message si le traitement audio échoue
-            }
-          }
 
           // Réponse via callback — include clientMessageId for sender-side dedup
           if (callback) {
@@ -746,96 +594,10 @@ export class MeeshySocketIOManager {
           }
 
           // Broadcast temps réel vers tous les clients de la conversation (y compris l'auteur)
-          if (response.success && response.data?.id) {
-            // Récupérer le message depuis la base de données avec les attachments ET replyTo
-            const message = await this.prisma.message.findUnique({
-              where: { id: response.data.id },
-              include: {
-                sender: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                    avatar: true,
-                    type: true,
-                    nickname: true,
-                    userId: true,
-                    user: {
-                      select: {
-                        id: true,
-                        username: true,
-                        displayName: true,
-                        firstName: true,
-                        lastName: true,
-                        avatar: true
-                      }
-                    }
-                  }
-                },
-                attachments: {
-                  select: {
-                    id: true,
-                    messageId: true,
-                    fileName: true,
-                    originalName: true,
-                    mimeType: true,
-                    fileSize: true,
-                    fileUrl: true,
-                    thumbnailUrl: true,
-                    width: true,
-                    height: true,
-                    duration: true,
-                    bitrate: true,
-                    sampleRate: true,
-                    codec: true,
-                    channels: true,
-                    fps: true,
-                    videoCodec: true,
-                    pageCount: true,
-                    lineCount: true,
-                    metadata: true, // Inclure audioEffectsTimeline et autres métadonnées JSON
-                    uploadedBy: true,
-                    isAnonymous: true,
-                    createdAt: true
-                  }
-                },
-                // NOTE: validatedMentions est un champ String[] et est automatiquement inclus (pas besoin de include)
-                replyTo: {
-                  include: {
-                    sender: {
-                      select: {
-                        id: true,
-                        displayName: true,
-                        avatar: true,
-                        type: true,
-                        nickname: true,
-                        userId: true,
-                        user: {
-                          select: {
-                            id: true,
-                            username: true,
-                            displayName: true,
-                            firstName: true,
-                            lastName: true,
-                            avatar: true
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            });
-            
-            if (message) {
-
-              // Utiliser la méthode _broadcastNewMessage pour un formatting cohérent
-              const messageWithTimestamp = {
-                ...message,
-                timestamp: message.createdAt
-              } as any;
+          if (response.success && response.data) {
+              const message = response.data as any;
               // FIX: Utiliser message.conversationId (déjà normalisé en base) au lieu de data.conversationId (peut être un identifier)
-              await this._broadcastNewMessage(messageWithTimestamp, message.conversationId, socket);
-            }
+              await this._broadcastNewMessage(message, message.conversationId, socket);
           }
         } catch (error: any) {
           logger.error('❌ [WEBSOCKET] Erreur envoi message avec attachments', error);
@@ -2592,7 +2354,11 @@ export class MeeshySocketIOManager {
    * Permet aux routes HTTP de déclencher le broadcast socket sans accéder aux méthodes privées.
    */
   public async broadcastMessage(message: Message, conversationId: string): Promise<void> {
-    await this._broadcastNewMessage(message, conversationId);
+    const messageWithTimestamp = {
+      ...message,
+      timestamp: (message as any).createdAt || (message as any).timestamp || new Date()
+    } as any;
+    await this._broadcastNewMessage(messageWithTimestamp, conversationId);
   }
 
   /**
@@ -3040,214 +2806,6 @@ export class MeeshySocketIOManager {
     return Array.from(this.connectedUsers.keys());
   }
 
-  /**
-   * Créer des notifications pour un nouveau message
-   */
-  private async _createMessageNotifications(message: any, senderId: string): Promise<void> {
-    try {
-      // Récupérer la conversation avec ses informations
-      const conversation = await this.prisma.conversation.findUnique({
-        where: { id: message.conversationId },
-        select: {
-          id: true,
-          type: true,
-          title: true
-        }
-      });
-
-      // Récupérer les attachments du message pour les inclure dans la notification
-      let messageAttachments: Array<{ id: string; filename: string; mimeType: string; fileSize: number }> = [];
-      if (message.id) {
-        try {
-          const attachments = await this.prisma.messageAttachment.findMany({
-            where: { messageId: message.id },
-            select: {
-              id: true,
-              fileName: true,
-              mimeType: true,
-              fileSize: true
-            }
-          });
-          // Mapper fileName vers filename pour correspondre à l'interface de la notification
-          messageAttachments = attachments.map(att => ({
-            id: att.id,
-            filename: att.fileName,
-            mimeType: att.mimeType,
-            fileSize: att.fileSize
-          }));
-          if (attachments.length > 0) {
-            logger.info(`📢 [NOTIFICATIONS] Message avec ${attachments.length} attachment(s)`);
-          }
-        } catch (err) {
-          logger.error('❌ [NOTIFICATIONS] Erreur lors de la récupération des attachments', err);
-        }
-      }
-
-      if (!conversation) {
-        logger.error('❌ [NOTIFICATIONS] Conversation non trouvée', message.conversationId);
-        return;
-      }
-
-      // Vérifier si c'est une réponse à un message
-      let originalMessageAuthorId: string | null = null;
-      if (message.replyToId) {
-        try {
-          const originalMessage = await this.prisma.message.findUnique({
-            where: { id: message.replyToId },
-            select: { senderId: true }
-          });
-          originalMessageAuthorId = originalMessage?.senderId || null;
-        } catch (err) {
-          logger.error('❌ [NOTIFICATIONS] Erreur lors de la récupération du message original', err);
-        }
-      }
-
-      // Récupérer les participants mentionnés dans le message
-      // Ils recevront une notification de mention spécifique, pas une notification de message générique
-      // We collect userId (for registered users) to match against notification recipients
-      const mentionedUserIds = new Set<string>();
-      if (message.id) {
-        try {
-          const mentions = await this.prisma.mention.findMany({
-            where: { messageId: message.id },
-            select: {
-              mentionedParticipantId: true,
-              mentionedParticipant: {
-                select: { userId: true }
-              }
-            }
-          });
-          mentions.forEach(m => {
-            if (m.mentionedParticipant?.userId) {
-              mentionedUserIds.add(m.mentionedParticipant.userId);
-            }
-            mentionedUserIds.add(m.mentionedParticipantId);
-          });
-          logger.info(`📢 [NOTIFICATIONS] ${mentionedUserIds.size} utilisateur(s) mentionné(s) - ils ne recevront QUE la notification de mention`);
-        } catch (err) {
-          logger.error('❌ [NOTIFICATIONS] Erreur lors de la récupération des mentions', err);
-        }
-      }
-
-      // Récupérer les participants de la conversation (Participant model)
-      // Only fetch participants with userId (registered users) for notifications
-      const conversationMembers = await this.prisma.participant.findMany({
-        where: {
-          conversationId: message.conversationId,
-          isActive: true,
-          id: {
-            not: message.senderId // Exclure l'expéditeur (senderId = participant.id)
-          },
-          userId: { not: null }
-        },
-        select: {
-          id: true,
-          userId: true,
-          user: {
-            select: {
-              id: true,
-              username: true
-            }
-          }
-        }
-      });
-
-      // Récupérer les informations de l'expéditeur
-      let senderUsername = 'Unknown';
-      let senderAvatar: string | undefined;
-      let senderDisplayName: string | undefined;
-      let senderFirstName: string | undefined;
-      let senderLastName: string | undefined;
-
-      if (message.sender) {
-        const participant = message.sender;
-        const user = participant.user;
-        senderUsername = user?.username || participant.displayName || participant.nickname || 'Unknown';
-        senderAvatar = user?.avatar || participant.avatar || undefined;
-        senderDisplayName = participant.displayName || user?.displayName || undefined;
-        senderFirstName = user?.firstName || undefined;
-        senderLastName = user?.lastName || undefined;
-      }
-
-      // Si c'est une réponse, créer une notification de réponse pour l'auteur du message original
-      // SAUF si l'auteur est mentionné (la mention a la priorité)
-      if (originalMessageAuthorId && originalMessageAuthorId !== senderId) {
-        // Vérifier si l'auteur du message original est mentionné dans ce message
-        const isOriginalAuthorMentioned = mentionedUserIds.has(originalMessageAuthorId);
-
-        if (!isOriginalAuthorMentioned) {
-          // L'auteur n'est pas mentionné, on crée une notification de réponse
-          await this.notificationService.createReplyNotification({
-            recipientUserId: originalMessageAuthorId,
-            replierUserId: message.senderId || '',
-            messageId: message.id,
-            conversationId: message.conversationId,
-            messagePreview: message.content,
-            originalMessageId: message.replyToId!,
-          });
-          logger.info(`📢 [NOTIFICATIONS] Notification de réponse créée pour ${originalMessageAuthorId}`);
-        } else {
-          logger.info(`📢 [NOTIFICATIONS] Skip notification de réponse pour ${originalMessageAuthorId} (mentionné - priorité mention)`);
-        }
-      }
-
-      // Filtrer les destinataires (exclure mentionnés et auteur du message original)
-      const recipients = conversationMembers.filter(member => {
-        const memberUserId = member.userId!;
-        if (mentionedUserIds.has(memberUserId)) return false;
-        if (originalMessageAuthorId && memberUserId === originalMessageAuthorId) return false;
-        return true;
-      });
-
-      logger.info(`📢 [NOTIFICATIONS] Génération de ${recipients.length} notification(s) pour le message ${message.id} dans la conversation ${message.conversationId} (${conversationMembers.length} membres, ${mentionedUserIds.size} mentionné(s), sender exclu)`);
-
-      // Resolve the sender's userId for notification purposes
-      let senderUserIdForNotif = '';
-      if (message.senderId) {
-        const senderPart = await this.prisma.participant.findUnique({
-          where: { id: message.senderId },
-          select: { userId: true }
-        });
-        senderUserIdForNotif = senderPart?.userId || message.senderId;
-      }
-
-      for (const member of recipients) {
-        await this.notificationService.createMessageNotification({
-          recipientUserId: member.userId!,
-          senderId: senderUserIdForNotif,
-          messageId: message.id,
-          conversationId: message.conversationId,
-          messagePreview: message.content,
-          hasAttachments: messageAttachments.length > 0,
-          attachmentCount: messageAttachments.length,
-          firstAttachmentType: messageAttachments[0]?.mimeType?.startsWith('image/') ? 'image' : 'document',
-        });
-      }
-
-      // Create mention notifications for mentioned users
-      for (const mentionedUserId of mentionedUserIds) {
-        if (mentionedUserId === senderUserIdForNotif) continue;
-        // Only process user IDs that match actual conversation members
-        const isMember = conversationMembers.some(m => m.userId === mentionedUserId);
-        if (!isMember) continue;
-
-        try {
-          await this.notificationService.createMentionNotification({
-            mentionedUserId,
-            mentionerUserId: senderUserIdForNotif,
-            messageId: message.id,
-            conversationId: message.conversationId,
-            messagePreview: message.content?.substring(0, 200) || '',
-          });
-        } catch (err) {
-          logger.error(`❌ [NOTIFICATIONS] Erreur mention notification pour ${mentionedUserId}`, err);
-        }
-      }
-
-    } catch (error) {
-      logger.error('❌ [NOTIFICATIONS] Erreur création notifications message', error);
-    }
-  }
 
   /**
    * Ajoute un socket au mapping utilisateur -> sockets
@@ -3366,13 +2924,9 @@ export class MeeshySocketIOManager {
       }
 
       // Broadcast to all members (translation arrives asynchronously via translationReady event)
+      // Note: Notifications are already triggered inside messagingService.handleMessage -> processor.triggerAllNotifications
       const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as any;
       await this._broadcastNewMessage(messageWithTimestamp, response.conversationId);
-
-      // Notifications push (fire-and-forget)
-      this._createMessageNotifications(result.data, response.asUserId).catch((err) => {
-        logger.error('[Agent] Notification error:', err);
-      });
 
       logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
     } catch (error) {

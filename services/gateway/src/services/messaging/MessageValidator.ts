@@ -24,7 +24,10 @@ export class MessageValidator {
     const warnings: MessageValidationResult['warnings'] = [];
 
     // Validation du contenu - permettre les messages sans contenu si il y a des attachements ou un payload chiffré
-    if ((!request.content || request.content.trim().length === 0) && (!request.attachments || request.attachments.length === 0) && !request.encryptedPayload) {
+    const hasAttachments = (request.attachments && request.attachments.length > 0) ||
+                          ((request as any).attachmentIds && (request as any).attachmentIds.length > 0);
+
+    if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload) {
       errors.push({
         field: 'content',
         message: 'Message content cannot be empty (unless attachments or encrypted payload are included)',
@@ -59,7 +62,8 @@ export class MessageValidator {
     }
 
     // Validation des pièces jointes
-    if (request.attachments && request.attachments.length > 10) {
+    const attachmentCount = (request.attachments?.length || 0) + ((request as any).attachmentIds?.length || 0);
+    if (attachmentCount > 10) {
       errors.push({
         field: 'attachments',
         message: 'Maximum 10 attachments per message',
