@@ -255,11 +255,18 @@ export class NotificationService {
         try {
           const sockets = await this.io.in(params.userId).fetchSockets();
           if (sockets.length === 0) {
+            const link = params.context.conversationId ?
+              (params.context.messageId ?
+                `/conversations/${params.context.conversationId}?messageId=${params.context.messageId}` :
+                `/conversations/${params.context.conversationId}`) :
+              undefined;
+
             this.pushService.sendToUser({
               userId: params.userId,
               payload: {
                 title: params.actor?.displayName || 'Meeshy',
                 body: params.content.substring(0, 200),
+                link,
                 data: {
                   type: params.type,
                   conversationId: params.context.conversationId || '',

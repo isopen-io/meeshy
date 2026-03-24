@@ -3,6 +3,7 @@
  * Handles message content processing, encryption, links, mentions, and persistence
  */
 
+import * as path from 'path';
 import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import type { MessageRequest } from '@meeshy/shared/types';
@@ -10,6 +11,8 @@ import { TrackingLinkService } from '../TrackingLinkService';
 import { MentionService } from '../MentionService';
 import { EncryptionService } from '../EncryptionService';
 import { NotificationService } from '../notifications/NotificationService';
+import { MessageTranslationService } from '../message-translation/MessageTranslationService';
+import { AttachmentService } from '../attachments';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 // Logger dédié pour MessageProcessor
@@ -32,14 +35,17 @@ export class MessageProcessor {
   private trackingLinkService: TrackingLinkService;
   private mentionService: MentionService;
   private encryptionService: EncryptionService;
+  private attachmentService: AttachmentService;
 
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly notificationService?: NotificationService
+    private readonly notificationService?: NotificationService,
+    private readonly translationService?: MessageTranslationService
   ) {
     this.trackingLinkService = new TrackingLinkService(prisma);
     this.mentionService = new MentionService(prisma);
     this.encryptionService = new EncryptionService(prisma);
+    this.attachmentService = new AttachmentService(prisma);
   }
 
   /**
@@ -293,6 +299,9 @@ export class MessageProcessor {
     mentionedUserIds?: readonly string[];
     encryptedContent?: string;
     encryptionMetadata?: Prisma.InputJsonValue;
+    attachmentIds?: string[];
+    isBlurred?: boolean;
+    expiresAt?: Date;
   }): Promise<Message> {
     // ÉTAPE 1: Traiter les liens AVANT de sauvegarder le message
     const processedContent = await this.processLinksInContent(
@@ -337,6 +346,8 @@ export class MessageProcessor {
         encryptionMode: encryptionContext.mode,
         encryptedContent: encryptionContext.encryptedContent,
         encryptionMetadata: encryptionContext.encryptionMetadata,
+        isBlurred: data.isBlurred || false,
+        expiresAt: data.expiresAt || null,
         deletedAt: null
       },
       include: {
@@ -388,16 +399,182 @@ export class MessageProcessor {
       }
     });
 
-    // ÉTAPE 4: Mettre à jour les liens de tracking avec le messageId
+    // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
+    await this.handleAttachments(data, message);
+
+    // ÉTAPE 5: Mettre à jour les liens de tracking avec le messageId
     await this.updateTrackingLinksWithMessageId(processedContent, data, message.id);
 
-    // ÉTAPE 5: Traiter les mentions d'utilisateurs
-    await this.processMentions(data, message, processedContent);
+    // ÉTAPE 6: Traiter les mentions et déclencher TOUTES les notifications
+    // (Mentions, Réponses, Messages réguliers)
+    await this.handleMentionsAndNotifications(data, message, processedContent);
 
     return {
       ...message,
       timestamp: message.createdAt
     } as Message;
+  }
+
+  /**
+   * Gère l'association ou la copie des attachments pour un nouveau message
+   */
+  private async handleAttachments(
+    data: {
+      senderId: string;
+      attachmentIds?: string[];
+      forwardedFromId?: string;
+      conversationId: string;
+    },
+    message: Message
+  ): Promise<void> {
+    try {
+      // 1. Lier les attachments pré-uploadés
+      if (data.attachmentIds && data.attachmentIds.length > 0) {
+        await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id);
+
+        // Déclencher le traitement audio si nécessaire
+        if (this.translationService) {
+          this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId)
+            .catch(err => logger.error('[MessageProcessor] Audio processing failed', err));
+        }
+      }
+      // 2. Copier les attachments si c'est un forward et qu'aucun nouvel attachment n'est fourni
+      else if (data.forwardedFromId) {
+        await this.copyForwardedAttachments(data.forwardedFromId, message.id, data.senderId);
+      }
+    } catch (error) {
+      logger.error('[MessageProcessor] Error handling attachments', error);
+    }
+  }
+
+  /**
+   * Copie les attachments d'un message original vers un nouveau message (Forward)
+   */
+  private async copyForwardedAttachments(originalMessageId: string, newMessageId: string, senderId: string): Promise<void> {
+    try {
+      const originalAttachments = await this.prisma.messageAttachment.findMany({
+        where: { messageId: originalMessageId }
+      });
+
+      if (originalAttachments.length === 0) return;
+
+      const createdAttachments = await Promise.all(
+        originalAttachments.map(att =>
+          this.prisma.messageAttachment.create({
+            data: {
+              messageId: newMessageId,
+              fileName: att.fileName,
+              originalName: att.originalName,
+              mimeType: att.mimeType,
+              fileSize: att.fileSize,
+              filePath: att.filePath,
+              fileUrl: att.fileUrl,
+              title: att.title,
+              alt: att.alt,
+              caption: att.caption,
+              forwardedFromAttachmentId: att.id,
+              isForwarded: true,
+              width: att.width,
+              height: att.height,
+              thumbnailPath: att.thumbnailPath,
+              thumbnailUrl: att.thumbnailUrl,
+              duration: att.duration,
+              bitrate: att.bitrate,
+              sampleRate: att.sampleRate,
+              codec: att.codec,
+              channels: att.channels,
+              fps: att.fps,
+              videoCodec: att.videoCodec,
+              pageCount: att.pageCount,
+              lineCount: att.lineCount,
+              uploadedBy: senderId,
+              isAnonymous: false,
+              transcription: att.transcription ?? undefined,
+              translations: att.translations ?? undefined,
+              metadata: att.metadata ?? undefined,
+            }
+          })
+        )
+      );
+
+      // Mettre à jour le messageType si le premier attachment est un média
+      const firstMime = createdAttachments[0].mimeType;
+      let detectedType = 'text';
+      if (firstMime.startsWith('image/')) detectedType = 'image';
+      else if (firstMime.startsWith('audio/')) detectedType = 'audio';
+      else if (firstMime.startsWith('video/')) detectedType = 'video';
+      else if (firstMime.startsWith('application/')) detectedType = 'file';
+
+      if (detectedType !== 'text') {
+        await this.prisma.message.update({
+          where: { id: newMessageId },
+          data: { messageType: detectedType }
+        });
+      }
+
+      logger.info(`[MessageProcessor] Copied ${createdAttachments.length} attachments for forward`);
+    } catch (error) {
+      logger.error('[MessageProcessor] Error copying forwarded attachments', error);
+    }
+  }
+
+  /**
+   * Envoie les audios au service de traduction pour transcription/clonage
+   */
+  private async processAudioAttachments(
+    attachmentIds: string[],
+    messageId: string,
+    conversationId: string,
+    senderId: string
+  ): Promise<void> {
+    if (!this.translationService) return;
+
+    try {
+      const attachments = await this.prisma.messageAttachment.findMany({
+        where: { id: { in: attachmentIds } },
+        select: { id: true, mimeType: true, fileUrl: true, filePath: true, duration: true, metadata: true }
+      });
+
+      const audioAttachments = attachments.filter(att => att.mimeType && att.mimeType.startsWith('audio/'));
+
+      for (const audioAtt of audioAttachments) {
+        let mobileTranscription: any = undefined;
+        if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
+          const metadata = audioAtt.metadata as any;
+          if (metadata.transcription) {
+            mobileTranscription = metadata.transcription;
+          }
+        }
+
+        const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
+        const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
+
+        // Resolve sender userId if needed
+        let resolvedSenderId = senderId;
+        const senderParticipant = await this.prisma.participant.findUnique({
+          where: { id: senderId },
+          select: { userId: true }
+        });
+        if (senderParticipant?.userId) {
+          resolvedSenderId = senderParticipant.userId;
+        }
+
+        await this.translationService.processAudioAttachment({
+          messageId,
+          attachmentId: audioAtt.id,
+          conversationId,
+          senderId: resolvedSenderId,
+          audioUrl: audioAtt.fileUrl || '',
+          audioPath: audioPath,
+          audioDurationMs: audioAtt.duration || 0,
+          mobileTranscription: mobileTranscription,
+          generateVoiceClone: true,
+          modelType: 'medium'
+        });
+      }
+    } catch (error) {
+      logger.error('[MessageProcessor] Error processing audio attachments', error);
+    }
   }
 
   /**
@@ -435,37 +612,54 @@ export class MessageProcessor {
   }
 
   /**
-   * Traiter les mentions d'utilisateurs
+   * Traiter les mentions et déclencher TOUTES les notifications nécessaires
+   * (Mentions, Réponses, Messages réguliers)
    */
-  private async processMentions(
-    data: { senderId?: string; conversationId: string; mentionedUserIds?: readonly string[] },
+  private async handleMentionsAndNotifications(
+    data: { senderId: string; conversationId: string; mentionedUserIds?: readonly string[] },
     message: Message,
     processedContent: string
   ): Promise<void> {
     try {
-      logger.info('[MessageProcessor] Processing mentions');
+      // 1. Gérer les mentions en DB (validation + création)
+      const validatedMentionUserIds = await this.processMentionsInDB(data, message, processedContent);
 
+      // 2. Déclencher les notifications (Mentions, Réponses, Messages)
+      if (this.notificationService) {
+        // Fire-and-forget pour ne pas bloquer le retour API
+        this.triggerAllNotifications(message, data, processedContent, validatedMentionUserIds)
+          .catch(err => logger.error('[MessageProcessor] Fire-and-forget notifications failed', err));
+      }
+    } catch (error) {
+      logger.error('[MessageProcessor] Error in handleMentionsAndNotifications', error);
+    }
+  }
+
+  /**
+   * Valide et crée les mentions en base de données
+   */
+  private async processMentionsInDB(
+    data: { senderId: string; conversationId: string; mentionedUserIds?: readonly string[] },
+    message: Message,
+    processedContent: string
+  ): Promise<string[]> {
+    try {
       let mentionedUserIds: string[] = [];
       let validatedUsernames: string[] = [];
 
-      // Utiliser les mentions envoyées par le frontend si disponibles
       if (data.mentionedUserIds && data.mentionedUserIds.length > 0) {
-        logger.info('[MessageProcessor] Using mentions from frontend:', data.mentionedUserIds);
         mentionedUserIds = Array.from(data.mentionedUserIds);
       } else {
-        // Parser le contenu pour extraire les mentions (compatibilité)
         const participants = await this.getConversationParticipants(data.conversationId);
         const mentionedUsernames = this.mentionService.extractMentionsWithParticipants(processedContent, participants);
-        logger.info('[MessageProcessor] Extracted mentions (legacy):', mentionedUsernames);
-
-        if (mentionedUsernames.length > 0 && data.senderId) {
+        if (mentionedUsernames.length > 0) {
           const userMap = await this.mentionService.resolveUsernames(mentionedUsernames);
           mentionedUserIds = Array.from(userMap.values()).map(user => user.id);
           validatedUsernames = Array.from(userMap.keys());
         }
       }
 
-      if (mentionedUserIds.length > 0 && data.senderId) {
+      if (mentionedUserIds.length > 0) {
         const validationResult = await this.mentionService.validateMentionPermissions(
           data.conversationId,
           mentionedUserIds,
@@ -473,13 +667,9 @@ export class MessageProcessor {
         );
 
         if (validationResult.validUserIds.length > 0) {
-          await this.mentionService.createMentions(
-            message.id,
-            validationResult.validUserIds
-          );
+          await this.mentionService.createMentions(message.id, validationResult.validUserIds);
 
           let finalValidatedUsernames: string[] = validatedUsernames;
-
           if (data.mentionedUserIds && data.mentionedUserIds.length > 0) {
             const users = await this.prisma.user.findMany({
               where: { id: { in: validationResult.validUserIds } },
@@ -493,121 +683,149 @@ export class MessageProcessor {
             data: { validatedMentions: finalValidatedUsernames }
           });
 
-          message.validatedMentions = finalValidatedUsernames;
-
-          logger.info(`[MessageProcessor] ${validationResult.validUserIds.length} mention(s) created`);
-
-          if (this.notificationService) {
-            await this.sendMentionNotifications(
-              validationResult.validUserIds,
-              data.senderId,
-              data.conversationId,
-              message.id,
-              processedContent
-            );
-          }
-        }
-
-        if (!validationResult.isValid) {
-          logger.warn(`[MessageProcessor] Some mentions invalid:`, validationResult.errors);
+          (message as any).validatedMentions = finalValidatedUsernames;
+          return validationResult.validUserIds;
         }
       }
-    } catch (mentionError) {
-      logger.error('[MessageProcessor] Error processing mentions', mentionError);
+      return [];
+    } catch (error) {
+      logger.error('[MessageProcessor] Error processing mentions in DB', error);
+      return [];
     }
   }
 
   /**
-   * Envoie les notifications de mention à tous les utilisateurs mentionnés
+   * Déclenche les notifications pour tous les types de destinataires
    */
-  private async sendMentionNotifications(
-    mentionedUserIds: string[],
-    senderId: string,
-    conversationId: string,
-    messageId: string,
-    messageContent: string
+  private async triggerAllNotifications(
+    message: Message,
+    data: { senderId: string; conversationId: string },
+    processedContent: string,
+    validatedMentionUserIds: string[]
   ): Promise<void> {
     if (!this.notificationService) return;
 
     try {
-      // senderId may be a Participant.id — resolve to User.id first
-      let senderUserId = senderId;
+      // 1. Résoudre le senderId en userId
+      let senderUserId = data.senderId;
       const senderParticipant = await this.prisma.participant.findUnique({
-        where: { id: senderId },
+        where: { id: data.senderId },
         select: { userId: true }
       });
       if (senderParticipant?.userId) {
         senderUserId = senderParticipant.userId;
       }
 
-      const sender = await this.prisma.user.findUnique({
-        where: { id: senderUserId },
-        select: { username: true, avatar: true }
-      });
-
-      if (!sender) {
-        logger.error('[MessageProcessor] Sender not found for mention notifications');
-        return;
-      }
-
-      const conversation = await this.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: {
-          title: true,
-          type: true,
-          participants: {
-            where: { isActive: true, type: 'user' },
-            select: { userId: true }
-          }
-        }
-      });
-
-      if (!conversation) {
-        logger.error('[MessageProcessor] Conversation not found for mention notifications');
-        return;
-      }
-
-      let messageAttachments: Array<{ id: string; filename: string; mimeType: string; fileSize: number }> = [];
-      try {
-        const attachments = await this.prisma.messageAttachment.findMany({
-          where: { messageId },
+      // 2. Charger les infos de l'expéditeur et de la conversation
+      const [sender, conversation] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: senderUserId },
+          select: { username: true, displayName: true, avatar: true }
+        }),
+        this.prisma.conversation.findUnique({
+          where: { id: data.conversationId },
           select: {
-            id: true,
-            fileName: true,
-            mimeType: true,
-            fileSize: true
+            title: true,
+            type: true,
+            participants: {
+              where: { isActive: true, type: 'user' },
+              select: { userId: true }
+            }
           }
-        });
-        messageAttachments = attachments.map(att => ({
-          id: att.id,
-          filename: att.fileName,
-          mimeType: att.mimeType,
-          fileSize: att.fileSize
-        }));
-      } catch (err) {
-        logger.error('[MessageProcessor] Error fetching attachments for mention', err);
-      }
+        })
+      ]);
+
+      if (!sender || !conversation) return;
 
       const memberIds = conversation.participants
         .map(p => p.userId)
         .filter((id): id is string => id !== null);
 
-      const count = await this.notificationService.createMentionNotificationsBatch(
-        mentionedUserIds,
-        {
-          senderId: senderUserId,
-          senderUsername: sender.username,
-          senderAvatar: sender.avatar || undefined,
-          messageContent,
-          conversationId,
-          messageId,
-        },
-        memberIds
-      );
+      // 3. Déterminer l'auteur du message original pour les réponses
+      let originalMessageAuthorUserId: string | null = null;
+      if (message.replyToId) {
+        const originalMessage = await this.prisma.message.findUnique({
+          where: { id: message.replyToId },
+          select: { senderId: true }
+        });
+        if (originalMessage?.senderId) {
+          const originalAuthorPart = await this.prisma.participant.findUnique({
+            where: { id: originalMessage.senderId },
+            select: { userId: true }
+          });
+          originalMessageAuthorUserId = originalAuthorPart?.userId || null;
+        }
+      }
 
-      logger.info(`[MessageProcessor] ${count} mention notifications created`);
+      // 4. Préparer les infos d'attachments
+      const attachments = await this.prisma.messageAttachment.findMany({
+        where: { messageId: message.id },
+        select: { mimeType: true, fileName: true }
+      });
+
+      const attachmentInfo = {
+        hasAttachments: attachments.length > 0,
+        attachmentCount: attachments.length,
+        firstAttachmentType: attachments[0]?.mimeType?.startsWith('image/') ? 'image' :
+                            attachments[0]?.mimeType?.startsWith('video/') ? 'video' :
+                            attachments[0]?.mimeType?.startsWith('audio/') ? 'audio' : 'document',
+        firstAttachmentFilename: attachments[0]?.fileName
+      };
+
+      // 5. Notification de RÉPONSE (prioritaire sur message régulier)
+      if (originalMessageAuthorUserId &&
+          originalMessageAuthorUserId !== senderUserId &&
+          !validatedMentionUserIds.includes(originalMessageAuthorUserId)) {
+
+        await this.notificationService.createReplyNotification({
+          recipientUserId: originalMessageAuthorUserId,
+          replierUserId: senderUserId,
+          messageId: message.id,
+          conversationId: data.conversationId,
+          messagePreview: processedContent,
+          originalMessageId: message.replyToId!,
+        });
+      }
+
+      // 6. Notifications de MENTION (Batch)
+      if (validatedMentionUserIds.length > 0) {
+        await this.notificationService.createMentionNotificationsBatch(
+          validatedMentionUserIds,
+          {
+            senderId: senderUserId,
+            senderUsername: sender.displayName || sender.username,
+            senderAvatar: sender.avatar || undefined,
+            messageContent: processedContent,
+            conversationId: data.conversationId,
+            messageId: message.id,
+          },
+          memberIds
+        );
+      }
+
+      // 7. Notifications de MESSAGE RÉGULIER
+      const alreadyNotified = new Set([senderUserId, ...validatedMentionUserIds]);
+      if (originalMessageAuthorUserId) alreadyNotified.add(originalMessageAuthorUserId);
+
+      const regularRecipients = memberIds.filter(id => !alreadyNotified.has(id));
+
+      if (regularRecipients.length > 0) {
+        await Promise.all(regularRecipients.map(recipientUserId =>
+          this.notificationService!.createMessageNotification({
+            recipientUserId,
+            senderId: senderUserId,
+            messageId: message.id,
+            conversationId: data.conversationId,
+            messagePreview: processedContent,
+            ...attachmentInfo as any
+          })
+        ));
+      }
+
+      logger.info(`[MessageProcessor] Notifications triggered for ${message.id}: ${validatedMentionUserIds.length} mentions, ${regularRecipients.length} messages, reply=${!!originalMessageAuthorUserId}`);
+
     } catch (error) {
-      logger.error('[MessageProcessor] Error sending mention notifications', error);
+      logger.error('[MessageProcessor] Error triggering notifications', error);
     }
   }
 

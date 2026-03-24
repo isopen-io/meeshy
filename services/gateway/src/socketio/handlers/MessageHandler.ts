@@ -167,97 +167,11 @@ export class MessageHandler {
       // Répondre au client
       this._sendResponse(callback, response);
 
-      // Copier les attachments si c'est un transfert (avec vérification d'accès)
-      if (response.success && response.data?.id && data.forwardedFromId) {
-        try {
-          // Vérifier que l'utilisateur a accès à la conversation source
-          if (data.forwardedFromConversationId) {
-            const isMember = await this.prisma.participant.findFirst({
-              where: {
-                conversationId: data.forwardedFromConversationId,
-                ...(userId ? { userId } : { id: participantId }),
-                isActive: true
-              },
-              select: { id: true }
-            });
-            if (!isMember) {
-              console.warn(`[MESSAGE_SEND] Forward denied: participant ${resolvedParticipantId} not member of source conversation ${data.forwardedFromConversationId}`);
-              return;
-            }
-          }
-
-          const originalAttachments = await this.prisma.messageAttachment.findMany({
-            where: { messageId: data.forwardedFromId }
-          });
-
-          if (originalAttachments.length > 0) {
-            const createdAtts = await Promise.all(
-              originalAttachments.map(att =>
-                this.prisma.messageAttachment.create({
-                  data: {
-                    messageId: response.data!.id,
-                    fileName: att.fileName,
-                    originalName: att.originalName,
-                    mimeType: att.mimeType,
-                    fileSize: att.fileSize,
-                    filePath: att.filePath,
-                    fileUrl: att.fileUrl,
-                    title: att.title,
-                    alt: att.alt,
-                    caption: att.caption,
-                    forwardedFromAttachmentId: att.id,
-                    isForwarded: true,
-                    width: att.width,
-                    height: att.height,
-                    thumbnailPath: att.thumbnailPath,
-                    thumbnailUrl: att.thumbnailUrl,
-                    duration: att.duration,
-                    bitrate: att.bitrate,
-                    sampleRate: att.sampleRate,
-                    codec: att.codec,
-                    channels: att.channels,
-                    fps: att.fps,
-                    videoCodec: att.videoCodec,
-                    pageCount: att.pageCount,
-                    lineCount: att.lineCount,
-                    uploadedBy: resolvedParticipantId,
-                    isAnonymous: false,
-                    transcription: att.transcription ?? undefined,
-                    translations: att.translations ?? undefined,
-                    metadata: att.metadata ?? undefined,
-                  }
-                })
-              )
-            );
-
-            // Mettre à jour le messageType
-            const firstMime = createdAtts[0].mimeType;
-            let detectedType = 'text';
-            if (firstMime.startsWith('image/')) detectedType = 'image';
-            else if (firstMime.startsWith('audio/')) detectedType = 'audio';
-            else if (firstMime.startsWith('video/')) detectedType = 'video';
-            else if (firstMime.startsWith('application/')) detectedType = 'file';
-
-            if (detectedType !== 'text') {
-              await this.prisma.message.update({
-                where: { id: response.data!.id },
-                data: { messageType: detectedType }
-              });
-            }
-
-            console.log(`[MESSAGE_SEND] 📎 Copied ${createdAtts.length} attachment(s) for forward`);
-          }
-        } catch (fwdErr) {
-          console.error('[MESSAGE_SEND] Error copying forward attachments:', fwdErr);
-        }
-      }
-
       // Broadcaster le message si succès
       // response.data is already enriched (sender.user, attachments, replyTo) from saveMessage include
       if (response.success && response.data) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
         await this.broadcastNewMessage(message, message.conversationId, socket);
-        await this._createMessageNotifications(message, resolvedParticipantId);
       }
 
       this.stats.messages_processed++;
@@ -330,29 +244,23 @@ export class MessageHandler {
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
         isAnonymous,
-        attachments: data.attachmentIds.map((id) => ({ id } as never)),
+        // Aligner avec GatewayMessage: attachments are passed as IDs for linking
+        attachmentIds: data.attachmentIds,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
           clientTimestamp: Date.now()
         }
-      };
+      } as any; // Cast needed as MessageRequest uses readonly attachments objects
 
       const response: MessageResponse = await this.messagingService.handleMessage(
         messageRequest,
         resolvedParticipantId
       );
 
-      if (response.success && response.data?.id) {
-        await attachmentService.associateAttachmentsToMessage(data.attachmentIds, response.data.id);
-
-        // Traiter les audios
-        await this._processAudioAttachments(data.attachmentIds, response.data.id);
-
-        const message = await this._fetchMessageForBroadcast(response.data.id);
-        if (message) {
-          await this.broadcastNewMessage(message, message.conversationId, socket);
-        }
+      if (response.success && response.data) {
+        const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
+        await this.broadcastNewMessage(message, message.conversationId, socket);
       }
 
       this._sendResponse(callback, response);
@@ -654,112 +562,6 @@ export class MessageHandler {
     }
   }
 
-  /**
-   * Créer des notifications pour un message
-   * Uses Participant model instead of ConversationMember
-   */
-  private async _createMessageNotifications(message: Message, senderParticipantId: string): Promise<void> {
-    try {
-      const conversationId = message.conversationId;
-      const messageId = message.id;
-      const messagePreview = message.content.substring(0, 100);
-
-      // Récupérer tous les participants de la conversation sauf l'expéditeur
-      // Only notify registered users (they have userId)
-      const participants = await this.prisma.participant.findMany({
-        where: {
-          conversationId,
-          isActive: true,
-          id: { not: senderParticipantId },
-          userId: { not: null }
-        },
-        select: { userId: true }
-      });
-
-      console.log(`[NOTIFICATIONS] Génération de ${participants.length} notification(s) pour le message ${messageId} dans la conversation ${conversationId}`);
-
-      // Resolve sender's userId for notification
-      const senderParticipant = await this.prisma.participant.findUnique({
-        where: { id: senderParticipantId },
-        select: { userId: true }
-      });
-      const senderUserId = senderParticipant?.userId || senderParticipantId;
-
-      await Promise.all(participants.map(participant =>
-        this.notificationService.createMessageNotification({
-          recipientUserId: participant.userId!,
-          senderId: senderUserId,
-          messageId,
-          conversationId,
-          messagePreview,
-        })
-      ));
-    } catch (error) {
-      console.error('[NOTIFICATIONS] Error creating message notifications:', error);
-    }
-  }
-
-  /**
-   * Traiter les attachments audio via le pipeline Whisper → NLLB → Chatterbox
-   */
-  private async _processAudioAttachments(attachmentIds: string[], messageId: string): Promise<void> {
-    try {
-      const message = await this.prisma.message.findUnique({
-        where: { id: messageId },
-        select: { conversationId: true, senderId: true }
-      });
-
-      if (!message || !message.senderId) return;
-
-      const attachmentsDetails = await this.prisma.messageAttachment.findMany({
-        where: { id: { in: attachmentIds } },
-        select: {
-          id: true,
-          mimeType: true,
-          fileUrl: true,
-          filePath: true,
-          duration: true,
-          metadata: true
-        }
-      });
-
-      const audioAttachments = attachmentsDetails.filter(att =>
-        att.mimeType && att.mimeType.startsWith('audio/')
-      );
-
-      if (audioAttachments.length === 0) return;
-
-      for (const audioAtt of audioAttachments) {
-        let mobileTranscription: unknown = undefined;
-        if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
-          const metadata = audioAtt.metadata as Record<string, unknown>;
-          if (metadata.transcription) {
-            mobileTranscription = metadata.transcription;
-          }
-        }
-
-        const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
-        const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
-
-        await this.translationService.processAudioAttachment({
-          messageId,
-          attachmentId: audioAtt.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          audioUrl: audioAtt.fileUrl || '',
-          audioPath: audioPath,
-          audioDurationMs: audioAtt.duration || 0,
-          mobileTranscription: mobileTranscription,
-          generateVoiceClone: true,
-          modelType: 'medium'
-        });
-      }
-
-      console.log(`[MESSAGE_HANDLER] ${audioAttachments.length} audio(s) sent to Translator for message ${messageId}`);
-    } catch (error) {
-      console.error('[MESSAGE_HANDLER] Error processing audio attachments:', error);
-    }
-  }
 
   /**
    * Envoie une réponse d'erreur

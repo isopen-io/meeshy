@@ -1068,7 +1068,7 @@ export function registerMessagesRoutes(
     Body: SendMessageBody;
   }>('/conversations/:id/messages', {
     schema: {
-      description: 'Send a new message to a conversation with optional encryption and attachments',
+      description: 'Send a new message to a conversation with optional encryption and attachments. Unified handler using MessagingService.',
       tags: ['conversations', 'messages'],
       summary: 'Send message',
       params: {
@@ -1092,7 +1092,10 @@ export function registerMessagesRoutes(
           encryptionMode: { type: 'string', enum: ['e2e', 'server'], description: 'Encryption mode' },
           encryptionMetadata: { type: 'object', description: 'Encryption metadata' },
           isEncrypted: { type: 'boolean', description: 'Whether message is encrypted' },
-          attachmentIds: { type: 'array', items: { type: 'string' }, description: 'IDs des attachments pré-uploadés via /attachments/upload' }
+          attachmentIds: { type: 'array', items: { type: 'string' }, description: 'IDs des attachments pré-uploadés' },
+          isBlurred: { type: 'boolean' },
+          expiresAt: { type: 'string', format: 'date-time' },
+          mentionedUserIds: { type: 'array', items: { type: 'string' } }
         }
       },
       response: {
@@ -1100,12 +1103,8 @@ export function registerMessagesRoutes(
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'object', description: 'Created message object' }
-              }
-            }
+            data: { type: 'object' },
+            metadata: { type: 'object' }
           }
         },
         400: errorResponseSchema,
@@ -1122,7 +1121,7 @@ export function registerMessagesRoutes(
 
       // Vérifier que l'utilisateur est authentifié
       if (!authRequest.authContext.isAuthenticated) {
-        return reply.status(403).send({
+        return reply.status(401).send({
           success: false,
           error: 'Authentification requise pour envoyer des messages'
         });
@@ -1131,7 +1130,7 @@ export function registerMessagesRoutes(
       const { id } = request.params;
       const {
         content,
-        originalLanguage = 'fr',
+        originalLanguage,
         messageType = 'text',
         replyToId,
         storyReplyToId,
@@ -1143,522 +1142,73 @@ export function registerMessagesRoutes(
         isEncrypted,
         attachmentIds,
         isBlurred,
-        expiresAt
+        expiresAt,
+        mentionedUserIds
       } = request.body;
+
       const userId = authRequest.authContext.userId;
+      const participantId = authRequest.authContext.isAnonymous
+        ? authRequest.authContext.participantId
+        : userId;
 
-      // Résoudre l'ID de conversation réel
-      const conversationId = await resolveConversationId(prisma, id);
-      if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+      if (!participantId) {
+        return reply.status(403).send({ success: false, error: 'Participant identification failed' });
       }
 
-      // Vérifier les permissions d'accès et d'écriture
-      let canSend = false;
+      // Utiliser le MessagingService unifié
+      const { MessagingService } = await import('../../services/messaging/MessagingService');
+      const messagingService = new MessagingService(
+        prisma,
+        translationService,
+        (fastify as any).notificationService
+      );
 
-      // Règle simple : seuls les utilisateurs faisant partie de la conversation peuvent y écrire
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
-      if (!canAccess) {
-        canSend = false;
-      } else {
-        // Vérifier les permissions d'écriture spécifiques
-        if (authRequest.authContext.isAnonymous) {
-          // Pour les utilisateurs anonymes, vérifier les permissions via Participant
-          canSend = authRequest.authContext.canSendMessages ?? false;
-        } else {
-          // Pour les utilisateurs connectés, l'accès implique l'écriture
-          canSend = true;
-        }
-      }
-
-      if (!canSend) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Vous n\'êtes pas autorisé à envoyer des messages dans cette conversation'
-        });
-      }
-
-      // Resolve the sender's participantId
-      const senderParticipant = authRequest.authContext.isAnonymous
-        ? { id: authRequest.authContext.participantId }
-        : await prisma.participant.findFirst({
-            where: { userId, conversationId, isActive: true },
-            select: { id: true }
-          });
-
-      if (!senderParticipant?.id) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Participant not found in this conversation'
-        });
-      }
-
-      // Validation du contenu (plaintext ou encrypted)
-      if (isEncrypted) {
-        // For encrypted messages, validate encrypted content
-        if (!encryptedContent || encryptedContent.trim().length === 0) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Encrypted content cannot be empty'
-          });
-        }
-        if (!encryptionMode || !['e2ee', 'server', 'hybrid'].includes(encryptionMode)) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Invalid encryption mode. Must be e2ee, server, or hybrid'
-          });
-        }
-        if (!encryptionMetadata) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Encryption metadata is required for encrypted messages'
-          });
-        }
-      } else {
-        // For plaintext messages, validate content (allow empty content when attachments present)
-        const hasAttachments = attachmentIds && attachmentIds.length > 0;
-        if ((!content || content.trim().length === 0) && !hasAttachments) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Message content cannot be empty'
-          });
-        }
-      }
-
-      // ÉTAPE 1: Traiter les liens dans le message AVANT la sauvegarde (skip for E2EE)
-      let processedContent = content || '';
-      let trackingLinks: any[] = [];
-
-      if (processedContent.trim() && (!isEncrypted || encryptionMode !== 'e2ee')) {
-        const linkResult = await trackingLinkService.processMessageLinks({
-          content: processedContent.trim(),
-          conversationId,
-          createdBy: userId
-        });
-        processedContent = linkResult.processedContent;
-        trackingLinks = linkResult.trackingLinks;
-      }
-
-      // ÉTAPE 2: Créer le message avec le contenu transformé
-      const messageData: any = {
-        conversationId: conversationId,
-        senderId: senderParticipant.id,
-        content: processedContent,
+      const messageRequest = {
+        conversationId: id,
+        content: content || '',
         originalLanguage,
         messageType,
         replyToId,
-        storyReplyToId,
         forwardedFromId,
         forwardedFromConversationId,
-        deletedAt: null
+        mentionedUserIds,
+        attachmentIds,
+        isBlurred,
+        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+        encryptedPayload: isEncrypted ? {
+          ciphertext: encryptedContent!,
+          mode: encryptionMode as any,
+          ...encryptionMetadata as any
+        } : undefined,
+        metadata: {
+          source: 'rest' as const,
+          requestId: request.id
+        }
       };
 
-      // Add blur flag if specified
-      if (isBlurred === true) {
-        messageData.isBlurred = true;
+      const result = await messagingService.handleMessage(messageRequest, participantId);
+
+      if (!result.success) {
+        return reply.status(400).send(result);
       }
 
-      // Add expiration if specified
-      if (expiresAt) {
-        const expiryDate = new Date(expiresAt);
-        if (isNaN(expiryDate.getTime())) {
-          return sendBadRequest(reply, 'Invalid expiresAt date format');
-        }
-        if (expiryDate <= new Date()) {
-          return sendBadRequest(reply, 'expiresAt must be in the future');
-        }
-        const maxFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
-        if (expiryDate > maxFuture) {
-          return sendBadRequest(reply, 'expiresAt cannot exceed 1 year');
-        }
-        messageData.expiresAt = expiryDate;
-      }
-
-      // Add encryption fields if message is encrypted
-      if (isEncrypted) {
-        messageData.isEncrypted = true;
-        messageData.encryptedContent = encryptedContent;
-        messageData.encryptionMode = encryptionMode;
-        messageData.encryptionMetadata = encryptionMetadata;
-      }
-
-      const message = await prisma.message.create({
-        data: messageData,
-        include: {
-          sender: {
-            select: {
-              id: true,
-              userId: true,
-              displayName: true,
-              avatar: true,
-              role: true,
-              user: { select: { username: true } }
-            }
-          },
-          replyTo: {
-            include: {
-              sender: {
-                select: {
-                  id: true,
-                  userId: true,
-                  displayName: true,
-                  avatar: true,
-                  user: { select: { username: true } }
-                }
-              }
-            }
-          }
-        }
-      });
-
-      // ÉTAPE 2b: Associer les attachments au message et traiter les audios
-      if (attachmentIds && attachmentIds.length > 0) {
-        try {
-          // Lier les attachments pré-uploadés au message
-          await attachmentService.associateAttachmentsToMessage(attachmentIds, message.id);
-
-          // Récupérer les détails pour détecter les audios
-          const attachmentsDetails = await prisma.messageAttachment.findMany({
-            where: { id: { in: attachmentIds } },
-            select: {
-              id: true,
-              mimeType: true,
-              fileUrl: true,
-              filePath: true,
-              duration: true,
-              metadata: true
-            }
-          });
-
-          // Filtrer les attachements audio
-          const audioAttachments = attachmentsDetails.filter(att =>
-            att.mimeType && att.mimeType.startsWith('audio/')
-          );
-
-          // Pour chaque audio, envoyer au Translator (même logique que WebSocket)
-          for (const audioAtt of audioAttachments) {
-            logger.info(`🎤 [REST] Envoi audio au Translator: ${audioAtt.id}`);
-
-            // Extraire la transcription mobile si présente dans les metadata
-            let mobileTranscription: any = undefined;
-            if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
-              const metadata = audioAtt.metadata as any;
-              if (metadata.transcription) {
-                mobileTranscription = metadata.transcription;
-                logger.info(`   📝 Transcription mobile trouvée: "${mobileTranscription.text?.substring(0, 50)}..."`);
-              }
-            }
-
-            // Construire le chemin ABSOLU du fichier audio via filePath
-            // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
-            const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
-            const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
-
-            await translationService.processAudioAttachment({
-              messageId: message.id,
-              attachmentId: audioAtt.id,
-              conversationId,
-              senderId: userId,
-              audioUrl: audioAtt.fileUrl || '',
-              audioPath: audioPath,
-              audioDurationMs: audioAtt.duration || 0,
-              mobileTranscription: mobileTranscription,
-              generateVoiceClone: true,
-              modelType: 'medium'
-            });
-          }
-
-          if (audioAttachments.length > 0) {
-            logger.info(`✅ [REST] ${audioAttachments.length} audio(s) envoyé(s) au Translator`);
-          }
-        } catch (audioError) {
-          logger.error('⚠️ [REST] Erreur traitement attachments/audio', audioError);
-          // Ne pas bloquer l'envoi du message si le traitement audio échoue
-        }
-      }
-
-      // ÉTAPE 2c: Copier les attachments du message original si transfert
-      let forwardedAttachmentIds: string[] = [];
-      if (forwardedFromId && (!attachmentIds || attachmentIds.length === 0)) {
-        try {
-          const originalAttachments = await prisma.messageAttachment.findMany({
-            where: { messageId: forwardedFromId },
-            select: {
-              id: true,
-              fileName: true,
-              originalName: true,
-              mimeType: true,
-              fileSize: true,
-              filePath: true,
-              fileUrl: true,
-              title: true,
-              alt: true,
-              caption: true,
-              width: true,
-              height: true,
-              thumbnailPath: true,
-              thumbnailUrl: true,
-              duration: true,
-              bitrate: true,
-              sampleRate: true,
-              codec: true,
-              channels: true,
-              fps: true,
-              videoCodec: true,
-              pageCount: true,
-              lineCount: true,
-              uploadedBy: true,
-              isAnonymous: true,
-              transcription: true,
-              translations: true,
-              metadata: true,
-            }
-          });
-
-          if (originalAttachments.length > 0) {
-            const createdAttachments = await Promise.all(
-              originalAttachments.map(att =>
-                prisma.messageAttachment.create({
-                  data: {
-                    messageId: message.id,
-                    fileName: att.fileName,
-                    originalName: att.originalName,
-                    mimeType: att.mimeType,
-                    fileSize: att.fileSize,
-                    filePath: att.filePath,
-                    fileUrl: att.fileUrl,
-                    title: att.title,
-                    alt: att.alt,
-                    caption: att.caption,
-                    forwardedFromAttachmentId: att.id,
-                    isForwarded: true,
-                    width: att.width,
-                    height: att.height,
-                    thumbnailPath: att.thumbnailPath,
-                    thumbnailUrl: att.thumbnailUrl,
-                    duration: att.duration,
-                    bitrate: att.bitrate,
-                    sampleRate: att.sampleRate,
-                    codec: att.codec,
-                    channels: att.channels,
-                    fps: att.fps,
-                    videoCodec: att.videoCodec,
-                    pageCount: att.pageCount,
-                    lineCount: att.lineCount,
-                    uploadedBy: userId,
-                    isAnonymous: false,
-                    transcription: att.transcription ?? undefined,
-                    translations: att.translations ?? undefined,
-                    metadata: att.metadata ?? undefined,
-                  }
-                })
-              )
-            );
-
-            forwardedAttachmentIds = createdAttachments.map(a => a.id);
-
-            // Mettre à jour le messageType si nécessaire
-            if (createdAttachments.length > 0) {
-              const firstMime = createdAttachments[0].mimeType;
-              let detectedType = 'text';
-              if (firstMime.startsWith('image/')) detectedType = 'image';
-              else if (firstMime.startsWith('audio/')) detectedType = 'audio';
-              else if (firstMime.startsWith('video/')) detectedType = 'video';
-              else if (firstMime.startsWith('application/')) detectedType = 'file';
-
-              if (detectedType !== 'text') {
-                await prisma.message.update({
-                  where: { id: message.id },
-                  data: { messageType: detectedType }
-                });
-              }
-            }
-
-            logger.info(`📎 [FORWARD] Copied ${createdAttachments.length} attachment(s) from message ${forwardedFromId}`);
-          }
-        } catch (fwdError) {
-          logger.error('⚠️ [FORWARD] Error copying attachments:', fwdError);
-        }
-      }
-
-      // ÉTAPE 3: Opérations post-création en PARALLÈLE (indépendantes)
-      // OPTIMIZED: Ces 3 opérations n'ont pas de dépendances entre elles
-      const postCreateOperations: Promise<void>[] = [];
-
-      // 3a. Mettre à jour les messageIds des TrackingLinks
-      if (trackingLinks.length > 0) {
-        const tokens = trackingLinks.map(link => link.token);
-        postCreateOperations.push(
-          trackingLinkService.updateTrackingLinksMessageId(tokens, message.id).then(() => {})
-        );
-      }
-
-      // 3b. Mettre à jour le timestamp de la conversation
-      postCreateOperations.push(
-        prisma.conversation.update({
-          where: { id: conversationId },
-          data: { lastMessageAt: new Date() }
-        }).then(() => {})
-      );
-
-      // 3c. Marquer le message comme lu pour l'expéditeur
-      postCreateOperations.push(
-        (async () => {
-          try {
-            const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
-            const readStatusService = new MessageReadStatusService(prisma);
-            await readStatusService.markMessagesAsRead(senderParticipant.id, conversationId, message.id);
-          } catch (err) {
-            logger.warn('Error marking message as read for sender:', err);
-          }
-        })()
-      );
-
-      // Attendre toutes les opérations en parallèle
-      await Promise.all(postCreateOperations);
-
-      // TRAITEMENT DES MENTIONS ET NOTIFICATIONS
-      const mentionService = (fastify as any).mentionService;
-      const notificationService = (fastify as any).notificationService;
-
-      if (mentionService && notificationService) {
-        try {
-          logger.info('[GATEWAY REST] ===== TRAITEMENT DES MENTIONS =====');
-
-          // Extraire les mentions du contenu
-          const mentionedUsernames = mentionService.extractMentions(processedContent);
-          logger.info('[GATEWAY REST] Mentions extraites:', mentionedUsernames);
-
-          if (mentionedUsernames.length > 0) {
-            // Résoudre les usernames en utilisateurs
-            const userMap = await mentionService.resolveUsernames(mentionedUsernames);
-            const mentionedUserIds = Array.from(userMap.values()).map((user: any) => user.id);
-            logger.info('[GATEWAY REST] UserIds trouvés:', mentionedUserIds);
-
-            if (mentionedUserIds.length > 0) {
-              // Valider les permissions de mention
-              const validationResult = await mentionService.validateMentionPermissions(
-                conversationId,
-                mentionedUserIds,
-                userId
-              );
-
-              if (validationResult.validUserIds.length > 0) {
-                // Créer les mentions en DB
-                await mentionService.createMentions(message.id, validationResult.validUserIds);
-
-                // Extraire les usernames validés
-                const validatedUsernames = Array.from(userMap.entries())
-                  .filter(([_, user]: [string, any]) => validationResult.validUserIds.includes(user.id))
-                  .map(([username, _]: [string, any]) => username);
-
-                // Mettre à jour le message avec validatedMentions
-                await prisma.message.update({
-                  where: { id: message.id },
-                  data: { validatedMentions: validatedUsernames }
-                });
-
-                // Mettre à jour l'objet message en mémoire
-                (message as any).validatedMentions = validatedUsernames;
-
-                logger.info(`[GATEWAY REST] ✅ ${validationResult.validUserIds.length} mention(s) créée(s)`);
-
-                // OPTIMIZED: Charger sender et conversation en PARALLÈLE
-                const [sender, conversationForNotif] = await Promise.all([
-                  prisma.user.findUnique({
-                    where: { id: userId },
-                    select: { username: true, displayName: true, avatar: true }
-                  }),
-                  prisma.conversation.findUnique({
-                    where: { id: conversationId },
-                    select: {
-                      title: true,
-                      type: true,
-                      participants: {
-                        where: { isActive: true },
-                        select: { userId: true }
-                      }
-                    }
-                  })
-                ]);
-
-                if (sender && conversationForNotif) {
-                  const conversation = conversationForNotif;
-                  const memberIds = conversation.participants.map((m: any) => m.userId);
-
-                  // PERFORMANCE: Créer toutes les notifications de mention en batch
-                  const count = await notificationService.createMentionNotificationsBatch(
-                    validationResult.validUserIds,
-                    {
-                      senderId: userId,
-                      senderUsername: sender.displayName || sender.username,
-                      senderAvatar: sender.avatar || undefined,
-                      messageContent: processedContent,
-                      conversationId,
-                      conversationTitle: conversation.title,
-                      messageId: message.id
-                    },
-                    memberIds
-                  );
-                  logger.info(`[GATEWAY REST] 📩 ${count} notifications de mention créées en batch`);
-                }
-              }
-            }
-          }
-        } catch (mentionError) {
-          logger.error('[GATEWAY REST] Erreur traitement mentions', mentionError);
-          // Ne pas bloquer l'envoi du message
-        }
-      }
-
-      // Broadcaster le nouveau message via socket (message:new) pour tous les membres de la conversation.
-      // Utiliser setImmediate pour ne pas bloquer la réponse REST.
-      // Cela permet à la liste de conversations iOS de se mettre à jour en temps réel avec les bons effets (isBlurred, etc.)
-      if (socketIOHandler && typeof socketIOHandler.broadcastMessage === 'function') {
+      // Broadcaster via socket (async)
+      if (socketIOHandler && result.data) {
+        const conversationId = result.data.conversationId;
         setImmediate(() => {
-          socketIOHandler.broadcastMessage(message as any, conversationId).catch((broadcastError: unknown) => {
-            logger.error('⚠️ [REST] Erreur broadcast message:new', broadcastError);
+          socketIOHandler.broadcastMessage(result.data as any, conversationId).catch((err: any) => {
+            logger.error('⚠️ [REST] Socket broadcast failed', err);
           });
         });
       }
 
-      // Déclencher les traductions via le MessageTranslationService (gère les langues des participants)
-      try {
-        await translationService.handleNewMessage({
-          id: message.id,
-          conversationId: conversationId, // Utiliser l'ID résolu
-          senderId: userId,
-          content: message.content,
-          originalLanguage,
-          messageType,
-          replyToId
-        } as any);
-      } catch (error) {
-        logger.error('Error queuing translations via MessageTranslationService', error);
-        // Ne pas faire échouer l'envoi du message si la traduction échoue
-      }
-
-      // Mettre à jour les stats dans le cache (et les calculer si entrée absente)
-      const stats = await conversationStatsService.updateOnNewMessage(
-        prisma,
-        conversationId, // Utiliser l'ID résolu
-        originalLanguage,
-        () => []
-      );
-
-      return sendSuccess(reply, {
-        ...message,
-        meta: { conversationStats: stats }
-      }, { statusCode: 201 });
+      return reply.send(result);
 
     } catch (error) {
-      logger.error('Error sending message', error);
-      reply.status(500).send({
+      logger.error('Error in REST send message:', error);
+      return reply.status(500).send({
         success: false,
-        error: 'Erreur lors de l\'envoi du message'
+        error: 'Erreur interne lors de l\'envoi du message'
       });
     }
   });
