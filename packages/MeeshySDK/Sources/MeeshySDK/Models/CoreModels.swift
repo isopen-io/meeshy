@@ -128,6 +128,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var lastSeenAt: Date? = nil
 
     public var currentUserRole: String? = nil
+    public var currentUserJoinedAt: Date? = nil
     public var reaction: String? = nil
 
     public var language: ConversationContext.ConversationLanguage = .french
@@ -208,7 +209,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
-                currentUserRole: String? = nil, reaction: String? = nil,
+                currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil, reaction: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
                 theme: ConversationContext.ConversationTheme = .general,
                 colorPalette: ConversationColorPalette? = nil) {
@@ -220,7 +221,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.isAnnouncementChannel = isAnnouncementChannel
         self.isPinned = isPinned; self.sectionId = sectionId; self.isMuted = isMuted
         self.participantUserId = participantUserId; self.participantUsername = participantUsername; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
-        self.currentUserRole = currentUserRole; self.reaction = reaction
+        self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt; self.reaction = reaction
         self.unreadCount = unreadCount; self.lastMessagePreview = lastMessagePreview
         self.lastMessageAttachments = lastMessageAttachments
         self.lastMessageAttachmentCount = lastMessageAttachmentCount

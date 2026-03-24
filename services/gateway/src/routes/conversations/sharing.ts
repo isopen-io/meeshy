@@ -607,7 +607,8 @@ export function registerSharingRoutes(
             canSendLocations: false,
             canSendLinks: false
           },
-          joinedAt: new Date()
+          joinedAt: new Date(),
+          shareLinkId: shareLink.id
         }
       });
 

@@ -95,12 +95,10 @@ class ConversationListViewModel: ObservableObject {
     private func setupBackgroundProcessing() {
         // Pipeline 1: Filtrage en arrière-plan
         Publishers.CombineLatest3($conversations, $searchText, $selectedFilter)
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.global(qos: .userInitiated))
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
             .sink { [weak self] (convs, text, filter) in
-                let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
-                DispatchQueue.main.async { [weak self] in
-                    self?.filteredConversations = filtered
-                }
+                guard let self else { return }
+                self.filteredConversations = Self.filterConversations(convs, searchText: text, filter: filter)
             }
             .store(in: &cancellables)
 

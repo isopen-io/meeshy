@@ -233,6 +233,7 @@ struct ConversationView: View {
             unreadCount: conversation?.unreadCount ?? 0,
             isDirect: conversation?.type == .direct,
             participantUserId: conversation?.participantUserId,
+            memberJoinedAt: conversation?.currentUserJoinedAt,
             anonymousSession: anonymousSession
         ))
     }
@@ -286,6 +287,27 @@ struct ConversationView: View {
         }
         return Self.dateSectionFullFormatter.string(from: date).capitalized
     }
+
+    private func joinedBanner(date: Date) -> some View {
+        HStack(spacing: 6) {
+            Spacer()
+            Image(systemName: "person.badge.plus")
+                .font(.system(size: 10, weight: .semibold))
+            Text("conversation.joined_on \(Self.joinedDateFormatter.string(from: date))")
+                .font(.system(size: 11, weight: .medium))
+            Spacer()
+        }
+        .foregroundColor(Color(hex: accentColor).opacity(0.7))
+        .padding(.vertical, 10)
+    }
+
+    private static let joinedDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .long
+        f.timeStyle = .none
+        f.locale = Locale.current
+        return f
+    }()
 
     private func dateSectionView(for date: Date) -> some View {
         HStack {
@@ -667,6 +689,8 @@ struct ConversationView: View {
                                     Task { await viewModel.loadOlderMessages() }
                                 }
                         }
+                    } else if !viewModel.messages.isEmpty, let joinedAt = viewModel.memberJoinedAt {
+                        joinedBanner(date: joinedAt)
                     }
 
                     Color.clear.frame(height: 70)

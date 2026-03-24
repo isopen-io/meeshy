@@ -471,6 +471,9 @@ model Participant {
   /// SHA-256 hash of anonymous session token (denormalized for indexed lookup)
   sessionTokenHash String?
 
+  /// ID du share link utilisé pour rejoindre (null = ajout direct)
+  shareLinkId String? @db.ObjectId
+
   /// Embedded anonymous session data (only for type="anonymous")
   anonymousSession AnonymousSession?
 

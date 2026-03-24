@@ -432,6 +432,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           displayName: username,
           language: body.language,
           sessionTokenHash: sessionTokenHash,
+          shareLinkId: shareLink.id,
           role: 'member',
           permissions: {
             canSendMessages: shareLink.allowAnonymousMessages,

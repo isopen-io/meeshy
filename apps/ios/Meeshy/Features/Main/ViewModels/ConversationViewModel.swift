@@ -264,6 +264,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Private
 
     let conversationId: String
+    let memberJoinedAt: Date?
     private let isDirect: Bool
     private let participantUserId: String?
     private let initialUnreadCount: Int
@@ -413,6 +414,7 @@ class ConversationViewModel: ObservableObject {
         unreadCount: Int = 0,
         isDirect: Bool = false,
         participantUserId: String? = nil,
+        memberJoinedAt: Date? = nil,
         anonymousSession: AnonymousSessionContext? = nil,
         authManager: AuthManaging = AuthManager.shared,
         messageService: MessageServiceProviding = MessageService.shared,
@@ -421,6 +423,7 @@ class ConversationViewModel: ObservableObject {
         reportService: ReportServiceProviding = ReportService.shared
     ) {
         self.conversationId = conversationId
+        self.memberJoinedAt = memberJoinedAt
         self.initialUnreadCount = unreadCount
         self.isDirect = isDirect
         self.participantUserId = participantUserId

@@ -327,11 +327,15 @@ export function registerCoreRoutes(
         },
         select: {
           conversationId: true,
-          role: true
+          role: true,
+          joinedAt: true
         }
       }) : [];
       const currentUserRoleMap = new Map(
         currentUserParticipants.map(p => [p.conversationId, p.role])
+      );
+      const currentUserJoinedAtMap = new Map(
+        currentUserParticipants.map(p => [p.conversationId, p.joinedAt])
       );
 
       // Collect all unique member userIds (optimized: only from returned conversations)
@@ -453,7 +457,8 @@ export function registerCoreRoutes(
             };
           })(),
           unreadCount,
-          currentUserRole: currentUserRoleMap.get(conversation.id) || null
+          currentUserRole: currentUserRoleMap.get(conversation.id) || null,
+          currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null
         };
       });
 

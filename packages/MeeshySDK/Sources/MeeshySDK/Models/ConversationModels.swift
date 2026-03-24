@@ -102,6 +102,7 @@ public struct APIConversation: Decodable, Sendable {
     public let updatedAt: Date?
     public let encryptionMode: String?
     public let currentUserRole: String?
+    public let currentUserJoinedAt: Date?
     public let createdAt: Date
 }
 
@@ -204,6 +205,7 @@ extension APIConversation {
             participantUsername: participantUsername,
             participantAvatarURL: participantAvatar,
             currentUserRole: currentRole,
+            currentUserJoinedAt: currentUserJoinedAt,
             reaction: prefs?.reaction
         )
     }

@@ -239,19 +239,47 @@ export function registerMessagesRoutes(
       const currentParticipant = !isAnonymousUser && userId
         ? await prisma.participant.findFirst({
             where: { userId, conversationId, isActive: true },
-            select: { id: true }
+            select: { id: true, joinedAt: true, shareLinkId: true }
           })
         : null;
+
+      // For anonymous users, also fetch joinedAt and shareLinkId
+      const anonymousParticipant = isAnonymousUser && authRequest.authContext.participantId
+        ? await prisma.participant.findFirst({
+            where: { id: authRequest.authContext.participantId },
+            select: { id: true, joinedAt: true, shareLinkId: true }
+          })
+        : null;
+
       timings.resolveParticipant = performance.now() - t0;
       const currentParticipantId = isAnonymousUser
         ? authRequest.authContext.participantId
         : currentParticipant?.id;
+
+      // Determine history start date based on share link configuration
+      const participant = isAnonymousUser ? anonymousParticipant : currentParticipant;
+      let historyStartDate: Date | null = null;
+
+      if (participant?.shareLinkId) {
+        const shareLink = await prisma.conversationShareLink.findFirst({
+          where: { id: participant.shareLinkId },
+          select: { allowViewHistory: true }
+        });
+        if (shareLink && !shareLink.allowViewHistory) {
+          historyStartDate = participant.joinedAt;
+        }
+      }
 
       // Construire la requête avec pagination
       const whereClause: any = {
         conversationId: conversationId, // Utiliser l'ID résolu
         deletedAt: null
       };
+
+      // Apply history restriction if share link disallows viewing history
+      if (historyStartDate) {
+        whereClause.createdAt = { gte: historyStartDate };
+      }
 
       if (before) {
         // Pagination par curseur (pour défilement historique)
@@ -262,6 +290,7 @@ export function registerMessagesRoutes(
 
         if (beforeMessage) {
           whereClause.createdAt = {
+            ...whereClause.createdAt,
             lt: beforeMessage.createdAt
           };
         }
@@ -281,9 +310,12 @@ export function registerMessagesRoutes(
           // Get half before and half after the target message
           const halfLimit = Math.floor(limit / 2);
 
+          const beforeFilter: any = { lt: aroundMessage.createdAt };
+          if (historyStartDate) beforeFilter.gte = historyStartDate;
+
           const [messagesBefore, messagesAfter] = await Promise.all([
             prisma.message.findMany({
-              where: { conversationId, deletedAt: null, createdAt: { lt: aroundMessage.createdAt } },
+              where: { conversationId, deletedAt: null, createdAt: beforeFilter },
               orderBy: { createdAt: 'desc' },
               take: halfLimit,
               select: { id: true }
