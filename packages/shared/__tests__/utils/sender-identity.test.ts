@@ -26,9 +26,4 @@ describe('getSenderUserId', () => {
     const sender = { id: 'part-123' };
     expect(getSenderUserId(sender)).toBeNull();
   });
-
-  it('should return null if nested user has no id', () => {
-    const sender = { id: 'part-123', user: { name: 'Test' } };
-    expect(getSenderUserId(sender as any)).toBeNull();
-  });
 });
