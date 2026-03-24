@@ -104,6 +104,7 @@ export const userMinimalSchema = {
   description: 'Minimal user data for lists and references',
   properties: {
     id: { type: 'string', description: 'User unique identifier' },
+    userId: { type: 'string', nullable: true, description: 'Real User ID (when sender is a Participant)' },
     username: { type: 'string', description: 'Username' },
     displayName: { type: 'string', description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
@@ -600,6 +601,7 @@ export const messageSchema = {
           nullable: true,
           properties: {
             id: { type: 'string' },
+            userId: { type: 'string', nullable: true },
             username: { type: 'string' },
             displayName: { type: 'string' },
             avatar: { type: 'string', nullable: true }

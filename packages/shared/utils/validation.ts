@@ -123,6 +123,7 @@ export const UserSchemas = {
   // User minimal (pour listes et références)
   minimal: z.object({
     id: z.string(),
+    userId: z.string().nullable().optional(),
     username: z.string(),
     displayName: z.string(),
     avatar: z.string().nullable().optional(),
