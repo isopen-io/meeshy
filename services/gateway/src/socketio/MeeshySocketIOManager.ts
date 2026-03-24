@@ -2924,13 +2924,9 @@ export class MeeshySocketIOManager {
       }
 
       // Broadcast to all members (translation arrives asynchronously via translationReady event)
+      // Note: Notifications are already triggered inside messagingService.handleMessage -> processor.triggerAllNotifications
       const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as any;
       await this._broadcastNewMessage(messageWithTimestamp, response.conversationId);
-
-      // Notifications push (fire-and-forget)
-      this._createMessageNotifications(result.data, response.asUserId).catch((err) => {
-        logger.error('[Agent] Notification error:', err);
-      });
 
       logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
     } catch (error) {

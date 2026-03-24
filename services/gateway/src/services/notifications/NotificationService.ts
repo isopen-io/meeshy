@@ -101,12 +101,17 @@ export class NotificationService {
       case 'new_message':       return prefs.newMessageEnabled;
       case 'missed_call':       return prefs.missedCallEnabled;
       case 'system':            return prefs.systemEnabled;
-      case 'user_mentioned':    return prefs.mentionEnabled;
-      case 'message_reaction':  return prefs.reactionEnabled;
+      case 'user_mentioned':
+      case 'mention':           return prefs.mentionEnabled;
+      case 'message_reaction':
+      case 'reaction':          return prefs.reactionEnabled;
+      case 'contact_request':
+      case 'contact_accepted':
       case 'friend_request':
       case 'friend_accepted':   return prefs.contactRequestEnabled;
       case 'member_joined':     return prefs.memberJoinedEnabled;
-      case 'message_reply':     return prefs.replyEnabled;
+      case 'message_reply':
+      case 'reply':             return prefs.replyEnabled;
       case 'translation_ready': return true; // toujours activé
       case 'post_like':         return prefs.postLikeEnabled ?? true;
       case 'post_comment':      return prefs.postCommentEnabled ?? true;
@@ -115,6 +120,9 @@ export class NotificationService {
       case 'status_reaction':   return prefs.storyReactionEnabled ?? true;
       case 'comment_like':      return prefs.commentLikeEnabled ?? false;
       case 'comment_reply':     return prefs.commentReplyEnabled ?? true;
+      case 'new_conversation_direct':
+      case 'new_conversation_group':
+      case 'new_conversation':  return prefs.conversationEnabled;
       case 'added_to_conversation':
       case 'removed_from_conversation':
       case 'member_removed':
@@ -1174,8 +1182,58 @@ export class NotificationService {
   }
 
   // ==============================================
-  // ADDED_TO_CONVERSATION
+  // CONVERSATION_INVITE / ADDED_TO_CONVERSATION
   // ==============================================
+
+  async createConversationInviteNotification(params: {
+    invitedUserId: string;
+    inviterId: string;
+    inviterUsername?: string;
+    inviterAvatar?: string;
+    conversationId: string;
+    conversationTitle?: string;
+    conversationType: 'direct' | 'group' | 'public' | 'global' | 'broadcast' | string;
+  }): Promise<Notification | null> {
+    const type = params.conversationType === 'direct' ? 'new_conversation_direct' : 'new_conversation_group';
+
+    // Si on n'a pas les infos de l'inviteur, on les récupère
+    let actor = {
+      id: params.inviterId,
+      username: params.inviterUsername || 'User',
+      displayName: params.inviterUsername || 'User',
+      avatar: params.inviterAvatar
+    };
+
+    if (!params.inviterUsername) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: params.inviterId },
+        select: { username: true, displayName: true, avatar: true }
+      });
+      if (user) {
+        actor.username = user.username;
+        actor.displayName = user.displayName || user.username;
+        actor.avatar = user.avatar || undefined;
+      }
+    }
+
+    const content = params.conversationType === 'direct'
+      ? `Nouvelle conversation avec ${actor.displayName}`
+      : `Invitation au groupe ${params.conversationTitle || 'sans nom'}`;
+
+    return this.createNotification({
+      userId: params.invitedUserId,
+      type: type as any,
+      priority: 'normal',
+      content,
+      actor,
+      context: {
+        conversationId: params.conversationId,
+        conversationTitle: params.conversationTitle,
+        conversationType: params.conversationType as any,
+      },
+      metadata: { action: 'view_conversation' },
+    });
+  }
 
   async createAddedToConversationNotification(params: {
     recipientUserId: string;
@@ -1197,7 +1255,7 @@ export class NotificationService {
       userId: params.recipientUserId,
       type: 'added_to_conversation',
       priority: 'normal',
-      content: '',
+      content: conversation?.type === 'direct' ? 'Nouveau contact' : `Ajouté au groupe ${conversation?.title || ''}`,
       actor: {
         id: params.addedByUserId,
         username: actor.username,
