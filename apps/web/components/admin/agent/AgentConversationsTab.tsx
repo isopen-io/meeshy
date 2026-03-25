@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Settings, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { agentAdminService, type AgentConfigData } from '@/services/agent-admin.service';
 import { AgentConfigDialog } from './AgentConfigDialog';
+import { UserDisplay } from './UserDisplay';
 import { toast } from 'sonner';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -59,9 +60,9 @@ export function AgentConversationsTab() {
       setConfigs(prev => prev.map(c =>
         c.conversationId === config.conversationId ? { ...c, enabled: !c.enabled } : c
       ));
-      toast.success(`Agent ${!config.enabled ? 'activ\u00e9' : 'd\u00e9sactiv\u00e9'}`);
+      toast.success(`Agent ${!config.enabled ? 'activé' : 'désactivé'}`);
     } catch {
-      toast.error('Erreur lors de la mise \u00e0 jour');
+      toast.error('Erreur lors de la mise à jour');
     }
   };
 
@@ -70,7 +71,7 @@ export function AgentConversationsTab() {
     try {
       await agentAdminService.deleteConfig(conversationId);
       setConfigs(prev => prev.filter(c => c.conversationId !== conversationId));
-      toast.success('Configuration supprim\u00e9e');
+      toast.success('Configuration supprimée');
     } catch {
       toast.error('Erreur lors de la suppression');
     }
@@ -173,9 +174,19 @@ export function AgentConversationsTab() {
                     </div>
 
                     {/* Controlled */}
-                    <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                      {(config.manualUserIds ?? []).length}/{config.maxControlledUsers}
-                    </span>
+                    <div className="flex flex-wrap gap-1 max-w-[120px] overflow-hidden">
+                      {(config.manualUserIds ?? []).slice(0, 3).map(id => (
+                        <UserDisplay key={id} userId={id} size="sm" showUsername={false} className="w-8" />
+                      ))}
+                      {(config.manualUserIds ?? []).length > 3 && (
+                        <Badge variant="secondary" className="h-6 w-6 rounded-full p-0 flex items-center justify-center text-[10px]">
+                          +{(config.manualUserIds ?? []).length - 3}
+                        </Badge>
+                      )}
+                      {(config.manualUserIds ?? []).length === 0 && (
+                        <span className="text-xs text-gray-400">0/{config.maxControlledUsers}</span>
+                      )}
+                    </div>
 
                     {/* Actions */}
                     <div className="flex gap-1 shrink-0">

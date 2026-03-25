@@ -49,7 +49,7 @@ const tabs = [
   { id: 'conversations', label: 'Conversations', icon: MessageSquare },
   { id: 'global', label: 'Global', icon: Settings },
   { id: 'llm', label: 'Config LLM', icon: Cpu },
-  { id: 'archetypes', label: 'Arch\u00e9types', icon: Users },
+  { id: 'archetypes', label: 'Archétypes', icon: Users },
   { id: 'live', label: 'Live', icon: Activity },
 ] as const;
 

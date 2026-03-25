@@ -18,6 +18,7 @@ import {
   type AgentRoleData,
   type ArchetypeData,
 } from '@/services/agent-admin.service';
+import { UserDisplay } from './UserDisplay';
 import { toast } from 'sonner';
 
 interface AgentRolesSectionProps {
@@ -111,13 +112,12 @@ export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
       {roles.map(role => (
         <div
           key={role.id}
-          className="rounded-lg border p-3 space-y-2"
+          className="rounded-lg border border-slate-200 dark:border-slate-800 p-4 space-y-3 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md transition-shadow"
         >
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <UserCog className="h-4 w-4 text-gray-400" />
-              <span className="font-mono text-sm">{(role.userId ?? '').slice(0, 8)}...</span>
-              <Badge variant="outline" className="text-xs">{originLabel(role.origin)}</Badge>
+            <div className="flex items-center gap-3">
+              <UserDisplay userId={role.userId} size="md" />
+              <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-tight">{originLabel(role.origin)}</Badge>
               {role.locked && (
                 <Badge variant="secondary" className="text-xs">
                   <Lock className="h-3 w-3 mr-1" />
