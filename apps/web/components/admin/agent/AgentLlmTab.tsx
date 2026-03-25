@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Save, Key } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Loader2, Save, Key, HelpCircle } from 'lucide-react';
 import { agentAdminService, type LlmConfigData, type LlmConfigUpdate } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
 
@@ -100,6 +101,19 @@ export function AgentLlmTab() {
     }
   };
 
+  const InfoIcon = ({ content }: { content: string }) => (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <HelpCircle className="h-3.5 w-3.5 text-gray-400 cursor-help hover:text-indigo-500 transition-colors inline ml-1.5" />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">
+          {content}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+
   if (loading) {
     return (
       <Card>
@@ -129,7 +143,10 @@ export function AgentLlmTab() {
         {/* Provider & Model */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label>Provider</Label>
+            <div className="flex items-center">
+              <Label>Provider</Label>
+              <InfoIcon content="Source d'intelligence. OpenAI (GPT) est rapide et polyvalent. Anthropic (Claude) est excellent pour le raisonnement logique et le respect strict des consignes de sécurité." />
+            </div>
             <Select
               value={form.provider}
               onValueChange={v => {
@@ -151,7 +168,10 @@ export function AgentLlmTab() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Modèle</Label>
+            <div className="flex items-center">
+              <Label>Modèle</Label>
+              <InfoIcon content="Version spécifique. Les modèles 'Mini' ou 'Haiku' sont optimisés pour le coût et la vitesse. Les versions complètes (4o, Sonnet) offrent une meilleure personnalité mais coûtent plus cher." />
+            </div>
             <Select value={form.model} onValueChange={v => setForm(prev => ({ ...prev, model: v }))}>
               <SelectTrigger>
                 <SelectValue />
@@ -179,10 +199,14 @@ export function AgentLlmTab() {
         <Separator />
 
         {/* Parameters */}
-        <div className="space-y-4">
+        <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Paramètres de génération</h3>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Température</Label>
+              <div className="flex items-center">
+                <Label>Température</Label>
+                <InfoIcon content="Contrôle l'audace du modèle. À 0, le modèle est conservateur et répétitif (parfait pour la FAQ). À 0.8+, il devient inventif et fluide (idéal pour l'animation). Attention : au-delà de 1.5, les réponses peuvent perdre leur sens." />
+              </div>
               <span className="text-sm text-gray-500 font-mono">{form.temperature?.toFixed(1)}</span>
             </div>
             <Slider
@@ -194,7 +218,10 @@ export function AgentLlmTab() {
             />
           </div>
           <div className="space-y-2">
-            <Label>Max Tokens</Label>
+            <div className="flex items-center">
+              <Label>Max Tokens</Label>
+              <InfoIcon content="Taille maximale de la réponse (incluant la ponctuation). Une valeur de 1024 correspond à environ 750 mots. Limiter cette valeur permet de contrôler directement les coûts et d'éviter les réponses interminables." />
+            </div>
             <Input
               type="number"
               value={form.maxTokens}
@@ -208,11 +235,14 @@ export function AgentLlmTab() {
         <Separator />
 
         {/* Budget */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Budget</h3>
+        <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Gestion du Budget</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Budget quotidien (USD)</Label>
+              <div className="flex items-center">
+                <Label>Budget quotidien (USD)</Label>
+                <InfoIcon content="Arrêt d'urgence financier : si le coût cumulé des appels atteint ce montant, le provider est désactivé jusqu'à minuit. Prévoyez une marge de 20% par rapport à l'usage normal." />
+              </div>
               <Input
                 type="number"
                 value={form.dailyBudgetUsd}
@@ -222,7 +252,10 @@ export function AgentLlmTab() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Coût max par appel (USD)</Label>
+              <div className="flex items-center">
+                <Label>Coût max par appel (USD)</Label>
+                <InfoIcon content="Protection contre les contextes explosifs : refuse de générer une réponse si l'historique est si long que le coût unitaire dépasse ce seuil. Évite les factures surprises sur un seul message." />
+              </div>
               <Input
                 type="number"
                 value={form.maxCostPerCall}

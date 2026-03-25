@@ -299,8 +299,8 @@ export const agentAdminService = {
     return unwrapResponse<AgentStatsData>(response);
   },
 
-  async getConfigs(page = 1, limit = 20): Promise<ApiResponse<AgentConfigData[]>> {
-    const response = await apiService.get('/admin/agent/configs', { page, limit });
+  async getConfigs(page = 1, limit = 20, search?: string): Promise<ApiResponse<AgentConfigData[]>> {
+    const response = await apiService.get('/admin/agent/configs', { page, limit, search });
     return unwrapResponse<AgentConfigData[]>(response);
   },
 

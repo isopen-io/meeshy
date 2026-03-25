@@ -66,6 +66,8 @@ export type PendingReaction = {
   targetMessageId: string;
   emoji: string;
   delaySeconds: number;
+  minWords?: never;
+  maxWords?: never;
 };
 
 export type PendingAction = PendingMessage | PendingReaction;
@@ -78,6 +80,8 @@ export type MessageDirective = {
   mentionUsernames: string[];
   delaySeconds: number;
   needsWebSearch?: boolean;
+  minWords?: number;
+  maxWords?: number;
 };
 
 export type ReactionDirective = {

@@ -1,55 +1,58 @@
 /**
  * SERVICE WORKER UTILITIES
- * Enregistrement et gestion du service worker
+ * Gestion avancée de l'enregistrement et de la mise à jour forcée.
+ * Implémente l'invalidation complète des caches et des données locales.
  */
 
 /**
- * Enregistre le service worker et retourne l'instance
- *
- * @returns ServiceWorkerRegistration ou null si échec
+ * Enregistre le service worker et initialise la détection de mise à jour.
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) {
-    console.warn('[SW] Service Worker not supported on this browser');
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
     return null;
   }
 
   try {
-    // Enregistrer le service worker
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/',
-      updateViaCache: 'none', // Toujours chercher les mises à jour
+      updateViaCache: 'none',
     });
 
-    console.log('[SW] Registered successfully:', registration.scope);
+    console.log('[SW] Registered:', registration.scope);
 
-    // Gérer les mises à jour du service worker
+    // Détection immédiate au chargement
+    if (registration.waiting) {
+      notifyUpdateAvailable(registration);
+    }
+
+    // Détection lors d'une vérification ultérieure
     registration.addEventListener('updatefound', () => {
       const newWorker = registration.installing;
-      console.log('[SW] Update found');
+      if (!newWorker) return;
 
-      if (newWorker) {
-        newWorker.addEventListener('statechange', () => {
-          console.log('[SW] State changed:', newWorker.state);
-
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // Nouvelle version installée mais pas encore activée
-            console.log('[SW] New version available');
-
-            // Optionnel : notifier l'utilisateur qu'une mise à jour est disponible
-            window.dispatchEvent(
-              new CustomEvent('sw-update-available', {
-                detail: { registration },
-              })
-            );
-          }
-        });
-      }
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          notifyUpdateAvailable(registration);
+        }
+      });
     });
 
-    // Vérifier immédiatement s'il y a une mise à jour
-    registration.update().catch((error) => {
-      console.warn('[SW] Update check failed:', error);
+    // Rechargement automatique quand le nouveau SW prend le contrôle
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      console.log('[SW] Controller changed. Reloading app...');
+      window.location.reload();
+    });
+
+    // 1. Vérifier les mises à jour immédiatement au démarrage
+    registration.update().catch(console.warn);
+
+    // 2. Vérifier les mises à jour quand l'utilisateur revient sur l'onglet (Refocus)
+    // C'est un pattern efficace utilisé par beaucoup d'apps (WhatsApp, Slack)
+    window.addEventListener('focus', () => {
+      registration.update().catch(console.warn);
     });
 
     return registration;
@@ -60,85 +63,85 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 }
 
 /**
+ * Déclenche l'invalidation complète de l'application et la mise à jour.
+ * Nettoie les caches d'assets ET les données IndexedDB.
+ */
+export async function performFullAppInvalidationAndReload(registration: ServiceWorkerRegistration) {
+  console.log('[SW] Starting full application invalidation...');
+
+  try {
+    // 1. Invalider tous les caches de l'API CacheStorage
+    if ('caches' in window) {
+      const cacheKeys = await caches.keys();
+      await Promise.all(cacheKeys.map(key => caches.delete(key)));
+      console.log('[SW] CacheStorage cleared.');
+    }
+
+    // 2. Invalider l'IndexedDB (Données React Query / Meeshy)
+    // On itère sur les bases de données connues ou on utilise une suppression brutale
+    if ('indexedDB' in window) {
+      // Pour Meeshy, le cache React Query est géré via idb-keyval ou une DB nommée
+      // On tente de supprimer les bases liées connues
+      const dbs = ['keyval-store', 'meeshy-rq-cache'];
+      dbs.forEach(dbName => {
+        const req = indexedDB.deleteDatabase(dbName);
+        req.onerror = () => console.warn(`[SW] Could not delete DB: ${dbName}`);
+        req.onsuccess = () => console.log(`[SW] Deleted DB: ${dbName}`);
+      });
+    }
+
+    // 3. Demander au SW en attente de s'activer
+    if (registration.waiting) {
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    } else {
+      // Si pas de worker en attente (cas rare au clic), on force juste le reload
+      window.location.reload();
+    }
+  } catch (error) {
+    console.error('[SW] Critical error during invalidation:', error);
+    // On reload quand même pour essayer de restaurer un état stable
+    window.location.reload();
+  }
+}
+
+/**
+ * Notifie l'interface via un CustomEvent
+ */
+function notifyUpdateAvailable(registration: ServiceWorkerRegistration) {
+  console.log('[SW] New build detected. Waiting for user confirmation.');
+  window.dispatchEvent(
+    new CustomEvent('sw-update-available', {
+      detail: { registration },
+    })
+  );
+}
+
+/**
+ * Helper compatible avec l'UI existante
+ */
+export async function activateWaitingServiceWorker(registration: ServiceWorkerRegistration) {
+  return performFullAppInvalidationAndReload(registration);
+}
+
+/**
+ * Déclenche un check manuel du sw.js (utilisé par le Gateway ou check périodique)
+ */
+export async function triggerManualUpdateCheck() {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (registration) await registration.update();
+}
+
+/**
  * Désinstalle le service worker
  */
 export async function unregisterServiceWorker(): Promise<boolean> {
-  if (!('serviceWorker' in navigator)) {
-    return false;
-  }
-
-  try {
-    const registration = await navigator.serviceWorker.getRegistration();
-    if (!registration) {
-      return false;
-    }
-
-    const success = await registration.unregister();
-    console.log('[SW] Unregistered:', success);
-    return success;
-  } catch (error) {
-    console.error('[SW] Unregister failed:', error);
-    return false;
-  }
-}
-
-/**
- * Force le service worker à se mettre à jour
- */
-export async function updateServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) {
-    return null;
-  }
-
-  try {
-    const registration = await navigator.serviceWorker.getRegistration();
-    if (!registration) {
-      return null;
-    }
-
-    await registration.update();
-    console.log('[SW] Update triggered');
-    return registration;
-  } catch (error) {
-    console.error('[SW] Update failed:', error);
-    return null;
-  }
-}
-
-/**
- * Vérifie si le service worker est enregistré et actif
- */
-export async function isServiceWorkerActive(): Promise<boolean> {
-  if (!('serviceWorker' in navigator)) {
-    return false;
-  }
-
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return false;
   const registration = await navigator.serviceWorker.getRegistration();
-  return registration !== undefined && registration.active !== null;
+  return registration ? await registration.unregister() : false;
 }
 
-/**
- * Envoie un message au service worker
- *
- * @param message Message à envoyer
- * @returns Réponse du service worker
- */
-export async function sendMessageToServiceWorker(message: any): Promise<any> {
-  if (!navigator.serviceWorker.controller) {
-    throw new Error('No service worker controller');
-  }
-
-  return new Promise((resolve, reject) => {
-    const messageChannel = new MessageChannel();
-
-    messageChannel.port1.onmessage = (event) => {
-      if (event.data.error) {
-        reject(event.data.error);
-      } else {
-        resolve(event.data);
-      }
-    };
-
-    navigator.serviceWorker.controller!.postMessage(message, [messageChannel.port2]);
-  });
+export function isServiceWorkerActive(): Promise<boolean> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return Promise.resolve(false);
+  return navigator.serviceWorker.getRegistration().then(reg => !!reg && !!reg.active);
 }

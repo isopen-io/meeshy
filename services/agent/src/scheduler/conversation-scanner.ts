@@ -116,7 +116,20 @@ export class ConversationScanner {
           const lastScan = parseInt(await this.redis.get(lastScanKey) || '0', 10);
           if (Date.now() - lastScan < conv.scanIntervalMinutes * 60_000) continue;
 
-          await this.processConversation(conv);
+          const globalBudgetCheck = await this.budgetManager.canScanConversation({
+            weekdayMaxConversations: globalConfig?.weekdayMaxConversations ?? 50,
+            weekendMaxConversations: globalConfig?.weekendMaxConversations ?? 100,
+          });
+
+          if (!globalBudgetCheck.allowed) {
+            console.log(`[Scanner] Global scan budget exhausted: ${globalBudgetCheck.current}/${globalBudgetCheck.max}`);
+            break; // Stop scanning this cycle
+          }
+
+          const processed = await this.processConversation(conv);
+          if (processed) {
+            await this.budgetManager.recordScannedConversation();
+          }
           await this.redis.set(lastScanKey, String(Date.now()), 'EX', 86400);
         } catch (error) {
           console.error(`[Scanner] Error processing conv=${conv.conversationId}:`, error);
@@ -128,16 +141,16 @@ export class ConversationScanner {
     }
   }
 
-  private async processConversation(conv: EligibleConversation): Promise<void> {
+  private async processConversation(conv: EligibleConversation): Promise<boolean> {
     const { conversationId } = conv;
     const activity = await detectActivity(this.persistence, conversationId);
 
     if (activity.shouldSkip) {
       console.log(`[Scanner] Skipping conv=${conversationId}: ${activity.reason}`);
-      return;
+      return false;
     }
 
-    const [messages, summary, toneProfiles, controlledUsers, agentHistory, todayActiveUserIds] = await Promise.all([
+    const [messages, summary, toneProfiles, manualControlledUsers, agentHistory, todayActiveUserIds] = await Promise.all([
       this.stateManager.getMessages(conversationId),
       this.stateManager.getSummary(conversationId),
       this.stateManager.getToneProfiles(conversationId),
@@ -146,9 +159,55 @@ export class ConversationScanner {
       this.stateManager.getTodayActiveUserIds(conversationId),
     ]);
 
+    let controlledUsers = manualControlledUsers;
+    const config = await this.persistence.getAgentConfig(conversationId);
+    if (config?.autoPickupEnabled && controlledUsers.length < (config.maxControlledUsers ?? 5)) {
+      const limit = (config.maxControlledUsers ?? 5) - controlledUsers.length;
+      const potentialUsers = await this.persistence.getPotentialControlledUsers(
+        conversationId,
+        limit,
+        config.inactivityThresholdHours ?? 72,
+        config.excludedRoles ?? [],
+        (config.excludedUserIds as string[]) ?? [],
+      );
+
+      for (const u of potentialUsers) {
+        if (!u.agentGlobalProfile) continue;
+        const p = u.agentGlobalProfile;
+        controlledUsers.push({
+          userId: u.id,
+          displayName: u.displayName ?? u.username ?? u.id,
+          username: u.username ?? u.id,
+          systemLanguage: u.systemLanguage,
+          source: 'auto_rule',
+          role: {
+            userId: u.id,
+            displayName: u.displayName ?? u.username ?? u.id,
+            origin: 'observed',
+            personaSummary: p.personaSummary ?? '',
+            tone: p.tone ?? 'neutre',
+            vocabularyLevel: p.vocabularyLevel ?? 'courant',
+            typicalLength: p.typicalLength ?? 'moyen',
+            emojiUsage: p.emojiUsage ?? 'occasionnel',
+            topicsOfExpertise: p.topicsOfExpertise,
+            topicsAvoided: p.topicsAvoided,
+            relationshipMap: {},
+            catchphrases: p.catchphrases,
+            responseTriggers: [],
+            silenceTriggers: [],
+            commonEmojis: p.commonEmojis,
+            reactionPatterns: p.reactionPatterns,
+            messagesAnalyzed: p.messagesAnalyzed,
+            confidence: p.confidence,
+            locked: p.locked,
+          },
+        });
+      }
+    }
+
     if (controlledUsers.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no controlled users`);
-      return;
+      return false;
     }
 
     let effectiveMessages = messages;
@@ -174,7 +233,7 @@ export class ConversationScanner {
 
     if (effectiveMessages.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no messages`);
-      return;
+      return false;
     }
 
     const budgetCheck = await this.budgetManager.canSendMessage(conversationId, {
@@ -183,7 +242,7 @@ export class ConversationScanner {
     });
     if (!budgetCheck.allowed) {
       console.log(`[Scanner] Budget exhausted for conv=${conversationId}: ${budgetCheck.current}/${budgetCheck.max}`);
-      return;
+      return false;
     }
 
     if (conv.burstEnabled) {
@@ -192,7 +251,7 @@ export class ConversationScanner {
       });
       if (!burstCheck.allowed) {
         console.log(`[Scanner] Burst cooldown for conv=${conversationId}: ${burstCheck.minutesUntilNext}min remaining`);
-        return;
+        return false;
       }
     }
 
@@ -278,5 +337,6 @@ export class ConversationScanner {
         }).catch((err) => console.error(`[Scanner] Analytics upsert error for conv=${conversationId}:`, err));
       }
     }
+    return true;
   }
 }

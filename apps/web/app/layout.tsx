@@ -17,8 +17,9 @@ import { CallManager } from "@/components/video-call";
 import { TabNotificationManager } from "@/components/common/TabNotificationManager";
 import { GoogleAnalytics } from "@/components/analytics";
 import { FirebaseInitializer } from "@/components/providers/FirebaseInitializer";
+import { ServiceWorkerInitializer } from "@/components/providers/ServiceWorkerInitializer";
 import { HtmlLangSync } from "@/components/common/HtmlLangSync";
-import { OfflineBanner } from "@/components/common/OfflineBanner";
+import { SystemStatusBanner } from "@/components/common/SystemStatusBanner";
 import "@/utils/console-override"; // 🔇 Désactive console.log en production
 
 export const metadata: Metadata = {
@@ -99,6 +100,9 @@ export default function RootLayout({
         {/* Firebase Initializer - Vérifie Firebase au démarrage */}
         <FirebaseInitializer />
 
+        {/* SW Initializer - Enregistre et check les updates au démarrage */}
+        <ServiceWorkerInitializer />
+
         {/* Sync <html lang> with user's interface language */}
         <HtmlLangSync />
 
@@ -108,7 +112,7 @@ export default function RootLayout({
               <MessageViewProvider>
                 <ErrorBoundary>
                   <ClientOnly>
-                    <OfflineBanner />
+                    <SystemStatusBanner />
                     <main id="main-content">
                       {children}
                     </main>

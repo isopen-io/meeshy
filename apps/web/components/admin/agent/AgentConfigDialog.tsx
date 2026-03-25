@@ -14,9 +14,12 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { Loader2, HelpCircle } from 'lucide-react';
 import { agentAdminService, type AgentConfigData, type AgentConfigUpsert } from '@/services/agent-admin.service';
 import { AgentRolesSection } from './AgentRolesSection';
+import { UserPicker } from './UserPicker';
+import { ConversationPicker } from './ConversationPicker';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
 interface AgentConfigDialogProps {
@@ -129,14 +132,14 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
   const handleSave = async () => {
     if (!conversationId.match(/^[0-9a-fA-F]{24}$/)) {
-      toast.error('ID de conversation invalide (24 caract\u00e8res hexad\u00e9cimaux)');
+      toast.error('ID de conversation invalide (24 caractères hexadécimaux)');
       return;
     }
 
     setSaving(true);
     try {
       await agentAdminService.upsertConfig(conversationId, form);
-      toast.success(isNew ? 'Configuration cr\u00e9\u00e9e' : 'Configuration mise \u00e0 jour');
+      toast.success(isNew ? 'Configuration créée' : 'Configuration mise à jour');
       onSave();
     } catch {
       toast.error('Erreur lors de la sauvegarde');
@@ -148,6 +151,19 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
   const updateField = <K extends keyof AgentConfigUpsert>(key: K, value: AgentConfigUpsert[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
+
+  const InfoIcon = ({ content }: { content: string }) => (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <HelpCircle className="h-3.5 w-3.5 text-gray-400 cursor-help hover:text-indigo-500 transition-colors inline ml-1.5" />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">
+          {content}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -163,42 +179,49 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 py-4 px-1">
           {/* Conversation ID */}
           {isNew && (
-            <div className="space-y-2">
-              <Label>ID Conversation</Label>
-              <Input
-                value={conversationId}
-                onChange={e => setConversationId(e.target.value)}
-                placeholder="ObjectId (24 hex chars)"
-                className="font-mono"
+            <div className="p-4 rounded-lg bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30">
+              <ConversationPicker
+                label="Conversation à configurer"
+                selectedId={conversationId || null}
+                onSelect={setConversationId}
+                onClear={() => setConversationId('')}
+                placeholder="Rechercher un groupe, un canal ou une discussion..."
               />
             </div>
           )}
 
-          {/* G\u00e9n\u00e9ral */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">G\u00e9n\u00e9ral</h3>
+          {/* Général */}
+          <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Général</h3>
             <div className="flex items-center justify-between">
-              <Label>Agent activ\u00e9</Label>
+              <div className="flex items-center">
+                <Label>Agent activé</Label>
+                <InfoIcon content="Interrupteur principal. Si désactivé, l'agent n'analysera aucun message et ne répondra jamais, libérant les ressources serveur." />
+              </div>
               <Switch checked={form.enabled} onCheckedChange={v => updateField('enabled', v)} />
             </div>
             <div className="flex items-center justify-between">
-              <Label>Auto-pickup</Label>
+              <div className="flex items-center">
+                <Label>Auto-pickup</Label>
+                <InfoIcon content="Mode dynamique : l'agent détecte les utilisateurs qui ne répondent plus (voir Seuil d'inactivité) et prend leur identité pour maintenir la conversation active." />
+              </div>
               <Switch checked={form.autoPickupEnabled} onCheckedChange={v => updateField('autoPickupEnabled', v)} />
             </div>
           </div>
 
-          <Separator />
-
           {/* Comportement */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Comportement & Contexte</h3>
+          <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Comportement & Contexte</h3>
             <div className="space-y-2">
-              <Label>Type d&apos;agent</Label>
+              <div className="flex items-center">
+                <Label>Type d&apos;agent</Label>
+                <InfoIcon content="Impacte le 'System Prompt' injecté : 'SAV' priorise la résolution de problèmes, 'Animateur' cherche à poser des questions et relancer le débat, 'Personnel' imite un utilisateur standard." />
+              </div>
               <select
-                className="w-full p-2 border rounded-md bg-transparent text-sm"
+                className="w-full p-2 border rounded-md bg-white dark:bg-gray-800 text-sm"
                 value={form.agentType}
                 onChange={e => updateField('agentType', e.target.value)}
               >
@@ -209,7 +232,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               </select>
             </div>
             <div className="space-y-2">
-              <Label>Taille fen\u00eatre contextuelle (messages)</Label>
+              <div className="flex items-center">
+                <Label>Taille fenêtre contextuelle (messages)</Label>
+                <InfoIcon content="Nombre de messages historiques envoyés au LLM. Plus c'est haut, meilleure est la mémoire, mais le coût en tokens et la latence augmentent significativement." />
+              </div>
               <Input
                 type="number"
                 value={form.contextWindowSize}
@@ -219,23 +245,30 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               />
             </div>
             <div className="flex items-center justify-between">
-              <Label>Utiliser l&apos;historique complet (Max 250)</Label>
+              <div className="flex items-center">
+                <Label>Utiliser l&apos;historique complet (Max 250)</Label>
+                <InfoIcon content="Force l'agent à lire toute la conversation disponible. Indispensable pour des résumés longs ou des suivis de dossiers complexes sur plusieurs jours." />
+              </div>
               <Switch checked={form.useFullHistory} onCheckedChange={v => updateField('useFullHistory', v)} />
             </div>
           </div>
 
-          <Separator />
-
           {/* Triggers */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Triggers</h3>
+          <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Triggers</h3>
             <div className="flex items-center justify-between">
-              <Label>Trigger sur timeout</Label>
+              <div className="flex items-center">
+                <Label>Trigger sur timeout</Label>
+                <InfoIcon content="Déclenchement proactif : l'agent 'relance' la conversation si personne n'a parlé pendant le délai imparti. Idéal pour l'animation de groupes." />
+              </div>
               <Switch checked={form.triggerOnTimeout} onCheckedChange={v => updateField('triggerOnTimeout', v)} />
             </div>
             {form.triggerOnTimeout && (
-              <div className="space-y-2 pl-4">
-                <Label>Timeout (secondes)</Label>
+              <div className="space-y-2 pl-4 border-l-2 border-indigo-100 dark:border-indigo-900">
+                <div className="flex items-center">
+                  <Label>Timeout (secondes)</Label>
+                  <InfoIcon content="Délai exact avant déclenchement. Une valeur trop courte (30s) peut donner l'impression que l'agent coupe la parole. Recommandé : 300s (5min)." />
+                </div>
                 <Input
                   type="number"
                   value={form.timeoutSeconds}
@@ -246,23 +279,38 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               </div>
             )}
             <div className="flex items-center justify-between">
-              <Label>Trigger sur message utilisateur</Label>
+              <div className="flex items-center">
+                <Label>Trigger sur message utilisateur</Label>
+                <InfoIcon content="Mode 'Chatbot' : chaque message entrant déclenche une analyse. Très réactif mais peut coûter cher et paraître envahissant si non bridé." />
+              </div>
               <Switch checked={form.triggerOnUserMessage} onCheckedChange={v => updateField('triggerOnUserMessage', v)} />
             </div>
             <div className="flex items-center justify-between">
-              <Label>Trigger sur reply-to</Label>
+              <div className="flex items-center">
+                <Label>Trigger sur reply-to</Label>
+                <InfoIcon content="Ciblage direct : l'agent ne répond que s'il est explicitement interpellé. Mode le plus discret et économique pour du support technique." />
+              </div>
               <Switch checked={form.triggerOnReplyTo} onCheckedChange={v => updateField('triggerOnReplyTo', v)} />
             </div>
+
+            <UserPicker
+              label="Trigger seulement pour ces utilisateurs"
+              userIds={form.triggerFromUserIds || []}
+              onAdd={id => updateField('triggerFromUserIds', [...(form.triggerFromUserIds || []), id])}
+              onRemove={id => updateField('triggerFromUserIds', (form.triggerFromUserIds || []).filter(u => u !== id))}
+              placeholder="Chercher pour restreindre les triggers..."
+            />
           </div>
 
-          <Separator />
-
           {/* Seuils */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Seuils</h3>
+          <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Seuils & Contrôle</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Inactivit\u00e9 (heures)</Label>
+                <div className="flex items-center">
+                  <Label>Inactivité (heures)</Label>
+                  <InfoIcon content="Seuil critique pour l'Auto-pickup. Si un utilisateur n'a pas posté depuis X heures, l'agent peut prendre sa place." />
+                </div>
                 <Input
                   type="number"
                   value={form.inactivityThresholdHours}
@@ -272,7 +320,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 />
               </div>
               <div className="space-y-2">
-                <Label>Messages min.</Label>
+                <div className="flex items-center">
+                  <Label>Messages min.</Label>
+                  <InfoIcon content="Filtre de sécurité : empêche l'agent d'intervenir dans des salons vides ou trop récents pour avoir un contexte de ton suffisant." />
+                </div>
                 <Input
                   type="number"
                   value={form.minHistoricalMessages}
@@ -281,7 +332,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 />
               </div>
               <div className="space-y-2">
-                <Label>Max utilisateurs contr\u00f4l\u00e9s</Label>
+                <div className="flex items-center">
+                  <Label>Max utilisateurs contrôlés</Label>
+                  <InfoIcon content="Impact sur la diversité : définit combien d'identités différentes l'agent peut assumer dans ce salon. Trop d'identités peut nuire à la cohérence globale." />
+                </div>
                 <Input
                   type="number"
                   value={form.maxControlledUsers}
@@ -291,15 +345,60 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 />
               </div>
             </div>
+
+            <div className="space-y-4 pt-2">
+              <UserPicker
+                label="Utilisateurs contrôlés manuellement"
+                userIds={form.manualUserIds || []}
+                onAdd={id => updateField('manualUserIds', [...(form.manualUserIds || []), id])}
+                onRemove={id => updateField('manualUserIds', (form.manualUserIds || []).filter(u => u !== id))}
+                placeholder="Ajouter un utilisateur sous contrôle..."
+              />
+
+              <UserPicker
+                label="Utilisateurs exclus (Blacklist)"
+                userIds={form.excludedUserIds || []}
+                onAdd={id => updateField('excludedUserIds', [...(form.excludedUserIds || []), id])}
+                onRemove={id => updateField('excludedUserIds', (form.excludedUserIds || []).filter(u => u !== id))}
+                placeholder="Exclure un utilisateur du contrôle..."
+              />
+
+              <div className="space-y-2">
+                <div className="flex items-center">
+                  <Label>Rôles exclus</Label>
+                  <InfoIcon content="L'agent ne pourra jamais prendre le contrôle d'utilisateurs ayant ces rôles." />
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {['USER', 'ADMIN', 'MODO', 'AUDIT', 'ANALYST', 'BIGBOSS'].map(role => {
+                    const isExcluded = (form.excludedRoles ?? []).includes(role);
+                    return (
+                      <Badge
+                        key={role}
+                        variant={isExcluded ? 'destructive' : 'outline'}
+                        className="cursor-pointer select-none py-1 px-3"
+                        onClick={() => {
+                          const current = form.excludedRoles ?? [];
+                          const next = isExcluded ? current.filter(r => r !== role) : [...current, role];
+                          updateField('excludedRoles', next);
+                        }}
+                      >
+                        {role}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
 
-          <Separator />
-
           {/* Planificateur */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Planificateur</h3>
+          <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Planificateur</h3>
             <div className="space-y-2">
-              <Label>Fr\u00e9quence de scan</Label>
+              <div className="flex items-center">
+                <Label>Fréquence de scan</Label>
+                <InfoIcon content="Battement de coeur du système : définit à quelle fréquence l'agent 'se réveille' pour voir s'il doit agir (Triggers/Timeouts)." />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label className="text-xs text-gray-500">Heures</Label>
@@ -333,7 +432,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Min r\u00e9ponses/cycle</Label>
+                <div className="flex items-center">
+                  <Label>Min réponses/cycle</Label>
+                  <InfoIcon content="Garantit une activité minimale quand l'agent se déclenche. Utile pour simuler une vraie discussion plutôt qu'un message isolé." />
+                </div>
                 <Input
                   type="number"
                   value={form.minResponsesPerCycle ?? 2}
@@ -343,7 +445,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 />
               </div>
               <div className="space-y-2">
-                <Label>Max r\u00e9ponses/cycle</Label>
+                <div className="flex items-center">
+                  <Label>Max réponses/cycle</Label>
+                  <InfoIcon content="Pare-feu anti-flood : plafonne le nombre de messages consécutifs. Crucial pour limiter les coûts API en cas de boucle infinie." />
+                </div>
                 <Input
                   type="number"
                   value={form.maxResponsesPerCycle ?? 12}
@@ -354,12 +459,18 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <Label>R\u00e9actions activ\u00e9es</Label>
+              <div className="flex items-center">
+                <Label>Réactions activées</Label>
+                <InfoIcon content="Humanisation : autorise l'agent à 'liker' ou réagir avec des emojis. Consomme moins de tokens qu'une réponse textuelle." />
+              </div>
               <Switch checked={form.reactionsEnabled ?? true} onCheckedChange={v => updateField('reactionsEnabled', v)} />
             </div>
             {form.reactionsEnabled !== false && (
-              <div className="space-y-2 pl-4">
-                <Label>Max r\u00e9actions/cycle</Label>
+              <div className="space-y-2 pl-4 border-l-2 border-indigo-100 dark:border-indigo-900">
+                <div className="flex items-center">
+                  <Label>Max réactions/cycle</Label>
+                  <InfoIcon content="Limite le nombre d'emojis posés lors d'un même scan. Évite que l'agent ne réagisse à absolument tous les messages en une fois." />
+                </div>
                 <Input
                   type="number"
                   value={form.maxReactionsPerCycle ?? 8}
@@ -371,46 +482,50 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             )}
           </div>
 
-          <Separator />
-
           {/* Instructions Agent */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Instructions Agent</h3>
+          <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Instructions Agent</h3>
             <div className="space-y-2">
-              <Label>Instructions sp\u00e9cifiques</Label>
+              <div className="flex items-center">
+                <Label>Instructions spécifiques</Label>
+                <InfoIcon content="Le 'Cerveau' de l'agent : décrivez ici sa mission, les infos à ne pas divulguer, ou des faits spécifiques à ce salon. Outre-passe les réglages globaux." />
+              </div>
               <Textarea
                 rows={4}
                 maxLength={5000}
                 value={form.agentInstructions ?? ''}
                 onChange={e => updateField('agentInstructions', e.target.value || null)}
-                placeholder="Instructions personnalis\u00e9es pour l'agent dans cette conversation..."
+                placeholder="Instructions personnalisées pour l'agent dans cette conversation..."
+                className="bg-white dark:bg-gray-800"
               />
               <p className="text-xs text-gray-500">{(form.agentInstructions ?? '').length}/5000</p>
             </div>
           </div>
 
-          <Separator />
-
           {/* Recherche Web */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Recherche Web</h3>
+          <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Recherche Web</h3>
             <div className="flex items-center justify-between">
               <div>
-                <Label>Recherche web activ\u00e9e</Label>
-                <p className="text-xs text-gray-500 mt-1">Permet \u00e0 l&apos;agent de rechercher des informations actuelles</p>
+                <div className="flex items-center">
+                  <Label>Recherche web activée</Label>
+                  <InfoIcon content="Connexion temps réel : permet à l'agent d'aller sur Google/Perplexity. Indispensable pour parler de l'actualité ou de météo, mais augmente le temps de réponse." />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Permet à l&apos;agent de rechercher des informations actuelles</p>
               </div>
               <Switch checked={form.webSearchEnabled ?? false} onCheckedChange={v => updateField('webSearchEnabled', v)} />
             </div>
           </div>
 
-          <Separator />
-
-          {/* G\u00e9n\u00e9ration */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">G\u00e9n\u00e9ration</h3>
+          {/* Génération */}
+          <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Génération</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Mots min. par message</Label>
+                <div className="flex items-center">
+                  <Label>Mots min. par message</Label>
+                  <InfoIcon content="Contrôle du style : force l'agent à être plus loquace. Évite les réponses trop brèves type 'OK' ou 'D'accord'." />
+                </div>
                 <Input
                   type="number"
                   value={form.minWordsPerMessage ?? 3}
@@ -420,7 +535,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 />
               </div>
               <div className="space-y-2">
-                <Label>Mots max. par message</Label>
+                <div className="flex items-center">
+                  <Label>Mots max. par message</Label>
+                  <InfoIcon content="Économie de tokens : empêche l'agent de générer des pavés illisibles. Une limite basse (50-80) est recommandée pour du chat standard." />
+                </div>
                 <Input
                   type="number"
                   value={form.maxWordsPerMessage ?? 400}
@@ -431,9 +549,12 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Temp\u00e9rature de g\u00e9n\u00e9ration ({((form.generationTemperature ?? 0.8) * 100).toFixed(0)}%)</Label>
+              <div className="flex items-center">
+                <Label>Température de génération ({((form.generationTemperature ?? 0.8) * 100).toFixed(0)}%)</Label>
+                <InfoIcon content="Curseur de créativité : à 0 l'agent est répétitif et factuel, à 1.5+ il peut devenir poétique ou commencer à halluciner." />
+              </div>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400 w-10">Pr\u00e9cis</span>
+                <span className="text-xs text-gray-400 w-10 text-right">Précis</span>
                 <input
                   type="range"
                   min={0}
@@ -441,24 +562,25 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   step={5}
                   value={Math.round((form.generationTemperature ?? 0.8) * 100)}
                   onChange={e => updateField('generationTemperature', parseInt(e.target.value) / 100)}
-                  className="flex-1"
+                  className="flex-1 accent-indigo-600"
                 />
-                <span className="text-xs text-gray-400 w-12">Cr\u00e9atif</span>
+                <span className="text-xs text-gray-400 w-12">Créatif</span>
               </div>
-              <p className="text-xs text-gray-500">0 = d\u00e9terministe, 1 = \u00e9quilibr\u00e9, 2 = tr\u00e8s cr\u00e9atif</p>
+              <p className="text-xs text-gray-500">0 = déterministe, 1 = équilibré, 2 = très créatif</p>
             </div>
           </div>
 
-          <Separator />
-
           {/* Quality Gate */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Quality Gate</h3>
+          <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Quality Gate</h3>
             <div className="flex items-center justify-between">
               <div>
-                <Label>V\u00e9rification LLM activ\u00e9e</Label>
+                <div className="flex items-center">
+                  <Label>Vérification LLM activée</Label>
+                  <InfoIcon content="Auto-censure intelligente : un second passage vérifie si le message respecte le ton et ne révèle pas qu'il est une IA. Rejette les messages non conformes." />
+                </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  V\u00e9rifie la coh\u00e9rence du ton, registre et langue. Les checks d\u00e9terministes (@@, longueur, r\u00e9v\u00e9lation IA) s&apos;appliquent toujours.
+                  Vérifie la cohérence du ton, registre et langue. Les checks déterministes (@@, longueur, révélation IA) s&apos;appliquent toujours.
                 </p>
               </div>
               <Switch
@@ -467,10 +589,13 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               />
             </div>
             {(form.qualityGateEnabled ?? true) && (
-              <div className="space-y-2 pl-4">
-                <Label>Score minimum ({Math.round((form.qualityGateMinScore ?? 0.5) * 100)}%)</Label>
+              <div className="space-y-2 pl-4 border-l-2 border-indigo-100 dark:border-indigo-900">
+                <div className="flex items-center">
+                  <Label>Score minimum ({Math.round((form.qualityGateMinScore ?? 0.5) * 100)}%)</Label>
+                  <InfoIcon content="Barrière de qualité : à 80%, seuls les messages parfaits passent. À 20%, l'agent est beaucoup plus libre mais peut faire des erreurs de style." />
+                </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400 w-10">Laxiste</span>
+                  <span className="text-xs text-gray-400 w-10 text-right">Laxiste</span>
                   <input
                     type="range"
                     min={0}
@@ -478,26 +603,27 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                     step={5}
                     value={Math.round((form.qualityGateMinScore ?? 0.5) * 100)}
                     onChange={e => updateField('qualityGateMinScore', parseInt(e.target.value) / 100)}
-                    className="flex-1"
+                    className="flex-1 accent-indigo-600"
                   />
                   <span className="text-xs text-gray-400 w-10">Strict</span>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Score en dessous duquel le message est rejet\u00e9. 50% = \u00e9quilibr\u00e9, 80% = tr\u00e8s strict.
+                  Score en dessous duquel le message est rejeté. 50% = équilibré, 80% = très strict.
                 </p>
               </div>
             )}
           </div>
 
-          <Separator />
-
           {/* Scheduling & Rythme */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Scheduling & Rythme</h3>
+          <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Scheduling & Rythme</h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Messages/jour (semaine)</Label>
+                <div className="flex items-center">
+                  <Label>Messages/jour (semaine)</Label>
+                  <InfoIcon content="Quota quotidien global pour ce salon. Une fois atteint, l'agent se met en veille jusqu'au lendemain." />
+                </div>
                 <Input
                   type="number"
                   value={form.weekdayMaxMessages ?? 10}
@@ -507,7 +633,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 />
               </div>
               <div className="space-y-2">
-                <Label>Messages/jour (weekend)</Label>
+                <div className="flex items-center">
+                  <Label>Messages/jour (weekend)</Label>
+                  <InfoIcon content="Quota weekend. Souvent plus élevé pour compenser l'absence de support humain le samedi/dimanche." />
+                </div>
                 <Input
                   type="number"
                   value={form.weekendMaxMessages ?? 25}
@@ -520,7 +649,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Utilisateurs/jour (semaine)</Label>
+                <div className="flex items-center">
+                  <Label>Utilisateurs/jour (semaine)</Label>
+                  <InfoIcon content="Nombre d'utilisateurs distincts que l'agent peut piloter par jour en semaine." />
+                </div>
                 <Input
                   type="number"
                   value={form.weekdayMaxUsers ?? 4}
@@ -530,7 +662,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 />
               </div>
               <div className="space-y-2">
-                <Label>Utilisateurs/jour (weekend)</Label>
+                <div className="flex items-center">
+                  <Label>Utilisateurs/jour (weekend)</Label>
+                  <InfoIcon content="Limite journalière d'utilisateurs distincts pour le weekend." />
+                </div>
                 <Input
                   type="number"
                   value={form.weekendMaxUsers ?? 6}
@@ -543,17 +678,23 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
             <div className="flex items-center justify-between">
               <div>
-                <Label>Mode burst</Label>
+                <div className="flex items-center">
+                  <Label>Mode burst</Label>
+                  <InfoIcon content="Simulateur humain : au lieu de répondre 1 par 1, l'agent envoie plusieurs messages (Taille burst) puis s'arrête (Pause min) pour paraître moins robotique." />
+                </div>
                 <p className="text-xs text-gray-500 mt-1">Groupe les messages en rafales avec des pauses entre elles</p>
               </div>
               <Switch checked={form.burstEnabled ?? true} onCheckedChange={v => updateField('burstEnabled', v)} />
             </div>
 
             {(form.burstEnabled ?? true) && (
-              <div className="space-y-4 pl-4">
+              <div className="space-y-4 pl-4 border-l-2 border-indigo-100 dark:border-indigo-900">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-2">
-                    <Label className="text-xs">Taille burst</Label>
+                    <div className="flex items-center">
+                      <Label className="text-[10px] uppercase font-bold text-gray-400">Taille burst</Label>
+                      <InfoIcon content="Nb de messages envoyés d'affilée." />
+                    </div>
                     <Input
                       type="number"
                       value={form.burstSize ?? 4}
@@ -563,7 +704,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Intervalle (min)</Label>
+                    <div className="flex items-center">
+                      <Label className="text-[10px] uppercase font-bold text-gray-400">Intervalle (min)</Label>
+                      <InfoIcon content="Temps entre 2 msgs du burst." />
+                    </div>
                     <Input
                       type="number"
                       value={form.burstIntervalMinutes ?? 5}
@@ -573,7 +717,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Pause (min)</Label>
+                    <div className="flex items-center">
+                      <Label className="text-[10px] uppercase font-bold text-gray-400">Pause (min)</Label>
+                      <InfoIcon content="Silence radio entre 2 rafales." />
+                    </div>
                     <Input
                       type="number"
                       value={form.quietIntervalMinutes ?? 90}
@@ -587,7 +734,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             )}
 
             <div className="space-y-2">
-              <Label>Seuil d&apos;inactivit\u00e9 (jours)</Label>
+              <div className="flex items-center">
+                <Label>Seuil d&apos;inactivité (jours)</Label>
+                <InfoIcon content="Nettoyage du pool : si l'utilisateur contrôlé ne s'est pas connecté manuellement depuis X jours, l'agent arrête de l'utiliser pour éviter les situations étranges." />
+              </div>
               <Input
                 type="number"
                 value={form.inactivityDaysThreshold ?? 3}
@@ -598,16 +748,25 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             </div>
 
             <div className="flex items-center justify-between">
-              <Label>Prioriser les utilisateurs tagg\u00e9s</Label>
+              <div className="flex items-center">
+                <Label>Prioriser les utilisateurs taggués</Label>
+                <InfoIcon content="Impact sur la pertinence sociale : l'agent réagit en priorité aux mentions (@username). Très efficace pour le SAV." />
+              </div>
               <Switch checked={form.prioritizeTaggedUsers ?? true} onCheckedChange={v => updateField('prioritizeTaggedUsers', v)} />
             </div>
             <div className="flex items-center justify-between">
-              <Label>Prioriser les r\u00e9ponses</Label>
+              <div className="flex items-center">
+                <Label>Prioriser les réponses</Label>
+                <InfoIcon content="Maintien du fil : l'agent favorise les discussions où il a déjà un échange en cours plutôt que d'entamer de nouveaux sujets au hasard." />
+              </div>
               <Switch checked={form.prioritizeRepliedUsers ?? true} onCheckedChange={v => updateField('prioritizeRepliedUsers', v)} />
             </div>
 
             <div className="space-y-2">
-              <Label>Boost r\u00e9actions ({(form.reactionBoostFactor ?? 1.5).toFixed(1)}x)</Label>
+              <div className="flex items-center">
+                <Label>Boost réactions ({(form.reactionBoostFactor ?? 1.5).toFixed(1)}x)</Label>
+                <InfoIcon content="Probabilité d'emoji : un facteur élevé (>2) rendra l'agent très expressif via les réactions, ce qui réduit la 'fatigue' textuelle dans le salon." />
+              </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs text-gray-400 w-8">0.5x</span>
                 <input
@@ -617,22 +776,19 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   step={1}
                   value={Math.round((form.reactionBoostFactor ?? 1.5) * 10)}
                   onChange={e => updateField('reactionBoostFactor', parseInt(e.target.value) / 10)}
-                  className="flex-1"
+                  className="flex-1 accent-indigo-600"
                 />
                 <span className="text-xs text-gray-400 w-8">5.0x</span>
               </div>
             </div>
           </div>
 
-          {/* R\u00f4les (only for existing configs) */}
+          {/* Rôles (only for existing configs) */}
           {!isNew && (
-            <>
-              <Separator />
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">R\u00f4les utilisateurs</h3>
-                <AgentRolesSection conversationId={conversationId} />
-              </div>
-            </>
+            <div className="space-y-4 p-4 rounded-lg bg-indigo-50/30 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Rôles utilisateurs</h3>
+              <AgentRolesSection conversationId={conversationId} />
+            </div>
           )}
         </div>
 
@@ -642,7 +798,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {isNew ? 'Cr\u00e9er' : 'Enregistrer'}
+            {isNew ? 'Créer' : 'Enregistrer'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MessageSquare, Zap, Users, Shapes, RotateCcw, Trash2 } from 'lucide-react';
 import { agentAdminService, type AgentStatsData } from '@/services/agent-admin.service';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { toast } from 'sonner';
 
 export function AgentOverviewTab() {
@@ -166,6 +167,16 @@ export function AgentOverviewTab() {
     },
   ];
 
+  const pieData = [
+    { name: 'Actifs', value: stats?.activeConfigs ?? 0, color: '#10b981' },
+    { name: 'Inactifs', value: (stats?.totalConfigs ?? 0) - (stats?.activeConfigs ?? 0), color: '#94a3b8' },
+  ];
+
+  const barData = [
+    { name: 'Rôles', count: stats?.totalRoles ?? 0, color: '#8b5cf6' },
+    { name: 'Archétypes', count: stats?.totalArchetypes ?? 0, color: '#f97316' },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -196,6 +207,56 @@ export function AgentOverviewTab() {
             </Card>
           );
         })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Répartition des Agents</CardTitle>
+          </CardHeader>
+          <CardContent className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Ressources IA</CardTitle>
+          </CardHeader>
+          <CardContent className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} />
+                <RechartsTooltip cursor={{ fill: '#f1f5f9' }} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {barData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="border-amber-200 dark:border-amber-900">
