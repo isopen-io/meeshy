@@ -16,6 +16,10 @@
       "tr": "Turco"
     },
     "loading": "Cargando...",
+    "offlineMessage": "Estás desconectado — los mensajes se enviarán al reconectarse",
+    "updateAvailable": "¡Hay una actualización de Meeshy disponible!",
+    "updateNow": "Actualizar",
+    "wait": "Esperar",
     "error": "Error",
     "cancel": "Cancelar",
     "save": "Guardar",

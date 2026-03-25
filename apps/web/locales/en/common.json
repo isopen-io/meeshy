@@ -16,6 +16,10 @@
       "tr": "Turkish"
     },
     "loading": "Loading...",
+    "offlineMessage": "You are offline — messages will be sent on reconnection",
+    "updateAvailable": "A Meeshy update is available!",
+    "updateNow": "Update",
+    "wait": "Wait",
     "error": "Error",
     "cancel": "Cancel",
     "save": "Save",
