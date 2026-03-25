@@ -95,22 +95,22 @@ describe('UsersService', () => {
       const result = await usersService.searchUsers('john');
 
       expect(mockApiService.get).toHaveBeenCalledWith('/users/search?q=john');
-      expect(result.success).toBe(true);
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toHaveLength(1);
     });
 
     it('should return empty array for query less than 2 characters', async () => {
       const result = await usersService.searchUsers('j');
 
       expect(mockApiService.get).not.toHaveBeenCalled();
-      expect(result.success).toBe(true);
-      expect(result.data).toEqual([]);
+      expect(result).toEqual([]);
     });
 
     it('should return empty array for empty query', async () => {
       const result = await usersService.searchUsers('');
 
       expect(mockApiService.get).not.toHaveBeenCalled();
-      expect(result.data).toEqual([]);
+      expect(result).toEqual([]);
     });
 
     it('should trim query before validation', async () => {
@@ -128,7 +128,7 @@ describe('UsersService', () => {
       const result = await usersService.searchUsers('   ');
 
       expect(mockApiService.get).not.toHaveBeenCalled();
-      expect(result.data).toEqual([]);
+      expect(result).toEqual([]);
     });
 
     it('should encode special characters in query', async () => {

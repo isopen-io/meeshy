@@ -156,11 +156,29 @@ export class ConversationsCrudService {
    * Rechercher dans les conversations
    */
   async searchConversations(query: string): Promise<Conversation[]> {
-    const response = await apiService.get<Conversation[]>(
-      '/api/conversations/search',
-      { q: query }
-    );
-    return response.data ?? [];
+    try {
+      const response = await apiService.get<any>(
+        '/api/conversations/search',
+        { q: query }
+      );
+
+      // Unwrap response if needed (handle both Conversation[] and {success, data: Conversation[]})
+      let rawData: any[] = [];
+      if (Array.isArray(response.data)) {
+        rawData = response.data;
+      } else if (response.data?.success && Array.isArray(response.data.data)) {
+        rawData = response.data.data;
+      } else if (Array.isArray(response)) {
+        rawData = response;
+      }
+
+      return rawData.map(conv =>
+        transformersService.transformConversationData(conv)
+      );
+    } catch (error) {
+      console.error('[ConversationsCrudService] Error searching conversations:', error);
+      return [];
+    }
   }
 
   /**

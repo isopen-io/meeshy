@@ -173,6 +173,25 @@ async function start() {
 
   scanner.start();
 
+  // STARTUP SUMMARY LOGGING
+  // List conversations being monitored and their controlled users
+  try {
+    const globalConfig = await configCache.getGlobalConfig();
+    const scanOptions = {
+      eligibleTypes: globalConfig?.eligibleConversationTypes ?? ['group', 'channel', 'public', 'global'],
+      freshnessHours: globalConfig?.messageFreshnessHours ?? 24,
+    };
+    const eligible = await findEligibleConversations(persistence, scanOptions);
+    server.log.info(`[Startup] Monitoring ${eligible.length} eligible conversations`);
+
+    for (const conv of eligible) {
+      const controlled = await persistence.getControlledUsers(conv.conversationId);
+      server.log.info(`[Startup] Conversation: ${conv.title || conv.conversationId} (${conv.conversationId}) | Controlled Users: ${controlled.length}`);
+    }
+  } catch (err) {
+    server.log.error('[Startup] Failed to log monitoring summary:', err);
+  }
+
   await server.listen({ port: env.PORT, host: '0.0.0.0' });
   server.log.info(`Agent service running on port ${env.PORT} with ${llm.name} provider`);
 
