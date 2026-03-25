@@ -16,6 +16,7 @@ import { getWebSocketUrl } from '@/lib/config';
 import { authManager } from '../auth-manager.service';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { logConversationIdDebug, getConversationIdType, getConversationApiId } from '@/utils/conversation-id-utils';
+import { triggerManualUpdateCheck } from '@/utils/service-worker';
 import type { User } from '@/types';
 import type {
   TypedSocket,
@@ -237,7 +238,7 @@ export class ConnectionService {
         if (serverVersion && serverVersion !== clientVersion) {
           console.log(`[SW] Version mismatch detected! Server: ${serverVersion}, Client: ${clientVersion}`);
           // Déclencher le check de mise à jour du Service Worker
-          require('@/utils/service-worker').triggerManualUpdateCheck().catch(console.error);
+          triggerManualUpdateCheck().catch(console.error);
         }
 
         onAuthenticated();

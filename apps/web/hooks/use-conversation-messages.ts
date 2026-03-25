@@ -176,16 +176,16 @@ export function useConversationMessages(
         throw new Error('Erreur lors du chargement des messages');
       }
 
-      // data.data peut être directement Message[] (format optimisé)
-      // ou un objet { messages, conversation, total, hasMore } (format liens partagés)
-      const newMessages = Array.isArray(data.data)
-        ? (data.data || [])
-        : ((data.data as any)?.messages || []);
+      // data.data: Message[] (standard) ou { messages, hasMore, ... } (shared links)
+      const responseData = data.data as Message[] | { messages: Message[]; hasMore?: boolean };
+      const newMessages = Array.isArray(responseData)
+        ? responseData
+        : (responseData?.messages ?? []);
 
       const cursorPagination = data.cursorPagination;
       const hasMoreMessages = cursorPagination?.hasMore ??
                              data.pagination?.hasMore ??
-                             (data.data as any)?.hasMore ??
+                             (!Array.isArray(responseData) ? responseData?.hasMore : undefined) ??
                              false;
       const newCursor = cursorPagination?.nextCursor ?? null;
 

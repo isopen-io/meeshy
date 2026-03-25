@@ -16,8 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, Save, Key, HelpCircle } from 'lucide-react';
+import { Loader2, Save, Key } from 'lucide-react';
+import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type LlmConfigData, type LlmConfigUpdate } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
 
@@ -100,19 +100,6 @@ export function AgentLlmTab() {
       setSaving(false);
     }
   };
-
-  const InfoIcon = ({ content }: { content: string }) => (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <HelpCircle className="h-3.5 w-3.5 text-gray-400 cursor-help hover:text-indigo-500 transition-colors inline ml-1.5" />
-        </TooltipTrigger>
-        <TooltipContent className="max-w-xs text-xs">
-          {content}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
 
   if (loading) {
     return (

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { apiService } from '@/services/api.service';
+import { usersService } from '@/services/users.service';
 import { useI18n } from '@/hooks/useI18n';
 import type { User } from '@/types';
 

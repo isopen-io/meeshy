@@ -9,9 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Save, Shield, HelpCircle } from 'lucide-react';
+import { Loader2, Save, Shield } from 'lucide-react';
+import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type AgentGlobalConfigUpsert } from '@/services/agent-admin.service';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
 const CONVERSATION_TYPES = ['group', 'channel', 'public', 'global', 'broadcast'] as const;
@@ -83,19 +83,6 @@ export function AgentGlobalConfigTab() {
   const updateField = <K extends keyof AgentGlobalConfigUpsert>(key: K, value: AgentGlobalConfigUpsert[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
-
-  const InfoIcon = ({ content }: { content: string }) => (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <HelpCircle className="h-3.5 w-3.5 text-gray-400 cursor-help hover:text-indigo-500 transition-colors inline ml-1.5" />
-        </TooltipTrigger>
-        <TooltipContent className="max-w-xs text-xs">
-          {content}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
 
   const toggleConversationType = (type: string) => {
     const current = form.eligibleConversationTypes ?? [];
