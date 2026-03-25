@@ -1,8 +1,10 @@
 import type { ConversationState, PendingAction, PendingMessage, AgentHistoryEntry } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
+import { getArchetype } from '@meeshy/shared/agent/archetypes';
+import { contentHash } from '../utils/content-hash';
 
-const AI_REVEAL_PATTERNS = [
+export const AI_REVEAL_PATTERNS = [
   /en tant qu['']ia/i,
   /je suis un(e)? (agent|bot|ia|intelligence artificielle|assistant ia)/i,
   /as an ai/i,
@@ -19,12 +21,12 @@ const GREETING_PATTERNS = [
   /^(comment\s+(ca|ça)\s+va|quoi\s+de\s+neuf|how('?s| is) it going)\b/i,
 ];
 
-function isGreeting(text: string): boolean {
+export function isGreeting(text: string): boolean {
   const trimmed = text.trim();
   return GREETING_PATTERNS.some((p) => p.test(trimmed));
 }
 
-function hasRecentGreeting(history: AgentHistoryEntry[], windowMinutes: number): boolean {
+export function hasRecentGreeting(history: AgentHistoryEntry[], windowMinutes: number): boolean {
   const cutoff = Date.now() - windowMinutes * 60 * 1000;
   return history.some((h) => h.timestamp > cutoff && GREETING_PATTERNS.some((p) => p.test(h.topic)));
 }
@@ -33,7 +35,7 @@ function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-function runDeterministicChecks(
+export function runDeterministicChecks(
   content: string,
   minWords: number,
   maxWords: number,
@@ -82,8 +84,8 @@ export function createQualityGateNode(llm: LlmProvider) {
       return { pendingActions: reactions };
     }
 
-    const minWords = state.minWordsPerMessage ?? 3;
-    const maxWords = state.maxWordsPerMessage ?? 400;
+    const globalMinWords = state.minWordsPerMessage ?? 3;
+    const globalMaxWords = state.maxWordsPerMessage ?? 400;
     const qualityGateEnabled = state.qualityGateEnabled ?? true;
     const minScore = state.qualityGateMinScore ?? 0.5;
 
@@ -103,10 +105,14 @@ export function createQualityGateNode(llm: LlmProvider) {
         continue;
       }
 
+      const archetype = profile.archetypeId ? getArchetype(profile.archetypeId) : null;
+      const effectiveMinWords = archetype?.minWords ?? globalMinWords;
+      const effectiveMaxWords = archetype?.maxWords ?? globalMaxWords;
+
       const deterministicResult = runDeterministicChecks(
         msg.content,
-        minWords,
-        maxWords,
+        effectiveMinWords,
+        effectiveMaxWords,
         state.messages,
       );
       if (!deterministicResult.ok) {
@@ -114,7 +120,7 @@ export function createQualityGateNode(llm: LlmProvider) {
         continue;
       }
 
-      const contentKey = msg.content.toLowerCase().trim().slice(0, 100);
+      const contentKey = contentHash(msg.content);
       if (seenContents.has(contentKey)) {
         console.warn(`[QualityGate] Duplicate content detected, skipping`);
         continue;
@@ -180,7 +186,7 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolea
       .map((a) => ({
         userId: a.asUserId,
         topic: a.content.slice(0, 50),
-        contentHash: a.content.toLowerCase().trim().slice(0, 100),
+        contentHash: contentHash(a.content),
         timestamp: Date.now(),
       }));
 

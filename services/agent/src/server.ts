@@ -20,6 +20,7 @@ import { detectInterpellation } from './reactive/interpellation-detector';
 import { configRoutes } from './routes/config';
 import { rolesRoutes } from './routes/roles';
 import { analyticsRoutes } from './routes/analytics';
+import { findEligibleConversations } from './scheduler/eligible-conversations';
 
 const server = Fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -64,7 +65,7 @@ async function start() {
 
   server.register((instance) => analyticsRoutes(instance, { stateManager, persistence }));
 
-  const deliveryQueue = new DeliveryQueue(zmqPublisher, persistence);
+  const deliveryQueue = new DeliveryQueue(zmqPublisher, persistence, stateManager);
   const reactiveHandler = new ReactiveHandler(llm, persistence, stateManager, deliveryQueue);
   const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager);
 
@@ -189,7 +190,7 @@ async function start() {
       server.log.info(`[Startup] Conversation: ${conv.title || conv.conversationId} (${conv.conversationId}) | Controlled Users: ${controlled.length}`);
     }
   } catch (err) {
-    server.log.error('[Startup] Failed to log monitoring summary:', err);
+    server.log.error({ err }, '[Startup] Failed to log monitoring summary');
   }
 
   await server.listen({ port: env.PORT, host: '0.0.0.0' });

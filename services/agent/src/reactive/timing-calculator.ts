@@ -5,7 +5,7 @@ function randomBetween(min: number, max: number): number {
 }
 
 function jitter(value: number, percent: number = 0.2): number {
-  return value + value * randomBetween(-percent, percent);
+  return Math.max(1_000, value + value * randomBetween(-percent, percent));
 }
 
 function apparitionDelayMs(lastUserMessageAgoMs: number): number {
@@ -16,12 +16,12 @@ function apparitionDelayMs(lastUserMessageAgoMs: number): number {
 }
 
 function readingDelayMs(unreadCount: number): number {
-  return Math.min(unreadCount * 2_000, 20_000);
+  return Math.min(unreadCount * randomBetween(1_500, 2_500), 20_000);
 }
 
 function typingDelayMs(wordCount: number): number {
-  const perWord = randomBetween(3_000, 4_000);
-  return Math.max(3_000, Math.min(wordCount * perWord, 180_000));
+  const perWord = randomBetween(800, 1_500);
+  return Math.max(2_000, Math.min(wordCount * perWord, 60_000));
 }
 
 export function calculateResponseDelay(input: {
@@ -33,7 +33,7 @@ export function calculateResponseDelay(input: {
   const { interpellationType, wordCount, lastUserMessageAgoMs, unreadMessageCount } = input;
 
   if (interpellationType === 'greeting') {
-    return Math.round(jitter(Math.max(3_000, Math.min(typingDelayMs(wordCount), 30_000))));
+    return Math.round(jitter(Math.max(2_000, Math.min(typingDelayMs(wordCount), 20_000))));
   }
 
   const apparition = apparitionDelayMs(lastUserMessageAgoMs);

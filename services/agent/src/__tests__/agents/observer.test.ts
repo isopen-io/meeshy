@@ -109,7 +109,7 @@ describe('Observer Agent', () => {
   it('returns empty on empty messages', async () => {
     const observe = createObserverNode(mockLlm);
     const result = await observe({ ...baseState, messages: [] });
-    expect(result).toEqual({ ...baseState, messages: [] });
+    expect(result).toEqual({});
   });
 
   it('resolves displayName from messages', async () => {
@@ -180,7 +180,7 @@ describe('Observer Agent', () => {
     const observe = createObserverNode(badLlm);
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
     const result = await observe(baseState);
-    expect(result).toEqual({});
+    expect(result).toEqual({ summary: '' });
     consoleSpy.mockRestore();
   });
 
@@ -194,7 +194,7 @@ describe('Observer Agent', () => {
     const observe = createObserverNode(errorLlm);
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
     const result = await observe(baseState);
-    expect(result).toEqual({});
+    expect(result).toEqual({ summary: '' });
     consoleSpy.mockRestore();
   });
 });

@@ -28,6 +28,8 @@ export class MongoPersistence {
         catchphrases: profile.catchphrases,
         responseTriggers: profile.responseTriggers,
         silenceTriggers: profile.silenceTriggers,
+        commonEmojis: profile.commonEmojis,
+        reactionPatterns: profile.reactionPatterns,
         messagesAnalyzed: profile.messagesAnalyzed,
         confidence: profile.confidence,
         locked: profile.locked,
@@ -44,6 +46,8 @@ export class MongoPersistence {
         catchphrases: profile.catchphrases,
         responseTriggers: profile.responseTriggers,
         silenceTriggers: profile.silenceTriggers,
+        commonEmojis: profile.commonEmojis,
+        reactionPatterns: profile.reactionPatterns,
         messagesAnalyzed: profile.messagesAnalyzed,
         confidence: profile.confidence,
         locked: profile.locked,
@@ -96,8 +100,8 @@ export class MongoPersistence {
         catchphrases: r.catchphrases,
         responseTriggers: r.responseTriggers,
         silenceTriggers: r.silenceTriggers,
-        commonEmojis: [],
-        reactionPatterns: [],
+        commonEmojis: r.commonEmojis,
+        reactionPatterns: r.reactionPatterns,
         messagesAnalyzed: r.messagesAnalyzed,
         confidence: r.confidence,
         locked: r.locked,
@@ -187,10 +191,7 @@ export class MongoPersistence {
       ...(maxConversations > 0 ? { take: maxConversations } : {}),
     });
 
-    return conversations.filter((conv) => {
-      if (!conv.agentConfig) return true;
-      return conv.agentConfig.enabled !== false;
-    });
+    return conversations.filter((conv) => conv.agentConfig?.enabled === true);
   }
 
   async getConversationContext(conversationId: string) {
@@ -200,24 +201,26 @@ export class MongoPersistence {
     });
   }
 
-  async getRecentMessageCount(conversationId: string, withinMinutes: number): Promise<number> {
+  async getRecentMessageCount(conversationId: string, withinMinutes: number, excludeAgent = false): Promise<number> {
     const since = new Date(Date.now() - withinMinutes * 60 * 1000);
     return this.prisma.message.count({
       where: {
         conversationId,
         createdAt: { gte: since },
         deletedAt: null,
+        ...(excludeAgent ? { messageSource: { not: 'agent' } } : {}),
       },
     });
   }
 
-  async getRecentUniqueAuthors(conversationId: string, withinMinutes: number): Promise<number> {
+  async getRecentUniqueAuthors(conversationId: string, withinMinutes: number, excludeAgent = false): Promise<number> {
     const since = new Date(Date.now() - withinMinutes * 60 * 1000);
     const messages = await this.prisma.message.findMany({
       where: {
         conversationId,
         createdAt: { gte: since },
         deletedAt: null,
+        ...(excludeAgent ? { messageSource: { not: 'agent' } } : {}),
       },
       select: { senderId: true },
       distinct: ['senderId'],
@@ -230,31 +233,18 @@ export class MongoPersistence {
   }
 
   async updateAnalytics(conversationId: string, data: { messagesSent: number; wordsSent: number; avgConfidence: number }) {
-    const existing = await this.prisma.agentAnalytic.findUnique({ where: { conversationId } });
-
-    if (existing) {
-      const totalMessages = existing.messagesSent + data.messagesSent;
-      const totalWords = existing.totalWordsSent + data.wordsSent;
-      const weightedConfidence = totalMessages > 0
-        ? (existing.avgConfidence * existing.messagesSent + data.avgConfidence * data.messagesSent) / totalMessages
-        : data.avgConfidence;
-
-      return this.prisma.agentAnalytic.update({
-        where: { conversationId },
-        data: {
-          messagesSent: totalMessages,
-          totalWordsSent: totalWords,
-          avgConfidence: weightedConfidence,
-          lastResponseAt: new Date(),
-        },
-      });
-    }
-
-    return this.prisma.agentAnalytic.create({
-      data: {
+    return this.prisma.agentAnalytic.upsert({
+      where: { conversationId },
+      create: {
         conversationId,
         messagesSent: data.messagesSent,
         totalWordsSent: data.wordsSent,
+        avgConfidence: data.avgConfidence,
+        lastResponseAt: new Date(),
+      },
+      update: {
+        messagesSent: { increment: data.messagesSent },
+        totalWordsSent: { increment: data.wordsSent },
         avgConfidence: data.avgConfidence,
         lastResponseAt: new Date(),
       },

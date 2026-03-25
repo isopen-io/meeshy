@@ -4,9 +4,10 @@ import type { RedisStateManager } from '../memory/redis-state';
 import type { DeliveryQueue } from '../delivery/delivery-queue';
 import type { ConfigCache } from '../config/config-cache';
 import type { DailyBudgetManager } from './daily-budget';
-import type { PendingMessage } from '../graph/state';
+import type { PendingMessage, ToneProfile } from '../graph/state';
 import { findEligibleConversations, type EligibleConversation } from './eligible-conversations';
 import { detectActivity } from './activity-detector';
+import { toneProfileToGlobalFields } from '../memory/profile-merger';
 
 type CompiledGraph = {
   invoke: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
@@ -28,14 +29,20 @@ export class ConversationScanner {
   ) {}
 
   start(intervalMs?: number): void {
-    const interval = intervalMs ?? this.defaultIntervalMs;
-    console.log(`[Scanner] Starting with interval ${interval / 1000}s`);
+    const baseInterval = intervalMs ?? this.defaultIntervalMs;
+    console.log(`[Scanner] Starting with base interval ${baseInterval / 1000}s`);
 
-    this.scanAll().catch((err) => console.error('[Scanner] Initial scan error:', err));
+    const initialDelay = Math.round(3000 + Math.random() * 5000);
+    setTimeout(() => {
+      this.scanAll().catch((err) => console.error('[Scanner] Initial scan error:', err));
+    }, initialDelay);
 
     this.intervalHandle = setInterval(() => {
-      this.scanAll().catch((err) => console.error('[Scanner] Scan cycle error:', err));
-    }, interval);
+      const jitter = Math.round(baseInterval * (Math.random() * 0.2 - 0.1));
+      setTimeout(() => {
+        this.scanAll().catch((err) => console.error('[Scanner] Scan cycle error:', err));
+      }, jitter);
+    }, baseInterval);
   }
 
   stop(): void {
@@ -93,11 +100,16 @@ export class ConversationScanner {
 
   private async scanAll(): Promise<void> {
     const lockKey = 'agent:scanning:lock';
-    const acquired = await this.redis.set(lockKey, '1', 'EX', 300, 'NX');
+    const lockTtl = 120;
+    const acquired = await this.redis.set(lockKey, '1', 'EX', lockTtl, 'NX');
     if (!acquired) {
       console.log('[Scanner] Another scan in progress, skipping');
       return;
     }
+
+    const heartbeat = setInterval(() => {
+      this.redis.expire(lockKey, lockTtl).catch(() => {});
+    }, Math.round(lockTtl * 0.4) * 1000);
 
     try {
       this.scanning = true;
@@ -123,7 +135,7 @@ export class ConversationScanner {
 
           if (!globalBudgetCheck.allowed) {
             console.log(`[Scanner] Global scan budget exhausted: ${globalBudgetCheck.current}/${globalBudgetCheck.max}`);
-            break; // Stop scanning this cycle
+            break;
           }
 
           const processed = await this.processConversation(conv);
@@ -136,6 +148,7 @@ export class ConversationScanner {
         }
       }
     } finally {
+      clearInterval(heartbeat);
       this.scanning = false;
       await this.redis.del(lockKey);
     }
@@ -159,7 +172,19 @@ export class ConversationScanner {
       this.stateManager.getTodayActiveUserIds(conversationId),
     ]);
 
-    let controlledUsers = manualControlledUsers;
+    let controlledUsers = manualControlledUsers.map((u) => {
+      const cachedProfile = toneProfiles[u.userId];
+      if (!cachedProfile) return u;
+      return {
+        ...u,
+        role: {
+          ...u.role,
+          commonEmojis: u.role.commonEmojis.length > 0 ? u.role.commonEmojis : cachedProfile.commonEmojis,
+          reactionPatterns: u.role.reactionPatterns.length > 0 ? u.role.reactionPatterns : cachedProfile.reactionPatterns,
+          personaSummary: u.role.personaSummary || cachedProfile.personaSummary,
+        },
+      };
+    });
     const config = await this.persistence.getAgentConfig(conversationId);
     if (config?.autoPickupEnabled && controlledUsers.length < (config.maxControlledUsers ?? 5)) {
       // STRATEGY: Gradual introduction.
@@ -218,6 +243,18 @@ export class ConversationScanner {
       console.log(`[Scanner] Skipping conv=${conversationId}: no controlled users`);
       return false;
     }
+
+    // P2.2: Filter out controlled users on cooldown
+    const availableUsers = [];
+    for (const u of controlledUsers) {
+      const onCooldown = await this.stateManager.isOnCooldown(conversationId, u.userId);
+      if (!onCooldown) availableUsers.push(u);
+    }
+    if (availableUsers.length === 0) {
+      console.log(`[Scanner] Skipping conv=${conversationId}: all controlled users on cooldown`);
+      return false;
+    }
+    controlledUsers = availableUsers;
 
     let effectiveMessages = messages;
     if (effectiveMessages.length === 0) {
@@ -310,6 +347,25 @@ export class ConversationScanner {
 
     if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);
     if (result.toneProfiles) await this.stateManager.setToneProfiles(conversationId, result.toneProfiles as Record<string, any>);
+
+    // P1.1: Persist global profiles for non-controlled users (enables auto-pickup)
+    // P3.2: Persist updated Observer profiles for controlled users
+    if (result.toneProfiles) {
+      const observedProfiles = result.toneProfiles as Record<string, ToneProfile>;
+      const controlledUserIds = new Set(controlledUsers.map((u) => u.userId));
+
+      for (const [userId, profile] of Object.entries(observedProfiles)) {
+        if (controlledUserIds.has(userId)) {
+          if (profile.messagesAnalyzed > (controlledUsers.find((u) => u.userId === userId)?.role.messagesAnalyzed ?? 0)) {
+            this.persistence.upsertUserRole(conversationId, profile).catch((err) =>
+              console.error(`[Scanner] Error persisting controlled user profile ${userId}:`, err));
+          }
+        } else if (profile.messagesAnalyzed >= 10) {
+          this.persistence.upsertGlobalProfile(userId, toneProfileToGlobalFields(profile)).catch((err) =>
+            console.error(`[Scanner] Error persisting global profile ${userId}:`, err));
+        }
+      }
+    }
 
     const updatedHistory = result.agentHistory as Array<{ userId: string; topic: string; contentHash: string; timestamp: number }> | undefined;
     if (updatedHistory && updatedHistory.length > 0) {

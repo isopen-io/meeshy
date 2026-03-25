@@ -18,11 +18,28 @@ const OBSERVER_SYSTEM_PROMPT = `Tu es un analyste conversationnel. Analyse la co
    - "reactionPatterns": emojis qu'il utilise typiquement en reaction (liste de strings)
    - "personaSummary": resume court de sa personnalite
 
+IMPORTANT: Retourne les valeurs de champ TOUJOURS en francais (familier/courant/soutenu, court/moyen/long, jamais/occasionnel/abondant), quelle que soit la langue de la conversation.
 Retourne UNIQUEMENT du JSON valide, aucun texte autour.`;
+
+function mergeStringArrays(incoming: unknown, existing: string[] | undefined): string[] {
+  const incomingArr = Array.isArray(incoming) ? incoming.filter((s): s is string => typeof s === 'string') : [];
+  const existingArr = existing ?? [];
+  if (incomingArr.length === 0) return existingArr;
+  return [...new Set([...existingArr, ...incomingArr])];
+}
+
+function safeString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.length > 0 ? value : fallback;
+}
+
+const CONFIDENCE_DECAY = 0.005;
+const MAX_LOCK_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function createObserverNode(llm: LlmProvider) {
   return async function observe(state: ConversationState) {
-    if (state.messages.length === 0) return state;
+    if (state.messages.length === 0) return {};
+
+    const participantIds = new Set(state.messages.map((m) => m.senderId));
 
     const conversationText = state.messages
       .map((m) => `[${m.senderName}]: ${m.content}`)
@@ -40,42 +57,68 @@ export function createObserverNode(llm: LlmProvider) {
         maxTokens: 1024,
       });
 
-      const parsed = parseJsonLlm<{ summary?: string; overallTone?: string; profiles?: Record<string, unknown> }>(response.content);
+      let parsed: { summary?: string; overallTone?: string; profiles?: Record<string, unknown> };
+      try {
+        parsed = parseJsonLlm<typeof parsed>(response.content);
+      } catch {
+        console.warn('[Observer] Failed to parse LLM response, preserving existing state');
+        return { summary: state.summary };
+      }
 
       const updatedProfiles: Record<string, ToneProfile> = { ...state.toneProfiles };
 
       if (parsed.profiles) {
         for (const [userId, profile] of Object.entries(parsed.profiles)) {
+          if (!participantIds.has(userId)) continue;
+
           const existing = updatedProfiles[userId];
           const p = profile as Record<string, unknown>;
 
-          if (existing?.locked) continue;
+          const controlledUser = state.controlledUsers.find((u) => u.userId === userId);
+          const preservedOrigin = controlledUser?.role.origin ?? existing?.origin ?? 'observed';
 
-          const messagesAnalyzed = (existing?.messagesAnalyzed ?? 0) +
-            state.messages.filter((m) => m.senderId === userId).length;
+          if (existing?.locked) {
+            if (existing.confidence > 0) {
+              updatedProfiles[userId] = {
+                ...existing,
+                confidence: Math.max(0.5, existing.confidence - CONFIDENCE_DECAY),
+                locked: existing.confidence - CONFIDENCE_DECAY > 0.5,
+              };
+            }
+            continue;
+          }
+
+          const lastAnalyzedId = (existing as any)?._lastAnalyzedMessageId as string | undefined;
+          const newMessages = lastAnalyzedId
+            ? state.messages.filter((m) => m.senderId === userId && m.id > lastAnalyzedId)
+            : state.messages.filter((m) => m.senderId === userId);
+          const newCount = newMessages.length;
+          const messagesAnalyzed = (existing?.messagesAnalyzed ?? 0) + newCount;
+          const latestMessageId = newMessages.length > 0 ? newMessages[newMessages.length - 1].id : lastAnalyzedId;
 
           updatedProfiles[userId] = {
             userId,
-            displayName: state.messages.find((m) => m.senderId === userId)?.senderName ?? userId,
-            origin: existing?.origin ?? 'observed',
+            displayName: state.messages.find((m) => m.senderId === userId)?.senderName ?? existing?.displayName ?? userId,
+            origin: preservedOrigin,
             archetypeId: existing?.archetypeId,
-            personaSummary: (p.personaSummary as string) ?? existing?.personaSummary ?? '',
-            tone: (p.tone as string) ?? existing?.tone ?? 'neutre',
-            vocabularyLevel: (p.vocabularyLevel as string) ?? existing?.vocabularyLevel ?? 'courant',
-            typicalLength: (p.typicalLength as string) ?? existing?.typicalLength ?? 'moyen',
-            emojiUsage: (p.emojiUsage as string) ?? existing?.emojiUsage ?? 'occasionnel',
-            topicsOfExpertise: (p.topicsOfExpertise as string[]) ?? existing?.topicsOfExpertise ?? [],
-            topicsAvoided: (p.topicsAvoided as string[]) ?? existing?.topicsAvoided ?? [],
+            personaSummary: safeString(p.personaSummary, existing?.personaSummary ?? ''),
+            tone: safeString(p.tone, existing?.tone ?? 'neutre'),
+            vocabularyLevel: safeString(p.vocabularyLevel, existing?.vocabularyLevel ?? 'courant'),
+            typicalLength: safeString(p.typicalLength, existing?.typicalLength ?? 'moyen'),
+            emojiUsage: safeString(p.emojiUsage, existing?.emojiUsage ?? 'occasionnel'),
+            topicsOfExpertise: mergeStringArrays(p.topicsOfExpertise, existing?.topicsOfExpertise),
+            topicsAvoided: mergeStringArrays(p.topicsAvoided, existing?.topicsAvoided),
             relationshipMap: existing?.relationshipMap ?? {},
-            catchphrases: (p.catchphrases as string[]) ?? existing?.catchphrases ?? [],
-            responseTriggers: (p.responseTriggers as string[]) ?? existing?.responseTriggers ?? [],
-            silenceTriggers: (p.silenceTriggers as string[]) ?? existing?.silenceTriggers ?? [],
-            commonEmojis: (p.commonEmojis as string[]) ?? existing?.commonEmojis ?? [],
-            reactionPatterns: (p.reactionPatterns as string[]) ?? existing?.reactionPatterns ?? [],
+            catchphrases: mergeStringArrays(p.catchphrases, existing?.catchphrases),
+            responseTriggers: mergeStringArrays(p.responseTriggers, existing?.responseTriggers),
+            silenceTriggers: mergeStringArrays(p.silenceTriggers, existing?.silenceTriggers),
+            commonEmojis: mergeStringArrays(p.commonEmojis, existing?.commonEmojis),
+            reactionPatterns: mergeStringArrays(p.reactionPatterns, existing?.reactionPatterns),
             messagesAnalyzed,
             confidence: Math.min(messagesAnalyzed / 50, 1.0),
             locked: messagesAnalyzed >= 50,
-          };
+            _lastAnalyzedMessageId: latestMessageId,
+          } as ToneProfile & { _lastAnalyzedMessageId?: string };
         }
       }
 
@@ -85,7 +128,7 @@ export function createObserverNode(llm: LlmProvider) {
       };
     } catch (error) {
       console.error('[Observer] Error analyzing conversation:', error);
-      return {};
+      return { summary: state.summary };
     }
   };
 }

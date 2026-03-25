@@ -235,7 +235,7 @@ function validateInterventions(
         topic: String(item.topic ?? ''),
         replyToMessageId: item.replyToMessageId ? String(item.replyToMessageId) : undefined,
         mentionUsernames: Array.isArray(item.mentionUsernames) ? item.mentionUsernames.map(String) : [],
-        delaySeconds: Math.max(30, Math.min(180, Number(item.delaySeconds) || 60)),
+        delaySeconds: Math.round(Math.max(30, Math.min(180, Number(item.delaySeconds) || 60)) * (0.85 + Math.random() * 0.3)),
         needsWebSearch: Boolean(item.needsWebSearch),
         minWords: limits.minWords,
         maxWords: limits.maxWords,
@@ -251,7 +251,7 @@ function validateInterventions(
         asUserId: userId,
         targetMessageId: targetId,
         emoji: String(item.emoji ?? '👍'),
-        delaySeconds: Math.max(5, Math.min(30, Number(item.delaySeconds) || 10)),
+        delaySeconds: Math.round(Math.max(5, Math.min(30, Number(item.delaySeconds) || 10)) * (0.8 + Math.random() * 0.4)),
       });
       reactionCount++;
       userActionCounts.set(userId, currentCount + 1);
@@ -316,7 +316,10 @@ export function createStrategistNode(llm: LlmProvider) {
       const controlledUserIds = new Set(state.controlledUsers.map((u) => u.userId));
       const messageIds = new Set(state.messages.map((m) => m.id));
 
-      const effectiveMaxMessages = Math.min(maxResponses, state.budgetRemaining);
+      const dynamicMax = state.activityScore < 0.3
+        ? maxResponses
+        : Math.max(1, Math.ceil(maxResponses * (1 - state.activityScore)));
+      const effectiveMaxMessages = Math.min(dynamicMax, state.budgetRemaining);
 
       const validatedInterventions = validateInterventions(
         parsed.interventions ?? [],

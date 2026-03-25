@@ -79,6 +79,7 @@ function makeStateManager(messages = [makeMessage()]) {
     getAgentHistory: jest.fn().mockResolvedValue([]),
     setAgentHistory: jest.fn().mockResolvedValue(undefined),
     getTodayActiveUserIds: jest.fn().mockResolvedValue([]),
+    isOnCooldown: jest.fn().mockResolvedValue(false),
   } as any;
 }
 

@@ -2,6 +2,7 @@ import type { PendingAction, PendingMessage, PendingReaction } from '../graph/st
 import type { AgentResponse, AgentReaction } from '../zmq/types';
 import type { ZmqAgentPublisher } from '../zmq/zmq-publisher';
 import type { MongoPersistence } from '../memory/mongo-persistence';
+import type { RedisStateManager } from '../memory/redis-state';
 
 export type DeliveryItem = {
   action: PendingAction;
@@ -10,6 +11,15 @@ export type DeliveryItem = {
   timer: ReturnType<typeof setTimeout>;
 };
 
+function randomCooldownSeconds(): number {
+  const base = 240 + Math.random() * 180;
+  return Math.round(base + base * (Math.random() * 0.3 - 0.15));
+}
+
+function jitterMs(value: number, percent = 0.2): number {
+  return Math.round(value + value * (Math.random() * 2 * percent - percent));
+}
+
 export class DeliveryQueue {
   private queue: DeliveryItem[] = [];
   private cancelled = new Set<string>();
@@ -17,23 +27,49 @@ export class DeliveryQueue {
   constructor(
     private publisher: ZmqAgentPublisher,
     private persistence: MongoPersistence,
+    private stateManager?: RedisStateManager,
   ) {}
 
   enqueue(conversationId: string, actions: PendingAction[]): void {
-    const sorted = [...actions].sort((a, b) => a.delaySeconds - b.delaySeconds);
+    const byUser = new Map<string, PendingAction[]>();
+    const reactions: PendingAction[] = [];
 
-    for (const action of sorted) {
-      const delayMs = action.delaySeconds * 1000;
-      const scheduledAt = Date.now() + delayMs;
+    for (const a of actions) {
+      if (a.type === 'reaction') {
+        reactions.push(a);
+      } else {
+        const list = byUser.get(a.asUserId) ?? [];
+        list.push(a);
+        byUser.set(a.asUserId, list);
+      }
+    }
 
-      const timer = setTimeout(async () => {
-        await this.deliver(conversationId, action);
-      }, delayMs);
+    for (const action of reactions) {
+      this.scheduleAction(conversationId, action, jitterMs(action.delaySeconds * 1000));
+    }
 
-      this.queue.push({ action, conversationId, scheduledAt, timer });
+    for (const [, userActions] of byUser) {
+      const sorted = [...userActions].sort((a, b) => a.delaySeconds - b.delaySeconds);
+      let cumulativeMs = jitterMs(sorted[0].delaySeconds * 1000);
+
+      for (let i = 0; i < sorted.length; i++) {
+        if (i > 0 && sorted[i].type === 'message') {
+          const wordCount = (sorted[i] as PendingMessage).content?.split(/\s+/).length ?? 10;
+          cumulativeMs += jitterMs(2000 + Math.random() * 4000 + wordCount * 600, 0.25);
+        }
+        this.scheduleAction(conversationId, sorted[i], i === 0 ? cumulativeMs : jitterMs(cumulativeMs, 0.15));
+      }
     }
 
     console.log(`[DeliveryQueue] Enqueued ${actions.length} actions for conv=${conversationId} (${actions.filter((a) => a.type === 'message').length} messages, ${actions.filter((a) => a.type === 'reaction').length} reactions)`);
+  }
+
+  private scheduleAction(conversationId: string, action: PendingAction, delayMs: number): void {
+    const scheduledAt = Date.now() + delayMs;
+    const timer = setTimeout(async () => {
+      await this.deliver(conversationId, action);
+    }, delayMs);
+    this.queue.push({ action, conversationId, scheduledAt, timer });
   }
 
   cancelForConversation(conversationId: string): number {
@@ -91,6 +127,11 @@ export class DeliveryQueue {
     };
 
     await this.publisher.publish(response);
+    if (this.stateManager) {
+      const cooldown = randomCooldownSeconds();
+      this.stateManager.setCooldown(conversationId, action.asUserId, cooldown).catch((err) =>
+        console.error(`[DeliveryQueue] Cooldown set error:`, err));
+    }
     console.log(`[DeliveryQueue] Delivered message: conv=${conversationId} user=${action.asUserId}`);
   }
 

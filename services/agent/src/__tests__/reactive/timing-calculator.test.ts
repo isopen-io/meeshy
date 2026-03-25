@@ -6,8 +6,8 @@ describe('TimingCalculator', () => {
       interpellationType: 'greeting', wordCount: 2,
       lastUserMessageAgoMs: 5 * 60 * 1000, unreadMessageCount: 1,
     });
-    expect(delay).toBeGreaterThanOrEqual(3_000);
-    expect(delay).toBeLessThanOrEqual(40_000);
+    expect(delay).toBeGreaterThanOrEqual(1_000);
+    expect(delay).toBeLessThanOrEqual(30_000);
   });
 
   it('returns shorter delay if user spoke recently', () => {
@@ -63,8 +63,8 @@ describe('TimingCalculator', () => {
       }));
     }
     const maxDelay = Math.max(...results);
-    // apparition(0-5s) + reading(0) + typing(max 180s) + jitter(±20%) = max ~222s
-    expect(maxDelay).toBeLessThanOrEqual(250_000);
+    // apparition(0-5s) + reading(0) + typing(max 60s) + jitter(±20%) = max ~78s
+    expect(maxDelay).toBeLessThanOrEqual(100_000);
   });
 
   it('adds reading delay proportional to unread count', () => {

@@ -3,6 +3,8 @@ import type { PendingMessage, MessageEntry, ControlledUser, AgentHistoryEntry } 
 import type { DeliveryQueue } from '../delivery/delivery-queue';
 import { calculateResponseDelay } from './timing-calculator';
 import type { InterpellationType } from './interpellation-detector';
+import { runDeterministicChecks, isGreeting, hasRecentGreeting, AI_REVEAL_PATTERNS } from '../agents/quality-gate';
+import { contentHash } from '../utils/content-hash';
 
 type InterpellationInput = {
   conversationId: string;
@@ -70,31 +72,69 @@ export class ReactiveHandler {
       const genResult = await this.callGeneration(input, targetUsers, recentMessages, triageResult);
       if (!genResult.messages || genResult.messages.length === 0) return;
 
-      const actions: PendingMessage[] = genResult.messages.map((msg) => {
-        const targetUser = targetUsers.find((u) => u.userId === msg.asUserId) ?? targetUsers[0];
-        const lastAgentMessage = [...recentMessages].reverse().find((m) => m.senderId === msg.asUserId);
-        const lastMessageAgoMs = lastAgentMessage
-          ? Date.now() - lastAgentMessage.timestamp
-          : 24 * 60 * 60 * 1000;
+      const agentHistory = await this.stateManager.getAgentHistory(input.conversationId);
 
-        const delayMs = calculateResponseDelay({
-          interpellationType: input.interpellationType,
-          wordCount: msg.wordCount || msg.content.split(/\s+/).length,
-          lastUserMessageAgoMs: lastMessageAgoMs,
-          unreadMessageCount: Math.min(recentMessages.length, 10),
-        });
+      const validatedMessages = genResult.messages.filter((msg) => {
+        const check = runDeterministicChecks(msg.content, 1, 400, recentMessages);
+        if (!check.ok) {
+          console.warn(`[ReactiveHandler] Deterministic check failed: ${check.reason}`);
+          return false;
+        }
+        if (isGreeting(msg.content) && hasRecentGreeting(agentHistory, 240)) {
+          console.warn('[ReactiveHandler] Greeting blocked — recent greeting in history');
+          return false;
+        }
+        for (const pattern of AI_REVEAL_PATTERNS) {
+          if (pattern.test(msg.content)) {
+            console.warn(`[ReactiveHandler] AI-reveal blocked: ${pattern}`);
+            return false;
+          }
+        }
+        return true;
+      });
 
-        return {
+      if (validatedMessages.length === 0) return;
+
+      const actions: PendingMessage[] = [];
+      let cumulativeDelayMs = 0;
+
+      for (let i = 0; i < validatedMessages.length; i++) {
+        const msg = validatedMessages[i];
+        const targetUser = targetUsers.find((u) => u.userId === msg.asUserId);
+        if (!targetUser) {
+          console.warn(`[ReactiveHandler] LLM returned unknown asUserId="${msg.asUserId}", skipping`);
+          continue;
+        }
+
+        if (i === 0) {
+          const lastAgentMessage = [...recentMessages].reverse().find((m) => m.senderId === msg.asUserId);
+          const lastMessageAgoMs = lastAgentMessage
+            ? Date.now() - lastAgentMessage.timestamp
+            : 24 * 60 * 60 * 1000;
+
+          cumulativeDelayMs = calculateResponseDelay({
+            interpellationType: input.interpellationType,
+            wordCount: msg.wordCount || msg.content.split(/\s+/).length,
+            lastUserMessageAgoMs: lastMessageAgoMs,
+            unreadMessageCount: Math.min(recentMessages.length, 10),
+          });
+        } else {
+          const wordCount = msg.wordCount || msg.content.split(/\s+/).length;
+          const typingGap = 2000 + Math.random() * 3000 + wordCount * 800;
+          cumulativeDelayMs += typingGap;
+        }
+
+        actions.push({
           type: 'message' as const,
           asUserId: msg.asUserId,
           content: msg.content,
           originalLanguage: targetUser.systemLanguage,
-          replyToId: msg.replyToId,
+          replyToId: i === 0 ? msg.replyToId : undefined,
           mentionedUsernames: [],
-          delaySeconds: Math.round(delayMs / 1000),
+          delaySeconds: Math.round(cumulativeDelayMs / 1000),
           messageSource: 'agent' as const,
-        };
-      });
+        });
+      }
 
       for (const action of actions) {
         const scheduled = this.deliveryQueue.getScheduledForUser(input.conversationId, action.asUserId);
@@ -110,14 +150,14 @@ export class ReactiveHandler {
 
       this.deliveryQueue.enqueue(input.conversationId, actions);
 
-      const agentHistory = await this.stateManager.getAgentHistory(input.conversationId);
+      const currentHistory = await this.stateManager.getAgentHistory(input.conversationId);
       const newEntries: AgentHistoryEntry[] = actions.map((a) => ({
         userId: a.asUserId,
         topic: triageResult.responses?.[0]?.suggestedTopic ?? 'reactive',
-        contentHash: this.hashContent(a.content),
+        contentHash: contentHash(a.content),
         timestamp: Date.now(),
       }));
-      await this.stateManager.setAgentHistory(input.conversationId, [...agentHistory, ...newEntries]);
+      await this.stateManager.setAgentHistory(input.conversationId, [...currentHistory, ...newEntries]);
 
     } catch (error) {
       console.error(`[ReactiveHandler] Error handling interpellation for conv=${input.conversationId}:`, error);
@@ -159,7 +199,12 @@ Reponds en JSON:
       maxTokens: 256,
     });
 
-    return JSON.parse(response.content);
+    try {
+      return JSON.parse(response.content);
+    } catch {
+      const { parseJsonLlm } = await import('../utils/parse-json-llm');
+      return parseJsonLlm<TriageResponse>(response.content);
+    }
   }
 
   private async callGeneration(
@@ -210,16 +255,12 @@ Genere les messages en JSON:
       maxTokens: 1024,
     });
 
-    return JSON.parse(response.content);
+    try {
+      return JSON.parse(response.content);
+    } catch {
+      const { parseJsonLlm } = await import('../utils/parse-json-llm');
+      return parseJsonLlm<GenerationResponse>(response.content);
+    }
   }
 
-  private hashContent(content: string): string {
-    let hash = 0;
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash |= 0;
-    }
-    return hash.toString(36);
-  }
 }

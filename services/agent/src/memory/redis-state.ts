@@ -1,6 +1,15 @@
 import Redis from 'ioredis';
 import type { MessageEntry, ToneProfile, AgentHistoryEntry } from '../graph/state';
 
+function safeParse<T>(data: string, fallback: T, label: string): T {
+  try {
+    return JSON.parse(data) as T;
+  } catch {
+    console.error(`[RedisState] Corrupted ${label} data, returning fallback`);
+    return fallback;
+  }
+}
+
 export class RedisStateManager {
   constructor(private redis: Redis) {}
 
@@ -10,7 +19,8 @@ export class RedisStateManager {
 
   async getMessages(conversationId: string): Promise<MessageEntry[]> {
     const data = await this.redis.get(this.key(conversationId, 'messages'));
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    return safeParse<MessageEntry[]>(data, [], `messages:${conversationId}`);
   }
 
   async setMessages(conversationId: string, messages: MessageEntry[]): Promise<void> {
@@ -27,7 +37,8 @@ export class RedisStateManager {
 
   async getToneProfiles(conversationId: string): Promise<Record<string, ToneProfile>> {
     const data = await this.redis.get(this.key(conversationId, 'profiles'));
-    return data ? JSON.parse(data) : {};
+    if (!data) return {};
+    return safeParse<Record<string, ToneProfile>>(data, {}, `profiles:${conversationId}`);
   }
 
   async setToneProfiles(conversationId: string, profiles: Record<string, ToneProfile>): Promise<void> {
@@ -44,7 +55,8 @@ export class RedisStateManager {
 
   async getAgentHistory(conversationId: string): Promise<AgentHistoryEntry[]> {
     const data = await this.redis.get(this.key(conversationId, 'history'));
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    return safeParse<AgentHistoryEntry[]>(data, [], `history:${conversationId}`);
   }
 
   async setAgentHistory(conversationId: string, history: AgentHistoryEntry[]): Promise<void> {

@@ -85,103 +85,56 @@ describe('MongoPersistence.getSummaryRecord()', () => {
 });
 
 describe('MongoPersistence.updateAnalytics()', () => {
-  it('creates a new record when none exists', async () => {
-    const created = makeAnalyticRecord({ messagesSent: 3, totalWordsSent: 40, avgConfidence: 0.7 });
+  it('calls upsert with atomic increment for messagesSent and totalWordsSent', async () => {
+    const upserted = makeAnalyticRecord({ messagesSent: 13, totalWordsSent: 165 });
     const prisma = {
       agentAnalytic: {
-        findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue(created),
-        update: jest.fn(),
+        upsert: jest.fn().mockResolvedValue(upserted),
       },
     } as any;
 
     const persistence = new MongoPersistence(prisma);
     const result = await persistence.updateAnalytics('conv-1', {
       messagesSent: 3,
-      wordsSent: 40,
-      avgConfidence: 0.7,
-    });
-
-    expect(prisma.agentAnalytic.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        conversationId: 'conv-1',
-        messagesSent: 3,
-        totalWordsSent: 40,
-        avgConfidence: 0.7,
-        lastResponseAt: expect.any(Date),
-      }),
-    });
-    expect(prisma.agentAnalytic.update).not.toHaveBeenCalled();
-    expect(result).toEqual(created);
-  });
-
-  it('accumulates messagesSent and totalWordsSent on existing record', async () => {
-    const existing = makeAnalyticRecord({ messagesSent: 10, totalWordsSent: 120, avgConfidence: 0.8 });
-    const prisma = {
-      agentAnalytic: {
-        findUnique: jest.fn().mockResolvedValue(existing),
-        update: jest.fn().mockResolvedValue({ ...existing, messagesSent: 13, totalWordsSent: 165 }),
-        create: jest.fn(),
-      },
-    } as any;
-
-    const persistence = new MongoPersistence(prisma);
-    await persistence.updateAnalytics('conv-1', {
-      messagesSent: 3,
       wordsSent: 45,
       avgConfidence: 0.6,
     });
 
-    expect(prisma.agentAnalytic.update).toHaveBeenCalledWith({
+    expect(prisma.agentAnalytic.upsert).toHaveBeenCalledWith({
       where: { conversationId: 'conv-1' },
-      data: expect.objectContaining({
-        messagesSent: 13,
-        totalWordsSent: 165,
+      create: expect.objectContaining({
+        conversationId: 'conv-1',
+        messagesSent: 3,
+        totalWordsSent: 45,
+        avgConfidence: 0.6,
+        lastResponseAt: expect.any(Date),
+      }),
+      update: expect.objectContaining({
+        messagesSent: { increment: 3 },
+        totalWordsSent: { increment: 45 },
+        avgConfidence: 0.6,
         lastResponseAt: expect.any(Date),
       }),
     });
-    expect(prisma.agentAnalytic.create).not.toHaveBeenCalled();
+    expect(result).toEqual(upserted);
   });
 
-  it('computes weighted average confidence on update', async () => {
-    const existing = makeAnalyticRecord({ messagesSent: 10, totalWordsSent: 100, avgConfidence: 0.8 });
+  it('creates a new record via upsert when none exists', async () => {
+    const created = makeAnalyticRecord({ messagesSent: 5, totalWordsSent: 60, avgConfidence: 0.9 });
     const prisma = {
       agentAnalytic: {
-        findUnique: jest.fn().mockResolvedValue(existing),
-        update: jest.fn().mockResolvedValue({}),
-        create: jest.fn(),
+        upsert: jest.fn().mockResolvedValue(created),
       },
     } as any;
 
     const persistence = new MongoPersistence(prisma);
-    await persistence.updateAnalytics('conv-1', {
+    const result = await persistence.updateAnalytics('conv-1', {
       messagesSent: 5,
-      wordsSent: 50,
-      avgConfidence: 0.5,
-    });
-
-    const updateCall = prisma.agentAnalytic.update.mock.calls[0][0];
-    expect(updateCall.data.avgConfidence).toBeCloseTo(0.7, 5);
-  });
-
-  it('uses incoming avgConfidence directly when existing messagesSent is 0', async () => {
-    const existing = makeAnalyticRecord({ messagesSent: 0, totalWordsSent: 0, avgConfidence: 0 });
-    const prisma = {
-      agentAnalytic: {
-        findUnique: jest.fn().mockResolvedValue(existing),
-        update: jest.fn().mockResolvedValue({}),
-        create: jest.fn(),
-      },
-    } as any;
-
-    const persistence = new MongoPersistence(prisma);
-    await persistence.updateAnalytics('conv-1', {
-      messagesSent: 4,
       wordsSent: 60,
       avgConfidence: 0.9,
     });
 
-    const updateCall = prisma.agentAnalytic.update.mock.calls[0][0];
-    expect(updateCall.data.avgConfidence).toBeCloseTo(0.9, 5);
+    expect(prisma.agentAnalytic.upsert).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(created);
   });
 });
