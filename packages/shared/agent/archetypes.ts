@@ -11,6 +11,8 @@ export type Archetype = {
   readonly silenceTriggers: readonly string[];
   readonly catchphrases: readonly string[];
   readonly confidence: number;
+  readonly minWords: number;
+  readonly maxWords: number;
 };
 
 const ARCHETYPES: readonly Archetype[] = [
@@ -27,6 +29,8 @@ const ARCHETYPES: readonly Archetype[] = [
     silenceTriggers: ['conflit', 'sujet sensible'],
     catchphrases: ['Intéressant !', 'Comment ça marche ?', 'Tu peux développer ?'],
     confidence: 0.4,
+    minWords: 20,
+    maxWords: 150,
   },
   {
     id: 'enthusiast',
@@ -41,6 +45,8 @@ const ARCHETYPES: readonly Archetype[] = [
     silenceTriggers: ['débat technique profond', 'critique'],
     catchphrases: ['Super !', 'Bravo !', "J'adore cette idée !"],
     confidence: 0.4,
+    minWords: 5,
+    maxWords: 50,
   },
   {
     id: 'skeptic',
@@ -55,6 +61,8 @@ const ARCHETYPES: readonly Archetype[] = [
     silenceTriggers: ['humour léger', 'small talk'],
     catchphrases: ['Tu es sûr ?', 'Source ?', 'Ça dépend du contexte'],
     confidence: 0.4,
+    minWords: 15,
+    maxWords: 120,
   },
   {
     id: 'pragmatic',
@@ -69,6 +77,8 @@ const ARCHETYPES: readonly Archetype[] = [
     silenceTriggers: ['bavardage', 'débat philosophique'],
     catchphrases: ['Concrètement...', 'La solution serait de...', 'Voici ce que je ferais'],
     confidence: 0.4,
+    minWords: 5,
+    maxWords: 60,
   },
   {
     id: 'social',
@@ -83,6 +93,8 @@ const ARCHETYPES: readonly Archetype[] = [
     silenceTriggers: ['discussion technique pointue'],
     catchphrases: ["Et toi, t'en penses quoi ?", 'On en parle ?', 'Ça me rappelle...'],
     confidence: 0.4,
+    minWords: 10,
+    maxWords: 100,
   },
 ];
 

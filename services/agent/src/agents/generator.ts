@@ -107,8 +107,8 @@ async function generateMessage(
     .filter(Boolean);
   const recentTopicsText = userHistory.length > 0 ? userHistory.join(', ') : 'aucun';
 
-  const minWords = state.minWordsPerMessage ?? 3;
-  const maxWords = state.maxWordsPerMessage ?? 400;
+  const minWords = directive.minWords ?? state.minWordsPerMessage ?? 3;
+  const maxWords = directive.maxWords ?? state.maxWordsPerMessage ?? 400;
   const temperature = state.generationTemperature ?? 0.8;
   const maxTokens = Math.max(64, Math.round(maxWords * 1.5));
 
