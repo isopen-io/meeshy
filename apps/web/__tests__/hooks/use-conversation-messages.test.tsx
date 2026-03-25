@@ -231,6 +231,28 @@ describe('useConversationMessages', () => {
   });
 
   describe('Pagination', () => {
+    it('should handle shared link response format (object in data.data)', async () => {
+      mockApiGet.mockResolvedValue({
+        data: {
+          success: true,
+          data: {
+            messages: mockMessages,
+            hasMore: true,
+            total: 10
+          }
+        },
+      });
+
+      const { result } = renderHook(() =>
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
+      );
+
+      await waitFor(() => {
+        expect(result.current.messages.length).toBe(3);
+        expect(result.current.hasMore).toBe(true);
+      });
+    });
+
     it('should set hasMore based on API response', async () => {
       mockApiGet.mockResolvedValue({
         data: {
