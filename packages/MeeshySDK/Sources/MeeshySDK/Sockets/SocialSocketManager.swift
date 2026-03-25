@@ -195,6 +195,11 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         return f
     }()
 
+    deinit {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+    }
+
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()

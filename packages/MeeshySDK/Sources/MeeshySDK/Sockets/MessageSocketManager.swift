@@ -487,6 +487,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         return f
     }()
 
+    deinit {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+    }
+
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()

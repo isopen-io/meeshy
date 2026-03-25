@@ -657,42 +657,6 @@ struct RootView: View {
         .zIndex(100)
     }
 
-    // MARK: - Legacy Floating Buttons (kept for reference)
-    private var floatingButtons: some View {
-        VStack {
-            HStack {
-                // Left - Feed button
-                ThemedFloatingButton(
-                    icon: showFeed ? nil : "square.stack.fill",
-                    colors: ["FF6B6B", "4ECDC4"],
-                    showLogo: showFeed
-                ) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        showFeed.toggle()
-                    }
-                }
-
-                Spacer()
-
-                // Right - Menu button
-                ThemedFloatingButton(
-                    icon: showMenu ? "person.3.fill" : "gearshape.fill",
-                    colors: showMenu ? ["FF6B6B", "4ECDC4"] : ["9B59B6", "4ECDC4"],
-                    badge: showMenu ? 0 : notificationManager.unreadCount
-                ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showMenu.toggle()
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-
-            Spacer()
-        }
-        .zIndex(100)
-    }
-
     // MARK: - Menu Ladder (positioned relative to menu button)
     private var menuLadder: some View {
         GeometryReader { geometry in
