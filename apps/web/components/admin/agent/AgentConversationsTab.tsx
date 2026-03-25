@@ -3,12 +3,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Settings, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Settings, Trash2, ChevronLeft, ChevronRight, Plus, Search as SearchIcon } from 'lucide-react';
 import { agentAdminService, type AgentConfigData } from '@/services/agent-admin.service';
 import { AgentConfigDialog } from './AgentConfigDialog';
+import { UserDisplay } from './UserDisplay';
+import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -31,6 +34,8 @@ export function AgentConversationsTab() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch] = useDebounce(searchTerm, 500);
   const [selectedConfig, setSelectedConfig] = useState<AgentConfigData | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const limit = 20;
@@ -38,7 +43,7 @@ export function AgentConversationsTab() {
   const fetchConfigs = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await agentAdminService.getConfigs(page, limit);
+      const response = await agentAdminService.getConfigs(page, limit, debouncedSearch);
       if (response.success && response.data) {
         setConfigs(Array.isArray(response.data) ? response.data : []);
         setTotal(response.pagination?.total ?? 0);
@@ -51,7 +56,7 @@ export function AgentConversationsTab() {
     }
   }, [page]);
 
-  useEffect(() => { fetchConfigs(); }, [fetchConfigs]);
+  useEffect(() => { fetchConfigs(); }, [fetchConfigs, debouncedSearch]);
 
   const handleToggle = async (config: AgentConfigData) => {
     try {
@@ -59,9 +64,9 @@ export function AgentConversationsTab() {
       setConfigs(prev => prev.map(c =>
         c.conversationId === config.conversationId ? { ...c, enabled: !c.enabled } : c
       ));
-      toast.success(`Agent ${!config.enabled ? 'activ\u00e9' : 'd\u00e9sactiv\u00e9'}`);
+      toast.success(`Agent ${!config.enabled ? 'activé' : 'désactivé'}`);
     } catch {
-      toast.error('Erreur lors de la mise \u00e0 jour');
+      toast.error('Erreur lors de la mise à jour');
     }
   };
 
@@ -70,7 +75,7 @@ export function AgentConversationsTab() {
     try {
       await agentAdminService.deleteConfig(conversationId);
       setConfigs(prev => prev.filter(c => c.conversationId !== conversationId));
-      toast.success('Configuration supprim\u00e9e');
+      toast.success('Configuration supprimée');
     } catch {
       toast.error('Erreur lors de la suppression');
     }
@@ -107,12 +112,24 @@ export function AgentConversationsTab() {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <CardTitle className="text-lg">Configurations Agent</CardTitle>
-          <Button size="sm" onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">Configurer</span>
-          </Button>
+          <div className="flex w-full sm:w-auto gap-2">
+            <div className="relative flex-1 sm:w-64">
+              <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Rechercher..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && fetchConfigs()}
+                className="pl-9"
+              />
+            </div>
+            <Button size="sm" onClick={handleCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Configurer</span>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {configs.length === 0 ? (
@@ -173,9 +190,19 @@ export function AgentConversationsTab() {
                     </div>
 
                     {/* Controlled */}
-                    <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                      {(config.manualUserIds ?? []).length}/{config.maxControlledUsers}
-                    </span>
+                    <div className="flex flex-wrap gap-1 max-w-[120px] overflow-hidden">
+                      {(config.manualUserIds ?? []).slice(0, 3).map(id => (
+                        <UserDisplay key={id} userId={id} size="sm" showUsername={false} className="w-8" />
+                      ))}
+                      {(config.manualUserIds ?? []).length > 3 && (
+                        <Badge variant="secondary" className="h-6 w-6 rounded-full p-0 flex items-center justify-center text-[10px]">
+                          +{(config.manualUserIds ?? []).length - 3}
+                        </Badge>
+                      )}
+                      {(config.manualUserIds ?? []).length === 0 && (
+                        <span className="text-xs text-gray-400">0/{config.maxControlledUsers}</span>
+                      )}
+                    </div>
 
                     {/* Actions */}
                     <div className="flex gap-1 shrink-0">

@@ -9,8 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Save, Shield } from 'lucide-react';
+import { Loader2, Save, Shield, HelpCircle } from 'lucide-react';
 import { agentAdminService, type AgentGlobalConfigUpsert } from '@/services/agent-admin.service';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
 const CONVERSATION_TYPES = ['group', 'channel', 'public', 'global', 'broadcast'] as const;
@@ -68,9 +69,9 @@ export function AgentGlobalConfigTab() {
     try {
       const res = await agentAdminService.updateGlobalConfig(form);
       if (res.success) {
-        toast.success('Configuration globale mise \u00e0 jour');
+        toast.success('Configuration globale mise à jour');
       } else {
-        toast.error('Erreur lors de la mise \u00e0 jour');
+        toast.error('Erreur lors de la mise à jour');
       }
     } catch {
       toast.error('Erreur de connexion au serveur');
@@ -82,6 +83,19 @@ export function AgentGlobalConfigTab() {
   const updateField = <K extends keyof AgentGlobalConfigUpsert>(key: K, value: AgentGlobalConfigUpsert[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
+
+  const InfoIcon = ({ content }: { content: string }) => (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <HelpCircle className="h-3.5 w-3.5 text-gray-400 cursor-help hover:text-indigo-500 transition-colors inline ml-1.5" />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">
+          {content}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 
   const toggleConversationType = (type: string) => {
     const current = form.eligibleConversationTypes ?? [];
@@ -106,40 +120,45 @@ export function AgentGlobalConfigTab() {
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle className="text-lg">Configuration Globale</CardTitle>
-          <p className="text-xs text-gray-500 mt-1">Kill switch global et param\u00e8tres par d\u00e9faut</p>
+          <p className="text-xs text-gray-500 mt-1">Kill switch global et paramètres par défaut</p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant={form.enabled ? 'default' : 'destructive'} className="text-xs">
             <Shield className="h-3 w-3 mr-1" />
-            {form.enabled ? 'Actif' : 'D\u00e9sactiv\u00e9'}
+            {form.enabled ? 'Actif' : 'Désactivé'}
           </Badge>
           <Switch checked={form.enabled ?? true} onCheckedChange={v => updateField('enabled', v)} />
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* System Prompt */}
-        <div className="space-y-2">
-          <Label>System Prompt Global</Label>
+        <div className="space-y-2 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+          <div className="flex items-center">
+            <Label className="font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider text-xs">System Prompt Global</Label>
+            <InfoIcon content="C'est la 'Constitution' de votre IA. Ce texte est ajouté au début de chaque requête LLM. Il définit les règles éthiques de base, le ton de la marque et les interdictions globales qui s'appliquent à tous les agents, quel que soit leur salon." />
+          </div>
           <Textarea
             rows={6}
             maxLength={10000}
             value={form.systemPrompt ?? ''}
             onChange={e => updateField('systemPrompt', e.target.value)}
-            placeholder="Prompt syst\u00e8me global pour tous les agents..."
+            placeholder="Prompt système global pour tous les agents..."
+            className="bg-white dark:bg-gray-800"
           />
           <p className="text-xs text-gray-500">{(form.systemPrompt ?? '').length}/10000</p>
         </div>
 
-        <Separator />
-
         {/* Provider & Model */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Provider par d\u00e9faut</h3>
+        <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Provider par défaut</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Provider</Label>
+              <div className="flex items-center">
+                <Label>Provider</Label>
+                <InfoIcon content="Source d'intelligence principale. OpenAI est souvent plus rapide, Anthropic est réputé pour sa précision et son respect des consignes complexes." />
+              </div>
               <select
-                className="w-full p-2 border rounded-md bg-transparent text-sm"
+                className="w-full p-2 border rounded-md bg-white dark:bg-gray-800 text-sm"
                 value={form.defaultProvider ?? 'openai'}
                 onChange={e => updateField('defaultProvider', e.target.value)}
               >
@@ -148,46 +167,59 @@ export function AgentGlobalConfigTab() {
               </select>
             </div>
             <div className="space-y-2">
-              <Label>Mod\u00e8le</Label>
+              <div className="flex items-center">
+                <Label>Modèle</Label>
+                <InfoIcon content="Version spécifique du moteur. 'Mini' ou 'Haiku' sont très économiques et rapides pour les réponses courtes. '4o' ou 'Sonnet' sont plus intelligents mais plus chers." />
+              </div>
               <Input
                 value={form.defaultModel ?? 'gpt-4o-mini'}
                 onChange={e => updateField('defaultModel', e.target.value)}
+                className="bg-white dark:bg-gray-800"
               />
             </div>
           </div>
         </div>
 
         {/* Fallback */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Fallback</h3>
+        <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Fallback</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Provider fallback</Label>
+              <div className="flex items-center">
+                <Label>Provider fallback</Label>
+                <InfoIcon content="Fournisseur de secours en cas d'erreur du fournisseur principal." />
+              </div>
               <Input
                 value={form.fallbackProvider ?? ''}
                 onChange={e => updateField('fallbackProvider', e.target.value || null)}
                 placeholder="Aucun"
+                className="bg-white dark:bg-gray-800"
               />
             </div>
             <div className="space-y-2">
-              <Label>Mod\u00e8le fallback</Label>
+              <div className="flex items-center">
+                <Label>Modèle fallback</Label>
+                <InfoIcon content="Modèle de secours (souvent un modèle plus petit et moins cher)." />
+              </div>
               <Input
                 value={form.fallbackModel ?? ''}
                 onChange={e => updateField('fallbackModel', e.target.value || null)}
                 placeholder="Aucun"
+                className="bg-white dark:bg-gray-800"
               />
             </div>
           </div>
         </div>
 
-        <Separator />
-
         {/* Budget & Concurrency */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Budget & Concurrence</h3>
+        <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Budget & Concurrence</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Budget quotidien (USD)</Label>
+              <div className="flex items-center">
+                <Label>Budget quotidien (USD)</Label>
+                <InfoIcon content="Vanne de sécurité financière globale. Si la somme des coûts de tous les agents dépasse ce montant, le service est suspendu pour éviter les débordements budgétaires." />
+              </div>
               <Input
                 type="number"
                 value={form.globalDailyBudgetUsd ?? 10}
@@ -195,29 +227,35 @@ export function AgentGlobalConfigTab() {
                 min={0}
                 max={1000}
                 step={0.5}
+                className="bg-white dark:bg-gray-800"
               />
             </div>
             <div className="space-y-2">
-              <Label>Max appels simultan\u00e9s</Label>
+              <div className="flex items-center">
+                <Label>Max appels simultanés</Label>
+                <InfoIcon content="Gestion du débit : bride le nombre de requêtes envoyées en même temps aux providers IA. Évite les erreurs de type 'Rate Limit' (429) lors des pics d'activité." />
+              </div>
               <Input
                 type="number"
                 value={form.maxConcurrentCalls ?? 5}
                 onChange={e => updateField('maxConcurrentCalls', Math.max(1, Math.min(50, parseInt(e.target.value) || 5)))}
                 min={1}
                 max={50}
+                className="bg-white dark:bg-gray-800"
               />
             </div>
           </div>
         </div>
 
-        <Separator />
-
         {/* Scan Settings */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Param\u00e8tres de scan</h3>
+        <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Paramètres de scan</h3>
 
           <div className="space-y-2">
-            <Label>Types de conversations \u00e9ligibles</Label>
+            <div className="flex items-center">
+              <Label>Types de conversations éligibles</Label>
+              <InfoIcon content="Politique de déploiement : choisissez où les agents ont le droit de résider. Les 'Groupes' et 'Public' sont les cibles classiques de l'animation." />
+            </div>
             <div className="flex flex-wrap gap-2">
               {CONVERSATION_TYPES.map(type => {
                 const active = (form.eligibleConversationTypes ?? []).includes(type);
@@ -237,25 +275,33 @@ export function AgentGlobalConfigTab() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Fra\u00eecheur messages (heures)</Label>
+              <div className="flex items-center">
+                <Label>Fraîcheur messages (heures)</Label>
+                <InfoIcon content="Pertinence temporelle : définit si l'agent doit répondre à des messages 'anciens'. À 22h, il ignorera tout ce qui a été dit hier pour ne pas déterrer de vieux débats." />
+              </div>
               <Input
                 type="number"
                 value={form.messageFreshnessHours ?? 22}
                 onChange={e => updateField('messageFreshnessHours', Math.max(1, Math.min(168, parseInt(e.target.value) || 22)))}
                 min={1}
                 max={168}
+                className="bg-white dark:bg-gray-800"
               />
-              <p className="text-xs text-gray-500">Messages plus vieux que cette limite sont ignor\u00e9s</p>
+              <p className="text-xs text-gray-500">Messages plus vieux que cette limite sont ignorés</p>
             </div>
             <div className="space-y-2">
-              <Label>Max conversations/cycle</Label>
+              <div className="flex items-center">
+                <Label>Max conversations/cycle</Label>
+                <InfoIcon content="Impact sur la latence : limite le nombre de salons analysés à chaque passage. Si votre parc d'agents est énorme, cela permet de lisser la charge serveur." />
+              </div>
               <Input
                 type="number"
                 value={form.maxConversationsPerCycle ?? 0}
                 onChange={e => updateField('maxConversationsPerCycle', Math.max(0, parseInt(e.target.value) || 0))}
                 min={0}
+                className="bg-white dark:bg-gray-800"
               />
-              <p className="text-xs text-gray-500">0 = illimit\u00e9</p>
+              <p className="text-xs text-gray-500">0 = illimité</p>
             </div>
           </div>
         </div>

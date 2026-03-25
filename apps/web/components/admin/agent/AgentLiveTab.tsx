@@ -13,6 +13,8 @@ import {
   type LiveStateData,
   type ToneProfileEntry,
 } from '@/services/agent-admin.service';
+import { UserDisplay } from './UserDisplay';
+import { ConversationPicker } from './ConversationPicker';
 
 function truncateId(id: string | undefined | null) {
   if (!id) return '???';
@@ -108,16 +110,21 @@ function ActivityCard({ data }: { data: LiveStateData }) {
           {(data.controlledUsers ?? []).length === 0 ? (
             <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucun utilisateur</p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-3">
               {(data.controlledUsers ?? []).map(user => (
-                <div key={user.userId} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-gray-900 dark:text-gray-100">{user.displayName}</span>
-                    {user.locked && <Lock className="h-3 w-3 text-orange-500" />}
+                <div key={user.userId} className="flex items-center justify-between group p-1.5 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  <div className="flex items-center gap-2 overflow-hidden flex-1">
+                    <UserDisplay userId={user.userId} size="sm" showUsername={false} className="flex-1" />
+                    {user.locked && <Lock className="h-3 w-3 text-orange-500 shrink-0" />}
                   </div>
-                  <span className={`text-xs font-mono ${confidenceColor(user.confidence)}`}>
-                    {(user.confidence * 100).toFixed(0)}%
-                  </span>
+                  <div className="flex items-center gap-2 pl-2">
+                    <div className="hidden group-hover:block transition-all">
+                      <Progress value={user.confidence * 100} className="w-12 h-1" />
+                    </div>
+                    <span className={`text-xs font-bold ${confidenceColor(user.confidence)} tabular-nums`}>
+                      {(user.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -172,16 +179,11 @@ function ToneProfilesCard({ profiles }: { profiles: Record<string, ToneProfileEn
               </thead>
               <tbody>
                 {entries.map(profile => (
-                  <tr key={profile.userId} className="border-b border-gray-50 dark:border-gray-800/50 last:border-0">
-                    <td className="py-2">
-                      <div className="flex flex-col">
-                        <span className="text-gray-900 dark:text-gray-100 font-medium">
-                          {profile.displayName || truncateId(profile.userId)}
-                        </span>
-                        <span className="text-xs text-gray-400 font-mono">{truncateId(profile.userId)}</span>
-                      </div>
+                  <tr key={profile.userId} className="border-b border-gray-50 dark:border-gray-800/50 last:border-0 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                    <td className="py-3 pr-2">
+                      <UserDisplay userId={profile.userId} size="sm" />
                     </td>
-                    <td className="py-2">
+                    <td className="py-3">
                       <Badge variant="outline" className="text-xs">{profile.tone}</Badge>
                     </td>
                     <td className="py-2 text-gray-600 dark:text-gray-300 text-xs">{profile.vocabularyLevel}</td>
@@ -361,30 +363,36 @@ export function AgentLiveTab() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="border-indigo-100 dark:border-indigo-900 shadow-sm">
         <CardContent className="pt-6">
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="ID de la conversation (ObjectId 24 chars)"
-                value={conversationId}
-                onChange={e => setConversationId(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="pl-9"
+          <div className="flex items-end gap-4">
+            <div className="flex-1">
+              <ConversationPicker
+                label="Sélectionner une conversation"
+                selectedId={conversationId || null}
+                onSelect={id => {
+                  setConversationId(id);
+                  // Auto-fetch if user selects from search
+                  setTimeout(fetchLiveState, 0);
+                }}
+                onClear={() => {
+                  setConversationId('');
+                  setLiveState(null);
+                }}
+                placeholder="Chercher par nom, ID ou #identifiant..."
               />
             </div>
             <Button
               onClick={fetchLiveState}
               disabled={loading || !conversationId.trim()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white h-12 px-6"
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
-                <Activity className="h-4 w-4 mr-1.5" />
+                <Activity className="h-4 w-4 mr-2" />
               )}
-              Charger
+              Superviser
             </Button>
           </div>
         </CardContent>

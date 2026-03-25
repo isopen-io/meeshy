@@ -11,6 +11,9 @@ import {
 } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
 import { agentAdminService, type ArchetypeData } from '@/services/agent-admin.service';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Info } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const TONE_COLORS: Record<string, string> = {
@@ -63,34 +66,69 @@ export function AgentArchetypesTab() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Catalogue d&apos;archétypes
-        </h2>
-        <Badge variant="outline">{archetypes.length} archétypes</Badge>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 border rounded-lg">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+            Catalogue d&apos;archétypes
+          </h2>
+          <p className="text-sm text-gray-500">Profils prédéfinis pour la génération de personnalité.</p>
+        </div>
+        <Badge variant="secondary" className="px-3 py-1">{archetypes.length} disponibles</Badge>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {archetypes.map(archetype => (
-          <Card key={archetype.id}>
+          <Card key={archetype.id} className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+            <div className="h-1.5 w-full bg-indigo-500" />
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">{archetype.name}</CardTitle>
-                <Badge variant="outline" className="font-mono text-xs">{archetype.id}</Badge>
+                <CardTitle className="text-base font-bold">{archetype.name}</CardTitle>
+                <Badge variant="outline" className="font-mono text-[10px] uppercase opacity-60">ID: {archetype.id}</Badge>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{archetype.personaSummary}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-snug">{archetype.personaSummary}</p>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2">
-                <Badge className={TONE_COLORS[archetype.tone] ?? 'bg-gray-100 text-gray-800'}>
-                  {archetype.tone}
-                </Badge>
-                <Badge variant="outline">{archetype.vocabularyLevel}</Badge>
-                <Badge variant="outline">{EMOJI_LABELS[archetype.emojiUsage] ?? archetype.emojiUsage}</Badge>
-                <Badge variant="secondary">{archetype.typicalLength}</Badge>
-              </div>
+            <CardContent className="space-y-4">
+              {/* Tags with Info icons */}
+              <TooltipProvider>
+                <div className="flex flex-wrap gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge className={cn("cursor-default", TONE_COLORS[archetype.tone] ?? 'bg-gray-100 text-gray-800')}>
+                        {archetype.tone}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>Ton de la communication</TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="cursor-default border-slate-300">
+                        {archetype.vocabularyLevel}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>Niveau de vocabulaire employé</TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="cursor-default border-slate-300">
+                        {EMOJI_LABELS[archetype.emojiUsage] ?? archetype.emojiUsage}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>Fréquence d&apos;utilisation des emojis</TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="secondary" className="cursor-default">
+                        {archetype.typicalLength}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>Longueur typique des messages</TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
 
               {/* Catchphrases */}
               {(archetype.catchphrases ?? []).length > 0 && (
