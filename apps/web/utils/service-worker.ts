@@ -1,10 +1,8 @@
 /**
  * SERVICE WORKER UTILITIES
  * Enregistrement et gestion du service worker avec détection automatique de mise à jour.
+ * Pattern "WhatsApp style" : déclenchement sur différence de version détectée par WebSocket.
  */
-
-// Intervalle de vérification automatique pour les nouveaux builds Docker (tous les 15 minutes)
-const UPDATE_CHECK_INTERVAL = 15 * 60 * 1000;
 
 /**
  * Enregistre le service worker et retourne l'instance
@@ -31,7 +29,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
       notifyUpdateAvailable(registration);
     }
 
-    // 2. Écouter les futures mises à jour
+    // 2. Écouter les futures mises à jour (quand registration.update() est appelé)
     registration.addEventListener('updatefound', () => {
       const newWorker = registration.installing;
       if (!newWorker) return;
@@ -44,7 +42,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
       });
     });
 
-    // 3. Écouter le changement de contrôleur (quand le nouveau SW prend le contrôle)
+    // 3. Écouter le changement de contrôleur (quand le nouveau SW prend le contrôle après SKIP_WAITING)
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing) return;
@@ -53,18 +51,28 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
       window.location.reload();
     });
 
-    // 4. Automatiser le check de nouvelle version Docker périodiquement
-    setInterval(() => {
-      console.log('[SW] Checking for new build/version...');
-      registration.update().catch((err) => {
-        console.warn('[SW] Periodic update check failed', err);
-      });
-    }, UPDATE_CHECK_INTERVAL);
-
     return registration;
   } catch (error) {
     console.error('[SW] Registration failed:', error);
     return null;
+  }
+}
+
+/**
+ * Force le navigateur à vérifier si une nouvelle version du sw.js existe.
+ * Appelé lorsqu'un mismatch de version est détecté (ex: via WebSocket).
+ */
+export async function triggerManualUpdateCheck(): Promise<void> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (registration) {
+      console.log('[SW] Triggering manual update check due to version mismatch...');
+      await registration.update();
+    }
+  } catch (error) {
+    console.warn('[SW] Manual update check failed', error);
   }
 }
 
@@ -81,11 +89,23 @@ function notifyUpdateAvailable(registration: ServiceWorkerRegistration) {
 }
 
 /**
- * Force le service worker en attente à s'activer
+ * Force le service worker en attente à s'activer et nettoie les caches
  */
-export function activateWaitingServiceWorker(registration: ServiceWorkerRegistration) {
+export async function activateWaitingServiceWorker(registration: ServiceWorkerRegistration) {
   if (registration.waiting) {
+    // 1. Demander au SW de s'activer
     registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+
+    // 2. Tenter de vider les caches nommés côté client pour garantir la fraîcheur
+    if ('caches' in window) {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(key => caches.delete(key)));
+        console.log('[SW] All caches invalidated before reload');
+      } catch (err) {
+        console.warn('[SW] Cache invalidation failed', err);
+      }
+    }
   }
 }
 
@@ -113,48 +133,21 @@ export async function unregisterServiceWorker(): Promise<boolean> {
 }
 
 /**
- * Force le service worker à se mettre à jour manuellement
- */
-export async function updateServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) {
-    return null;
-  }
-
-  try {
-    const registration = await navigator.serviceWorker.getRegistration();
-    if (!registration) {
-      return null;
-    }
-
-    await registration.update();
-    console.log('[SW] Update triggered manually');
-    return registration;
-  } catch (error) {
-    console.error('[SW] Update failed:', error);
-    return null;
-  }
-}
-
-/**
  * Vérifie si le service worker est enregistré et actif
  */
-export async function isServiceWorkerActive(): Promise<boolean> {
-  if (!('serviceWorker' in navigator)) {
-    return false;
+export function isServiceWorkerActive(): Promise<boolean> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return Promise.resolve(false);
   }
 
-  const registration = await navigator.serviceWorker.getRegistration();
-  return registration !== undefined && registration.active !== null;
+  return navigator.serviceWorker.getRegistration().then(reg => !!reg && !!reg.active);
 }
 
 /**
  * Envoie un message au service worker
- *
- * @param message Message à envoyer
- * @returns Réponse du service worker
  */
 export async function sendMessageToServiceWorker(message: any): Promise<any> {
-  if (!navigator.serviceWorker.controller) {
+  if (typeof window === 'undefined' || !navigator.serviceWorker.controller) {
     throw new Error('No service worker controller');
   }
 

@@ -817,9 +817,11 @@ export class MeeshySocketIOManager {
             } catch {}
 
             // CORRECTION CRITIQUE: Émettre l'événement AUTHENTICATED IMMÉDIATEMENT
+            // Inclure la version de l'application pour permettre au client de détecter une mise à jour (WhatsApp pattern)
             const authResponse = { 
               success: true, 
-              user: { id: user.id, language: user.language, isAnonymous: false } 
+              user: { id: user.id, language: user.language, isAnonymous: false },
+              version: process.env.APP_VERSION || '1.1.0'
             };
             
             socket.emit(SERVER_EVENTS.AUTHENTICATED, authResponse);
@@ -904,7 +906,8 @@ export class MeeshySocketIOManager {
             // CORRECTION CRITIQUE: Émettre l'événement AUTHENTICATED IMMÉDIATEMENT
             const authResponse = {
               success: true,
-              user: { id: user.id, language: user.language, isAnonymous: true }
+              user: { id: user.id, language: user.language, isAnonymous: true },
+              version: process.env.APP_VERSION || '1.1.0'
             };
 
             socket.emit(SERVER_EVENTS.AUTHENTICATED, authResponse);
@@ -1054,7 +1057,11 @@ export class MeeshySocketIOManager {
           socket.join('conversation:any');
         } catch {}
         
-        socket.emit(SERVER_EVENTS.AUTHENTICATED, { success: true, user: { id: user.id, language: user.language } });
+        socket.emit(SERVER_EVENTS.AUTHENTICATED, {
+          success: true,
+          user: { id: user.id, language: user.language },
+          version: process.env.APP_VERSION || '1.1.0'
+        });
         
       } else {
         socket.emit(SERVER_EVENTS.AUTHENTICATED, { success: false, error: 'Authentication failed' });

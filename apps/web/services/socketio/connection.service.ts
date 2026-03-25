@@ -229,6 +229,17 @@ export class ConnectionService {
     this.state.socket.on(SERVER_EVENTS.AUTHENTICATED, (response: any) => {
       if (response?.success) {
         this.state.isConnected = true;
+
+        // WhatsApp style: Vérifier la version du serveur
+        const serverVersion = response.version;
+        const clientVersion = process.env.NEXT_PUBLIC_APP_VERSION || '1.1.0';
+
+        if (serverVersion && serverVersion !== clientVersion) {
+          console.log(`[SW] Version mismatch detected! Server: ${serverVersion}, Client: ${clientVersion}`);
+          // Déclencher le check de mise à jour du Service Worker
+          require('@/utils/service-worker').triggerManualUpdateCheck().catch(console.error);
+        }
+
         onAuthenticated();
 
         // Auto-join conversation if callback provided
