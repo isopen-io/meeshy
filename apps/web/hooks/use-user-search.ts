@@ -31,25 +31,13 @@ export function useUserSearch(
 
     setIsLoading(true);
     try {
-      const response = await apiService.get<{ success: boolean; data: User[] }>(
-        `/users/search?q=${encodeURIComponent(trimmedQuery)}`
-      );
+      const users = await usersService.searchUsers(trimmedQuery);
 
-      if (response.data?.success && Array.isArray(response.data.data)) {
-        const users = response.data.data;
-        const filteredUsers = users.filter((user: User) =>
-          user.id !== currentUserId &&
-          !selectedUsers.some(selected => selected.id === user.id)
-        );
-        setAvailableUsers(filteredUsers);
-      } else {
-        const users = Array.isArray(response.data) ? response.data : [];
-        const filteredUsers = users.filter((user: User) =>
-          user.id !== currentUserId &&
-          !selectedUsers.some(selected => selected.id === user.id)
-        );
-        setAvailableUsers(filteredUsers);
-      }
+      const filteredUsers = users.filter((user: User) =>
+        user.id !== currentUserId &&
+        !selectedUsers.some(selected => selected.id === user.id)
+      );
+      setAvailableUsers(filteredUsers);
     } catch (error) {
       console.error('Erreur recherche utilisateurs:', error);
       toast.error(t('createConversationModal.errors.searchError'));

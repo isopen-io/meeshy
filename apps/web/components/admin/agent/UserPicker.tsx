@@ -34,10 +34,8 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
     }
     setLoading(true);
     try {
-      const response = await usersService.searchUsers(query);
-      if (response.success && response.data) {
-        setResults(response.data);
-      }
+      const users = await usersService.searchUsers(query);
+      setResults(users);
     } catch (err) {
       console.error('Error searching users:', err);
     } finally {
