@@ -255,26 +255,28 @@ export const getBackendUrl = (): string => {
     const deploymentMode = getDeploymentMode();
     const hostname = window.location.hostname;
 
+    const protocol = window.location.protocol;
+
     // MODE LOCAL (make start/start-network): toujours utiliser localhost:port ou IP:port
     if (deploymentMode === 'local') {
       // Si on accède via IP, utiliser IP:3000
       if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-        return trimSlashes(`http://${hostname}:3000`);
+        return trimSlashes(`${protocol}//${hostname}:3000`);
       }
       // Sinon, toujours utiliser localhost:3000 (même si hostname = meeshy.local)
-      return trimSlashes('http://localhost:3000');
+      return trimSlashes(`${protocol}//localhost:3000`);
     }
 
     // MODE DOCKER: utiliser le nom du service gateway
     if (deploymentMode === 'docker') {
       // En Docker, le frontend accède au gateway via le nom de service
-      return trimSlashes('http://gateway:3000');
+      return trimSlashes(`${protocol}//gateway:3000`);
     }
 
     // MODE PRODUCTION: utiliser les sous-domaines
     // Si on accède via IP ou localhost, utiliser HTTP direct avec port 3000
     if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === 'localhost') {
-      return trimSlashes(`http://${hostname}:3000`);
+      return trimSlashes(`${protocol}//${hostname}:3000`);
     }
 
     // Si on accède via un domaine, utiliser gate.{domain}
@@ -315,30 +317,31 @@ export const getWebSocketUrl = (): string => {
     const deploymentMode = getDeploymentMode();
     const hostname = window.location.hostname;
 
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
     // MODE LOCAL (make start/start-network): toujours utiliser ws://localhost:port ou ws://IP:port
     if (deploymentMode === 'local') {
       // Si on accède via IP, utiliser ws://IP:3000
       if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-        return trimSlashes(`ws://${hostname}:3000`);
+        return trimSlashes(`${protocol}//${hostname}:3000`);
       }
       // Sinon, toujours utiliser ws://localhost:3000 (même si hostname = meeshy.local)
-      return trimSlashes('ws://localhost:3000');
+      return trimSlashes(`${protocol}//localhost:3000`);
     }
 
     // MODE DOCKER: utiliser le nom du service gateway
     if (deploymentMode === 'docker') {
       // En Docker, le frontend accède au gateway via le nom de service
-      return trimSlashes('ws://gateway:3000');
+      return trimSlashes(`${protocol}//gateway:3000`);
     }
 
     // MODE PRODUCTION: utiliser les sous-domaines
     // Si on accède via IP ou localhost, utiliser WS direct avec port 3000
     if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === 'localhost') {
-      return trimSlashes(`ws://${hostname}:3000`);
+      return trimSlashes(`${protocol}//${hostname}:3000`);
     }
 
     // Si on accède via un domaine, utiliser wss://gate.{domain}
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const parts = hostname.split('.');
     if (parts.length >= 2) {
       const gateDomain = parts[0] === 'www'
@@ -398,27 +401,28 @@ export const getTranslationUrl = (): string => {
 
     const deploymentMode = getDeploymentMode();
     const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
 
     // MODE LOCAL (make start/start-network): toujours utiliser localhost:port ou IP:port
     if (deploymentMode === 'local') {
       // Si on accède via IP, utiliser http://IP:8000
       if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-        return trimSlashes(`http://${hostname}:8000`);
+        return trimSlashes(`${protocol}//${hostname}:8000`);
       }
       // Sinon, toujours utiliser localhost:8000 (même si hostname = meeshy.local)
-      return trimSlashes('http://localhost:8000');
+      return trimSlashes(`${protocol}//localhost:8000`);
     }
 
     // MODE DOCKER: utiliser le nom du service translator
     if (deploymentMode === 'docker') {
       // En Docker, le frontend accède au translator via le nom de service
-      return trimSlashes('http://translator:8000');
+      return trimSlashes(`${protocol}//translator:8000`);
     }
 
     // MODE PRODUCTION: utiliser les sous-domaines
     // Si on accède via IP, utiliser HTTP direct avec port 8000
     if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-      return trimSlashes(`http://${hostname}:8000`);
+      return trimSlashes(`${protocol}//${hostname}:8000`);
     }
 
     // Si on accède via un domaine, utiliser ml.{domain}
