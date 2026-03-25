@@ -26,6 +26,11 @@ type BurstLimits = {
   quietIntervalMinutes: number;
 };
 
+type GlobalConvLimits = {
+  weekdayMaxConversations: number;
+  weekendMaxConversations: number;
+};
+
 export class DailyBudgetManager {
   constructor(private redis: Redis) {}
 
@@ -68,6 +73,21 @@ export class DailyBudgetManager {
   async recordBurst(conversationId: string) {
     const key = `${BUDGET_PREFIX}${conversationId}:last-burst`;
     await this.redis.set(key, String(Date.now()), 'EX', BUDGET_TTL);
+  }
+
+  async canScanConversation(limits: GlobalConvLimits) {
+    const key = `${BUDGET_PREFIX}global:scanned-convs:${todayKey()}`;
+    const current = parseInt((await this.redis.get(key)) ?? '0', 10);
+    const max = isWeekend() ? limits.weekendMaxConversations : limits.weekdayMaxConversations;
+    return { allowed: current < max, current, max };
+  }
+
+  async recordScannedConversation() {
+    const key = `${BUDGET_PREFIX}global:scanned-convs:${todayKey()}`;
+    await Promise.all([
+      this.redis.incr(key),
+      this.redis.expire(key, BUDGET_TTL),
+    ]);
   }
 
   async getTodayStats(conversationId: string) {

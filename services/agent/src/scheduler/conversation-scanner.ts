@@ -116,7 +116,20 @@ export class ConversationScanner {
           const lastScan = parseInt(await this.redis.get(lastScanKey) || '0', 10);
           if (Date.now() - lastScan < conv.scanIntervalMinutes * 60_000) continue;
 
-          await this.processConversation(conv);
+          const globalBudgetCheck = await this.budgetManager.canScanConversation({
+            weekdayMaxConversations: globalConfig?.weekdayMaxConversations ?? 50,
+            weekendMaxConversations: globalConfig?.weekendMaxConversations ?? 100,
+          });
+
+          if (!globalBudgetCheck.allowed) {
+            console.log(`[Scanner] Global scan budget exhausted: ${globalBudgetCheck.current}/${globalBudgetCheck.max}`);
+            break; // Stop scanning this cycle
+          }
+
+          const processed = await this.processConversation(conv);
+          if (processed) {
+            await this.budgetManager.recordScannedConversation();
+          }
           await this.redis.set(lastScanKey, String(Date.now()), 'EX', 86400);
         } catch (error) {
           console.error(`[Scanner] Error processing conv=${conv.conversationId}:`, error);
@@ -128,13 +141,13 @@ export class ConversationScanner {
     }
   }
 
-  private async processConversation(conv: EligibleConversation): Promise<void> {
+  private async processConversation(conv: EligibleConversation): Promise<boolean> {
     const { conversationId } = conv;
     const activity = await detectActivity(this.persistence, conversationId);
 
     if (activity.shouldSkip) {
       console.log(`[Scanner] Skipping conv=${conversationId}: ${activity.reason}`);
-      return;
+      return false;
     }
 
     const [messages, summary, toneProfiles, manualControlledUsers, agentHistory, todayActiveUserIds] = await Promise.all([
@@ -194,7 +207,7 @@ export class ConversationScanner {
 
     if (controlledUsers.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no controlled users`);
-      return;
+      return false;
     }
 
     let effectiveMessages = messages;
@@ -220,7 +233,7 @@ export class ConversationScanner {
 
     if (effectiveMessages.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no messages`);
-      return;
+      return false;
     }
 
     const budgetCheck = await this.budgetManager.canSendMessage(conversationId, {
@@ -229,7 +242,7 @@ export class ConversationScanner {
     });
     if (!budgetCheck.allowed) {
       console.log(`[Scanner] Budget exhausted for conv=${conversationId}: ${budgetCheck.current}/${budgetCheck.max}`);
-      return;
+      return false;
     }
 
     if (conv.burstEnabled) {
@@ -238,7 +251,7 @@ export class ConversationScanner {
       });
       if (!burstCheck.allowed) {
         console.log(`[Scanner] Burst cooldown for conv=${conversationId}: ${burstCheck.minutesUntilNext}min remaining`);
-        return;
+        return false;
       }
     }
 
@@ -324,5 +337,6 @@ export class ConversationScanner {
         }).catch((err) => console.error(`[Scanner] Analytics upsert error for conv=${conversationId}:`, err));
       }
     }
+    return true;
   }
 }

@@ -3097,6 +3097,10 @@ model AgentGlobalConfig {
   messageFreshnessHours Int      @default(22)
   /// Max conversations per scan cycle (0 = unlimited)
   maxConversationsPerCycle Int    @default(0)
+  /// Global daily limit for scanned conversations (weekday)
+  weekdayMaxConversations Int    @default(50)
+  /// Global daily limit for scanned conversations (weekend)
+  weekendMaxConversations Int    @default(100)
 
   updatedAt             DateTime @updatedAt
 }

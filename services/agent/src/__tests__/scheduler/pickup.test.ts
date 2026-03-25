@@ -103,6 +103,8 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
       {
         canSendMessage: jest.fn().mockResolvedValue({ allowed: true, remaining: 10 }),
         canBurst: jest.fn().mockResolvedValue({ allowed: true }),
+        canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
+        recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
       } as any
     );
@@ -125,6 +127,8 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
     const scanner = new ConversationScanner(graph, persistence, makeStateManager(), { enqueue: jest.fn() } as any, makeRedis(), { getGlobalConfig: jest.fn().mockResolvedValue(null) } as any, {
       canSendMessage: jest.fn().mockResolvedValue({ allowed: true, remaining: 10 }),
       canBurst: jest.fn().mockResolvedValue({ allowed: true }),
+      canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
+      recordScannedConversation: jest.fn().mockResolvedValue(undefined),
       getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
     } as any);
 

@@ -175,10 +175,8 @@ function calculateWordLimits(
   const archetype = user.role.archetypeId ? getArchetype(user.role.archetypeId) : null;
 
   // 1. User Override
-  // @ts-ignore - Fields added to Prisma
-  let minWords = user.role.overrideMinWordsPerMessage;
-  // @ts-ignore - Fields added to Prisma
-  let maxWords = user.role.overrideMaxWordsPerMessage;
+  let minWords = (user.role as any).overrideMinWordsPerMessage;
+  let maxWords = (user.role as any).overrideMaxWordsPerMessage;
 
   // 2. Archetype
   if (minWords === undefined || minWords === null) minWords = archetype?.minWords;
