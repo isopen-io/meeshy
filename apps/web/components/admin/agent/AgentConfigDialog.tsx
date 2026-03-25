@@ -358,6 +358,32 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 onRemove={id => updateField('excludedUserIds', (form.excludedUserIds || []).filter(u => u !== id))}
                 placeholder="Exclure un utilisateur du contrôle..."
               />
+
+              <div className="space-y-2">
+                <div className="flex items-center">
+                  <Label>Rôles exclus</Label>
+                  <InfoIcon content="L'agent ne pourra jamais prendre le contrôle d'utilisateurs ayant ces rôles." />
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {['USER', 'ADMIN', 'MODO', 'AUDIT', 'ANALYST', 'BIGBOSS'].map(role => {
+                    const isExcluded = (form.excludedRoles ?? []).includes(role);
+                    return (
+                      <Badge
+                        key={role}
+                        variant={isExcluded ? 'destructive' : 'outline'}
+                        className="cursor-pointer select-none py-1 px-3"
+                        onClick={() => {
+                          const current = form.excludedRoles ?? [];
+                          const next = isExcluded ? current.filter(r => r !== role) : [...current, role];
+                          updateField('excludedRoles', next);
+                        }}
+                      >
+                        {role}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
