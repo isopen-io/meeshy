@@ -83,48 +83,8 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
   useEffect(() => {
     if (config) {
       setConversationId(config.conversationId);
-      setForm({
-        enabled: config.enabled,
-        autoPickupEnabled: config.autoPickupEnabled,
-        inactivityThresholdHours: config.inactivityThresholdHours,
-        minHistoricalMessages: config.minHistoricalMessages,
-        maxControlledUsers: config.maxControlledUsers,
-        triggerOnTimeout: config.triggerOnTimeout,
-        timeoutSeconds: config.timeoutSeconds,
-        triggerOnUserMessage: config.triggerOnUserMessage,
-        triggerOnReplyTo: config.triggerOnReplyTo,
-        agentType: config.agentType,
-        contextWindowSize: config.contextWindowSize,
-        useFullHistory: config.useFullHistory,
-        excludedRoles: config.excludedRoles,
-        excludedUserIds: config.excludedUserIds,
-        manualUserIds: config.manualUserIds,
-        triggerFromUserIds: config.triggerFromUserIds,
-        scanIntervalMinutes: config.scanIntervalMinutes,
-        minResponsesPerCycle: config.minResponsesPerCycle,
-        maxResponsesPerCycle: config.maxResponsesPerCycle,
-        reactionsEnabled: config.reactionsEnabled,
-        maxReactionsPerCycle: config.maxReactionsPerCycle,
-        agentInstructions: config.agentInstructions,
-        webSearchEnabled: config.webSearchEnabled,
-        minWordsPerMessage: config.minWordsPerMessage,
-        maxWordsPerMessage: config.maxWordsPerMessage,
-        generationTemperature: config.generationTemperature,
-        qualityGateEnabled: config.qualityGateEnabled,
-        qualityGateMinScore: config.qualityGateMinScore,
-        weekdayMaxMessages: config.weekdayMaxMessages,
-        weekendMaxMessages: config.weekendMaxMessages,
-        weekdayMaxUsers: config.weekdayMaxUsers,
-        weekendMaxUsers: config.weekendMaxUsers,
-        burstEnabled: config.burstEnabled,
-        burstSize: config.burstSize,
-        burstIntervalMinutes: config.burstIntervalMinutes,
-        quietIntervalMinutes: config.quietIntervalMinutes,
-        inactivityDaysThreshold: config.inactivityDaysThreshold,
-        prioritizeTaggedUsers: config.prioritizeTaggedUsers,
-        prioritizeRepliedUsers: config.prioritizeRepliedUsers,
-        reactionBoostFactor: config.reactionBoostFactor,
-      });
+      const { id, conversationId: _cid, conversation, configuredBy, createdAt, updatedAt, ...upsertFields } = config;
+      setForm(upsertFields);
     } else {
       setConversationId('');
       setForm({ ...DEFAULTS });
@@ -211,7 +171,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <select
                 className="w-full p-2 border rounded-md bg-white dark:bg-gray-800 text-sm"
                 value={form.agentType}
-                onChange={e => updateField('agentType', e.target.value)}
+                onChange={e => updateField('agentType', e.target.value as 'personal' | 'support' | 'faq' | 'animator')}
               >
                 <option value="personal">Personnel</option>
                 <option value="support">SAV / Support</option>

@@ -77,13 +77,12 @@ export function useConversationMessages(
   // 🟡 OPTIMISATION: Ref pour loadMessagesInternal pour debounce stable
   const loadMessagesInternalRef = useRef<typeof loadMessagesInternal | null>(null);
 
-  // 🔴 OPTIMISATION: Fonction de tri mémoïsée (utilisée 3× dans le code)
   const sortMessagesByDateDesc = useMemo(() => {
     return (messages: Message[]) => {
       return [...messages].sort((a, b) => {
-        const dateA = new Date(a.createdAt).getTime();
-        const dateB = new Date(b.createdAt).getTime();
-        return dateB - dateA; // DESC: plus récent en premier
+        const dateA = typeof a.createdAt === 'string' ? a.createdAt : String(a.createdAt);
+        const dateB = typeof b.createdAt === 'string' ? b.createdAt : String(b.createdAt);
+        return dateB > dateA ? 1 : dateB < dateA ? -1 : 0;
       });
     };
   }, []);

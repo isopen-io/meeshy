@@ -52,33 +52,21 @@ export const usersService = {
 
     // Validation: minimum 2 caractères requis par l'API
     if (trimmedQuery.length < 2) {
-      console.log('[UsersService] searchUsers ignoré - query trop courte:', trimmedQuery.length);
-      return [];
+        return [];
     }
 
-    console.log('[UsersService] searchUsers appelé avec query:', trimmedQuery);
     try {
       const url = `/users/search?q=${encodeURIComponent(trimmedQuery)}`;
-      console.log('[UsersService] URL de recherche:', url);
+      const response = await apiService.get<{ success: boolean; data: User[] }>(url);
 
-      const response = await apiService.get<any>(url);
-      console.log('[UsersService] ✅ Réponse API:', response);
-
-      // L'API peut renvoyer directement User[] ou { success: true, data: User[] }
-      let users: User[] = [];
       if (Array.isArray(response.data)) {
-        users = response.data;
-      } else if (response.data?.success && Array.isArray(response.data.data)) {
-        users = response.data.data;
-      } else if (Array.isArray(response)) {
-        // Au cas où ApiResponse a été déjà unwrappé par apiService.get
-        users = response as unknown as User[];
+        return response.data;
       }
-
-      console.log('[UsersService] Nombre d\'utilisateurs trouvés:', users.length);
-      return users;
-    } catch (error) {
-      console.error('[UsersService] ❌ Erreur lors de la recherche d\'utilisateurs:', error);
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+      return [];
+    } catch {
       return [];
     }
   },

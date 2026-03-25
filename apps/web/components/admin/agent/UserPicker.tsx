@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { usersService } from '@/services/users.service';
 import { User } from '@/types';
 import { Search, Plus, X, Loader2 } from 'lucide-react';
 import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
+import { useSearchUsersQuery } from '@/hooks/queries/use-users-query';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
@@ -23,29 +23,8 @@ interface UserPickerProps {
 export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rechercher un utilisateur..." }: UserPickerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch] = useDebounce(searchTerm, 500);
-  const [results, setResults] = useState<User[]>([]);
-  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-
-  const searchUsers = useCallback(async (query: string) => {
-    if (query.length < 2) {
-      setResults([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      const users = await usersService.searchUsers(query);
-      setResults(users);
-    } catch (err) {
-      console.error('Error searching users:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    searchUsers(debouncedSearch);
-  }, [debouncedSearch, searchUsers]);
+  const { data: results = [], isLoading: loading } = useSearchUsersQuery(debouncedSearch);
 
   return (
     <div className="space-y-3">

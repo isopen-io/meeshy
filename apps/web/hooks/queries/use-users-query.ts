@@ -52,10 +52,7 @@ export function useDashboardStatsQuery() {
 export function useSearchUsersQuery(query: string) {
   return useQuery({
     queryKey: [...queryKeys.users.all, 'search', query],
-    queryFn: async () => {
-      const response = await usersService.searchUsers(query);
-      return response.data;
-    },
+    queryFn: () => usersService.searchUsers(query),
     // Recherche : données éphémères, pas de cache long
     gcTime: 5 * 60 * 1000, // 5 min
     enabled: query.length >= 2,

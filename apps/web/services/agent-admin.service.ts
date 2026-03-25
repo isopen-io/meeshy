@@ -1,6 +1,8 @@
 import { apiService } from './api.service';
 import type { ApiResponse } from '@meeshy/shared/types';
 
+type AgentType = 'personal' | 'support' | 'faq' | 'animator';
+
 function unwrapResponse<T>(response: ApiResponse<unknown>): ApiResponse<T> {
   if (!response.success || !response.data) return response as ApiResponse<T>;
   const raw = response.data as Record<string, unknown>;
@@ -45,7 +47,7 @@ export type AgentConfigData = {
   triggerOnUserMessage: boolean;
   triggerFromUserIds: string[];
   triggerOnReplyTo: boolean;
-  agentType: string;
+  agentType: AgentType;
   contextWindowSize: number;
   useFullHistory: boolean;
   scanIntervalMinutes: number;
@@ -90,7 +92,7 @@ export type AgentConfigUpsert = {
   triggerOnUserMessage?: boolean;
   triggerFromUserIds?: string[];
   triggerOnReplyTo?: boolean;
-  agentType?: string;
+  agentType?: AgentType;
   contextWindowSize?: number;
   useFullHistory?: boolean;
   scanIntervalMinutes?: number;
