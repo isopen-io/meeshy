@@ -1,13 +1,24 @@
 /**
  * SERVICE WORKER - MEESHY PWA
- * Gère les notifications push et le cache de l'application
+ * Gère les notifications push et le cache de l'interface (App Shell)
+ * Optimisé pour des chargements instantanés et une faible consommation de données.
  */
 
 /// <reference lib="webworker" />
 
 // Déclaration du contexte du service worker
-const SW_VERSION = '1.0.0';
+const SW_VERSION = '1.1.0';
 const CACHE_NAME = `meeshy-v${SW_VERSION}`;
+
+// Assets critiques pour l'App Shell (chargement instantané)
+const PRECACHE_ASSETS = [
+  '/',
+  '/manifest.json',
+  '/favicon.ico',
+  '/favicon.svg',
+  '/android-chrome-192x192.png',
+  '/android-chrome-512x512.png',
+];
 
 // Log helper
 function log(...args) {
@@ -21,22 +32,15 @@ function log(...args) {
 self.addEventListener('install', (event) => {
   log('Installing...');
 
-  // Skip waiting pour activer immédiatement
-  self.skipWaiting();
-
-  // Pré-cache des ressources essentielles (optionnel)
+  // Pré-cache des ressources essentielles
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      log('Cache opened');
-      return cache.addAll([
-        '/',
-        '/icons/icon-192x192.png',
-        '/icons/icon-512x512.png',
-        '/icons/badge-72x72.png',
-      ]).catch((error) => {
-        log('Cache addAll failed:', error);
-        // Ne pas bloquer l'installation si le cache échoue
-      });
+      log('Precaching critical assets');
+      return cache.addAll(PRECACHE_ASSETS);
+    }).then(() => {
+      log('Precaching complete');
+      // On ne fait plus de skipWaiting() automatique ici pour permettre
+      // à l'utilisateur de choisir quand mettre à jour via l'interface.
     })
   );
 });
@@ -50,9 +54,6 @@ self.addEventListener('activate', (event) => {
 
   event.waitUntil(
     (async () => {
-      // Prendre le contrôle de tous les clients
-      await self.clients.claim();
-
       // Nettoyer les anciens caches
       const cacheNames = await caches.keys();
       await Promise.all(
@@ -64,7 +65,9 @@ self.addEventListener('activate', (event) => {
           })
       );
 
-      log('Activated successfully');
+      // Prendre le contrôle de tous les clients immédiatement après l'activation
+      await self.clients.claim();
+      log('Activated and claimed clients');
     })()
   );
 });
@@ -87,8 +90,8 @@ self.addEventListener('push', (event) => {
 
     const options = {
       body: body || '',
-      icon: icon || '/icons/icon-192x192.png',
-      badge: badge || '/icons/badge-72x72.png',
+      icon: icon || '/android-chrome-192x192.png',
+      badge: badge || '/favicon-32x32.png',
       image: image,
       data: notificationData || {},
       tag: tag || notificationData?.conversationId || 'default',
@@ -109,113 +112,43 @@ self.addEventListener('push', (event) => {
     };
 
     event.waitUntil(
-      (async () => {
-        await self.registration.showNotification(title, options);
-
-        // Mettre à jour le badge
-        const unreadCount = notificationData?.unreadCount || 1;
-        if ('setAppBadge' in navigator) {
-          try {
-            await navigator.setAppBadge(unreadCount);
-            log('Badge updated to:', unreadCount);
-          } catch (error) {
-            log('Failed to update badge:', error);
-          }
-        }
-
-        log('Notification shown:', title);
-      })()
+      self.registration.showNotification(title, options)
     );
   } catch (error) {
     log('Error showing notification:', error);
   }
 });
 
-// ============================================================================
-// CLIC SUR NOTIFICATION
-// ============================================================================
-
 self.addEventListener('notificationclick', (event) => {
-  log('Notification clicked:', event.action);
-
   event.notification.close();
 
   const action = event.action;
   const notificationData = event.notification.data || {};
 
-  // Si action "close", ne rien faire
-  if (action === 'close') {
-    return;
-  }
+  if (action === 'close') return;
 
-  // Construire l'URL de destination
-  let targetUrl = '/';
-
-  if (notificationData.url) {
-    targetUrl = notificationData.url;
-  } else if (notificationData.conversationId) {
-    targetUrl = `/conversations/${notificationData.conversationId}`;
-  }
-
+  let targetUrl = notificationData.url || (notificationData.conversationId ? `/conversations/${notificationData.conversationId}` : '/');
   const urlToOpen = new URL(targetUrl, self.location.origin).href;
 
   event.waitUntil(
     (async () => {
-      // Récupérer tous les clients (fenêtres/tabs)
-      const clients = await self.clients.matchAll({
-        type: 'window',
-        includeUncontrolled: true,
-      });
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
 
-      log('Found clients:', clients.length);
-
-      // Chercher un client avec l'URL exacte
       for (const client of clients) {
-        if (client.url === urlToOpen && 'focus' in client) {
-          log('Focusing existing client with exact URL');
-          return client.focus();
-        }
+        if (client.url === urlToOpen && 'focus' in client) return client.focus();
       }
 
-      // Chercher un client avec la même origine
       for (const client of clients) {
         if (client.url.startsWith(self.location.origin) && 'focus' in client) {
-          log('Focusing existing client and navigating');
           const focusedClient = await client.focus();
-
-          // Envoyer un message pour naviguer vers l'URL
-          focusedClient.postMessage({
-            type: 'NOTIFICATION_CLICKED',
-            url: targetUrl,
-            data: notificationData,
-          });
-
+          focusedClient.postMessage({ type: 'NOTIFICATION_CLICKED', url: targetUrl });
           return focusedClient;
         }
       }
 
-      // Aucun client trouvé, ouvrir une nouvelle fenêtre
-      if (self.clients.openWindow) {
-        log('Opening new window');
-        return self.clients.openWindow(urlToOpen);
-      }
+      if (self.clients.openWindow) return self.clients.openWindow(urlToOpen);
     })()
   );
-});
-
-// ============================================================================
-// FERMETURE DE NOTIFICATION
-// ============================================================================
-
-self.addEventListener('notificationclose', (event) => {
-  log('Notification closed');
-
-  // Optionnel : envoyer des analytics
-  const data = event.notification.data;
-  if (data && data.conversationId) {
-    // Envoyer à analytics
-    log('Notification closed for conversation:', data.conversationId);
-  }
 });
 
 // ============================================================================
@@ -223,48 +156,63 @@ self.addEventListener('notificationclose', (event) => {
 // ============================================================================
 
 self.addEventListener('message', (event) => {
-  log('Message received:', event.data);
+  if (!event.data) return;
 
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+  log('Message received:', event.data.type);
+
+  if (event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 
-  if (event.data && event.data.type === 'CLEAR_BADGE') {
-    if ('clearAppBadge' in navigator) {
-      navigator.clearAppBadge().then(() => {
-        log('Badge cleared');
-      }).catch((error) => {
-        log('Failed to clear badge:', error);
-      });
-    }
-  }
-
-  if (event.data && event.data.type === 'SET_BADGE') {
-    const count = event.data.count || 0;
-    if ('setAppBadge' in navigator) {
-      navigator.setAppBadge(count).then(() => {
-        log('Badge set to:', count);
-      }).catch((error) => {
-        log('Failed to set badge:', error);
-      });
-    }
+  // Autres handlers (badge, etc)
+  if (event.data.type === 'CLEAR_BADGE' && 'clearAppBadge' in navigator) {
+    navigator.clearAppBadge();
   }
 });
 
 // ============================================================================
-// FETCH (CACHE STRATEGY)
+// STRATÉGIE DE CACHE (FETCH)
 // ============================================================================
 
 self.addEventListener('fetch', (event) => {
-  // Pour l'instant, on ne fait pas de cache agressif
-  // Juste laisser passer toutes les requêtes normalement
-  // On peut implémenter des stratégies de cache plus tard si besoin
+  const { request } = event;
+  const url = new URL(request.url);
 
-  // Network First pour les données dynamiques
+  // 1. Ignorer les requêtes vers l'API ou socket.io (toujours réseau)
+  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/socket.io') || url.hostname.includes('gate.')) {
+    return;
+  }
+
+  // 2. Stratégie Stale-While-Revalidate pour l'interface et les assets
+  // Permet un chargement instantané depuis le cache tout en mettant à jour en arrière-plan
+  if (request.mode === 'navigate' || request.destination === 'style' || request.destination === 'script' || request.destination === 'font' || request.destination === 'image') {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cachedResponse = await cache.match(request);
+
+        const fetchPromise = fetch(request).then((networkResponse) => {
+          // Ne mettre en cache que les réponses valides
+          if (networkResponse.ok) {
+            cache.put(request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(() => {
+          // En cas d'échec réseau total (offline)
+          return cachedResponse || Response.error();
+        });
+
+        // Retourner la version en cache immédiatement si disponible, sinon attendre le réseau
+        return cachedResponse || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // 3. Par défaut : Network First
   event.respondWith(
-    fetch(event.request).catch(() => {
-      // Si le réseau échoue, essayer le cache
-      return caches.match(event.request);
+    fetch(request).catch(async () => {
+      const cachedResponse = await caches.match(request);
+      return cachedResponse || Response.error();
     })
   );
 });

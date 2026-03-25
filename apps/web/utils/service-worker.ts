@@ -1,6 +1,6 @@
 /**
  * SERVICE WORKER UTILITIES
- * Enregistrement et gestion du service worker
+ * Enregistrement et gestion du service worker avec détection de mise à jour.
  */
 
 /**
@@ -9,7 +9,7 @@
  * @returns ServiceWorkerRegistration ou null si échec
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
     console.warn('[SW] Service Worker not supported on this browser');
     return null;
   }
@@ -18,44 +18,63 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     // Enregistrer le service worker
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/',
-      updateViaCache: 'none', // Toujours chercher les mises à jour
+      updateViaCache: 'none', // Toujours chercher les mises à jour sur le réseau
     });
 
     console.log('[SW] Registered successfully:', registration.scope);
 
-    // Gérer les mises à jour du service worker
+    // 1. Détection initiale d'un worker en attente (déjà installé lors d'une session précédente)
+    if (registration.waiting) {
+      notifyUpdateAvailable(registration);
+    }
+
+    // 2. Écouter les futures mises à jour
     registration.addEventListener('updatefound', () => {
       const newWorker = registration.installing;
-      console.log('[SW] Update found');
+      if (!newWorker) return;
 
-      if (newWorker) {
-        newWorker.addEventListener('statechange', () => {
-          console.log('[SW] State changed:', newWorker.state);
-
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // Nouvelle version installée mais pas encore activée
-            console.log('[SW] New version available');
-
-            // Optionnel : notifier l'utilisateur qu'une mise à jour est disponible
-            window.dispatchEvent(
-              new CustomEvent('sw-update-available', {
-                detail: { registration },
-              })
-            );
-          }
-        });
-      }
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          // Nouvelle version installée et prête à être activée
+          notifyUpdateAvailable(registration);
+        }
+      });
     });
 
-    // Vérifier immédiatement s'il y a une mise à jour
-    registration.update().catch((error) => {
-      console.warn('[SW] Update check failed:', error);
+    // 3. Écouter le changement de contrôleur (quand le nouveau SW prend le contrôle)
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      // Recharger la page pour activer la nouvelle version sur tout le site
+      window.location.reload();
     });
 
     return registration;
   } catch (error) {
     console.error('[SW] Registration failed:', error);
     return null;
+  }
+}
+
+/**
+ * Notifie l'interface qu'une mise à jour est disponible via un CustomEvent
+ */
+function notifyUpdateAvailable(registration: ServiceWorkerRegistration) {
+  console.log('[SW] New version available and waiting to activate');
+  window.dispatchEvent(
+    new CustomEvent('sw-update-available', {
+      detail: { registration },
+    })
+  );
+}
+
+/**
+ * Force le service worker en attente à s'activer
+ */
+export function activateWaitingServiceWorker(registration: ServiceWorkerRegistration) {
+  if (registration.waiting) {
+    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
   }
 }
 
