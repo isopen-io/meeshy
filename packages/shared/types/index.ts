@@ -668,4 +668,5 @@ export type {
 } from './socketio-events.js';
 
 // ===== AGENT TYPES =====
-export { AgentType, AGENT_TYPES } from './agent.js';
+export type { AgentType } from './agent.js';
+export { AGENT_TYPES } from './agent.js';
