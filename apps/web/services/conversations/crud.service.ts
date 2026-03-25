@@ -157,19 +157,16 @@ export class ConversationsCrudService {
    */
   async searchConversations(query: string): Promise<Conversation[]> {
     try {
-      const response = await apiService.get<any>(
-        '/api/conversations/search',
+      const response = await apiService.get<{ success: boolean; data: Conversation[] }>(
+        '/conversations/search',
         { q: query }
       );
 
-      // Unwrap response if needed (handle both Conversation[] and {success, data: Conversation[]})
-      let rawData: any[] = [];
+      let rawData: Conversation[] = [];
       if (Array.isArray(response.data)) {
         rawData = response.data;
-      } else if (response.data?.success && Array.isArray(response.data.data)) {
+      } else if (response.data?.data && Array.isArray(response.data.data)) {
         rawData = response.data.data;
-      } else if (Array.isArray(response)) {
-        rawData = response;
       }
 
       return rawData.map(conv =>

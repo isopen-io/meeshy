@@ -53,7 +53,7 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
               <Plus className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 p-0 shadow-lg border-gray-200 dark:border-gray-800" align="start">
+          <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[320px] p-0 shadow-lg border-gray-200 dark:border-gray-800" align="start">
             <div className="p-3 border-b border-gray-100 dark:border-gray-800">
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
