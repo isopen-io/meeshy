@@ -375,6 +375,40 @@ struct ConversationView: View {
         }
     }
 
+    // MARK: - Empty Conversation State
+
+    private var conversationEmptyState: some View {
+        VStack(spacing: 12) {
+            Spacer()
+
+            Image(systemName: conversation?.type == .direct ? "person.crop.circle" : "bubble.left.and.bubble.right")
+                .font(.system(size: 36, weight: .light))
+                .foregroundColor(Color(hex: accentColor).opacity(0.5))
+
+            Button {
+                isTyping = true
+            } label: {
+                Text(String(localized: "empty.send_first", defaultValue: "Envoyer un message"))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color(hex: accentColor)))
+            }
+
+            Text(conversation?.type == .direct
+                 ? String(localized: "empty.direct_hint", defaultValue: "Commencez la conversation")
+                 : String(localized: "empty.group_hint", defaultValue: "Soyez le premier a envoyer un message"))
+                .font(.system(size: 12))
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, minHeight: 200)
+    }
+
     // MARK: - Unread Separator
 
     private var unreadSeparator: some View {
@@ -701,6 +735,8 @@ struct ConversationView: View {
                                 .staggeredAppear(index: index, baseDelay: 0.04)
                         }
                         .transition(.opacity)
+                    } else if viewModel.messages.isEmpty && !viewModel.isLoadingInitial {
+                        conversationEmptyState
                     } else {
                         encryptionDisclaimer
                     }

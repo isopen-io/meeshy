@@ -7,6 +7,7 @@ public struct EmptyStateView: View {
     public let subtitle: String
     public let actionLabel: String?
     public let accentColor: String
+    public let compact: Bool
     public var onAction: (() -> Void)?
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -18,6 +19,7 @@ public struct EmptyStateView: View {
         subtitle: String,
         actionLabel: String? = nil,
         accentColor: String = "4ECDC4",
+        compact: Bool = false,
         onAction: (() -> Void)? = nil
     ) {
         self.icon = icon
@@ -25,45 +27,39 @@ public struct EmptyStateView: View {
         self.subtitle = subtitle
         self.actionLabel = actionLabel
         self.accentColor = accentColor
+        self.compact = compact
         self.onAction = onAction
     }
 
     public var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: compact ? 10 : 16) {
             Spacer()
 
             Image(systemName: icon)
-                .font(.system(size: 52, weight: .light))
+                .font(.system(size: compact ? 36 : 52, weight: .light))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
-                .padding(.bottom, 4)
+                .padding(.bottom, compact ? 0 : 4)
+
+            if let actionLabel, let onAction, compact {
+                actionButton(label: actionLabel, action: onAction)
+            }
 
             Text(title)
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: compact ? 15 : 18, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text(subtitle)
-                .font(.system(size: 14))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: compact ? 12 : 14))
+                    .foregroundColor(theme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
 
-            if let actionLabel, let onAction {
-                Button {
-                    HapticFeedback.light()
-                    onAction()
-                } label: {
-                    Text(actionLabel)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(
-                            Capsule()
-                                .fill(Color(hex: accentColor))
-                        )
-                }
-                .padding(.top, 4)
+            if let actionLabel, let onAction, !compact {
+                actionButton(label: actionLabel, action: onAction)
+                    .padding(.top, 4)
             }
 
             Spacer()
@@ -78,5 +74,22 @@ public struct EmptyStateView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title). \(subtitle)")
+    }
+
+    private func actionButton(label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            Text(label)
+                .font(.system(size: compact ? 13 : 14, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, compact ? 16 : 24)
+                .padding(.vertical, compact ? 8 : 10)
+                .background(
+                    Capsule()
+                        .fill(Color(hex: accentColor))
+                )
+        }
     }
 }
