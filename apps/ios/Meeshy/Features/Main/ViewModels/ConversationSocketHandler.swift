@@ -294,26 +294,22 @@ final class ConversationSocketHandler {
                     return
                 }
 
-                var batch = delegate.messages
-                var changed = false
-                for i in batch.indices.reversed() {
-                    guard batch[i].isMe else { continue }
+                for i in delegate.messages.indices.reversed() {
+                    guard delegate.messages[i].isMe else { continue }
 
-                    let current = batch[i].deliveryStatus
+                    let current = delegate.messages[i].deliveryStatus
 
-                    if batch[i].createdAt <= event.updatedAt {
+                    if delegate.messages[i].createdAt <= event.updatedAt {
                         if newStatus == .read && current == .read { break }
                         if newStatus == .delivered && (current == .delivered || current == .read) { break }
 
                         if newStatus == .read || (newStatus == .delivered && current != .read) {
-                            batch[i].deliveryStatus = newStatus
-                            changed = true
+                            delegate.messages[i].deliveryStatus = newStatus
                         }
                     } else if current == .read {
                         break
                     }
                 }
-                if changed { delegate.messages = batch }
             }
             .store(in: &cancellables)
 
