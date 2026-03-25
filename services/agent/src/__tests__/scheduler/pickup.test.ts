@@ -64,6 +64,7 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     getRecentMessages: jest.fn().mockResolvedValue([]),
     getPotentialControlledUsers: jest.fn().mockResolvedValue([]),
     updateAnalytics: jest.fn().mockResolvedValue(undefined),
+    upsertUserRole: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   } as any;
 }
@@ -90,7 +91,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
   it('includes potential users when autoPickupEnabled is true and capacity remains', async () => {
     const graph = { invoke: jest.fn().mockResolvedValue({ pendingActions: [] }) };
     const persistence = makePersistence({
-      getPotentialControlledUsers: jest.fn().mockResolvedValue([makePotentialUser('p1'), makePotentialUser('p2')]),
+      getPotentialControlledUsers: jest.fn().mockResolvedValue([makePotentialUser('p1')]),
     });
 
     const scanner = new ConversationScanner(
@@ -111,9 +112,10 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
 
     await scanner.scanConversation('conv-1');
 
-    expect(persistence.getPotentialControlledUsers).toHaveBeenCalledWith('conv-1', 2, 72, [], []);
+    // Stratégie d'introduction graduelle : on n'en prend qu'un par cycle maintenant
+    expect(persistence.getPotentialControlledUsers).toHaveBeenCalledWith('conv-1', 1, 72, [], []);
     const invokeArgs = graph.invoke.mock.calls[0][0];
-    expect(invokeArgs.controlledUsers).toHaveLength(3); // 1 manual + 2 potential
+    expect(invokeArgs.controlledUsers).toHaveLength(2); // 1 manual + 1 potential
     expect(invokeArgs.controlledUsers.find((u: any) => u.source === 'auto_rule')).toBeDefined();
     expect(invokeArgs.controlledUsers.find((u: any) => u.userId === 'p1').role.tone).toBe('enthousiaste');
   });

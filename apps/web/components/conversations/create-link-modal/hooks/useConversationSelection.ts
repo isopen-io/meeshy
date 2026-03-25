@@ -3,8 +3,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Conversation, User } from '@meeshy/shared/types';
 import { conversationsService } from '@/services/conversations.service';
-import { authManager } from '@/services/auth-manager.service';
-import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
+import { usersService } from '@/services/users.service';
 import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
 import { NewConversationData } from '../types';
@@ -55,20 +54,8 @@ export function useConversationSelection(currentUser: User | null, isOpen: boole
 
       setIsLoadingUsers(true);
       try {
-        const token = authManager.getAuthToken();
-        const response = await fetch(
-          buildApiUrl(`${API_ENDPOINTS.USER.SEARCH}?q=${encodeURIComponent(trimmedQuery)}`),
-          {
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
-
-        if (response.ok) {
-          const users = await response.json();
-          setAvailableUsers(users);
-        } else {
-          console.error('Error searching users');
-        }
+        const users = await usersService.searchUsers(trimmedQuery);
+        setAvailableUsers(users);
       } catch (error) {
         console.error('Error searching users:', error);
       } finally {
@@ -78,14 +65,42 @@ export function useConversationSelection(currentUser: User | null, isOpen: boole
     []
   );
 
+  const searchConversations = useCallback(async (query: string) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      loadConversations();
+      return;
+    }
+    setIsLoadingConversations(true);
+    try {
+      const results = await conversationsService.searchConversations(trimmedQuery);
+      const linkableResults = results.filter(
+        (conv) => conv.type !== 'direct' && conv.type !== 'global'
+      );
+      setConversations(linkableResults);
+    } catch (error) {
+      console.error('Error searching conversations:', error);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  }, [loadConversations]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (conversationSearchQuery.trim()) {
+        searchConversations(conversationSearchQuery);
+      } else if (isOpen) {
+        loadConversations();
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [conversationSearchQuery, searchConversations, loadConversations, isOpen]);
+
   const filteredConversations = useMemo(() => {
-    if (!conversationSearchQuery.trim()) return conversations;
-    return conversations.filter(
-      (conv) =>
-        (conv.title && conv.title.toLowerCase().includes(conversationSearchQuery.toLowerCase())) ||
-        (conv.description && conv.description.toLowerCase().includes(conversationSearchQuery.toLowerCase()))
-    );
-  }, [conversations, conversationSearchQuery]);
+    // On garde l'usage de filteredConversations pour la compatibilité avec le reste du composant
+    // mais maintenant on s'appuie sur le state `conversations` qui est mis à jour par searchConversations
+    return conversations;
+  }, [conversations]);
 
   const filteredUsers = useMemo(() => {
     if (!currentUser) return availableUsers;
