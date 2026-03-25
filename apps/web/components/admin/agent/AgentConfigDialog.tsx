@@ -18,6 +18,7 @@ import { Loader2, HelpCircle } from 'lucide-react';
 import { agentAdminService, type AgentConfigData, type AgentConfigUpsert } from '@/services/agent-admin.service';
 import { AgentRolesSection } from './AgentRolesSection';
 import { UserPicker } from './UserPicker';
+import { ConversationPicker } from './ConversationPicker';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
@@ -181,13 +182,13 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         <div className="space-y-6 py-4 px-1">
           {/* Conversation ID */}
           {isNew && (
-            <div className="space-y-2 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-              <Label>ID Conversation</Label>
-              <Input
-                value={conversationId}
-                onChange={e => setConversationId(e.target.value)}
-                placeholder="ObjectId (24 hex chars)"
-                className="font-mono"
+            <div className="p-4 rounded-lg bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30">
+              <ConversationPicker
+                label="Conversation à configurer"
+                selectedId={conversationId || null}
+                onSelect={setConversationId}
+                onClear={() => setConversationId('')}
+                placeholder="Rechercher un groupe, un canal ou une discussion..."
               />
             </div>
           )}
@@ -198,14 +199,14 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>Agent activé</Label>
-                <InfoIcon content="Active ou désactive complètement l'agent pour cette conversation." />
+                <InfoIcon content="Interrupteur principal. Si désactivé, l'agent n'analysera aucun message et ne répondra jamais, libérant les ressources serveur." />
               </div>
               <Switch checked={form.enabled} onCheckedChange={v => updateField('enabled', v)} />
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>Auto-pickup</Label>
-                <InfoIcon content="Permet à l'agent de prendre automatiquement le contrôle d'utilisateurs inactifs." />
+                <InfoIcon content="Mode dynamique : l'agent détecte les utilisateurs qui ne répondent plus (voir Seuil d'inactivité) et prend leur identité pour maintenir la conversation active." />
               </div>
               <Switch checked={form.autoPickupEnabled} onCheckedChange={v => updateField('autoPickupEnabled', v)} />
             </div>
@@ -217,7 +218,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Type d&apos;agent</Label>
-                <InfoIcon content="Définit le rôle de l'agent. Support = formel, Animateur = engageant, FAQ = informatif." />
+                <InfoIcon content="Impacte le 'System Prompt' injecté : 'SAV' priorise la résolution de problèmes, 'Animateur' cherche à poser des questions et relancer le débat, 'Personnel' imite un utilisateur standard." />
               </div>
               <select
                 className="w-full p-2 border rounded-md bg-white dark:bg-gray-800 text-sm"
@@ -233,7 +234,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Taille fenêtre contextuelle (messages)</Label>
-                <InfoIcon content="Nombre de messages récents envoyés au LLM pour comprendre le contexte." />
+                <InfoIcon content="Nombre de messages historiques envoyés au LLM. Plus c'est haut, meilleure est la mémoire, mais le coût en tokens et la latence augmentent significativement." />
               </div>
               <Input
                 type="number"
@@ -246,7 +247,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>Utiliser l&apos;historique complet (Max 250)</Label>
-                <InfoIcon content="Ignore la fenêtre glissante pour envoyer le maximum de messages possible (limité par le LLM)." />
+                <InfoIcon content="Force l'agent à lire toute la conversation disponible. Indispensable pour des résumés longs ou des suivis de dossiers complexes sur plusieurs jours." />
               </div>
               <Switch checked={form.useFullHistory} onCheckedChange={v => updateField('useFullHistory', v)} />
             </div>
@@ -258,13 +259,16 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>Trigger sur timeout</Label>
-                <InfoIcon content="L'agent se déclenche automatiquement après une période d'inactivité." />
+                <InfoIcon content="Déclenchement proactif : l'agent 'relance' la conversation si personne n'a parlé pendant le délai imparti. Idéal pour l'animation de groupes." />
               </div>
               <Switch checked={form.triggerOnTimeout} onCheckedChange={v => updateField('triggerOnTimeout', v)} />
             </div>
             {form.triggerOnTimeout && (
               <div className="space-y-2 pl-4 border-l-2 border-indigo-100 dark:border-indigo-900">
-                <Label>Timeout (secondes)</Label>
+                <div className="flex items-center">
+                  <Label>Timeout (secondes)</Label>
+                  <InfoIcon content="Délai exact avant déclenchement. Une valeur trop courte (30s) peut donner l'impression que l'agent coupe la parole. Recommandé : 300s (5min)." />
+                </div>
                 <Input
                   type="number"
                   value={form.timeoutSeconds}
@@ -277,14 +281,14 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>Trigger sur message utilisateur</Label>
-                <InfoIcon content="L'agent répond dès qu'un utilisateur envoie un message (Attention au flood)." />
+                <InfoIcon content="Mode 'Chatbot' : chaque message entrant déclenche une analyse. Très réactif mais peut coûter cher et paraître envahissant si non bridé." />
               </div>
               <Switch checked={form.triggerOnUserMessage} onCheckedChange={v => updateField('triggerOnUserMessage', v)} />
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>Trigger sur reply-to</Label>
-                <InfoIcon content="L'agent répond systématiquement quand on lui répond ou qu'il est cité." />
+                <InfoIcon content="Ciblage direct : l'agent ne répond que s'il est explicitement interpellé. Mode le plus discret et économique pour du support technique." />
               </div>
               <Switch checked={form.triggerOnReplyTo} onCheckedChange={v => updateField('triggerOnReplyTo', v)} />
             </div>
@@ -305,7 +309,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Inactivité (heures)</Label>
-                  <InfoIcon content="Délai avant qu'un utilisateur soit considéré comme inactif pour l'auto-pickup." />
+                  <InfoIcon content="Seuil critique pour l'Auto-pickup. Si un utilisateur n'a pas posté depuis X heures, l'agent peut prendre sa place." />
                 </div>
                 <Input
                   type="number"
@@ -318,7 +322,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Messages min.</Label>
-                  <InfoIcon content="Nombre de messages minimum dans la conversation avant que l'agent ne s'active." />
+                  <InfoIcon content="Filtre de sécurité : empêche l'agent d'intervenir dans des salons vides ou trop récents pour avoir un contexte de ton suffisant." />
                 </div>
                 <Input
                   type="number"
@@ -330,7 +334,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Max utilisateurs contrôlés</Label>
-                  <InfoIcon content="Limite du nombre d'utilisateurs que l'agent peut piloter simultanément." />
+                  <InfoIcon content="Impact sur la diversité : définit combien d'identités différentes l'agent peut assumer dans ce salon. Trop d'identités peut nuire à la cohérence globale." />
                 </div>
                 <Input
                   type="number"
@@ -393,7 +397,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Fréquence de scan</Label>
-                <InfoIcon content="Intervalle de temps entre chaque analyse de la conversation par l'agent." />
+                <InfoIcon content="Battement de coeur du système : définit à quelle fréquence l'agent 'se réveille' pour voir s'il doit agir (Triggers/Timeouts)." />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -430,7 +434,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Min réponses/cycle</Label>
-                  <InfoIcon content="Nombre minimum de messages que l'agent doit envoyer lors d'un cycle de réponse." />
+                  <InfoIcon content="Garantit une activité minimale quand l'agent se déclenche. Utile pour simuler une vraie discussion plutôt qu'un message isolé." />
                 </div>
                 <Input
                   type="number"
@@ -443,7 +447,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Max réponses/cycle</Label>
-                  <InfoIcon content="Limite maximum de messages envoyés par cycle pour éviter le spam." />
+                  <InfoIcon content="Pare-feu anti-flood : plafonne le nombre de messages consécutifs. Crucial pour limiter les coûts API en cas de boucle infinie." />
                 </div>
                 <Input
                   type="number"
@@ -457,13 +461,16 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>Réactions activées</Label>
-                <InfoIcon content="Permet à l'agent d'ajouter des réactions (emojis) aux messages." />
+                <InfoIcon content="Humanisation : autorise l'agent à 'liker' ou réagir avec des emojis. Consomme moins de tokens qu'une réponse textuelle." />
               </div>
               <Switch checked={form.reactionsEnabled ?? true} onCheckedChange={v => updateField('reactionsEnabled', v)} />
             </div>
             {form.reactionsEnabled !== false && (
               <div className="space-y-2 pl-4 border-l-2 border-indigo-100 dark:border-indigo-900">
-                <Label>Max réactions/cycle</Label>
+                <div className="flex items-center">
+                  <Label>Max réactions/cycle</Label>
+                  <InfoIcon content="Limite le nombre d'emojis posés lors d'un même scan. Évite que l'agent ne réagisse à absolument tous les messages en une fois." />
+                </div>
                 <Input
                   type="number"
                   value={form.maxReactionsPerCycle ?? 8}
@@ -481,7 +488,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Instructions spécifiques</Label>
-                <InfoIcon content="Directives particulières pour le comportement de l'agent dans ce salon précis." />
+                <InfoIcon content="Le 'Cerveau' de l'agent : décrivez ici sa mission, les infos à ne pas divulguer, ou des faits spécifiques à ce salon. Outre-passe les réglages globaux." />
               </div>
               <Textarea
                 rows={4}
@@ -502,7 +509,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div>
                 <div className="flex items-center">
                   <Label>Recherche web activée</Label>
-                  <InfoIcon content="Autorise l'agent à utiliser un moteur de recherche pour les infos en temps réel." />
+                  <InfoIcon content="Connexion temps réel : permet à l'agent d'aller sur Google/Perplexity. Indispensable pour parler de l'actualité ou de météo, mais augmente le temps de réponse." />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Permet à l&apos;agent de rechercher des informations actuelles</p>
               </div>
@@ -517,7 +524,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Mots min. par message</Label>
-                  <InfoIcon content="Longueur minimale souhaitée pour les réponses de l'agent." />
+                  <InfoIcon content="Contrôle du style : force l'agent à être plus loquace. Évite les réponses trop brèves type 'OK' ou 'D'accord'." />
                 </div>
                 <Input
                   type="number"
@@ -530,7 +537,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Mots max. par message</Label>
-                  <InfoIcon content="Longueur maximale pour limiter les réponses trop longues ou coûteuses." />
+                  <InfoIcon content="Économie de tokens : empêche l'agent de générer des pavés illisibles. Une limite basse (50-80) est recommandée pour du chat standard." />
                 </div>
                 <Input
                   type="number"
@@ -544,7 +551,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Température de génération ({((form.generationTemperature ?? 0.8) * 100).toFixed(0)}%)</Label>
-                <InfoIcon content="Influence le caractère aléatoire : 0 est prévisible, 1 est équilibré, 2 est très varié." />
+                <InfoIcon content="Curseur de créativité : à 0 l'agent est répétitif et factuel, à 1.5+ il peut devenir poétique ou commencer à halluciner." />
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs text-gray-400 w-10 text-right">Précis</span>
@@ -568,7 +575,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Quality Gate</h3>
             <div className="flex items-center justify-between">
               <div>
-                <Label>Vérification LLM activée</Label>
+                <div className="flex items-center">
+                  <Label>Vérification LLM activée</Label>
+                  <InfoIcon content="Auto-censure intelligente : un second passage vérifie si le message respecte le ton et ne révèle pas qu'il est une IA. Rejette les messages non conformes." />
+                </div>
                 <p className="text-xs text-gray-500 mt-1">
                   Vérifie la cohérence du ton, registre et langue. Les checks déterministes (@@, longueur, révélation IA) s&apos;appliquent toujours.
                 </p>
@@ -580,7 +590,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             </div>
             {(form.qualityGateEnabled ?? true) && (
               <div className="space-y-2 pl-4 border-l-2 border-indigo-100 dark:border-indigo-900">
-                <Label>Score minimum ({Math.round((form.qualityGateMinScore ?? 0.5) * 100)}%)</Label>
+                <div className="flex items-center">
+                  <Label>Score minimum ({Math.round((form.qualityGateMinScore ?? 0.5) * 100)}%)</Label>
+                  <InfoIcon content="Barrière de qualité : à 80%, seuls les messages parfaits passent. À 20%, l'agent est beaucoup plus libre mais peut faire des erreurs de style." />
+                </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-gray-400 w-10 text-right">Laxiste</span>
                   <input
@@ -609,7 +622,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Messages/jour (semaine)</Label>
-                  <InfoIcon content="Nombre maximum de messages envoyés par jour en semaine." />
+                  <InfoIcon content="Quota quotidien global pour ce salon. Une fois atteint, l'agent se met en veille jusqu'au lendemain." />
                 </div>
                 <Input
                   type="number"
@@ -622,7 +635,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Messages/jour (weekend)</Label>
-                  <InfoIcon content="Limite journalière spécifique pour le weekend." />
+                  <InfoIcon content="Quota weekend. Souvent plus élevé pour compenser l'absence de support humain le samedi/dimanche." />
                 </div>
                 <Input
                   type="number"
@@ -667,7 +680,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div>
                 <div className="flex items-center">
                   <Label>Mode burst</Label>
-                  <InfoIcon content="Regroupe les messages en rafales rapides suivies de pauses pour simuler une activité humaine." />
+                  <InfoIcon content="Simulateur humain : au lieu de répondre 1 par 1, l'agent envoie plusieurs messages (Taille burst) puis s'arrête (Pause min) pour paraître moins robotique." />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Groupe les messages en rafales avec des pauses entre elles</p>
               </div>
@@ -678,7 +691,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-4 pl-4 border-l-2 border-indigo-100 dark:border-indigo-900">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-2">
-                    <Label className="text-xs">Taille burst</Label>
+                    <div className="flex items-center">
+                      <Label className="text-[10px] uppercase font-bold text-gray-400">Taille burst</Label>
+                      <InfoIcon content="Nb de messages envoyés d'affilée." />
+                    </div>
                     <Input
                       type="number"
                       value={form.burstSize ?? 4}
@@ -688,7 +704,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Intervalle (min)</Label>
+                    <div className="flex items-center">
+                      <Label className="text-[10px] uppercase font-bold text-gray-400">Intervalle (min)</Label>
+                      <InfoIcon content="Temps entre 2 msgs du burst." />
+                    </div>
                     <Input
                       type="number"
                       value={form.burstIntervalMinutes ?? 5}
@@ -698,7 +717,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Pause (min)</Label>
+                    <div className="flex items-center">
+                      <Label className="text-[10px] uppercase font-bold text-gray-400">Pause (min)</Label>
+                      <InfoIcon content="Silence radio entre 2 rafales." />
+                    </div>
                     <Input
                       type="number"
                       value={form.quietIntervalMinutes ?? 90}
@@ -714,7 +736,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Seuil d&apos;inactivité (jours)</Label>
-                <InfoIcon content="Nombre de jours d'absence avant qu'un utilisateur soit complètement retiré du pool." />
+                <InfoIcon content="Nettoyage du pool : si l'utilisateur contrôlé ne s'est pas connecté manuellement depuis X jours, l'agent arrête de l'utiliser pour éviter les situations étranges." />
               </div>
               <Input
                 type="number"
@@ -728,14 +750,14 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>Prioriser les utilisateurs taggués</Label>
-                <InfoIcon content="Répond en priorité si un utilisateur contrôlé est cité par un autre." />
+                <InfoIcon content="Impact sur la pertinence sociale : l'agent réagit en priorité aux mentions (@username). Très efficace pour le SAV." />
               </div>
               <Switch checked={form.prioritizeTaggedUsers ?? true} onCheckedChange={v => updateField('prioritizeTaggedUsers', v)} />
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>Prioriser les réponses</Label>
-                <InfoIcon content="Répond en priorité si quelqu'un a explicitement répondu à un message de l'agent." />
+                <InfoIcon content="Maintien du fil : l'agent favorise les discussions où il a déjà un échange en cours plutôt que d'entamer de nouveaux sujets au hasard." />
               </div>
               <Switch checked={form.prioritizeRepliedUsers ?? true} onCheckedChange={v => updateField('prioritizeRepliedUsers', v)} />
             </div>
@@ -743,7 +765,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Boost réactions ({(form.reactionBoostFactor ?? 1.5).toFixed(1)}x)</Label>
-                <InfoIcon content="Augmente la probabilité de réagir aux messages au lieu de répondre." />
+                <InfoIcon content="Probabilité d'emoji : un facteur élevé (>2) rendra l'agent très expressif via les réactions, ce qui réduit la 'fatigue' textuelle dans le salon." />
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs text-gray-400 w-8">0.5x</span>

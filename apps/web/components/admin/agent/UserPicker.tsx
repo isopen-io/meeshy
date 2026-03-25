@@ -10,6 +10,7 @@ import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Badge } from '@/components/ui/badge';
 
 interface UserPickerProps {
   userIds: string[];
@@ -105,13 +106,20 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
                         setSearchTerm('');
                         setOpen(false);
                       }}
-                      className="w-full text-left p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group flex items-center justify-between"
+                      className="w-full text-left p-3 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group flex items-center justify-between border border-transparent hover:border-indigo-100"
                     >
-                      <UserDisplay user={user} size="sm" />
+                      <div className="flex items-center gap-3">
+                        <UserDisplay user={user} size="md" />
+                        <div className="flex flex-col gap-1">
+                          <Badge variant="outline" className="text-[9px] uppercase w-fit px-1.5 py-0">
+                            {user.role}
+                          </Badge>
+                        </div>
+                      </div>
                       {userIds.includes(user.id) ? (
-                        <span className="text-[10px] uppercase font-bold text-gray-300">Ajouté</span>
+                        <Badge variant="secondary" className="text-[10px] uppercase font-bold">Ajouté</Badge>
                       ) : (
-                        <Plus className="h-3 w-3 text-gray-300 group-hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-all" />
+                        <Plus className="h-4 w-4 text-gray-300 group-hover:text-indigo-500 transition-all" />
                       )}
                     </button>
                   ))}

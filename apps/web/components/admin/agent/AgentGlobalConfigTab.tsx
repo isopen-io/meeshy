@@ -135,7 +135,7 @@ export function AgentGlobalConfigTab() {
         <div className="space-y-2 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
           <div className="flex items-center">
             <Label className="font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider text-xs">System Prompt Global</Label>
-            <InfoIcon content="Le socle de personnalité commun à TOUS les agents de la plateforme." />
+            <InfoIcon content="C'est la 'Constitution' de votre IA. Ce texte est ajouté au début de chaque requête LLM. Il définit les règles éthiques de base, le ton de la marque et les interdictions globales qui s'appliquent à tous les agents, quel que soit leur salon." />
           </div>
           <Textarea
             rows={6}
@@ -155,7 +155,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Provider</Label>
-                <InfoIcon content="Fournisseur d'IA utilisé par défaut si aucun n'est spécifié." />
+                <InfoIcon content="Source d'intelligence principale. OpenAI est souvent plus rapide, Anthropic est réputé pour sa précision et son respect des consignes complexes." />
               </div>
               <select
                 className="w-full p-2 border rounded-md bg-white dark:bg-gray-800 text-sm"
@@ -169,7 +169,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Modèle</Label>
-                <InfoIcon content="Identifiant technique du modèle (ex: gpt-4o, claude-3-5-sonnet)." />
+                <InfoIcon content="Version spécifique du moteur. 'Mini' ou 'Haiku' sont très économiques et rapides pour les réponses courtes. '4o' ou 'Sonnet' sont plus intelligents mais plus chers." />
               </div>
               <Input
                 value={form.defaultModel ?? 'gpt-4o-mini'}
@@ -218,7 +218,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Budget quotidien (USD)</Label>
-                <InfoIcon content="Limite globale de dépenses cumulées pour TOUS les agents." />
+                <InfoIcon content="Vanne de sécurité financière globale. Si la somme des coûts de tous les agents dépasse ce montant, le service est suspendu pour éviter les débordements budgétaires." />
               </div>
               <Input
                 type="number"
@@ -233,7 +233,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Max appels simultanés</Label>
-                <InfoIcon content="Limite technique pour éviter de saturer les quotas API." />
+                <InfoIcon content="Gestion du débit : bride le nombre de requêtes envoyées en même temps aux providers IA. Évite les erreurs de type 'Rate Limit' (429) lors des pics d'activité." />
               </div>
               <Input
                 type="number"
@@ -254,7 +254,7 @@ export function AgentGlobalConfigTab() {
           <div className="space-y-2">
             <div className="flex items-center">
               <Label>Types de conversations éligibles</Label>
-              <InfoIcon content="Filtre global sur quels types de conversations peuvent héberger un agent." />
+              <InfoIcon content="Politique de déploiement : choisissez où les agents ont le droit de résider. Les 'Groupes' et 'Public' sont les cibles classiques de l'animation." />
             </div>
             <div className="flex flex-wrap gap-2">
               {CONVERSATION_TYPES.map(type => {
@@ -277,7 +277,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Fraîcheur messages (heures)</Label>
-                <InfoIcon content="L'agent ignorera les messages plus anciens que ce délai pour ses réponses." />
+                <InfoIcon content="Pertinence temporelle : définit si l'agent doit répondre à des messages 'anciens'. À 22h, il ignorera tout ce qui a été dit hier pour ne pas déterrer de vieux débats." />
               </div>
               <Input
                 type="number"
@@ -292,7 +292,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Max conversations/cycle</Label>
-                <InfoIcon content="Nombre max de conversations traitées par intervalle de scan." />
+                <InfoIcon content="Impact sur la latence : limite le nombre de salons analysés à chaque passage. Si votre parc d'agents est énorme, cela permet de lisser la charge serveur." />
               </div>
               <Input
                 type="number"

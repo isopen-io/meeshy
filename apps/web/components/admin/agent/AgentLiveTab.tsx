@@ -14,6 +14,7 @@ import {
   type ToneProfileEntry,
 } from '@/services/agent-admin.service';
 import { UserDisplay } from './UserDisplay';
+import { ConversationPicker } from './ConversationPicker';
 
 function truncateId(id: string | undefined | null) {
   if (!id) return '???';
@@ -362,30 +363,36 @@ export function AgentLiveTab() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="border-indigo-100 dark:border-indigo-900 shadow-sm">
         <CardContent className="pt-6">
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="ID de la conversation (ObjectId 24 chars)"
-                value={conversationId}
-                onChange={e => setConversationId(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="pl-9"
+          <div className="flex items-end gap-4">
+            <div className="flex-1">
+              <ConversationPicker
+                label="Sélectionner une conversation"
+                selectedId={conversationId || null}
+                onSelect={id => {
+                  setConversationId(id);
+                  // Auto-fetch if user selects from search
+                  setTimeout(fetchLiveState, 0);
+                }}
+                onClear={() => {
+                  setConversationId('');
+                  setLiveState(null);
+                }}
+                placeholder="Chercher par nom, ID ou #identifiant..."
               />
             </div>
             <Button
               onClick={fetchLiveState}
               disabled={loading || !conversationId.trim()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white h-12 px-6"
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
-                <Activity className="h-4 w-4 mr-1.5" />
+                <Activity className="h-4 w-4 mr-2" />
               )}
-              Charger
+              Superviser
             </Button>
           </div>
         </CardContent>

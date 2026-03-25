@@ -3,13 +3,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Settings, Trash2, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Settings, Trash2, ChevronLeft, ChevronRight, Plus, Search as SearchIcon } from 'lucide-react';
 import { agentAdminService, type AgentConfigData } from '@/services/agent-admin.service';
 import { AgentConfigDialog } from './AgentConfigDialog';
 import { UserDisplay } from './UserDisplay';
+import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -32,6 +34,8 @@ export function AgentConversationsTab() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch] = useDebounce(searchTerm, 500);
   const [selectedConfig, setSelectedConfig] = useState<AgentConfigData | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const limit = 20;
@@ -39,7 +43,7 @@ export function AgentConversationsTab() {
   const fetchConfigs = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await agentAdminService.getConfigs(page, limit);
+      const response = await agentAdminService.getConfigs(page, limit, debouncedSearch);
       if (response.success && response.data) {
         setConfigs(Array.isArray(response.data) ? response.data : []);
         setTotal(response.pagination?.total ?? 0);
@@ -52,7 +56,7 @@ export function AgentConversationsTab() {
     }
   }, [page]);
 
-  useEffect(() => { fetchConfigs(); }, [fetchConfigs]);
+  useEffect(() => { fetchConfigs(); }, [fetchConfigs, debouncedSearch]);
 
   const handleToggle = async (config: AgentConfigData) => {
     try {
@@ -108,12 +112,24 @@ export function AgentConversationsTab() {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <CardTitle className="text-lg">Configurations Agent</CardTitle>
-          <Button size="sm" onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">Configurer</span>
-          </Button>
+          <div className="flex w-full sm:w-auto gap-2">
+            <div className="relative flex-1 sm:w-64">
+              <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Rechercher..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && fetchConfigs()}
+                className="pl-9"
+              />
+            </div>
+            <Button size="sm" onClick={handleCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Configurer</span>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {configs.length === 0 ? (
