@@ -517,24 +517,22 @@ public struct UserProfileSheet: View {
     @ViewBuilder
     private var conversationsTabContent: some View {
         if effectiveConversations.isEmpty {
-            // Empty state: affiche le bouton Send Message
-            VStack(spacing: 16) {
+            // Empty state: bouton Send Message au-dessus du texte
+            VStack(spacing: 10) {
                 Image(systemName: "bubble.left.and.bubble.right")
-                    .font(.system(size: 32))
-                    .foregroundColor(theme.textMuted.opacity(0.6))
-
-                Text("Aucune conversation en commun")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .font(.system(size: 28))
+                    .foregroundColor(theme.textMuted.opacity(0.5))
 
                 if !isCurrentUser, !isBlocked, !isBlockedByTarget {
-                    sendMessageButton
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
+                    sendMessageButtonCompact
                 }
+
+                Text("Aucune conversation en commun")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textMuted.opacity(0.7))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
+            .padding(.vertical, 24)
         } else {
             VStack(spacing: 0) {
                 // Bouton Send Message en tête si conversations existent
@@ -840,6 +838,14 @@ public struct UserProfileSheet: View {
     // MARK: - Send Message Button
 
     private var sendMessageButton: some View {
+        sendMessageButtonContent(compact: false)
+    }
+
+    private var sendMessageButtonCompact: some View {
+        sendMessageButtonContent(compact: true)
+    }
+
+    private func sendMessageButtonContent(compact: Bool) -> some View {
         Button {
             HapticFeedback.medium()
             if let onSendMessage {
@@ -854,15 +860,16 @@ public struct UserProfileSheet: View {
                 }
             }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: compact ? 6 : 8) {
                 Image(systemName: "paperplane.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: compact ? 12 : 14, weight: .semibold))
                 Text("Envoyer un message")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: compact ? 13 : 15, weight: .semibold))
             }
             .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .frame(maxWidth: compact ? nil : .infinity)
+            .padding(.horizontal, compact ? 20 : 0)
+            .padding(.vertical, compact ? 10 : 14)
             .background(
                 LinearGradient(
                     colors: [MeeshyColors.pink, MeeshyColors.cyan],
@@ -870,8 +877,8 @@ public struct UserProfileSheet: View {
                     endPoint: .trailing
                 )
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .shadow(color: MeeshyColors.pink.opacity(0.3), radius: 8, y: 4)
+            .clipShape(RoundedRectangle(cornerRadius: compact ? 20 : 14))
+            .shadow(color: MeeshyColors.pink.opacity(0.3), radius: compact ? 4 : 8, y: compact ? 2 : 4)
         }
         .pressable()
     }
