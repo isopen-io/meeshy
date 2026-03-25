@@ -195,13 +195,8 @@ struct ConversationListView: View {
         return statusViewModel.statusForUser(userId: userId)
     }
 
-    private func enrichedConversation(_ conversation: Conversation) -> Conversation {
-        return conversation
-    }
-
     @ViewBuilder
     private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> some View {
-        let displayConversation = enrichedConversation(conversation)
         let community: MeeshyCommunity? = {
             guard conversation.type == .community || conversation.communityId != nil,
                   let communityId = conversation.communityId else { return nil }
@@ -216,8 +211,8 @@ struct ConversationListView: View {
                 conversation: conversation,
                 community: community,
                 availableWidth: rowWidth,
-                isDragging: draggingConversation?.id == displayConversation.id,
-                presenceState: presenceManager.presenceState(for: displayConversation.participantUserId ?? ""),
+                isDragging: draggingConversation?.id == conversation.id,
+                presenceState: presenceManager.presenceState(for: conversation.participantUserId ?? ""),
                 onViewStory: {
                     handleStoryView(conversation)
                 },
@@ -228,15 +223,15 @@ struct ConversationListView: View {
                     handleConversationInfoView(conversation)
                 },
                 onMoodBadgeTap: { anchor in
-                    handleMoodBadgeTap(displayConversation, at: anchor)
+                    handleMoodBadgeTap(conversation, at: anchor)
                 },
-                onCreateShareLink: canCreateShareLink(for: displayConversation) ? {
-                    Task { await shareConversationLink(for: displayConversation) }
+                onCreateShareLink: canCreateShareLink(for: conversation) ? {
+                    Task { await shareConversationLink(for: conversation) }
                 } : nil,
                 isDark: theme.mode.isDark,
-                storyRingState: storyRingState(for: displayConversation),
-                moodStatus: conversationMoodStatus(for: displayConversation),
-                typingUsername: conversationViewModel.typingUsernames[displayConversation.id]
+                storyRingState: storyRingState(for: conversation),
+                moodStatus: conversationMoodStatus(for: conversation),
+                typingUsername: conversationViewModel.typingUsernames[conversation.id]
             )
             .equatable()
             .contentShape(Rectangle())
@@ -569,7 +564,7 @@ struct ConversationListView: View {
                             GeometryReader { geo in
                                 Color.clear.preference(
                                     key: ScrollOffsetPreferenceKey.self,
-                                    value: geo.frame(in: .named("convList")).minY
+                                    value: geo.frame(in: .named("scroll")).minY
                                 )
                             }
                         )
@@ -725,11 +720,6 @@ struct ConversationListView: View {
     }
 
     // See ConversationListView+Overlays.swift for conversationContextMenu
-
-    // MARK: - Handle Scroll Change
-    private func handleScrollChange(_ offset: CGFloat) {
-        // Obsolete (geometric proxy removed)
-    }
 
     // MARK: - Handle Drop
     private func handleDrop(to sectionId: String, providers: [NSItemProvider]) -> Bool {

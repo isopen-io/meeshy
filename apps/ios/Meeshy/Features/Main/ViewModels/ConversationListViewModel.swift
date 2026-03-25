@@ -21,7 +21,8 @@ class ConversationListViewModel: ObservableObject {
     @Published var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
     @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName
-    @Published var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages
+    var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
+    private var previewLoadingInFlight: Set<String> = []
     private var typingTimers: [String: Timer] = [:]
 
     var totalUnreadCount: Int {
@@ -95,10 +96,12 @@ class ConversationListViewModel: ObservableObject {
     private func setupBackgroundProcessing() {
         // Pipeline 1: Filtrage en arrière-plan
         Publishers.CombineLatest3($conversations, $searchText, $selectedFilter)
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.global(qos: .userInitiated))
             .sink { [weak self] (convs, text, filter) in
-                guard let self else { return }
-                self.filteredConversations = Self.filterConversations(convs, searchText: text, filter: filter)
+                let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
+                Task { @MainActor [weak self] in
+                    self?.filteredConversations = filtered
+                }
             }
             .store(in: &cancellables)
 
@@ -719,7 +722,10 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Message Prefetch
 
     func loadPreviewMessages(for conversationId: String) async {
-        guard previewMessages[conversationId] == nil else { return }
+        guard previewMessages[conversationId] == nil,
+              !previewLoadingInFlight.contains(conversationId) else { return }
+        previewLoadingInFlight.insert(conversationId)
+        defer { previewLoadingInFlight.remove(conversationId) }
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId).value ?? []
         if !cached.isEmpty {
             previewMessages[conversationId] = Array(cached.suffix(5))

@@ -321,20 +321,13 @@ struct ThemedConversationRow: View {
         }
     }
 
-    // MARK: - Separator
-
-    /// Ligne de séparation stylisée : gradient accent → secondaire → transparent
-    /// Décalée après l'avatar (padding 14 + avatar 52 + spacing 14 = 80pt)
-    private var separatorLine: some View {
-        EmptyView()
-    }
-
     private func timeAgo(_ date: Date) -> String {
         let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "now" }
-        if seconds < 3600 { return "\(seconds / 60)m" }
+        if seconds < 60 { return "maintenant" }
+        if seconds < 3600 { return "\(seconds / 60) min" }
         if seconds < 86400 { return "\(seconds / 3600)h" }
-        return "\(seconds / 86400)d"
+        if seconds < 604800 { return "\(seconds / 86400)j" }
+        return "\(seconds / 604800)sem"
     }
 
     // MARK: - Typing Indicator
