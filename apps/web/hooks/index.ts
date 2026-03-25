@@ -8,7 +8,7 @@ export { useMessaging } from './use-messaging'; // Hook de haut niveau
 export { useMessageTranslation } from './useMessageTranslation'; // Pour traduction de messages API
 export { useI18n } from './useI18n'; // Pour traduction i18n interface
 export { useMessageTranslations } from './use-message-translations';
-export { useConversationMessages } from './use-conversation-messages';
+export { useConversationMessagesRQ as useConversationMessages } from './queries/use-conversation-messages-rq';
 
 // Langues unifiées
 export { useLanguage } from './use-language'; // Nouveau hook fusionné

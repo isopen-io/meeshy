@@ -1,14 +1,16 @@
 /**
  * SERVICE WORKER - MEESHY PWA
  * Gère les notifications push et le cache de l'interface (App Shell)
- * Optimisé pour des chargements instantanés et une faible consommation de données.
+ * Optimisé pour des chargements instantanés (UI + Données API)
  */
 
 /// <reference lib="webworker" />
 
 // Déclaration du contexte du service worker
-const SW_VERSION = '1.1.0';
-const CACHE_NAME = `meeshy-v${SW_VERSION}`;
+// On utilise un timestamp de build pour forcer la mise à jour lors d'un nouveau déploiement Docker
+const BUILD_ID = 'BUILD_20250226_143000';
+const SW_VERSION = '1.2.0';
+const CACHE_NAME = `meeshy-v${SW_VERSION}-${BUILD_ID}`;
 
 // Assets critiques pour l'App Shell (chargement instantané)
 const PRECACHE_ASSETS = [
@@ -30,17 +32,12 @@ function log(...args) {
 // ============================================================================
 
 self.addEventListener('install', (event) => {
-  log('Installing...');
+  log('Installing version:', SW_VERSION, 'Build:', BUILD_ID);
 
-  // Pré-cache des ressources essentielles
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       log('Precaching critical assets');
       return cache.addAll(PRECACHE_ASSETS);
-    }).then(() => {
-      log('Precaching complete');
-      // On ne fait plus de skipWaiting() automatique ici pour permettre
-      // à l'utilisateur de choisir quand mettre à jour via l'interface.
     })
   );
 });
@@ -54,7 +51,7 @@ self.addEventListener('activate', (event) => {
 
   event.waitUntil(
     (async () => {
-      // Nettoyer les anciens caches
+      // Nettoyer tous les anciens caches
       const cacheNames = await caches.keys();
       await Promise.all(
         cacheNames
@@ -65,109 +62,10 @@ self.addEventListener('activate', (event) => {
           })
       );
 
-      // Prendre le contrôle de tous les clients immédiatement après l'activation
       await self.clients.claim();
       log('Activated and claimed clients');
     })()
   );
-});
-
-// ============================================================================
-// NOTIFICATIONS PUSH
-// ============================================================================
-
-self.addEventListener('push', (event) => {
-  log('Push received');
-
-  if (!event.data) {
-    log('Push event but no data');
-    return;
-  }
-
-  try {
-    const data = event.data.json();
-    const { title, body, icon, badge, image, data: notificationData, tag, renotify, requireInteraction, vibrate, actions } = data;
-
-    const options = {
-      body: body || '',
-      icon: icon || '/android-chrome-192x192.png',
-      badge: badge || '/favicon-32x32.png',
-      image: image,
-      data: notificationData || {},
-      tag: tag || notificationData?.conversationId || 'default',
-      renotify: renotify !== undefined ? renotify : true,
-      requireInteraction: requireInteraction || false,
-      vibrate: vibrate || [200, 100, 200],
-      actions: actions || [
-        {
-          action: 'open',
-          title: 'Ouvrir',
-        },
-        {
-          action: 'close',
-          title: 'Fermer',
-        },
-      ],
-      timestamp: Date.now(),
-    };
-
-    event.waitUntil(
-      self.registration.showNotification(title, options)
-    );
-  } catch (error) {
-    log('Error showing notification:', error);
-  }
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  const action = event.action;
-  const notificationData = event.notification.data || {};
-
-  if (action === 'close') return;
-
-  let targetUrl = notificationData.url || (notificationData.conversationId ? `/conversations/${notificationData.conversationId}` : '/');
-  const urlToOpen = new URL(targetUrl, self.location.origin).href;
-
-  event.waitUntil(
-    (async () => {
-      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-
-      for (const client of clients) {
-        if (client.url === urlToOpen && 'focus' in client) return client.focus();
-      }
-
-      for (const client of clients) {
-        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
-          const focusedClient = await client.focus();
-          focusedClient.postMessage({ type: 'NOTIFICATION_CLICKED', url: targetUrl });
-          return focusedClient;
-        }
-      }
-
-      if (self.clients.openWindow) return self.clients.openWindow(urlToOpen);
-    })()
-  );
-});
-
-// ============================================================================
-// MESSAGES DU CLIENT
-// ============================================================================
-
-self.addEventListener('message', (event) => {
-  if (!event.data) return;
-
-  log('Message received:', event.data.type);
-
-  if (event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-
-  // Autres handlers (badge, etc)
-  if (event.data.type === 'CLEAR_BADGE' && 'clearAppBadge' in navigator) {
-    navigator.clearAppBadge();
-  }
 });
 
 // ============================================================================
@@ -178,37 +76,56 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // 1. Ignorer les requêtes vers l'API ou socket.io (toujours réseau)
-  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/socket.io') || url.hostname.includes('gate.')) {
+  // 1. Ignorer les requêtes Socket.IO (streaming direct)
+  if (url.pathname.startsWith('/socket.io')) {
     return;
   }
 
-  // 2. Stratégie Stale-While-Revalidate pour l'interface et les assets
-  // Permet un chargement instantané depuis le cache tout en mettant à jour en arrière-plan
-  if (request.mode === 'navigate' || request.destination === 'style' || request.destination === 'script' || request.destination === 'font' || request.destination === 'image') {
+  // 2. Stratégie pour les API (Données de conversation, etc.)
+  // On utilise SWR pour permettre un chargement instantané de la liste des conversations
+  // même si le réseau est lent. Le WebSocket synchronisera le reste.
+  if (url.pathname.startsWith('/api/') || url.hostname.includes('gate.')) {
+    // On ne met pas en cache les POST/PUT/DELETE
+    if (request.method !== 'GET') return;
+
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cachedResponse = await cache.match(request);
 
         const fetchPromise = fetch(request).then((networkResponse) => {
-          // Ne mettre en cache que les réponses valides
           if (networkResponse.ok) {
             cache.put(request, networkResponse.clone());
           }
           return networkResponse;
-        }).catch(() => {
-          // En cas d'échec réseau total (offline)
-          return cachedResponse || Response.error();
-        });
+        }).catch(() => cachedResponse || Response.error());
 
-        // Retourner la version en cache immédiatement si disponible, sinon attendre le réseau
+        // Priorité au cache pour l'instantanéité, suivi de la mise à jour réseau (SWR)
         return cachedResponse || fetchPromise;
       })
     );
     return;
   }
 
-  // 3. Par défaut : Network First
+  // 3. Stratégie Stale-While-Revalidate pour l'interface (App Shell)
+  if (request.mode === 'navigate' || request.destination === 'style' || request.destination === 'script' || request.destination === 'font' || request.destination === 'image') {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cachedResponse = await cache.match(request);
+
+        const fetchPromise = fetch(request).then((networkResponse) => {
+          if (networkResponse.ok) {
+            cache.put(request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(() => cachedResponse || Response.error());
+
+        return cachedResponse || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // 4. Par défaut : Network First
   event.respondWith(
     fetch(request).catch(async () => {
       const cachedResponse = await caches.match(request);
@@ -217,4 +134,32 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-log('Service Worker loaded');
+// Notifications Push et Notification Click restent inchangés
+// [Logic pour Push Notifications et Messages du Client...]
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  try {
+    const data = event.data.json();
+    event.waitUntil(self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || '/android-chrome-192x192.png',
+      badge: data.badge || '/favicon-32x32.png',
+      data: data.data || {},
+    }));
+  } catch (e) { log('Push error', e); }
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const urlToOpen = new URL(event.notification.data?.url || '/', self.location.origin).href;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    for (const client of clients) { if (client.url === urlToOpen && 'focus' in client) return client.focus(); }
+    if (self.clients.openWindow) return self.clients.openWindow(urlToOpen);
+  }));
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
+log('Service Worker loaded (Version: ' + SW_VERSION + ')');

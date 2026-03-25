@@ -1,7 +1,10 @@
 /**
  * SERVICE WORKER UTILITIES
- * Enregistrement et gestion du service worker avec détection de mise à jour.
+ * Enregistrement et gestion du service worker avec détection automatique de mise à jour.
  */
+
+// Intervalle de vérification automatique pour les nouveaux builds Docker (tous les 15 minutes)
+const UPDATE_CHECK_INTERVAL = 15 * 60 * 1000;
 
 /**
  * Enregistre le service worker et retourne l'instance
@@ -49,6 +52,14 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
       // Recharger la page pour activer la nouvelle version sur tout le site
       window.location.reload();
     });
+
+    // 4. Automatiser le check de nouvelle version Docker périodiquement
+    setInterval(() => {
+      console.log('[SW] Checking for new build/version...');
+      registration.update().catch((err) => {
+        console.warn('[SW] Periodic update check failed', err);
+      });
+    }, UPDATE_CHECK_INTERVAL);
 
     return registration;
   } catch (error) {
@@ -102,7 +113,7 @@ export async function unregisterServiceWorker(): Promise<boolean> {
 }
 
 /**
- * Force le service worker à se mettre à jour
+ * Force le service worker à se mettre à jour manuellement
  */
 export async function updateServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) {
@@ -116,7 +127,7 @@ export async function updateServiceWorker(): Promise<ServiceWorkerRegistration |
     }
 
     await registration.update();
-    console.log('[SW] Update triggered');
+    console.log('[SW] Update triggered manually');
     return registration;
   } catch (error) {
     console.error('[SW] Update failed:', error);
