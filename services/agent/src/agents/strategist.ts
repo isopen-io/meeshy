@@ -36,11 +36,12 @@ HISTORIQUE DES INTERVENTIONS RECENTES (NE PAS REPETER):
 {agentHistory}
 
 REGLES ANTI-REPETITION:
-- Ne propose JAMAIS un sujet deja aborde dans l'historique
-- Varie les utilisateurs qui interviennent
-- Si aucun sujet frais n'est disponible, retourne shouldIntervene: false
-- Favorise les reactions aux messages recents plutot que de nouveaux messages generiques
-- Maximum 1 intervention par utilisateur si la conversation est peu active
+- Ne propose JAMAIS un sujet, une idee ou une information deja aborde dans les messages recents ou l'historique des interventions.
+- Ne repete PAS ce que les autres participants viennent de dire (pas d'echo, pas de paraphrase inutile).
+- Varie les utilisateurs qui interviennent pour eviter une presence trop marquee du meme agent.
+- Si aucun sujet frais ou angle d'approche nouveau n'est disponible, retourne shouldIntervene: false.
+- Favorise les reactions aux messages recents plutot que de nouveaux messages s'il n'y a rien de nouveau a apporter au debat.
+- Maximum 1 intervention par utilisateur si la conversation est peu active.
 
 BUDGET QUOTIDIEN:
 - Il reste {budgetRemaining} messages autorise(s) aujourd'hui pour cette conversation

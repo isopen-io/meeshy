@@ -37,6 +37,7 @@ function runDeterministicChecks(
   content: string,
   minWords: number,
   maxWords: number,
+  contextMessages: { content: string }[],
 ): { ok: boolean; reason: string } {
   if (!content.trim()) {
     return { ok: false, reason: 'empty content' };
@@ -56,6 +57,16 @@ function runDeterministicChecks(
   if (wordCount > maxWords) {
     return { ok: false, reason: `too long: ${wordCount} words > max ${maxWords}` };
   }
+
+  // Check for similarity with the last 20 messages in context to avoid repetition/echoing
+  const normalizedNew = content.toLowerCase().trim().replace(/[^\w\s]/g, '');
+  for (const m of contextMessages.slice(-20)) {
+    const normalizedOld = m.content.toLowerCase().trim().replace(/[^\w\s]/g, '');
+    if (normalizedNew === normalizedOld || (normalizedNew.length > 20 && normalizedOld.includes(normalizedNew))) {
+      return { ok: false, reason: 'content too similar to recent conversation context (repetition check)' };
+    }
+  }
+
   return { ok: true, reason: '' };
 }
 
@@ -92,7 +103,12 @@ export function createQualityGateNode(llm: LlmProvider) {
         continue;
       }
 
-      const deterministicResult = runDeterministicChecks(msg.content, minWords, maxWords);
+      const deterministicResult = runDeterministicChecks(
+        msg.content,
+        minWords,
+        maxWords,
+        state.messages,
+      );
       if (!deterministicResult.ok) {
         console.warn(`[QualityGate] Deterministic check failed for user ${userId}: ${deterministicResult.reason}`);
         continue;

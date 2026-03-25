@@ -169,7 +169,7 @@ export class MongoPersistence {
     maxConversations?: number;
   }) {
     const types = options?.eligibleTypes ?? ['group', 'channel', 'public', 'global'];
-    const freshnessHours = options?.freshnessHours ?? 22;
+    const freshnessHours = options?.freshnessHours ?? 24;
     const maxConversations = options?.maxConversations ?? 0;
 
     const freshnessThreshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000);

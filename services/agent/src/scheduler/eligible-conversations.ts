@@ -43,7 +43,10 @@ export async function findEligibleConversations(
   persistence: MongoPersistence,
   options?: { eligibleTypes?: string[]; freshnessHours?: number; maxConversations?: number },
 ): Promise<EligibleConversation[]> {
-  const conversations = await persistence.getEligibleConversations(options);
+  const conversations = await persistence.getEligibleConversations({
+    ...options,
+    freshnessHours: options?.freshnessHours ?? 24,
+  });
 
   return conversations.map((conv) => {
     const config = conv.agentConfig;
