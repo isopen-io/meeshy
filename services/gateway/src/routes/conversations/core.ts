@@ -107,7 +107,7 @@ export function registerCoreRoutes(
           offset: { type: 'string', description: 'Number of conversations to skip for pagination (default 0)' },
           before: { type: 'string', description: 'Cursor for pagination: get conversations before this conversation ID (by lastMessageAt)' },
           includeCount: { type: 'string', enum: ['true', 'false'], description: 'Include total count of conversations' },
-          type: { type: 'string', enum: ['direct', 'group', 'anonymous', 'broadcast'], description: 'Filter by conversation type' },
+          type: { type: 'string', enum: ['direct', 'group', 'public', 'global', 'broadcast'], description: 'Filter by conversation type' },
           withUserId: { type: 'string', description: 'Filter direct conversations that include this user ID as a participant' }
         }
       },

@@ -9,6 +9,15 @@ import { useAuthStore } from '@/stores/auth-store';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 import type { AudioTranslationReadyEventData } from '@meeshy/shared/types/socketio-events';
+import type { OptimisticMessage } from '@/utils/optimistic-message';
+
+function isOptimisticMessage(m: Message): m is OptimisticMessage {
+  return '_tempId' in m;
+}
+
+type CachedMessage = Message & {
+  translatedAudios?: Record<string, unknown>;
+};
 
 interface UseSocketCacheSyncOptions {
   conversationId?: string | null;
@@ -42,9 +51,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               if (m.id === message.id) return old; // already have this server message
               // If own message:new arrives while optimistic is still 'sending', replace it
               // Match by content to avoid cross-replacing when multiple messages are sending
-              if (isOwnMessage && !optimisticTempId && (m as any)._tempId && (m as any)._localStatus === 'sending'
+              if (isOwnMessage && !optimisticTempId && isOptimisticMessage(m) && m._localStatus === 'sending'
                   && m.content === message.content) {
-                optimisticTempId = (m as any)._tempId;
+                optimisticTempId = m._tempId;
               }
             }
           }
@@ -56,7 +65,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               pages: old.pages.map(page => ({
                 ...page,
                 messages: page.messages.map(m =>
-                  (m as any)._tempId === optimisticTempId ? message : m
+                  isOptimisticMessage(m) && m._tempId === optimisticTempId ? message : m
                 ),
               })),
             };
@@ -199,10 +208,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                 // Merge translations as array, dedup by targetLanguage
                 const existingTranslations = Array.isArray(m.translations) ? [...m.translations] : [];
                 for (const t of data.translations) {
-                  const targetLang = (t as any).language || t.targetLanguage;
-                  const idx = existingTranslations.findIndex((et: any) =>
-                    ((et as any).language || et.targetLanguage) === targetLang
-                  );
+                  const targetLang = t.targetLanguage;
+                  const idx = existingTranslations.findIndex((et) => et.targetLanguage === targetLang);
                   if (idx >= 0) existingTranslations[idx] = t;
                   else existingTranslations.push(t);
                 }
@@ -246,8 +253,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               messages: page.messages.map((m) => {
                 if (m.id !== data.messageId) return m;
                 // Attach transcription to the first audio attachment or at message level
-                const attachments = Array.isArray((m as any).attachments) ? [...(m as any).attachments] : [];
-                const audioIdx = attachments.findIndex((a: any) => a.mimeType?.startsWith('audio/'));
+                const attachments = Array.isArray(m.attachments) ? [...m.attachments] : [];
+                const audioIdx = attachments.findIndex((a) => a.mimeType?.startsWith('audio/'));
                 if (audioIdx >= 0) {
                   attachments[audioIdx] = { ...attachments[audioIdx], transcription: data.transcription, transcriptionLanguage: data.language };
                 }
@@ -275,7 +282,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               messages: page.messages.map((m) => {
                 if (m.id !== data.messageId) return m;
                 // Store translated audio metadata keyed by target language
-                const translatedAudios = { ...((m as any).translatedAudios || {}) };
+                const translatedAudios = { ...((m as CachedMessage).translatedAudios || {}) };
                 translatedAudios[targetLang] = {
                   url: data.translatedAudio.url,
                   targetLanguage: targetLang,
