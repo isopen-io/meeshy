@@ -118,6 +118,39 @@ export class MongoPersistence {
     });
   }
 
+  async getPotentialControlledUsers(
+    conversationId: string,
+    limit: number,
+    thresholdHours: number,
+    excludedRoles: string[],
+    excludedUserIds: string[],
+  ) {
+    const threshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
+    const existingRoles = await this.prisma.agentUserRole.findMany({
+      where: { conversationId },
+      select: { userId: true },
+    });
+    const existingRoleUserIds = existingRoles.map((r) => r.userId);
+
+    return this.prisma.user.findMany({
+      where: {
+        participations: { some: { conversationId, isActive: true } },
+        lastActiveAt: { lt: threshold },
+        role: { notIn: excludedRoles as unknown as any[] },
+        id: { notIn: [...excludedUserIds, ...existingRoleUserIds] },
+        agentGlobalProfile: { isNot: null },
+      },
+      select: {
+        id: true,
+        displayName: true,
+        username: true,
+        systemLanguage: true,
+        agentGlobalProfile: true,
+      },
+      take: limit,
+    });
+  }
+
   async getGlobalProfile(userId: string) {
     return this.prisma.agentGlobalProfile.findUnique({ where: { userId } });
   }

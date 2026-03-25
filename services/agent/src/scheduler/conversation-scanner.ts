@@ -137,7 +137,7 @@ export class ConversationScanner {
       return;
     }
 
-    const [messages, summary, toneProfiles, controlledUsers, agentHistory, todayActiveUserIds] = await Promise.all([
+    const [messages, summary, toneProfiles, manualControlledUsers, agentHistory, todayActiveUserIds] = await Promise.all([
       this.stateManager.getMessages(conversationId),
       this.stateManager.getSummary(conversationId),
       this.stateManager.getToneProfiles(conversationId),
@@ -145,6 +145,52 @@ export class ConversationScanner {
       this.stateManager.getAgentHistory(conversationId),
       this.stateManager.getTodayActiveUserIds(conversationId),
     ]);
+
+    let controlledUsers = manualControlledUsers;
+    const config = await this.persistence.getAgentConfig(conversationId);
+    if (config?.autoPickupEnabled && controlledUsers.length < (config.maxControlledUsers ?? 5)) {
+      const limit = (config.maxControlledUsers ?? 5) - controlledUsers.length;
+      const potentialUsers = await this.persistence.getPotentialControlledUsers(
+        conversationId,
+        limit,
+        config.inactivityThresholdHours ?? 72,
+        config.excludedRoles ?? [],
+        (config.excludedUserIds as string[]) ?? [],
+      );
+
+      for (const u of potentialUsers) {
+        if (!u.agentGlobalProfile) continue;
+        const p = u.agentGlobalProfile;
+        controlledUsers.push({
+          userId: u.id,
+          displayName: u.displayName ?? u.username ?? u.id,
+          username: u.username ?? u.id,
+          systemLanguage: u.systemLanguage,
+          source: 'auto_rule',
+          role: {
+            userId: u.id,
+            displayName: u.displayName ?? u.username ?? u.id,
+            origin: 'observed',
+            personaSummary: p.personaSummary ?? '',
+            tone: p.tone ?? 'neutre',
+            vocabularyLevel: p.vocabularyLevel ?? 'courant',
+            typicalLength: p.typicalLength ?? 'moyen',
+            emojiUsage: p.emojiUsage ?? 'occasionnel',
+            topicsOfExpertise: p.topicsOfExpertise,
+            topicsAvoided: p.topicsAvoided,
+            relationshipMap: {},
+            catchphrases: p.catchphrases,
+            responseTriggers: [],
+            silenceTriggers: [],
+            commonEmojis: p.commonEmojis,
+            reactionPatterns: p.reactionPatterns,
+            messagesAnalyzed: p.messagesAnalyzed,
+            confidence: p.confidence,
+            locked: p.locked,
+          },
+        });
+      }
+    }
 
     if (controlledUsers.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no controlled users`);

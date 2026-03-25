@@ -1,6 +1,7 @@
-import type { ConversationState, InterventionPlan, InterventionDirective } from '../graph/state';
+import type { ConversationState, InterventionPlan, InterventionDirective, ControlledUser } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
+import { getArchetype } from '@meeshy/shared/agent/archetypes';
 
 const STRATEGIST_SYSTEM_PROMPT = `Tu es l'orchestrateur d'une communaute de messagerie. Analyse cette conversation et decide quelles interventions sont naturelles.
 
@@ -166,23 +167,69 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     })());
 }
 
-function validateInterventions(interventions: unknown[], controlledUserIds: Set<string>, messageIds: Set<string>, maxMessages: number, maxReactions: number): InterventionDirective[] {
+function calculateWordLimits(
+  user: ControlledUser,
+  isInterpelle: boolean,
+  state: ConversationState,
+) {
+  const archetype = user.role.archetypeId ? getArchetype(user.role.archetypeId) : null;
+
+  // 1. User Override
+  // @ts-ignore - Fields added to Prisma
+  let minWords = user.role.overrideMinWordsPerMessage;
+  // @ts-ignore - Fields added to Prisma
+  let maxWords = user.role.overrideMaxWordsPerMessage;
+
+  // 2. Archetype
+  if (minWords === undefined || minWords === null) minWords = archetype?.minWords;
+  if (maxWords === undefined || maxWords === null) maxWords = archetype?.maxWords;
+
+  // 3. Response Mode / Conversation Default
+  if (minWords === undefined || minWords === null) minWords = state.minWordsPerMessage;
+  if (maxWords === undefined || maxWords === null) {
+    if (!isInterpelle) {
+      // Default to 300 words for "dynamique" (auto-pick) mode
+      maxWords = Math.min(300, state.maxWordsPerMessage);
+    } else {
+      maxWords = state.maxWordsPerMessage;
+    }
+  }
+
+  return {
+    minWords: Number(minWords) || 3,
+    maxWords: Number(maxWords) || 300,
+  };
+}
+
+function validateInterventions(
+  interventions: unknown[],
+  controlledUsers: ControlledUser[],
+  messageIds: Set<string>,
+  maxMessages: number,
+  maxReactions: number,
+  state: ConversationState,
+): InterventionDirective[] {
   const validated: InterventionDirective[] = [];
   let messageCount = 0;
   let reactionCount = 0;
   const userActionCounts = new Map<string, number>();
+  const controlledUserMap = new Map(controlledUsers.map((u) => [u.userId, u]));
 
   for (const raw of interventions) {
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) continue;
     const item = raw as Record<string, unknown>;
     const userId = String(item.asUserId ?? '');
 
-    if (!controlledUserIds.has(userId)) continue;
+    const user = controlledUserMap.get(userId);
+    if (!user) continue;
 
     const currentCount = userActionCounts.get(userId) ?? 0;
     if (currentCount >= 2) continue;
 
     if (item.type === 'message' && messageCount < maxMessages) {
+      const isInterpelle = Boolean(item.replyToMessageId) || (Array.isArray(item.mentionUsernames) && item.mentionUsernames.length > 0);
+      const limits = calculateWordLimits(user, isInterpelle, state);
+
       validated.push({
         type: 'message',
         asUserId: userId,
@@ -191,6 +238,8 @@ function validateInterventions(interventions: unknown[], controlledUserIds: Set<
         mentionUsernames: Array.isArray(item.mentionUsernames) ? item.mentionUsernames.map(String) : [],
         delaySeconds: Math.max(30, Math.min(180, Number(item.delaySeconds) || 60)),
         needsWebSearch: Boolean(item.needsWebSearch),
+        minWords: limits.minWords,
+        maxWords: limits.maxWords,
       });
       messageCount++;
       userActionCounts.set(userId, currentCount + 1);
@@ -272,10 +321,11 @@ export function createStrategistNode(llm: LlmProvider) {
 
       const validatedInterventions = validateInterventions(
         parsed.interventions ?? [],
-        controlledUserIds,
+        state.controlledUsers,
         messageIds,
         effectiveMaxMessages,
         reactionsEnabled ? maxReactions : 0,
+        state,
       );
 
       return {

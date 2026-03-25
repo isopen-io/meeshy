@@ -3007,6 +3007,8 @@ model AgentUserRole {
   overrideVocabularyLevel  String?
   overrideTypicalLength    String?
   overrideEmojiUsage       String?
+  overrideMinWordsPerMessage Int?
+  overrideMaxWordsPerMessage Int?
 
   messagesAnalyzed  Int      @default(0)
   confidence        Float    @default(0.0)
