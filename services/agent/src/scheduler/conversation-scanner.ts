@@ -104,7 +104,7 @@ export class ConversationScanner {
       const globalConfig = await this.configCache.getGlobalConfig();
       const scanOptions = {
         eligibleTypes: globalConfig?.eligibleConversationTypes ?? ['group', 'channel', 'public', 'global'],
-        freshnessHours: globalConfig?.messageFreshnessHours ?? 22,
+        freshnessHours: globalConfig?.messageFreshnessHours ?? 24,
         maxConversations: globalConfig?.maxConversationsPerCycle ?? 0,
       };
       const eligible = await findEligibleConversations(this.persistence, scanOptions);
@@ -162,7 +162,9 @@ export class ConversationScanner {
     let controlledUsers = manualControlledUsers;
     const config = await this.persistence.getAgentConfig(conversationId);
     if (config?.autoPickupEnabled && controlledUsers.length < (config.maxControlledUsers ?? 5)) {
-      const limit = (config.maxControlledUsers ?? 5) - controlledUsers.length;
+      // STRATEGY: Gradual introduction.
+      // We only pick ONE new user per cycle to avoid flooding the conversation with many new bots at once.
+      const limit = 1;
       const potentialUsers = await this.persistence.getPotentialControlledUsers(
         conversationId,
         limit,
@@ -174,16 +176,16 @@ export class ConversationScanner {
       for (const u of potentialUsers) {
         if (!u.agentGlobalProfile) continue;
         const p = u.agentGlobalProfile;
-        controlledUsers.push({
+        const newControlledUser = {
           userId: u.id,
           displayName: u.displayName ?? u.username ?? u.id,
           username: u.username ?? u.id,
           systemLanguage: u.systemLanguage,
-          source: 'auto_rule',
+          source: 'auto_rule' as const,
           role: {
             userId: u.id,
             displayName: u.displayName ?? u.username ?? u.id,
-            origin: 'observed',
+            origin: 'observed' as const,
             personaSummary: p.personaSummary ?? '',
             tone: p.tone ?? 'neutre',
             vocabularyLevel: p.vocabularyLevel ?? 'courant',
@@ -201,7 +203,14 @@ export class ConversationScanner {
             confidence: p.confidence,
             locked: p.locked,
           },
-        });
+        };
+
+        controlledUsers.push(newControlledUser);
+
+        // PERSISTENCE: Save the newly auto-picked user to AgentUserRole
+        // so that they are maintained for this conversation in future cycles.
+        this.persistence.upsertUserRole(conversationId, newControlledUser.role).catch((err) =>
+          console.error(`[Scanner] Error persisting auto-picked user ${u.id} for conv=${conversationId}:`, err));
       }
     }
 
