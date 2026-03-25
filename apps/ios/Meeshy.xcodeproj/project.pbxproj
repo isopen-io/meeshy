@@ -97,6 +97,9 @@
 		CC2200000000002F22 /* MessageDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2200000000001F22 /* MessageDetailSheet.swift */; };
 		CC2300000000002F23 /* ConversationLockSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2300000000001F23 /* ConversationLockSheet.swift */; };
 		CC2400000000002F24 /* ConversationLockManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2400000000001F24 /* ConversationLockManager.swift */; };
+		EDIT002A002A002A002A0002 /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDIT001A001A001A001A0001 /* EditProfileView.swift */; };
+		FRRL002A002A002A002A0002 /* FriendRequestListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FRRL001A001A001A001A0001 /* FriendRequestListView.swift */; };
+		RPTU002A002A002A002A0002 /* ReportUserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = RPTU001A001A001A001A0001 /* ReportUserView.swift */; };
 		CC4000000000002F40 /* ContactCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4000000000001F40 /* ContactCardView.swift */; };
 		CC5DF0610487315B178B7FE5 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BB909122D8D9361EC72DF1 /* RootView.swift */; };
 		CDL6001A001A001A001A0001 /* CommunityLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDL6002A002A002A002A0002 /* CommunityLinkDetailView.swift */; };
@@ -362,6 +365,9 @@
 		CC2200000000001F22 /* MessageDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailSheet.swift; sourceTree = "<group>"; };
 		CC2300000000001F23 /* ConversationLockSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockSheet.swift; sourceTree = "<group>"; };
 		CC2400000000001F24 /* ConversationLockManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockManager.swift; sourceTree = "<group>"; };
+		EDIT001A001A001A001A0001 /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
+		FRRL001A001A001A001A0001 /* FriendRequestListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendRequestListView.swift; sourceTree = "<group>"; };
+		RPTU001A001A001A001A0001 /* ReportUserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportUserView.swift; sourceTree = "<group>"; };
 		CC4000000000001F40 /* ContactCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactCardView.swift; sourceTree = "<group>"; };
 		CC44DD55EE66FF7788990011 /* AudioPostComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPostComposerView.swift; sourceTree = "<group>"; };
 		CDL6002A002A002A002A0002 /* CommunityLinkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityLinkDetailView.swift; sourceTree = "<group>"; };
@@ -625,6 +631,9 @@
 				AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */,
 				AA00BB11CC22DD33EE440080 /* PostDetailView.swift */,
 				AA00BB11CC22DD33EE440081 /* BookmarksView.swift */,
+				EDIT001A001A001A001A0001 /* EditProfileView.swift */,
+				FRRL001A001A001A001A0001 /* FriendRequestListView.swift */,
+				RPTU001A001A001A001A0001 /* ReportUserView.swift */,
 				AA00BB11CC22DD33EE440082 /* PostTranslationSheet.swift */,
 				AA00BB11CC22DD33EE440031 /* FeedPostCard.swift */,
 				AA00BB11CC22DD33EE440032 /* FeedPostCard+Media.swift */,
@@ -1168,6 +1177,9 @@
 				CC2300000000002F23 /* ConversationLockSheet.swift in Sources */,
 				CC2400000000002F24 /* ConversationLockManager.swift in Sources */,
 				CC4000000000002F40 /* ContactCardView.swift in Sources */,
+				EDIT002A002A002A002A0002 /* EditProfileView.swift in Sources */,
+				FRRL002A002A002A002A0002 /* FriendRequestListView.swift in Sources */,
+				RPTU002A002A002A002A0002 /* ReportUserView.swift in Sources */,
 				WDMGR001B001B001B00002 /* WidgetDataManager.swift in Sources */,
 				RR1100000000002F01 /* Router.swift in Sources */,
 				DL1100000000002F01 /* DeepLinkRouter.swift in Sources */,

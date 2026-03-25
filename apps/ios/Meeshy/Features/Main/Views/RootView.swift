@@ -178,6 +178,12 @@ struct RootView: View {
                     case .bookmarks:
                         BookmarksView()
                             .navigationBarHidden(true)
+                    case .friendRequests:
+                        FriendRequestListView()
+                            .navigationBarHidden(true)
+                    case .editProfile:
+                        EditProfileView()
+                            .navigationBarHidden(true)
                     }
                 }
             }
@@ -736,9 +742,12 @@ private struct ProfileFetchingSheet: View {
     @State private var isLoading = true
     @State private var fullUser: MeeshyUser?
     @State private var fetchError: String?
+    @State private var connectionRequestSent = false
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var statusViewModel: StatusViewModel
+
+    private var targetUserId: String { user.userId ?? "" }
 
     var body: some View {
         Group {
@@ -775,11 +784,55 @@ private struct ProfileFetchingSheet: View {
             user: user,
             isLoading: isLoading,
             fullUser: fullUser,
+            onBlock: {
+                Task { await blockUser() }
+            },
+            onUnblock: {
+                Task { await unblockUser() }
+            },
+            onConnectionRequest: {
+                Task { await sendConnectionRequest() }
+            },
             onDismiss: { dismiss() },
             currentUserId: AuthManager.shared.currentUser?.id ?? "",
-            moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-            onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            moodEmoji: statusViewModel.statusForUser(userId: targetUserId)?.moodEmoji,
+            onMoodTap: statusViewModel.moodTapHandler(for: targetUserId)
         )
+    }
+
+    private func sendConnectionRequest() async {
+        guard !targetUserId.isEmpty else { return }
+        do {
+            let _ = try await FriendService.shared.sendFriendRequest(receiverId: targetUserId)
+            connectionRequestSent = true
+            HapticFeedback.success()
+            ToastManager.shared.showSuccess("Demande envoyee")
+        } catch {
+            HapticFeedback.error()
+            ToastManager.shared.showError("Impossible d'envoyer la demande")
+        }
+    }
+
+    private func blockUser() async {
+        guard !targetUserId.isEmpty else { return }
+        do {
+            try await BlockService.shared.blockUser(userId: targetUserId)
+            HapticFeedback.medium()
+            ToastManager.shared.showSuccess("Utilisateur bloque")
+        } catch {
+            ToastManager.shared.showError("Impossible de bloquer")
+        }
+    }
+
+    private func unblockUser() async {
+        guard !targetUserId.isEmpty else { return }
+        do {
+            try await BlockService.shared.unblockUser(userId: targetUserId)
+            HapticFeedback.light()
+            ToastManager.shared.showSuccess("Utilisateur debloque")
+        } catch {
+            ToastManager.shared.showError("Impossible de debloquer")
+        }
     }
 
     private func errorView(_ message: String) -> some View {
