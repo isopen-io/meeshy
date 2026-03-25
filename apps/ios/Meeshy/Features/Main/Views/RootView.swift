@@ -742,7 +742,9 @@ private struct ProfileFetchingSheet: View {
     @State private var isLoading = true
     @State private var fullUser: MeeshyUser?
     @State private var fetchError: String?
-    @State private var connectionRequestSent = false
+    @State private var connectionStatus: ConnectionStatus = .none
+    @State private var isBlocked = false
+    @State private var pendingRequestId: String?
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var statusViewModel: StatusViewModel
@@ -776,14 +778,17 @@ private struct ProfileFetchingSheet: View {
                 }
             } catch {}
             isLoading = false
+            await checkPendingRequest()
         }
     }
 
     private var profileSheet: some View {
         UserProfileSheet(
             user: user,
+            isBlocked: isBlocked,
             isLoading: isLoading,
             fullUser: fullUser,
+            connectionStatus: connectionStatus,
             onBlock: {
                 Task { await blockUser() }
             },
@@ -793,6 +798,12 @@ private struct ProfileFetchingSheet: View {
             onConnectionRequest: {
                 Task { await sendConnectionRequest() }
             },
+            onCancelRequest: {
+                Task { await cancelRequest() }
+            },
+            onResendRequest: {
+                Task { await resendRequest() }
+            },
             onDismiss: { dismiss() },
             currentUserId: AuthManager.shared.currentUser?.id ?? "",
             moodEmoji: statusViewModel.statusForUser(userId: targetUserId)?.moodEmoji,
@@ -800,11 +811,23 @@ private struct ProfileFetchingSheet: View {
         )
     }
 
+    private func checkPendingRequest() async {
+        guard !targetUserId.isEmpty else { return }
+        do {
+            let sent = try await FriendService.shared.sentRequests()
+            if let pending = sent.data.first(where: { $0.receiverId == targetUserId && $0.status == "pending" }) {
+                pendingRequestId = pending.id
+                connectionStatus = .pendingSent(requestId: pending.id)
+            }
+        } catch {}
+    }
+
     private func sendConnectionRequest() async {
         guard !targetUserId.isEmpty else { return }
         do {
-            let _ = try await FriendService.shared.sendFriendRequest(receiverId: targetUserId)
-            connectionRequestSent = true
+            let request = try await FriendService.shared.sendFriendRequest(receiverId: targetUserId)
+            pendingRequestId = request.id
+            connectionStatus = .pendingSent(requestId: request.id)
             HapticFeedback.success()
             ToastManager.shared.showSuccess("Demande envoyee")
         } catch {
@@ -813,10 +836,31 @@ private struct ProfileFetchingSheet: View {
         }
     }
 
+    private func cancelRequest() async {
+        guard let requestId = pendingRequestId else { return }
+        do {
+            try await FriendService.shared.deleteRequest(requestId: requestId)
+            pendingRequestId = nil
+            connectionStatus = .none
+            HapticFeedback.medium()
+            ToastManager.shared.showSuccess("Demande annulee")
+        } catch {
+            ToastManager.shared.showError("Impossible d'annuler")
+        }
+    }
+
+    private func resendRequest() async {
+        if let requestId = pendingRequestId {
+            try? await FriendService.shared.deleteRequest(requestId: requestId)
+        }
+        await sendConnectionRequest()
+    }
+
     private func blockUser() async {
         guard !targetUserId.isEmpty else { return }
         do {
             try await BlockService.shared.blockUser(userId: targetUserId)
+            isBlocked = true
             HapticFeedback.medium()
             ToastManager.shared.showSuccess("Utilisateur bloque")
         } catch {
@@ -828,6 +872,7 @@ private struct ProfileFetchingSheet: View {
         guard !targetUserId.isEmpty else { return }
         do {
             try await BlockService.shared.unblockUser(userId: targetUserId)
+            isBlocked = false
             HapticFeedback.light()
             ToastManager.shared.showSuccess("Utilisateur debloque")
         } catch {
