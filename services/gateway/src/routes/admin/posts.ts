@@ -105,7 +105,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'object' }
+            data: { type: 'object', additionalProperties: true }
           }
         },
         401: errorResponseSchema,
@@ -425,7 +425,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'object' }
+            data: { type: 'object', additionalProperties: true }
           }
         },
         401: errorResponseSchema,
