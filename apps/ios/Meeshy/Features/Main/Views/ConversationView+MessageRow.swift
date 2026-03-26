@@ -51,9 +51,19 @@ extension ConversationView {
                     translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
                     textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                     preferredTranslation: viewModel.preferredTranslation(for: msg.id),
-                    showAvatar: false,
+                    showAvatar: !isDirect && !msg.isMe,
                     presenceState: bubblePresence,
                     senderMoodEmoji: statusViewModel.statusForUser(userId: msg.senderId)?.moodEmoji,
+                    senderStoryRingState: storyViewModel.hasUnviewedStories(forUserId: msg.senderId)
+                        ? .unread
+                        : storyViewModel.hasStories(forUserId: msg.senderId) ? .read : .none,
+                    onViewStory: storyViewModel.hasStories(forUserId: msg.senderId) ? {
+                        if let groupIdx = storyViewModel.groupIndex(forUserId: msg.senderId) {
+                            overlayState.storyViewerUserId = msg.senderId
+                            overlayState.storyViewerGroupIndex = groupIdx
+                            overlayState.showStoryViewer = true
+                        }
+                    } : nil,
                     onAddReaction: { messageId in
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             overlayState.emojiOnlyMode = true

@@ -41,6 +41,9 @@ struct ConversationOverlayState {
     var quickReactionMessageId: String? = nil
     var emojiOnlyMode = false
     var deleteConfirmMessageId: String? = nil
+    var showStoryViewer = false
+    var storyViewerUserId: String? = nil
+    var storyViewerGroupIndex: Int = 0
 }
 
 struct ConversationScrollState {
@@ -470,6 +473,16 @@ struct ConversationView: View {
                 if let userId = headerState.storyUserIdForHeader,
                    let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
                     StoryViewerView(viewModel: storyViewModel, groups: [storyViewModel.storyGroups[resolvedIndex]], currentGroupIndex: 0, isPresented: $headerState.showStoryViewerFromHeader)
+                }
+            }
+            .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
+                if let resolvedIndex = storyViewModel.groupIndex(forUserId: overlayState.storyViewerUserId ?? "") {
+                    StoryViewerView(
+                        viewModel: storyViewModel,
+                        groups: [storyViewModel.storyGroups[resolvedIndex]],
+                        currentGroupIndex: 0,
+                        isPresented: $overlayState.showStoryViewer
+                    )
                 }
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
