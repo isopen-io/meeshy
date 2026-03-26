@@ -94,6 +94,44 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         markDirty(key)
     }
 
+    public func upsert(item: Value, for key: Key, merge: @Sendable ([Value], Value) -> [Value]) async {
+        if var l1 = memoryCache[key] {
+            l1.items = merge(l1.items, item)
+            memoryCache[key] = l1
+            touchKey(key)
+            markDirty(key)
+            return
+        }
+        let keyStr = namespacedKey(key.description)
+        let existing = readFromL2(for: keyStr)?.items ?? []
+        let merged = merge(existing, item)
+        let entry = L1Entry(items: merged, loadedAt: Date())
+        memoryCache[key] = entry
+        touchKey(key)
+        markDirty(key)
+    }
+
+    public func upsertPatch(for key: Key, itemId: String, mutate: @Sendable (inout Value) -> Void) async {
+        if var l1 = memoryCache[key] {
+            if let idx = l1.items.firstIndex(where: { $0.id == itemId }) {
+                mutate(&l1.items[idx])
+                memoryCache[key] = l1
+                touchKey(key)
+                markDirty(key)
+            }
+            return
+        }
+        let keyStr = namespacedKey(key.description)
+        guard var items = readFromL2(for: keyStr)?.items else { return }
+        if let idx = items.firstIndex(where: { $0.id == itemId }) {
+            mutate(&items[idx])
+            let entry = L1Entry(items: items, loadedAt: Date())
+            memoryCache[key] = entry
+            touchKey(key)
+            markDirty(key)
+        }
+    }
+
     public func invalidate(for key: Key) async {
         memoryCache.removeValue(forKey: key)
         removeFromAccessOrder(key)
