@@ -238,6 +238,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   }, [selectedConversation?.id]);
 
   // ========== HOOKS MESSAGES ==========
+  const messageConversationId = selectedConversation?.id || effectiveSelectedId;
   const {
     messages,
     isLoading: isLoadingMessages,
@@ -252,8 +253,6 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     addOptimisticMessage,
     markMessageFailed,
     removeOptimisticMessage,
-  // Use effectiveSelectedId directly — don't wait for conversations list to resolve
-  const messageConversationId = selectedConversation?.id || effectiveSelectedId;
   } = useConversationMessagesRQ(messageConversationId || null, user!, {
     limit: 20,
     enabled: !!messageConversationId,
