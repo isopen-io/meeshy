@@ -13,6 +13,21 @@ type CompiledGraph = {
   invoke: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
 };
 
+function extractRecentTopicCategories(
+  history: Array<{ topic: string; timestamp: number }>,
+): string[] {
+  const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
+  const recentTopics = history
+    .filter((h) => h.timestamp > sixHoursAgo)
+    .map((h) => h.topic.toLowerCase().trim());
+
+  const seen = new Set<string>();
+  for (const topic of recentTopics) {
+    if (topic.length > 3) seen.add(topic);
+  }
+  return [...seen];
+}
+
 export class ConversationScanner {
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
   private scanning = false;
@@ -163,13 +178,14 @@ export class ConversationScanner {
       return false;
     }
 
-    const [messages, summary, toneProfiles, manualControlledUsers, agentHistory, todayActiveUserIds] = await Promise.all([
+    const [messages, summary, toneProfiles, manualControlledUsers, agentHistory, todayActiveUserIds, lastAgentUserId] = await Promise.all([
       this.stateManager.getMessages(conversationId),
       this.stateManager.getSummary(conversationId),
       this.stateManager.getToneProfiles(conversationId),
       this.persistence.getControlledUsers(conversationId),
       this.stateManager.getAgentHistory(conversationId),
       this.stateManager.getTodayActiveUserIds(conversationId),
+      this.stateManager.getLastAgentUserId(conversationId),
     ]);
 
     let controlledUsers = manualControlledUsers.map((u) => {
@@ -188,13 +204,16 @@ export class ConversationScanner {
     const config = await this.persistence.getAgentConfig(conversationId);
     const autoPickup = config?.autoPickupEnabled ?? true;
     if (autoPickup && controlledUsers.length < (config?.maxControlledUsers ?? 5)) {
-      // STRATEGY: Gradual introduction.
-      // We only pick ONE new user per cycle to avoid flooding the conversation with many new bots at once.
-      const limit = 1;
+      const isPublicConversation = conv.conversationType === 'global' || conv.conversationType === 'public';
+      // STRATEGY: Gradual introduction for private groups, aggressive for global/public.
+      // Global/public conversations need diverse voices — pick up to 3 users per cycle with a lower inactivity threshold.
+      const limit = isPublicConversation ? 3 : 1;
+      const baseThreshold = config?.inactivityThresholdHours ?? 72;
+      const effectiveThreshold = isPublicConversation ? Math.min(baseThreshold, 24) : baseThreshold;
       const potentialUsers = await this.persistence.getPotentialControlledUsers(
         conversationId,
         limit,
-        config?.inactivityThresholdHours ?? 72,
+        effectiveThreshold,
         config?.excludedRoles ?? [],
         (config?.excludedUserIds as string[]) ?? [],
       );
@@ -306,7 +325,10 @@ export class ConversationScanner {
     const day = new Date().getUTCDay();
     const maxUsersToday = day === 0 || day === 6 ? conv.weekendMaxUsers : conv.weekdayMaxUsers;
 
-    console.log(`[Scanner] Processing conv=${conversationId} activity=${activity.activityScore.toFixed(2)} msgs=${effectiveMessages.length} users=${controlledUsers.length}`);
+    // Extract recent topic categories from agent history to enforce diversity at code level
+    const recentTopicCategories = extractRecentTopicCategories(agentHistory);
+
+    console.log(`[Scanner] Processing conv=${conversationId} activity=${activity.activityScore.toFixed(2)} msgs=${effectiveMessages.length} users=${controlledUsers.length} lastUser=${lastAgentUserId ?? 'none'} recentTopics=${recentTopicCategories.length}`);
 
     const result = await this.graph.invoke({
       conversationId,
@@ -344,6 +366,8 @@ export class ConversationScanner {
       reactionBoostFactor: conv.reactionBoostFactor,
       agentHistory,
       todayActiveUserIds,
+      lastAgentUserId,
+      recentTopicCategories,
     });
 
     if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);
@@ -390,6 +414,11 @@ export class ConversationScanner {
           console.error(`[Scanner] Burst record error:`, err));
       }
       if (messageActions.length > 0) {
+        // Track last agent user for rotation enforcement
+        const lastMsg = messageActions[messageActions.length - 1];
+        this.stateManager.setLastAgentUserId(conversationId, lastMsg.asUserId).catch((err) =>
+          console.error(`[Scanner] Error tracking last agent user:`, err));
+
         const wordsSent = messageActions.reduce((sum, m) => sum + (m.content?.split(/\s+/).length ?? 0), 0);
         const controlledUsersList = (result.controlledUsers ?? []) as Array<{ role: { confidence: number } }>;
         const avgConfidence = controlledUsersList.length > 0

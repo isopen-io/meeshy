@@ -35,6 +35,9 @@ DECIDE:
 HISTORIQUE DES INTERVENTIONS RECENTES (NE PAS REPETER):
 {agentHistory}
 
+SUJETS RECEMMENT ABORDES (INTERDITS - trouver un angle COMPLETEMENT different):
+{recentTopicCategories}
+
 REGLES ANTI-REPETITION:
 - Ne propose JAMAIS un sujet, une idee ou une information deja aborde dans les messages recents ou l'historique des interventions.
 - Ne repete PAS ce que les autres participants viennent de dire (pas d'echo, pas de paraphrase inutile).
@@ -42,6 +45,7 @@ REGLES ANTI-REPETITION:
 - Si aucun sujet frais ou angle d'approche nouveau n'est disponible, retourne shouldIntervene: false.
 - Favorise les reactions aux messages recents plutot que de nouveaux messages s'il n'y a rien de nouveau a apporter au debat.
 - Maximum 1 intervention par utilisateur si la conversation est peu active.
+- Les sujets listes dans "SUJETS RECEMMENT ABORDES" sont STRICTEMENT INTERDITS. Choisis un sujet dans un DOMAINE COMPLETEMENT DIFFERENT.
 
 BUDGET QUOTIDIEN:
 - Il reste {budgetRemaining} messages autorise(s) aujourd'hui pour cette conversation
@@ -56,6 +60,7 @@ ROTATION UTILISATEURS:
 - Si un message recent est une reponse a un message d'un utilisateur inactif: il DOIT reagir
 - INTERDIT de faire intervenir {todayActiveUserNames} s'il reste des utilisateurs qui n'ont PAS encore parle
 - VARIE les utilisateurs: ne choisis PAS toujours le meme. Chaque cycle DOIT utiliser un utilisateur DIFFERENT du precedent
+- DERNIER UTILISATEUR AGENT: {lastAgentUserId}. Il est INTERDIT de le reutiliser s'il existe d'autres utilisateurs disponibles
 
 UTILISATEURS AYANT DEJA PARLE AUJOURD'HUI: {todayActiveUserNames}
 
@@ -143,6 +148,16 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     ? `INSTRUCTIONS SPECIFIQUES: ${state.agentInstructions}`
     : '';
 
+  const recentTopicsText = (state.recentTopicCategories ?? []).length > 0
+    ? state.recentTopicCategories.join(', ')
+    : 'Aucun sujet recent.';
+
+  const lastUserName = (() => {
+    if (!state.lastAgentUserId) return 'aucun';
+    const user = state.controlledUsers.find((u) => u.userId === state.lastAgentUserId);
+    return user ? `${user.displayName} (${user.userId})` : state.lastAgentUserId;
+  })();
+
   return STRATEGIST_SYSTEM_PROMPT
     .replace('{messages}', messagesText)
     .replace('{inactiveUsers}', inactiveUsersText)
@@ -154,11 +169,13 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     .replace('{minResponses}', String(minResponses))
     .replace('{maxResponses}', String(maxResponses + effectiveMaxReactions))
     .replace('{agentHistory}', historyText)
+    .replace('{recentTopicCategories}', recentTopicsText)
     .replace(/\{budgetRemaining\}/g, String(state.budgetRemaining))
     .replace('{todayUsersActive}', String(state.todayUsersActive))
     .replace('{maxUsersToday}', String(state.maxUsersToday))
     .replace('{reactionBoostFactor}', String(state.reactionBoostFactor))
     .replace(/\{burstSize\}/g, String(state.burstSize))
+    .replace(/\{lastAgentUserId\}/g, lastUserName)
     .replace(/\{todayActiveUserNames\}/g, (() => {
       const activeSet = new Set(state.todayActiveUserIds ?? []);
       const activeNames = state.controlledUsers
@@ -315,6 +332,22 @@ export function createStrategistNode(llm: LlmProvider) {
 
       const controlledUserIds = new Set(state.controlledUsers.map((u) => u.userId));
       const messageIds = new Set(state.messages.map((m) => m.id));
+
+      // CODE-LEVEL USER ROTATION: If the LLM picked the same user as last cycle
+      // and there are other available users, rewrite the first intervention to use a different user.
+      if (state.lastAgentUserId && state.controlledUsers.length > 1 && parsed.interventions) {
+        const otherUsers = state.controlledUsers.filter((u) => u.userId !== state.lastAgentUserId);
+        if (otherUsers.length > 0) {
+          const messageInterventions = (parsed.interventions as Array<Record<string, unknown>>).filter(
+            (i) => i.type === 'message' && i.asUserId === state.lastAgentUserId,
+          );
+          for (const intervention of messageInterventions) {
+            const replacement = otherUsers[Math.floor(Math.random() * otherUsers.length)];
+            console.log(`[Strategist] Rotating user: ${state.lastAgentUserId} → ${replacement.userId} (${replacement.displayName})`);
+            intervention.asUserId = replacement.userId;
+          }
+        }
+      }
 
       const dynamicMax = state.activityScore < 0.3
         ? maxResponses

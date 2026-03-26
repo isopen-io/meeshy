@@ -35,6 +35,7 @@ function buildGeneratorPrompt(
   mentionUsernames: string[],
   userLanguage: string,
   recentTopics: string,
+  recentTopicCategories: string,
   conversationTitle: string,
   conversationDescription: string,
   agentInstructions: string,
@@ -69,7 +70,8 @@ SUJET A ABORDER: ${topic}${mentionsText}
 ANTI-REPETITION:
 - NE repete PAS les memes idees ou formulations que tu as deja utilisees
 - Si tu n'as RIEN de nouveau a dire, reponds exactement "SKIP"
-- Sujets deja abordes recemment: ${recentTopics}
+- Sujets deja abordes recemment par cet utilisateur: ${recentTopics}
+- Sujets recemment abordes par TOUS les agents (INTERDITS): ${recentTopicCategories}
 
 REGLES ABSOLUES:
 - Tu es ${displayName}. Pas un assistant IA.
@@ -112,6 +114,10 @@ async function generateMessage(
   const temperature = state.generationTemperature ?? 0.8;
   const maxTokens = Math.max(64, Math.round(maxWords * 1.5));
 
+  const recentTopicCategoriesText = (state.recentTopicCategories ?? []).length > 0
+    ? state.recentTopicCategories.join(', ')
+    : 'aucun';
+
   const systemPrompt = buildGeneratorPrompt(
     user.displayName,
     profile,
@@ -121,6 +127,7 @@ async function generateMessage(
     directive.mentionUsernames,
     userLanguage,
     recentTopicsText,
+    recentTopicCategoriesText,
     state.conversationTitle,
     state.conversationDescription,
     state.agentInstructions,
