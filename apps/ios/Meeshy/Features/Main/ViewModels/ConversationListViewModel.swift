@@ -36,6 +36,7 @@ class ConversationListViewModel: ObservableObject {
     private let messageService: MessageServiceProviding
     private let authManager: AuthManaging
     private let storyService: StoryServiceProviding
+    private let syncEngine: ConversationSyncEngineProviding
     private let pageLimit = 100
     /// Au-delà de ce seuil le scroll infini (loadMore) reprend la main
     private let autoLoadCap = 1000
@@ -74,7 +75,8 @@ class ConversationListViewModel: ObservableObject {
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         messageService: MessageServiceProviding = MessageService.shared,
         authManager: AuthManaging = AuthManager.shared,
-        storyService: StoryServiceProviding = StoryService.shared
+        storyService: StoryServiceProviding = StoryService.shared,
+        syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared
     ) {
         self.api = api
         self.conversationService = conversationService
@@ -83,7 +85,7 @@ class ConversationListViewModel: ObservableObject {
         self.messageService = messageService
         self.authManager = authManager
         self.storyService = storyService
-        observeSocketReconnect()
+        self.syncEngine = syncEngine
         subscribeToSocketEvents()
         syncBadgeOnUnreadChange()
         setupBackgroundProcessing()
@@ -192,153 +194,32 @@ class ConversationListViewModel: ObservableObject {
         return result
     }
 
-    // Re-seed presence when Socket.IO reconnects (online → offline → online)
-    private func observeSocketReconnect() {
-        MessageSocketManager.shared.$isConnected
-            .removeDuplicates()
-            .dropFirst()
-            .filter { $0 }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
+    // MARK: - Sync Engine Observation
+
+    func observeSync() {
+        syncEngine.conversationsDidChange
+            .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
+            .sink { [weak self] in
                 Task { [weak self] in
-                    await self?.loadConversations()
+                    await self?.reloadFromCache()
                 }
             }
             .store(in: &cancellables)
     }
 
+    private func reloadFromCache() async {
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list")
+        switch cached {
+        case .fresh(let data, _), .stale(let data, _):
+            conversations = data
+        case .expired, .empty:
+            break
+        }
+    }
+
     // MARK: - Real-time Socket Subscriptions
 
     private func subscribeToSocketEvents() {
-        // Unread count updates from server
-        messageSocket.unreadUpdated
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                invalidateCache()
-                guard let idx = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[idx].unreadCount = event.unreadCount
-                // Fast-path: mise à jour directe de groupedConversations (pas d'attente pipeline 150ms)
-                let cid = event.conversationId
-                let newCount = event.unreadCount
-                for i in 0..<self.groupedConversations.count {
-                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
-                        self.groupedConversations[i].conversations[rowIdx].unreadCount = newCount
-                        break
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // New message → update last message preview + bump to top + global mark-as-received
-        messageSocket.messageReceived
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] apiMsg in
-                guard let self else { return }
-                invalidateCache()
-
-                // Global mark-as-received for ALL incoming messages from other users
-                let userId = self.currentUserId
-                if apiMsg.senderId != userId {
-                    let msgConvId = apiMsg.conversationId
-                    Task {
-                        do {
-                            let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                                endpoint: "/conversations/\(msgConvId)/mark-as-received",
-                                method: "POST"
-                            )
-                        } catch {
-                            await PendingStatusQueue.shared.enqueue(.init(
-                                conversationId: msgConvId, type: "received", timestamp: Date()
-                            ))
-                        }
-                    }
-                }
-
-                let convId = apiMsg.conversationId
-                guard let idx = self.convIndex(for: convId) else { return }
-
-                let preview = apiMsg.content
-                let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username
-                let msgDate = apiMsg.createdAt
-
-                self.conversations[idx].lastMessagePreview = preview
-                self.conversations[idx].lastMessageSenderName = senderName
-                self.conversations[idx].lastMessageAt = msgDate
-                self.conversations[idx].lastMessageId = apiMsg.id
-                self.conversations[idx].lastMessageIsBlurred = apiMsg.isBlurred ?? false
-                self.conversations[idx].lastMessageIsViewOnce = apiMsg.isViewOnce ?? false
-                self.conversations[idx].lastMessageExpiresAt = apiMsg.expiresAt
-
-                // Move conversation to top if not already
-                if idx > 0 {
-                    let conv = self.conversations.remove(at: idx)
-                    self.conversations.insert(conv, at: 0)
-                }
-
-                // Fast-path: mise à jour directe de groupedConversations (pas d'attente pipeline 150ms)
-                for i in 0..<self.groupedConversations.count {
-                    guard let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == convId }) else { continue }
-                    self.groupedConversations[i].conversations[rowIdx].lastMessagePreview = preview
-                    self.groupedConversations[i].conversations[rowIdx].lastMessageSenderName = senderName
-                    self.groupedConversations[i].conversations[rowIdx].lastMessageAt = msgDate
-                    self.groupedConversations[i].conversations[rowIdx].lastMessageId = apiMsg.id
-                    self.groupedConversations[i].conversations[rowIdx].lastMessageIsBlurred = apiMsg.isBlurred ?? false
-                    self.groupedConversations[i].conversations[rowIdx].lastMessageIsViewOnce = apiMsg.isViewOnce ?? false
-                    self.groupedConversations[i].conversations[rowIdx].lastMessageExpiresAt = apiMsg.expiresAt
-                    // Remonter en tête de section (sauf pinned)
-                    if rowIdx > 0 && self.groupedConversations[i].section.id != "pinned" {
-                        let conv = self.groupedConversations[i].conversations.remove(at: rowIdx)
-                        self.groupedConversations[i].conversations.insert(conv, at: 0)
-                    }
-                    break
-                }
-            }
-            .store(in: &cancellables)
-
-        // Edited message → update last message preview if it was the last message
-        messageSocket.messageEdited
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] apiMsg in
-                guard let self else { return }
-                let editedContent = apiMsg.content ?? ""
-                let convId = apiMsg.conversationId
-                guard let idx = self.convIndex(for: convId) else { return }
-                guard self.conversations[idx].lastMessageId == apiMsg.id else { return }
-                self.conversations[idx].lastMessagePreview = editedContent
-                self.invalidateCache()
-                // Fast-path: mise à jour directe de groupedConversations
-                for i in 0..<self.groupedConversations.count {
-                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == convId }) {
-                        self.groupedConversations[i].conversations[rowIdx].lastMessagePreview = editedContent
-                        break
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Deleted message → clear last message preview if it was the last message
-        messageSocket.messageDeleted
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                let convId = event.conversationId
-                guard let idx = self.convIndex(for: convId) else { return }
-                guard self.conversations[idx].lastMessageId == event.messageId else { return }
-                self.conversations[idx].lastMessagePreview = ""
-                self.conversations[idx].lastMessageId = nil
-                self.invalidateCache()
-                // Fast-path: mise à jour directe de groupedConversations
-                for i in 0..<self.groupedConversations.count {
-                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == convId }) {
-                        self.groupedConversations[i].conversations[rowIdx].lastMessagePreview = ""
-                        self.groupedConversations[i].conversations[rowIdx].lastMessageId = nil
-                        break
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
         // Typing indicator — affiche "<Auteur> écrit..." dans le row
         messageSocket.typingStarted
             .receive(on: DispatchQueue.main)
@@ -415,113 +296,57 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Load Conversations
 
     func loadConversations() async {
-        if isCacheValid && !conversations.isEmpty {
-            return
-        }
-
         guard !isLoading else { return }
-        isLoading = true
-        currentOffset = 0
-
-        // Afficher le cache immédiatement (AVANT le réseau)
-        let cached = await CacheCoordinator.shared.conversations.load(for: "list").value ?? []
-        if !cached.isEmpty {
-            conversations = cached
-        }
 
         async let categoriesTask: () = loadCategories()
 
-        do {
-            let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
-                endpoint: "/conversations",
-                offset: 0,
-                limit: pageLimit
-            )
-
-            if response.success {
-                let userId = currentUserId
-                PresenceManager.shared.seed(from: response.data, currentUserId: userId)
-                conversations = response.data.map { $0.toConversation(currentUserId: userId) }
-                hasMore = response.pagination?.hasMore ?? false
-                currentOffset = conversations.count
-                lastFetchedAt = Date()
-
-                Task.detached(priority: .utility) { [conversations] in
-                    await CacheCoordinator.shared.conversations.save(conversations, for: "list")
-                }
-
-                prefetchMessages(for: response.data, userId: userId)
-
-                // Charger les pages suivantes silencieusement en arrière-plan
-                if hasMore {
-                    Task { await self.loadAllRemainingBackground() }
-                }
-                
-                // Précharger les stories en arrière-plan (optimisé)
-                prefetchRecentStories()
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list")
+        switch cached {
+        case .fresh(let data, _):
+            conversations = data
+            lastFetchedAt = Date()
+        case .stale(let data, _):
+            conversations = data
+            lastFetchedAt = Date()
+            Task { [weak self] in await self?.syncEngine.syncSinceLastCheckpoint() }
+        case .expired, .empty:
+            isLoading = true
+            await syncEngine.fullSync()
+            let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
+            if let data = reloaded.value {
+                conversations = data
             }
-        } catch {
-            Logger.messages.error("[ConversationListVM] Error loading conversations: \(error.localizedDescription)")
+            lastFetchedAt = Date()
+            isLoading = false
         }
 
+        // Précharger les stories en arrière-plan (optimisé)
+        prefetchRecentStories()
+
         await categoriesTask
-        isLoading = false
     }
 
     // MARK: - Force Refresh (pull-to-refresh)
     // Recharge les conversations depuis l'API puis continue en arrière-plan
 
     func forceRefresh() async {
-        isLoading = false
-        hasMore = true
-        currentOffset = 0
         invalidateCache()
-        await loadConversations()
+        isLoading = true
+        await syncEngine.fullSync()
+        let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
+        if let data = reloaded.value {
+            conversations = data
+        }
+        lastFetchedAt = Date()
+        isLoading = false
+        prefetchRecentStories()
     }
 
     // MARK: - Refresh
 
     func refresh() async {
-        currentOffset = 0
-        hasMore = true
-        await loadConversations()
-    }
-
-    // MARK: - Background full load (pages 2+, silencieux, cap = autoLoadCap)
-    // Au-delà du cap, loadMore() public prend le relais (scroll infini pour power users)
-
-    private func loadAllRemainingBackground() async {
-        while hasMore && !isLoadingMore && conversations.count < autoLoadCap {
-            isLoadingMore = true
-            do {
-                let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
-                    endpoint: "/conversations",
-                    offset: currentOffset,
-                    limit: pageLimit
-                )
-
-                if response.success {
-                    let userId = currentUserId
-                    PresenceManager.shared.seed(from: response.data, currentUserId: userId)
-                    let incoming = response.data.map { $0.toConversation(currentUserId: userId) }
-                    let deduplicated = incoming.filter { convIndex(for: $0.id) == nil }
-                    if !deduplicated.isEmpty {
-                        conversations.append(contentsOf: deduplicated)
-                    }
-                    hasMore = response.pagination?.hasMore ?? false
-                    currentOffset += deduplicated.count
-
-                    Task.detached(priority: .background) { [snapshot = self.conversations] in
-                        await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
-                    }
-                } else {
-                    hasMore = false
-                }
-            } catch {
-                hasMore = false
-            }
-            isLoadingMore = false
-        }
+        await syncEngine.syncSinceLastCheckpoint()
+        await reloadFromCache()
     }
 
     // MARK: - Load More (scroll infini — uniquement pour users avec >1000 conversations)
