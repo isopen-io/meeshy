@@ -12,6 +12,7 @@
 
 import { logger } from '@/utils/logger';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { AttachmentStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import type {
   Message,
   SocketIOMessage
@@ -39,7 +40,7 @@ export class MessagingService {
   private deleteListeners: Set<MessageDeleteListener> = new Set();
   private mentionListeners: Set<(data: any) => void> = new Set();
   private consumedListeners: Set<(data: any) => void> = new Set();
-  private attachmentStatusListeners: Set<(data: any) => void> = new Set();
+  private attachmentStatusListeners: Set<(data: AttachmentStatusUpdatedEventData) => void> = new Set();
 
   private encryptionHandlers: EncryptionHandlers | null = null;
   private getMessageByIdCallback: GetMessageByIdCallback | null = null;
@@ -117,7 +118,7 @@ export class MessagingService {
       this.deleteListeners.forEach(listener => listener(data.messageId));
     });
 
-    // Mention created
+    // Mention created — NOTE: gateway does not emit MENTION_CREATED yet (dead listener)
     socket.on(SERVER_EVENTS.MENTION_CREATED as any, (data: any) => {
       this.mentionListeners.forEach(listener => listener(data));
     });

@@ -89,7 +89,7 @@ export function useContactsData(t: (key: string) => string) {
       const token = authManager.getAuthToken();
       if (!token) return;
 
-      const response = await fetch(buildApiUrl('/users/friend-requests'), {
+      const response = await fetch(buildApiUrl('/friend-requests'), {
         headers: { Authorization: `Bearer ${token}` }
       });
 

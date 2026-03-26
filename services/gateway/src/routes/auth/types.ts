@@ -49,6 +49,7 @@ export interface UserResponseData {
   displayName: string;
   bio: string | null;
   avatar: string | null;
+  banner: string | null;
   phoneNumber: string | null;
   role: string;
   isActive: boolean;
@@ -101,6 +102,7 @@ export function formatUserResponse(user: any, permissions?: any): UserResponseDa
     displayName: user.displayName,
     bio: user.bio,
     avatar: user.avatar,
+    banner: user.banner || null,
     phoneNumber: user.phoneNumber,
     role: user.role,
     isActive: user.isActive,
@@ -115,7 +117,7 @@ export function formatUserResponse(user: any, permissions?: any): UserResponseDa
     phoneVerifiedAt: user.phoneVerifiedAt,
     twoFactorEnabledAt: user.twoFactorEnabledAt,
     pendingEmail: user.pendingEmail || null,
-    pendingPhone: user.pendingPhoneNumber || null,
+    pendingPhone: user.pendingPhone || user.pendingPhoneNumber || null,
     lastPasswordChange: user.lastPasswordChange,
     lastLoginIp: user.lastLoginIp,
     lastLoginLocation: user.lastLoginLocation,

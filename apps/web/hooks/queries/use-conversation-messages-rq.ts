@@ -16,7 +16,12 @@ import { conversationsService } from '@/services/conversations.service';
 import { apiService } from '@/services/api.service';
 import { AnonymousChatService } from '@/services/anonymous-chat.service';
 import type { Message, User } from '@meeshy/shared/types';
+import type { OptimisticMessage } from '@/utils/optimistic-message';
 export type { OptimisticMessage } from '@/utils/optimistic-message';
+
+function isOptimisticMessage(m: Message): m is OptimisticMessage {
+  return '_tempId' in m;
+}
 
 export interface ConversationMessagesRQOptions {
   limit?: number;
@@ -398,7 +403,7 @@ export function useConversationMessagesRQ(
         pages: old.pages.map(page => ({
           ...page,
           messages: page.messages.map(m =>
-            (m as any)._tempId === tempId ? serverMessage : m
+            isOptimisticMessage(m) && m._tempId === tempId ? serverMessage : m
           ),
         })),
       };
@@ -414,7 +419,7 @@ export function useConversationMessagesRQ(
         pages: old.pages.map(page => ({
           ...page,
           messages: page.messages.map(m =>
-            (m as any)._tempId === tempId ? { ...m, _localStatus: 'failed' } : m
+            isOptimisticMessage(m) && m._tempId === tempId ? { ...m, _localStatus: 'failed' as const } : m
           ),
         })),
       };
@@ -429,7 +434,7 @@ export function useConversationMessagesRQ(
         ...old,
         pages: old.pages.map(page => ({
           ...page,
-          messages: page.messages.filter(m => (m as any)._tempId !== tempId),
+          messages: page.messages.filter(m => !(isOptimisticMessage(m) && m._tempId === tempId)),
         })),
       };
     });

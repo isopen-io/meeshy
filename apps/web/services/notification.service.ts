@@ -288,19 +288,21 @@ export const NotificationService = {
 
   /**
    * Récupère les préférences de notifications
+   * Migré de /notifications/preferences vers /me/preferences/notification (système unifié UserPreferences)
    */
   async getPreferences(): Promise<ApiResponse<any>> {
     return withRetry(async () => {
-      return apiService.get('/notifications/preferences');
+      return apiService.get('/me/preferences/notification');
     });
   },
 
   /**
    * Met à jour les préférences de notifications
+   * Migré de /notifications/preferences vers /me/preferences/notification (système unifié UserPreferences)
    */
   async updatePreferences(preferences: any): Promise<ApiResponse<any>> {
     return withRetry(async () => {
-      return apiService.patch('/notifications/preferences', preferences);
+      return apiService.patch('/me/preferences/notification', preferences);
     });
   },
 };

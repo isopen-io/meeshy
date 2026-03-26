@@ -149,11 +149,12 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       }
 
       const token = authService.generateToken(user);
+      const permissions = authService.getUserPermissions(user as any);
 
       reply.send({
         success: true,
         data: {
-          user: formatUserResponse(user),
+          user: formatUserResponse(user, permissions),
           token,
           expiresIn: 24 * 60 * 60
         }

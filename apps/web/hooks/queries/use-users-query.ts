@@ -65,8 +65,9 @@ export function useUpdateUserProfileMutation() {
   return useMutation({
     mutationFn: (data: UpdateUserDto) => usersService.updateMyProfile(data),
     onSuccess: (response) => {
-      // Update current user cache
-      queryClient.setQueryData<User>(queryKeys.users.current(), response.data);
+      // Gateway returns { user: {...}, message: '...' } in data
+      const userData = (response.data as any)?.user ?? response.data;
+      queryClient.setQueryData<User>(queryKeys.users.current(), userData);
 
       // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: queryKeys.users.current() });
