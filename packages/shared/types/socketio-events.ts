@@ -309,6 +309,19 @@ export interface NotificationCountsEventData {
 }
 
 /**
+ * Données de mise à jour de statut d'attachement
+ * Emitted by gateway when an attachment action occurs (e.g., download, view)
+ */
+export interface AttachmentStatusUpdatedEventData {
+  readonly attachmentId: string;
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly action: string;
+  readonly updatedAt: Date;
+}
+
+/**
  * Données de message système
  */
 export interface SystemMessageEventData {

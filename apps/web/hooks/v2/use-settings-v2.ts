@@ -30,6 +30,14 @@ export interface NotificationSettingsV2 {
   marketing: boolean;
 }
 
+const NOTIF_KEY_TO_BACKEND: Record<keyof NotificationSettingsV2, string> = {
+  messages: 'newMessageEnabled',
+  mentions: 'mentionEnabled',
+  communities: 'conversationEnabled',
+  calls: 'missedCallEnabled',
+  marketing: 'systemEnabled',
+};
+
 export interface ThemeSettingV2 {
   mode: 'light' | 'dark' | 'system';
 }
@@ -199,11 +207,11 @@ export function useSettingsV2(options: UseSettingsV2Options = {}): SettingsV2Ret
   const notificationSettings = useMemo((): NotificationSettingsV2 => {
     const prefs = notificationPrefs || {};
     return {
-      messages: prefs.messages !== false,
-      mentions: prefs.mentions !== false,
-      communities: prefs.communities !== false,
-      calls: prefs.calls !== false,
-      marketing: prefs.marketing === true,
+      messages: prefs.newMessageEnabled !== false,
+      mentions: prefs.mentionEnabled !== false,
+      communities: prefs.conversationEnabled !== false,
+      calls: prefs.missedCallEnabled !== false,
+      marketing: prefs.systemEnabled === true,
     };
   }, [notificationPrefs]);
 
@@ -239,7 +247,8 @@ export function useSettingsV2(options: UseSettingsV2Options = {}): SettingsV2Ret
 
   const updateNotificationSetting = useCallback(
     async (key: keyof NotificationSettingsV2, value: boolean) => {
-      await updateNotifPrefsMutation.mutateAsync({ [key]: value });
+      const backendKey = NOTIF_KEY_TO_BACKEND[key];
+      await updateNotifPrefsMutation.mutateAsync({ [backendKey]: value });
     },
     [updateNotifPrefsMutation]
   );

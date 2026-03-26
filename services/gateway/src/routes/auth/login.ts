@@ -145,10 +145,12 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         });
       }
 
+      const permissions = authService.getUserPermissions(user as any);
+
       reply.send({
         success: true,
         data: {
-          user: formatUserResponse(user),
+          user: formatUserResponse(user, permissions),
           token: jwtToken,
           sessionToken,
           session: formatSessionResponse(session, rememberDevice || false),

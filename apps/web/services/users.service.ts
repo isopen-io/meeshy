@@ -78,19 +78,20 @@ export const usersService = {
     try {
       const response = await apiService.get<any>('/auth/me');
 
-      // L'API retourne { success: true, data: { user: {...} } }
-      // apiService.request() met la réponse JSON dans response.data
-      // Donc response.data = { success: true, data: { user: {...} } }
-      const userData = (response.data?.data?.user as User) || (response.data?.user as User) || (response.data as User);
+      // apiService.request() wraps the gateway JSON response in { success, data }
+      // Gateway /auth/me returns { success: true, data: { user: {...} } }
+      // So response.data = { success: true, data: { user: {...} } }
+      // → response.data.data.user is the actual User object
+      const rawData = response.data;
+      const userData = (rawData?.data?.user ?? rawData?.user ?? rawData) as User;
 
-      // S'assurer que les permissions sont définies
-      const userWithPermissions = userData && !userData.permissions
-        ? { ...userData, permissions: getDefaultPermissions(userData.role) }
-        : userData;
+      if (userData && !userData.permissions) {
+        userData.permissions = getDefaultPermissions(userData.role);
+      }
 
       return {
         ...response,
-        data: userWithPermissions
+        data: userData
       };
     } catch (error) {
       console.error('Erreur lors de la récupération du profil:', error);

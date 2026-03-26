@@ -45,7 +45,7 @@ export function registerParticipantsRoutes(
         type: 'object',
         properties: {
           onlineOnly: { type: 'string', enum: ['true', 'false'], description: 'Filter to only online participants' },
-          role: { type: 'string', enum: ['CREATOR', 'ADMIN', 'MODERATOR', 'MEMBER'], description: 'Filter by participant role' },
+          role: { type: 'string', enum: ['creator', 'admin', 'moderator', 'member'], description: 'Filter by participant role (lowercase, as stored in DB)' },
           search: { type: 'string', description: 'Search participants by name or username' },
           limit: { type: 'string', description: 'Maximum number of participants to return (default: 20, max: 100)' },
           cursor: { type: 'string', description: 'Cursor for pagination (Participant ID)' }
@@ -179,7 +179,7 @@ export function registerParticipantsRoutes(
         systemLanguage: participant.user?.systemLanguage ?? participant.language,
         regionalLanguage: participant.user?.regionalLanguage ?? participant.language,
         customDestinationLanguage: participant.user?.customDestinationLanguage ?? participant.language,
-        autoTranslateEnabled: false,
+        autoTranslateEnabled: participant.user?.autoTranslateEnabled ?? true,
         isActive: participant.isActive,
         createdAt: participant.user?.createdAt ?? participant.joinedAt,
         updatedAt: participant.user?.updatedAt ?? participant.joinedAt,

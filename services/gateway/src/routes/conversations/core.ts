@@ -364,7 +364,8 @@ export function registerCoreRoutes(
         : Promise.resolve([]);
 
       const [memberUsers, userParticipantRecords, totalCount] = await Promise.all([
-        // Fetch user data only for members in these conversations
+        // Fetch user data with firstName/lastName for DM name resolution
+        // (participant.user select only has displayName, not firstName/lastName)
         allMemberUserIds.size > 0
           ? prisma.user.findMany({
               where: { id: { in: Array.from(allMemberUserIds) } },
