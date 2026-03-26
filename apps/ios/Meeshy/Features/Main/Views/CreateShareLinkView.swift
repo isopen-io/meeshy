@@ -464,6 +464,7 @@ struct CreateShareLinkView: View {
         case .community: ("person.3.sequence.fill", "F8B500")
         case .channel:   ("megaphone.fill", "A855F7")
         case .public:    ("globe", "4ECDC4")
+        case .broadcast:  ("megaphone.fill", "A855F7")
         default:         ("bubble.left.and.bubble.right.fill", "08D9D6")
         }
         return iconBadge(icon, color: color)
@@ -624,11 +625,11 @@ private extension MeeshyConversation.ConversationType {
         case .direct:    "Message direct"
         case .group:     "Groupe"
         case .public:    "Public"
-        case .global:    "Global"
+        case .global:    "Globale"
         case .community: "Communauté"
         case .channel:   "Canal"
         case .bot:       "Bot"
-        case .broadcast: "Broadcast"
+        case .broadcast: "Communication"
         }
     }
 }

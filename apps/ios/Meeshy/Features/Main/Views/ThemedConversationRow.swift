@@ -575,7 +575,7 @@ private struct ConversationAvatarView: View {
         items.append(AvatarContextMenuItem(label: "Infos conversation", icon: "info.circle.fill") {
             onViewConversationInfo?()
         })
-        let sharableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global]
+        let sharableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global, .broadcast]
         if sharableTypes.contains(conversation.type), let handler = onCreateShareLink {
             items.append(AvatarContextMenuItem(label: "Créer un lien de partage", icon: "link.badge.plus") {
                 handler()

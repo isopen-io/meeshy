@@ -248,7 +248,7 @@ export function registerSharingRoutes(
     Body: {
       title?: string;
       description?: string;
-      type?: 'direct' | 'group' | 'public' | 'global';
+      type?: 'direct' | 'group' | 'public' | 'global' | 'broadcast';
     };
   }>('/conversations/:id', {
     schema: {

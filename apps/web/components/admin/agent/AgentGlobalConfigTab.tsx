@@ -16,11 +16,12 @@ import { toast } from 'sonner';
 
 const CONVERSATION_TYPES = ['group', 'channel', 'public', 'global', 'broadcast'] as const;
 const TYPE_LABELS: Record<string, string> = {
+  direct: 'Direct',
   group: 'Groupe',
-  channel: 'Canal',
   public: 'Public',
-  global: 'Global',
-  broadcast: 'Broadcast',
+  global: 'Globale',
+  broadcast: 'Communication',
+  channel: 'Canal',
 };
 
 export function AgentGlobalConfigTab() {

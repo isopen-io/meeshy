@@ -98,7 +98,7 @@ export function ConversationSettings({
     { value: 'private', label: 'Privée', description: 'Sur invitation uniquement' },
     { value: 'general', label: 'Générale', description: 'Conversation standard' },
     { value: 'public', label: 'Publique', description: 'Visible par tous' },
-    { value: 'broadcast', label: 'Broadcast', description: 'Lecture seule pour les membres' },
+    { value: 'broadcast', label: 'Communication', description: 'Lecture seule pour les membres' },
   ] as const;
 
   return (

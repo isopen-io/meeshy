@@ -87,12 +87,12 @@ export class TransformersService {
    * Map statique pour la conversion des types de conversation
    */
   private static readonly CONVERSATION_TYPE_MAP = new Map<string, ConversationType>([
-    ['group', 'group'],
-    ['public', 'broadcast'],
-    ['global', 'broadcast'],
     ['direct', 'direct'],
-    ['anonymous', 'direct'],
+    ['group', 'group'],
+    ['public', 'public'],
+    ['global', 'global'],
     ['broadcast', 'broadcast'],
+    ['anonymous', 'direct'],
   ]);
 
   /**

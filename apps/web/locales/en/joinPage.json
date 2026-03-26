@@ -9,6 +9,7 @@
     "public": "Public",
     "privateConversation": "Private",
     "global": "Global",
+    "broadcast": "Communication",
     "anonymous": "Anonymous",
     "members": "Members",
     "participants": "Participants",

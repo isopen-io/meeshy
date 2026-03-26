@@ -629,7 +629,7 @@ export interface UpdateUserResponse {
  * Requête de création de conversation
  */
 export interface CreateConversationRequest {
-  readonly type: 'direct' | 'group' | 'public' | 'global';
+  readonly type: 'direct' | 'group' | 'public' | 'global' | 'broadcast';
   readonly name?: string;
   readonly title?: string; // Alias pour name
   readonly description?: string;

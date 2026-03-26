@@ -28,16 +28,16 @@ interface LinkTypeStepProps {
 
 const getConversationTypeLabel = (type: string): string => {
   switch (type) {
-    case 'global':
-      return 'Global Group';
-    case 'group':
-      return 'Private Group';
-    case 'public':
-      return 'Public Group';
-    case 'broadcast':
-      return 'Broadcast';
     case 'direct':
       return 'Direct';
+    case 'group':
+      return 'Groupe';
+    case 'public':
+      return 'Public';
+    case 'global':
+      return 'Globale';
+    case 'broadcast':
+      return 'Communication';
     default:
       return type;
   }

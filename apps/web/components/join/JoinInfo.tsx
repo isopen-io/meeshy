@@ -14,10 +14,11 @@ export function JoinInfo({ conversationLink }: JoinInfoProps) {
 
   const getConversationTypeLabel = (type: string | undefined) => {
     switch (type) {
-      case 'group': return t('group');
       case 'direct': return t('direct');
+      case 'group': return t('group');
       case 'public': return t('public');
       case 'global': return t('global');
+      case 'broadcast': return t('broadcast');
       default: return t('privateConversation');
     }
   };
@@ -28,6 +29,7 @@ export function JoinInfo({ conversationLink }: JoinInfoProps) {
       case 'global':
         return "default";
       case 'public':
+      case 'broadcast':
         return "secondary";
       case 'direct':
         return "outline";

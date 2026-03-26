@@ -15,12 +15,12 @@ import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
 
 const TYPE_LABELS: Record<string, string> = {
-  group: 'Groupe',
-  channel: 'Canal',
-  public: 'Public',
-  global: 'Global',
-  broadcast: 'Broadcast',
   direct: 'Direct',
+  group: 'Groupe',
+  public: 'Public',
+  global: 'Globale',
+  broadcast: 'Communication',
+  channel: 'Canal',
 };
 
 function conversationLabel(config: AgentConfigData): string {
