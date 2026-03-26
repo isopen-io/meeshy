@@ -60,6 +60,7 @@ export class ConnectionService {
 
   // Callback for auto-join after connection
   private autoJoinCallback: (() => void) | null = null;
+  private isAppUpdating = false;
 
   /**
    * Get translation helper
@@ -276,15 +277,15 @@ export class ConnectionService {
       this.state.isConnected = false;
       this.state.isConnecting = false;
 
-      // Client-initiated disconnect — no reconnect
-      if (reason === 'io client disconnect') return;
+      // Client-initiated disconnect or app updating — no reconnect
+      if (reason === 'io client disconnect' || this.isAppUpdating) return;
 
       onDisconnected(reason);
 
       // Single reconnect path with delay based on reason
       const delay = (reason === 'transport close' || reason === 'transport error') ? 3000 : 2000;
       setTimeout(() => {
-        if (!this.state.isConnected && !this.state.isConnecting) {
+        if (!this.state.isConnected && !this.state.isConnecting && !this.isAppUpdating) {
           this.reconnect();
         }
       }, delay);
@@ -382,7 +383,7 @@ export class ConnectionService {
    * Schedule reconnection attempt
    */
   private scheduleReconnect(): void {
-    if (this.state.reconnectAttempts >= this.maxReconnectAttempts) {
+    if (this.isAppUpdating || this.state.reconnectAttempts >= this.maxReconnectAttempts) {
       return;
     }
 
@@ -409,9 +410,34 @@ export class ConnectionService {
   }
 
   /**
+   * Signal that an app update is in progress — prevents logout during update cycle
+   */
+  setAppUpdating(updating: boolean): void {
+    this.isAppUpdating = updating;
+  }
+
+  /**
+   * Gracefully disconnect for app update (client-initiated, no reconnect)
+   */
+  disconnectForUpdate(): void {
+    this.isAppUpdating = true;
+    if (this.state.socket) {
+      this.state.socket.disconnect();
+      this.state.socket = null;
+    }
+    this.state.isConnected = false;
+    this.state.isConnecting = false;
+  }
+
+  /**
    * Handle authentication failure
    */
   private async handleAuthenticationFailure(errorMessage: string): Promise<void> {
+    if (this.isAppUpdating) {
+      console.log('[ConnectionService] App update in progress, skipping auth failure handling');
+      return;
+    }
+
     const isAuthRequiredError = errorMessage.includes('Authentification requise') ||
                                 errorMessage.includes('Bearer token') ||
                                 errorMessage.includes('x-session-token');

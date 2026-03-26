@@ -106,6 +106,13 @@ class MeeshySocketIOService {
   }
 
   /**
+   * Graceful disconnect for app update — prevents auth failure logout
+   */
+  public disconnectForUpdate(): void {
+    this.orchestrator.disconnectForUpdate();
+  }
+
+  /**
    * Rejoint automatiquement la dernière conversation active après authentification
    */
   private _autoJoinLastConversation(): void {

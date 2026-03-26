@@ -70,6 +70,16 @@ export async function performFullAppInvalidationAndReload(registration: ServiceW
   console.log('[SW] Starting full application invalidation...');
 
   try {
+    // 0. Déconnecter gracieusement le WebSocket AVANT le reload
+    // Évite que handleAuthenticationFailure → logout ne purge la session
+    try {
+      const { meeshySocketIOService } = await import('@/services/meeshy-socketio.service');
+      meeshySocketIOService.disconnectForUpdate();
+      console.log('[SW] WebSocket gracefully disconnected for update.');
+    } catch (e) {
+      console.warn('[SW] Could not disconnect WebSocket:', e);
+    }
+
     // 1. Invalider tous les caches de l'API CacheStorage
     if ('caches' in window) {
       const cacheKeys = await caches.keys();

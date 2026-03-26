@@ -444,6 +444,10 @@ export class SocketIOOrchestrator {
     this.connectionService.reconnect();
   }
 
+  disconnectForUpdate(): void {
+    this.connectionService.disconnectForUpdate();
+  }
+
   getConnectionStatus(): ConnectionStatus {
     return this.connectionService.getConnectionStatus();
   }
