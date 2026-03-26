@@ -191,7 +191,8 @@ export class MongoPersistence {
       ...(maxConversations > 0 ? { take: maxConversations } : {}),
     });
 
-    return conversations.filter((conv) => conv.agentConfig?.enabled === true);
+    // No config = eligible (auto-pickup). enabled: false = manually disabled = skip.
+    return conversations.filter((conv) => !conv.agentConfig || conv.agentConfig.enabled !== false);
   }
 
   async getConversationContext(conversationId: string) {
