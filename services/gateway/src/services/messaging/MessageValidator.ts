@@ -262,11 +262,39 @@ export class MessageValidator {
     // Récupérer les infos de la conversation pour les permissions
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { type: true }
+      select: { type: true, isAnnouncementChannel: true, defaultWriteRole: true }
     });
 
     if (!conversation) {
       return this.createPermissionDenied('Conversation non trouvée');
+    }
+
+    // Enforce write permissions (broadcast / announcement channels)
+    if (conversation.isAnnouncementChannel || (conversation.defaultWriteRole && conversation.defaultWriteRole !== 'everyone')) {
+      const roleHierarchy: Record<string, number> = {
+        member: 1, moderator: 2, admin: 3, creator: 4
+      };
+      const requiredRole = conversation.isAnnouncementChannel ? 'admin' : (conversation.defaultWriteRole || 'everyone');
+      const userRoleLevel = roleHierarchy[membership.role] ?? 0;
+      const requiredLevel = roleHierarchy[requiredRole] ?? 0;
+
+      // Also allow global platform admins (check via User table)
+      let isGlobalAdmin = false;
+      if (userRoleLevel < requiredLevel && authContext.userId) {
+        const user = await this.prisma.user.findUnique({
+          where: { id: authContext.userId },
+          select: { role: true }
+        });
+        isGlobalAdmin = ['ADMIN', 'BIGBOSS', 'MODERATOR'].includes(user?.role || '');
+      }
+
+      if (userRoleLevel < requiredLevel && !isGlobalAdmin) {
+        return this.createPermissionDenied(
+          conversation.isAnnouncementChannel
+            ? 'Ce canal est en mode annonce — seuls les administrateurs peuvent publier'
+            : `Rôle insuffisant pour écrire dans cette conversation (requis: ${requiredRole})`
+        );
+      }
     }
 
     return {
@@ -274,7 +302,7 @@ export class MessageValidator {
       canSendAnonymous: false,
       canAttachFiles: membership.permissions?.canSendFiles ?? true,
       canMentionUsers: true,
-      canUseHighPriority: conversation.type !== 'public',
+      canUseHighPriority: conversation.type !== 'public' && conversation.type !== 'broadcast',
       restrictions: {
         maxContentLength: MESSAGE_LIMITS.MAX_MESSAGE_LENGTH,
         maxAttachments: 100,

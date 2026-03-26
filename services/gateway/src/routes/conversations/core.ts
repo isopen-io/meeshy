@@ -696,7 +696,7 @@ export function registerCoreRoutes(
         'create-conversation'
       );
 
-      const { type, title, description, participantIds = [], communityId, identifier } = validatedData;
+      const { type, title, description, participantIds = [], communityId, identifier } = validatedData as { type: string; title?: string; description?: string; participantIds?: string[]; communityId?: string; identifier?: string };
 
       // Utiliser le nouveau système d'authentification unifié
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -774,6 +774,9 @@ export function registerCoreRoutes(
       };
 
       const creatorUser = userMap.get(userId);
+      // Broadcast = announcement channel with admin-only write
+      const isBroadcast = type === 'broadcast';
+
       const conversation = await prisma.conversation.create({
         data: {
           identifier: finalIdentifier,
@@ -781,6 +784,7 @@ export function registerCoreRoutes(
           title,
           description,
           communityId: communityId || null,
+          ...(isBroadcast ? { isAnnouncementChannel: true, defaultWriteRole: 'admin' } : {}),
           participants: {
             create: [
               {

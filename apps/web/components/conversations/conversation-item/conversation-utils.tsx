@@ -1,4 +1,4 @@
-import { Globe, Users } from 'lucide-react';
+import { Globe, Megaphone, Users } from 'lucide-react';
 import type { Conversation } from '@meeshy/shared/types';
 import { formatRelativeDate } from '@/utils/date-format';
 
@@ -66,8 +66,8 @@ export function getConversationAvatarUrl(
  * Obtenir l'icône de la conversation selon son type
  */
 export function getConversationIcon(conversation: Conversation): React.ReactNode | null {
+  if (conversation.type === 'broadcast') return <Megaphone className="h-4 w-4" />;
   if (conversation.visibility === 'public') return <Globe className="h-4 w-4" />;
-  if (conversation.type === 'broadcast') return <Users className="h-4 w-4" />;
   if (conversation.type === 'group') return <Users className="h-4 w-4" />;
   if (conversation.type !== 'direct') return <Users className="h-4 w-4" />;
   return null;

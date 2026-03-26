@@ -329,9 +329,9 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
 /**
  * Normalise le type de conversation pour ConversationMessages
  */
-function normalizeConversationType(type: string): 'direct' | 'group' | 'public' {
+function normalizeConversationType(type: string): 'direct' | 'group' | 'public' | 'broadcast' {
   if (type === 'anonymous') return 'direct';
-  if (type === 'broadcast') return 'public';
+  if (type === 'broadcast') return 'broadcast';
   if (type === 'direct' || type === 'group' || type === 'public') {
     return type;
   }

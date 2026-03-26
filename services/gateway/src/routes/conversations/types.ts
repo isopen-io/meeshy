@@ -12,7 +12,7 @@ export interface ConversationParams {
 }
 
 export interface CreateConversationBody {
-  type: 'direct' | 'group' | 'public' | 'global';
+  type: 'direct' | 'group' | 'public' | 'global' | 'broadcast';
   title?: string;
   description?: string;
   participantIds?: string[];
