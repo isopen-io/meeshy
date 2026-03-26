@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { conversationsCrudService } from '@/services/conversations/crud.service';
 import { Conversation } from '@meeshy/shared/types';
-import { Search, Plus, X, Loader2, MessageSquare, Users, Globe } from 'lucide-react';
+import { Search, Plus, X, Loader2, MessageSquare, Users, Globe, Calendar, Hash } from 'lucide-react';
 import { useDebounce } from 'use-debounce';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -79,25 +79,60 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
 
       <div className="flex items-center gap-2">
         {selectedConversation ? (
-          <div className="flex-1 flex items-center justify-between p-3 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-800">
-            <div className="flex items-center gap-3 overflow-hidden">
-              <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400">
-                {getIcon(selectedConversation.type)}
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-sm font-bold text-indigo-900 dark:text-indigo-100 truncate">
-                  {selectedConversation.title || "Sans titre"}
-                </span>
-                <span className="text-xs text-indigo-600/70 dark:text-indigo-400/70 font-mono">
-                  {selectedConversation.id}
-                </span>
-              </div>
-            </div>
-            {onClear && (
-              <Button variant="ghost" size="sm" onClick={onClear} className="h-8 w-8 p-0 text-indigo-500 hover:bg-indigo-100">
-                <X className="h-4 w-4" />
-              </Button>
+          <div className="flex-1 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-800 overflow-hidden">
+            {selectedConversation.banner && (
+              <div className="h-16 w-full bg-cover bg-center" style={{ backgroundImage: `url(${selectedConversation.banner})` }} />
             )}
+            <div className="p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  {selectedConversation.avatar ? (
+                    <img src={selectedConversation.avatar} alt="" className="h-10 w-10 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 shrink-0">
+                      {getIcon(selectedConversation.type)}
+                    </div>
+                  )}
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-bold text-indigo-900 dark:text-indigo-100 truncate">
+                      {selectedConversation.title || "Sans titre"}
+                    </span>
+                    <div className="flex items-center gap-2 text-xs text-indigo-600/70 dark:text-indigo-400/70">
+                      <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-tighter px-1.5 py-0">
+                        {selectedConversation.type}
+                      </Badge>
+                      {selectedConversation.memberCount > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <Users className="h-3 w-3" />
+                          {selectedConversation.memberCount}
+                        </span>
+                      )}
+                      {selectedConversation.createdAt && (
+                        <span className="flex items-center gap-0.5">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(selectedConversation.createdAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {onClear && (
+                  <Button variant="ghost" size="sm" onClick={onClear} className="h-8 w-8 p-0 text-indigo-500 hover:bg-indigo-100 shrink-0">
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-xs text-indigo-500/60 dark:text-indigo-400/50">
+                <Hash className="h-3 w-3" />
+                <span className="font-mono truncate">{selectedConversation.identifier || selectedConversation.id}</span>
+              </div>
+              {selectedConversation.lastMessage && (
+                <div className="mt-2 px-2 py-1.5 rounded bg-indigo-100/50 dark:bg-indigo-900/30 text-xs text-indigo-700 dark:text-indigo-300 truncate">
+                  <span className="font-semibold">{(selectedConversation.lastMessage as any).sender?.displayName || 'Utilisateur'}:</span>{' '}
+                  {(selectedConversation.lastMessage as any).content}
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <Popover open={open} onOpenChange={setOpen}>
@@ -147,21 +182,36 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                               <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                                 {conv.title || "Sans titre"}
                               </span>
-                              <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-tighter opacity-70">
-                                {conv.type}
-                              </Badge>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {conv.memberCount > 0 && (
+                                  <span className="flex items-center gap-0.5 text-[10px] text-gray-400">
+                                    <Users className="h-3 w-3" />
+                                    {conv.memberCount}
+                                  </span>
+                                )}
+                                <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-tighter opacity-70">
+                                  {conv.type}
+                                </Badge>
+                              </div>
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-xs text-gray-400 font-mono truncate max-w-[150px]">
-                                {conv.id}
+                                {conv.identifier || conv.id}
                               </span>
-                              {conv.identifier && (
+                              {conv.lastMessageAt && (
                                 <>
                                   <span className="text-gray-300">•</span>
-                                  <span className="text-xs text-indigo-500 italic">#{conv.identifier}</span>
+                                  <span className="text-[10px] text-gray-400">
+                                    {new Date(conv.lastMessageAt).toLocaleDateString()}
+                                  </span>
                                 </>
                               )}
                             </div>
+                            {(conv as any).lastMessage?.content && (
+                              <p className="text-[11px] text-gray-400 truncate mt-0.5">
+                                {(conv as any).lastMessage.content}
+                              </p>
+                            )}
                           </div>
                           <Plus className="h-4 w-4 text-gray-300 opacity-0 group-hover:opacity-100 transition-all mr-2" />
                         </div>

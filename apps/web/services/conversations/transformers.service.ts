@@ -442,7 +442,7 @@ export class TransformersService {
       isArchived: Boolean(conv.isArchived ?? false),
       isGroup: String(conv.type) === 'group',
       isPrivate: this.mapConversationVisibility(String(conv.type) || 'direct') === 'private',
-      memberCount: participants.length,
+      memberCount: (conv.memberCount as number) || (conv._count as any)?.participants || participants.length,
       lastMessageAt: conv.lastMessageAt ? new Date(String(conv.lastMessageAt)) : new Date(String(conv.updatedAt)),
       createdAt: new Date(String(conv.createdAt)),
       updatedAt: new Date(String(conv.updatedAt)),
