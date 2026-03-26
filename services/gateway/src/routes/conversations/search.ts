@@ -96,27 +96,33 @@ export function registerSearchRoutes(
           ],
         },
         include: {
+          _count: { select: { participants: { where: { isActive: true } } } },
           participants: {
-            include: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              userId: true,
+              displayName: true,
               user: {
                 select: {
                   id: true,
                   username: true,
                   displayName: true,
-                  avatar: true,
-                  isOnline: true,
-                  lastActiveAt: true,
                 },
               },
             },
-            take: 10,
+            take: 5,
           },
           messages: {
             orderBy: { createdAt: 'desc' },
             take: 1,
             include: {
               sender: {
-                include: {
+                select: {
+                  id: true,
+                  userId: true,
+                  displayName: true,
+                  avatar: true,
                   user: {
                     select: {
                       id: true,
@@ -124,7 +130,6 @@ export function registerSearchRoutes(
                       displayName: true,
                       avatar: true,
                       isOnline: true,
-                      lastActiveAt: true,
                     },
                   },
                 },
@@ -149,8 +154,8 @@ export function registerSearchRoutes(
         ? await readStatusService.getUnreadCountsForConversations(userParticipantIds, conversationIds)
         : new Map<string, number>();
 
-      // Transformer les conversations pour garantir qu'un titre existe (sauf DMs)
-      const conversationsWithTitle = conversations.map((conversation) => {
+      // Transformer les conversations pour un payload léger (search)
+      const results = conversations.map((conversation) => {
         const displayTitle = (conversation as any).type === 'direct'
           ? (conversation.title || null)
           : (conversation.title && conversation.title.trim() !== ''
@@ -160,40 +165,49 @@ export function registerSearchRoutes(
                     id: m.userId,
                     displayName: m.user?.displayName,
                     username: m.user?.username,
-                    firstName: m.user?.firstName,
-                    lastName: m.user?.lastName
                   })),
                   userId
                 ));
 
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
 
+        const msg = conversation.messages[0];
+        const sender = msg?.sender as any;
+        const lastMessage = msg ? {
+          id: msg.id,
+          content: msg.content,
+          senderId: msg.senderId,
+          messageType: msg.messageType,
+          createdAt: msg.createdAt,
+          sender: sender ? {
+            id: sender.id,
+            userId: sender.userId,
+            username: sender.user?.username ?? null,
+            displayName: sender.displayName ?? sender.user?.displayName ?? null,
+            avatar: sender.avatar ?? sender.user?.avatar ?? null,
+            isOnline: sender.user?.isOnline ?? false,
+          } : null,
+          attachments: msg.attachments || [],
+        } : null;
+
         return {
-          ...conversation,
+          id: conversation.id,
+          identifier: conversation.identifier,
           title: displayTitle,
-          lastMessage: (() => {
-            const msg = conversation.messages[0];
-            if (!msg) return null;
-            const sender = msg.sender as any;
-            return {
-              ...msg,
-              sender: sender ? {
-                ...sender,
-                username: sender.user?.username ?? sender.username ?? null,
-                firstName: sender.user?.firstName ?? null,
-                lastName: sender.user?.lastName ?? null,
-                displayName: sender.displayName ?? sender.user?.displayName ?? null,
-                avatar: sender.avatar ?? sender.user?.avatar ?? null,
-                isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
-                lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
-              } : null
-            };
-          })(),
-          unreadCount
+          type: conversation.type,
+          avatar: conversation.avatar,
+          banner: conversation.banner,
+          isActive: conversation.isActive,
+          communityId: conversation.communityId,
+          memberCount: (conversation as any)._count?.participants ?? 0,
+          lastMessage,
+          lastMessageAt: conversation.lastMessageAt,
+          createdAt: conversation.createdAt,
+          unreadCount,
         };
       });
 
-      return sendSuccess(reply, conversationsWithTitle);
+      return sendSuccess(reply, results);
     } catch (error) {
       console.error('Error searching conversations:', error);
       sendInternalError(reply, 'Erreur lors de la recherche de conversations');
