@@ -227,10 +227,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       // Vérifier que le message existe et appartient à l'utilisateur
+      // senderId est un Participant ID, pas un User ID — filtrer via sender.userId
       const message = await prisma.message.findFirst({
         where: {
           id: messageId,
-          senderId: userId,
+          sender: { userId },
           deletedAt: null
         },
         include: {
@@ -422,8 +423,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // Vérifier les permissions de suppression
       const userMembership = message.conversation.participants[0];
       const canDelete =
-        // L'auteur du message peut le supprimer
-        message.senderId === userId ||
+        // L'auteur du message peut le supprimer (sender.userId est le User ID)
+        message.sender?.userId === userId ||
         // Les administrateurs et modérateurs peuvent supprimer
         userMembership?.role === 'admin' ||
         userMembership?.role === 'moderator' ||
