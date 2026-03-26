@@ -265,11 +265,12 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       }
 
       const expiresIn = rememberDevice ? 365 * 24 * 60 * 60 : 24 * 60 * 60;
+      const twoFAPermissions = authService.getUserPermissions(user as any);
 
       return reply.send({
         success: true,
         data: {
-          user: formatUserResponse(user),
+          user: formatUserResponse(user, twoFAPermissions),
           token: jwtToken,
           sessionToken,
           session: formatSessionResponse(session, rememberDevice || false),

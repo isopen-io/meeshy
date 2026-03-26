@@ -19,6 +19,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, PaginationParams, UserIdParams, UsernameParams } from './types';
 import { formatUserResponse } from '../auth/types';
+import { UserRoleEnum } from '@meeshy/shared/types';
 import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 
@@ -213,10 +214,23 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
+      const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
+      const permissions = {
+        canAccessAdmin: isAdmin,
+        canManageUsers: isAdmin,
+        canManageGroups: isAdmin,
+        canManageConversations: isAdmin,
+        canViewAnalytics: isAdmin,
+        canModerateContent: isAdmin || updatedUser.role === 'MODERATOR',
+        canViewAuditLogs: isAdmin || updatedUser.role === 'AUDIT',
+        canManageNotifications: isAdmin,
+        canManageTranslations: isAdmin,
+      };
+
       return reply.send({
         success: true,
         data: {
-          user: formatUserResponse(updatedUser),
+          user: formatUserResponse(updatedUser, permissions),
           message: 'Profile updated successfully'
         }
       });
