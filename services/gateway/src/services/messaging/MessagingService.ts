@@ -58,14 +58,14 @@ export class MessagingService {
       }
 
       // 3. Vérification des permissions via Participant
-      // participantId can be a Participant.id OR a User.id (legacy callers)
       let participant = await this.prisma.participant.findUnique({
         where: { id: participantId },
         select: { id: true, conversationId: true, isActive: true }
       });
 
-      // Fallback: participantId might be a userId — resolve via conversationId + userId
+      // Fallback: participantId might be a userId from uncorrected callers — log warning
       if (!participant || participant.conversationId !== conversationId) {
+        console.warn('[MessagingService] Fallback userId→participant resolution triggered — caller should pass Participant.id', { participantId, conversationId });
         participant = await this.prisma.participant.findFirst({
           where: { userId: participantId, conversationId, isActive: true },
           select: { id: true, conversationId: true, isActive: true }

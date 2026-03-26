@@ -82,8 +82,8 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       // Enrichir avec pourcentages et nombre d'utilisateurs par langue
       const topLanguages = await Promise.all(
         topLanguagesByMessages.map(async (lang) => {
-          // Compter utilisateurs distincts pour cette langue
-          const users = await fastify.prisma.message.findMany({
+          // Compter utilisateurs distincts pour cette langue (resolve participant → user)
+          const langMessages = await fastify.prisma.message.findMany({
             where: {
               originalLanguage: lang.originalLanguage,
               createdAt: { gte: startDate },
@@ -91,15 +91,15 @@ export async function languagesRoutes(fastify: FastifyInstance) {
               senderId: { not: null }
             },
             select: {
-              senderId: true
-            },
-            distinct: ['senderId']
+              sender: { select: { userId: true } }
+            }
           });
+          const uniqueUserIds = new Set(langMessages.map(m => m.sender?.userId).filter(Boolean));
 
           return {
             language: lang.originalLanguage || 'Unknown',
             messageCount: lang._count.id,
-            userCount: users.length,
+            userCount: uniqueUserIds.size,
             percentage: totalMessages > 0
               ? Math.round((lang._count.id / totalMessages) * 100)
               : 0

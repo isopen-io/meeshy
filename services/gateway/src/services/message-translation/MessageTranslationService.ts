@@ -2439,12 +2439,22 @@ export class MessageTranslationService extends EventEmitter {
         targetLanguages = ['en']; // Fallback à l'anglais
       }
 
-      // 4. Appeler processAudioAttachment avec toutes les infos
+      // 4. Resolve senderId (Participant ID) → User ID
+      let resolvedSenderId = attachment.message.senderId;
+      const senderParticipant = await this.prisma.participant.findUnique({
+        where: { id: attachment.message.senderId },
+        select: { userId: true }
+      });
+      if (senderParticipant?.userId) {
+        resolvedSenderId = senderParticipant.userId;
+      }
+
+      // 5. Appeler processAudioAttachment avec toutes les infos
       const taskId = await this.processAudioAttachment({
         messageId: attachment.messageId,
         attachmentId: attachment.id,
         conversationId: attachment.message.conversationId,
-        senderId: attachment.message.senderId,
+        senderId: resolvedSenderId,
         audioUrl: attachment.fileUrl,
         audioPath: audioPath,
         audioDurationMs: attachment.duration || 0,
@@ -2500,21 +2510,29 @@ export class MessageTranslationService extends EventEmitter {
         select: { senderId: true }
       });
       
-      if (message && message.senderId) {
-        // Incrémenter le compteur de traductions utilisées
-        await this.prisma.userStats.upsert({
-          where: { userId: message.senderId },
-          update: {
-            translationsUsed: {
-              increment: 1
-            }
-          },
-          create: {
-            userId: message.senderId,
-            translationsUsed: 1
-          }
+      if (message?.senderId) {
+        // Resolve Participant ID → User ID
+        const sender = await this.prisma.participant.findUnique({
+          where: { id: message.senderId },
+          select: { userId: true }
         });
-        
+        const senderUserId = sender?.userId;
+
+        if (senderUserId) {
+          // Incrémenter le compteur de traductions utilisées
+          await this.prisma.userStats.upsert({
+            where: { userId: senderUserId },
+            update: {
+              translationsUsed: {
+                increment: 1
+              }
+            },
+            create: {
+              userId: senderUserId,
+              translationsUsed: 1
+            }
+          });
+        }
       }
     } catch (error) {
       logger.error(`❌ [TranslationService] Erreur lors de l'incrémentation des stats: ${error}`);

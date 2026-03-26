@@ -126,10 +126,16 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const userIds = topSenders.map(s => s.senderId!).filter(Boolean);
-      const userMap = await fetchUserDetails(fastify, userIds);
+      const senderParticipantIds = topSenders.map(s => s.senderId!).filter(Boolean);
+      const senderParticipants = await fastify.prisma.participant.findMany({
+        where: { id: { in: senderParticipantIds } },
+        select: { id: true, userId: true }
+      });
+      const senderPartToUser = new Map(senderParticipants.map(p => [p.id, p.userId]));
+      const senderUserIds = [...new Set(senderParticipants.map(p => p.userId).filter(Boolean))] as string[];
+      const userMap = await fetchUserDetails(fastify, senderUserIds);
       return buildUserRankings(
-        topSenders.map(s => [s.senderId!, s._count.id] as [string, number]),
+        topSenders.map(s => [senderPartToUser.get(s.senderId!) || s.senderId!, s._count.id] as [string, number]),
         userMap
       );
     }
@@ -316,10 +322,16 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const userIds = topSenders.map(s => s.senderId!).filter(Boolean);
-      const userMap = await fetchUserDetails(fastify, userIds);
+      const filePartIds = topSenders.map(s => s.senderId!).filter(Boolean);
+      const fileParticipants = await fastify.prisma.participant.findMany({
+        where: { id: { in: filePartIds } },
+        select: { id: true, userId: true }
+      });
+      const filePartToUser = new Map(fileParticipants.map(p => [p.id, p.userId]));
+      const fileUserIds = [...new Set(fileParticipants.map(p => p.userId).filter(Boolean))] as string[];
+      const userMap = await fetchUserDetails(fastify, fileUserIds);
       return buildUserRankings(
-        topSenders.map(s => [s.senderId!, s._count.id] as [string, number]),
+        topSenders.map(s => [filePartToUser.get(s.senderId!) || s.senderId!, s._count.id] as [string, number]),
         userMap
       );
     }

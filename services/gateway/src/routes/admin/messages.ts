@@ -175,25 +175,22 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         take: 10
       });
 
-      const topSendersData = await Promise.all(
-        topSenders.map(async (sender) => {
-          const user = await fastify.prisma.user.findUnique({
-            where: { id: sender.senderId! },
-            select: {
-              id: true,
-              username: true,
-              displayName: true
-            }
-          });
+      const participantIds = topSenders.map(s => s.senderId!).filter(Boolean);
+      const participants = await fastify.prisma.participant.findMany({
+        where: { id: { in: participantIds } },
+        select: { id: true, userId: true, user: { select: { username: true, displayName: true } } }
+      });
+      const participantMap = new Map(participants.map(p => [p.id, p]));
 
-          return {
-            userId: sender.senderId,
-            username: user?.username || 'Unknown',
-            displayName: user?.displayName,
-            messageCount: sender._count.id
-          };
-        })
-      );
+      const topSendersData = topSenders.map((sender) => {
+        const participant = participantMap.get(sender.senderId!);
+        return {
+          userId: participant?.userId || sender.senderId,
+          username: participant?.user?.username || 'Unknown',
+          displayName: participant?.user?.displayName,
+          messageCount: sender._count.id
+        };
+      });
 
       // Messages avec pièces jointes
       const messagesWithAttachments = await fastify.prisma.message.count({

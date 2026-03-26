@@ -110,7 +110,7 @@ export function registerMessagesAdvancedRoutes(
         },
         include: {
           sender: {
-            select: { id: true, role: true }
+            select: { id: true, userId: true, role: true }
           }
         }
       });
@@ -123,7 +123,7 @@ export function registerMessagesAdvancedRoutes(
       }
 
       // Vérifier la restriction temporelle (24 heures max pour les utilisateurs normaux)
-      const isAuthor = existingMessage.senderId === userId;
+      const isAuthor = existingMessage.sender?.userId === userId;
       const messageAge = Date.now() - new Date(existingMessage.createdAt).getTime();
       const twentyFourHoursInMs = 24 * 60 * 60 * 1000; // 24 heures en millisecondes
 
@@ -437,7 +437,7 @@ export function registerMessagesAdvancedRoutes(
           content: processedContent,
           originalLanguage: originalLanguage,
           conversationId: conversationId,
-          senderId: userId
+          senderId: existingMessage.senderId
         };
 
         // Déclencher la retraduction via la méthode privée existante
@@ -548,7 +548,7 @@ export function registerMessagesAdvancedRoutes(
         },
         include: {
           sender: {
-            select: { id: true }
+            select: { id: true, userId: true }
           },
           attachments: {
             select: { id: true }
@@ -564,7 +564,7 @@ export function registerMessagesAdvancedRoutes(
       }
 
       // Vérifier les permissions : l'auteur peut supprimer, ou les modérateurs/admins/créateurs
-      const isAuthor = existingMessage.senderId === userId;
+      const isAuthor = existingMessage.sender?.userId === userId;
       let canDelete = isAuthor;
 
       if (!canDelete) {
@@ -710,6 +710,9 @@ export function registerMessagesAdvancedRoutes(
       const message = await prisma.message.findFirst({
         where: { id: messageId },
         include: {
+          sender: {
+            select: { userId: true }
+          },
           conversation: {
             include: {
               participants: {
@@ -731,7 +734,7 @@ export function registerMessagesAdvancedRoutes(
       }
 
       // Vérifier que l'utilisateur est l'auteur du message
-      if (message.senderId !== userId) {
+      if (message.sender?.userId !== userId) {
         return reply.status(403).send({
           success: false,
           error: 'Vous ne pouvez modifier que vos propres messages'

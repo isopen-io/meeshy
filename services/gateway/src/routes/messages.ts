@@ -324,7 +324,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           content: content.trim(),
           originalLanguage: message.originalLanguage,
           conversationId: message.conversationId,
-          senderId: userId
+          senderId: message.senderId
         };
 
         // Déclencher la retraduction via la méthode privée existante
@@ -632,6 +632,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           id: messageId
         },
         include: {
+          sender: {
+            select: { userId: true }
+          },
           conversation: {
             include: {
               participants: {
@@ -653,7 +656,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // Seuls les modérateurs/admins ou l'auteur peuvent voir l'historique
       const userMembership = message.conversation.participants[0];
       const canViewHistory =
-        message.senderId === userId ||
+        message.sender?.userId === userId ||
         userMembership?.role === 'admin' ||
         userMembership?.role === 'moderator' ||
         authRequest.authContext.registeredUser?.role === 'ADMIN' ||

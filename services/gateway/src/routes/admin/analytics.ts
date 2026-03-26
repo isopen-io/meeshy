@@ -436,7 +436,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         },
         select: {
           createdAt: true,
-          senderId: true
+          sender: { select: { userId: true } }
         }
       });
 
@@ -456,8 +456,8 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
 
         if (simplifiedKey && dailyData[simplifiedKey]) {
           dailyData[simplifiedKey].messages++;
-          if (msg.senderId) {
-            dailyData[simplifiedKey].users.add(msg.senderId);
+          if (msg.sender?.userId) {
+            dailyData[simplifiedKey].users.add(msg.sender.userId);
           }
         }
       });

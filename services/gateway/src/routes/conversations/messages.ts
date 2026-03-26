@@ -1180,9 +1180,19 @@ export function registerMessagesRoutes(
       } = request.body;
 
       const userId = authRequest.authContext.userId;
-      const participantId = authRequest.authContext.isAnonymous
-        ? authRequest.authContext.participantId
-        : userId;
+      let participantId: string;
+      if (authRequest.authContext.isAnonymous) {
+        participantId = authRequest.authContext.participantId!;
+      } else {
+        const participant = await prisma.participant.findFirst({
+          where: { userId, conversationId: id, isActive: true },
+          select: { id: true }
+        });
+        if (!participant) {
+          return reply.status(403).send({ success: false, error: 'You are not a participant of this conversation' });
+        }
+        participantId = participant.id;
+      }
 
       if (!participantId) {
         return reply.status(403).send({ success: false, error: 'Participant identification failed' });
@@ -1382,12 +1392,22 @@ export function registerMessagesRoutes(
         });
       }
 
+      // Resolve participant ID for this user
+      const currentParticipant = await prisma.participant.findFirst({
+        where: { userId, conversationId, isActive: true },
+        select: { id: true }
+      });
+
+      if (!currentParticipant) {
+        return sendForbidden(reply, 'Participant not found in this conversation');
+      }
+
       // Find the latest message in the conversation (not sent by the user)
       const latestMessage = await prisma.message.findFirst({
         where: {
           conversationId,
           deletedAt: null,
-          senderId: { not: userId }
+          senderId: { not: currentParticipant.id }
         },
         orderBy: { createdAt: 'desc' },
         select: { id: true, createdAt: true }

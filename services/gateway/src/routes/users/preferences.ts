@@ -238,13 +238,13 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         }),
         fastify.prisma.message.count({
           where: {
-            senderId: userId,
+            sender: { userId },
             deletedAt: null
           }
         }),
         fastify.prisma.message.count({
           where: {
-            senderId: userId,
+            sender: { userId },
             deletedAt: null,
             createdAt: {
               gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
@@ -258,7 +258,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         }),
         fastify.prisma.message.count({
           where: {
-            senderId: userId,
+            sender: { userId },
             deletedAt: null,
             createdAt: {
               gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
@@ -424,14 +424,14 @@ export async function getUserStats(fastify: FastifyInstance) {
         languagesRaw,
       ] = await Promise.all([
         fastify.prisma.message.count({
-          where: { senderId: userId, deletedAt: null },
+          where: { sender: { userId }, deletedAt: null },
         }),
         fastify.prisma.participant.count({
           where: { userId },
         }),
         fastify.prisma.message.count({
           where: {
-            senderId: userId,
+            sender: { userId },
             deletedAt: null,
             translations: { isSet: true },
           },
@@ -442,7 +442,7 @@ export async function getUserStats(fastify: FastifyInstance) {
         fastify.prisma.message.groupBy({
           by: ['originalLanguage'],
           where: {
-            senderId: userId,
+            sender: { userId },
             deletedAt: null,
             originalLanguage: { not: null },
           },

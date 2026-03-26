@@ -268,16 +268,24 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           hybrid: 'Hybrid',
         };
 
-        await fastify.prisma.message.create({
-          data: {
-            conversationId,
-            senderId: authContext.userId,
-            content: encryptionMessages[mode],
-            originalLanguage: 'en',
-            messageType: 'system',
-            deletedAt: null
-          }
+        // Resolve Participant.id for system message sender
+        const senderParticipant = await fastify.prisma.participant.findFirst({
+          where: { userId: authContext.userId, conversationId, isActive: true },
+          select: { id: true }
         });
+
+        if (senderParticipant) {
+          await fastify.prisma.message.create({
+            data: {
+              conversationId,
+              senderId: senderParticipant.id,
+              content: encryptionMessages[mode],
+              originalLanguage: 'en',
+              messageType: 'system',
+              deletedAt: null
+            }
+          });
+        }
 
         console.log(`[EncryptionRoutes] Encryption enabled for conversation ${conversationId} - Mode: ${mode}`);
 

@@ -48,14 +48,14 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           user,
         ] = await Promise.all([
           fastify.prisma.message.count({
-            where: { senderId: userId, deletedAt: null },
+            where: { sender: { userId }, deletedAt: null },
           }),
           fastify.prisma.participant.count({
             where: { userId },
           }),
           fastify.prisma.message.count({
             where: {
-              senderId: userId,
+              sender: { userId },
               deletedAt: null,
               translations: { not: { equals: null } },
             },
@@ -66,7 +66,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           fastify.prisma.message.groupBy({
             by: ['originalLanguage'],
             where: {
-              senderId: userId,
+              sender: { userId },
               deletedAt: null,
             },
           }),
@@ -144,7 +144,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
 
         const messages = await fastify.prisma.message.findMany({
           where: {
-            senderId: userId,
+            sender: { userId },
             deletedAt: null,
             createdAt: { gte: startDate },
           },
@@ -215,14 +215,14 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           user,
         ] = await Promise.all([
           fastify.prisma.message.count({
-            where: { senderId: userId, deletedAt: null },
+            where: { sender: { userId }, deletedAt: null },
           }),
           fastify.prisma.participant.count({
             where: { userId },
           }),
           fastify.prisma.message.count({
             where: {
-              senderId: userId,
+              sender: { userId },
               deletedAt: null,
               translations: { not: { equals: null } },
             },
@@ -233,7 +233,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           fastify.prisma.message.groupBy({
             by: ['originalLanguage'],
             where: {
-              senderId: userId,
+              sender: { userId },
               deletedAt: null,
             },
           }),

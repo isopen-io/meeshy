@@ -393,10 +393,21 @@ export class MeeshySocketIOManager {
 
 
           // PHASE 3.1: Utilisation du MessagingService unifié (Participant model)
-          // userId here is participantId for anonymous, or resolved per-conversation for registered
+          // Resolve participant ID: anonymous users already have participantId, registered users need lookup
+          let resolvedParticipantId = userId;
+          if (!isAnonymous) {
+            const participant = await this.prisma.participant.findFirst({
+              where: { userId, conversationId: data.conversationId, isActive: true },
+              select: { id: true }
+            });
+            if (participant) {
+              resolvedParticipantId = participant.id;
+            }
+          }
+
           const response: MessageResponse = await this.messagingService.handleMessage(
             messageRequest,
-            userId
+            resolvedParticipantId
           );
 
           // Réponse via callback - typage strict SocketIOResponse
@@ -570,9 +581,21 @@ export class MeeshySocketIOManager {
           } as any;
 
 
+          // Resolve participant ID for registered users
+          let resolvedParticipantId = userId;
+          if (!isAnonymous) {
+            const participant = await this.prisma.participant.findFirst({
+              where: { userId, conversationId: data.conversationId, isActive: true },
+              select: { id: true }
+            });
+            if (participant) {
+              resolvedParticipantId = participant.id;
+            }
+          }
+
           const response: MessageResponse = await this.messagingService.handleMessage(
             messageRequest,
-            userId
+            resolvedParticipantId
           );
 
           // Réponse via callback — include clientMessageId for sender-side dedup
@@ -1101,9 +1124,13 @@ export class MeeshySocketIOManager {
         replyToId: data.replyToId
       };
 
-      // Unified Participant model: senderId is always set (Participant.id)
-      messageData.senderId = userId;
-      
+      // Resolve userId → Participant.id for senderId
+      const senderParticipant = await this.prisma.participant.findFirst({
+        where: { userId, conversationId: data.conversationId, isActive: true },
+        select: { id: true }
+      });
+      messageData.senderId = senderParticipant?.id || userId;
+
       // 1. SAUVEGARDER LE MESSAGE ET LIBÉRER LE CLIENT
       const result = await this.translationService.handleNewMessage(messageData);
       this.stats.messages_processed++;
