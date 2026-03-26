@@ -244,7 +244,7 @@ export class PushNotificationService {
     });
 
     if (tokens.length === 0) {
-      console.log(`[PUSH] No active tokens found for user ${userId}`);
+      console.warn(`[PUSH] No active tokens found for user ${userId}`);
       return [];
     }
 
@@ -523,7 +523,7 @@ export class PushNotificationService {
       },
     });
 
-    console.log(`[PUSH] Cleaned up ${result.count} inactive/stale tokens`);
+    console.info(`[PUSH] Cleaned up ${result.count} inactive/stale tokens`);
     return result.count;
   }
 

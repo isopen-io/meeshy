@@ -62,7 +62,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
         speakerInfo = '⚠️ AUCUN speakerAnalysis';
       }
 
-      logger.info(`🧹 [CLEAN] Attachment ${attIndex} - Transcription: ${cleaned.transcription.segments.length} segments | ${speakerInfo} | segment[0]: hasStartMs=${'startMs' in originalSegment}, hasEndMs=${'endMs' in originalSegment}, hasSpeakerId=${'speakerId' in originalSegment}, voiceSimilarityScoreType=${typeof originalSegment.voiceSimilarityScore}, voiceSimilarityScoreValue=${originalSegment.voiceSimilarityScore}`);
+      logger.debug(`🧹 [CLEAN] Attachment ${attIndex} - Transcription: ${cleaned.transcription.segments.length} segments | ${speakerInfo} | segment[0]: hasStartMs=${'startMs' in originalSegment}, hasEndMs=${'endMs' in originalSegment}, hasSpeakerId=${'speakerId' in originalSegment}, voiceSimilarityScoreType=${typeof originalSegment.voiceSimilarityScore}, voiceSimilarityScoreValue=${originalSegment.voiceSimilarityScore}`);
 
       cleaned.transcription.segments = cleaned.transcription.segments.map((seg: any) => ({
         ...seg,
@@ -71,7 +71,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
       }));
 
       const cleanedSegment = cleaned.transcription.segments[0];
-      logger.info(`🧹 [CLEAN] Segment nettoyé [0]: text="${cleanedSegment.text}", startMs=${cleanedSegment.startMs}, endMs=${cleanedSegment.endMs}, speakerId=${cleanedSegment.speakerId}, voiceSimilarityScore=${cleanedSegment.voiceSimilarityScore}, confidence=${cleanedSegment.confidence}`);
+      logger.debug(`🧹 [CLEAN] Segment nettoyé [0]: text="${cleanedSegment.text}", startMs=${cleanedSegment.startMs}, endMs=${cleanedSegment.endMs}, speakerId=${cleanedSegment.speakerId}, voiceSimilarityScore=${cleanedSegment.voiceSimilarityScore}, confidence=${cleanedSegment.confidence}`);
     }
 
     // Nettoyer les traductions
@@ -82,7 +82,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
         return `${lang}(url="${trans.url || '⚠️ VIDE'}", segments=${trans.segments?.length || 0})`;
       }).join(', ');
 
-      logger.info(`🧹 [CLEAN] Attachment ${attIndex} - Traductions: ${langs.length} langue(s) [${translationsInfo}]`);
+      logger.debug(`🧹 [CLEAN] Attachment ${attIndex} - Traductions: ${langs.length} langue(s) [${translationsInfo}]`);
 
       const cleanedTranslations: any = {};
       for (const [lang, translation] of Object.entries(cleaned.translations)) {
@@ -98,7 +98,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
       }
       cleaned.translations = cleanedTranslations;
     } else {
-      logger.info(`🧹 [CLEAN] Attachment ${attIndex} - AUCUNE traduction trouvée`);
+      logger.debug(`🧹 [CLEAN] Attachment ${attIndex} - AUCUNE traduction trouvée`);
     }
 
     return cleaned;

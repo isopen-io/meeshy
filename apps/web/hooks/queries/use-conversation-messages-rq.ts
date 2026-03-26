@@ -140,10 +140,15 @@ export function useConversationMessagesRQ(
     queryFn: ({ pageParam = 1 }) =>
       fetchMessagesFromService(conversationId!, pageParam, limit, linkId),
     initialPageParam: 1 as number | string,
-    getNextPageParam: (lastPage, allPages) => {
+    getNextPageParam: (lastPage) => {
       if (!lastPage.hasMore) return undefined;
+      // Préférer le cursor renvoyé par le serveur
       if (lastPage.nextCursor) return lastPage.nextCursor;
-      return allPages.length + 1;
+      // Dériver le cursor depuis le dernier message de la page (le plus ancien, tri DESC)
+      // Le gateway accepte un message ID comme paramètre "before"
+      const lastMessage = lastPage.messages[lastPage.messages.length - 1];
+      if (lastMessage?.id) return lastMessage.id;
+      return undefined;
     },
     enabled: enabled && !!conversationId,
     select: (data) => ({
