@@ -48,6 +48,15 @@ export class ConnectionService {
 
   private readonly maxReconnectAttempts = 5;
   private reconnectTimeout: NodeJS.Timeout | null = null;
+  private reconnectDebounceTimeout: NodeJS.Timeout | null = null;
+  private authSafetyTimeout: NodeJS.Timeout | null = null;
+
+  // Stored listener callbacks for reconnection
+  private listenerCallbacks: {
+    onAuthenticated: () => void;
+    onDisconnected: (reason: string) => void;
+    onError: (error: Error) => void;
+  } | null = null;
 
   // Callback for auto-join after connection
   private autoJoinCallback: (() => void) | null = null;
@@ -213,23 +222,31 @@ export class ConnectionService {
   ): void {
     if (!this.state.socket) return;
 
+    this.listenerCallbacks = { onAuthenticated, onDisconnected, onError };
+
     // Connect event
     this.state.socket.on('connect', () => {
       this.state.isConnecting = false;
       this.state.reconnectAttempts = 0;
 
-      // Safety timeout if AUTHENTICATED doesn't arrive
-      setTimeout(() => {
+      // Safety timeout if AUTHENTICATED doesn't arrive (15s to allow slow DB queries)
+      if (this.authSafetyTimeout) clearTimeout(this.authSafetyTimeout);
+      this.authSafetyTimeout = setTimeout(() => {
         if (!this.state.isConnected && this.state.socket?.connected) {
           this.state.socket?.disconnect();
         }
-      }, 5000);
+        this.authSafetyTimeout = null;
+      }, 15000);
     });
 
     // Authenticated event
     this.state.socket.on(SERVER_EVENTS.AUTHENTICATED, (response: any) => {
       if (response?.success) {
         this.state.isConnected = true;
+        if (this.authSafetyTimeout) {
+          clearTimeout(this.authSafetyTimeout);
+          this.authSafetyTimeout = null;
+        }
 
         // WhatsApp style: Vérifier la version du serveur
         const serverVersion = response.version;
@@ -259,38 +276,18 @@ export class ConnectionService {
       this.state.isConnected = false;
       this.state.isConnecting = false;
 
-      const shouldReconnect = reason !== 'io client disconnect';
-      const wasNeverConnected = this.state.reconnectAttempts === 0 && reason === 'io server disconnect';
-
-      if (wasNeverConnected) {
-        return; // Don't reconnect if first connection failed
-      }
+      // Client-initiated disconnect — no reconnect
+      if (reason === 'io client disconnect') return;
 
       onDisconnected(reason);
 
-      if (reason === 'io server disconnect') {
-        if (shouldReconnect) {
-          setTimeout(() => {
-            if (!this.state.isConnected && !this.state.isConnecting) {
-              this.reconnect();
-            }
-          }, 2000);
+      // Single reconnect path with delay based on reason
+      const delay = (reason === 'transport close' || reason === 'transport error') ? 3000 : 2000;
+      setTimeout(() => {
+        if (!this.state.isConnected && !this.state.isConnecting) {
+          this.reconnect();
         }
-      } else if (reason === 'transport close' || reason === 'transport error') {
-        if (shouldReconnect) {
-          setTimeout(() => {
-            if (!this.state.isConnected && !this.state.isConnecting) {
-              this.reconnect();
-            }
-          }, 3000);
-        }
-      } else if (shouldReconnect) {
-        setTimeout(() => {
-          if (!this.state.isConnected && !this.state.isConnecting) {
-            this.reconnect();
-          }
-        }, 2000);
-      }
+      }, delay);
     });
 
     // Connect error
@@ -335,42 +332,27 @@ export class ConnectionService {
    * Reconnect the socket
    */
   reconnect(): void {
-    if (this.state.isConnecting) {
-      return;
-    }
+    // Debounce: éviter les reconnexions en rafale
+    if (this.reconnectDebounceTimeout) return;
+
+    this.reconnectDebounceTimeout = setTimeout(() => {
+      this.reconnectDebounceTimeout = null;
+    }, 2000);
+
+    if (this.state.isConnecting) return;
 
     const actuallyConnected = this.state.socket?.connected === true && this.state.isConnected;
-    if (this.state.socket && actuallyConnected) {
-      return; // Already connected
-    }
+    if (this.state.socket && actuallyConnected) return;
 
-    // Clean up if disconnected
+    // Clean up existing socket
     if (this.state.socket) {
-      const socketState = {
-        connected: this.state.socket.connected,
-        disconnected: this.state.socket.disconnected,
-        connecting: !this.state.socket.connected && !this.state.socket.disconnected
-      };
-
-      if (socketState.disconnected) {
-        try {
-          this.state.socket.removeAllListeners();
-          this.state.socket.disconnect();
-          this.state.socket = null;
-        } catch (e) {
-          // Ignore
-        }
-      } else if (socketState.connecting) {
-        return; // Don't interrupt ongoing connection
-      } else if (socketState.connected) {
-        try {
-          this.state.socket.removeAllListeners();
-          this.state.socket.disconnect();
-          this.state.socket = null;
-        } catch (e) {
-          // Ignore
-        }
+      try {
+        this.state.socket.removeAllListeners();
+        this.state.socket.disconnect();
+      } catch (e) {
+        // Ignore
       }
+      this.state.socket = null;
     }
 
     this.state.isConnected = false;
@@ -382,6 +364,15 @@ export class ConnectionService {
 
     if (this.currentUser || hasAuthToken || hasSessionToken) {
       this.initializeConnection();
+      // Re-attacher les listeners et connecter
+      if (this.listenerCallbacks && this.state.socket) {
+        this.setupConnectionListeners(
+          this.listenerCallbacks.onAuthenticated,
+          this.listenerCallbacks.onDisconnected,
+          this.listenerCallbacks.onError
+        );
+        this.connect();
+      }
     } else {
       toast.warning('Please reconnect to use real-time chat');
     }
@@ -405,6 +396,14 @@ export class ConnectionService {
     this.reconnectTimeout = setTimeout(() => {
       if (!this.state.isConnected) {
         this.initializeConnection();
+        if (this.listenerCallbacks && this.state.socket) {
+          this.setupConnectionListeners(
+            this.listenerCallbacks.onAuthenticated,
+            this.listenerCallbacks.onDisconnected,
+            this.listenerCallbacks.onError
+          );
+          this.connect();
+        }
       }
     }, delay);
   }
@@ -434,6 +433,14 @@ export class ConnectionService {
 
         await new Promise(resolve => setTimeout(resolve, 500));
         this.initializeConnection();
+        if (this.listenerCallbacks && this.state.socket) {
+          this.setupConnectionListeners(
+            this.listenerCallbacks.onAuthenticated,
+            this.listenerCallbacks.onDisconnected,
+            this.listenerCallbacks.onError
+          );
+          this.connect();
+        }
 
         for (let i = 0; i < 6; i++) {
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -622,6 +629,14 @@ export class ConnectionService {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
+    }
+    if (this.reconnectDebounceTimeout) {
+      clearTimeout(this.reconnectDebounceTimeout);
+      this.reconnectDebounceTimeout = null;
+    }
+    if (this.authSafetyTimeout) {
+      clearTimeout(this.authSafetyTimeout);
+      this.authSafetyTimeout = null;
     }
 
     if (this.state.socket) {

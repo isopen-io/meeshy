@@ -772,18 +772,8 @@ export class MeeshySocketIOManager {
               language: dbUser.systemLanguage
             };
 
-            // CORRECTION CRITIQUE: Gérer les connexions multiples (même utilisateur, plusieurs onglets)
-            const existingUser = this.connectedUsers.get(user.id);
-            if (existingUser && existingUser.socketId !== socket.id) {
-              // Déconnecter l'ancienne socket
-              const oldSocket = this.io.sockets.sockets.get(existingUser.socketId);
-              if (oldSocket) {
-                oldSocket.disconnect(true);
-              }
-              this.socketToUser.delete(existingUser.socketId);
-            }
-
-            // Enregistrer l'utilisateur
+            // Multi-socket: ne PAS déconnecter l'ancien socket (multi-onglet supporté)
+            // Mettre à jour connectedUsers avec le dernier socketId pour le routing principal
             this.connectedUsers.set(user.id, user);
             this.socketToUser.set(socket.id, user.id);
             this._addUserSocket(user.id, socket.id);
@@ -867,17 +857,7 @@ export class MeeshySocketIOManager {
               sessionToken
             };
 
-            // CORRECTION CRITIQUE: Gérer les connexions multiples (même anonyme, plusieurs onglets)
-            const existingUser = this.connectedUsers.get(user.id);
-            if (existingUser && existingUser.socketId !== socket.id) {
-              const oldSocket = this.io.sockets.sockets.get(existingUser.socketId);
-              if (oldSocket) {
-                oldSocket.disconnect(true);
-              }
-              this.socketToUser.delete(existingUser.socketId);
-            }
-
-            // Enregistrer l'utilisateur anonyme
+            // Multi-socket: ne PAS déconnecter l'ancien socket (multi-onglet supporté)
             this.connectedUsers.set(user.id, user);
             this.socketToUser.set(socket.id, participant.id);
             this._addUserSocket(user.id, socket.id);
@@ -1024,18 +1004,7 @@ export class MeeshySocketIOManager {
       }
       
       if (user) {
-        // CORRECTION CRITIQUE: Gérer les connexions multiples
-        const existingUser = this.connectedUsers.get(user.id);
-        if (existingUser && existingUser.socketId !== socket.id) {
-          // Déconnecter l'ancienne socket
-          const oldSocket = this.io.sockets.sockets.get(existingUser.socketId);
-          if (oldSocket) {
-            oldSocket.disconnect(true);
-          }
-          this.socketToUser.delete(existingUser.socketId);
-        }
-
-        // Enregistrer l'utilisateur
+        // Multi-socket: ne PAS déconnecter l'ancien socket (multi-onglet supporté)
         this.connectedUsers.set(user.id, user);
         this.socketToUser.set(socket.id, user.id);
         
@@ -1762,17 +1731,27 @@ export class MeeshySocketIOManager {
       const userId = result?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
-      // CORRECTION CRITIQUE: Ne supprimer que si c'est bien la socket active actuelle
-      // (en cas de reconnexion rapide, une nouvelle socket peut avoir été créée)
-      const currentUser = result?.user;
-      if (currentUser && currentUser.socketId === socket.id) {
-        // Guard race condition: marquer comme déconnecté AVANT le cleanup
-        // Empêche les updates fire-and-forget de StatusService de s'exécuter après ce point
+      // Nettoyer cette socket des mappings
+      this._removeUserSocket(userId, socket.id);
+      this.socketToUser.delete(socket.id);
+
+      // Vérifier si l'utilisateur a encore des sockets actives
+      const remainingSockets = this.userSockets.get(userId);
+      const hasRemainingSockets = remainingSockets && remainingSockets.size > 0;
+
+      if (hasRemainingSockets) {
+        // L'utilisateur a encore des sockets actives (multi-onglet) — ne pas marquer offline
+        // Mettre à jour connectedUsers avec un des sockets restants
+        const nextSocketId = remainingSockets.values().next().value;
+        const currentUser = this.connectedUsers.get(userId);
+        if (currentUser && nextSocketId) {
+          this.connectedUsers.set(userId, { ...currentUser, socketId: nextSocketId });
+        }
+      } else {
+        // Plus aucune socket — marquer offline
         this.statusService.markDisconnected(userId, isAnonymous);
 
-        // IMPORTANT: Automatically leave any active video/audio calls
-        // userId here may be a registered user's ID or an anonymous participant's ID
-        // For registered users, find their participant records; for anonymous, userId IS participantId
+        // Automatically leave any active video/audio calls
         try {
           const activeParticipations = await this.prisma.callParticipant.findMany({
             where: {
@@ -1786,37 +1765,28 @@ export class MeeshySocketIOManager {
             }
           });
 
-          if (activeParticipations.length > 0) {
-
-            for (const participation of activeParticipations) {
-              try {
-                await this.callService.leaveCall({
-                  callId: participation.callSessionId,
-                  userId,
-                  participantId: participation.participantId
-                });
-              } catch (error) {
-                logger.error(`❌ Error auto-leaving call ${participation.callSessionId}:`, error);
-              }
+          for (const participation of activeParticipations) {
+            try {
+              await this.callService.leaveCall({
+                callId: participation.callSessionId,
+                userId,
+                participantId: participation.participantId
+              });
+            } catch (error) {
+              logger.error(`❌ Error auto-leaving call ${participation.callSessionId}:`, error);
             }
           }
         } catch (error) {
           logger.error(`❌ Error checking/leaving active calls for user ${userId}:`, error);
         }
 
-        this._removeUserSocket(userId, socket.id);
         this.connectedUsers.delete(userId);
-        this.socketToUser.delete(socket.id);
 
-        // CORRECTION: Mettre à jour l'état en ligne/hors ligne selon le type d'utilisateur et broadcaster
         if (isAnonymous) {
           await this.maintenanceService.updateAnonymousOnlineStatus(userId, false, true);
         } else {
           await this.maintenanceService.updateUserOnlineStatus(userId, false, true);
         }
-      } else {
-        // Cette socket était déjà remplacée, juste nettoyer socketToUser
-        this.socketToUser.delete(socket.id);
       }
     }
 
