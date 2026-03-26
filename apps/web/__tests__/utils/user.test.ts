@@ -37,8 +37,6 @@ describe('user', () => {
     displayName: '',
     systemLanguage: 'en',
     regionalLanguage: 'en',
-    useCustomDestination: false,
-    translateToRegionalLanguage: false,
     ...overrides,
   } as User);
 
@@ -277,10 +275,9 @@ describe('user', () => {
     it('should use customDestinationLanguage when enabled', () => {
       const user = createMockUser({
         username: 'otheruser',
-        useCustomDestination: true,
         customDestinationLanguage: 'fr',
         systemLanguage: 'en',
-      });
+      } as Partial<User>);
       const participants = [
         { ...createMockParticipant(), userId: 'current', user: createMockUser({ username: 'current' }) },
         { ...createMockParticipant(), userId: 'other', user },
@@ -292,10 +289,9 @@ describe('user', () => {
     it('should use regionalLanguage when translateToRegionalLanguage is true', () => {
       const user = createMockUser({
         username: 'otheruser',
-        translateToRegionalLanguage: true,
         regionalLanguage: 'es',
         systemLanguage: 'en',
-      });
+      } as Partial<User>);
       const participants = [
         { ...createMockParticipant(), userId: 'current', user: createMockUser({ username: 'current' }) },
         { ...createMockParticipant(), userId: 'other', user },

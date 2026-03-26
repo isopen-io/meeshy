@@ -40,11 +40,11 @@ const mockLocation = {
 const originalLocation = window.location;
 
 beforeAll(() => {
-  window.location = mockLocation;
+  Object.defineProperty(window, 'location', { value: mockLocation as any, writable: true });
 });
 
 afterAll(() => {
-  window.location = originalLocation;
+  Object.defineProperty(window, 'location', { value: originalLocation as any, writable: true });
 });
 
 describe('AuthGuard', () => {

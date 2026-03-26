@@ -116,7 +116,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  window.location = savedLocation;
+  window.location = savedLocation as unknown as string & Location;
 });
 
 describe('useAuth', () => {

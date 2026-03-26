@@ -531,10 +531,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
     // Determine messageType from attachments
     const resolvedMessageType = hasAttachments && currentAttachmentMimeTypes[0]
-      ? (currentAttachmentMimeTypes[0].startsWith('image/') ? 'image'
-        : currentAttachmentMimeTypes[0].startsWith('audio/') ? 'audio'
-        : currentAttachmentMimeTypes[0].startsWith('video/') ? 'video'
-        : 'file') as const
+      ? currentAttachmentMimeTypes[0].startsWith('image/') ? 'image' as const
+        : currentAttachmentMimeTypes[0].startsWith('audio/') ? 'audio' as const
+        : currentAttachmentMimeTypes[0].startsWith('video/') ? 'video' as const
+        : 'file' as const
       : 'text' as const;
 
     // 1. Create optimistic message and add to store IMMEDIATELY

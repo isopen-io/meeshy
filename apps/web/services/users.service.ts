@@ -85,13 +85,13 @@ export const usersService = {
       const rawData = response.data;
       const userData = (rawData?.data?.user ?? rawData?.user ?? rawData) as User;
 
-      if (userData && !userData.permissions) {
-        userData.permissions = getDefaultPermissions(userData.role);
-      }
+      const finalUserData = userData && !userData.permissions
+        ? { ...userData, permissions: getDefaultPermissions(userData.role) }
+        : userData;
 
       return {
         ...response,
-        data: userData
+        data: finalUserData
       };
     } catch (error) {
       console.error('Erreur lors de la récupération du profil:', error);

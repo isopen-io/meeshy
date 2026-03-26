@@ -24,10 +24,11 @@ type TestUser = Pick<
   | 'systemLanguage'
   | 'regionalLanguage'
   | 'customDestinationLanguage'
-  | 'useCustomDestination'
-  | 'translateToSystemLanguage'
-  | 'translateToRegionalLanguage'
->;
+> & {
+  useCustomDestination?: boolean;
+  translateToSystemLanguage?: boolean;
+  translateToRegionalLanguage?: boolean;
+};
 
 describe('useMessageTranslations', () => {
   // Factory function to create test users
@@ -67,7 +68,7 @@ describe('useMessageTranslations', () => {
         regionalLanguage: 'es',
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       expect(result.current.resolveUserPreferredLanguage()).toBe('fr');
     });
@@ -81,7 +82,7 @@ describe('useMessageTranslations', () => {
         regionalLanguage: 'es',
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       expect(result.current.resolveUserPreferredLanguage()).toBe('de');
     });
@@ -95,7 +96,7 @@ describe('useMessageTranslations', () => {
         regionalLanguage: 'pt',
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       expect(result.current.resolveUserPreferredLanguage()).toBe('pt');
     });
@@ -108,7 +109,7 @@ describe('useMessageTranslations', () => {
         systemLanguage: 'ja',
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       expect(result.current.resolveUserPreferredLanguage()).toBe('ja');
     });
@@ -121,7 +122,7 @@ describe('useMessageTranslations', () => {
         systemLanguage: 'en',
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       expect(result.current.resolveUserPreferredLanguage()).toBe('it');
     });
@@ -135,7 +136,7 @@ describe('useMessageTranslations', () => {
         useCustomDestination: false,
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const languages = result.current.getUserLanguagePreferences();
       expect(languages).toContain('en');
@@ -148,7 +149,7 @@ describe('useMessageTranslations', () => {
         translateToRegionalLanguage: true,
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const languages = result.current.getUserLanguagePreferences();
       expect(languages).toContain('en');
@@ -163,7 +164,7 @@ describe('useMessageTranslations', () => {
         translateToRegionalLanguage: true,
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const languages = result.current.getUserLanguagePreferences();
       expect(languages).toEqual(['en']);
@@ -178,7 +179,7 @@ describe('useMessageTranslations', () => {
         translateToRegionalLanguage: true,
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const languages = result.current.getUserLanguagePreferences();
       expect(languages).toContain('en');
@@ -196,7 +197,7 @@ describe('useMessageTranslations', () => {
         translateToRegionalLanguage: true,
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const languages = result.current.getUserLanguagePreferences();
       expect(languages).toEqual(['en', 'fr']);
@@ -211,7 +212,7 @@ describe('useMessageTranslations', () => {
         originalLanguage: 'en',
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
       const processed = result.current.processMessageWithTranslations(message);
 
       expect(processed.content).toBe('Hello world');
@@ -233,7 +234,7 @@ describe('useMessageTranslations', () => {
         ],
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
       const processed = result.current.processMessageWithTranslations(message);
 
       expect(processed.content).toBe('Bonjour le monde');
@@ -255,7 +256,7 @@ describe('useMessageTranslations', () => {
         ],
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
       const processed = result.current.processMessageWithTranslations(message);
 
       expect(processed.content).toBe('Hola mundo');
@@ -277,7 +278,7 @@ describe('useMessageTranslations', () => {
         ],
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
       const processed = result.current.processMessageWithTranslations(message);
 
       expect(processed.originalContent).toBe('Hello world');
@@ -305,7 +306,7 @@ describe('useMessageTranslations', () => {
         ],
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
       const processed = result.current.processMessageWithTranslations(message);
 
       // Should use the newer translation
@@ -328,7 +329,7 @@ describe('useMessageTranslations', () => {
         ],
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
       const processed = result.current.processMessageWithTranslations(message);
 
       expect(processed.translations.length).toBe(1);
@@ -343,7 +344,7 @@ describe('useMessageTranslations', () => {
         translations: [],
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
       const processed = result.current.processMessageWithTranslations(message);
 
       expect(processed.translations).toEqual([]);
@@ -357,7 +358,7 @@ describe('useMessageTranslations', () => {
         originalLanguage: undefined,
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
       const processed = result.current.processMessageWithTranslations(message);
 
       expect(processed.originalLanguage).toBe('fr');
@@ -386,7 +387,7 @@ describe('useMessageTranslations', () => {
         ],
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
       const processed = result.current.processMessageWithTranslations(message);
 
       expect(processed.content).toBe('Bonjour (premium)');
@@ -397,7 +398,7 @@ describe('useMessageTranslations', () => {
     it('should return original content when already in preferred language', () => {
       const user = createTestUser({ systemLanguage: 'en' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -418,7 +419,7 @@ describe('useMessageTranslations', () => {
     it('should return translated content when available', () => {
       const user = createTestUser({ systemLanguage: 'fr' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -445,7 +446,7 @@ describe('useMessageTranslations', () => {
     it('should return original content with translatedFrom when no translation available', () => {
       const user = createTestUser({ systemLanguage: 'de' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -472,7 +473,7 @@ describe('useMessageTranslations', () => {
     it('should only use completed translations', () => {
       const user = createTestUser({ systemLanguage: 'fr' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -500,7 +501,7 @@ describe('useMessageTranslations', () => {
     it('should return false when message is in preferred language', () => {
       const user = createTestUser({ systemLanguage: 'en' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -517,7 +518,7 @@ describe('useMessageTranslations', () => {
     it('should return false when translation already exists', () => {
       const user = createTestUser({ systemLanguage: 'fr' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -540,7 +541,7 @@ describe('useMessageTranslations', () => {
     it('should return true when translation is needed', () => {
       const user = createTestUser({ systemLanguage: 'de' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -557,7 +558,7 @@ describe('useMessageTranslations', () => {
     it('should support custom target language parameter', () => {
       const user = createTestUser({ systemLanguage: 'en' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -577,7 +578,7 @@ describe('useMessageTranslations', () => {
     it('should return true when translation exists but is not completed', () => {
       const user = createTestUser({ systemLanguage: 'fr' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -606,7 +607,7 @@ describe('useMessageTranslations', () => {
         translateToRegionalLanguage: true,
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -631,7 +632,7 @@ describe('useMessageTranslations', () => {
         translateToRegionalLanguage: true,
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -654,7 +655,7 @@ describe('useMessageTranslations', () => {
         systemLanguage: 'en',
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -679,7 +680,7 @@ describe('useMessageTranslations', () => {
         useCustomDestination: true,
       });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -702,7 +703,7 @@ describe('useMessageTranslations', () => {
     it('should return stable function references', () => {
       const user = createTestUser();
       const { result, rerender } = renderHook(() =>
-        useMessageTranslations({ currentUser: user as User })
+        useMessageTranslations({ currentUser: user as unknown as User })
       );
 
       const firstRefs = {
@@ -742,12 +743,12 @@ describe('useMessageTranslations', () => {
 
       const { result, rerender } = renderHook(
         ({ currentUser }) => useMessageTranslations({ currentUser }),
-        { initialProps: { currentUser: user1 as User } }
+        { initialProps: { currentUser: user1 as unknown as User } }
       );
 
       expect(result.current.resolveUserPreferredLanguage()).toBe('en');
 
-      rerender({ currentUser: user2 as User });
+      rerender({ currentUser: user2 as unknown as User });
 
       expect(result.current.resolveUserPreferredLanguage()).toBe('fr');
     });
@@ -757,7 +758,7 @@ describe('useMessageTranslations', () => {
     it('should handle undefined translations gracefully', () => {
       const user = createTestUser({ systemLanguage: 'fr' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -775,7 +776,7 @@ describe('useMessageTranslations', () => {
     it('should handle message with only originalContent', () => {
       const user = createTestUser({ systemLanguage: 'en' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = {
         id: 'msg-1',
@@ -791,7 +792,7 @@ describe('useMessageTranslations', () => {
     it('should default location to Paris', () => {
       const user = createTestUser({ systemLanguage: 'en' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = createTestMessage({ location: undefined });
 
@@ -802,7 +803,7 @@ describe('useMessageTranslations', () => {
     it('should preserve existing location', () => {
       const user = createTestUser({ systemLanguage: 'en' });
 
-      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as User }));
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
       const message = createTestMessage({ location: 'London' });
 
