@@ -145,9 +145,6 @@
     "%@/150 caracteres" : {
 
     },
-    "%@/500" : {
-
-    },
     "%@%%" : {
 
     },
@@ -858,9 +855,6 @@
         }
       }
     },
-    "Aucune demande" : {
-
-    },
     "Aucune donnée" : {
 
     },
@@ -1529,6 +1523,9 @@
         }
       }
     },
+    "conversation.joined_on %@" : {
+
+    },
     "conversation.type.bot" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1796,9 +1793,6 @@
           }
         }
       }
-    },
-    "Demandes d'amis" : {
-
     },
     "Déplacer vers..." : {
       "extractionState" : "stale",
@@ -2191,9 +2185,6 @@
       }
     },
     "Les communautés que vous gérez apparaîtront ici avec leur lien de partage" : {
-
-    },
-    "Les demandes d'amis apparaitront ici" : {
 
     },
     "Les messages avec %@ sont chiffrés de bout en bout." : {
@@ -2959,9 +2950,6 @@
           }
         }
       }
-    },
-    "Signaler @%@" : {
-
     },
     "Silence" : {
       "extractionState" : "stale",

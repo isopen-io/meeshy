@@ -3,6 +3,13 @@ import MeeshySDK
 
 // MARK: - User Profile Sheet
 
+public enum ConnectionStatus: Equatable, Sendable {
+    case none
+    case pendingSent(requestId: String)
+    case pendingReceived(requestId: String)
+    case connected
+}
+
 public struct UserProfileSheet: View {
     public let user: ProfileSheetUser
     public let conversations: [MeeshyConversation]
@@ -13,11 +20,14 @@ public struct UserProfileSheet: View {
     public var fullUser: MeeshyUser?
     public var userStats: UserStats?
     public var isLoadingStats: Bool = false
+    public var connectionStatus: ConnectionStatus = .none
     public var onNavigateToConversation: ((MeeshyConversation) -> Void)?
     public var onSendMessage: (() -> Void)?
     public var onBlock: (() -> Void)?
     public var onUnblock: (() -> Void)?
     public var onConnectionRequest: (() -> Void)?
+    public var onCancelRequest: (() -> Void)?
+    public var onResendRequest: (() -> Void)?
     public var onDismiss: (() -> Void)?
     public var onLoadStats: (() async -> Void)?
     public var currentUserId: String = ""
@@ -47,11 +57,14 @@ public struct UserProfileSheet: View {
         fullUser: MeeshyUser? = nil,
         userStats: UserStats? = nil,
         isLoadingStats: Bool = false,
+        connectionStatus: ConnectionStatus = .none,
         onNavigateToConversation: ((MeeshyConversation) -> Void)? = nil,
         onSendMessage: (() -> Void)? = nil,
         onBlock: (() -> Void)? = nil,
         onUnblock: (() -> Void)? = nil,
         onConnectionRequest: (() -> Void)? = nil,
+        onCancelRequest: (() -> Void)? = nil,
+        onResendRequest: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
         onLoadStats: (() async -> Void)? = nil,
         currentUserId: String = "",
@@ -67,11 +80,14 @@ public struct UserProfileSheet: View {
         self.fullUser = fullUser
         self.userStats = userStats
         self.isLoadingStats = isLoadingStats
+        self.connectionStatus = connectionStatus
         self.onNavigateToConversation = onNavigateToConversation
         self.onSendMessage = onSendMessage
         self.onBlock = onBlock
         self.onUnblock = onUnblock
         self.onConnectionRequest = onConnectionRequest
+        self.onCancelRequest = onCancelRequest
+        self.onResendRequest = onResendRequest
         self.onDismiss = onDismiss
         self.onLoadStats = onLoadStats
         self.currentUserId = currentUserId
@@ -452,61 +468,88 @@ public struct UserProfileSheet: View {
 
     @ViewBuilder
     private var actionButtons: some View {
-        VStack(spacing: 12) {
-            if let onConnectionRequest {
-                connectionRequestButton(action: onConnectionRequest)
+        VStack(spacing: 10) {
+            switch connectionStatus {
+            case .none:
+                if let onConnectionRequest {
+                    profileActionButton(
+                        icon: "person.badge.plus.fill",
+                        label: "Demande de connexion",
+                        color: Color(hex: resolvedAccent),
+                        action: onConnectionRequest
+                    )
+                }
+            case .pendingSent:
+                if let onCancelRequest {
+                    profileActionButton(
+                        icon: "xmark.circle.fill",
+                        label: "Annuler la demande",
+                        color: theme.textMuted,
+                        action: onCancelRequest
+                    )
+                }
+                if let onResendRequest {
+                    profileActionButton(
+                        icon: "arrow.clockwise.circle.fill",
+                        label: "Renvoyer la demande",
+                        color: Color(hex: resolvedAccent),
+                        action: onResendRequest
+                    )
+                }
+            case .pendingReceived:
+                EmptyView()
+            case .connected:
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(MeeshyColors.success)
+                    Text("Connectes")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(MeeshyColors.success)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(MeeshyColors.success.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
 
-            // Block button (only if not blocked and callback provided)
-            if !isBlocked, let onBlock {
-                blockButton(action: onBlock)
+            if isBlocked, let onUnblock {
+                profileActionButton(
+                    icon: "hand.raised.slash.fill",
+                    label: "Debloquer l'utilisateur",
+                    color: MeeshyColors.warning,
+                    action: onUnblock
+                )
+            } else if !isBlocked, let onBlock {
+                profileActionButton(
+                    icon: "hand.raised.fill",
+                    label: "Bloquer cet utilisateur",
+                    color: theme.error,
+                    action: onBlock
+                )
             }
         }
     }
 
-    private func blockButton(action: @escaping () -> Void) -> some View {
+    private func profileActionButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
         Button {
             HapticFeedback.medium()
             action()
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "hand.raised.fill")
+                Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
-                Text("Bloquer cet utilisateur")
+                Text(label)
                     .font(.system(size: 14, weight: .semibold))
             }
-            .foregroundColor(theme.error)
+            .foregroundColor(color)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(theme.error.opacity(0.1))
+            .background(color.opacity(0.1))
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(theme.error.opacity(0.3), lineWidth: 1.5)
-            )
-        }
-        .pressable()
-    }
-
-    private func connectionRequestButton(action: @escaping () -> Void) -> some View {
-        Button {
-            HapticFeedback.medium()
-            action()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "person.badge.plus.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                Text("Demande de connexion")
-                    .font(.system(size: 15, weight: .semibold))
-            }
-            .foregroundColor(Color(hex: resolvedAccent))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(Color(hex: resolvedAccent).opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color(hex: resolvedAccent).opacity(0.3), lineWidth: 1.5)
+                    .stroke(color.opacity(0.3), lineWidth: 1.5)
             )
         }
         .pressable()
@@ -514,35 +557,39 @@ public struct UserProfileSheet: View {
 
     // MARK: - Conversations Tab
 
+    private var isInteractionDisabled: Bool {
+        isBlocked || isBlockedByTarget
+    }
+
     @ViewBuilder
     private var conversationsTabContent: some View {
         if effectiveConversations.isEmpty {
-            // Empty state: affiche le bouton Send Message
-            VStack(spacing: 16) {
-                Image(systemName: "bubble.left.and.bubble.right")
-                    .font(.system(size: 32))
-                    .foregroundColor(theme.textMuted.opacity(0.6))
+            VStack(spacing: 10) {
+                Image(systemName: isInteractionDisabled ? "nosign" : "bubble.left.and.bubble.right")
+                    .font(.system(size: 28))
+                    .foregroundColor(theme.textMuted.opacity(isInteractionDisabled ? 0.3 : 0.5))
 
-                Text("Aucune conversation en commun")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-
-                if !isCurrentUser, !isBlocked, !isBlockedByTarget {
-                    sendMessageButton
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
+                if !isCurrentUser, !isInteractionDisabled {
+                    sendMessageButtonCompact
                 }
+
+                Text(isInteractionDisabled
+                     ? "Interactions desactivees"
+                     : "Aucune conversation en commun")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textMuted.opacity(0.7))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
+            .padding(.vertical, 24)
         } else {
             VStack(spacing: 0) {
-                // Bouton Send Message en tête si conversations existent
-                if !isCurrentUser, !isBlocked, !isBlockedByTarget {
+                if !isCurrentUser {
                     sendMessageButton
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
                         .padding(.bottom, 16)
+                        .opacity(isInteractionDisabled ? 0.35 : 1)
+                        .allowsHitTesting(!isInteractionDisabled)
                 }
 
                 ForEach(Array(effectiveConversations.enumerated()), id: \.element.id) { index, conv in
@@ -584,6 +631,8 @@ public struct UserProfileSheet: View {
                         .contentShape(Rectangle())
                     }
                     .staggeredAppear(index: index)
+                    .opacity(isInteractionDisabled ? 0.35 : 1)
+                    .allowsHitTesting(!isInteractionDisabled)
 
                     if index < effectiveConversations.count - 1 {
                         Divider()
@@ -840,6 +889,14 @@ public struct UserProfileSheet: View {
     // MARK: - Send Message Button
 
     private var sendMessageButton: some View {
+        sendMessageButtonContent(compact: false)
+    }
+
+    private var sendMessageButtonCompact: some View {
+        sendMessageButtonContent(compact: true)
+    }
+
+    private func sendMessageButtonContent(compact: Bool) -> some View {
         Button {
             HapticFeedback.medium()
             if let onSendMessage {
@@ -854,15 +911,16 @@ public struct UserProfileSheet: View {
                 }
             }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: compact ? 6 : 8) {
                 Image(systemName: "paperplane.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: compact ? 12 : 14, weight: .semibold))
                 Text("Envoyer un message")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: compact ? 13 : 15, weight: .semibold))
             }
             .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .frame(maxWidth: compact ? nil : .infinity)
+            .padding(.horizontal, compact ? 20 : 0)
+            .padding(.vertical, compact ? 10 : 14)
             .background(
                 LinearGradient(
                     colors: [MeeshyColors.pink, MeeshyColors.cyan],
@@ -870,8 +928,8 @@ public struct UserProfileSheet: View {
                     endPoint: .trailing
                 )
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .shadow(color: MeeshyColors.pink.opacity(0.3), radius: 8, y: 4)
+            .clipShape(RoundedRectangle(cornerRadius: compact ? 20 : 14))
+            .shadow(color: MeeshyColors.pink.opacity(0.3), radius: compact ? 4 : 8, y: compact ? 2 : 4)
         }
         .pressable()
     }

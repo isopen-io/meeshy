@@ -107,7 +107,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                 {placeholder}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[400px] p-0 shadow-xl border-gray-200 dark:border-gray-800" align="start">
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[360px] p-0 shadow-xl border-gray-200 dark:border-gray-800" align="start">
               <div className="p-3 border-b border-gray-100 dark:border-gray-800 bg-slate-50 dark:bg-slate-900 rounded-t-lg">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />

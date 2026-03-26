@@ -487,6 +487,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         return f
     }()
 
+    deinit {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+    }
+
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -1075,7 +1080,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 handler(decoded)
             }
         } catch {
-            Logger.socket.error("Decode error for \(String(describing: type)): \(error)")
+            // Log raw JSON keys for debugging decode failures
+            if let dict = first as? [String: Any] {
+                let keys = dict.keys.sorted().joined(separator: ", ")
+                Logger.socket.error("Decode error for \(String(describing: type)): \(error) — keys: [\(keys)]")
+            } else {
+                Logger.socket.error("Decode error for \(String(describing: type)): \(error)")
+            }
         }
     }
 }

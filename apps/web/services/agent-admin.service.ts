@@ -1,7 +1,5 @@
 import { apiService } from './api.service';
-import type { ApiResponse } from '@meeshy/shared/types';
-
-type AgentType = 'personal' | 'support' | 'faq' | 'animator';
+import type { ApiResponse, AgentType } from '@meeshy/shared/types';
 
 function unwrapResponse<T>(response: ApiResponse<unknown>): ApiResponse<T> {
   if (!response.success || !response.data) return response as ApiResponse<T>;

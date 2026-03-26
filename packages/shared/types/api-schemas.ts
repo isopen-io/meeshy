@@ -50,6 +50,7 @@ export const userSchema = {
     displayName: { type: 'string', description: 'Display name shown to other users' },
     bio: { type: 'string', nullable: true, description: 'User biography' },
     avatar: { type: 'string', nullable: true, description: 'Avatar image URL' },
+    banner: { type: 'string', nullable: true, description: 'Banner image URL' },
     phoneNumber: { type: 'string', nullable: true, description: 'Phone number in E.164 format (+33612345678)' },
     phoneCountryCode: { type: 'string', nullable: true, description: 'ISO 3166-1 alpha-2 country code (FR, US)' },
 

@@ -116,7 +116,7 @@ public struct APITextTranslation: Decodable, Identifiable, Sendable {
     public let sourceLanguage: String?
 }
 
-public struct APIMessage: Decodable, Sendable {
+public struct APIMessage: Sendable {
     public let id: String
     public let conversationId: String
     public let senderId: String
@@ -153,6 +153,66 @@ public struct APIMessage: Decodable, Sendable {
     public let deliveredCount: Int?
     public let readCount: Int?
     public let translations: [APITextTranslation]?
+}
+
+extension APIMessage: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case id, conversationId, senderId, content, originalLanguage
+        case messageType, messageSource, isEdited, deletedAt
+        case replyToId, storyReplyToId, forwardedFromId, forwardedFromConversationId
+        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt
+        case isEncrypted, encryptionMode, createdAt, updatedAt
+        case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
+        case reactionSummary, reactionCount, currentUserReactions
+        case deliveredToAllAt, readByAllAt, deliveredCount, readCount
+        case translations
+        // MongoDB fallback
+        case _id
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Resilient id: try "id" first, fall back to "_id" (raw MongoDB)
+        if let idValue = try c.decodeIfPresent(String.self, forKey: .id) {
+            id = idValue
+        } else {
+            id = try c.decode(String.self, forKey: ._id)
+        }
+        conversationId = try c.decode(String.self, forKey: .conversationId)
+        senderId = try c.decode(String.self, forKey: .senderId)
+        content = try c.decodeIfPresent(String.self, forKey: .content)
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
+        messageType = try c.decodeIfPresent(String.self, forKey: .messageType)
+        messageSource = try c.decodeIfPresent(String.self, forKey: .messageSource)
+        isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited)
+        deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+        replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
+        storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
+        forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId)
+        forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId)
+        pinnedAt = try c.decodeIfPresent(String.self, forKey: .pinnedAt)
+        pinnedBy = try c.decodeIfPresent(String.self, forKey: .pinnedBy)
+        isViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce)
+        isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
+        encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
+        sender = try c.decodeIfPresent(APIMessageSender.self, forKey: .sender)
+        attachments = try c.decodeIfPresent([APIMessageAttachment].self, forKey: .attachments)
+        replyTo = try c.decodeIfPresent(APIMessageReplyTo.self, forKey: .replyTo)
+        forwardedFrom = try c.decodeIfPresent(APIForwardedFrom.self, forKey: .forwardedFrom)
+        forwardedFromConversation = try c.decodeIfPresent(APIForwardedFromConversation.self, forKey: .forwardedFromConversation)
+        reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
+        reactionCount = try c.decodeIfPresent(Int.self, forKey: .reactionCount)
+        currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
+        deliveredToAllAt = try c.decodeIfPresent(Date.self, forKey: .deliveredToAllAt)
+        readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
+        deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount)
+        readCount = try c.decodeIfPresent(Int.self, forKey: .readCount)
+        translations = try c.decodeIfPresent([APITextTranslation].self, forKey: .translations)
+    }
 }
 
 public struct MessagesAPIResponse: Decodable, Sendable {

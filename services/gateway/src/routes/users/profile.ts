@@ -1099,7 +1099,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: { type: 'object' }
+            data: { type: 'object', additionalProperties: true }
           }
         },
         404: errorResponseSchema,
@@ -1147,7 +1147,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: { type: 'object' }
+            data: { type: 'object', additionalProperties: true }
           }
         },
         400: errorResponseSchema,
@@ -1200,7 +1200,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: { type: 'object' }
+            data: { type: 'object', additionalProperties: true }
           }
         },
         400: errorResponseSchema,

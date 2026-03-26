@@ -1135,8 +1135,9 @@ export function registerMessagesRoutes(
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'object' },
-            metadata: { type: 'object' }
+            data: { type: 'object', additionalProperties: true },
+            message: { type: 'string' },
+            metadata: { type: 'object', additionalProperties: true }
           }
         },
         400: errorResponseSchema,

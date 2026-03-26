@@ -155,7 +155,7 @@ export function AgentConversationsTab() {
                   {/* Conversation name + type */}
                   <div className="col-span-1 lg:col-span-2 min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-medium truncate text-gray-900 dark:text-gray-100" title={config.conversationId}>
+                      <span className="text-sm font-medium truncate flex-1 text-gray-900 dark:text-gray-100" title={config.conversationId}>
                         {conversationLabel(config)}
                       </span>
                       {config.conversation?.type && (
@@ -190,7 +190,7 @@ export function AgentConversationsTab() {
                     </div>
 
                     {/* Controlled */}
-                    <div className="flex flex-wrap gap-1 max-w-[120px] overflow-hidden">
+                    <div className="flex flex-wrap gap-1 overflow-hidden">
                       {(config.manualUserIds ?? []).slice(0, 3).map(id => (
                         <UserDisplay key={id} userId={id} size="sm" showUsername={false} className="w-8" />
                       ))}

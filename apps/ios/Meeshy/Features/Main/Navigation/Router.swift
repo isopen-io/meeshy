@@ -24,6 +24,8 @@ enum Route: Hashable {
     case dataExport
     case postDetail(String)
     case bookmarks
+    case friendRequests
+    case editProfile
 }
 
 @MainActor

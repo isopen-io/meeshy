@@ -178,6 +178,12 @@ struct RootView: View {
                     case .bookmarks:
                         BookmarksView()
                             .navigationBarHidden(true)
+                    case .friendRequests:
+                        FriendRequestListView()
+                            .navigationBarHidden(true)
+                    case .editProfile:
+                        EditProfileView()
+                            .navigationBarHidden(true)
                     }
                 }
             }
@@ -657,42 +663,6 @@ struct RootView: View {
         .zIndex(100)
     }
 
-    // MARK: - Legacy Floating Buttons (kept for reference)
-    private var floatingButtons: some View {
-        VStack {
-            HStack {
-                // Left - Feed button
-                ThemedFloatingButton(
-                    icon: showFeed ? nil : "square.stack.fill",
-                    colors: ["FF6B6B", "4ECDC4"],
-                    showLogo: showFeed
-                ) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        showFeed.toggle()
-                    }
-                }
-
-                Spacer()
-
-                // Right - Menu button
-                ThemedFloatingButton(
-                    icon: showMenu ? "person.3.fill" : "gearshape.fill",
-                    colors: showMenu ? ["FF6B6B", "4ECDC4"] : ["9B59B6", "4ECDC4"],
-                    badge: showMenu ? 0 : notificationManager.unreadCount
-                ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showMenu.toggle()
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-
-            Spacer()
-        }
-        .zIndex(100)
-    }
-
     // MARK: - Menu Ladder (positioned relative to menu button)
     private var menuLadder: some View {
         GeometryReader { geometry in
@@ -772,9 +742,15 @@ private struct ProfileFetchingSheet: View {
     @State private var isLoading = true
     @State private var fullUser: MeeshyUser?
     @State private var fetchError: String?
+    @State private var connectionStatus: ConnectionStatus = .none
+    @State private var isBlocked = false
+    @State private var isBlockedByTarget = false
+    @State private var pendingRequestId: String?
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var statusViewModel: StatusViewModel
+
+    private var targetUserId: String { user.userId ?? "" }
 
     var body: some View {
         Group {
@@ -803,19 +779,106 @@ private struct ProfileFetchingSheet: View {
                 }
             } catch {}
             isLoading = false
+            await checkPendingRequest()
         }
     }
 
     private var profileSheet: some View {
         UserProfileSheet(
             user: user,
+            isBlocked: isBlocked,
             isLoading: isLoading,
             fullUser: fullUser,
+            connectionStatus: connectionStatus,
+            onBlock: {
+                Task { await blockUser() }
+            },
+            onUnblock: {
+                Task { await unblockUser() }
+            },
+            onConnectionRequest: {
+                Task { await sendConnectionRequest() }
+            },
+            onCancelRequest: {
+                Task { await cancelRequest() }
+            },
+            onResendRequest: {
+                Task { await resendRequest() }
+            },
             onDismiss: { dismiss() },
             currentUserId: AuthManager.shared.currentUser?.id ?? "",
-            moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-            onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            moodEmoji: statusViewModel.statusForUser(userId: targetUserId)?.moodEmoji,
+            onMoodTap: statusViewModel.moodTapHandler(for: targetUserId)
         )
+    }
+
+    private func checkPendingRequest() async {
+        guard !targetUserId.isEmpty else { return }
+        do {
+            let sent = try await FriendService.shared.sentRequests()
+            if let pending = sent.data.first(where: { $0.receiverId == targetUserId && $0.status == "pending" }) {
+                pendingRequestId = pending.id
+                connectionStatus = .pendingSent(requestId: pending.id)
+            }
+        } catch {}
+    }
+
+    private func sendConnectionRequest() async {
+        guard !targetUserId.isEmpty else { return }
+        do {
+            let request = try await FriendService.shared.sendFriendRequest(receiverId: targetUserId)
+            pendingRequestId = request.id
+            connectionStatus = .pendingSent(requestId: request.id)
+            HapticFeedback.success()
+            ToastManager.shared.showSuccess("Demande envoyee")
+        } catch {
+            HapticFeedback.error()
+            ToastManager.shared.showError("Impossible d'envoyer la demande")
+        }
+    }
+
+    private func cancelRequest() async {
+        guard let requestId = pendingRequestId else { return }
+        do {
+            try await FriendService.shared.deleteRequest(requestId: requestId)
+            pendingRequestId = nil
+            connectionStatus = .none
+            HapticFeedback.medium()
+            ToastManager.shared.showSuccess("Demande annulee")
+        } catch {
+            ToastManager.shared.showError("Impossible d'annuler")
+        }
+    }
+
+    private func resendRequest() async {
+        if let requestId = pendingRequestId {
+            try? await FriendService.shared.deleteRequest(requestId: requestId)
+        }
+        await sendConnectionRequest()
+    }
+
+    private func blockUser() async {
+        guard !targetUserId.isEmpty else { return }
+        do {
+            try await BlockService.shared.blockUser(userId: targetUserId)
+            isBlocked = true
+            HapticFeedback.medium()
+            ToastManager.shared.showSuccess("Utilisateur bloque")
+        } catch {
+            ToastManager.shared.showError("Impossible de bloquer")
+        }
+    }
+
+    private func unblockUser() async {
+        guard !targetUserId.isEmpty else { return }
+        do {
+            try await BlockService.shared.unblockUser(userId: targetUserId)
+            isBlocked = false
+            HapticFeedback.light()
+            ToastManager.shared.showSuccess("Utilisateur debloque")
+        } catch {
+            ToastManager.shared.showError("Impossible de debloquer")
+        }
     }
 
     private func errorView(_ message: String) -> some View {

@@ -666,3 +666,7 @@ export type {
   ConnectionDiagnostics,
   UserPermissions
 } from './socketio-events.js';
+
+// ===== AGENT TYPES =====
+export type { AgentType } from './agent.js';
+export { AGENT_TYPES } from './agent.js';

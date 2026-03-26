@@ -64,7 +64,9 @@ class ConversationViewModel: ObservableObject {
     @Published var typingUsernames: [String] = []
 
     /// Real-time translation/transcription/audio data keyed by messageId
-    @Published var messageTranslations: [String: [MessageTranslation]] = [:]
+    @Published var messageTranslations: [String: [MessageTranslation]] = [:] {
+        didSet { _mediaCaptionMap = nil }
+    }
     @Published var messageTranscriptions: [String: MessageTranscription] = [:] {
         didSet { _allAudioItems = nil }
     }
@@ -233,9 +235,8 @@ class ConversationViewModel: ObservableObject {
                 } else if visuals.count == 1 && !msg.content.isEmpty {
                     // Single visual + message text -> show as caption
                     // Use translation if available, otherwise original content
-                    if let translations = messageTranslations[msg.id],
-                       let best = translations.first {
-                        map[att.id] = best.translatedContent
+                    if let preferred = preferredTranslation(for: msg.id) {
+                        map[att.id] = preferred.translatedContent
                     } else {
                         map[att.id] = msg.content
                     }
@@ -475,6 +476,17 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Message Processing Pipeline
+
+    private func processAPIMessages(_ apiMessages: [APIMessage]) async -> [Message] {
+        let userId = currentUserId
+        var msgs = apiMessages.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
+        await decryptMessagesIfNeeded(&msgs)
+        extractAttachmentTranscriptions(from: apiMessages)
+        extractTextTranslations(from: apiMessages)
+        return msgs
+    }
+
     // MARK: - Load Messages (initial)
 
     func loadMessages() async {
@@ -495,14 +507,12 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId, offset: 0, limit: limit, includeReplies: true
             )
 
-            let userId = currentUserId
-            // API returns newest first, reverse to oldest-first for display
-            var loadedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
-            await decryptMessagesIfNeeded(&loadedMessages)
-            messages = loadedMessages
+            let loadedMessages = await processAPIMessages(response.data)
 
-            extractAttachmentTranscriptions(from: response.data)
-            extractTextTranslations(from: response.data)
+            // Merge: keep any socket-delivered messages that arrived during the await
+            let loadedIds = Set(loadedMessages.map(\.id))
+            let socketOnly = messages.filter { !loadedIds.contains($0.id) && $0.createdAt > (loadedMessages.last?.createdAt ?? .distantPast) }
+            messages = loadedMessages + socketOnly
             self.nextMessageCursor = response.cursorPagination?.nextCursor
             hasOlderMessages = response.cursorPagination?.hasMore ?? false
 
@@ -554,15 +564,10 @@ class ConversationViewModel: ObservableObject {
                     conversationId: conversationId, before: beforeValue, limit: limit, includeReplies: true
                 )
 
-                let userId = currentUserId
-                var olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
-                await decryptMessagesIfNeeded(&olderMessages)
-                extractAttachmentTranscriptions(from: response.data)
-                extractTextTranslations(from: response.data)
+                let olderMessages = await processAPIMessages(response.data)
 
                 // Dedup and prepend (single array assignment to avoid O(N) insert + multiple didSet)
-                let existingIds = Set(messages.map(\.id))
-                let newMessages = olderMessages.filter { !existingIds.contains($0.id) }
+                let newMessages = olderMessages.filter { !self.containsMessage(id: $0.id) }
                 messages = newMessages + messages
 
                 self.nextMessageCursor = response.cursorPagination?.nextCursor
@@ -1064,8 +1069,7 @@ class ConversationViewModel: ObservableObject {
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
 
-            let existingIds = Set(messages.map(\.id))
-            let newMessages = fetchedMessages.filter { !existingIds.contains($0.id) }
+            let newMessages = fetchedMessages.filter { !self.containsMessage(id: $0.id) }
                 .filter { $0.createdAt > lastMessage.createdAt }
 
             if !newMessages.isEmpty {
@@ -1212,8 +1216,7 @@ class ConversationViewModel: ObservableObject {
                 await decryptMessagesIfNeeded(&newMessages)
                 extractAttachmentTranscriptions(from: response.data)
                 extractTextTranslations(from: response.data)
-                let existingIds = Set(messages.map(\.id))
-                let genuinelyNew = newMessages.filter { !existingIds.contains($0.id) }
+                let genuinelyNew = newMessages.filter { !self.containsMessage(id: $0.id) }
 
                 if !genuinelyNew.isEmpty {
                     // Data is already chronologically sorted by the reversed() map and strictly newer,

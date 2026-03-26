@@ -709,7 +709,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'object' }
+            data: { type: 'object', additionalProperties: true }
           }
         },
         401: { description: 'User not authenticated', ...errorResponseSchema },

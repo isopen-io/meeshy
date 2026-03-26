@@ -24,7 +24,7 @@ final class PresenceManager: ObservableObject {
     @Published var presenceMap: [String: UserPresence] = [:]
 
     private var cancellables = Set<AnyCancellable>()
-    private var recalcTimer: Timer?
+    nonisolated(unsafe) private var recalcTimer: Timer?
 
     private init() {
         // Subscribe to user:status events from socket
@@ -83,5 +83,10 @@ final class PresenceManager: ObservableObject {
 
     func presenceState(for userId: String) -> PresenceState {
         presenceMap[userId]?.state ?? .offline
+    }
+
+    deinit {
+        recalcTimer?.invalidate()
+        recalcTimer = nil
     }
 }
