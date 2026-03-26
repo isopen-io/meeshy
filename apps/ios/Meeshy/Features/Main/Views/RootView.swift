@@ -744,6 +744,7 @@ private struct ProfileFetchingSheet: View {
     @State private var fetchError: String?
     @State private var connectionStatus: ConnectionStatus = .none
     @State private var isBlocked = false
+    @State private var isBlockedByTarget = false
     @State private var pendingRequestId: String?
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
