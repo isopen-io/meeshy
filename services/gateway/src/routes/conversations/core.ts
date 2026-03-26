@@ -95,7 +95,7 @@ export function registerCoreRoutes(
   });
 
   // Route pour obtenir toutes les conversations de l'utilisateur
-  fastify.get<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string } }>('/conversations', {
+  fastify.get<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string } }>('/conversations', {
     schema: {
       description: 'Get all conversations for the authenticated user with pagination support',
       tags: ['conversations'],
@@ -108,7 +108,8 @@ export function registerCoreRoutes(
           before: { type: 'string', description: 'Cursor for pagination: get conversations before this conversation ID (by lastMessageAt)' },
           includeCount: { type: 'string', enum: ['true', 'false'], description: 'Include total count of conversations' },
           type: { type: 'string', enum: ['direct', 'group', 'public', 'global', 'broadcast'], description: 'Filter by conversation type' },
-          withUserId: { type: 'string', description: 'Filter direct conversations that include this user ID as a participant' }
+          withUserId: { type: 'string', description: 'Filter direct conversations that include this user ID as a participant' },
+          updatedSince: { type: 'string', description: 'ISO8601 timestamp — return only conversations updated after this time' }
         }
       },
       response: {
@@ -119,7 +120,7 @@ export function registerCoreRoutes(
       }
     },
     preValidation: [optionalAuth]
-  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string } }>, reply) => {
+  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string } }>, reply) => {
     try {
       const authRequest = request as UnifiedAuthRequest;
 
@@ -139,6 +140,7 @@ export function registerCoreRoutes(
       const typeFilter = request.query.type;
       const withUserId = request.query.withUserId;
       const beforeCursor = request.query.before;
+      const updatedSince = request.query.updatedSince;
 
       // === PERFORMANCE INSTRUMENTATION ===
       const perfStart = performance.now();
@@ -193,6 +195,13 @@ export function registerCoreRoutes(
         }
       }
 
+      if (updatedSince) {
+        const sinceDate = new Date(updatedSince);
+        if (!isNaN(sinceDate.getTime())) {
+          whereClause.updatedAt = { gt: sinceDate };
+        }
+      }
+
       t0 = performance.now();
       const conversations = await prisma.conversation.findMany({
         where: whereClause,
@@ -205,6 +214,7 @@ export function registerCoreRoutes(
           identifier: true,
           isActive: true,
           createdAt: true,
+          updatedAt: true,
           lastMessageAt: true,
           banner: true,
           avatar: true,
