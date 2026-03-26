@@ -18,6 +18,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, PaginationParams, UserIdParams, UsernameParams } from './types';
+import { formatUserResponse } from '../auth/types';
 import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 
@@ -208,41 +209,14 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       const updatedUser = await fastify.prisma.user.update({
         where: { id: userId },
         data: updateData,
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phoneNumber: true,
-          displayName: true,
-          avatar: true,
-          banner: true,
-          bio: true,
-          isOnline: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          lastActiveAt: true,
-          createdAt: true,
-          updatedAt: true
-        }
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
-      const responseUser = {
-        ...updatedUser,
-        // TODO: Load from UserPreferences.application
-        autoTranslateEnabled: true
-      };
-
       return reply.send({
         success: true,
         data: {
-          user: responseUser,
+          user: formatUserResponse(updatedUser),
           message: 'Profile updated successfully'
         }
       });

@@ -69,13 +69,13 @@ export function useContactsActions(
       const token = authManager.getAuthToken();
       if (!token) return;
 
-      const response = await fetch(buildApiUrl(`/users/friend-requests/${requestId}`), {
+      const response = await fetch(buildApiUrl(`/friend-requests/${requestId}`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ status: action === 'accept' ? 'accepted' : 'rejected' })
       });
 
       if (response.ok) {
@@ -96,7 +96,7 @@ export function useContactsActions(
       const token = authManager.getAuthToken();
       if (!token) return;
 
-      const response = await fetch(buildApiUrl('/users/friend-requests'), {
+      const response = await fetch(buildApiUrl('/friend-requests'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -123,13 +123,11 @@ export function useContactsActions(
       const token = authManager.getAuthToken();
       if (!token) return;
 
-      const response = await fetch(buildApiUrl(`/users/friend-requests/${requestId}`), {
-        method: 'PATCH',
+      const response = await fetch(buildApiUrl(`/friend-requests/${requestId}`), {
+        method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ action: 'cancel' })
+        }
       });
 
       if (response.ok) {

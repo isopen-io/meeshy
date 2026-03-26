@@ -117,7 +117,7 @@ export class MessagingService {
       this.deleteListeners.forEach(listener => listener(data.messageId));
     });
 
-    // Mention created
+    // Mention created — NOTE: gateway does not emit MENTION_CREATED yet (dead listener)
     socket.on(SERVER_EVENTS.MENTION_CREATED as any, (data: any) => {
       this.mentionListeners.forEach(listener => listener(data));
     });

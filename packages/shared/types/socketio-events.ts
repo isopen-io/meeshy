@@ -257,13 +257,32 @@ export interface TranslationErrorEventData {
 
 /**
  * Données de notification générique
+ * Aligned with NotificationFormatter.formatNotification() output
  */
 export interface NotificationEventData {
   readonly id: string;
+  readonly userId: string;
   readonly type: string;
-  readonly title: string;
-  readonly message: string;
-  readonly timestamp: Date;
+  readonly priority?: string;
+  readonly content: string;
+  readonly actor?: {
+    readonly id?: string;
+    readonly username?: string;
+    readonly displayName?: string;
+    readonly avatar?: string;
+  };
+  readonly context?: Record<string, unknown>;
+  readonly metadata?: Record<string, unknown>;
+  readonly state: {
+    readonly isRead: boolean;
+    readonly readAt: Date | null;
+    readonly createdAt: Date;
+    readonly expiresAt?: Date;
+  };
+  readonly delivery?: {
+    readonly emailSent: boolean;
+    readonly pushSent: boolean;
+  };
 }
 
 /**
@@ -286,6 +305,7 @@ export interface NotificationDeletedEventData {
 export interface NotificationCountsEventData {
   readonly total: number;
   readonly unread: number;
+  readonly byType?: Record<string, number>;
 }
 
 /**

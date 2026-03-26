@@ -62,7 +62,7 @@ export const CommonSchemas = {
   language: z.string().min(2).max(5).regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'Code langue invalide'),
   
   // Type de conversation
-  conversationType: z.enum(['direct', 'group', 'public', 'global']),
+  conversationType: z.enum(['direct', 'group', 'public', 'global', 'broadcast']),
   
   // Type de message (aligned with messageTypeEnum)
   messageType: z.enum(['text', 'image', 'file', 'audio', 'video', 'location', 'system']),

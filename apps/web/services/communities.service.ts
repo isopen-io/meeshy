@@ -34,9 +34,11 @@ export interface Community {
       isOnline: boolean;
     };
   }>;
+  conversationCount?: number;
+  memberCount?: number;
   _count?: {
     members: number;
-    conversations: number;
+    Conversation: number;
   };
 }
 

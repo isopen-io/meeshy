@@ -72,8 +72,8 @@ export interface SettingsV2Return {
   updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   requestEmailVerification: () => Promise<void>;
   requestPhoneVerification: () => Promise<void>;
-  enable2FA: () => Promise<void>;
-  disable2FA: () => Promise<void>;
+  enable2FA: (code: string) => Promise<void>;
+  disable2FA: (password: string) => Promise<void>;
   deleteAccount: () => Promise<void>;
 
   // Loading states
@@ -282,13 +282,13 @@ export function useSettingsV2(options: UseSettingsV2Options = {}): SettingsV2Ret
     await apiService.post('/auth/send-phone-verification');
   }, []);
 
-  const enable2FA = useCallback(async () => {
-    await apiService.post('/auth/2fa/enable');
+  const enable2FA = useCallback(async (code: string) => {
+    await apiService.post('/auth/2fa/enable', { code });
     queryClient.invalidateQueries({ queryKey: queryKeys.users.current() });
   }, [queryClient]);
 
-  const disable2FA = useCallback(async () => {
-    await apiService.post('/auth/2fa/disable');
+  const disable2FA = useCallback(async (password: string) => {
+    await apiService.post('/auth/2fa/disable', { password });
     queryClient.invalidateQueries({ queryKey: queryKeys.users.current() });
   }, [queryClient]);
 
