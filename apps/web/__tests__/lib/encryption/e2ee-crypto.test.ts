@@ -68,9 +68,13 @@ describe('E2EECrypto', () => {
   describe('encrypt', () => {
     const fakePayload: EncryptedPayload = {
       ciphertext: 'encrypted-data',
-      iv: 'random-iv',
-      mode: 'AES_GCM' as EncryptionMode,
-      conversationId: 'conv-1',
+      metadata: {
+        mode: 'e2ee' as EncryptionMode,
+        protocol: 'aes-256-gcm' as const,
+        keyId: 'key-1',
+        iv: 'random-iv',
+        authTag: 'auth-tag',
+      },
     };
 
     it('returns encrypted payload for an encrypted conversation', async () => {
@@ -105,9 +109,13 @@ describe('E2EECrypto', () => {
   describe('decrypt', () => {
     const fakePayload: EncryptedPayload = {
       ciphertext: 'encrypted-data',
-      iv: 'random-iv',
-      mode: 'AES_GCM' as EncryptionMode,
-      conversationId: 'conv-1',
+      metadata: {
+        mode: 'e2ee' as EncryptionMode,
+        protocol: 'aes-256-gcm' as const,
+        keyId: 'key-1',
+        iv: 'random-iv',
+        authTag: 'auth-tag',
+      },
     };
 
     it('returns decrypted content', async () => {

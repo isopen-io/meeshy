@@ -179,7 +179,7 @@ export function registerParticipantsRoutes(
         systemLanguage: participant.user?.systemLanguage ?? participant.language,
         regionalLanguage: participant.user?.regionalLanguage ?? participant.language,
         customDestinationLanguage: participant.user?.customDestinationLanguage ?? participant.language,
-        autoTranslateEnabled: participant.user?.autoTranslateEnabled ?? true,
+        autoTranslateEnabled: true,
         isActive: participant.isActive,
         createdAt: participant.user?.createdAt ?? participant.joinedAt,
         updatedAt: participant.user?.updatedAt ?? participant.joinedAt,

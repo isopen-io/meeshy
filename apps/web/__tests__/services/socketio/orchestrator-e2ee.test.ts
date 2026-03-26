@@ -152,7 +152,7 @@ jest.mock('@/services/auth-manager.service', () => ({
 }));
 
 describe('SocketIOOrchestrator E2EE', () => {
-  let orchestrator: InstanceType<typeof import('@/services/socketio/orchestrator.service').SocketIOOrchestrator>;
+  let orchestrator: import('@/services/socketio/orchestrator.service').SocketIOOrchestrator;
 
   beforeEach(() => {
     jest.clearAllMocks();

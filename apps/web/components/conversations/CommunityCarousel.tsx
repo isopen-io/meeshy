@@ -111,7 +111,7 @@ export function CommunityCarousel({
         // CORRECTION: Utiliser le comptage du backend (_count.Conversation) au lieu de filtrer localement
         // Le backend connaît le nombre exact de conversations dans la communauté
         // Le filtrage local peut être incomplet si toutes les conversations ne sont pas chargées
-        const conversationCountFromBackend = (community as any).conversationCount ?? community._count?.Conversation ?? community._count?.conversations ?? 0;
+        const conversationCountFromBackend = (community as any).conversationCount ?? community._count?.Conversation ?? 0;
 
         // Pour debug: comparer avec le filtrage local
         const communityConversationsLocal = conversations.filter(c => {

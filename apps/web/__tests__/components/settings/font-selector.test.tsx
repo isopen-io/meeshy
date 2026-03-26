@@ -25,16 +25,16 @@ const mockUseFontPreference = jest.fn(() => ({
   changeFontFamily: mockChangeFontFamily,
   resetToDefault: mockResetToDefault,
   isLoading: false,
-  error: null,
+  error: null as string | null,
   fontConfig: {
     id: 'inter',
     name: 'Inter',
     description: 'Police moderne et lisible',
-  },
+  } as { id: string; name: string; description: string } | null,
 }));
 
 jest.mock('@/hooks/use-font-preference', () => ({
-  useFontPreference: (...args: any[]) => mockUseFontPreference(...args),
+  useFontPreference: () => mockUseFontPreference(),
 }));
 
 // Mock des polices disponibles

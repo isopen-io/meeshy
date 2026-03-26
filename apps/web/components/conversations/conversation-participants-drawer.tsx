@@ -171,19 +171,30 @@ export function ConversationParticipantsDrawer({
       try {
         const results = await participantsService.searchParticipants(conversationId, searchQuery, 50);
         const mappedResults: Participant[] = results.map(user => ({
-          id: user.id,
+          id: user.participantId || user.id,
           conversationId,
           type: 'user' as const,
-          userId: user.id,
+          userId: user.userId ?? user.id,
           displayName: user.displayName || user.username,
           avatar: user.avatar ?? undefined,
-          role: MemberRole.MEMBER as string,
-          language: 'en',
-          permissions: { canSendMessages: true as boolean, canSendFiles: true as boolean, canSendImages: true as boolean, canSendVideos: true as boolean, canSendAudios: true as boolean, canSendLocations: true as boolean, canSendLinks: true as boolean },
-          isActive: true as boolean,
-          isOnline: (user.isOnline ?? false) as boolean,
-          joinedAt: new Date(),
-          user: user as unknown,
+          role: user.conversationRole || MemberRole.MEMBER as string,
+          language: user.systemLanguage || 'en',
+          permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true },
+          isActive: user.isActive,
+          isOnline: user.isOnline ?? false,
+          joinedAt: new Date(user.joinedAt),
+          user: {
+            id: user.userId ?? user.id,
+            username: user.username,
+            displayName: user.displayName,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            avatar: user.avatar ?? undefined,
+            isOnline: user.isOnline,
+            lastActiveAt: user.lastActiveAt ? new Date(user.lastActiveAt) : undefined,
+            systemLanguage: user.systemLanguage,
+            role: user.role,
+          },
         }));
         setBackendSearchResults(mappedResults);
       } catch (error) {
@@ -208,24 +219,9 @@ export function ConversationParticipantsDrawer({
 
       setIsPlatformSearching(true);
       try {
-        const response = await usersService.searchUsers(searchQuery);
-        // apiService.get wraps: {success, data: <backend_body>, message}
-        // backend_body = {success, data: User[], pagination}
-        // So: response.data.data = User[]
-        const responseData = response?.data as any;
-        let users: any[] = [];
-        if (Array.isArray(responseData?.data)) {
-          users = responseData.data;
-        } else if (Array.isArray(responseData)) {
-          users = responseData;
-        } else if (responseData && typeof responseData === 'object') {
-          // Try deeper nesting or direct array in other shapes
-          const nested = (responseData as any)?.data;
-          if (Array.isArray(nested)) {
-            users = nested;
-          }
-        }
-        console.log('[ParticipantsDrawer] Platform search results:', { raw: response, extracted: users.length, users });
+        const users = await usersService.searchUsers(searchQuery);
+        const userList = Array.isArray(users) ? users : [];
+        console.log('[ParticipantsDrawer] Platform search results:', { extracted: userList.length, users: userList });
         setPlatformResults(users);
       } catch (error) {
         console.error('Erreur lors de la recherche d\'utilisateurs:', error);

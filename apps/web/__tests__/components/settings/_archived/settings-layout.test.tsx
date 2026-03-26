@@ -100,9 +100,6 @@ describe('SettingsLayout', () => {
     systemLanguage: 'fr',
     regionalLanguage: 'fr',
     autoTranslateEnabled: true,
-    translateToSystemLanguage: true,
-    translateToRegionalLanguage: false,
-    useCustomDestination: false,
     customDestinationLanguage: undefined,
     encryptionPreference: 'optional',
     role: 'USER',
@@ -433,7 +430,7 @@ describe('SettingsLayout', () => {
     it('affiche le selecteur de langue personnalisee quand active', () => {
       const userWithCustomLang = {
         ...mockUser,
-        useCustomDestination: true,
+        customDestinationLanguage: 'es',
       };
 
       render(<SettingsLayout {...defaultProps} currentUser={userWithCustomLang} />);

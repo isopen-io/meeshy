@@ -42,7 +42,7 @@ describe('CommunitiesService', () => {
     },
     _count: {
       members: 10,
-      conversations: 5,
+      Conversation: 5,
     },
     ...overrides,
   });

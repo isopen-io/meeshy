@@ -31,9 +31,6 @@ describe('LanguageStore', () => {
           regionalLanguage: 'fr',
           customDestinationLanguage: undefined,
           autoTranslateEnabled: true,
-          translateToSystemLanguage: true,
-          translateToRegionalLanguage: false,
-          useCustomDestination: false,
         },
       });
     });
@@ -60,9 +57,6 @@ describe('LanguageStore', () => {
         regionalLanguage: 'fr',
         customDestinationLanguage: undefined,
         autoTranslateEnabled: true,
-        translateToSystemLanguage: true,
-        translateToRegionalLanguage: false,
-        useCustomDestination: false,
       });
     });
   });
@@ -140,28 +134,26 @@ describe('LanguageStore', () => {
         useLanguageStore.getState().updateLanguageConfig({
           systemLanguage: 'en',
           regionalLanguage: 'es',
-          translateToRegionalLanguage: true,
         });
       });
 
       const config = useLanguageStore.getState().userLanguageConfig;
       expect(config.systemLanguage).toBe('en');
       expect(config.regionalLanguage).toBe('es');
-      expect(config.translateToRegionalLanguage).toBe(true);
     });
 
     it('should preserve other config properties when updating', () => {
       act(() => {
         useLanguageStore.getState().updateLanguageConfig({
-          useCustomDestination: true,
+          customDestinationLanguage: 'de',
         });
       });
 
       const config = useLanguageStore.getState().userLanguageConfig;
-      expect(config.useCustomDestination).toBe(true);
+      expect(config.customDestinationLanguage).toBe('de');
       // Other properties should remain unchanged
       expect(config.autoTranslateEnabled).toBe(true);
-      expect(config.translateToSystemLanguage).toBe(true);
+      expect(config.systemLanguage).toBe('fr');
     });
   });
 
@@ -281,13 +273,11 @@ describe('LanguageStore', () => {
     it('should persist user language config', () => {
       act(() => {
         useLanguageStore.getState().updateLanguageConfig({
-          useCustomDestination: true,
           customDestinationLanguage: 'pt',
         });
       });
 
       const config = useLanguageStore.getState().userLanguageConfig;
-      expect(config.useCustomDestination).toBe(true);
       expect(config.customDestinationLanguage).toBe('pt');
     });
   });

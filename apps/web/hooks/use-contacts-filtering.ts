@@ -85,16 +85,8 @@ export function useContactsFiltering(
     }
 
     try {
-      const response = await usersService.searchUsers(query);
-      let searchData: User[] = [];
-
-      if (response.data && typeof response.data === 'object' && 'success' in response.data && 'data' in response.data) {
-        searchData = Array.isArray(response.data.data) ? response.data.data : [];
-      } else if (Array.isArray(response.data)) {
-        searchData = response.data;
-      }
-
-      setSearchResults(searchData);
+      const users = await usersService.searchUsers(query);
+      setSearchResults(Array.isArray(users) ? users : []);
     } catch (error) {
       console.error('[CONTACTS] Erreur lors de la recherche:', error);
       toast.error(t('errors.searchError'));

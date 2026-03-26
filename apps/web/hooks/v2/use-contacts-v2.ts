@@ -128,8 +128,8 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
   } = useQuery({
     queryKey: [...queryKeys.users.all, 'search', searchQuery],
     queryFn: async () => {
-      const response = await usersService.searchUsers(searchQuery);
-      return response.data || [];
+      const users = await usersService.searchUsers(searchQuery);
+      return Array.isArray(users) ? users : [];
     },
     enabled: searchQuery.length >= 2,
   });

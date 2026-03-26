@@ -376,7 +376,7 @@ describe('Groups API Integration - Real Data Flow', () => {
           updatedAt: new Date('2024-01-14T17:15:00Z'),
           lastActiveAt: new Date('2024-01-14T17:15:00Z')
         }
-      ] as User[];
+      ] as unknown as User[];
 
       mockApiService.get.mockResolvedValue({
         data: searchResults,

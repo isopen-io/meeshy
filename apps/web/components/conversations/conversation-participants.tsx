@@ -124,7 +124,32 @@ export function ConversationParticipants({
   const currentUserParticipant = uniqueParticipants.find(p => p.userId === currentUser.id);
   const allParticipantsIncludingCurrent = currentUserParticipant
     ? uniqueParticipants
-    : [...uniqueParticipants, { userId: currentUser.id, user: currentUser, role: MemberRole.MEMBER } as Participant];
+    : [...uniqueParticipants, {
+        id: currentUser.id,
+        conversationId,
+        type: 'user' as const,
+        userId: currentUser.id,
+        displayName: currentUser.displayName || `${currentUser.firstName} ${currentUser.lastName}`,
+        avatar: currentUser.avatar,
+        role: MemberRole.MEMBER as string,
+        language: currentUser.systemLanguage || 'fr',
+        permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true },
+        isActive: true,
+        isOnline: currentUser.isOnline,
+        joinedAt: new Date(),
+        user: {
+          id: currentUser.id,
+          username: currentUser.username,
+          displayName: currentUser.displayName,
+          firstName: currentUser.firstName,
+          lastName: currentUser.lastName,
+          avatar: currentUser.avatar,
+          isOnline: currentUser.isOnline,
+          lastActiveAt: currentUser.lastActiveAt,
+          systemLanguage: currentUser.systemLanguage,
+          role: currentUser.role,
+        },
+      } satisfies Participant];
 
   // Afficher les 3 premiers participants en ligne (incluant l'utilisateur connecté s'il est en ligne)
   // Afficher l'utilisateur courant + 2 autres participants (en ligne ou non)

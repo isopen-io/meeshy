@@ -1,5 +1,5 @@
 import type { Message, Participant, Attachment } from '@meeshy/shared/types';
-import type { MessageType } from '@meeshy/shared/types/conversation';
+import type { MessageType } from '@meeshy/shared/types/socketio-events';
 
 type SendPayload = {
   attachmentIds?: string[];
