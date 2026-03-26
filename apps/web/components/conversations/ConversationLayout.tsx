@@ -252,9 +252,11 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     addOptimisticMessage,
     markMessageFailed,
     removeOptimisticMessage,
-  } = useConversationMessagesRQ(selectedConversation?.id || null, user!, {
+  // Use effectiveSelectedId directly — don't wait for conversations list to resolve
+  const messageConversationId = selectedConversation?.id || effectiveSelectedId;
+  } = useConversationMessagesRQ(messageConversationId || null, user!, {
     limit: 20,
-    enabled: !!selectedConversation?.id,
+    enabled: !!messageConversationId,
     containerRef: messagesScrollRef,
   });
 

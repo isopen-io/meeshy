@@ -7,10 +7,12 @@
 /// <reference lib="webworker" />
 
 /**
- * APP_BUILD_VERSION - Changé à chaque build Docker/Deploiement
- * C'est l'identifiant unique qui déclenche la mise à jour côté navigateur.
+ * APP_BUILD_VERSION - Replaced at container startup by docker-entrypoint.sh
+ * Falls back to timestamp if not replaced (dev mode).
  */
-const APP_BUILD_VERSION = 'BUILD_20250226_150000';
+const APP_BUILD_VERSION = '__RUNTIME_BUILD_VERSION__' !== '__RUNTIME' + '_BUILD_VERSION__'
+  ? '__RUNTIME_BUILD_VERSION__'
+  : `DEV_${Date.now()}`;
 const SW_VERSION = '1.3.0';
 const CACHE_NAME = `meeshy-cache-${APP_BUILD_VERSION}`;
 

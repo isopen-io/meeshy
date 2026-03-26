@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -460,5 +461,9 @@ function NotificationsPageContent() {
 }
 
 export default function NotificationsPage() {
-  return <NotificationsPageContent />;
+  return (
+    <AuthGuard requireAuth={true} allowAnonymous={false}>
+      <NotificationsPageContent />
+    </AuthGuard>
+  );
 }

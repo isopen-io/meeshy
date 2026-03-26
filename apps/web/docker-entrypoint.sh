@@ -53,6 +53,12 @@ replace_placeholder "__RUNTIME_FIREBASE_APP_ID__" "NEXT_PUBLIC_FIREBASE_APP_ID" 
 replace_placeholder "__RUNTIME_FIREBASE_MEASUREMENT_ID__" "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID" ""
 replace_placeholder "__RUNTIME_FIREBASE_VAPID_KEY__" "NEXT_PUBLIC_FIREBASE_VAPID_KEY" ""
 
+# Inject build version for service worker cache invalidation
+BUILD_VERSION="BUILD_$(date +%Y%m%d_%H%M%S)"
+echo "[Meeshy] Setting BUILD_VERSION = $BUILD_VERSION"
+find /app -type f -name "sw.js" -exec \
+    sed -i "s|__RUNTIME_BUILD_VERSION__|$BUILD_VERSION|g" {} + 2>/dev/null || true
+
 echo "[Meeshy] Runtime environment injection complete!"
 echo "[Meeshy] Starting Next.js server..."
 
