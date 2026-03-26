@@ -60,7 +60,10 @@ public struct AvatarConfig {
     public let context: AvatarContext
     public let moodEmoji: String?
     public let presenceState: PresenceState
+    public let storyRingState: StoryRingState
     public let onTap: (() -> Void)?
+    public let onViewProfile: (() -> Void)?
+    public let onViewStory: (() -> Void)?
     public let contextMenuItems: [AvatarContextMenuItem]?
 
     public init(
@@ -69,7 +72,10 @@ public struct AvatarConfig {
         context: AvatarContext = .messageBubble,
         moodEmoji: String? = nil,
         presenceState: PresenceState = .offline,
+        storyRingState: StoryRingState = .none,
         onTap: (() -> Void)? = nil,
+        onViewProfile: (() -> Void)? = nil,
+        onViewStory: (() -> Void)? = nil,
         contextMenuItems: [AvatarContextMenuItem]? = nil
     ) {
         self.url = url
@@ -77,7 +83,10 @@ public struct AvatarConfig {
         self.context = context
         self.moodEmoji = moodEmoji
         self.presenceState = presenceState
+        self.storyRingState = storyRingState
         self.onTap = onTap
+        self.onViewProfile = onViewProfile
+        self.onViewStory = onViewStory
         self.contextMenuItems = contextMenuItems
     }
 }
@@ -122,10 +131,13 @@ public struct UserIdentityBar: View {
                     context: avatar.context,
                     accentColor: avatar.accentColor,
                     avatarURL: avatar.url,
+                    storyState: avatar.storyRingState,
                     moodEmoji: avatar.moodEmoji,
                     presenceState: avatar.presenceState,
                     enablePulse: false,
                     onTap: avatar.onTap,
+                    onViewProfile: avatar.onViewProfile,
+                    onViewStory: avatar.onViewStory,
                     contextMenuItems: avatar.contextMenuItems
                 )
             }
@@ -372,7 +384,9 @@ extension UserIdentityBar {
         onTranslateTap: (() -> Void)?,
         presenceState: PresenceState = .offline,
         moodEmoji: String? = nil,
-        onAvatarTap: (() -> Void)?
+        storyRingState: StoryRingState = .none,
+        onAvatarTap: (() -> Void)?,
+        onViewStory: (() -> Void)? = nil
     ) -> UserIdentityBar {
         var leading1: [IdentityBarElement] = [.name]
         if let role, role != .member {
@@ -400,11 +414,12 @@ extension UserIdentityBar {
 
         let trailing2: [IdentityBarElement] = []
 
-        var contextMenuItems: [AvatarContextMenuItem]?
+        var contextMenuItems: [AvatarContextMenuItem] = []
+        if let onViewStory, storyRingState != .none {
+            contextMenuItems.append(AvatarContextMenuItem(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
+        }
         if let onAvatarTap {
-            contextMenuItems = [
-                AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap)
-            ]
+            contextMenuItems.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap))
         }
 
         let avatarConfig = AvatarConfig(
@@ -413,7 +428,10 @@ extension UserIdentityBar {
             context: .messageBubble,
             moodEmoji: moodEmoji,
             presenceState: presenceState,
-            contextMenuItems: contextMenuItems
+            storyRingState: storyRingState,
+            onViewProfile: onAvatarTap,
+            onViewStory: onViewStory,
+            contextMenuItems: contextMenuItems.isEmpty ? nil : contextMenuItems
         )
 
         return UserIdentityBar(

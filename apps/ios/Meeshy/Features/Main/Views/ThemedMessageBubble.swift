@@ -19,6 +19,8 @@ struct ThemedMessageBubble: View {
     var showAvatar: Bool = true
     var presenceState: PresenceState = .offline
     var senderMoodEmoji: String? = nil
+    var senderStoryRingState: StoryRingState = .none
+    var onViewStory: (() -> Void)? = nil
     var onAddReaction: ((String) -> Void)? = nil
     var onToggleReaction: ((String) -> Void)? = nil
     var onOpenReactPicker: ((String) -> Void)? = nil
@@ -393,6 +395,43 @@ struct ThemedMessageBubble: View {
         .padding(.vertical, 2)
     }
 
+    @ViewBuilder
+    private var identityBarSection: some View {
+        if showIdentityBar {
+            UserIdentityBar.messageBubble(
+                name: message.senderName ?? "?",
+                username: message.senderUsername.map { "@\($0)" },
+                avatarURL: message.senderAvatarURL,
+                accentColor: message.senderColor ?? contactColor,
+                role: nil,
+                time: timeString,
+                delivery: message.isMe ? message.deliveryStatus : nil,
+                flags: buildAvailableFlags(),
+                activeFlag: secondaryLangCode,
+                onFlagTap: { code in handleFlagTap(code) },
+                onTranslateTap: hasAnyTranslation ? { onShowTranslationDetail?(message.id) } : nil,
+                presenceState: presenceState,
+                moodEmoji: senderMoodEmoji,
+                storyRingState: senderStoryRingState,
+                onAvatarTap: { selectedProfileUser = .from(message: message) },
+                onViewStory: onViewStory
+            )
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        } else {
+            UserIdentityBar.metaRow(
+                time: timeString,
+                delivery: message.isMe ? message.deliveryStatus : nil,
+                flags: hasAnyTranslation ? buildAvailableFlags() : [],
+                activeFlag: secondaryLangCode,
+                onFlagTap: hasAnyTranslation ? { code in handleFlagTap(code) } : nil,
+                onTranslateTap: hasAnyTranslation ? { onShowTranslationDetail?(message.id) } : nil,
+                isMe: message.isMe
+            )
+            .padding(.horizontal, 14)
+        }
+    }
+
     private var messageContent: some View {
         HStack(alignment: .bottom, spacing: 0) {
             if message.isMe { Spacer(minLength: 50) }
@@ -477,39 +516,8 @@ struct ThemedMessageBubble: View {
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, hasTextOrNonMediaContent ? 10 : 4)
 
-                                // Unified identity bar — full for group sender signature, compact meta row otherwise
-                                if showIdentityBar {
-                                    UserIdentityBar.messageBubble(
-                                        name: message.senderName ?? "?",
-                                        username: message.senderUsername.map { "@\($0)" },
-                                        avatarURL: message.senderAvatarURL,
-                                        accentColor: message.senderColor ?? contactColor,
-                                        role: nil,
-                                        time: timeString,
-                                        delivery: message.isMe ? message.deliveryStatus : nil,
-                                        flags: buildAvailableFlags(),
-                                        activeFlag: secondaryLangCode,
-                                        onFlagTap: { code in handleFlagTap(code) },
-                                        onTranslateTap: hasAnyTranslation ? { onShowTranslationDetail?(message.id) } : nil,
-                                        presenceState: presenceState,
-                                        moodEmoji: senderMoodEmoji,
-                                        onAvatarTap: { selectedProfileUser = .from(message: message) }
-                                    )
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 8)
-                                } else {
-                                    UserIdentityBar.metaRow(
-                                        time: timeString,
-                                        delivery: message.isMe ? message.deliveryStatus : nil,
-                                        flags: hasAnyTranslation ? buildAvailableFlags() : [],
-                                        activeFlag: secondaryLangCode,
-                                        onFlagTap: hasAnyTranslation ? { code in handleFlagTap(code) } : nil,
-                                        onTranslateTap: hasAnyTranslation ? { onShowTranslationDetail?(message.id) } : nil,
-                                        isMe: message.isMe
-                                    )
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 4)
-                                }
+                                // Unified identity bar — extracted to reduce type-checker load
+                                identityBarSection
                             }
                             .padding(.top, message.isEdited ? 12 : 0)
                             .overlay(alignment: .topLeading) {
@@ -1373,6 +1381,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.showAvatar == rhs.showAvatar &&
         lhs.presenceState == rhs.presenceState &&
         lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
+        lhs.senderStoryRingState == rhs.senderStoryRingState &&
         lhs.isLastInGroup == rhs.isLastInGroup &&
         lhs.isLastReceivedMessage == rhs.isLastReceivedMessage &&
         lhs.activeAudioLanguage == rhs.activeAudioLanguage
