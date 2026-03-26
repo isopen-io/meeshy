@@ -69,7 +69,6 @@ public actor CacheCoordinator {
         guard !isStarted else { return }
         isStarted = true
         resolveCurrentUserId()
-        subscribeToMessageSocket()
         subscribeToLifecycle()
     }
 
@@ -85,249 +84,9 @@ public actor CacheCoordinator {
         currentUserId = id
     }
 
-    // MARK: - Message Socket Subscriptions
+    // MARK: - Public Cache Methods (called by ConversationSyncEngine)
 
-    private func subscribeToMessageSocket() {
-        let msgSocket = messageSocket
-
-        msgSocket.messageReceived
-            .sink { [weak self] apiMessage in
-                guard let self else { return }
-                Task {
-                    let msg = apiMessage.toMessage(currentUserId: await self.currentUserId)
-                    await self.handleMessageReceived(msg)
-                }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.messageEdited
-            .sink { [weak self] apiMessage in
-                guard let self else { return }
-                Task {
-                    let msg = apiMessage.toMessage(currentUserId: await self.currentUserId)
-                    await self.handleMessageEdited(msg)
-                }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.messageDeleted
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleMessageDeleted(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.reactionAdded
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleReactionAdded(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.reactionRemoved
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleReactionRemoved(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.reactionSynced
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleReactionSynced(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.participantRoleUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleParticipantRoleUpdated(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.conversationJoined
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.participants.invalidate(for: event.conversationId) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.conversationLeft
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.participants.invalidate(for: event.conversationId) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.unreadUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleUnreadUpdated(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.readStatusUpdated
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleReadStatusUpdated(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.translationReceived
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleTranslationReceived(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.transcriptionReady
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleTranscriptionReady(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.audioTranslationReady
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleAudioTranslation(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.audioTranslationProgressive
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleAudioTranslation(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.audioTranslationCompleted
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.handleAudioTranslation(event) }
-            }
-            .store(in: &cancellables)
-
-        msgSocket.didReconnect
-            .sink { [weak self] in
-                guard let self else { return }
-                Task { await self.handleReconnect() }
-            }
-            .store(in: &cancellables)
-    }
-
-    // MARK: - Event Handlers
-
-    private func handleMessageReceived(_ msg: MeeshyMessage) async {
-        await messages.update(for: msg.conversationId) { existing in
-            var updated = existing
-            updated.append(msg)
-            return updated
-        }
-    }
-
-    private func handleMessageEdited(_ msg: MeeshyMessage) async {
-        await messages.update(for: msg.conversationId) { existing in
-            existing.map { $0.id == msg.id ? msg : $0 }
-        }
-    }
-
-    private func handleMessageDeleted(_ event: MessageDeletedEvent) async {
-        await messages.update(for: event.conversationId) { existing in
-            existing.map { msg in
-                guard msg.id == event.messageId else { return msg }
-                var updated = msg
-                updated.deletedAt = Date()
-                updated.content = ""
-                return updated
-            }
-        }
-    }
-
-    private func handleReactionAdded(_ event: ReactionUpdateEvent) async {
-        let mutate: @Sendable (MeeshyMessage) -> MeeshyMessage = { msg in
-            var updated = msg
-            let reaction = MeeshyReaction(
-                messageId: event.messageId,
-                participantId: event.participantId,
-                emoji: event.emoji
-            )
-            updated.reactions.append(reaction)
-            return updated
-        }
-        if let convId = event.conversationId {
-            await updateMessageInKey(conversationId: convId, messageId: event.messageId, mutate: mutate)
-        } else {
-            await updateMessageInAllKeys(messageId: event.messageId, mutate: mutate)
-        }
-    }
-
-    private func handleReactionRemoved(_ event: ReactionUpdateEvent) async {
-        let mutate: @Sendable (MeeshyMessage) -> MeeshyMessage = { msg in
-            var updated = msg
-            updated.reactions.removeAll {
-                $0.emoji == event.emoji && $0.participantId == event.participantId
-            }
-            return updated
-        }
-        if let convId = event.conversationId {
-            await updateMessageInKey(conversationId: convId, messageId: event.messageId, mutate: mutate)
-        } else {
-            await updateMessageInAllKeys(messageId: event.messageId, mutate: mutate)
-        }
-    }
-
-    private func handleReactionSynced(_ event: ReactionSyncEvent) async {
-        await updateMessageInAllKeys(messageId: event.messageId) { msg in
-            var updated = msg
-            updated.reactions = event.reactions.flatMap { agg in
-                (0..<agg.count).map { index in
-                    let pid = agg.participantIds.flatMap { $0.count > index ? $0[index] : nil }
-                    return MeeshyReaction(
-                        messageId: event.messageId,
-                        participantId: pid,
-                        emoji: agg.emoji
-                    )
-                }
-            }
-            return updated
-        }
-    }
-
-    private func handleParticipantRoleUpdated(_ event: ParticipantRoleUpdatedEvent) async {
-        await participants.update(for: event.conversationId) { existing in
-            existing.map { participant in
-                guard participant.id == event.participant.id else { return participant }
-                var updated = participant
-                updated.conversationRole = event.newRole
-                return updated
-            }
-        }
-    }
-
-    private func handleUnreadUpdated(_ event: UnreadUpdateEvent) async {
-        await conversations.update(for: "list") { existing in
-            existing.map { conv in
-                guard conv.id == event.conversationId else { return conv }
-                var updated = conv
-                updated.unreadCount = event.unreadCount
-                return updated
-            }
-        }
-    }
-
-    private func handleReadStatusUpdated(_ event: ReadStatusUpdateEvent) async {
-        await messages.update(for: event.conversationId) { existing in
-            existing.map { msg in
-                var updated = msg
-                updated.deliveredCount = event.summary.deliveredCount
-                updated.readCount = event.summary.readCount
-                return updated
-            }
-        }
-    }
-
-    private func handleTranslationReceived(_ event: TranslationEvent) async {
+    public func cacheTranslation(_ event: TranslationEvent) {
         let msgId = event.messageId
         var existing = translationCache[msgId] ?? []
         for translation in event.translations {
@@ -340,11 +99,11 @@ public actor CacheCoordinator {
         translationCache[msgId] = existing
     }
 
-    private func handleTranscriptionReady(_ event: TranscriptionReadyEvent) async {
+    public func cacheTranscription(_ event: TranscriptionReadyEvent) {
         transcriptionCache[event.messageId] = event
     }
 
-    private func handleAudioTranslation(_ event: AudioTranslationEvent) async {
+    public func cacheAudioTranslation(_ event: AudioTranslationEvent) {
         let msgId = event.messageId
         var existing = audioTranslationCache[msgId] ?? []
         if let idx = existing.firstIndex(where: { $0.translatedAudio.targetLanguage == event.translatedAudio.targetLanguage }) {
@@ -353,37 +112,6 @@ public actor CacheCoordinator {
             existing.append(event)
         }
         audioTranslationCache[msgId] = existing
-    }
-
-    private func handleReconnect() async {
-        await conversations.invalidate(for: "list")
-        logger.info("Reconnected — invalidated conversations cache")
-    }
-
-    // MARK: - Helpers
-
-    private func updateMessageInKey(
-        conversationId: String,
-        messageId: String,
-        mutate: @Sendable (MeeshyMessage) -> MeeshyMessage
-    ) async {
-        await messages.update(for: conversationId) { existing in
-            guard existing.contains(where: { $0.id == messageId }) else { return existing }
-            return existing.map { $0.id == messageId ? mutate($0) : $0 }
-        }
-    }
-
-    private func updateMessageInAllKeys(
-        messageId: String,
-        mutate: @Sendable (MeeshyMessage) -> MeeshyMessage
-    ) async {
-        let keys = await messages.loadedKeys()
-        for key in keys {
-            await messages.update(for: key) { existing in
-                guard existing.contains(where: { $0.id == messageId }) else { return existing }
-                return existing.map { $0.id == messageId ? mutate($0) : $0 }
-            }
-        }
     }
 
     // MARK: - Lifecycle
