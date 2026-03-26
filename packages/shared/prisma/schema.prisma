@@ -2913,7 +2913,7 @@ model AgentConfig {
   useFullHistory           Boolean  @default(false)
 
   manualUserIds            String[] @db.ObjectId
-  autoPickupEnabled        Boolean  @default(false)
+  autoPickupEnabled        Boolean  @default(true)
   inactivityThresholdHours Int      @default(72)
   minHistoricalMessages    Int      @default(0)
   maxControlledUsers       Int      @default(5)

@@ -186,16 +186,17 @@ export class ConversationScanner {
       };
     });
     const config = await this.persistence.getAgentConfig(conversationId);
-    if (config?.autoPickupEnabled && controlledUsers.length < (config.maxControlledUsers ?? 5)) {
+    const autoPickup = config?.autoPickupEnabled ?? true;
+    if (autoPickup && controlledUsers.length < (config?.maxControlledUsers ?? 5)) {
       // STRATEGY: Gradual introduction.
       // We only pick ONE new user per cycle to avoid flooding the conversation with many new bots at once.
       const limit = 1;
       const potentialUsers = await this.persistence.getPotentialControlledUsers(
         conversationId,
         limit,
-        config.inactivityThresholdHours ?? 72,
-        config.excludedRoles ?? [],
-        (config.excludedUserIds as string[]) ?? [],
+        config?.inactivityThresholdHours ?? 72,
+        config?.excludedRoles ?? [],
+        (config?.excludedUserIds as string[]) ?? [],
       );
 
       for (const u of potentialUsers) {

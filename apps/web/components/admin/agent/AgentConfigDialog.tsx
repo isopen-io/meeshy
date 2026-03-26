@@ -32,7 +32,7 @@ interface AgentConfigDialogProps {
 
 const DEFAULTS: AgentConfigUpsert = {
   enabled: true,
-  autoPickupEnabled: false,
+  autoPickupEnabled: true,
   inactivityThresholdHours: 72,
   minHistoricalMessages: 0,
   maxControlledUsers: 5,
@@ -115,7 +115,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {isNew ? 'Nouvelle configuration agent' : 'Modifier la configuration'}
@@ -127,7 +127,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4 px-1">
+        <div className="space-y-6 py-4 px-1 overflow-y-auto flex-1 min-h-0">
           {/* Conversation ID */}
           {isNew && (
             <div className="p-4 rounded-lg bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30">
@@ -740,7 +740,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           )}
         </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
+        <DialogFooter className="flex-col sm:flex-row gap-2 border-t border-slate-200 dark:border-slate-700 pt-4 mt-0 shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Annuler
           </Button>
