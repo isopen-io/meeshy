@@ -239,6 +239,24 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // ========== HOOKS MESSAGES ==========
   const messageConversationId = selectedConversation?.id || effectiveSelectedId;
+
+  // Conversation minimale pour l'affichage immédiat des messages
+  // Permet de rendre ConversationView dès qu'on a un ID, sans attendre le chargement
+  // de la liste des conversations (comme BubbleStreamPage qui affiche directement)
+  const displayConversation = useMemo((): Conversation | null => {
+    if (selectedConversation) return selectedConversation;
+    if (!effectiveSelectedId) return null;
+    return {
+      id: effectiveSelectedId,
+      title: '',
+      type: 'group',
+      visibility: 'public',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      participants: [],
+      unreadCount: 0,
+    } as Conversation;
+  }, [selectedConversation, effectiveSelectedId]);
   const {
     messages,
     isLoading: isLoadingMessages,
@@ -383,12 +401,14 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // Chargement parallèle conversation + participants (async-parallel)
   // Uses conversationIdSet instead of conversations array, user?.id instead of user (#10, #11)
+  // Note: clearMessages() retiré — React Query gère le changement de conversation
+  // via le changement de queryKey (basé sur conversationId). Appeler clearMessages()
+  // supprimait le cache de la conversation COURANTE, causant un double-fetch inutile.
   useEffect(() => {
     const targetId = selectedConversationId || selectedConversation?.id;
     if (!targetId || !user?.id) return;
     if (targetId === previousConversationIdRef.current) return;
 
-    clearMessages();
     previousConversationIdRef.current = targetId;
 
     const loadPromises: Promise<void>[] = [];
@@ -407,7 +427,6 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     conversationIdSet,
     loadDirectConversation,
     loadParticipants,
-    clearMessages,
     instanceId,
   ]);
 
@@ -767,11 +786,13 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   if (!user) return null;
 
   // Mode mobile avec conversation ouverte
-  if (isMobile && selectedConversation) {
+  // Utilise displayConversation pour afficher les messages immédiatement
+  // même si la liste des conversations n'a pas encore chargé
+  if (isMobile && displayConversation) {
     return (
       <>
         <ConversationView
-          conversation={selectedConversation}
+          conversation={displayConversation}
           currentUser={user}
           messages={messages}
           participants={participants}
@@ -817,9 +838,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           showBackButton={!!selectedConversationId}
         />
 
-        {galleryOpen && (
+        {galleryOpen && displayConversation && (
           <AttachmentGallery
-            conversationId={selectedConversation.id}
+            conversationId={displayConversation.id}
             initialAttachmentId={selectedAttachmentId || undefined}
             open={galleryOpen}
             onClose={() => setGalleryOpen(false)}
@@ -916,15 +937,15 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
               selectedConversationId ? 'w-full h-full' : 'flex-1 h-full'
             )}
             aria-label={
-              selectedConversation
-                ? t('conversationLayout.conversationWith', { name: selectedConversation.title })
+              displayConversation
+                ? t('conversationLayout.conversationWith', { name: displayConversation.title })
                 : t('conversationLayout.selectConversation')
             }
           >
-            {selectedConversation ? (
+            {displayConversation ? (
               <FeatureErrorBoundary featureName="Chat">
                 <ConversationView
-                  conversation={selectedConversation}
+                  conversation={displayConversation}
                   currentUser={user}
                   messages={messages}
                   participants={participants}
@@ -998,9 +1019,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       </DashboardLayout>
 
       {/* Gallery - Desktop */}
-      {selectedConversation && galleryOpen && (
+      {displayConversation && galleryOpen && (
         <AttachmentGallery
-          conversationId={selectedConversation.id}
+          conversationId={displayConversation.id}
           initialAttachmentId={selectedAttachmentId || undefined}
           open={galleryOpen}
           onClose={() => setGalleryOpen(false)}
