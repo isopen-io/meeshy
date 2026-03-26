@@ -360,7 +360,7 @@ export class ConversationScanner {
             this.persistence.upsertUserRole(conversationId, profile).catch((err) =>
               console.error(`[Scanner] Error persisting controlled user profile ${userId}:`, err));
           }
-        } else if (profile.messagesAnalyzed >= 10) {
+        } else if (profile.messagesAnalyzed >= 3) {
           this.persistence.upsertGlobalProfile(userId, toneProfileToGlobalFields(profile)).catch((err) =>
             console.error(`[Scanner] Error persisting global profile ${userId}:`, err));
         }
