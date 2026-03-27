@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usersService } from '@/services/users.service';
-import { User } from '@/types';
+import type { SocketIOUser as User } from '@meeshy/shared/types';
 import { cn } from '@/lib/utils';
 
 interface UserDisplayProps {
