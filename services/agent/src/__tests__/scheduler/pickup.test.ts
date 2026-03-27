@@ -56,7 +56,7 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     getAgentConfig: jest.fn().mockResolvedValue({
       autoPickupEnabled: true,
       maxControlledUsers: 3,
-      inactivityThresholdHours: 72,
+      inactivityThresholdHours: 30,
       excludedRoles: [],
       excludedUserIds: [],
     }),
@@ -114,8 +114,8 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
 
     await scanner.scanConversation('conv-1');
 
-    // Stratégie d'introduction graduelle : on n'en prend qu'un par cycle maintenant
-    expect(persistence.getPotentialControlledUsers).toHaveBeenCalledWith('conv-1', 2, 72, [], []);
+    // With 1 existing controlled user (< 3), reduced threshold (24h) applies
+    expect(persistence.getPotentialControlledUsers).toHaveBeenCalledWith('conv-1', 2, 24, [], []);
     const invokeArgs = graph.invoke.mock.calls[0][0];
     expect(invokeArgs.controlledUsers).toHaveLength(2); // 1 manual + 1 potential
     expect(invokeArgs.controlledUsers.find((u: any) => u.source === 'auto_rule')).toBeDefined();
@@ -148,7 +148,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
 
     await scanner.scanConversation('conv-1');
 
-    expect(persistence.getLeastActiveParticipants).toHaveBeenCalledWith('conv-1', 1, [], []);
+    expect(persistence.getLeastActiveParticipants).toHaveBeenCalledWith('conv-1', 3, [], []);
     expect(graph.invoke).toHaveBeenCalled();
     const invokeArgs = graph.invoke.mock.calls[0][0];
     expect(invokeArgs.controlledUsers).toHaveLength(1);
@@ -184,6 +184,86 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
 
     expect(persistence.getLeastActiveParticipants).not.toHaveBeenCalled();
     expect(graph.invoke).toHaveBeenCalled();
+  });
+
+  it('uses standard inactivity threshold (72h) when >= 3 controlled users exist', async () => {
+    const graph = { invoke: jest.fn().mockResolvedValue({ pendingActions: [] }) };
+    const persistence = makePersistence({
+      getControlledUsers: jest.fn().mockResolvedValue([
+        makeControlledUser('bot1'), makeControlledUser('bot2'), makeControlledUser('bot3'),
+      ]),
+      getAgentConfig: jest.fn().mockResolvedValue({
+        autoPickupEnabled: true,
+        maxControlledUsers: 5,
+        inactivityThresholdHours: 30,
+        excludedRoles: [],
+        excludedUserIds: [],
+      }),
+      getPotentialControlledUsers: jest.fn().mockResolvedValue([]),
+    });
+
+    const scanner = new ConversationScanner(
+      graph,
+      persistence,
+      makeStateManager(),
+      { enqueue: jest.fn() } as any,
+      makeRedis(),
+      { getGlobalConfig: jest.fn().mockResolvedValue(null) } as any,
+      {
+        canSendMessage: jest.fn().mockResolvedValue({ allowed: true, remaining: 10 }),
+        canBurst: jest.fn().mockResolvedValue({ allowed: true }),
+        canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
+        recordScannedConversation: jest.fn().mockResolvedValue(undefined),
+        getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+      } as any,
+    );
+
+    await scanner.scanConversation('conv-1');
+
+    // >= 3 controlled users: full 30h threshold used
+    expect(persistence.getPotentialControlledUsers).toHaveBeenCalledWith('conv-1', 2, 30, [], []);
+  });
+
+  it('bootstrap fallback picks up to 3 participants for multi-user conversations', async () => {
+    const graph = { invoke: jest.fn().mockResolvedValue({ pendingActions: [] }) };
+    const persistence = makePersistence({
+      getControlledUsers: jest.fn().mockResolvedValue([]),
+      getPotentialControlledUsers: jest.fn().mockResolvedValue([]),
+      getLeastActiveParticipants: jest.fn().mockResolvedValue([
+        makePotentialUser('fb1'), makePotentialUser('fb2'), makePotentialUser('fb3'),
+      ]),
+      getAgentConfig: jest.fn().mockResolvedValue({
+        autoPickupEnabled: true,
+        maxControlledUsers: 5,
+        inactivityThresholdHours: 30,
+        excludedRoles: [],
+        excludedUserIds: [],
+      }),
+    });
+
+    const scanner = new ConversationScanner(
+      graph,
+      persistence,
+      makeStateManager(),
+      { enqueue: jest.fn() } as any,
+      makeRedis(),
+      { getGlobalConfig: jest.fn().mockResolvedValue(null) } as any,
+      {
+        canSendMessage: jest.fn().mockResolvedValue({ allowed: true, remaining: 10 }),
+        canBurst: jest.fn().mockResolvedValue({ allowed: true }),
+        canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
+        recordScannedConversation: jest.fn().mockResolvedValue(undefined),
+        getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+      } as any,
+    );
+
+    await scanner.scanConversation('conv-1');
+
+    expect(persistence.getLeastActiveParticipants).toHaveBeenCalledWith('conv-1', 3, [], []);
+    expect(graph.invoke).toHaveBeenCalled();
+    const invokeArgs = graph.invoke.mock.calls[0][0];
+    expect(invokeArgs.controlledUsers).toHaveLength(3);
+    expect(persistence.upsertUserRole).toHaveBeenCalledTimes(3);
   });
 
   it('does not include potential users if autoPickupEnabled is false', async () => {

@@ -38,7 +38,7 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
       contextWindowSize: 50,
       useFullHistory: false,
       agentType: 'personal',
-      inactivityThresholdHours: 72,
+      inactivityThresholdHours: 30,
       excludedRoles: [],
       excludedUserIds: [],
       agentInstructions: null,

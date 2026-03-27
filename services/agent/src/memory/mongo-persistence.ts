@@ -225,21 +225,35 @@ export class MongoPersistence {
 
     const freshnessThreshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000);
 
-    const conversations = await this.prisma.conversation.findMany({
-      where: {
-        type: { in: types },
-        isActive: true,
-        lastMessageAt: { gte: freshnessThreshold },
-      },
-      include: {
-        agentConfig: true,
-      },
-      orderBy: { lastMessageAt: 'desc' },
-      ...(maxConversations > 0 ? { take: maxConversations } : {}),
-    });
+    const [configuredConversations, freshConversations] = await Promise.all([
+      this.prisma.conversation.findMany({
+        where: {
+          type: { in: types },
+          isActive: true,
+          agentConfig: { enabled: true },
+        },
+        include: { agentConfig: true },
+        orderBy: { lastMessageAt: 'desc' },
+      }),
+      this.prisma.conversation.findMany({
+        where: {
+          type: { in: types },
+          isActive: true,
+          lastMessageAt: { gte: freshnessThreshold },
+          agentConfig: null,
+        },
+        include: { agentConfig: true },
+        orderBy: { lastMessageAt: 'desc' },
+      }),
+    ]);
 
-    // No config = eligible (auto-pickup). enabled: false = manually disabled = skip.
-    return conversations.filter((conv) => !conv.agentConfig || conv.agentConfig.enabled !== false);
+    const seen = new Set(configuredConversations.map((c) => c.id));
+    const merged = [
+      ...configuredConversations,
+      ...freshConversations.filter((c) => !seen.has(c.id)),
+    ];
+
+    return maxConversations > 0 ? merged.slice(0, maxConversations) : merged;
   }
 
   async getConversationContext(conversationId: string) {

@@ -72,7 +72,7 @@ export class ConversationScanner {
       contextWindowSize: config?.contextWindowSize ?? 50,
       useFullHistory: config?.useFullHistory ?? false,
       agentType: config?.agentType ?? 'personal',
-      inactivityThresholdHours: config?.inactivityThresholdHours ?? 72,
+      inactivityThresholdHours: config?.inactivityThresholdHours ?? 30,
       excludedRoles: config?.excludedRoles ?? [],
       excludedUserIds: config?.excludedUserIds ?? [],
       agentInstructions: config?.agentInstructions ?? null,
@@ -189,12 +189,16 @@ export class ConversationScanner {
     const autoPickup = config?.autoPickupEnabled ?? true;
     if (autoPickup && controlledUsers.length < (config?.maxControlledUsers ?? 5)) {
       // STRATEGY: Pick up multiple inactive users per cycle to diversify agent personas faster.
+      // When very few controlled users exist (< 3), use a reduced inactivity threshold (24h)
+      // to accelerate population. Once >= 3 users, use the standard threshold.
       const remainingSlots = (config?.maxControlledUsers ?? 5) - controlledUsers.length;
       const limit = Math.min(3, remainingSlots);
+      const baseThreshold = config?.inactivityThresholdHours ?? 30;
+      const effectiveThreshold = controlledUsers.length < 3 ? Math.min(baseThreshold, 24) : baseThreshold;
       const potentialUsers = await this.persistence.getPotentialControlledUsers(
         conversationId,
         limit,
-        config?.inactivityThresholdHours ?? 72,
+        effectiveThreshold,
         config?.excludedRoles ?? [],
         (config?.excludedUserIds as string[]) ?? [],
       );
@@ -240,10 +244,12 @@ export class ConversationScanner {
     }
 
     if (controlledUsers.length === 0 && autoPickup) {
+      const maxControlled = config?.maxControlledUsers ?? 5;
+      const bootstrapLimit = Math.min(3, maxControlled);
       const existingRoleUserIds = manualControlledUsers.map((u) => u.userId);
       const fallbackUsers = await this.persistence.getLeastActiveParticipants(
         conversationId,
-        1,
+        bootstrapLimit,
         (config?.excludedUserIds as string[]) ?? [],
         existingRoleUserIds,
       );
