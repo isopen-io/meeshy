@@ -144,7 +144,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var merged = existing
 
             for delta in deltaConversations {
-                if delta.deletedAt != nil {
+                if !delta.isActive {
                     merged.removeAll { $0.id == delta.id }
                     await cache.messages.invalidate(for: delta.id)
                 } else if let idx = merged.firstIndex(where: { $0.id == delta.id }) {
@@ -379,7 +379,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == msg.conversationId }) {
-                updated[idx].lastMessage = msg
+                updated[idx].lastMessagePreview = msg.content
+                updated[idx].lastMessageId = msg.id
+                updated[idx].lastMessageSenderName = msg.senderName
+                updated[idx].lastMessageAt = msg.createdAt
                 updated[idx].unreadCount += 1
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)
