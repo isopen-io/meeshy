@@ -60,19 +60,37 @@ class StoryViewModel: ObservableObject {
 
     func loadStories() async {
         guard !isLoading else { return }
-        isLoading = true
 
+        let cached = await CacheCoordinator.shared.stories.load(for: "recent_tray")
+        switch cached {
+        case .fresh(let data, _):
+            storyGroups = data
+            return
+        case .stale(let data, _):
+            storyGroups = data
+            Task { [weak self] in await self?.fetchStoriesFromNetwork() }
+            return
+        case .expired, .empty:
+            break
+        }
+
+        isLoading = true
+        await fetchStoriesFromNetwork()
+        isLoading = false
+    }
+
+    private func fetchStoriesFromNetwork() async {
         do {
             let response = try await storyService.list(cursor: nil, limit: 50)
 
             if response.success {
-                storyGroups = response.data.toStoryGroups()
+                let groups = response.data.toStoryGroups()
+                storyGroups = groups
+                await CacheCoordinator.shared.stories.save(groups, for: "recent_tray")
             }
         } catch {
             Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
         }
-
-        isLoading = false
     }
 
     // MARK: - Mark Story as Viewed
@@ -101,6 +119,7 @@ class StoryViewModel: ObservableObject {
                     isViewed: true
                 )
                 storyGroups[i] = storyGroups[i].with(stories: updated)
+                persistStoryCache()
                 return
             }
         }
@@ -417,6 +436,7 @@ class StoryViewModel: ObservableObject {
                     break
                 }
             }
+            persistStoryCache()
             return true
         } catch {
             return false
@@ -443,12 +463,24 @@ class StoryViewModel: ObservableObject {
                         self.storyGroups.insert(newGroup, at: 0)
                     }
                 }
+                self.persistStoryCache()
             }
             .store(in: &cancellables)
 
         socialSocket.storyViewed
             .receive(on: DispatchQueue.main)
-            .sink { _ in }
+            .sink { [weak self] viewedData in
+                guard let self else { return }
+                for i in self.storyGroups.indices {
+                    if let j = self.storyGroups[i].stories.firstIndex(where: { $0.id == viewedData.storyId }) {
+                        var updatedStories = self.storyGroups[i].stories
+                        updatedStories[j].isViewed = true
+                        self.storyGroups[i] = self.storyGroups[i].with(stories: updatedStories)
+                        self.persistStoryCache()
+                        return
+                    }
+                }
+            }
             .store(in: &cancellables)
     }
 
@@ -481,5 +513,11 @@ class StoryViewModel: ObservableObject {
                 stories: [item]
             ), at: 0)
         }
+        persistStoryCache()
+    }
+
+    private func persistStoryCache() {
+        let snapshot = storyGroups
+        Task { await CacheCoordinator.shared.stories.save(snapshot, for: "recent_tray") }
     }
 }

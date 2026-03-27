@@ -24,6 +24,7 @@ class FeedViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket: SocialSocketProviding
     private let postService: PostServiceProviding
+    private var cacheSaveTask: Task<Void, Never>?
 
     init(
         api: APIClientProviding = APIClient.shared,
@@ -189,6 +190,7 @@ class FeedViewModel: ObservableObject {
             } else {
                 let _ = try await api.delete(endpoint: "/posts/\(postId)/like")
             }
+            debouncedCacheSave()
         } catch {
             // Revert on failure
             posts[index].isLiked.toggle()
@@ -203,7 +205,7 @@ class FeedViewModel: ObservableObject {
                 method: "POST"
             )
         } catch {
-            // Silently fail
+            ToastManager.shared.showError("Erreur lors de l'enregistrement")
         }
     }
 
@@ -223,6 +225,7 @@ class FeedViewModel: ObservableObject {
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             posts.insert(feedPost, at: 0)
+            debouncedCacheSave()
             publishSuccess = true
         } catch {
             publishError = error.localizedDescription
@@ -236,7 +239,7 @@ class FeedViewModel: ObservableObject {
                 posts[index].commentCount += 1
             }
         } catch {
-            // Silent failure — comment count will update via socket event
+            ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
         }
     }
 
@@ -250,7 +253,7 @@ class FeedViewModel: ObservableObject {
                 body: bodyData
             )
         } catch {
-            // Silent failure
+            ToastManager.shared.showError("Erreur lors du like")
         }
     }
 
@@ -258,7 +261,7 @@ class FeedViewModel: ObservableObject {
         do {
             try await postService.repost(postId: postId, quote: isQuote ? content : nil)
         } catch {
-            // Silent failure — repost will appear via socket event
+            ToastManager.shared.showError("Erreur lors du repost")
         }
     }
 
@@ -274,7 +277,39 @@ class FeedViewModel: ObservableObject {
                 body: bodyData
             )
         } catch {
-            // Silent failure
+            ToastManager.shared.showError("Erreur lors du partage")
+        }
+    }
+
+    func deletePost(_ postId: String) async {
+        let snapshot = posts
+        posts.removeAll { $0.id == postId }
+
+        do {
+            try await postService.delete(postId: postId)
+            debouncedCacheSave()
+            ToastManager.shared.showSuccess("Post supprime")
+        } catch {
+            posts = snapshot
+            ToastManager.shared.showError("Erreur lors de la suppression")
+        }
+    }
+
+    func reportPost(_ postId: String) async {
+        do {
+            try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
+            ToastManager.shared.showSuccess("Signalement envoye")
+        } catch {
+            ToastManager.shared.showError("Erreur lors du signalement")
+        }
+    }
+
+    func pinPost(_ postId: String) async {
+        do {
+            try await postService.pinPost(postId: postId)
+            ToastManager.shared.showSuccess("Post epingle")
+        } catch {
+            ToastManager.shared.showError("Erreur lors de l'epinglage")
         }
     }
 
@@ -318,6 +353,7 @@ class FeedViewModel: ObservableObject {
                 if !self.posts.contains(where: { $0.id == feedPost.id }) {
                     self.posts.insert(feedPost, at: 0)
                     self.newPostsCount += 1
+                    self.debouncedCacheSave()
                 }
             }
             .store(in: &cancellables)
@@ -333,6 +369,7 @@ class FeedViewModel: ObservableObject {
                     var merged = updatedFeedPost
                     merged.isLiked = self.posts[index].isLiked
                     self.posts[index] = merged
+                    self.debouncedCacheSave()
                 }
             }
             .store(in: &cancellables)
@@ -342,6 +379,7 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] postId in
                 self?.posts.removeAll { $0.id == postId }
+                self?.debouncedCacheSave()
             }
             .store(in: &cancellables)
 
@@ -351,6 +389,7 @@ class FeedViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].likes = data.likeCount
+                self.debouncedCacheSave()
             }
             .store(in: &cancellables)
 
@@ -360,6 +399,7 @@ class FeedViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].likes = data.likeCount
+                self.debouncedCacheSave()
             }
             .store(in: &cancellables)
 
@@ -372,6 +412,7 @@ class FeedViewModel: ObservableObject {
                 if !self.posts.contains(where: { $0.id == repostFeedPost.id }) {
                     self.posts.insert(repostFeedPost, at: 0)
                     self.newPostsCount += 1
+                    self.debouncedCacheSave()
                 }
             }
             .store(in: &cancellables)
@@ -440,5 +481,14 @@ class FeedViewModel: ObservableObject {
         socialSocket.unsubscribeFeed()
     }
 
+    private func debouncedCacheSave() {
+        cacheSaveTask?.cancel()
+        let snapshot = posts
+        cacheSaveTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            await CacheCoordinator.shared.feed.save(snapshot, for: "main-feed")
+        }
+    }
 }
 

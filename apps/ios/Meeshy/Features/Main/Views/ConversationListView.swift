@@ -516,7 +516,7 @@ struct ConversationListView: View {
                 .environmentObject(theme)
             }
             .alert("Master PIN requis", isPresented: $showNoMasterPinAlert) {
-                Button("Configurer", role: .none) {}
+                Button("Configurer", role: .none) { router.push(.settings) }
                 Button("Annuler", role: .cancel) {}
             } message: {
                 Text("Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.")

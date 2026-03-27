@@ -59,7 +59,7 @@ class PostDetailViewModel: ObservableObject {
             commentCursor = response.pagination?.nextCursor
             hasMoreComments = response.pagination?.hasMore ?? false
         } catch {
-            // Silent fail on comment pagination
+            ToastManager.shared.showError("Erreur lors du chargement des commentaires")
         }
     }
 
@@ -83,7 +83,11 @@ class PostDetailViewModel: ObservableObject {
 
     func bookmarkPost() async {
         guard let post else { return }
-        try? await PostService.shared.bookmark(postId: post.id)
+        do {
+            try await PostService.shared.bookmark(postId: post.id)
+        } catch {
+            ToastManager.shared.showError("Erreur lors de l'enregistrement")
+        }
     }
 
     func sendComment(_ content: String) async {
@@ -99,7 +103,7 @@ class PostDetailViewModel: ObservableObject {
             comments.insert(comment, at: 0)
             self.post?.commentCount += 1
         } catch {
-            // Silent
+            ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
         }
     }
 

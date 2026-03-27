@@ -640,7 +640,7 @@ struct FeedComposerSheet: View {
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "FF6B6B"))
                     }
-                    Button {} label: {
+                    Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "F8B500"))

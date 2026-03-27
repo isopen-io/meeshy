@@ -143,14 +143,18 @@ class StatusViewModel: ObservableObject {
     func clearStatus() async {
         guard let status = myStatus else { return }
 
+        let snapshot = statuses
+        let previousStatus = myStatus
+        statuses.removeAll { $0.id == status.id }
+        myStatus = nil
+
         do {
             try await statusService.delete(statusId: status.id)
         } catch {
-            // Silent failure
+            statuses = snapshot
+            myStatus = previousStatus
+            ToastManager.shared.showError("Erreur lors de la suppression du statut")
         }
-
-        statuses.removeAll { $0.id == status.id }
-        myStatus = nil
     }
 
     // MARK: - Current User Info (for preview)
@@ -228,7 +232,7 @@ class StatusViewModel: ObservableObject {
         do {
             try await statusService.react(statusId: statusId, emoji: emoji)
         } catch {
-            // Silent failure
+            ToastManager.shared.showError("Erreur lors de la reaction")
         }
     }
 

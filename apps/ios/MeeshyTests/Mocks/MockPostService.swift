@@ -163,6 +163,10 @@ final class MockPostService: PostServiceProviding {
 
     func requestTranslation(postId: String, targetLanguage: String) async throws {}
 
+    func pinPost(postId: String) async throws {}
+
+    func unpinPost(postId: String) async throws {}
+
     // MARK: - Reset
 
     func reset() {

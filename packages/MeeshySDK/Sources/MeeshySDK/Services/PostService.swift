@@ -16,6 +16,8 @@ public protocol PostServiceProviding: Sendable {
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, mediaIds: [String]?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
+    func pinPost(postId: String) async throws
+    func unpinPost(postId: String) async throws
 }
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {
@@ -98,6 +100,14 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             method: "POST",
             body: bodyData
         )
+    }
+
+    public func pinPost(postId: String) async throws {
+        let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/posts/\(postId)/pin", method: "POST")
+    }
+
+    public func unpinPost(postId: String) async throws {
+        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/pin")
     }
 
     public func unlikeComment(postId: String, commentId: String) async throws {
