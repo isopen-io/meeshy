@@ -5,6 +5,7 @@ import Foundation
 public protocol ReportServiceProviding: Sendable {
     func reportMessage(messageId: String, reportType: String, reason: String?) async throws
     func reportUser(userId: String, reportType: String, reason: String?) async throws
+    func reportPost(postId: String, reportType: String, reason: String?) async throws
     func reportStory(storyId: String, reportType: String, reason: String?) async throws
     func reportConversation(conversationId: String, reportType: String, reason: String?) async throws
 }
@@ -31,6 +32,16 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
         let body = CreateReportBody(
             reportedType: "user",
             reportedEntityId: userId,
+            reportType: reportType,
+            reason: reason
+        )
+        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
+    }
+
+    public func reportPost(postId: String, reportType: String, reason: String? = nil) async throws {
+        let body = CreateReportBody(
+            reportedType: "post",
+            reportedEntityId: postId,
             reportType: reportType,
             reason: reason
         )

@@ -26,13 +26,19 @@ class BookmarksViewModel: ObservableObject {
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? false
         } catch {
-            // Silent
+            ToastManager.shared.showError("Erreur lors du chargement des favoris")
         }
     }
 
     func removeBookmark(_ postId: String) async {
+        let snapshot = posts
         posts.removeAll { $0.id == postId }
-        try? await PostService.shared.removeBookmark(postId: postId)
+        do {
+            try await PostService.shared.removeBookmark(postId: postId)
+        } catch {
+            posts = snapshot
+            ToastManager.shared.showError("Erreur lors de la suppression du favori")
+        }
     }
 
     func refresh() async {

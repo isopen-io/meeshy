@@ -448,7 +448,17 @@ class StoryViewModel: ObservableObject {
 
         socialSocket.storyViewed
             .receive(on: DispatchQueue.main)
-            .sink { _ in }
+            .sink { [weak self] viewedData in
+                guard let self else { return }
+                for i in self.storyGroups.indices {
+                    if let j = self.storyGroups[i].stories.firstIndex(where: { $0.id == viewedData.storyId }) {
+                        var updatedStories = self.storyGroups[i].stories
+                        updatedStories[j].isViewed = true
+                        self.storyGroups[i] = self.storyGroups[i].with(stories: updatedStories)
+                        return
+                    }
+                }
+            }
             .store(in: &cancellables)
     }
 

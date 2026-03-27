@@ -19,6 +19,9 @@ struct FeedPostCard: View {
     var onSelectLanguage: ((String, String) -> Void)? = nil // (postId, language)
     var onTapPost: ((String) -> Void)? = nil
     var onTapRepost: ((String) -> Void)? = nil
+    var onDelete: ((String) -> Void)? = nil
+    var onReport: ((String) -> Void)? = nil
+    var onPin: ((String) -> Void)? = nil
 
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @ObservedObject private var theme = ThemeManager.shared
@@ -164,8 +167,51 @@ struct FeedPostCard: View {
 
             Spacer()
 
-            Button {
-                HapticFeedback.light()
+            Menu {
+                Button {
+                    UIPasteboard.general.string = post.content
+                    HapticFeedback.success()
+                } label: {
+                    Label("Copier le texte", systemImage: "doc.on.doc")
+                }
+                Button {
+                    onShare?(post.id)
+                    HapticFeedback.light()
+                } label: {
+                    Label("Partager", systemImage: "square.and.arrow.up")
+                }
+                Button {
+                    onBookmark?(post.id)
+                    HapticFeedback.light()
+                } label: {
+                    Label("Enregistrer", systemImage: "bookmark")
+                }
+                if onPin != nil {
+                    Button {
+                        onPin?(post.id)
+                        HapticFeedback.light()
+                    } label: {
+                        Label("Epingler", systemImage: "pin")
+                    }
+                }
+                if onDelete != nil {
+                    Divider()
+                    Button(role: .destructive) {
+                        onDelete?(post.id)
+                        HapticFeedback.medium()
+                    } label: {
+                        Label("Supprimer", systemImage: "trash")
+                    }
+                }
+                if onReport != nil {
+                    Divider()
+                    Button(role: .destructive) {
+                        onReport?(post.id)
+                        HapticFeedback.medium()
+                    } label: {
+                        Label("Signaler", systemImage: "exclamationmark.triangle")
+                    }
+                }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 16))

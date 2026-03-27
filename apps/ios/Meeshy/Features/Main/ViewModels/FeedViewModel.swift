@@ -203,7 +203,7 @@ class FeedViewModel: ObservableObject {
                 method: "POST"
             )
         } catch {
-            // Silently fail
+            ToastManager.shared.showError("Erreur lors de l'enregistrement")
         }
     }
 
@@ -236,7 +236,7 @@ class FeedViewModel: ObservableObject {
                 posts[index].commentCount += 1
             }
         } catch {
-            // Silent failure — comment count will update via socket event
+            ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
         }
     }
 
@@ -250,7 +250,7 @@ class FeedViewModel: ObservableObject {
                 body: bodyData
             )
         } catch {
-            // Silent failure
+            ToastManager.shared.showError("Erreur lors du like")
         }
     }
 
@@ -258,7 +258,7 @@ class FeedViewModel: ObservableObject {
         do {
             try await postService.repost(postId: postId, quote: isQuote ? content : nil)
         } catch {
-            // Silent failure — repost will appear via socket event
+            ToastManager.shared.showError("Erreur lors du repost")
         }
     }
 
@@ -274,7 +274,38 @@ class FeedViewModel: ObservableObject {
                 body: bodyData
             )
         } catch {
-            // Silent failure
+            ToastManager.shared.showError("Erreur lors du partage")
+        }
+    }
+
+    func deletePost(_ postId: String) async {
+        let snapshot = posts
+        posts.removeAll { $0.id == postId }
+
+        do {
+            try await postService.delete(postId: postId)
+            ToastManager.shared.showSuccess("Post supprime")
+        } catch {
+            posts = snapshot
+            ToastManager.shared.showError("Erreur lors de la suppression")
+        }
+    }
+
+    func reportPost(_ postId: String) async {
+        do {
+            try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
+            ToastManager.shared.showSuccess("Signalement envoye")
+        } catch {
+            ToastManager.shared.showError("Erreur lors du signalement")
+        }
+    }
+
+    func pinPost(_ postId: String) async {
+        do {
+            try await postService.pinPost(postId: postId)
+            ToastManager.shared.showSuccess("Post epingle")
+        } catch {
+            ToastManager.shared.showError("Erreur lors de l'epinglage")
         }
     }
 

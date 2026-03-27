@@ -205,7 +205,33 @@ struct ThemedFeedOverlay: View {
 
                     // Feed posts with infinite scroll
                     ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
-                        FeedPostCard(post: post)
+                        FeedPostCard(
+                            post: post,
+                            onLike: { postId in
+                                Task { await viewModel.likePost(postId) }
+                            },
+                            onRepost: { postId in
+                                Task { await viewModel.repostPost(postId) }
+                            },
+                            onShare: { postId in
+                                Task { await viewModel.sharePost(postId) }
+                            },
+                            onBookmark: { postId in
+                                Task { await viewModel.bookmarkPost(postId) }
+                            },
+                            onSendComment: { postId, content, parentId in
+                                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
+                            },
+                            onLikeComment: { postId, commentId in
+                                Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
+                            },
+                            onDelete: post.authorId == AuthManager.shared.currentUser?.userId ? { postId in
+                                Task { await viewModel.deletePost(postId) }
+                            } : nil,
+                            onReport: post.authorId != AuthManager.shared.currentUser?.userId ? { postId in
+                                Task { await viewModel.reportPost(postId) }
+                            } : nil
+                        )
                             .staggeredAppear(index: index, baseDelay: 0.06)
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }

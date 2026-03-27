@@ -320,7 +320,16 @@ struct FeedView: View {
                             },
                             onTapRepost: { repostId in
                                 router.push(.postDetail(repostId))
-                            }
+                            },
+                            onDelete: post.authorId == AuthManager.shared.currentUser?.userId ? { postId in
+                                Task { await viewModel.deletePost(postId) }
+                            } : nil,
+                            onReport: post.authorId != AuthManager.shared.currentUser?.userId ? { postId in
+                                Task { await viewModel.reportPost(postId) }
+                            } : nil,
+                            onPin: post.authorId == AuthManager.shared.currentUser?.userId ? { postId in
+                                Task { await viewModel.pinPost(postId) }
+                            } : nil
                         )
                         .onAppear {
                             Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
