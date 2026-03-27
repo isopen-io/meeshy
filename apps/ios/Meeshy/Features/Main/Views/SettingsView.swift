@@ -27,7 +27,6 @@ struct SettingsView: View {
     @State private var showAffiliate = false
     @State private var showVoiceProfileWizard = false
     @State private var showVoiceProfileManage = false
-    @State private var autoTranscriptionEnabled = false
 
     private let accentColor = "08D9D6"
 
@@ -377,7 +376,10 @@ struct SettingsView: View {
     private var transcriptionSection: some View {
         settingsSection(title: "Transcription", icon: "text.quote", color: "4ECDC4") {
             settingsRow(icon: "waveform", title: "Transcription automatique", color: "4ECDC4") {
-                Toggle("", isOn: $autoTranscriptionEnabled)
+                Toggle("", isOn: Binding(
+                    get: { prefs.audio.autoTranscribeIncoming },
+                    set: { val in prefs.updateAudio { $0.autoTranscribeIncoming = val } }
+                ))
                     .labelsHidden()
                     .tint(Color(hex: accentColor))
             }

@@ -484,6 +484,8 @@ struct ThemedFeedCard: View {
     let item: FeedItem
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
+    @State private var isBookmarked = false
+    @State private var showCopiedToast = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -507,7 +509,24 @@ struct ThemedFeedCard: View {
 
                 Spacer()
 
-                Button {} label: {
+                Menu {
+                    Button {
+                        UIPasteboard.general.string = item.content
+                        HapticFeedback.success()
+                    } label: {
+                        Label("Copier le texte", systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        let activityVC = UIActivityViewController(activityItems: [item.content], applicationActivities: nil)
+                        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                           let root = scene.windows.first?.rootViewController {
+                            root.present(activityVC, animated: true)
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        Label("Partager", systemImage: "square.and.arrow.up")
+                    }
+                } label: {
                     Image(systemName: "ellipsis")
                         .foregroundColor(theme.textMuted)
                 }
@@ -529,10 +548,14 @@ struct ThemedFeedCard: View {
 
                 Spacer()
 
-                Button {} label: {
-                    Image(systemName: "bookmark")
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isBookmarked.toggle() }
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                         .foregroundColor(Color(hex: "F8B500"))
                 }
+                .accessibilityLabel(isBookmarked ? "Retirer des favoris" : "Ajouter aux favoris")
             }
             .padding(.top, 4)
         }

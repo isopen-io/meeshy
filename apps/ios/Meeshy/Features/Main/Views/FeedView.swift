@@ -35,6 +35,7 @@ struct FeedView: View {
     @State var isLoadingMedia = false
     @StateObject var audioRecorder = AudioRecorderManager()
     @State private var pendingAttachmentType: String?
+    @State private var showEmojiPicker = false
 
     var composerHasContent: Bool {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
@@ -558,7 +559,7 @@ struct FeedView: View {
                             .foregroundColor(Color(hex: "FF6B6B"))
                     }
                     .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
-                    Button {} label: {
+                    Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "F8B500"))
@@ -619,6 +620,13 @@ struct FeedView: View {
             LocationPickerView(accentColor: "4ECDC4") { coordinate, address in
                 handleFeedLocationSelection(coordinate: coordinate, address: address)
             }
+        }
+        .sheet(isPresented: $showEmojiPicker) {
+            EmojiPickerSheet(quickReactions: ["😀", "❤️", "🔥", "👍", "😂", "🎉"]) { emoji in
+                composerText += emoji
+                showEmojiPicker = false
+            }
+            .presentationDetents([.medium, .large])
         }
         .onChange(of: selectedPhotoItems) { _, items in
             handleFeedPhotoSelection(items)
