@@ -179,3 +179,42 @@ describe('DeliveryQueue — queue introspection and rescheduling', () => {
     expect(count).toBe(0);
   });
 });
+
+describe('DeliveryQueue — conversation-wide minimum gap', () => {
+  it('enforces minimum gap between messages in the same conversation', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 5 })]);
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-bob', delaySeconds: 5 })]);
+
+    const items = queue.getScheduledForUser('conv-1', 'bot-bob');
+    expect(items).toHaveLength(1);
+    const aliceItems = queue.getScheduledForUser('conv-1', 'bot-alice');
+    expect(aliceItems).toHaveLength(1);
+
+    const gap = items[0].scheduledAt - aliceItems[0].scheduledAt;
+    expect(gap).toBeGreaterThanOrEqual(10_000);
+  });
+
+  it('does not enforce gap across different conversations', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 5 })]);
+    queue.enqueue('conv-2', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 5 })]);
+
+    const items1 = queue.getScheduledForUser('conv-1', 'bot-alice');
+    const items2 = queue.getScheduledForUser('conv-2', 'bot-alice');
+
+    const gap = Math.abs(items1[0].scheduledAt - items2[0].scheduledAt);
+    expect(gap).toBeLessThan(10_000);
+  });
+
+  it('does not enforce gap for reactions', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 5 })]);
+    queue.enqueue('conv-1', [makeReaction({ asUserId: 'bot-bob', delaySeconds: 5 })]);
+
+    expect(queue.pendingCount).toBe(2);
+  });
+});

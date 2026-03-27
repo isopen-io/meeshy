@@ -20,6 +20,8 @@ function jitterMs(value: number, percent = 0.2): number {
   return Math.round(value + value * (Math.random() * 2 * percent - percent));
 }
 
+const MIN_CONVERSATION_GAP_MS = 15_000;
+
 export class DeliveryQueue {
   private queue: DeliveryItem[] = [];
   private cancelled = new Set<string>();
@@ -65,11 +67,34 @@ export class DeliveryQueue {
   }
 
   private scheduleAction(conversationId: string, action: PendingAction, delayMs: number): void {
-    const scheduledAt = Date.now() + delayMs;
+    const now = Date.now();
+    let scheduledAt = now + delayMs;
+
+    if (action.type === 'message') {
+      const latestForConv = this.getLatestMessageScheduledAt(conversationId);
+      if (latestForConv > 0) {
+        const minNext = latestForConv + jitterMs(MIN_CONVERSATION_GAP_MS, 0.3);
+        if (scheduledAt < minNext) {
+          scheduledAt = minNext;
+        }
+      }
+    }
+
+    const effectiveDelay = Math.max(0, scheduledAt - now);
     const timer = setTimeout(async () => {
       await this.deliver(conversationId, action);
-    }, delayMs);
+    }, effectiveDelay);
     this.queue.push({ action, conversationId, scheduledAt, timer });
+  }
+
+  private getLatestMessageScheduledAt(conversationId: string): number {
+    let latest = 0;
+    for (const item of this.queue) {
+      if (item.conversationId === conversationId && item.action.type === 'message' && item.scheduledAt > latest) {
+        latest = item.scheduledAt;
+      }
+    }
+    return latest;
   }
 
   cancelForConversation(conversationId: string): number {
