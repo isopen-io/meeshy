@@ -24,6 +24,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 import { useCurrentUserQuery } from '@/hooks/queries';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
+import { apiService } from '@/services/api.service';
+import type { PreferenceCategory } from '@/types/preferences';
 
 const ProfileSettings = dynamic(
   () => import('@/components/settings/user-settings').then(mod => ({ default: mod.UserSettings })),
@@ -42,7 +45,7 @@ const PrivacySettings = dynamic(
 );
 
 const MediaSettings = dynamic(
-  () => import('@/components/settings/MediaSettings').then(mod => ({ default: mod.MediaSettings })),
+  () => import('@/components/settings/media-settings').then(mod => ({ default: mod.MediaSettings })),
   {
     loading: () => <SettingsLoadingSkeleton />,
     ssr: false
@@ -122,6 +125,7 @@ export default function SettingsPage() {
   const { t } = useI18n('settings');
   const reducedMotion = useReducedMotion();
   const [activeTab, setActiveTab] = useState(getInitialTab);
+  useUnsavedChangesWarning();
 
   const {
     data: currentUser,
@@ -238,6 +242,34 @@ export default function SettingsPage() {
       window.history.replaceState(null, '', `#${activeTab}`);
     }
   }, [activeTab]);
+
+  const TAB_TO_CATEGORY: Record<string, PreferenceCategory> = useMemo(() => ({
+    privacy: 'privacy',
+    notification: 'notifications',
+    media: 'audio',
+    message: 'message',
+    application: 'application',
+    security: 'privacy',
+  }), []);
+
+  useEffect(() => {
+    const categoriesToPrefetch = new Set<PreferenceCategory>();
+    const currentIndex = tabs.findIndex(t => t.value === activeTab);
+    const neighbors = [currentIndex - 1, currentIndex + 1].filter(i => i >= 0 && i < tabs.length);
+
+    for (const idx of neighbors) {
+      const cat = TAB_TO_CATEGORY[tabs[idx].value];
+      if (cat) categoriesToPrefetch.add(cat);
+    }
+
+    for (const cat of categoriesToPrefetch) {
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.preferences.category(cat),
+        queryFn: () => apiService.get(`/api/v1/me/preferences/${cat}`).then(r => r.data),
+        staleTime: 5 * 60 * 1000,
+      });
+    }
+  }, [activeTab, tabs, queryClient, TAB_TO_CATEGORY]);
 
   const handleUserUpdate = useCallback((updatedUser: User) => {
     queryClient.setQueryData(queryKeys.users.current(), updatedUser);
