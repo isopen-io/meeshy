@@ -1,4 +1,4 @@
-import type { ConversationState, InterventionPlan, InterventionDirective, ControlledUser } from '../graph/state';
+import type { ConversationState, InterventionPlan, InterventionDirective, ReactionDirective, ControlledUser } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 import { getArchetype } from '@meeshy/shared/agent/archetypes';
@@ -291,6 +291,68 @@ function validateInterventions(
   return validated;
 }
 
+const DEFAULT_REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '💯', '😮', '🙌', '✨', '🤔'];
+
+function ensureMinimumReactions(
+  interventions: InterventionDirective[],
+  state: ConversationState,
+  maxReactions: number,
+): InterventionDirective[] {
+  if (maxReactions <= 0) return interventions;
+
+  const hasMessages = interventions.some((i) => i.type === 'message');
+  if (!hasMessages) return interventions;
+
+  const existingReactionCount = interventions.filter((i) => i.type === 'reaction').length;
+  const minReactions = 1;
+  const targetReactions = Math.min(
+    minReactions + Math.floor(Math.random() * 3),
+    maxReactions,
+  );
+
+  if (existingReactionCount >= minReactions) return interventions;
+
+  const controlledUserIds = new Set(state.controlledUsers.map((u) => u.userId));
+  const reactableMessages = state.messages
+    .filter((m) => !controlledUserIds.has(m.senderId))
+    .slice(-15);
+
+  if (reactableMessages.length === 0) return interventions;
+
+  const alreadyReactedTo = new Set(
+    interventions
+      .filter((i): i is ReactionDirective => i.type === 'reaction')
+      .map((i) => i.targetMessageId),
+  );
+
+  const candidateMessages = reactableMessages.filter((m) => !alreadyReactedTo.has(m.id));
+  if (candidateMessages.length === 0) return interventions;
+
+  const reactionsToAdd = targetReactions - existingReactionCount;
+  const result = [...interventions];
+
+  for (let i = 0; i < reactionsToAdd && i < candidateMessages.length; i++) {
+    const targetMsg = candidateMessages[candidateMessages.length - 1 - i];
+    const user = state.controlledUsers[Math.floor(Math.random() * state.controlledUsers.length)];
+    const userEmojis = user.role.reactionPatterns.length > 0
+      ? user.role.reactionPatterns
+      : user.role.commonEmojis.length > 0
+        ? user.role.commonEmojis
+        : DEFAULT_REACTION_EMOJIS;
+    const emoji = userEmojis[Math.floor(Math.random() * userEmojis.length)];
+
+    result.push({
+      type: 'reaction',
+      asUserId: user.userId,
+      targetMessageId: targetMsg.id,
+      emoji,
+      delaySeconds: Math.round((5 + Math.random() * 25) * (0.8 + Math.random() * 0.4)),
+    });
+  }
+
+  return result;
+}
+
 export function createStrategistNode(llm: LlmProvider) {
   return async function strategist(state: ConversationState) {
     if (state.controlledUsers.length === 0) {
@@ -360,11 +422,17 @@ export function createStrategistNode(llm: LlmProvider) {
         state,
       );
 
+      const withReactions = ensureMinimumReactions(
+        validatedInterventions,
+        state,
+        reactionsEnabled ? maxReactions : 0,
+      );
+
       return {
         interventionPlan: {
-          shouldIntervene: validatedInterventions.length > 0,
+          shouldIntervene: withReactions.length > 0,
           reason: parsed.reason ?? '',
-          interventions: validatedInterventions,
+          interventions: withReactions,
         } satisfies InterventionPlan,
       };
     } catch (error) {

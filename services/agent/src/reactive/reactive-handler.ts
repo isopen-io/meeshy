@@ -129,7 +129,7 @@ export class ReactiveHandler {
           asUserId: msg.asUserId,
           content: msg.content,
           originalLanguage: targetUser.systemLanguage,
-          replyToId: i === 0 ? msg.replyToId : undefined,
+          replyToId: i === 0 ? input.triggerMessage.id : undefined,
           mentionedUsernames: [],
           delaySeconds: Math.round(cumulativeDelayMs / 1000),
           messageSource: 'agent' as const,

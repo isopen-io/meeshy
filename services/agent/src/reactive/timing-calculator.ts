@@ -40,5 +40,11 @@ export function calculateResponseDelay(input: {
   const reading = readingDelayMs(unreadMessageCount);
   const typing = typingDelayMs(wordCount);
 
-  return Math.round(jitter(apparition + reading + typing));
+  const total = apparition + reading + typing;
+
+  if (interpellationType === 'reply' || interpellationType === 'mention') {
+    return Math.round(jitter(Math.min(total, 90_000)));
+  }
+
+  return Math.round(jitter(total));
 }
