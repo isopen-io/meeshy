@@ -188,9 +188,9 @@ export class ConversationScanner {
     const config = await this.persistence.getAgentConfig(conversationId);
     const autoPickup = config?.autoPickupEnabled ?? true;
     if (autoPickup && controlledUsers.length < (config?.maxControlledUsers ?? 5)) {
-      // STRATEGY: Gradual introduction.
-      // We only pick ONE new user per cycle to avoid flooding the conversation with many new bots at once.
-      const limit = 1;
+      // STRATEGY: Pick up multiple inactive users per cycle to diversify agent personas faster.
+      const remainingSlots = (config?.maxControlledUsers ?? 5) - controlledUsers.length;
+      const limit = Math.min(3, remainingSlots);
       const potentialUsers = await this.persistence.getPotentialControlledUsers(
         conversationId,
         limit,
@@ -200,7 +200,6 @@ export class ConversationScanner {
       );
 
       for (const u of potentialUsers) {
-        if (!u.agentGlobalProfile) continue;
         const p = u.agentGlobalProfile;
         const newControlledUser = {
           userId: u.id,
@@ -211,23 +210,23 @@ export class ConversationScanner {
           role: {
             userId: u.id,
             displayName: u.displayName ?? u.username ?? u.id,
-            origin: 'observed' as const,
-            personaSummary: p.personaSummary ?? '',
-            tone: p.tone ?? 'neutre',
-            vocabularyLevel: p.vocabularyLevel ?? 'courant',
-            typicalLength: p.typicalLength ?? 'moyen',
-            emojiUsage: p.emojiUsage ?? 'occasionnel',
-            topicsOfExpertise: p.topicsOfExpertise,
-            topicsAvoided: p.topicsAvoided,
+            origin: (p ? 'observed' : 'archetype') as 'observed' | 'archetype',
+            personaSummary: p?.personaSummary ?? '',
+            tone: p?.tone ?? 'neutre',
+            vocabularyLevel: p?.vocabularyLevel ?? 'courant',
+            typicalLength: p?.typicalLength ?? 'moyen',
+            emojiUsage: p?.emojiUsage ?? 'occasionnel',
+            topicsOfExpertise: p?.topicsOfExpertise ?? [],
+            topicsAvoided: p?.topicsAvoided ?? [],
             relationshipMap: {},
-            catchphrases: p.catchphrases,
+            catchphrases: p?.catchphrases ?? [],
             responseTriggers: [],
             silenceTriggers: [],
-            commonEmojis: p.commonEmojis,
-            reactionPatterns: p.reactionPatterns,
-            messagesAnalyzed: p.messagesAnalyzed,
-            confidence: p.confidence,
-            locked: p.locked,
+            commonEmojis: p?.commonEmojis ?? [],
+            reactionPatterns: p?.reactionPatterns ?? [],
+            messagesAnalyzed: p?.messagesAnalyzed ?? 0,
+            confidence: p?.confidence ?? 0.1,
+            locked: p?.locked ?? false,
           },
         };
 
@@ -361,7 +360,7 @@ export class ConversationScanner {
             this.persistence.upsertUserRole(conversationId, profile).catch((err) =>
               console.error(`[Scanner] Error persisting controlled user profile ${userId}:`, err));
           }
-        } else if (profile.messagesAnalyzed >= 10) {
+        } else if (profile.messagesAnalyzed >= 3) {
           this.persistence.upsertGlobalProfile(userId, toneProfileToGlobalFields(profile)).catch((err) =>
             console.error(`[Scanner] Error persisting global profile ${userId}:`, err));
         }
