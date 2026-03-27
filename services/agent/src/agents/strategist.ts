@@ -134,10 +134,17 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
 
   const effectiveMaxReactions = reactionsEnabled ? maxReactions : 0;
 
-  const historyText = (state.agentHistory ?? [])
+  const recentHistory = (state.agentHistory ?? []).slice(-30);
+
+  const historyText = recentHistory
     .slice(-20)
     .map((h) => `- ${h.userId}: "${h.topic}" (il y a ${Math.round((Date.now() - h.timestamp) / 60000)}min)`)
     .join('\n') || 'Aucune intervention recente.';
+
+  const bannedTopics = [...new Set(recentHistory.map((h) => h.topic).filter(Boolean))];
+  const bannedTopicsText = bannedTopics.length > 0
+    ? `\nSUJETS INTERDITS (deja abordes recemment - NE PAS Y REVENIR, propose un sujet COMPLETEMENT DIFFERENT):\n${bannedTopics.map((t) => `- "${t}"`).join('\n')}`
+    : '';
 
   const instructionsText = state.agentInstructions
     ? `INSTRUCTIONS SPECIFIQUES: ${state.agentInstructions}`
@@ -153,7 +160,7 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     .replace('{agentInstructions}', instructionsText)
     .replace('{minResponses}', String(minResponses))
     .replace('{maxResponses}', String(maxResponses + effectiveMaxReactions))
-    .replace('{agentHistory}', historyText)
+    .replace('{agentHistory}', historyText + bannedTopicsText)
     .replace(/\{budgetRemaining\}/g, String(state.budgetRemaining))
     .replace('{todayUsersActive}', String(state.todayUsersActive))
     .replace('{maxUsersToday}', String(state.maxUsersToday))
@@ -200,6 +207,22 @@ function calculateWordLimits(
   };
 }
 
+function extractSignificantWords(text: string): string[] {
+  return text.toLowerCase()
+    .replace(/[^\w\sàâäéèêëïîôùûüÿçæœ]/g, '')
+    .split(/\s+/)
+    .filter((w) => w.length > 4);
+}
+
+function isTopicTooSimilar(topic: string, recentTopics: string[]): boolean {
+  const topicWords = extractSignificantWords(topic);
+  if (topicWords.length === 0) return false;
+  const recentWords = new Set(recentTopics.flatMap((t) => extractSignificantWords(t)));
+  if (recentWords.size === 0) return false;
+  const overlap = topicWords.filter((w) => recentWords.has(w));
+  return overlap.length / topicWords.length > 0.5;
+}
+
 function validateInterventions(
   interventions: unknown[],
   controlledUsers: ControlledUser[],
@@ -226,6 +249,13 @@ function validateInterventions(
     if (currentCount >= 2) continue;
 
     if (item.type === 'message' && messageCount < maxMessages) {
+      const topic = String(item.topic ?? '');
+      const recentTopics = (state.agentHistory ?? []).slice(-30).map((h) => h.topic).filter(Boolean);
+      if (topic && isTopicTooSimilar(topic, recentTopics)) {
+        console.warn(`[Strategist] Rejected intervention: topic "${topic}" too similar to recent history`);
+        continue;
+      }
+
       const isInterpelle = Boolean(item.replyToMessageId) || (Array.isArray(item.mentionUsernames) && item.mentionUsernames.length > 0);
       const limits = calculateWordLimits(user, isInterpelle, state);
 

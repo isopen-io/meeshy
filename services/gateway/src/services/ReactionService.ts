@@ -31,10 +31,20 @@ export interface GetReactionsOptions {
 }
 
 export class ReactionService {
+  private static readonly OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
+
+  private validateMessageId(messageId: string): void {
+    if (!messageId || !ReactionService.OBJECT_ID_REGEX.test(messageId)) {
+      throw new Error(`Invalid message ID format: ${messageId.substring(0, 20)}`);
+    }
+  }
+
   constructor(private readonly prisma: PrismaClient) {}
 
   async addReaction(options: AddReactionOptions): Promise<ReactionData | null> {
     const { messageId, participantId, emoji } = options;
+
+    this.validateMessageId(messageId);
 
     const sanitized = sanitizeEmoji(emoji);
     if (!sanitized) {
@@ -109,6 +119,8 @@ export class ReactionService {
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {
     const { messageId, participantId, emoji } = options;
 
+    this.validateMessageId(messageId);
+
     const sanitized = sanitizeEmoji(emoji);
     if (!sanitized) {
       throw new Error('Invalid emoji format');
@@ -131,6 +143,8 @@ export class ReactionService {
 
   async getMessageReactions(options: GetReactionsOptions): Promise<ReactionSync> {
     const { messageId, currentParticipantId } = options;
+
+    this.validateMessageId(messageId);
 
     const reactions = await this.prisma.reaction.findMany({
       where: { messageId },
@@ -214,6 +228,8 @@ export class ReactionService {
     emoji: string,
     currentParticipantId?: string
   ): Promise<ReactionAggregation> {
+    this.validateMessageId(messageId);
+
     const sanitized = sanitizeEmoji(emoji);
     if (!sanitized) {
       throw new Error('Invalid emoji format');

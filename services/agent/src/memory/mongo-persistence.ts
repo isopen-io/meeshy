@@ -142,7 +142,6 @@ export class MongoPersistence {
         lastActiveAt: { lt: threshold },
         role: { notIn: excludedRoles as unknown as any[] },
         id: { notIn: [...excludedUserIds, ...existingRoleUserIds] },
-        agentGlobalProfile: { isNot: null },
       },
       select: {
         id: true,

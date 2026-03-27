@@ -51,7 +51,7 @@ export interface ZMQClientStats {
 // Timeout for ZMQ translation requests (30 seconds)
 const ZMQ_REQUEST_TIMEOUT_MS = 30_000;
 // Maximum number of retries before emitting an error
-const ZMQ_MAX_RETRIES = 1;
+const ZMQ_MAX_RETRIES = 3;
 
 export class ZmqTranslationClient extends EventEmitter {
   private connectionManager: ZmqConnectionManager;

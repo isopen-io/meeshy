@@ -58,6 +58,11 @@ export function useMessageReactions({
   // Traductions
   const { t } = useI18n('reactions');
 
+  // Désactiver les réactions sur les messages optimistes (ID temporaire)
+  // pour éviter d'envoyer un ID invalide au gateway (Prisma ObjectID error)
+  const isOptimistic = messageId.startsWith('temp-');
+  const effectiveEnabled = enabled && !isOptimistic;
+
   // État local
   const [reactions, setReactions] = useState<ReactionAggregation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,7 +73,7 @@ export function useMessageReactions({
    * Synchronise les réactions depuis le serveur
    */
   const refreshReactions = useCallback(async () => {
-    if (!enabled || !messageId) {
+    if (!effectiveEnabled || !messageId) {
       return;
     }
 
@@ -104,13 +109,13 @@ export function useMessageReactions({
     } finally {
       setIsLoading(false);
     }
-  }, [messageId, enabled]);
+  }, [messageId, effectiveEnabled]);
 
   /**
    * Ajoute une réaction avec optimistic update
    */
   const addReaction = useCallback(async (emoji: string): Promise<boolean> => {
-    if (!enabled || !messageId) return false;
+    if (!effectiveEnabled || !messageId) return false;
 
 
     // CORRECTION CRITIQUE: Ne PAS ajouter si déjà présente dans userReactions
@@ -203,13 +208,13 @@ export function useMessageReactions({
       refreshReactions(); // Revert
       return false;
     }
-  }, [messageId, currentUserId, isAnonymous, enabled, refreshReactions, userReactions]);
+  }, [messageId, currentUserId, isAnonymous, effectiveEnabled, refreshReactions, userReactions]);
 
   /**
    * Retire une réaction avec optimistic update
    */
   const removeReaction = useCallback(async (emoji: string): Promise<boolean> => {
-    if (!enabled || !messageId) return false;
+    if (!effectiveEnabled || !messageId) return false;
 
     try {
       // Optimistic update
@@ -265,7 +270,7 @@ export function useMessageReactions({
       refreshReactions(); // Revert
       return false;
     }
-  }, [messageId, enabled, refreshReactions]);
+  }, [messageId, effectiveEnabled, refreshReactions]);
 
   /**
    * Toggle une réaction (ajoute si absente, retire si présente)
@@ -306,7 +311,7 @@ export function useMessageReactions({
    * Synchronisation initiale avec délai pour la connexion WebSocket
    */
   useEffect(() => {
-    if (enabled && messageId) {
+    if (effectiveEnabled && messageId) {
       // Attendre un peu que la connexion WebSocket soit établie
       const timer = setTimeout(() => {
         const socket = meeshySocketIOService.getSocket();
@@ -316,16 +321,16 @@ export function useMessageReactions({
           setTimeout(() => refreshReactions(), 2000);
         }
       }, 500);
-      
+
       return () => clearTimeout(timer);
     }
-  }, [messageId, enabled, refreshReactions]);
+  }, [messageId, effectiveEnabled, refreshReactions]);
 
   /**
    * Écoute des événements WebSocket temps-réel
    */
   useEffect(() => {
-    if (!enabled || !messageId) return;
+    if (!effectiveEnabled || !messageId) return;
 
     const handleReactionAdded = (event: ReactionUpdateEvent) => {
       if (event.messageId !== messageId) {
@@ -390,7 +395,7 @@ export function useMessageReactions({
       unsubAdded();
       unsubRemoved();
     };
-  }, [messageId, currentUserId, isAnonymous, enabled]);
+  }, [messageId, currentUserId, isAnonymous, effectiveEnabled]);
 
   return {
     // État

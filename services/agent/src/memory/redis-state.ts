@@ -61,7 +61,7 @@ export class RedisStateManager {
 
   async setAgentHistory(conversationId: string, history: AgentHistoryEntry[]): Promise<void> {
     const trimmed = history.slice(-100);
-    await this.redis.set(this.key(conversationId, 'history'), JSON.stringify(trimmed), 'EX', 86400);
+    await this.redis.set(this.key(conversationId, 'history'), JSON.stringify(trimmed), 'EX', 259200);
   }
 
   async getTodayActiveUserIds(conversationId: string): Promise<string[]> {
