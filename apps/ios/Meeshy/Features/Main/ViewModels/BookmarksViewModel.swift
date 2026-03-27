@@ -15,8 +15,28 @@ class BookmarksViewModel: ObservableObject {
 
     func loadBookmarks() async {
         guard !isLoading else { return }
+
+        if nextCursor == nil {
+            let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
+            switch cached {
+            case .fresh(let data, _):
+                posts = data
+                return
+            case .stale(let data, _):
+                posts = data
+                Task { [weak self] in await self?.fetchBookmarksFromNetwork() }
+                return
+            case .expired, .empty:
+                break
+            }
+        }
+
         isLoading = true
         defer { isLoading = false }
+        await fetchBookmarksFromNetwork()
+    }
+
+    private func fetchBookmarksFromNetwork() async {
         do {
             let response = try await PostService.shared.getBookmarks(cursor: nextCursor)
             let newPosts = response.data.map { $0.toFeedPost(preferredLanguages: preferredLanguages) }
@@ -25,6 +45,10 @@ class BookmarksViewModel: ObservableObject {
             posts.append(contentsOf: unique)
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? false
+
+            if nextCursor == nil || posts.count == unique.count {
+                await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+            }
         } catch {
             ToastManager.shared.showError("Erreur lors du chargement des favoris")
         }
@@ -35,6 +59,7 @@ class BookmarksViewModel: ObservableObject {
         posts.removeAll { $0.id == postId }
         do {
             try await PostService.shared.removeBookmark(postId: postId)
+            await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
         } catch {
             posts = snapshot
             ToastManager.shared.showError("Erreur lors de la suppression du favori")
@@ -45,6 +70,7 @@ class BookmarksViewModel: ObservableObject {
         posts = []
         nextCursor = nil
         hasMore = true
+        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
         await loadBookmarks()
     }
 }

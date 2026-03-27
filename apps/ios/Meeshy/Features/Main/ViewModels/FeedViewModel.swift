@@ -24,6 +24,7 @@ class FeedViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket: SocialSocketProviding
     private let postService: PostServiceProviding
+    private var cacheSaveTask: Task<Void, Never>?
 
     init(
         api: APIClientProviding = APIClient.shared,
@@ -223,6 +224,7 @@ class FeedViewModel: ObservableObject {
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             posts.insert(feedPost, at: 0)
+            debouncedCacheSave()
             publishSuccess = true
         } catch {
             publishError = error.localizedDescription
@@ -284,6 +286,7 @@ class FeedViewModel: ObservableObject {
 
         do {
             try await postService.delete(postId: postId)
+            debouncedCacheSave()
             ToastManager.shared.showSuccess("Post supprime")
         } catch {
             posts = snapshot
@@ -349,6 +352,7 @@ class FeedViewModel: ObservableObject {
                 if !self.posts.contains(where: { $0.id == feedPost.id }) {
                     self.posts.insert(feedPost, at: 0)
                     self.newPostsCount += 1
+                    self.debouncedCacheSave()
                 }
             }
             .store(in: &cancellables)
@@ -364,6 +368,7 @@ class FeedViewModel: ObservableObject {
                     var merged = updatedFeedPost
                     merged.isLiked = self.posts[index].isLiked
                     self.posts[index] = merged
+                    self.debouncedCacheSave()
                 }
             }
             .store(in: &cancellables)
@@ -373,6 +378,7 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] postId in
                 self?.posts.removeAll { $0.id == postId }
+                self?.debouncedCacheSave()
             }
             .store(in: &cancellables)
 
@@ -403,6 +409,7 @@ class FeedViewModel: ObservableObject {
                 if !self.posts.contains(where: { $0.id == repostFeedPost.id }) {
                     self.posts.insert(repostFeedPost, at: 0)
                     self.newPostsCount += 1
+                    self.debouncedCacheSave()
                 }
             }
             .store(in: &cancellables)
@@ -471,5 +478,14 @@ class FeedViewModel: ObservableObject {
         socialSocket.unsubscribeFeed()
     }
 
+    private func debouncedCacheSave() {
+        cacheSaveTask?.cancel()
+        let snapshot = posts
+        cacheSaveTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            await CacheCoordinator.shared.feed.save(snapshot, for: "main-feed")
+        }
+    }
 }
 

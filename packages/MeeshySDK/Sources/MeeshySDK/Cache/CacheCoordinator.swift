@@ -69,6 +69,7 @@ public actor CacheCoordinator {
         guard !isStarted else { return }
         isStarted = true
         resolveCurrentUserId()
+        loadTranslationCaches()
         subscribeToLifecycle()
     }
 
@@ -142,6 +143,7 @@ public actor CacheCoordinator {
         await participants.flushDirtyKeys()
         await profiles.flushDirtyKeys()
         await feed.flushDirtyKeys()
+        persistTranslationCaches()
     }
 
     public func evictUnderMemoryPressure() async {
@@ -150,6 +152,44 @@ public actor CacheCoordinator {
         await video.evictExpired()
         await thumbnails.evictExpired()
         logger.info("Memory pressure — evicted expired media")
+    }
+
+    // MARK: - Translation Cache Persistence
+
+    private static let translationCacheKey = "meeshy_cache_translations"
+    private static let transcriptionCacheKey = "meeshy_cache_transcriptions"
+    private static let audioTranslationCacheKey = "meeshy_cache_audio_translations"
+
+    private func persistTranslationCaches() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(translationCache) {
+            UserDefaults.standard.set(data, forKey: Self.translationCacheKey)
+        }
+        if let data = try? encoder.encode(transcriptionCache) {
+            UserDefaults.standard.set(data, forKey: Self.transcriptionCacheKey)
+        }
+        if let data = try? encoder.encode(audioTranslationCache) {
+            UserDefaults.standard.set(data, forKey: Self.audioTranslationCacheKey)
+        }
+    }
+
+    private func loadTranslationCaches() {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        if let data = UserDefaults.standard.data(forKey: Self.translationCacheKey),
+           let decoded = try? decoder.decode([String: [TranslationData]].self, from: data) {
+            translationCache = decoded
+        }
+        if let data = UserDefaults.standard.data(forKey: Self.transcriptionCacheKey),
+           let decoded = try? decoder.decode([String: TranscriptionReadyEvent].self, from: data) {
+            transcriptionCache = decoded
+        }
+        if let data = UserDefaults.standard.data(forKey: Self.audioTranslationCacheKey),
+           let decoded = try? decoder.decode([String: [AudioTranslationEvent]].self, from: data) {
+            audioTranslationCache = decoded
+        }
+        logger.info("Loaded translation caches: \(translationCache.count) translations, \(transcriptionCache.count) transcriptions, \(audioTranslationCache.count) audio translations")
     }
 
     public func invalidateAll() async {
@@ -167,5 +207,8 @@ public actor CacheCoordinator {
         translationCache.removeAll()
         transcriptionCache.removeAll()
         audioTranslationCache.removeAll()
+        UserDefaults.standard.removeObject(forKey: Self.translationCacheKey)
+        UserDefaults.standard.removeObject(forKey: Self.transcriptionCacheKey)
+        UserDefaults.standard.removeObject(forKey: Self.audioTranslationCacheKey)
     }
 }

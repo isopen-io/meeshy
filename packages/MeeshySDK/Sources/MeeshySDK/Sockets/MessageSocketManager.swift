@@ -67,7 +67,7 @@ public struct UserStatusEvent: Decodable, Sendable {
 
 // MARK: - Translation Event Data
 
-public struct TranslationData: Decodable, Sendable {
+public struct TranslationData: Codable, Sendable {
     public let id: String
     public let messageId: String
     public let sourceLanguage: String
@@ -77,14 +77,14 @@ public struct TranslationData: Decodable, Sendable {
     public let confidenceScore: Double?
 }
 
-public struct TranslationEvent: Decodable, Sendable {
+public struct TranslationEvent: Codable, Sendable {
     public let messageId: String
     public let translations: [TranslationData]
 }
 
 // MARK: - Transcription Event Data
 
-public struct TranscriptionSegment: Decodable, Sendable {
+public struct TranscriptionSegment: Codable, Sendable {
     public let text: String
     public let startTime: Double?
     public let endTime: Double?
@@ -111,9 +111,18 @@ public struct TranscriptionSegment: Decodable, Sendable {
             endTime = try c.decodeIfPresent(Double.self, forKey: .endTime)
         }
     }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(text, forKey: .text)
+        try c.encodeIfPresent(startTime, forKey: .startTime)
+        try c.encodeIfPresent(endTime, forKey: .endTime)
+        try c.encodeIfPresent(speakerId, forKey: .speakerId)
+        try c.encodeIfPresent(voiceSimilarityScore, forKey: .voiceSimilarityScore)
+    }
 }
 
-public struct TranscriptionData: Decodable, Sendable {
+public struct TranscriptionData: Codable, Sendable {
     public let id: String?
     public let text: String
     public let language: String
@@ -123,7 +132,7 @@ public struct TranscriptionData: Decodable, Sendable {
     public let speakerCount: Int?
 }
 
-public struct TranscriptionReadyEvent: Decodable, Sendable {
+public struct TranscriptionReadyEvent: Codable, Sendable {
     public let messageId: String
     public let attachmentId: String
     public let conversationId: String
@@ -133,7 +142,7 @@ public struct TranscriptionReadyEvent: Decodable, Sendable {
 
 // MARK: - Audio Translation Event Data
 
-public struct TranslatedAudioInfo: Decodable, Sendable {
+public struct TranslatedAudioInfo: Codable, Sendable {
     public let id: String
     public let targetLanguage: String
     public let url: String
@@ -146,7 +155,7 @@ public struct TranslatedAudioInfo: Decodable, Sendable {
     public let segments: [TranscriptionSegment]?
 }
 
-public struct AudioTranslationEvent: Decodable, Sendable {
+public struct AudioTranslationEvent: Codable, Sendable {
     public let messageId: String
     public let attachmentId: String
     public let conversationId: String
