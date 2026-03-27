@@ -180,34 +180,49 @@ describe('DeliveryQueue — queue introspection and rescheduling', () => {
   });
 });
 
-describe('DeliveryQueue — conversation-wide minimum gap', () => {
-  it('enforces minimum gap between messages in the same conversation', () => {
+describe('DeliveryQueue — conversation-wide gap proportional to word count', () => {
+  it('enforces gap proportional to word count between conversation messages', () => {
     const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
 
     queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 5 })]);
-    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-bob', delaySeconds: 5, content: 'Voici un message plus long pour tester le gap' })]);
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-bob', delaySeconds: 5, content: 'Voici un message de taille moyenne pour verifier le gap entre les messages envoyes dans cette conv' })]);
 
-    const items = queue.getScheduledForUser('conv-1', 'bot-bob');
-    expect(items).toHaveLength(1);
+    const bobItems = queue.getScheduledForUser('conv-1', 'bot-bob');
     const aliceItems = queue.getScheduledForUser('conv-1', 'bot-alice');
-    expect(aliceItems).toHaveLength(1);
+    const gap = bobItems[0].scheduledAt - aliceItems[0].scheduledAt;
 
-    const gap = items[0].scheduledAt - aliceItems[0].scheduledAt;
-    expect(gap).toBeGreaterThanOrEqual(5_000);
+    // ~16 words → 30s base ± 50% jitter → 15s-45s
+    expect(gap).toBeGreaterThanOrEqual(10_000);
   });
 
-  it('uses shorter gap for very short messages', () => {
+  it('uses ~10s gap for very short messages (<=4 words)', () => {
     const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
 
     queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 5 })]);
     queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-bob', delaySeconds: 5, content: 'Ok cool' })]);
 
-    const items = queue.getScheduledForUser('conv-1', 'bot-bob');
+    const bobItems = queue.getScheduledForUser('conv-1', 'bot-bob');
     const aliceItems = queue.getScheduledForUser('conv-1', 'bot-alice');
-    const gap = items[0].scheduledAt - aliceItems[0].scheduledAt;
+    const gap = bobItems[0].scheduledAt - aliceItems[0].scheduledAt;
 
-    expect(gap).toBeGreaterThanOrEqual(3_000);
-    expect(gap).toBeLessThan(15_000);
+    // 2 words → 10s base ± 40% jitter → 6s-14s
+    expect(gap).toBeGreaterThanOrEqual(5_000);
+    expect(gap).toBeLessThan(20_000);
+  });
+
+  it('uses ~120s gap for long messages (65-105 words)', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    const longContent = Array.from({ length: 80 }, (_, i) => `mot${i}`).join(' ');
+
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 5 })]);
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-bob', delaySeconds: 5, content: longContent })]);
+
+    const bobItems = queue.getScheduledForUser('conv-1', 'bot-bob');
+    const aliceItems = queue.getScheduledForUser('conv-1', 'bot-alice');
+    const gap = bobItems[0].scheduledAt - aliceItems[0].scheduledAt;
+
+    // 80 words → 120s base ± 20% jitter → 96s-144s
+    expect(gap).toBeGreaterThanOrEqual(90_000);
   });
 
   it('does not enforce gap across different conversations', () => {

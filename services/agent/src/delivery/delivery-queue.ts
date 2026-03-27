@@ -20,12 +20,15 @@ function jitterMs(value: number, percent = 0.2): number {
   return Math.round(value + value * (Math.random() * 2 * percent - percent));
 }
 
-function minConversationGapMs(action: PendingAction): number {
-  if (action.type !== 'message') return 0;
+function conversationGap(action: PendingAction): { gapMs: number; jitterPercent: number } {
+  if (action.type !== 'message') return { gapMs: 0, jitterPercent: 0 };
   const wordCount = action.content?.split(/\s+/).length ?? 0;
-  if (wordCount <= 4) return 5_000;
-  if (wordCount <= 15) return 8_000;
-  return 15_000;
+  if (wordCount <= 4) return { gapMs: 10_000, jitterPercent: 0.4 };
+  if (wordCount <= 15) return { gapMs: 15_000, jitterPercent: 0.6 };
+  if (wordCount <= 35) return { gapMs: 30_000, jitterPercent: 0.5 };
+  if (wordCount <= 65) return { gapMs: 90_000, jitterPercent: 0.3 };
+  if (wordCount <= 105) return { gapMs: 120_000, jitterPercent: 0.2 };
+  return { gapMs: 330_000, jitterPercent: 0.4 };
 }
 
 export class DeliveryQueue {
@@ -79,8 +82,8 @@ export class DeliveryQueue {
     if (action.type === 'message') {
       const latestForConv = this.getLatestMessageScheduledAt(conversationId);
       if (latestForConv > 0) {
-        const gapMs = minConversationGapMs(action);
-        const minNext = latestForConv + jitterMs(gapMs, 0.3);
+        const { gapMs, jitterPercent } = conversationGap(action);
+        const minNext = latestForConv + jitterMs(gapMs, jitterPercent);
         if (scheduledAt < minNext) {
           scheduledAt = minNext;
         }
