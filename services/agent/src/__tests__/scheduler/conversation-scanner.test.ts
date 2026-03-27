@@ -63,7 +63,10 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     }),
     getConversationContext: jest.fn().mockResolvedValue({ title: 'Test', description: null }),
     getRecentMessages: jest.fn().mockResolvedValue([]),
+    getPotentialControlledUsers: jest.fn().mockResolvedValue([]),
+    getLeastActiveParticipants: jest.fn().mockResolvedValue([]),
     updateAnalytics: jest.fn().mockResolvedValue(undefined),
+    upsertUserRole: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   } as any;
 }
@@ -212,6 +215,36 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
 
     expect(graph.invoke).not.toHaveBeenCalled();
     expect(persistence.updateAnalytics).not.toHaveBeenCalled();
+  });
+
+  it('invokes graph with budgetRemaining=0 during burst cooldown (observation still runs)', async () => {
+    const graph = { invoke: jest.fn().mockResolvedValue({ summary: 'obs', toneProfiles: {}, pendingActions: [] }) };
+    const persistence = makePersistence();
+    const budgetManager = makeBudgetManager();
+    budgetManager.canBurst = jest.fn().mockResolvedValue({ allowed: false, minutesUntilNext: 45 });
+
+    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis(), makeConfigCache(), budgetManager);
+
+    await scanner.scanConversation('conv-1');
+
+    expect(graph.invoke).toHaveBeenCalled();
+    const invokeArgs = graph.invoke.mock.calls[0][0];
+    expect(invokeArgs.budgetRemaining).toBe(0);
+  });
+
+  it('invokes graph with budgetRemaining=0 when daily budget exhausted (observation still runs)', async () => {
+    const graph = { invoke: jest.fn().mockResolvedValue({ summary: 'obs', toneProfiles: {}, pendingActions: [] }) };
+    const persistence = makePersistence();
+    const budgetManager = makeBudgetManager();
+    budgetManager.canSendMessage = jest.fn().mockResolvedValue({ allowed: false, remaining: 0, current: 10, max: 10 });
+
+    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis(), makeConfigCache(), budgetManager);
+
+    await scanner.scanConversation('conv-1');
+
+    expect(graph.invoke).toHaveBeenCalled();
+    const invokeArgs = graph.invoke.mock.calls[0][0];
+    expect(invokeArgs.budgetRemaining).toBe(0);
   });
 
   it('skips processing when conversation is very active', async () => {

@@ -63,6 +63,7 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     getConversationContext: jest.fn().mockResolvedValue({ title: 'Test', description: null }),
     getRecentMessages: jest.fn().mockResolvedValue([]),
     getPotentialControlledUsers: jest.fn().mockResolvedValue([]),
+    getLeastActiveParticipants: jest.fn().mockResolvedValue([]),
     updateAnalytics: jest.fn().mockResolvedValue(undefined),
     upsertUserRole: jest.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -114,11 +115,75 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
     await scanner.scanConversation('conv-1');
 
     // Stratégie d'introduction graduelle : on n'en prend qu'un par cycle maintenant
-    expect(persistence.getPotentialControlledUsers).toHaveBeenCalledWith('conv-1', 1, 72, [], []);
+    expect(persistence.getPotentialControlledUsers).toHaveBeenCalledWith('conv-1', 2, 72, [], []);
     const invokeArgs = graph.invoke.mock.calls[0][0];
     expect(invokeArgs.controlledUsers).toHaveLength(2); // 1 manual + 1 potential
     expect(invokeArgs.controlledUsers.find((u: any) => u.source === 'auto_rule')).toBeDefined();
     expect(invokeArgs.controlledUsers.find((u: any) => u.userId === 'p1').role.tone).toBe('enthousiaste');
+  });
+
+  it('uses bootstrap fallback (getLeastActiveParticipants) when no inactive users found and 0 controlled users', async () => {
+    const graph = { invoke: jest.fn().mockResolvedValue({ pendingActions: [] }) };
+    const persistence = makePersistence({
+      getControlledUsers: jest.fn().mockResolvedValue([]),
+      getPotentialControlledUsers: jest.fn().mockResolvedValue([]),
+      getLeastActiveParticipants: jest.fn().mockResolvedValue([makePotentialUser('fallback1')]),
+    });
+
+    const scanner = new ConversationScanner(
+      graph,
+      persistence,
+      makeStateManager(),
+      { enqueue: jest.fn() } as any,
+      makeRedis(),
+      { getGlobalConfig: jest.fn().mockResolvedValue(null) } as any,
+      {
+        canSendMessage: jest.fn().mockResolvedValue({ allowed: true, remaining: 10 }),
+        canBurst: jest.fn().mockResolvedValue({ allowed: true }),
+        canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
+        recordScannedConversation: jest.fn().mockResolvedValue(undefined),
+        getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+      } as any,
+    );
+
+    await scanner.scanConversation('conv-1');
+
+    expect(persistence.getLeastActiveParticipants).toHaveBeenCalledWith('conv-1', 1, [], []);
+    expect(graph.invoke).toHaveBeenCalled();
+    const invokeArgs = graph.invoke.mock.calls[0][0];
+    expect(invokeArgs.controlledUsers).toHaveLength(1);
+    expect(invokeArgs.controlledUsers[0].userId).toBe('fallback1');
+    expect(persistence.upsertUserRole).toHaveBeenCalled();
+  });
+
+  it('does not use bootstrap fallback when auto-pickup already found users', async () => {
+    const graph = { invoke: jest.fn().mockResolvedValue({ pendingActions: [] }) };
+    const persistence = makePersistence({
+      getControlledUsers: jest.fn().mockResolvedValue([]),
+      getPotentialControlledUsers: jest.fn().mockResolvedValue([makePotentialUser('p1')]),
+      getLeastActiveParticipants: jest.fn().mockResolvedValue([]),
+    });
+
+    const scanner = new ConversationScanner(
+      graph,
+      persistence,
+      makeStateManager(),
+      { enqueue: jest.fn() } as any,
+      makeRedis(),
+      { getGlobalConfig: jest.fn().mockResolvedValue(null) } as any,
+      {
+        canSendMessage: jest.fn().mockResolvedValue({ allowed: true, remaining: 10 }),
+        canBurst: jest.fn().mockResolvedValue({ allowed: true }),
+        canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
+        recordScannedConversation: jest.fn().mockResolvedValue(undefined),
+        getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+      } as any,
+    );
+
+    await scanner.scanConversation('conv-1');
+
+    expect(persistence.getLeastActiveParticipants).not.toHaveBeenCalled();
+    expect(graph.invoke).toHaveBeenCalled();
   });
 
   it('does not include potential users if autoPickupEnabled is false', async () => {

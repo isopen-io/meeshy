@@ -239,6 +239,56 @@ export class ConversationScanner {
       }
     }
 
+    if (controlledUsers.length === 0 && autoPickup) {
+      const existingRoleUserIds = manualControlledUsers.map((u) => u.userId);
+      const fallbackUsers = await this.persistence.getLeastActiveParticipants(
+        conversationId,
+        1,
+        (config?.excludedUserIds as string[]) ?? [],
+        existingRoleUserIds,
+      );
+
+      for (const u of fallbackUsers) {
+        const p = u.agentGlobalProfile;
+        const newControlledUser = {
+          userId: u.id,
+          displayName: u.displayName ?? u.username ?? u.id,
+          username: u.username ?? u.id,
+          systemLanguage: u.systemLanguage,
+          source: 'auto_rule' as const,
+          role: {
+            userId: u.id,
+            displayName: u.displayName ?? u.username ?? u.id,
+            origin: (p ? 'observed' : 'archetype') as 'observed' | 'archetype',
+            personaSummary: p?.personaSummary ?? '',
+            tone: p?.tone ?? 'neutre',
+            vocabularyLevel: p?.vocabularyLevel ?? 'courant',
+            typicalLength: p?.typicalLength ?? 'moyen',
+            emojiUsage: p?.emojiUsage ?? 'occasionnel',
+            topicsOfExpertise: p?.topicsOfExpertise ?? [],
+            topicsAvoided: p?.topicsAvoided ?? [],
+            relationshipMap: {},
+            catchphrases: p?.catchphrases ?? [],
+            responseTriggers: [],
+            silenceTriggers: [],
+            commonEmojis: p?.commonEmojis ?? [],
+            reactionPatterns: p?.reactionPatterns ?? [],
+            messagesAnalyzed: p?.messagesAnalyzed ?? 0,
+            confidence: p?.confidence ?? 0.1,
+            locked: p?.locked ?? false,
+          },
+        };
+
+        controlledUsers.push(newControlledUser);
+        this.persistence.upsertUserRole(conversationId, newControlledUser.role).catch((err) =>
+          console.error(`[Scanner] Error persisting bootstrap user ${u.id} for conv=${conversationId}:`, err));
+      }
+
+      if (controlledUsers.length > 0) {
+        console.log(`[Scanner] Bootstrap: picked ${controlledUsers.length} least-active participant(s) for conv=${conversationId}`);
+      }
+    }
+
     if (controlledUsers.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no controlled users`);
       return false;
@@ -259,9 +309,10 @@ export class ConversationScanner {
     let effectiveMessages = messages;
     if (effectiveMessages.length === 0) {
       const dbMessages = await this.persistence.getRecentMessages(conversationId, 50);
-      effectiveMessages = dbMessages.reverse()
-        .filter((m) => m.senderId !== null)
-        .map((m) => ({
+      const reversed = dbMessages.reverse();
+      effectiveMessages = reversed
+        .filter((m: typeof reversed[number]) => m.senderId !== null)
+        .map((m: typeof reversed[number]) => ({
           id: m.id,
           senderId: m.senderId!,
           senderName: m.sender?.displayName ?? m.sender?.user?.username ?? m.senderId!,
@@ -286,18 +337,24 @@ export class ConversationScanner {
       weekdayMaxMessages: conv.weekdayMaxMessages,
       weekendMaxMessages: conv.weekendMaxMessages,
     });
+
+    let effectiveBudgetRemaining = budgetCheck.remaining;
+    let burstCooldownActive = false;
+
     if (!budgetCheck.allowed) {
-      console.log(`[Scanner] Budget exhausted for conv=${conversationId}: ${budgetCheck.current}/${budgetCheck.max}`);
-      return false;
+      effectiveBudgetRemaining = 0;
+      burstCooldownActive = true;
+      console.log(`[Scanner] Budget exhausted for conv=${conversationId}: ${budgetCheck.current}/${budgetCheck.max} — observation only`);
     }
 
-    if (conv.burstEnabled) {
+    if (conv.burstEnabled && !burstCooldownActive) {
       const burstCheck = await this.budgetManager.canBurst(conversationId, {
         quietIntervalMinutes: conv.quietIntervalMinutes,
       });
       if (!burstCheck.allowed) {
-        console.log(`[Scanner] Burst cooldown for conv=${conversationId}: ${burstCheck.minutesUntilNext}min remaining`);
-        return false;
+        effectiveBudgetRemaining = 0;
+        burstCooldownActive = true;
+        console.log(`[Scanner] Burst cooldown for conv=${conversationId}: ${burstCheck.minutesUntilNext}min remaining — observation only`);
       }
     }
 
@@ -333,7 +390,7 @@ export class ConversationScanner {
       maxResponsesPerCycle: conv.maxResponsesPerCycle,
       reactionsEnabled: conv.reactionsEnabled,
       maxReactionsPerCycle: conv.maxReactionsPerCycle,
-      budgetRemaining: budgetCheck.remaining,
+      budgetRemaining: effectiveBudgetRemaining,
       todayUsersActive: todayStats.usersActive,
       maxUsersToday,
       burstMode: conv.burstEnabled,

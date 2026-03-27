@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
 import type { ToneProfile, ControlledUser } from '../graph/state';
 import { toneProfileToGlobalFields } from './profile-merger';
 
@@ -111,15 +111,21 @@ export class MongoPersistence {
 
   async getInactiveUsers(conversationId: string, thresholdHours: number, excludedRoles: string[], excludedUserIds: string[]) {
     const threshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
-    return this.prisma.user.findMany({
+    const participants = await this.prisma.participant.findMany({
       where: {
-        participations: { some: { conversationId, isActive: true } },
+        conversationId,
+        isActive: true,
         lastActiveAt: { lt: threshold },
-        role: { notIn: excludedRoles as unknown as any[] },
-        id: { notIn: excludedUserIds },
+        userId: { not: null, notIn: excludedUserIds },
+        user: { role: { notIn: excludedRoles as UserRole[] } },
       },
-      select: { id: true, displayName: true, username: true, bio: true, systemLanguage: true },
+      select: {
+        user: { select: { id: true, displayName: true, username: true, bio: true, systemLanguage: true } },
+      },
     });
+    return participants
+      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
+      .map((p) => p.user);
   }
 
   async getPotentialControlledUsers(
@@ -136,22 +142,64 @@ export class MongoPersistence {
     });
     const existingRoleUserIds = existingRoles.map((r) => r.userId);
 
-    return this.prisma.user.findMany({
+    const participants = await this.prisma.participant.findMany({
       where: {
-        participations: { some: { conversationId, isActive: true } },
+        conversationId,
+        isActive: true,
         lastActiveAt: { lt: threshold },
-        role: { notIn: excludedRoles as unknown as any[] },
-        id: { notIn: [...excludedUserIds, ...existingRoleUserIds] },
+        userId: { not: null, notIn: [...excludedUserIds, ...existingRoleUserIds] },
+        user: { role: { notIn: excludedRoles as UserRole[] } },
       },
       select: {
-        id: true,
-        displayName: true,
-        username: true,
-        systemLanguage: true,
-        agentGlobalProfile: true,
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+            systemLanguage: true,
+            agentGlobalProfile: true,
+          },
+        },
       },
+      orderBy: { lastActiveAt: 'asc' },
       take: limit,
     });
+
+    return participants
+      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
+      .map((p) => p.user);
+  }
+
+  async getLeastActiveParticipants(
+    conversationId: string,
+    limit: number,
+    excludedUserIds: string[],
+    existingControlledUserIds: string[],
+  ) {
+    const participants = await this.prisma.participant.findMany({
+      where: {
+        conversationId,
+        isActive: true,
+        userId: { not: null, notIn: [...excludedUserIds, ...existingControlledUserIds] },
+      },
+      select: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+            systemLanguage: true,
+            agentGlobalProfile: true,
+          },
+        },
+      },
+      orderBy: { lastActiveAt: 'asc' },
+      take: limit,
+    });
+
+    return participants
+      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
+      .map((p) => p.user);
   }
 
   async getGlobalProfile(userId: string) {
