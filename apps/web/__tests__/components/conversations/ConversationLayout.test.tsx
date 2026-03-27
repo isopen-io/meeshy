@@ -226,16 +226,6 @@ jest.mock('@/hooks/conversations/use-video-call', () => ({
   })),
 }));
 
-jest.mock('@/hooks/conversations/use-socket-callbacks', () => ({
-  useSocketCallbacks: jest.fn(() => ({
-    onNewMessage: jest.fn(),
-    onMessageEdited: jest.fn(),
-    onMessageDeleted: jest.fn(),
-    onTranslation: jest.fn(),
-    onUserTyping: jest.fn(),
-  })),
-}));
-
 // Mock components
 jest.mock('@/components/layout/DashboardLayout', () => ({
   DashboardLayout: ({ children }: { children: React.ReactNode }) => (

@@ -16,7 +16,6 @@
  * - useTranslationState: état des traductions
  * - useParticipants: chargement participants
  * - useVideoCall: appels vidéo
- * - useSocketCallbacks: callbacks Socket.IO
  *
  * @module components/conversations/ConversationLayout
  */
@@ -64,7 +63,7 @@ import { useMessageActions } from '@/hooks/conversations/useMessageActions';
 import { useTranslationState } from '@/hooks/conversations/use-translation-state';
 import { useParticipants } from '@/hooks/conversations/use-participants';
 import { useVideoCall } from '@/hooks/conversations/use-video-call';
-import { useSocketCallbacks } from '@/hooks/conversations/use-socket-callbacks';
+import type { TranslationEvent } from '@meeshy/shared/types';
 
 // Dynamic imports (bundle-dynamic-imports) - chargés uniquement quand nécessaires
 const AttachmentGallery = dynamic(
@@ -291,29 +290,37 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       hasMore,
     });
 
-  // ========== SOCKET CALLBACKS ==========
-  const { onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onUserTyping } =
-    useSocketCallbacks({
-      conversationId: selectedConversation?.id || null,
-      currentUser: user,
-      addMessage,
-      updateMessage,
-      removeMessage,
-      setConversations,
-      refreshConversations,
-      removeTranslatingState,
-      addUsedLanguages,
-    });
+  // ========== SOCKET CALLBACKS (inline — cache mutations handled by useSocketCacheSync) ==========
+  const onTranslation = useCallback(
+    (messageId: string, translations: Array<{ targetLanguage?: string; language?: string }>) => {
+      const newLanguages = translations
+        .map(t => t.targetLanguage || t.language)
+        .filter((lang): lang is string => Boolean(lang));
+      addUsedLanguages(newLanguages);
+      for (const translation of translations) {
+        const targetLang = translation.targetLanguage || translation.language;
+        if (targetLang) {
+          removeTranslatingState(messageId, targetLang);
+        }
+      }
+    },
+    [removeTranslatingState, addUsedLanguages]
+  );
 
-  // Socket.IO messaging
+  const onUserTyping = useCallback(
+    (userId: string, _username: string, _isTyping: boolean, typingConversationId: string) => {
+      if (!user || userId === user.id) return;
+      if (typingConversationId !== selectedConversation?.id) return;
+    },
+    [user, selectedConversation?.id]
+  );
+
+  // Socket.IO messaging — cache mutations handled by useSocketCacheSync, only UI callbacks here
   const { sendMessage: sendMessageViaSocket, connectionStatus, startTyping, stopTyping } =
     useSocketIOMessaging({
       conversationId: selectedConversation?.id,
       currentUser: user || undefined,
       onUserTyping,
-      onMessageEdited,
-      onMessageDeleted,
-      onNewMessage,
       onTranslation,
     });
 

@@ -50,10 +50,14 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
             for (const m of page.messages) {
               if (m.id === message.id) return old; // already have this server message
               // If own message:new arrives while optimistic is still 'sending', replace it
-              // Match by content to avoid cross-replacing when multiple messages are sending
+              // Match by content + conversationId + recent timestamp to avoid cross-replacing
               if (isOwnMessage && !optimisticTempId && isOptimisticMessage(m) && m._localStatus === 'sending'
-                  && m.content === message.content) {
-                optimisticTempId = m._tempId;
+                  && m.content === message.content && m.conversationId === message.conversationId) {
+                // Additional safety: only match if optimistic was created within last 30s
+                const optimisticAge = Date.now() - new Date(m.createdAt).getTime();
+                if (optimisticAge < 30_000) {
+                  optimisticTempId = m._tempId;
+                }
               }
             }
           }
