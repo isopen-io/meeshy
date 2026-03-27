@@ -198,11 +198,26 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     },
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const [configsCount, activeCount, rolesCount] = await Promise.all([
+      const [configsCount, activeCount, rolesCount, uniqueControlledUsers, analyticsAgg] = await Promise.all([
         fastify.prisma.agentConfig.count(),
         fastify.prisma.agentConfig.count({ where: { enabled: true } }),
         fastify.prisma.agentUserRole.count(),
+        fastify.prisma.agentUserRole.findMany({ select: { userId: true }, distinct: ['userId'] }),
+        fastify.prisma.agentAnalytic.aggregate({
+          _sum: { messagesSent: true, totalWordsSent: true },
+          _avg: { avgConfidence: true },
+        }),
       ]);
+
+      const recentAnalytics = await fastify.prisma.agentAnalytic.findMany({
+        where: { lastResponseAt: { not: null } },
+        orderBy: { lastResponseAt: 'desc' },
+        take: 10,
+        include: {
+          conversation: { select: { id: true, title: true, type: true } },
+        },
+      });
+
       return reply.send({
         success: true,
         data: {
@@ -210,6 +225,20 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           activeConfigs: activeCount,
           totalRoles: rolesCount,
           totalArchetypes: listArchetypes().length,
+          totalControlledUsers: uniqueControlledUsers.length,
+          totalMessagesSent: analyticsAgg._sum.messagesSent ?? 0,
+          totalWordsSent: analyticsAgg._sum.totalWordsSent ?? 0,
+          avgConfidence: analyticsAgg._avg.avgConfidence ?? 0,
+          recentActivity: recentAnalytics.map((a) => ({
+            conversationId: a.conversationId,
+            conversation: a.conversation
+              ? { id: a.conversation.id, title: a.conversation.title, type: a.conversation.type }
+              : null,
+            messagesSent: a.messagesSent,
+            totalWordsSent: a.totalWordsSent,
+            avgConfidence: a.avgConfidence,
+            lastResponseAt: a.lastResponseAt?.toISOString() ?? null,
+          })),
         },
       });
     } catch (error) {
@@ -231,19 +260,25 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         properties: {
           page: { type: 'string', description: 'Page number (default: 1)' },
           limit: { type: 'string', description: 'Items per page (default: 20, max: 100)' },
+          search: { type: 'string', description: 'Filter by conversation title' },
         },
       },
       response: { 200: paginatedArrayResponse, ...stdErrors },
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { page = '1', limit = '20' } = request.query as { page?: string; limit?: string };
+      const { page = '1', limit = '20', search } = request.query as { page?: string; limit?: string; search?: string };
       const pageNum = Math.max(1, parseInt(page, 10));
       const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
       const skip = (pageNum - 1) * limitNum;
 
+      const where = search
+        ? { conversation: { title: { contains: search, mode: 'insensitive' as const } } }
+        : {};
+
       const [configs, total] = await Promise.all([
         fastify.prisma.agentConfig.findMany({
+          where,
           skip,
           take: limitNum,
           orderBy: { updatedAt: 'desc' },
@@ -253,14 +288,29 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
             },
           },
         }),
-        fastify.prisma.agentConfig.count(),
+        fastify.prisma.agentConfig.count({ where }),
       ]);
 
       const conversationIds = configs.map((c) => c.conversationId);
+
       const allRoles = conversationIds.length > 0
         ? await fastify.prisma.agentUserRole.findMany({
             where: { conversationId: { in: conversationIds } },
             select: { conversationId: true, userId: true },
+          })
+        : [];
+
+      type AnalyticSelect = { conversationId: string; messagesSent: number; totalWordsSent: number; avgConfidence: number; lastResponseAt: Date | null };
+      const allAnalytics: AnalyticSelect[] = conversationIds.length > 0
+        ? await fastify.prisma.agentAnalytic.findMany({
+            where: { conversationId: { in: conversationIds } },
+            select: {
+              conversationId: true,
+              messagesSent: true,
+              totalWordsSent: true,
+              avgConfidence: true,
+              lastResponseAt: true,
+            },
           })
         : [];
 
@@ -271,10 +321,23 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         rolesByConvId.set(role.conversationId, arr);
       }
 
-      const enrichedConfigs = configs.map((c) => ({
-        ...c,
-        controlledUserIds: rolesByConvId.get(c.conversationId) ?? [],
-      }));
+      const analyticsByConvId = new Map(allAnalytics.map((a) => [a.conversationId, a]));
+
+      const enrichedConfigs = configs.map((c) => {
+        const analytics = analyticsByConvId.get(c.conversationId);
+        return {
+          ...c,
+          controlledUserIds: rolesByConvId.get(c.conversationId) ?? [],
+          analytics: analytics
+            ? {
+                messagesSent: analytics.messagesSent,
+                totalWordsSent: analytics.totalWordsSent,
+                avgConfidence: analytics.avgConfidence,
+                lastResponseAt: analytics.lastResponseAt?.toISOString() ?? null,
+              }
+            : null,
+        };
+      });
 
       return reply.send({
         success: true,
@@ -875,6 +938,95 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'Error fetching live analytics:', error);
+      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+    }
+  });
+
+  // GET /recent-activity
+  fastify.get('/recent-activity', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'List conversations with recent agent activity, ordered by last response. Used for Live tab quick access.',
+      tags: ['admin-agent'],
+      summary: 'Recent agent activity',
+      security: securityBearerAuth,
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'string', description: 'Max items (default: 20, max: 50)' },
+          search: { type: 'string', description: 'Filter by conversation title' },
+        },
+      },
+      response: { 200: successArrayResponse, ...stdErrors },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { limit = '20', search } = request.query as { limit?: string; search?: string };
+      const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+
+      const analytics = await fastify.prisma.agentAnalytic.findMany({
+        where: {
+          lastResponseAt: { not: null },
+          ...(search ? {
+            conversation: { title: { contains: search, mode: 'insensitive' as const } },
+          } : {}),
+        },
+        orderBy: { lastResponseAt: 'desc' },
+        take: limitNum,
+        include: {
+          conversation: {
+            select: { id: true, title: true, type: true },
+          },
+        },
+      });
+
+      const conversationIds = analytics.map((a) => a.conversationId);
+
+      type ConfigSelect = { conversationId: string; enabled: boolean };
+      const configs: ConfigSelect[] = conversationIds.length > 0
+        ? await fastify.prisma.agentConfig.findMany({
+            where: { conversationId: { in: conversationIds } },
+            select: { conversationId: true, enabled: true },
+          })
+        : [];
+
+      const roles = conversationIds.length > 0
+        ? await fastify.prisma.agentUserRole.findMany({
+            where: { conversationId: { in: conversationIds } },
+            select: { conversationId: true, userId: true, confidence: true, locked: true },
+          })
+        : [];
+
+      const configByConvId = new Map(configs.map((c) => [c.conversationId, c]));
+      type RoleEntry = (typeof roles)[number];
+      const rolesByConvId = new Map<string, RoleEntry[]>();
+      for (const role of roles) {
+        const arr = rolesByConvId.get(role.conversationId) ?? [];
+        arr.push(role);
+        rolesByConvId.set(role.conversationId, arr);
+      }
+
+      const result = analytics.map((a) => {
+        const config = configByConvId.get(a.conversationId);
+        const convRoles = rolesByConvId.get(a.conversationId) ?? [];
+        return {
+          conversationId: a.conversationId,
+          conversation: a.conversation
+            ? { id: a.conversation.id, title: a.conversation.title, type: a.conversation.type }
+            : null,
+          enabled: config?.enabled ?? false,
+          messagesSent: a.messagesSent,
+          totalWordsSent: a.totalWordsSent,
+          avgConfidence: a.avgConfidence,
+          lastResponseAt: a.lastResponseAt?.toISOString() ?? null,
+          controlledUserIds: convRoles.map((r) => r.userId),
+          controlledUsersCount: convRoles.length,
+        };
+      });
+
+      return reply.send({ success: true, data: result });
+    } catch (error) {
+      logError(fastify.log, 'Error fetching recent activity:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
     }
   });

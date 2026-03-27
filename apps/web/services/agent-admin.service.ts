@@ -14,11 +14,25 @@ function unwrapResponse<T>(response: ApiResponse<unknown>): ApiResponse<T> {
   return response as ApiResponse<T>;
 }
 
+export type RecentActivityEntry = {
+  conversationId: string;
+  conversation: AgentConfigConversation | null;
+  messagesSent: number;
+  totalWordsSent: number;
+  avgConfidence: number;
+  lastResponseAt: string | null;
+};
+
 export type AgentStatsData = {
   totalConfigs: number;
   activeConfigs: number;
   totalRoles: number;
   totalArchetypes: number;
+  totalControlledUsers: number;
+  totalMessagesSent: number;
+  totalWordsSent: number;
+  avgConfidence: number;
+  recentActivity: RecentActivityEntry[];
 };
 
 export type AgentConfigConversation = {
@@ -73,6 +87,7 @@ export type AgentConfigData = {
   prioritizeTaggedUsers: boolean;
   prioritizeRepliedUsers: boolean;
   reactionBoostFactor: number;
+  analytics: AnalyticsData | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -277,6 +292,18 @@ export type LiveStateData = {
   controlledUsers: ControlledUserEntry[];
 };
 
+export type RecentConversationActivity = {
+  conversationId: string;
+  conversation: AgentConfigConversation | null;
+  enabled: boolean;
+  messagesSent: number;
+  totalWordsSent: number;
+  avgConfidence: number;
+  lastResponseAt: string | null;
+  controlledUserIds: string[];
+  controlledUsersCount: number;
+};
+
 export type ResetDeletedCounts = {
   configs?: number;
   roles?: number;
@@ -363,6 +390,11 @@ export const agentAdminService = {
   async updateGlobalConfig(data: AgentGlobalConfigUpsert): Promise<ApiResponse<AgentGlobalConfigData>> {
     const response = await apiService.put('/admin/agent/global-config', data);
     return unwrapResponse<AgentGlobalConfigData>(response);
+  },
+
+  async getRecentActivity(limit = 20, search?: string): Promise<ApiResponse<RecentConversationActivity[]>> {
+    const response = await apiService.get('/admin/agent/recent-activity', { limit, search });
+    return unwrapResponse<RecentConversationActivity[]>(response);
   },
 
   async getLiveState(conversationId: string): Promise<ApiResponse<LiveStateData>> {

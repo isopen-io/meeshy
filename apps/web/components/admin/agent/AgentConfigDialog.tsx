@@ -19,6 +19,7 @@ import { Loader2 } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type AgentConfigData, type AgentConfigUpsert } from '@/services/agent-admin.service';
 import { AgentRolesSection } from './AgentRolesSection';
+import { UserDisplay } from './UserDisplay';
 import { UserPicker } from './UserPicker';
 import { ConversationPicker } from './ConversationPicker';
 import { toast } from 'sonner';
@@ -83,7 +84,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
   useEffect(() => {
     if (config) {
       setConversationId(config.conversationId);
-      const { id, conversationId: _cid, conversation, configuredBy, createdAt, updatedAt, ...upsertFields } = config;
+      const { id, conversationId: _cid, conversation, configuredBy, controlledUserIds: _cu, analytics: _an, createdAt, updatedAt, ...upsertFields } = config;
       setForm(upsertFields);
     } else {
       setConversationId('');
