@@ -16,6 +16,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { broadcastPreferenceUpdate } from '@/lib/settings-sync';
 import {
   isConsentRequiredError,
   isPreferenceErrorResponse,
@@ -220,12 +221,9 @@ export function usePreferences<C extends PreferenceCategory>(
       onError?.(err);
     },
     onSuccess: (newData) => {
-      // Mettre à jour le cache avec les données du serveur
       queryClient.setQueryData(queryKey, newData);
-
-      // Réinitialiser les violations
       setConsentViolations(null);
-
+      broadcastPreferenceUpdate(category);
       onSuccess?.(newData);
     },
   });
@@ -283,6 +281,7 @@ export function usePreferences<C extends PreferenceCategory>(
     onSuccess: (newData) => {
       queryClient.setQueryData(queryKey, newData);
       setConsentViolations(null);
+      broadcastPreferenceUpdate(category);
       onSuccess?.(newData);
     },
   });
