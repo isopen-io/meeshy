@@ -190,6 +190,7 @@ class FeedViewModel: ObservableObject {
             } else {
                 let _ = try await api.delete(endpoint: "/posts/\(postId)/like")
             }
+            debouncedCacheSave()
         } catch {
             // Revert on failure
             posts[index].isLiked.toggle()
@@ -388,6 +389,7 @@ class FeedViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].likes = data.likeCount
+                self.debouncedCacheSave()
             }
             .store(in: &cancellables)
 
@@ -397,6 +399,7 @@ class FeedViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].likes = data.likeCount
+                self.debouncedCacheSave()
             }
             .store(in: &cancellables)
 

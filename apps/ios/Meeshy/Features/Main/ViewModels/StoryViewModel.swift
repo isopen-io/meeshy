@@ -476,6 +476,7 @@ class StoryViewModel: ObservableObject {
                         var updatedStories = self.storyGroups[i].stories
                         updatedStories[j].isViewed = true
                         self.storyGroups[i] = self.storyGroups[i].with(stories: updatedStories)
+                        self.persistStoryCache()
                         return
                     }
                 }

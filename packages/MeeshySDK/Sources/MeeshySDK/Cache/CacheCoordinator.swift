@@ -143,6 +143,7 @@ public actor CacheCoordinator {
         await participants.flushDirtyKeys()
         await profiles.flushDirtyKeys()
         await feed.flushDirtyKeys()
+        await stories.flushDirtyKeys()
         persistTranslationCaches()
     }
 
