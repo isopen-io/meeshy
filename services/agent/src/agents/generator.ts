@@ -49,8 +49,9 @@ function buildGeneratorPrompt(
     ? `\nINSTRUCTIONS: ${agentInstructions}`
     : '';
 
-  const catchphrasesText = profile.catchphrases.length > 0
-    ? `\n- EXPRESSIONS OBLIGATOIRES (utilise au moins une): "${profile.catchphrases.join('", "')}"`
+  const useCatchphrases = profile.catchphrases.length > 0 && Math.random() < 0.7;
+  const catchphrasesText = useCatchphrases
+    ? `\n- EXPRESSIONS TYPIQUES (glisse naturellement l'une d'elles dans ta reponse): "${profile.catchphrases.join('", "')}"`
     : '';
 
   const emojisText = profile.commonEmojis.length > 0
