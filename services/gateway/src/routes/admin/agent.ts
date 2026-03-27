@@ -256,9 +256,29 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         fastify.prisma.agentConfig.count(),
       ]);
 
+      const conversationIds = configs.map((c) => c.conversationId);
+      const allRoles = conversationIds.length > 0
+        ? await fastify.prisma.agentUserRole.findMany({
+            where: { conversationId: { in: conversationIds } },
+            select: { conversationId: true, userId: true },
+          })
+        : [];
+
+      const rolesByConvId = new Map<string, string[]>();
+      for (const role of allRoles) {
+        const arr = rolesByConvId.get(role.conversationId) ?? [];
+        arr.push(role.userId);
+        rolesByConvId.set(role.conversationId, arr);
+      }
+
+      const enrichedConfigs = configs.map((c) => ({
+        ...c,
+        controlledUserIds: rolesByConvId.get(c.conversationId) ?? [],
+      }));
+
       return reply.send({
         success: true,
-        data: configs,
+        data: enrichedConfigs,
         pagination: { total, page: pageNum, limit: limitNum, hasMore: skip + limitNum < total },
       });
     } catch (error) {
@@ -286,7 +306,11 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       if (!config) {
         return reply.status(404).send({ success: false, message: 'Config non trouvée' });
       }
-      return reply.send({ success: true, data: config });
+      const roles = await fastify.prisma.agentUserRole.findMany({
+        where: { conversationId },
+        select: { userId: true },
+      });
+      return reply.send({ success: true, data: { ...config, controlledUserIds: roles.map((r) => r.userId) } });
     } catch (error) {
       logError(fastify.log, 'Error fetching agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
@@ -804,8 +828,9 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       const toneProfiles = profilesRaw ? JSON.parse(profilesRaw) : {};
       const messages = messagesRaw ? JSON.parse(messagesRaw) : [];
 
+      type LiveUser = { id: string; displayName: string | null; username: string | null; systemLanguage: string | null };
       const userIds = roles.map((r) => r.userId);
-      const users = userIds.length > 0
+      const users: LiveUser[] = userIds.length > 0
         ? await fastify.prisma.user.findMany({
             where: { id: { in: userIds } },
             select: { id: true, displayName: true, username: true, systemLanguage: true },

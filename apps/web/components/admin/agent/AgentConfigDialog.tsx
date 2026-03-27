@@ -303,6 +303,24 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 placeholder="Ajouter un utilisateur sous contrôle..."
               />
 
+              {config && (() => {
+                const manualSet = new Set(form.manualUserIds ?? []);
+                const autoPickedIds = (config.controlledUserIds ?? []).filter(id => !manualSet.has(id));
+                if (autoPickedIds.length === 0) return null;
+                return (
+                  <div className="space-y-2 pt-1">
+                    <Label className="text-xs text-gray-500">
+                      Auto-d&eacute;tect&eacute;s ({autoPickedIds.length})
+                    </Label>
+                    <div className="flex flex-wrap gap-2 p-2 rounded-md border border-dashed border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+                      {autoPickedIds.map(id => (
+                        <UserDisplay key={id} userId={id} size="sm" showUsername={false} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <UserPicker
                 label="Utilisateurs exclus (Blacklist)"
                 userIds={form.excludedUserIds || []}

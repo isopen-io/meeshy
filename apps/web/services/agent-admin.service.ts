@@ -33,6 +33,7 @@ export type AgentConfigData = {
   conversation?: AgentConfigConversation;
   enabled: boolean;
   configuredBy: string;
+  controlledUserIds: string[];
   manualUserIds: string[];
   autoPickupEnabled: boolean;
   inactivityThresholdHours: number;

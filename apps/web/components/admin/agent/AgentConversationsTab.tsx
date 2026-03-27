@@ -191,15 +191,15 @@ export function AgentConversationsTab() {
 
                     {/* Controlled */}
                     <div className="flex flex-wrap gap-1 overflow-hidden">
-                      {(config.manualUserIds ?? []).slice(0, 3).map(id => (
+                      {(config.controlledUserIds ?? []).slice(0, 3).map(id => (
                         <UserDisplay key={id} userId={id} size="sm" showUsername={false} className="w-8" />
                       ))}
-                      {(config.manualUserIds ?? []).length > 3 && (
+                      {(config.controlledUserIds ?? []).length > 3 && (
                         <Badge variant="secondary" className="h-6 w-6 rounded-full p-0 flex items-center justify-center text-[10px]">
-                          +{(config.manualUserIds ?? []).length - 3}
+                          +{(config.controlledUserIds ?? []).length - 3}
                         </Badge>
                       )}
-                      {(config.manualUserIds ?? []).length === 0 && (
+                      {(config.controlledUserIds ?? []).length === 0 && (
                         <span className="text-xs text-gray-400">0/{config.maxControlledUsers}</span>
                       )}
                     </div>
