@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { usePreferences } from '@/hooks/use-preferences';
-import type { PrivacyPreferences } from '@/types/preferences';
+import type { PrivacyPreference } from '@/types/preferences';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,7 +52,7 @@ export function PrivacySettings() {
    * Utilise optimistic update automatique via React Query
    */
   const handlePreferenceChange = async (
-    key: keyof PrivacyPreferences,
+    key: keyof PrivacyPreference,
     value: boolean | string
   ) => {
     // Play sound feedback immédiatement

@@ -17,27 +17,19 @@ import { useI18n } from '@/hooks/use-i18n';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { usePreferences } from '@/hooks/use-preferences';
-import type { MessagePreference } from '@meeshy/shared/types/preferences';
-import type { PreferenceCategory } from '@/types/preferences';
+import type { MessagePreference } from '@/types/preferences';
 
 export default function MessageSettings() {
   const { t } = useI18n('settings');
   const reducedMotion = useReducedMotion();
 
-  // Hook usePreferences avec auto-save
   const {
     data: preferences,
     isLoading,
     isUpdating: isSaving,
     error: queryError,
     updatePreferences,
-  } = usePreferences('message' as PreferenceCategory) as unknown as {
-    data: MessagePreference | undefined;
-    isLoading: boolean;
-    isUpdating: boolean;
-    error: Error | null;
-    updatePreferences: (updates: Partial<MessagePreference>) => Promise<MessagePreference>;
-  };
+  } = usePreferences('message');
 
   const error = queryError?.message ?? null;
 
