@@ -3,12 +3,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { useQueryClient } from '@tanstack/react-query';
 import { User } from '@/types';
-import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Footer } from '@/components/layout/Footer';
 import { useI18n } from '@/hooks/use-i18n';
-import { toast } from 'sonner';
 import {
   Settings as SettingsIcon,
   User as UserIcon,
@@ -19,13 +18,13 @@ import {
   PlayCircle,
   Lock
 } from 'lucide-react';
-import { authManager } from '@/services/auth-manager.service';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { ResponsiveTabs } from '@/components/ui/responsive-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
+import { useCurrentUserQuery } from '@/hooks/queries';
+import { queryKeys } from '@/lib/react-query/query-keys';
 
-// Dynamic imports with loading skeletons for code splitting
 const ProfileSettings = dynamic(
   () => import('@/components/settings/user-settings').then(mod => ({ default: mod.UserSettings })),
   {
@@ -90,7 +89,6 @@ const SecuritySettings = dynamic(
   }
 );
 
-// Loading skeleton component
 function SettingsLoadingSkeleton() {
   return (
     <div className="space-y-6 p-6">
@@ -107,12 +105,10 @@ function SettingsLoadingSkeleton() {
   );
 }
 
-// Get initial tab from URL hash (will be validated against available tabs later)
 function getInitialTab(): string {
   if (typeof window === 'undefined') return 'profile';
   const hash = window.location.hash.replace('#', '');
 
-  // Handle media sub-sections (#media-audio, #media-video, #media-document)
   if (hash.startsWith('media-')) {
     return 'media';
   }
@@ -122,21 +118,29 @@ function getInitialTab(): string {
 
 export default function SettingsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { t } = useI18n('settings');
   const reducedMotion = useReducedMotion();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(getInitialTab);
-  const [prefetchedTabs, setPrefetchedTabs] = useState<Set<string>>(new Set());
 
-  // Check if user has moderator access or higher
+  const {
+    data: currentUser,
+    isLoading,
+    error: userError,
+  } = useCurrentUserQuery();
+
+  useEffect(() => {
+    if (userError) {
+      router.push('/login');
+    }
+  }, [userError, router]);
+
   const hasModeratorAccess = useMemo(() => {
-    if (!currentUser?.role) return false;
+    if (!(currentUser as User)?.role) return false;
     const moderatorRoles = ['MODERATOR', 'ADMIN', 'BIGBOSS', 'CREATOR', 'MODO'];
-    return moderatorRoles.includes(currentUser.role);
+    return moderatorRoles.includes((currentUser as User).role);
   }, [currentUser]);
 
-  // Memoized tabs configuration
   const tabs = useMemo(() => {
     const allTabs = [
       {
@@ -183,7 +187,6 @@ export default function SettingsPage() {
       }
     ];
 
-    // Only add Beta Playground for moderators and above
     if (hasModeratorAccess) {
       allTabs.push({
         value: 'beta',
@@ -196,87 +199,20 @@ export default function SettingsPage() {
     return allTabs;
   }, [t, hasModeratorAccess]);
 
-  // Load user settings with parallel fetches
-  useEffect(() => {
-    const loadUserSettings = async () => {
-      try {
-        const token = authManager.getAuthToken();
-        if (!token) {
-          router.push('/login');
-          return;
-        }
-
-        // Parallel fetches to eliminate waterfall
-        const [userResponse, notificationsResponse, privacyResponse] = await Promise.all([
-          fetch(buildApiUrl(API_ENDPOINTS.AUTH.ME), {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }),
-          fetch(buildApiUrl('/me/preferences/notification'), {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }).catch(() => null),
-          fetch(buildApiUrl('/me/preferences/privacy'), {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }).catch(() => null),
-        ]);
-
-        if (userResponse.status === 401) {
-          authManager.clearAllSessions();
-          router.push('/login');
-          return;
-        }
-
-        const userResult = await userResponse.json();
-
-        if (userResponse.ok) {
-          if (userResult.success && userResult.data && userResult.data.user) {
-            setCurrentUser(userResult.data.user);
-
-            // Preload data in HTTP cache
-            if (notificationsResponse?.ok) {
-              await notificationsResponse.json();
-            }
-            if (privacyResponse?.ok) {
-              await privacyResponse.json();
-            }
-          } else {
-            throw new Error(userResult.error || t('errors.loadProfile'));
-          }
-        } else {
-          throw new Error(userResult.error || t('errors.loadProfile'));
-        }
-      } catch (error) {
-        console.error('Error loading settings:', error);
-        toast.error(error instanceof Error ? error.message : t('errors.loadSettings'));
-        router.push('/login');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadUserSettings();
-  }, [router, t]);
-
-  // Validate and set initial tab based on available tabs
   useEffect(() => {
     if (tabs.length > 0) {
       const validTabValues = tabs.map(tab => tab.value);
       if (!validTabValues.includes(activeTab)) {
-        // If current tab is not available (e.g., beta for non-moderators), redirect to profile
         setActiveTab('profile');
       }
     }
   }, [tabs, activeTab]);
 
-  // Listen to hash changes for navigation
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
       const validTabValues = tabs.map(tab => tab.value);
 
-      // Handle media sub-sections (#media-audio, #media-video, #media-document)
       let targetTab = hash;
       if (hash.startsWith('media-')) {
         targetTab = 'media';
@@ -291,15 +227,11 @@ export default function SettingsPage() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [activeTab, tabs]);
 
-  // Update URL when tab changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const currentHash = window.location.hash.replace('#', '');
 
-      // Don't overwrite media sub-section hashes (#media-audio, #media-video, #media-document)
-      // when the media tab is active
       if (activeTab === 'media' && currentHash.startsWith('media-')) {
-        // Keep the existing sub-section hash
         return;
       }
 
@@ -307,22 +239,10 @@ export default function SettingsPage() {
     }
   }, [activeTab]);
 
-  // Prefetch on hover handler
-  const handleTabHover = useCallback((tabValue: string) => {
-    if (!prefetchedTabs.has(tabValue)) {
-      setPrefetchedTabs(prev => new Set(prev).add(tabValue));
-      // Trigger prefetch by setting state
-      // The dynamic import will be triggered when this tab is rendered
-    }
-  }, [prefetchedTabs]);
-
-  // Handle user update - just update local state (API already called by child component)
   const handleUserUpdate = useCallback((updatedUser: User) => {
-    // Update local state with the user data returned from the API
-    setCurrentUser(updatedUser);
-  }, []);
+    queryClient.setQueryData(queryKeys.users.current(), updatedUser);
+  }, [queryClient]);
 
-  // Memoized tab items for ResponsiveTabs
   const tabItems = useMemo(() => tabs.map(tab => ({
     value: tab.value,
     label: tab.label,
@@ -333,7 +253,6 @@ export default function SettingsPage() {
     })()
   })), [tabs, currentUser, handleUserUpdate]);
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 flex items-center justify-center">
@@ -355,11 +274,8 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
-      {/* Main content area */}
       <DashboardLayout title={t('title')} className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
-        {/* Content area with full width */}
         <div className="relative z-10 space-y-8 pb-8 w-full py-8 px-4 md:px-8">
-          {/* Hero Section */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 md:p-12 text-white shadow-2xl">
             <div className="absolute inset-0 bg-black/10"></div>
             <div className="relative z-10">
@@ -370,7 +286,7 @@ export default function SettingsPage() {
                 <div className="flex-1">
                   <h1 className="text-4xl md:text-5xl font-bold mb-2">{t('title')}</h1>
                   <p className="text-lg md:text-xl text-blue-100">
-                    {t('pageTitle', { username: currentUser?.username })}
+                    {t('pageTitle', { username: (currentUser as User)?.username })}
                   </p>
                 </div>
               </div>
@@ -378,12 +294,10 @@ export default function SettingsPage() {
                 {t('subtitle') || 'Manage your account preferences, language settings, and privacy options'}
               </p>
             </div>
-            {/* Decorative elements */}
             <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
             <div className="absolute -left-12 -top-12 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl"></div>
           </div>
 
-          {/* Settings Content with modern card */}
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border-2 border-gray-200 dark:border-gray-800 overflow-hidden">
             <div className="p-6">
               <FeatureErrorBoundary featureName="Settings">
@@ -400,7 +314,6 @@ export default function SettingsPage() {
         </div>
       </DashboardLayout>
 
-      {/* Footer */}
       <div className="w-screen relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-16">
         <Footer />
       </div>
