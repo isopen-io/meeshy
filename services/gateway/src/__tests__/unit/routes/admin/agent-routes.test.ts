@@ -93,31 +93,39 @@ describe('Agent Admin Routes', () => {
   });
 
   describe('GET /configs', () => {
-    it('returns paginated configs', async () => {
+    it('returns paginated configs with controlledUserIds', async () => {
       const configs = [{ id: '1', conversationId: 'c1', enabled: true }];
       mockPrisma.agentConfig.findMany.mockResolvedValue(configs);
       mockPrisma.agentConfig.count.mockResolvedValue(1);
+      mockPrisma.agentUserRole.findMany.mockResolvedValue([
+        { conversationId: 'c1', userId: 'u1' },
+        { conversationId: 'c1', userId: 'u2' },
+      ]);
 
       const res = await app.inject({ method: 'GET', url: '/configs?page=1&limit=20' });
       const body = JSON.parse(res.body);
 
       expect(res.statusCode).toBe(200);
       expect(body.success).toBe(true);
-      expect(body.data).toEqual(configs);
+      expect(body.data).toEqual([{ ...configs[0], controlledUserIds: ['u1', 'u2'] }]);
       expect(body.pagination).toEqual({ total: 1, page: 1, limit: 20, hasMore: false });
     });
   });
 
   describe('GET /configs/:conversationId', () => {
-    it('returns config for conversation', async () => {
+    it('returns config for conversation with controlledUserIds', async () => {
       const config = { id: '1', conversationId: '507f1f77bcf86cd799439099', enabled: true };
       mockPrisma.agentConfig.findUnique.mockResolvedValue(config);
+      mockPrisma.agentUserRole.findMany.mockResolvedValue([
+        { userId: 'u1' },
+        { userId: 'u3' },
+      ]);
 
       const res = await app.inject({ method: 'GET', url: '/configs/507f1f77bcf86cd799439099' });
       const body = JSON.parse(res.body);
 
       expect(res.statusCode).toBe(200);
-      expect(body.data).toEqual(config);
+      expect(body.data).toEqual({ ...config, controlledUserIds: ['u1', 'u3'] });
     });
 
     it('returns 404 when not found', async () => {

@@ -1,25 +1,46 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Activity, Users, Brain, MessageSquare, Clock, Loader2, Search, Lock } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Activity,
+  Users,
+  Brain,
+  MessageSquare,
+  Clock,
+  Loader2,
+  Search,
+  Lock,
+  RefreshCw,
+  ChevronRight,
+  Zap,
+  Eye,
+} from 'lucide-react';
 import {
   agentAdminService,
   type LiveStateData,
   type ToneProfileEntry,
+  type RecentConversationActivity,
 } from '@/services/agent-admin.service';
 import { UserDisplay } from './UserDisplay';
-import { ConversationPicker } from './ConversationPicker';
+import { useDebounce } from 'use-debounce';
 
-function truncateId(id: string | undefined | null) {
-  if (!id) return '???';
-  if (id.length <= 8) return id;
-  return `${id.slice(0, 4)}...${id.slice(-4)}`;
+function formatTimeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Jamais';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'maintenant';
+  if (minutes < 60) return `${minutes}min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}j`;
 }
 
 function confidenceColor(value: number) {
@@ -28,17 +49,14 @@ function confidenceColor(value: number) {
   return 'text-gray-500 dark:text-gray-400';
 }
 
-function activityColor(value: number) {
-  if (value > 0.7) return 'bg-green-500';
-  if (value > 0.3) return 'bg-yellow-500';
-  return 'bg-red-500';
-}
-
-function activityLabel(value: number) {
-  if (value > 0.7) return 'Haute';
-  if (value > 0.3) return 'Moyenne';
-  return 'Basse';
-}
+const TYPE_LABELS: Record<string, string> = {
+  direct: 'Direct',
+  group: 'Groupe',
+  public: 'Public',
+  global: 'Globale',
+  broadcast: 'Communication',
+  channel: 'Canal',
+};
 
 function LoadingSkeleton() {
   return (
@@ -61,6 +79,102 @@ function LoadingSkeleton() {
   );
 }
 
+// ── Recent Conversations Sidebar ───────────────────────────────────────────
+
+function RecentConversationsList({
+  selected,
+  onSelect,
+}: {
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const [items, setItems] = useState<RecentConversationActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 500);
+
+  const fetchRecent = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await agentAdminService.getRecentActivity(30, debouncedSearch || undefined);
+      if (res.success && res.data) {
+        setItems(Array.isArray(res.data) ? res.data : []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedSearch]);
+
+  useEffect(() => { fetchRecent(); }, [fetchRecent]);
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="px-3 pt-3 pb-2">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+          <Input
+            placeholder="Filtrer..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-8 h-8 text-xs"
+          />
+        </div>
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="px-2 pb-2 space-y-0.5">
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full rounded-lg" />
+            ))
+          ) : items.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-6 italic">Aucune activité récente</p>
+          ) : (
+            items.map((item) => {
+              const isSelected = selected === item.conversationId;
+              return (
+                <button
+                  key={item.conversationId}
+                  onClick={() => onSelect(item.conversationId)}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg transition-all ${
+                    isSelected
+                      ? 'bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      {item.enabled && (
+                        <div className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                      )}
+                      <span className="text-xs font-medium truncate text-gray-900 dark:text-gray-100">
+                        {item.conversation?.title ?? item.conversationId.slice(0, 10) + '...'}
+                      </span>
+                    </div>
+                    {item.conversation?.type && (
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">
+                        {TYPE_LABELS[item.conversation.type] ?? item.conversation.type}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                    <span className="tabular-nums">{item.messagesSent} msgs</span>
+                    <span className="tabular-nums">{item.controlledUsersCount} users</span>
+                    <span className="tabular-nums ml-auto">{formatTimeAgo(item.lastResponseAt)}</span>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+// ── Live State Detail Cards ───────────────────────────────────────────────
+
 function ActivityCard({ data }: { data: LiveStateData }) {
   const score = data.analytics?.avgConfidence ?? 0;
   const hasCooldown = (data.controlledUsers ?? []).some(u => u.locked);
@@ -69,78 +183,40 @@ function ActivityCard({ data }: { data: LiveStateData }) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          Activit&eacute;
+          Utilisateurs contrôlés
         </CardTitle>
-        <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950">
-          <Activity className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+        <div className="flex items-center gap-2">
+          {hasCooldown && (
+            <Badge variant="outline" className="border-orange-300 text-orange-600 dark:text-orange-400 text-[10px]">
+              <Clock className="h-3 w-3 mr-0.5" />
+              Cooldown
+            </Badge>
+          )}
+          <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
+            <Users className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-gray-500 dark:text-gray-400">Score d&apos;activit&eacute;</span>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {(score * 100).toFixed(0)}%
-              </span>
-              <Badge variant={score > 0.7 ? 'default' : 'secondary'} className="text-xs">
-                {activityLabel(score)}
-              </Badge>
-            </div>
-          </div>
-          <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-            <div
-              className={`h-full rounded-full transition-all ${activityColor(score)}`}
-              style={{ width: `${Math.min(score * 100, 100)}%` }}
-            />
-          </div>
-        </div>
-
-        {hasCooldown && (
-          <Badge variant="outline" className="border-orange-300 text-orange-600 dark:text-orange-400">
-            <Clock className="h-3 w-3 mr-1" />
-            Cooldown actif
-          </Badge>
-        )}
-
-        <div>
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
-            Utilisateurs contr&ocirc;l&eacute;s ({(data.controlledUsers ?? []).length})
-          </p>
-          {(data.controlledUsers ?? []).length === 0 ? (
-            <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucun utilisateur</p>
-          ) : (
-            <div className="space-y-3">
-              {(data.controlledUsers ?? []).map(user => (
-                <div key={user.userId} className="flex items-center justify-between group p-1.5 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                  <div className="flex items-center gap-2 overflow-hidden flex-1">
-                    <UserDisplay userId={user.userId} size="sm" showUsername={false} className="flex-1" />
-                    {user.locked && <Lock className="h-3 w-3 text-orange-500 shrink-0" />}
-                  </div>
-                  <div className="flex items-center gap-2 pl-2">
-                    <div className="hidden group-hover:block transition-all">
-                      <Progress value={user.confidence * 100} className="w-12 h-1" />
-                    </div>
-                    <span className={`text-xs font-bold ${confidenceColor(user.confidence)} tabular-nums`}>
-                      {(user.confidence * 100).toFixed(0)}%
-                    </span>
-                  </div>
+      <CardContent className="space-y-3">
+        {(data.controlledUsers ?? []).length === 0 ? (
+          <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucun utilisateur contrôlé</p>
+        ) : (
+          <div className="space-y-2">
+            {(data.controlledUsers ?? []).map(user => (
+              <div key={user.userId} className="flex items-center justify-between p-2 rounded-md bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors">
+                <div className="flex items-center gap-2 overflow-hidden flex-1">
+                  <UserDisplay userId={user.userId} size="sm" showUsername className="flex-1" />
+                  {user.locked && <Lock className="h-3 w-3 text-orange-500 shrink-0" />}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {data.analytics && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-            <div>
-              <p className="text-xs text-gray-400">Messages envoy&eacute;s</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{data.analytics.messagesSent}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Mots totaux</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{data.analytics.totalWordsSent}</p>
-            </div>
+                <div className="flex items-center gap-2 pl-2 shrink-0">
+                  <Badge variant="outline" className="text-[9px] px-1">{user.systemLanguage}</Badge>
+                  <Progress value={user.confidence * 100} className="w-14 h-1.5" />
+                  <span className={`text-xs font-bold ${confidenceColor(user.confidence)} tabular-nums w-8 text-right`}>
+                    {(user.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </CardContent>
@@ -155,62 +231,38 @@ function ToneProfilesCard({ profiles }: { profiles: Record<string, ToneProfileEn
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          Profils de ton
+          Profils de ton ({entries.length})
         </CardTitle>
-        <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950">
-          <Users className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+        <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
+          <Activity className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
         </div>
       </CardHeader>
       <CardContent>
         {entries.length === 0 ? (
-          <p className="text-sm text-gray-400 dark:text-gray-500 italic">Aucun profil de ton</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucun profil de ton</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 dark:border-gray-800">
-                  <th className="text-left py-2 text-xs font-medium text-gray-500 dark:text-gray-400">Utilisateur</th>
-                  <th className="text-left py-2 text-xs font-medium text-gray-500 dark:text-gray-400">Ton</th>
-                  <th className="text-left py-2 text-xs font-medium text-gray-500 dark:text-gray-400">Vocabulaire</th>
-                  <th className="text-right py-2 text-xs font-medium text-gray-500 dark:text-gray-400">Msgs</th>
-                  <th className="text-right py-2 text-xs font-medium text-gray-500 dark:text-gray-400">Confiance</th>
-                  <th className="text-center py-2 text-xs font-medium text-gray-500 dark:text-gray-400"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map(profile => (
-                  <tr key={profile.userId} className="border-b border-gray-50 dark:border-gray-800/50 last:border-0 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
-                    <td className="py-3 pr-2">
-                      <UserDisplay userId={profile.userId} size="sm" />
-                    </td>
-                    <td className="py-3">
-                      <Badge variant="outline" className="text-xs">{profile.tone}</Badge>
-                    </td>
-                    <td className="py-2 text-gray-600 dark:text-gray-300 text-xs">{profile.vocabularyLevel}</td>
-                    <td className="py-2 text-right text-gray-600 dark:text-gray-300">{profile.messagesAnalyzed}</td>
-                    <td className="py-2 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Progress
-                          value={profile.confidence * 100}
-                          className="w-16 h-1.5"
-                        />
-                        <span className={`text-xs font-mono ${confidenceColor(profile.confidence)}`}>
-                          {(profile.confidence * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-2 text-center">
-                      {profile.locked && (
-                        <Badge variant="secondary" className="text-xs">
-                          <Lock className="h-3 w-3 mr-0.5" />
-                          Lock
-                        </Badge>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-2">
+            {entries.map(profile => (
+              <div key={profile.userId} className="flex items-center gap-3 p-2 rounded-md bg-gray-50/50 dark:bg-gray-800/30">
+                <UserDisplay userId={profile.userId} size="sm" showUsername={false} className="shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <Badge variant="outline" className="text-[10px]">{profile.tone}</Badge>
+                    <span className="text-[10px] text-gray-400">{profile.vocabularyLevel}</span>
+                    {profile.locked && (
+                      <Lock className="h-2.5 w-2.5 text-orange-500" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Progress value={profile.confidence * 100} className="flex-1 h-1" />
+                    <span className={`text-[10px] font-mono ${confidenceColor(profile.confidence)} tabular-nums`}>
+                      {(profile.confidence * 100).toFixed(0)}%
+                    </span>
+                    <span className="text-[10px] text-gray-400 tabular-nums">{profile.messagesAnalyzed} msgs</span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </CardContent>
@@ -225,10 +277,10 @@ function SummaryCard({ data }: { data: LiveStateData }) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          R&eacute;sum&eacute;
+          Résumé contextuel
         </CardTitle>
-        <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950">
-          <Brain className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+        <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
+          <Brain className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -240,10 +292,10 @@ function SummaryCard({ data }: { data: LiveStateData }) {
 
             {(record.currentTopics ?? []).length > 0 && (
               <div>
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Sujets</p>
-                <div className="flex flex-wrap gap-1.5">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Sujets</p>
+                <div className="flex flex-wrap gap-1">
                   {(record.currentTopics ?? []).map(topic => (
-                    <Badge key={topic} variant="secondary" className="text-xs">
+                    <Badge key={topic} variant="secondary" className="text-[10px]">
                       {topic}
                     </Badge>
                   ))}
@@ -251,15 +303,14 @@ function SummaryCard({ data }: { data: LiveStateData }) {
               </div>
             )}
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 dark:text-gray-400">Ton dominant :</span>
-              <Badge variant="outline" className="border-indigo-300 text-indigo-600 dark:text-indigo-400 text-xs">
-                {record.overallTone}
-              </Badge>
-            </div>
-
-            <div className="text-xs text-gray-400">
-              {record.messageCount} messages analys&eacute;s
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-400">Ton :</span>
+                <Badge variant="outline" className="border-indigo-300 text-indigo-600 dark:text-indigo-400 text-[10px]">
+                  {record.overallTone}
+                </Badge>
+              </div>
+              <span className="text-gray-400 tabular-nums">{record.messageCount} msgs analysés</span>
             </div>
           </>
         ) : data.summary ? (
@@ -267,26 +318,26 @@ function SummaryCard({ data }: { data: LiveStateData }) {
             {data.summary}
           </p>
         ) : (
-          <p className="text-sm text-gray-400 dark:text-gray-500 italic">Aucun r&eacute;sum&eacute; disponible</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucun résumé disponible</p>
         )}
       </CardContent>
     </Card>
   );
 }
 
-function HistoryCard({ data }: { data: LiveStateData }) {
+function MetricsCard({ data }: { data: LiveStateData }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          Historique Agent
+          Métriques
         </CardTitle>
-        <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950">
-          <MessageSquare className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+        <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
+          <MessageSquare className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span>{data.cachedMessageCount} messages en cache</span>
             {data.analytics?.lastResponseAt && (
@@ -303,24 +354,24 @@ function HistoryCard({ data }: { data: LiveStateData }) {
           </div>
 
           {data.analytics ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              <div className="text-center p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-                <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{data.analytics.messagesSent}</p>
-                <p className="text-xs text-gray-500">Messages</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                <p className="text-xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{data.analytics.messagesSent}</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Messages</p>
               </div>
-              <div className="text-center p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-                <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{data.analytics.totalWordsSent}</p>
-                <p className="text-xs text-gray-500">Mots</p>
+              <div className="text-center p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                <p className="text-xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{data.analytics.totalWordsSent}</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Mots</p>
               </div>
-              <div className="text-center p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-                <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+              <div className="text-center p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                <p className="text-xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">
                   {(data.analytics.avgConfidence * 100).toFixed(0)}%
                 </p>
-                <p className="text-xs text-gray-500">Confiance moy.</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Confiance</p>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-400 dark:text-gray-500 italic pt-2">Aucune analytique disponible</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucune analytique disponible</p>
           )}
         </div>
       </CardContent>
@@ -328,94 +379,147 @@ function HistoryCard({ data }: { data: LiveStateData }) {
   );
 }
 
+// ── Main Live Tab ─────────────────────────────────────────────────────────
+
 export function AgentLiveTab() {
-  const [conversationId, setConversationId] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [liveState, setLiveState] = useState<LiveStateData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchLiveState = useCallback(async () => {
-    const trimmedId = conversationId.trim();
-    if (!trimmedId) return;
+  const fetchLiveState = useCallback(async (id?: string) => {
+    const targetId = id ?? selectedId;
+    if (!targetId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await agentAdminService.getLiveState(trimmedId);
+      const response = await agentAdminService.getLiveState(targetId);
       if (response.success && response.data) {
         setLiveState(response.data);
       } else {
-        setError('Impossible de charger l\'etat live');
+        setError('Impossible de charger l\'état live');
       }
     } catch {
       setError('Erreur de connexion ou conversation introuvable');
     } finally {
       setLoading(false);
     }
-  }, [conversationId]);
+  }, [selectedId]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      fetchLiveState();
-    }
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId(id);
+    setLiveState(null);
+    setError(null);
+    fetchLiveState(id);
   }, [fetchLiveState]);
 
+  // Auto-refresh
+  useEffect(() => {
+    if (autoRefresh && selectedId) {
+      intervalRef.current = setInterval(() => {
+        fetchLiveState();
+      }, 15000);
+      return () => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+      };
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, [autoRefresh, selectedId, fetchLiveState]);
+
   return (
-    <div className="space-y-6">
-      <Card className="border-indigo-100 dark:border-indigo-900 shadow-sm">
-        <CardContent className="pt-6">
-          <div className="flex items-end gap-4">
-            <div className="flex-1">
-              <ConversationPicker
-                label="Sélectionner une conversation"
-                selectedId={conversationId || null}
-                onSelect={id => {
-                  setConversationId(id);
-                  // Auto-fetch if user selects from search
-                  setTimeout(fetchLiveState, 0);
-                }}
-                onClear={() => {
-                  setConversationId('');
-                  setLiveState(null);
-                }}
-                placeholder="Chercher par nom, ID ou #identifiant..."
-              />
-            </div>
-            <Button
-              onClick={fetchLiveState}
-              disabled={loading || !conversationId.trim()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white h-12 px-6"
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Activity className="h-4 w-4 mr-2" />
-              )}
-              Superviser
-            </Button>
-          </div>
-        </CardContent>
+    <div className="flex gap-4 min-h-[600px]">
+      {/* Left panel - Recent conversations list */}
+      <Card className="w-80 shrink-0 hidden lg:flex flex-col overflow-hidden">
+        <CardHeader className="pb-2 shrink-0">
+          <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+            <Zap className="h-3.5 w-3.5 text-indigo-500" />
+            Conversations actives
+          </CardTitle>
+        </CardHeader>
+        <div className="flex-1 overflow-hidden">
+          <RecentConversationsList selected={selectedId} onSelect={handleSelect} />
+        </div>
       </Card>
 
-      {loading && <LoadingSkeleton />}
-
-      {error && (
+      {/* Mobile: show list as horizontal scroll */}
+      <div className="lg:hidden w-full space-y-4">
         <Card>
-          <CardContent className="p-6">
-            <p className="text-sm text-red-500">{error}</p>
+          <CardContent className="p-3">
+            <RecentConversationsList selected={selectedId} onSelect={handleSelect} />
           </CardContent>
         </Card>
-      )}
+      </div>
 
-      {liveState && !loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ActivityCard data={liveState} />
-          <ToneProfilesCard profiles={liveState.toneProfiles} />
-          <SummaryCard data={liveState} />
-          <HistoryCard data={liveState} />
-        </div>
-      )}
+      {/* Right panel - Live state detail */}
+      <div className="flex-1 min-w-0 space-y-4">
+        {!selectedId ? (
+          <Card className="h-full flex items-center justify-center">
+            <CardContent className="text-center py-16">
+              <Eye className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+              <p className="text-sm text-gray-400">
+                Sélectionnez une conversation pour superviser son état en temps réel
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Header with controls */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                  {liveState?.conversationId ? `Live : ${liveState.conversationId.slice(0, 12)}...` : 'Chargement...'}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant={autoRefresh ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  className="text-xs h-7"
+                >
+                  <RefreshCw className={`h-3 w-3 mr-1 ${autoRefresh ? 'animate-spin' : ''}`} />
+                  {autoRefresh ? 'Auto 15s' : 'Auto'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchLiveState()}
+                  disabled={loading}
+                  className="text-xs h-7"
+                >
+                  {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                </Button>
+              </div>
+            </div>
+
+            {loading && !liveState && <LoadingSkeleton />}
+
+            {error && (
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-sm text-red-500">{error}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {liveState && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ActivityCard data={liveState} />
+                <ToneProfilesCard profiles={liveState.toneProfiles} />
+                <SummaryCard data={liveState} />
+                <MetricsCard data={liveState} />
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -19,6 +19,7 @@ import { Loader2 } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type AgentConfigData, type AgentConfigUpsert } from '@/services/agent-admin.service';
 import { AgentRolesSection } from './AgentRolesSection';
+import { UserDisplay } from './UserDisplay';
 import { UserPicker } from './UserPicker';
 import { ConversationPicker } from './ConversationPicker';
 import { toast } from 'sonner';
@@ -83,7 +84,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
   useEffect(() => {
     if (config) {
       setConversationId(config.conversationId);
-      const { id, conversationId: _cid, conversation, configuredBy, createdAt, updatedAt, ...upsertFields } = config;
+      const { id, conversationId: _cid, conversation, configuredBy, controlledUserIds: _cu, analytics: _an, createdAt, updatedAt, ...upsertFields } = config;
       setForm(upsertFields);
     } else {
       setConversationId('');
@@ -302,6 +303,24 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 onRemove={id => updateField('manualUserIds', (form.manualUserIds || []).filter(u => u !== id))}
                 placeholder="Ajouter un utilisateur sous contrôle..."
               />
+
+              {config && (() => {
+                const manualSet = new Set(form.manualUserIds ?? []);
+                const autoPickedIds = (config.controlledUserIds ?? []).filter(id => !manualSet.has(id));
+                if (autoPickedIds.length === 0) return null;
+                return (
+                  <div className="space-y-2 pt-1">
+                    <Label className="text-xs text-gray-500">
+                      Auto-d&eacute;tect&eacute;s ({autoPickedIds.length})
+                    </Label>
+                    <div className="flex flex-wrap gap-2 p-2 rounded-md border border-dashed border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+                      {autoPickedIds.map(id => (
+                        <UserDisplay key={id} userId={id} size="sm" showUsername={false} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <UserPicker
                 label="Utilisateurs exclus (Blacklist)"
