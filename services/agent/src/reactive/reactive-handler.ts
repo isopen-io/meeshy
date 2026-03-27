@@ -48,6 +48,8 @@ type StateManager = {
 };
 
 export class ReactiveHandler {
+  private conversationLocks = new Map<string, Promise<void>>();
+
   constructor(
     private readonly llm: LlmProvider,
     private readonly persistence: Persistence,
@@ -56,6 +58,13 @@ export class ReactiveHandler {
   ) {}
 
   async handleInterpellation(input: InterpellationInput): Promise<void> {
+    const lock = this.conversationLocks.get(input.conversationId) ?? Promise.resolve();
+    const next = lock.then(() => this.processInterpellation(input)).catch(() => {});
+    this.conversationLocks.set(input.conversationId, next);
+    return next;
+  }
+
+  private async processInterpellation(input: InterpellationInput): Promise<void> {
     try {
       const controlledUsers = await this.persistence.getControlledUsers(input.conversationId);
       if (controlledUsers.length === 0) return;
@@ -129,7 +138,7 @@ export class ReactiveHandler {
           asUserId: msg.asUserId,
           content: msg.content,
           originalLanguage: targetUser.systemLanguage,
-          replyToId: i === 0 ? msg.replyToId : undefined,
+          replyToId: i === 0 ? input.triggerMessage.id : undefined,
           mentionedUsernames: [],
           delaySeconds: Math.round(cumulativeDelayMs / 1000),
           messageSource: 'agent' as const,

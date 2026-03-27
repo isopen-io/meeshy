@@ -67,6 +67,31 @@ describe('TimingCalculator', () => {
     expect(maxDelay).toBeLessThanOrEqual(100_000);
   });
 
+  it('caps reply/mention delay at 90s even with long inactivity', () => {
+    const results: number[] = [];
+    for (let i = 0; i < 30; i++) {
+      results.push(calculateResponseDelay({
+        interpellationType: 'reply', wordCount: 50,
+        lastUserMessageAgoMs: 24 * 60 * 60 * 1000, unreadMessageCount: 10,
+      }));
+    }
+    const maxDelay = Math.max(...results);
+    // 90s base + 20% jitter = max ~108s
+    expect(maxDelay).toBeLessThanOrEqual(120_000);
+  });
+
+  it('caps mention delay at 90s even with long inactivity', () => {
+    const results: number[] = [];
+    for (let i = 0; i < 30; i++) {
+      results.push(calculateResponseDelay({
+        interpellationType: 'mention', wordCount: 50,
+        lastUserMessageAgoMs: 24 * 60 * 60 * 1000, unreadMessageCount: 10,
+      }));
+    }
+    const maxDelay = Math.max(...results);
+    expect(maxDelay).toBeLessThanOrEqual(120_000);
+  });
+
   it('adds reading delay proportional to unread count', () => {
     const noUnread: number[] = [];
     for (let i = 0; i < 20; i++) {

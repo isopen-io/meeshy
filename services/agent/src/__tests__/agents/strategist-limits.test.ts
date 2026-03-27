@@ -49,7 +49,8 @@ describe('Strategist — Dynamic Word Limits', () => {
       archetypeId: overrides.archetypeId,
       overrideMinWordsPerMessage: overrides.minWords,
       overrideMaxWordsPerMessage: overrides.maxWords,
-      personaSummary: '', tone: '', vocabularyLevel: '', typicalLength: '', emojiUsage: '',
+      personaSummary: '', tone: '', vocabularyLevel: 'courant',
+      typicalLength: overrides.typicalLength ?? 'moyen', emojiUsage: '',
       topicsOfExpertise: [], topicsAvoided: [], relationshipMap: {}, catchphrases: [],
       responseTriggers: [], silenceTriggers: [], commonEmojis: [], reactionPatterns: [],
       messagesAnalyzed: 0, confidence: 0.5, locked: false,
@@ -63,19 +64,20 @@ describe('Strategist — Dynamic Word Limits', () => {
     const result = await strategist(makeState(users));
 
     const interventions = result.interventionPlan.interventions;
-    expect(interventions).toHaveLength(2);
+    const messageInterventions = interventions.filter((i: any) => i.type === 'message');
+    expect(messageInterventions).toHaveLength(2);
 
-    // Intervention 1: Dynamique (auto-pick)
-    const int1 = interventions.find((i: any) => i.asUserId === 'u1') as MessageDirective;
+    // Intervention 1: Dynamique — typicalLength 'moyen' → 30-150
+    const int1 = messageInterventions.find((i: any) => i.asUserId === 'u1') as MessageDirective;
     expect(int1).toBeDefined();
-    expect(int1.minWords).toBe(3); // default from state
-    expect(int1.maxWords).toBe(300); // default capped at 300 for dynamic
+    expect(int1.minWords).toBe(30);
+    expect(int1.maxWords).toBe(150);
 
-    // Intervention 2: Interpellé (reply to m1)
-    const int2 = interventions.find((i: any) => i.asUserId === 'u2') as MessageDirective;
+    // Intervention 2: Interpellé (reply to m1) — typicalLength 'moyen' → 30-150
+    const int2 = messageInterventions.find((i: any) => i.asUserId === 'u2') as MessageDirective;
     expect(int2).toBeDefined();
-    expect(int2.minWords).toBe(3); // default from state
-    expect(int2.maxWords).toBe(400); // default from state for interpelle
+    expect(int2.minWords).toBe(30);
+    expect(int2.maxWords).toBe(150);
   });
 
   it('respects user overrides in hierarchy', async () => {
@@ -87,11 +89,83 @@ describe('Strategist — Dynamic Word Limits', () => {
     const strategist = createStrategistNode(llm as any);
     const result = await strategist(makeState(users));
 
-    const interventions = result.interventionPlan.interventions;
-    const int1 = interventions.find((i: any) => i.asUserId === 'u1') as MessageDirective;
+    const messageInterventions = result.interventionPlan.interventions.filter((i: any) => i.type === 'message');
+    const int1 = messageInterventions.find((i: any) => i.asUserId === 'u1') as MessageDirective;
     expect(int1).toBeDefined();
     expect(int1.minWords).toBe(10);
     expect(int1.maxWords).toBe(50);
+  });
+
+  it('injects reactions when LLM produces messages but no reactions', async () => {
+    (getArchetype as jest.Mock).mockReturnValue(null);
+    const users = [makeControlledUser('u1'), makeControlledUser('u2')];
+    const state = makeState(users);
+    state.messages = [
+      { id: 'm1', senderId: 'real-user', senderName: 'Alice', senderUsername: 'alice', content: 'Hello!', timestamp: Date.now() },
+      { id: 'm2', senderId: 'real-user-2', senderName: 'Bob', senderUsername: 'bob', content: 'Super post!', timestamp: Date.now() },
+    ];
+    const strategist = createStrategistNode(llm as any);
+    const result = await strategist(state);
+
+    const reactions = result.interventionPlan.interventions.filter((i: any) => i.type === 'reaction');
+    expect(reactions.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('maps typicalLength to distinct word ranges per user', async () => {
+    const llmMulti = {
+      chat: jest.fn().mockResolvedValue({
+        content: JSON.stringify({
+          shouldIntervene: true,
+          reason: 'test',
+          interventions: [
+            { type: 'message', asUserId: 'short', topic: 'bref', delaySeconds: 30 },
+            { type: 'message', asUserId: 'long', topic: 'detail', delaySeconds: 30 },
+          ]
+        })
+      })
+    };
+    (getArchetype as jest.Mock).mockReturnValue(null);
+    const users = [
+      makeControlledUser('short', { typicalLength: 'court' }),
+      makeControlledUser('long', { typicalLength: 'long' }),
+    ];
+    const strategist = createStrategistNode(llmMulti as any);
+    const result = await strategist(makeState(users));
+
+    const msgs = result.interventionPlan.interventions.filter((i: any) => i.type === 'message');
+    const shortUser = msgs.find((i: any) => i.asUserId === 'short') as MessageDirective;
+    const longUser = msgs.find((i: any) => i.asUserId === 'long') as MessageDirective;
+
+    expect(shortUser.minWords).toBe(10);
+    expect(shortUser.maxWords).toBe(60);
+    expect(longUser.minWords).toBe(100);
+    expect(longUser.maxWords).toBe(250);
+  });
+
+  it('does not inject reactions when LLM already provided them', async () => {
+    const llmWithReactions = {
+      chat: jest.fn().mockResolvedValue({
+        content: JSON.stringify({
+          shouldIntervene: true,
+          reason: 'test',
+          interventions: [
+            { type: 'message', asUserId: 'u1', topic: 'topic1', delaySeconds: 30 },
+            { type: 'reaction', asUserId: 'u1', targetMessageId: 'm1', emoji: '👍', delaySeconds: 5 },
+          ]
+        })
+      })
+    };
+    (getArchetype as jest.Mock).mockReturnValue(null);
+    const users = [makeControlledUser('u1')];
+    const state = makeState(users);
+    state.messages = [
+      { id: 'm1', senderId: 'real-user', senderName: 'Alice', senderUsername: 'alice', content: 'Cool', timestamp: Date.now() },
+    ];
+    const strategist = createStrategistNode(llmWithReactions as any);
+    const result = await strategist(state);
+
+    const reactions = result.interventionPlan.interventions.filter((i: any) => i.type === 'reaction');
+    expect(reactions.length).toBe(1);
   });
 
   it('respects archetype limits in hierarchy', async () => {
@@ -103,8 +177,8 @@ describe('Strategist — Dynamic Word Limits', () => {
     const strategist = createStrategistNode(llm as any);
     const result = await strategist(makeState(users));
 
-    const interventions = result.interventionPlan.interventions;
-    const int1 = interventions.find((i: any) => i.asUserId === 'u1') as MessageDirective;
+    const messageInterventions = result.interventionPlan.interventions.filter((i: any) => i.type === 'message');
+    const int1 = messageInterventions.find((i: any) => i.asUserId === 'u1') as MessageDirective;
     expect(int1).toBeDefined();
     expect(int1.minWords).toBe(20);
     expect(int1.maxWords).toBe(150);
