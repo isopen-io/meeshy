@@ -316,8 +316,8 @@ export class MessageReadStatusService {
     totalMembers: number;
     receivedCount: number;
     readCount: number;
-    receivedBy: Array<{ participantId: string; displayName: string; receivedAt: Date }>;
-    readBy: Array<{ participantId: string; displayName: string; readAt: Date }>;
+    receivedBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; receivedAt: Date }>;
+    readBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; readAt: Date }>;
   }> {
     try {
       const message = await this.prisma.message.findUnique({
@@ -329,7 +329,7 @@ export class MessageReadStatusService {
 
       const participants = await this.prisma.participant.findMany({
         where: { conversationId, isActive: true },
-        select: { id: true, displayName: true },
+        select: { id: true, displayName: true, user: { select: { avatar: true } } },
       });
 
       const totalMembers = Math.max(
@@ -343,20 +343,26 @@ export class MessageReadStatusService {
           participantId: { not: message.senderId },
         },
         include: {
-          participant: { select: { id: true, displayName: true } },
+          participant: { select: { id: true, displayName: true, user: { select: { avatar: true } } } },
         },
       });
+
+      const participantAvatars = new Map(
+        participants.map(p => [p.id, p.user?.avatar ?? null])
+      );
 
       const receivedBy: Array<{
         participantId: string;
         displayName: string;
+        avatarURL: string | null;
         receivedAt: Date;
       }> = [];
-      const readBy: Array<{ participantId: string; displayName: string; readAt: Date }> =
+      const readBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; readAt: Date }> =
         [];
 
       for (const cursor of cursors) {
         if (!cursor.participant) continue;
+        const avatarURL = cursor.participant.user?.avatar ?? participantAvatars.get(cursor.participantId) ?? null;
 
         if (
           cursor.lastDeliveredAt &&
@@ -365,6 +371,7 @@ export class MessageReadStatusService {
           receivedBy.push({
             participantId: cursor.participantId,
             displayName: cursor.participant.displayName,
+            avatarURL,
             receivedAt: cursor.lastDeliveredAt,
           });
         }
@@ -373,6 +380,7 @@ export class MessageReadStatusService {
           readBy.push({
             participantId: cursor.participantId,
             displayName: cursor.participant.displayName,
+            avatarURL,
             readAt: cursor.lastReadAt,
           });
         }

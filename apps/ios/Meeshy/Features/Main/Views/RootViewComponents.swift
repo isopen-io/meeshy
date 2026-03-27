@@ -528,7 +528,7 @@ struct ThemedFeedCard: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
-                    Text("2h")
+                    Text(timeAgoShort(from: item.timestamp))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color(hex: item.color))
                 }
@@ -569,8 +569,8 @@ struct ThemedFeedCard: View {
                 FeedActionButton(icon: isLiked ? "heart.fill" : "heart", color: "FF6B6B", count: item.likes + (isLiked ? 1 : 0), isActive: isLiked) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isLiked.toggle() }
                 }
-                FeedActionButton(icon: "bubble.right", color: "4ECDC4", count: Int.random(in: 0...30))
-                FeedActionButton(icon: "arrow.2.squarepath", color: "9B59B6", count: Int.random(in: 0...15))
+                FeedActionButton(icon: "bubble.right", color: "4ECDC4", count: 0)
+                FeedActionButton(icon: "arrow.2.squarepath", color: "9B59B6", count: 0)
 
                 Spacer()
 
@@ -595,6 +595,14 @@ struct ThemedFeedCard: View {
                 )
                 .shadow(color: Color(hex: item.color).opacity(theme.mode.isDark ? 0.15 : 0.1), radius: 8, y: 4)
         )
+    }
+
+    private func timeAgoShort(from date: Date) -> String {
+        let seconds = Int(Date().timeIntervalSince(date))
+        if seconds < 60 { return "maintenant" }
+        if seconds < 3600 { return "\(seconds / 60)m" }
+        if seconds < 86400 { return "\(seconds / 3600)h" }
+        return "\(seconds / 86400)j"
     }
 }
 
