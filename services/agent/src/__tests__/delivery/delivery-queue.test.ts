@@ -185,7 +185,7 @@ describe('DeliveryQueue — conversation-wide minimum gap', () => {
     const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
 
     queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 5 })]);
-    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-bob', delaySeconds: 5 })]);
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-bob', delaySeconds: 5, content: 'Voici un message plus long pour tester le gap' })]);
 
     const items = queue.getScheduledForUser('conv-1', 'bot-bob');
     expect(items).toHaveLength(1);
@@ -193,7 +193,21 @@ describe('DeliveryQueue — conversation-wide minimum gap', () => {
     expect(aliceItems).toHaveLength(1);
 
     const gap = items[0].scheduledAt - aliceItems[0].scheduledAt;
-    expect(gap).toBeGreaterThanOrEqual(10_000);
+    expect(gap).toBeGreaterThanOrEqual(5_000);
+  });
+
+  it('uses shorter gap for very short messages', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 5 })]);
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-bob', delaySeconds: 5, content: 'Ok cool' })]);
+
+    const items = queue.getScheduledForUser('conv-1', 'bot-bob');
+    const aliceItems = queue.getScheduledForUser('conv-1', 'bot-alice');
+    const gap = items[0].scheduledAt - aliceItems[0].scheduledAt;
+
+    expect(gap).toBeGreaterThanOrEqual(3_000);
+    expect(gap).toBeLessThan(15_000);
   });
 
   it('does not enforce gap across different conversations', () => {

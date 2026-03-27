@@ -175,6 +175,14 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     })());
 }
 
+const TYPICAL_LENGTH_RANGES: Record<string, { min: number; max: number }> = {
+  expeditif: { min: 1, max: 15 },
+  court: { min: 10, max: 60 },
+  moyen: { min: 30, max: 150 },
+  long: { min: 100, max: 250 },
+  'tres long': { min: 200, max: 500 },
+};
+
 function calculateWordLimits(
   user: ControlledUser,
   isInterpelle: boolean,
@@ -182,7 +190,7 @@ function calculateWordLimits(
 ) {
   const archetype = user.role.archetypeId ? getArchetype(user.role.archetypeId) : null;
 
-  // 1. User Override
+  // 1. User Override (highest priority)
   let minWords = (user.role as any).overrideMinWordsPerMessage;
   let maxWords = (user.role as any).overrideMaxWordsPerMessage;
 
@@ -190,20 +198,25 @@ function calculateWordLimits(
   if (minWords === undefined || minWords === null) minWords = archetype?.minWords;
   if (maxWords === undefined || maxWords === null) maxWords = archetype?.maxWords;
 
-  // 3. Response Mode / Conversation Default
+  // 3. Per-user typicalLength (maps to distinct word ranges)
+  if (minWords === undefined || minWords === null) {
+    const range = TYPICAL_LENGTH_RANGES[user.role.typicalLength];
+    if (range) minWords = range.min;
+  }
+  if (maxWords === undefined || maxWords === null) {
+    const range = TYPICAL_LENGTH_RANGES[user.role.typicalLength];
+    if (range) maxWords = range.max;
+  }
+
+  // 4. Conversation default fallback
   if (minWords === undefined || minWords === null) minWords = state.minWordsPerMessage;
   if (maxWords === undefined || maxWords === null) {
-    if (!isInterpelle) {
-      // Default to 300 words for "dynamique" (auto-pick) mode
-      maxWords = Math.min(300, state.maxWordsPerMessage);
-    } else {
-      maxWords = state.maxWordsPerMessage;
-    }
+    maxWords = isInterpelle ? state.maxWordsPerMessage : Math.min(300, state.maxWordsPerMessage);
   }
 
   return {
-    minWords: Number(minWords) || 3,
-    maxWords: Number(maxWords) || 300,
+    minWords: Number(minWords) || 10,
+    maxWords: Number(maxWords) || 150,
   };
 }
 
@@ -293,6 +306,12 @@ function validateInterventions(
 
 const DEFAULT_REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '💯', '😮', '🙌', '✨', '🤔'];
 
+function getUserReactionEmojis(user: ControlledUser): string[] {
+  if (user.role.reactionPatterns.length > 0) return user.role.reactionPatterns;
+  if (user.role.commonEmojis.length > 0) return user.role.commonEmojis;
+  return DEFAULT_REACTION_EMOJIS;
+}
+
 function ensureMinimumReactions(
   interventions: InterventionDirective[],
   state: ConversationState,
@@ -300,54 +319,57 @@ function ensureMinimumReactions(
 ): InterventionDirective[] {
   if (maxReactions <= 0) return interventions;
 
-  const hasMessages = interventions.some((i) => i.type === 'message');
-  if (!hasMessages) return interventions;
-
-  const existingReactionCount = interventions.filter((i) => i.type === 'reaction').length;
-  const minReactions = 1;
-  const targetReactions = Math.min(
-    minReactions + Math.floor(Math.random() * 3),
-    maxReactions,
-  );
-
-  if (existingReactionCount >= minReactions) return interventions;
+  const messageInterventions = interventions.filter((i) => i.type === 'message');
+  if (messageInterventions.length === 0) return interventions;
 
   const controlledUserIds = new Set(state.controlledUsers.map((u) => u.userId));
+  const controlledUserMap = new Map(state.controlledUsers.map((u) => [u.userId, u]));
   const reactableMessages = state.messages
     .filter((m) => !controlledUserIds.has(m.senderId))
-    .slice(-15);
+    .slice(-20);
 
   if (reactableMessages.length === 0) return interventions;
 
   const alreadyReactedTo = new Set(
     interventions
       .filter((i): i is ReactionDirective => i.type === 'reaction')
-      .map((i) => i.targetMessageId),
+      .map((i) => `${i.asUserId}:${i.targetMessageId}`),
   );
 
-  const candidateMessages = reactableMessages.filter((m) => !alreadyReactedTo.has(m.id));
-  if (candidateMessages.length === 0) return interventions;
-
-  const reactionsToAdd = targetReactions - existingReactionCount;
   const result = [...interventions];
+  let totalReactions = interventions.filter((i) => i.type === 'reaction').length;
 
-  for (let i = 0; i < reactionsToAdd && i < candidateMessages.length; i++) {
-    const targetMsg = candidateMessages[candidateMessages.length - 1 - i];
-    const user = state.controlledUsers[Math.floor(Math.random() * state.controlledUsers.length)];
-    const userEmojis = user.role.reactionPatterns.length > 0
-      ? user.role.reactionPatterns
-      : user.role.commonEmojis.length > 0
-        ? user.role.commonEmojis
-        : DEFAULT_REACTION_EMOJIS;
-    const emoji = userEmojis[Math.floor(Math.random() * userEmojis.length)];
+  const usersWhoSpeak = new Set(messageInterventions.map((i) => i.asUserId));
 
-    result.push({
-      type: 'reaction',
-      asUserId: user.userId,
-      targetMessageId: targetMsg.id,
-      emoji,
-      delaySeconds: Math.round((5 + Math.random() * 25) * (0.8 + Math.random() * 0.4)),
-    });
+  for (const userId of usersWhoSpeak) {
+    const user = controlledUserMap.get(userId);
+    if (!user || totalReactions >= maxReactions) break;
+
+    const userExistingReactions = interventions.filter(
+      (i) => i.type === 'reaction' && i.asUserId === userId,
+    ).length;
+    if (userExistingReactions >= 1) continue;
+
+    const reactionCount = 1 + Math.floor(Math.random() * 3);
+    const userEmojis = getUserReactionEmojis(user);
+    const candidateMessages = reactableMessages.filter(
+      (m) => !alreadyReactedTo.has(`${userId}:${m.id}`) && m.senderId !== userId,
+    );
+
+    for (let i = 0; i < reactionCount && i < candidateMessages.length && totalReactions < maxReactions; i++) {
+      const targetMsg = candidateMessages[candidateMessages.length - 1 - i];
+      const emoji = userEmojis[Math.floor(Math.random() * userEmojis.length)];
+
+      result.push({
+        type: 'reaction',
+        asUserId: userId,
+        targetMessageId: targetMsg.id,
+        emoji,
+        delaySeconds: Math.round((3 + Math.random() * 20) * (0.8 + Math.random() * 0.4)),
+      });
+      alreadyReactedTo.add(`${userId}:${targetMsg.id}`);
+      totalReactions++;
+    }
   }
 
   return result;

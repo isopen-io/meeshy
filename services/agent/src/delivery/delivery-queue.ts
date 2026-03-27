@@ -20,7 +20,13 @@ function jitterMs(value: number, percent = 0.2): number {
   return Math.round(value + value * (Math.random() * 2 * percent - percent));
 }
 
-const MIN_CONVERSATION_GAP_MS = 15_000;
+function minConversationGapMs(action: PendingAction): number {
+  if (action.type !== 'message') return 0;
+  const wordCount = action.content?.split(/\s+/).length ?? 0;
+  if (wordCount <= 4) return 5_000;
+  if (wordCount <= 15) return 8_000;
+  return 15_000;
+}
 
 export class DeliveryQueue {
   private queue: DeliveryItem[] = [];
@@ -73,7 +79,8 @@ export class DeliveryQueue {
     if (action.type === 'message') {
       const latestForConv = this.getLatestMessageScheduledAt(conversationId);
       if (latestForConv > 0) {
-        const minNext = latestForConv + jitterMs(MIN_CONVERSATION_GAP_MS, 0.3);
+        const gapMs = minConversationGapMs(action);
+        const minNext = latestForConv + jitterMs(gapMs, 0.3);
         if (scheduledAt < minNext) {
           scheduledAt = minNext;
         }
