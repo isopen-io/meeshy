@@ -433,18 +433,20 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     private func handleReactionSynced(_ event: ReactionSyncEvent) async {
-        // ReactionSyncEvent has no conversationId — update across all loaded keys
+        let messageId = event.messageId
+        let reactions = event.reactions
         let keys = await cache.messages.loadedKeys()
         for key in keys {
             await cache.messages.update(for: key) { existing in
                 existing.map { msg in
-                    guard msg.id == event.messageId else { return msg }
+                    guard msg.id == messageId else { return msg }
                     var updated = msg
-                    updated.reactions = event.reactions.flatMap { agg in
-                        (0..<agg.count).map { index in
-                            let pid = agg.participantIds.flatMap { $0.count > index ? $0[index] : nil }
+                    updated.reactions = reactions.flatMap { agg in
+                        let pids = agg.participantIds ?? []
+                        return (0..<agg.count).map { index in
+                            let pid: String? = index < pids.count ? pids[index] : nil
                             return MeeshyReaction(
-                                messageId: event.messageId,
+                                messageId: messageId,
                                 participantId: pid,
                                 emoji: agg.emoji
                             )
