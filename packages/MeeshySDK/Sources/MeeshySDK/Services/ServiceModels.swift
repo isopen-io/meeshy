@@ -98,6 +98,20 @@ public struct CreateCommentRequest: Encodable {
     }
 }
 
+public struct UpdatePostRequest: Encodable {
+    public let content: String?
+    public let visibility: String?
+    public let visibilityUserIds: [String]?
+    public let storyEffects: StoryEffects?
+    public let moodEmoji: String?
+
+    public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil, storyEffects: StoryEffects? = nil, moodEmoji: String? = nil) {
+        self.content = content; self.visibility = visibility
+        self.visibilityUserIds = visibilityUserIds; self.storyEffects = storyEffects
+        self.moodEmoji = moodEmoji
+    }
+}
+
 public struct CreateStoryRequest: Encodable {
     public let type = "STORY"
     public let content: String?

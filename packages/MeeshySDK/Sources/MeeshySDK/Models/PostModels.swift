@@ -97,6 +97,26 @@ public struct APIPost: Decodable, Sendable {
     public let isLikedByMe: Bool?
 }
 
+public struct APIPostViewer: Decodable, Sendable {
+    public let id: String
+    public let userId: String
+    public let viewedAt: Date?
+    public let duration: Int?
+    public let user: APIAuthor?
+}
+
+public struct PostViewersResponse: Decodable, Sendable {
+    public let items: [APIPostViewer]
+    public let pagination: PostViewersPagination
+}
+
+public struct PostViewersPagination: Decodable, Sendable {
+    public let total: Int
+    public let offset: Int
+    public let limit: Int
+    public let hasMore: Bool
+}
+
 // MARK: - Conversion helpers
 
 private func thumbnailColorForMime(_ mimeType: String?) -> String {
