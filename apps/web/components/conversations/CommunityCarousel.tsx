@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Archive, Users, MessageSquare, Grid3x3, Heart } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import type { Conversation } from '@meeshy/shared/types';
 import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
-import { communitiesService, type Community } from '@/services/communities.service';
+import { useCommunitiesQuery } from '@/hooks/queries';
 
 interface CommunityCarouselProps {
   conversations: Conversation[];
@@ -42,40 +41,7 @@ export function CommunityCarousel({
   t,
   preferencesMap = new Map()
 }: CommunityCarouselProps) {
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [isLoadingCommunities, setIsLoadingCommunities] = useState(true);
-
-  // Charger les communautés de l'utilisateur
-  useEffect(() => {
-    const loadCommunities = async () => {
-      try {
-        setIsLoadingCommunities(true);
-        const response = await communitiesService.getCommunities();
-
-
-        // La réponse est ApiResponse<Community[]>, donc response.data est Community[]
-        // Mais si response.data contient {success, data}, alors il faut response.data.data
-        let communitiesData: Community[] = [];
-
-        if (Array.isArray(response.data)) {
-          // Cas 1: response.data est directement un tableau
-          communitiesData = response.data;
-        } else if (response.data && typeof response.data === 'object' && 'data' in response.data) {
-          // Cas 2: response.data contient {success: true, data: [...]}
-          communitiesData = (response.data as any).data || [];
-        }
-
-
-        setCommunities(communitiesData);
-      } catch (error) {
-        console.error('[CommunityCarousel] ❌ Error loading communities:', error);
-        setCommunities([]);
-      } finally {
-        setIsLoadingCommunities(false);
-      }
-    };
-    loadCommunities();
-  }, []);
+  const { data: communities = [], isLoading: isLoadingCommunities } = useCommunitiesQuery();
 
   // Calculer les données des cartes
   const cards = useMemo((): CardData[] => {
@@ -108,24 +74,7 @@ export function CommunityCarousel({
       communities.forEach(community => {
         if (!community || !community.id) return;
 
-        // CORRECTION: Utiliser le comptage du backend (_count.Conversation) au lieu de filtrer localement
-        // Le backend connaît le nombre exact de conversations dans la communauté
-        // Le filtrage local peut être incomplet si toutes les conversations ne sont pas chargées
-        const conversationCountFromBackend = (community as any).conversationCount ?? community._count?.Conversation ?? 0;
-
-        // Pour debug: comparer avec le filtrage local
-        const communityConversationsLocal = conversations.filter(c => {
-          if (!c || !c.id) return false;
-          const prefs = preferencesMap.get(c.id);
-          const isArchived = prefs?.isArchived || false;
-          const matchesCommunity = c.communityId === community.id;
-
-          if (matchesCommunity) {
-          }
-
-          return matchesCommunity && !isArchived;
-        });
-
+        const conversationCountFromBackend = community._count?.conversations ?? 0;
 
         result.push({
           id: community.id,

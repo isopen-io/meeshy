@@ -1,14 +1,7 @@
-/**
- * Tests for CommunitiesService
- *
- * Tests community CRUD operations, member management,
- * and conversation fetching within communities
- */
-
-import { communitiesService, Community, CreateCommunityRequest, UpdateCommunityRequest } from '@/services/communities.service';
+import { communitiesService } from '@/services/communities.service';
 import { apiService } from '@/services/api.service';
+import type { Community, CreateCommunityData, UpdateCommunityData } from '@meeshy/shared/types';
 
-// Mock the apiService
 jest.mock('@/services/api.service', () => ({
   apiService: {
     get: jest.fn(),
@@ -35,171 +28,123 @@ describe('CommunitiesService', () => {
     createdBy: 'user-1',
     createdAt: new Date(),
     updatedAt: new Date(),
-    creator: {
-      id: 'user-1',
-      username: 'creator',
-      displayName: 'Creator User',
-    },
     _count: {
       members: 10,
-      Conversation: 5,
+      conversations: 5,
     },
     ...overrides,
-  });
+  } as Community);
 
   describe('getCommunities', () => {
     it('should fetch all communities', async () => {
       const mockCommunities = [
-        createMockCommunity({ id: 'comm-1', name: 'Community 1' }),
-        createMockCommunity({ id: 'comm-2', name: 'Community 2' }),
+        createMockCommunity({ id: 'comm-1' }),
+        createMockCommunity({ id: 'comm-2' }),
       ];
-
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: mockCommunities,
-      });
+      mockApiService.get.mockResolvedValue({ success: true, data: mockCommunities });
 
       const result = await communitiesService.getCommunities();
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/communities', { params: {} });
-      expect(result.success).toBe(true);
+      expect(mockApiService.get).toHaveBeenCalledWith('/communities', {});
       expect(result.data).toHaveLength(2);
     });
 
     it('should fetch communities with search filter', async () => {
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: [createMockCommunity({ name: 'Matching Community' })],
-      });
+      mockApiService.get.mockResolvedValue({ success: true, data: [] });
 
-      const result = await communitiesService.getCommunities('Matching');
+      await communitiesService.getCommunities({ search: 'test' });
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/communities', {
-        params: { search: 'Matching' },
-      });
-      expect(result.data).toHaveLength(1);
+      expect(mockApiService.get).toHaveBeenCalledWith('/communities', { search: 'test' });
     });
 
-    it('should return empty params when no search', async () => {
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: [],
-      });
+    it('should pass pagination params', async () => {
+      mockApiService.get.mockResolvedValue({ success: true, data: [] });
 
-      await communitiesService.getCommunities();
+      await communitiesService.getCommunities({ offset: 10, limit: 5 });
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/communities', { params: {} });
-    });
-
-    it('should throw error on failure', async () => {
-      mockApiService.get.mockRejectedValue(new Error('Network error'));
-
-      await expect(communitiesService.getCommunities()).rejects.toThrow('Network error');
+      expect(mockApiService.get).toHaveBeenCalledWith('/communities', { offset: 10, limit: 5 });
     });
   });
 
   describe('getCommunity', () => {
     it('should fetch a specific community by ID', async () => {
-      const mockCommunity = createMockCommunity();
-
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: mockCommunity,
-      });
+      const community = createMockCommunity();
+      mockApiService.get.mockResolvedValue({ success: true, data: community });
 
       const result = await communitiesService.getCommunity('community-123');
 
       expect(mockApiService.get).toHaveBeenCalledWith('/communities/community-123');
       expect(result.data?.name).toBe('Test Community');
     });
-
-    it('should throw error when community not found', async () => {
-      mockApiService.get.mockRejectedValue(new Error('Community not found'));
-
-      await expect(communitiesService.getCommunity('nonexistent')).rejects.toThrow(
-        'Community not found'
-      );
-    });
   });
 
   describe('getCommunityByIdentifier', () => {
     it('should fetch community by identifier', async () => {
-      const mockCommunity = createMockCommunity({ identifier: 'my-community' });
-
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: mockCommunity,
-      });
+      const community = createMockCommunity({ identifier: 'my-community' });
+      mockApiService.get.mockResolvedValue({ success: true, data: community });
 
       const result = await communitiesService.getCommunityByIdentifier('my-community');
 
       expect(mockApiService.get).toHaveBeenCalledWith('/communities/identifier/my-community');
       expect(result.data?.identifier).toBe('my-community');
     });
+  });
 
-    it('should handle special characters in identifier', async () => {
+  describe('searchCommunities', () => {
+    it('should search public communities', async () => {
+      mockApiService.get.mockResolvedValue({ success: true, data: [] });
+
+      await communitiesService.searchCommunities('test', 0, 20);
+
+      expect(mockApiService.get).toHaveBeenCalledWith('/communities/search', {
+        q: 'test',
+        offset: 0,
+        limit: 20,
+      });
+    });
+  });
+
+  describe('checkIdentifier', () => {
+    it('should check identifier availability', async () => {
       mockApiService.get.mockResolvedValue({
         success: true,
-        data: createMockCommunity({ identifier: 'my-special-community' }),
+        data: { available: true, identifier: 'mshy_test' },
       });
 
-      await communitiesService.getCommunityByIdentifier('my-special-community');
+      const result = await communitiesService.checkIdentifier('mshy_test');
 
       expect(mockApiService.get).toHaveBeenCalledWith(
-        '/communities/identifier/my-special-community'
+        '/communities/check-identifier/mshy_test'
       );
+      expect(result.data?.available).toBe(true);
     });
   });
 
   describe('getCommunityConversations', () => {
     it('should fetch conversations for a community', async () => {
-      const mockConversations = [
-        { id: 'conv-1', title: 'General' },
-        { id: 'conv-2', title: 'Announcements' },
-      ];
-
       mockApiService.get.mockResolvedValue({
         success: true,
-        data: mockConversations,
+        data: [{ id: 'conv-1' }, { id: 'conv-2' }],
       });
 
       const result = await communitiesService.getCommunityConversations('community-123');
 
-      expect(mockApiService.get).toHaveBeenCalledWith(
-        '/communities/community-123/conversations'
-      );
+      expect(mockApiService.get).toHaveBeenCalledWith('/communities/community-123/conversations');
       expect(result.data).toHaveLength(2);
-    });
-
-    it('should return empty array when no conversations', async () => {
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: [],
-      });
-
-      const result = await communitiesService.getCommunityConversations('empty-community');
-
-      expect(result.data).toEqual([]);
     });
   });
 
   describe('createCommunity', () => {
     it('should create a new community', async () => {
-      const createData: CreateCommunityRequest = {
+      const createData: CreateCommunityData = {
         name: 'New Community',
         identifier: 'new-community',
         description: 'A new community',
         isPrivate: false,
       };
-
-      const createdCommunity = createMockCommunity({
-        id: 'new-123',
-        ...createData,
-      });
-
       mockApiService.post.mockResolvedValue({
         success: true,
-        data: createdCommunity,
+        data: createMockCommunity({ ...createData }),
       });
 
       const result = await communitiesService.createCommunity(createData);
@@ -207,218 +152,153 @@ describe('CommunitiesService', () => {
       expect(mockApiService.post).toHaveBeenCalledWith('/communities', createData);
       expect(result.data?.name).toBe('New Community');
     });
-
-    it('should create community with minimal data', async () => {
-      const createData: CreateCommunityRequest = {
-        name: 'Minimal Community',
-      };
-
-      mockApiService.post.mockResolvedValue({
-        success: true,
-        data: createMockCommunity({ name: 'Minimal Community' }),
-      });
-
-      const result = await communitiesService.createCommunity(createData);
-
-      expect(mockApiService.post).toHaveBeenCalledWith('/communities', createData);
-      expect(result.success).toBe(true);
-    });
-
-    it('should create private community', async () => {
-      const createData: CreateCommunityRequest = {
-        name: 'Private Community',
-        isPrivate: true,
-      };
-
-      mockApiService.post.mockResolvedValue({
-        success: true,
-        data: createMockCommunity({ ...createData }),
-      });
-
-      await communitiesService.createCommunity(createData);
-
-      expect(mockApiService.post).toHaveBeenCalledWith('/communities', createData);
-    });
-
-    it('should throw error on creation failure', async () => {
-      mockApiService.post.mockRejectedValue(new Error('Identifier already exists'));
-
-      await expect(
-        communitiesService.createCommunity({ name: 'Duplicate' })
-      ).rejects.toThrow('Identifier already exists');
-    });
   });
 
   describe('updateCommunity', () => {
     it('should update community', async () => {
-      const updateData: UpdateCommunityRequest = {
-        name: 'Updated Name',
-        description: 'Updated description',
-      };
-
-      const updatedCommunity = createMockCommunity({
-        name: 'Updated Name',
-        description: 'Updated description',
-      });
-
+      const updateData: UpdateCommunityData = { name: 'Updated Name' };
       mockApiService.put.mockResolvedValue({
         success: true,
-        data: updatedCommunity,
+        data: createMockCommunity({ name: 'Updated Name' }),
       });
 
       const result = await communitiesService.updateCommunity('community-123', updateData);
 
-      expect(mockApiService.put).toHaveBeenCalledWith(
-        '/communities/community-123',
-        updateData
-      );
+      expect(mockApiService.put).toHaveBeenCalledWith('/communities/community-123', updateData);
       expect(result.data?.name).toBe('Updated Name');
-    });
-
-    it('should update community identifier', async () => {
-      const updateData: UpdateCommunityRequest = {
-        identifier: 'new-identifier',
-      };
-
-      mockApiService.put.mockResolvedValue({
-        success: true,
-        data: createMockCommunity({ identifier: 'new-identifier' }),
-      });
-
-      const result = await communitiesService.updateCommunity('community-123', updateData);
-
-      expect(result.data?.identifier).toBe('new-identifier');
-    });
-
-    it('should update privacy setting', async () => {
-      const updateData: UpdateCommunityRequest = {
-        isPrivate: true,
-      };
-
-      mockApiService.put.mockResolvedValue({
-        success: true,
-        data: createMockCommunity({ isPrivate: true }),
-      });
-
-      const result = await communitiesService.updateCommunity('community-123', updateData);
-
-      expect(result.data?.isPrivate).toBe(true);
     });
   });
 
   describe('deleteCommunity', () => {
     it('should delete community', async () => {
-      mockApiService.delete.mockResolvedValue({
-        success: true,
-        data: undefined,
-      });
+      mockApiService.delete.mockResolvedValue({ success: true });
 
       const result = await communitiesService.deleteCommunity('community-123');
 
       expect(mockApiService.delete).toHaveBeenCalledWith('/communities/community-123');
       expect(result.success).toBe(true);
     });
-
-    it('should throw error when deletion fails', async () => {
-      mockApiService.delete.mockRejectedValue(new Error('Cannot delete community with members'));
-
-      await expect(communitiesService.deleteCommunity('community-123')).rejects.toThrow(
-        'Cannot delete community with members'
-      );
-    });
   });
 
-  describe('addMember', () => {
-    it('should add member to community', async () => {
-      mockApiService.post.mockResolvedValue({
-        success: true,
-        data: undefined,
-      });
+  describe('member management', () => {
+    it('should get members', async () => {
+      mockApiService.get.mockResolvedValue({ success: true, data: [] });
 
-      const result = await communitiesService.addMember('community-123', 'user-456');
+      await communitiesService.getMembers('community-123');
+
+      expect(mockApiService.get).toHaveBeenCalledWith('/communities/community-123/members', {
+        offset: 0,
+        limit: 50,
+      });
+    });
+
+    it('should add member to community', async () => {
+      mockApiService.post.mockResolvedValue({ success: true, data: { id: 'm1' } });
+
+      await communitiesService.addMember('community-123', { userId: 'user-456' });
 
       expect(mockApiService.post).toHaveBeenCalledWith('/communities/community-123/members', {
         userId: 'user-456',
       });
-      expect(result.success).toBe(true);
     });
 
-    it('should throw error when user already member', async () => {
-      mockApiService.post.mockRejectedValue(new Error('User is already a member'));
+    it('should update member role', async () => {
+      mockApiService.patch.mockResolvedValue({ success: true, data: { id: 'm1' } });
 
-      await expect(
-        communitiesService.addMember('community-123', 'existing-user')
-      ).rejects.toThrow('User is already a member');
-    });
-
-    it('should throw error when community is private and user not invited', async () => {
-      mockApiService.post.mockRejectedValue(new Error('Cannot join private community'));
-
-      await expect(
-        communitiesService.addMember('private-community', 'user-456')
-      ).rejects.toThrow('Cannot join private community');
-    });
-  });
-
-  describe('removeMember', () => {
-    it('should remove member from community', async () => {
-      mockApiService.delete.mockResolvedValue({
-        success: true,
-        data: undefined,
+      await communitiesService.updateMemberRole('community-123', 'member-1', {
+        role: 'admin' as never,
       });
 
-      const result = await communitiesService.removeMember('community-123', 'member-456');
+      expect(mockApiService.patch).toHaveBeenCalledWith(
+        '/communities/community-123/members/member-1/role',
+        { role: 'admin' }
+      );
+    });
+
+    it('should remove member from community', async () => {
+      mockApiService.delete.mockResolvedValue({ success: true });
+
+      await communitiesService.removeMember('community-123', 'member-456');
 
       expect(mockApiService.delete).toHaveBeenCalledWith(
         '/communities/community-123/members/member-456'
       );
-      expect(result.success).toBe(true);
-    });
-
-    it('should throw error when member not found', async () => {
-      mockApiService.delete.mockRejectedValue(new Error('Member not found'));
-
-      await expect(
-        communitiesService.removeMember('community-123', 'nonexistent-member')
-      ).rejects.toThrow('Member not found');
-    });
-
-    it('should throw error when trying to remove creator', async () => {
-      mockApiService.delete.mockRejectedValue(new Error('Cannot remove community creator'));
-
-      await expect(
-        communitiesService.removeMember('community-123', 'creator-id')
-      ).rejects.toThrow('Cannot remove community creator');
     });
   });
 
-  describe('Error handling', () => {
-    it('should propagate API errors with proper context', async () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+  describe('join/leave', () => {
+    it('should join a community', async () => {
+      mockApiService.post.mockResolvedValue({ success: true, data: { id: 'm1' } });
 
-      mockApiService.get.mockRejectedValue(new Error('Internal server error'));
+      await communitiesService.joinCommunity('community-123');
 
-      await expect(communitiesService.getCommunity('test')).rejects.toThrow(
-        'Internal server error'
+      expect(mockApiService.post).toHaveBeenCalledWith('/communities/community-123/join');
+    });
+
+    it('should leave a community', async () => {
+      mockApiService.post.mockResolvedValue({ success: true });
+
+      await communitiesService.leaveCommunity('community-123');
+
+      expect(mockApiService.post).toHaveBeenCalledWith('/communities/community-123/leave');
+    });
+  });
+
+  describe('preferences', () => {
+    it('should get preferences', async () => {
+      mockApiService.get.mockResolvedValue({ success: true, data: { isPinned: true } });
+
+      await communitiesService.getPreferences('community-123');
+
+      expect(mockApiService.get).toHaveBeenCalledWith(
+        '/user-preferences/communities/community-123'
       );
-
-      expect(consoleSpy).toHaveBeenCalled();
-      consoleSpy.mockRestore();
     });
-  });
 
-  describe('Response structure', () => {
-    it('should return ApiResponse format', async () => {
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: [createMockCommunity()],
-        message: 'Communities fetched successfully',
+    it('should list all preferences', async () => {
+      mockApiService.get.mockResolvedValue({ success: true, data: [] });
+
+      await communitiesService.listPreferences();
+
+      expect(mockApiService.get).toHaveBeenCalledWith('/user-preferences/communities', {
+        offset: 0,
+        limit: 50,
       });
+    });
 
-      const result = await communitiesService.getCommunities();
+    it('should update preferences', async () => {
+      mockApiService.put.mockResolvedValue({ success: true, data: { isPinned: true } });
 
-      expect(result).toHaveProperty('success');
-      expect(result).toHaveProperty('data');
+      await communitiesService.updatePreferences('community-123', { isPinned: true });
+
+      expect(mockApiService.put).toHaveBeenCalledWith(
+        '/user-preferences/communities/community-123',
+        { isPinned: true }
+      );
+    });
+
+    it('should delete preferences', async () => {
+      mockApiService.delete.mockResolvedValue({ success: true });
+
+      await communitiesService.deletePreferences('community-123');
+
+      expect(mockApiService.delete).toHaveBeenCalledWith(
+        '/user-preferences/communities/community-123'
+      );
+    });
+
+    it('should reorder preferences', async () => {
+      mockApiService.post.mockResolvedValue({ success: true });
+
+      const updates = [
+        { communityId: 'c1', orderInCategory: 0 },
+        { communityId: 'c2', orderInCategory: 1 },
+      ];
+      await communitiesService.reorderPreferences(updates);
+
+      expect(mockApiService.post).toHaveBeenCalledWith('/user-preferences/communities/reorder', {
+        updates,
+      });
     });
   });
 });

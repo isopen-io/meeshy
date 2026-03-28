@@ -13,7 +13,7 @@
  * - Composants enfants pour UI modulaire
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useIsAuthChecking } from '@/stores';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -24,11 +24,18 @@ import type { Group } from '@meeshy/shared/types';
 import { cn } from '@/lib/utils';
 
 // Hooks customs
-import { useGroups } from '@/hooks/use-groups';
-import { useGroupDetails } from '@/hooks/use-group-details';
-import { useGroupForm } from '@/hooks/use-group-form';
-import { useCommunityConversations } from '@/hooks/use-community-conversations';
 import { useGroupsResponsive } from '@/hooks/use-groups-responsive';
+import {
+  useCommunitiesQuery,
+  useCommunityQuery,
+  useCommunityConversationsQuery,
+  useCreateCommunityMutation,
+  useCheckIdentifierQuery,
+} from '@/hooks/queries';
+import {
+  generateCommunityIdentifier,
+  sanitizeCommunityIdentifier,
+} from '@/utils/community-identifier';
 
 // Composants UI
 import { GroupsList } from './GroupsList';
@@ -53,39 +60,98 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
   const [searchFilter, setSearchFilter] = useState('');
   const [copiedIdentifier, setCopiedIdentifier] = useState<string | null>(null);
 
-  // Hooks customs pour la logique métier
-  const { groups, setGroups, isLoading } = useGroups();
-  const { selectedGroup, setSelectedGroup, loadGroupDetails } = useGroupDetails();
-  const { communityConversations, isLoadingConversations, loadCommunityConversations } =
-    useCommunityConversations();
+  // React Query hooks pour la logique métier
+  const { data: groups = [], isLoading } = useCommunitiesQuery();
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+
+  // Charger les détails quand un identifiant est dans l'URL mais pas trouvé localement
+  const { data: fetchedGroupDetail } = useCommunityQuery(
+    selectedGroupIdentifier && !selectedGroup ? selectedGroupIdentifier : null
+  );
+
+  // Conversations de la communauté sélectionnée
+  const { data: communityConversations = [], isLoading: isLoadingConversations } =
+    useCommunityConversationsQuery(selectedGroup?.id);
+
   const { showGroupsList, setShowGroupsList, isMobile } = useGroupsResponsive(selectedGroup);
 
-  // Hook formulaire de création
-  const groupForm = useGroupForm({
-    tGroups,
-    onSuccess: (newGroup) => {
-      setGroups((prev) => [newGroup, ...prev]);
-      setIsCreateModalOpen(false);
+  // Création de communauté via React Query
+  const createCommunityMutation = useCreateCommunityMutation();
+
+  // Form state pour la création (local, pas besoin de hook séparé)
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
+  const [newGroupIdentifier, setNewGroupIdentifier] = useState('');
+  const [newGroupIsPrivate, setNewGroupIsPrivate] = useState(false);
+
+  // Identifier availability check via React Query
+  const fullIdentifier = newGroupIdentifier ? `mshy_${newGroupIdentifier}` : '';
+  const { data: identifierCheck, isFetching: isCheckingIdentifier } =
+    useCheckIdentifierQuery(fullIdentifier);
+
+  const identifierAvailable = identifierCheck?.available ?? null;
+  const isFormValid = !!(
+    newGroupName.trim() &&
+    newGroupIdentifier.trim() &&
+    identifierAvailable === true &&
+    !isCheckingIdentifier
+  );
+
+  // Auto-generate identifier from name
+  useEffect(() => {
+    if (newGroupName.trim()) {
+      const generated = generateCommunityIdentifier(newGroupName);
+      setNewGroupIdentifier(generated);
     }
-  });
+  }, [newGroupName]);
+
+  // Reset form
+  const resetForm = useCallback(() => {
+    setNewGroupName('');
+    setNewGroupDescription('');
+    setNewGroupIdentifier('');
+    setNewGroupIsPrivate(false);
+  }, []);
+
+  // Create group handler
+  const handleCreateGroup = useCallback(async () => {
+    if (!isFormValid) return;
+    try {
+      await createCommunityMutation.mutateAsync({
+        name: newGroupName,
+        description: newGroupDescription || undefined,
+        identifier: `mshy_${newGroupIdentifier}`,
+        isPrivate: newGroupIsPrivate,
+      });
+      resetForm();
+      setIsCreateModalOpen(false);
+      toast.success(tGroups('success.groupCreated'));
+    } catch {
+      toast.error(tGroups('errors.createError'));
+    }
+  }, [
+    isFormValid, createCommunityMutation, newGroupName, newGroupDescription,
+    newGroupIdentifier, newGroupIsPrivate, resetForm, tGroups,
+  ]);
+
+  // Sync fetched group detail from URL
+  useEffect(() => {
+    if (fetchedGroupDetail && !selectedGroup) {
+      setSelectedGroup(fetchedGroupDetail as unknown as Group);
+      if (isMobile) {
+        setShowGroupsList(false);
+      }
+    }
+  }, [fetchedGroupDetail, selectedGroup, isMobile, setShowGroupsList]);
 
   // Sélectionner un groupe
   const handleSelectGroup = useCallback(
     (group: Group) => {
-      try {
-        setSelectedGroup(group);
-
-        if (group.id) {
-          loadCommunityConversations(group.id, group.isPrivate);
-        }
-
-        const identifier = group.identifier || '';
-        router.push(`/groups/${identifier}`);
-      } catch (error) {
-        console.error('[ERROR] handleSelectGroup failed:', error);
-      }
+      setSelectedGroup(group);
+      const identifier = group.identifier || '';
+      router.push(`/groups/${identifier}`);
     },
-    [router, loadCommunityConversations, setSelectedGroup]
+    [router]
   );
 
   // Retour à la liste (mobile)
@@ -137,18 +203,10 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
         if (isMobile) {
           setShowGroupsList(false);
         }
-      } else {
-        loadGroupDetails(selectedGroupIdentifier, isMobile);
       }
+      // If not found locally, useCommunityQuery above handles fetching
     }
-  }, [selectedGroupIdentifier, groups, isMobile, loadGroupDetails, setSelectedGroup, setShowGroupsList]);
-
-  // Charger les conversations quand le groupe est sélectionné
-  useEffect(() => {
-    if (selectedGroup?.id) {
-      loadCommunityConversations(selectedGroup.id, selectedGroup.isPrivate);
-    }
-  }, [selectedGroup?.id, selectedGroup?.isPrivate, loadCommunityConversations]);
+  }, [selectedGroupIdentifier, groups, isMobile, setShowGroupsList]);
 
   // Loading state pendant la vérification d'authentification
   if (isAuthChecking) {
@@ -230,19 +288,19 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
         isOpen={isCreateModalOpen}
         onOpenChange={setIsCreateModalOpen}
         formState={{
-          newGroupName: groupForm.newGroupName,
-          setNewGroupName: groupForm.setNewGroupName,
-          newGroupDescription: groupForm.newGroupDescription,
-          setNewGroupDescription: groupForm.setNewGroupDescription,
-          newGroupIdentifier: groupForm.newGroupIdentifier,
-          setNewGroupIdentifier: groupForm.setNewGroupIdentifier,
-          newGroupIsPrivate: groupForm.newGroupIsPrivate,
-          setNewGroupIsPrivate: groupForm.setNewGroupIsPrivate,
-          isCheckingIdentifier: groupForm.isCheckingIdentifier,
-          identifierAvailable: groupForm.identifierAvailable,
-          isValid: groupForm.isValid
+          newGroupName,
+          setNewGroupName,
+          newGroupDescription,
+          setNewGroupDescription,
+          newGroupIdentifier,
+          setNewGroupIdentifier: (value: string) => setNewGroupIdentifier(sanitizeCommunityIdentifier(value)),
+          newGroupIsPrivate,
+          setNewGroupIsPrivate,
+          isCheckingIdentifier,
+          identifierAvailable,
+          isValid: isFormValid,
         }}
-        onSubmit={groupForm.createGroup}
+        onSubmit={handleCreateGroup}
         tGroups={tGroups}
       />
     </DashboardLayout>
