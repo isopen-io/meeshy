@@ -236,6 +236,19 @@ class ConversationListViewModel: ObservableObject {
                 self?.clearTyping(for: event.conversationId)
             }
             .store(in: &cancellables)
+
+        messageSocket.userPreferencesUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let convId = event.conversationId else { return }
+                if let idx = conversations.firstIndex(where: { $0.id == convId }) {
+                    var conv = conversations[idx]
+                    if let isPinned = event.isPinned { conv.isPinned = isPinned }
+                    if let isMuted = event.isMuted { conv.isMuted = isMuted }
+                    conversations[idx] = conv
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Typing Cleanup

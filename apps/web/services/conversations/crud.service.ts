@@ -4,7 +4,6 @@
  */
 
 import { apiService } from '../api.service';
-import { cacheService } from './cache.service';
 import { transformersService } from './transformers.service';
 import type {
   Conversation,
@@ -24,23 +23,7 @@ export class ConversationsCrudService {
    * Obtenir toutes les conversations de l'utilisateur avec pagination et filtres
    */
   async getConversations(options: GetConversationsOptions = {}): Promise<GetConversationsResponse> {
-    const { limit = 20, offset = 0, skipCache = false, type, withUserId, before } = options;
-
-    // Vérifier le cache (seulement pour la première page sans offset, sans filtres, sans cursor)
-    if (!skipCache && !before && offset === 0 && !type && !withUserId) {
-      const cachedConversations = cacheService.getConversationsFromCache();
-      if (cachedConversations) {
-        return {
-          conversations: cachedConversations,
-          pagination: {
-            limit,
-            offset: 0,
-            total: cachedConversations.length,
-            hasMore: false
-          }
-        };
-      }
-    }
+    const { limit = 20, offset = 0, type, withUserId, before } = options;
 
     const queryParams: Record<string, string> = {
       limit: limit.toString(),
@@ -74,11 +57,6 @@ export class ConversationsCrudService {
     );
 
     const cursorPagination = response.data.cursorPagination;
-
-    // Mettre en cache les conversations (seulement pour la première page, not cursor-based)
-    if (offset === 0 && !before) {
-      cacheService.setConversationsCache(conversations);
-    }
 
     return {
       conversations,
@@ -120,8 +98,6 @@ export class ConversationsCrudService {
       throw new Error('Erreur lors de la création de la conversation');
     }
 
-    // Invalider le cache
-    cacheService.invalidateConversationsCache();
 
     return transformersService.transformConversationData(response.data.data);
   }
@@ -136,8 +112,6 @@ export class ConversationsCrudService {
       throw new Error('Erreur lors de la mise à jour de la conversation');
     }
 
-    // Invalider le cache
-    cacheService.invalidateConversationsCache();
 
     return response.data;
   }
@@ -147,9 +121,6 @@ export class ConversationsCrudService {
    */
   async deleteConversation(id: string): Promise<void> {
     await apiService.delete(`/conversations/${id}`);
-
-    // Invalider le cache
-    cacheService.invalidateConversationsCache();
   }
 
   /**
@@ -184,7 +155,6 @@ export class ConversationsCrudService {
   async getConversationsWithUser(userId: string): Promise<Conversation[]> {
     try {
       const { conversations } = await this.getConversations({
-        skipCache: true,
         type: 'direct',
         withUserId: userId
       });

@@ -23,7 +23,27 @@ import type {
   MessagesQuery
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { z } from 'zod';
+import { CommonSchemas } from '@meeshy/shared/utils/validation';
+
+const SendMessageBodySchema = z.object({
+  content: CommonSchemas.messageContent,
+  originalLanguage: CommonSchemas.language.optional(),
+  messageType: CommonSchemas.messageType.optional(),
+  replyToId: z.string().optional(),
+  storyReplyToId: z.string().optional(),
+  forwardedFromId: z.string().optional(),
+  forwardedFromConversationId: z.string().optional(),
+  encryptedContent: z.string().optional(),
+  encryptionMode: z.enum(['e2ee', 'server', 'hybrid']).optional(),
+  encryptionMetadata: z.record(z.unknown()).optional(),
+  isEncrypted: z.boolean().optional(),
+  attachmentIds: z.array(z.string()).optional(),
+  isBlurred: z.boolean().optional(),
+  expiresAt: z.string().optional(),
+  mentionedUserIds: z.array(z.string()).optional(),
+});
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
@@ -215,10 +235,7 @@ export function registerMessagesRoutes(
       const conversationId = await resolveConversationId(prisma, id);
       timings.resolveConversationId = performance.now() - t0;
       if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // Vérifier les permissions d'accès
@@ -227,10 +244,7 @@ export function registerMessagesRoutes(
       timings.canAccessConversation = performance.now() - t0;
 
       if (!canAccess) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // Resolve the current user's participantId in this conversation
@@ -263,10 +277,18 @@ export function registerMessagesRoutes(
       if (participant?.shareLinkId) {
         const shareLink = await prisma.conversationShareLink.findFirst({
           where: { id: participant.shareLinkId },
-          select: { allowViewHistory: true }
+          select: { allowViewHistory: true, expiresAt: true, maxUses: true, currentUses: true }
         });
-        if (shareLink && !shareLink.allowViewHistory) {
-          historyStartDate = participant.joinedAt;
+        if (shareLink) {
+          if (shareLink.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
+            return sendForbidden(reply, 'This share link has expired', { code: 'SHARE_LINK_EXPIRED' });
+          }
+          if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
+            return sendForbidden(reply, 'This share link has reached its usage limit', { code: 'SHARE_LINK_MAX_USES' });
+          }
+          if (!shareLink.allowViewHistory) {
+            historyStartDate = participant.joinedAt;
+          }
         }
       }
 
@@ -976,10 +998,7 @@ export function registerMessagesRoutes(
     } catch (error) {
       const totalMs = Math.round(performance.now() - reqStart);
       logger.error(`Error fetching messages (after ${totalMs}ms)`, error);
-      reply.status(500).send({
-        success: false,
-        error: 'Error retrieving messages'
-      });
+      sendInternalError(reply, 'Error retrieving messages');
     }
   });
 
@@ -1026,19 +1045,13 @@ export function registerMessagesRoutes(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // Vérifier les permissions d'accès
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!canAccess) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // Resolve participant ID for this user
@@ -1088,10 +1101,7 @@ export function registerMessagesRoutes(
 
     } catch (error) {
       logger.error('Error marking conversation as read', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors du marquage des messages comme lus'
-      });
+      sendInternalError(reply, 'Erreur lors du marquage des messages comme lus');
     }
   });
 
@@ -1154,10 +1164,12 @@ export function registerMessagesRoutes(
 
       // Vérifier que l'utilisateur est authentifié
       if (!authRequest.authContext.isAuthenticated) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentification requise pour envoyer des messages'
-        });
+        return sendUnauthorized(reply, 'Authentification requise pour envoyer des messages');
+      }
+
+      const bodyResult = SendMessageBodySchema.safeParse(request.body);
+      if (!bodyResult.success) {
+        return sendBadRequest(reply, 'Validation error', { message: bodyResult.error.message });
       }
 
       const { id } = request.params;
@@ -1177,7 +1189,7 @@ export function registerMessagesRoutes(
         isBlurred,
         expiresAt,
         mentionedUserIds
-      } = request.body;
+      } = bodyResult.data as SendMessageBody;
 
       const userId = authRequest.authContext.userId;
       let participantId: string;
@@ -1189,13 +1201,13 @@ export function registerMessagesRoutes(
           select: { id: true }
         });
         if (!participant) {
-          return reply.status(403).send({ success: false, error: 'You are not a participant of this conversation' });
+          return sendForbidden(reply, 'You are not a participant of this conversation');
         }
         participantId = participant.id;
       }
 
       if (!participantId) {
-        return reply.status(403).send({ success: false, error: 'Participant identification failed' });
+        return sendForbidden(reply, 'Participant identification failed');
       }
 
       // Utiliser le MessagingService unifié
@@ -1232,7 +1244,7 @@ export function registerMessagesRoutes(
       const result = await messagingService.handleMessage(messageRequest, participantId);
 
       if (!result.success) {
-        return reply.status(400).send(result);
+        return sendBadRequest(reply, result.error || 'Invalid message request');
       }
 
       // Broadcaster via socket (async)
@@ -1249,10 +1261,7 @@ export function registerMessagesRoutes(
 
     } catch (error) {
       logger.error('Error in REST send message:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne lors de l\'envoi du message'
-      });
+      return sendInternalError(reply, 'Erreur interne lors de l\'envoi du message');
     }
   });
 
@@ -1291,10 +1300,7 @@ export function registerMessagesRoutes(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // Vérifier les permissions d'accès
@@ -1377,19 +1383,13 @@ export function registerMessagesRoutes(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Conversation not found'
-        });
+        return sendNotFound(reply, 'Conversation not found');
       }
 
       // Vérifier les permissions d'accès
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!canAccess) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Unauthorized access to this conversation'
-        });
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
       // Resolve participant ID for this user
@@ -1469,10 +1469,7 @@ export function registerMessagesRoutes(
 
     } catch (error) {
       logger.error('Error marking conversation as unread', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Error marking conversation as unread'
-      });
+      sendInternalError(reply, 'Error marking conversation as unread');
     }
   });
 

@@ -89,6 +89,11 @@ public struct SocketCommentLikedData: Decodable, Sendable {
     public let likeCount: Int
 }
 
+public struct SocketPostBookmarkedData: Decodable, Sendable {
+    public let postId: String
+    public let bookmarked: Bool
+}
+
 public struct SocketStoryTranslationUpdatedData: Decodable, Sendable {
     public let postId: String
     public let textObjectIndex: Int
@@ -125,6 +130,7 @@ public protocol SocialSocketProviding: Sendable {
     var postLiked: PassthroughSubject<SocketPostLikedData, Never> { get }
     var postUnliked: PassthroughSubject<SocketPostUnlikedData, Never> { get }
     var postReposted: PassthroughSubject<SocketPostRepostedData, Never> { get }
+    var postBookmarked: PassthroughSubject<SocketPostBookmarkedData, Never> { get }
     var storyCreated: PassthroughSubject<APIPost, Never> { get }
     var storyViewed: PassthroughSubject<SocketStoryViewedData, Never> { get }
     var storyReacted: PassthroughSubject<SocketStoryReactedData, Never> { get }
@@ -158,6 +164,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let postLiked = PassthroughSubject<SocketPostLikedData, Never>()
     public let postUnliked = PassthroughSubject<SocketPostUnlikedData, Never>()
     public let postReposted = PassthroughSubject<SocketPostRepostedData, Never>()
+    public let postBookmarked = PassthroughSubject<SocketPostBookmarkedData, Never>()
     public let storyCreated = PassthroughSubject<APIPost, Never>()
     public let storyViewed = PassthroughSubject<SocketStoryViewedData, Never>()
     public let storyReacted = PassthroughSubject<SocketStoryReactedData, Never>()
@@ -362,6 +369,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             guard let self else { return }
             self.decode(SocketPostRepostedData.self, from: data) { [weak self] payload in
                 self?.postReposted.send(payload)
+            }
+        }
+
+        socket.on("post:bookmarked") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketPostBookmarkedData.self, from: data) { [weak self] payload in
+                self?.postBookmarked.send(payload)
             }
         }
 

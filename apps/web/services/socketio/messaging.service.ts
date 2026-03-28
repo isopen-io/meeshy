@@ -12,7 +12,11 @@
 
 import { logger } from '@/utils/logger';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { AttachmentStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import type {
+  AttachmentStatusUpdatedEventData,
+  MessageConsumedEventData,
+  ReactionUpdateEventData,
+} from '@meeshy/shared/types/socketio-events';
 import type {
   Message,
   SocketIOMessage
@@ -25,7 +29,6 @@ import type {
   MessageDeleteListener,
   UnsubscribeFn,
   EncryptionHandlers,
-  GetMessageByIdCallback,
   MessageSendOptions,
   MessageAckResponse
 } from './types';
@@ -38,12 +41,11 @@ export class MessagingService {
   private messageListeners: Set<MessageListener> = new Set();
   private editListeners: Set<MessageEditListener> = new Set();
   private deleteListeners: Set<MessageDeleteListener> = new Set();
-  private mentionListeners: Set<(data: any) => void> = new Set();
-  private consumedListeners: Set<(data: any) => void> = new Set();
+  private mentionListeners: Set<(data: unknown) => void> = new Set();
+  private consumedListeners: Set<(data: MessageConsumedEventData) => void> = new Set();
   private attachmentStatusListeners: Set<(data: AttachmentStatusUpdatedEventData) => void> = new Set();
 
   private encryptionHandlers: EncryptionHandlers | null = null;
-  private getMessageByIdCallback: GetMessageByIdCallback | null = null;
 
   /**
    * Check if encryption handlers are already configured
@@ -66,13 +68,6 @@ export class MessagingService {
   clearEncryptionHandlers(): void {
     this.encryptionHandlers = null;
     logger.debug('[MessagingService]', 'Encryption handlers cleared');
-  }
-
-  /**
-   * Set callback for retrieving messages by ID
-   */
-  setGetMessageByIdCallback(callback: GetMessageByIdCallback): void {
-    this.getMessageByIdCallback = callback;
   }
 
   /**
@@ -118,24 +113,20 @@ export class MessagingService {
       this.deleteListeners.forEach(listener => listener(data.messageId));
     });
 
-    // Mention created — NOTE: gateway does not emit MENTION_CREATED yet (dead listener)
-    socket.on(SERVER_EVENTS.MENTION_CREATED as any, (data: any) => {
-      this.mentionListeners.forEach(listener => listener(data));
-    });
-
-    // Message consumed (view-once)
-    socket.on(SERVER_EVENTS.MESSAGE_CONSUMED as any, (data: any) => {
+    socket.on(SERVER_EVENTS.MESSAGE_CONSUMED, (data: MessageConsumedEventData) => {
       this.consumedListeners.forEach(listener => listener(data));
     });
 
-    // System message (join, leave, etc.)
-    socket.on(SERVER_EVENTS.SYSTEM_MESSAGE as any, (data: any) => {
-      this.messageListeners.forEach(listener => listener(convertMessageFn(data)));
+    socket.on(SERVER_EVENTS.SYSTEM_MESSAGE, (data) => {
+      this.messageListeners.forEach(listener => listener(convertMessageFn(data as unknown as SocketIOMessage)));
     });
 
-    // Attachment status updated
-    socket.on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED as any, (data: any) => {
+    socket.on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
       this.attachmentStatusListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.MENTION_CREATED, (data: unknown) => {
+      this.mentionListeners.forEach(listener => listener(data));
     });
   }
 
@@ -143,8 +134,9 @@ export class MessagingService {
    * Decrypt message if it has encrypted content
    */
   private async decryptMessage(socketMessage: SocketIOMessage, message: Message): Promise<Message> {
-    const encryptedContent = (socketMessage as any).encryptedContent;
-    const encryptionMetadata = (socketMessage as any).encryptionMetadata;
+    const socketMsg = socketMessage as SocketIOMessage & { encryptedContent?: string; encryptionMetadata?: { mode: string; keyId?: string; iv?: string; authTag?: string } };
+    const encryptedContent = socketMsg.encryptedContent;
+    const encryptionMetadata = socketMsg.encryptionMetadata;
 
     if (!encryptedContent || !encryptionMetadata || !this.encryptionHandlers?.decrypt) {
       return message;
@@ -166,13 +158,20 @@ export class MessagingService {
       } as Message & { _isEncrypted?: boolean; _encryptionMode?: string };
 
     } catch (decryptionError) {
-      console.error('[MessagingService] Decryption failed:', decryptionError);
+      const errorMsg = decryptionError instanceof Error ? decryptionError.message : 'Unknown error';
+      const decryptionErrorCode = errorMsg.includes('key')
+        ? 'KEY_MISSING'
+        : errorMsg.includes('session')
+          ? 'SESSION_NOT_FOUND'
+          : 'DECRYPTION_FAILED';
+      console.error(`[MessagingService] Decryption failed (${decryptionErrorCode}):`, decryptionError);
       return {
         ...message,
         content: message.content || '[Encrypted message - Unable to decrypt]',
         _isEncrypted: true,
-        _decryptionFailed: true
-      } as Message & { _isEncrypted?: boolean; _decryptionFailed?: boolean };
+        _decryptionFailed: true,
+        _decryptionErrorCode: decryptionErrorCode,
+      } as Message & { _isEncrypted?: boolean; _decryptionFailed?: boolean; _decryptionErrorCode?: string };
     }
   }
 
@@ -204,8 +203,7 @@ export class MessagingService {
     try {
       const hasAttachments = attachmentIds && attachmentIds.length > 0;
 
-      // Build base message payload
-      const messageData: any = {
+      const messageData: Record<string, unknown> = {
         conversationId,
         content,
         ...(originalLanguage && { originalLanguage }),
@@ -355,9 +353,10 @@ export class MessagingService {
       });
 
       logger.info('[MessagingService]', 'Message sent via REST fallback');
+      const msg = response as Message & { data?: { id?: string } };
       return {
         success: true,
-        messageId: (response as any)?.data?.id ?? (response as any)?.id ?? response?.id,
+        messageId: msg.data?.id ?? msg.id,
         clientMessageId: options.clientMessageId,
       };
     } catch (error) {
@@ -372,7 +371,7 @@ export class MessagingService {
   private async emitWithTimeout(
     socket: TypedSocket,
     event: string,
-    data: any,
+    data: Record<string, unknown>,
     timeoutMs: number
   ): Promise<MessageAckResponse> {
     return new Promise((resolve) => {
@@ -381,7 +380,7 @@ export class MessagingService {
         resolve({ success: false, timedOut: true });
       }, timeoutMs);
 
-      socket.emit(event as any, data, (response: any) => {
+      const callback = (response: { success?: boolean; data?: { messageId?: string; clientMessageId?: string }; message?: string; error?: string }) => {
         clearTimeout(timeout);
         if (response?.success) {
           resolve({
@@ -394,7 +393,9 @@ export class MessagingService {
           logger.warn('[MessagingService]', `Send failed: ${errorMsg}`);
           resolve({ success: false });
         }
-      });
+      };
+
+      (socket as unknown as { emit: (event: string, data: unknown, cb: typeof callback) => void }).emit(event, data, callback);
     });
   }
 
@@ -438,23 +439,17 @@ export class MessagingService {
   /**
    * Event listener: Mention created
    */
-  onMentionCreated(listener: (data: any) => void): UnsubscribeFn {
+  onMentionCreated(listener: (data: unknown) => void): UnsubscribeFn {
     this.mentionListeners.add(listener);
     return () => this.mentionListeners.delete(listener);
   }
 
-  /**
-   * Event listener: Message consumed (view-once)
-   */
-  onMessageConsumed(listener: (data: any) => void): UnsubscribeFn {
+  onMessageConsumed(listener: (data: MessageConsumedEventData) => void): UnsubscribeFn {
     this.consumedListeners.add(listener);
     return () => this.consumedListeners.delete(listener);
   }
 
-  /**
-   * Event listener: Attachment status updated
-   */
-  onAttachmentStatusUpdated(listener: (data: any) => void): UnsubscribeFn {
+  onAttachmentStatusUpdated(listener: (data: AttachmentStatusUpdatedEventData) => void): UnsubscribeFn {
     this.attachmentStatusListeners.add(listener);
     return () => this.attachmentStatusListeners.delete(listener);
   }

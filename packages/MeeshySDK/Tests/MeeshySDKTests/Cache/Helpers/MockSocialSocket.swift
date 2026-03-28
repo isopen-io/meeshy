@@ -8,6 +8,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let postLiked = PassthroughSubject<SocketPostLikedData, Never>()
     let postUnliked = PassthroughSubject<SocketPostUnlikedData, Never>()
     let postReposted = PassthroughSubject<SocketPostRepostedData, Never>()
+    let postBookmarked = PassthroughSubject<SocketPostBookmarkedData, Never>()
     let storyCreated = PassthroughSubject<APIPost, Never>()
     let storyViewed = PassthroughSubject<SocketStoryViewedData, Never>()
     let storyReacted = PassthroughSubject<SocketStoryReactedData, Never>()

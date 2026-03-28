@@ -223,7 +223,6 @@ describe('useConversationsQuery', () => {
         expect.objectContaining({
           limit: 10,
           offset: 5,
-          skipCache: true,
         })
       );
     });

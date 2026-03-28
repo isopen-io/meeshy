@@ -15,8 +15,6 @@ export { useConversationUI } from './useConversationUI';
 
 // Hooks de communication
 export { useConversationTyping } from './useConversationTyping';
-export { useSocketCallbacks } from './use-socket-callbacks';
-
 // Hooks de données
 export { useComposerDrafts } from './useComposerDrafts';
 export { useMessageActions } from './useMessageActions';

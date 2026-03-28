@@ -559,6 +559,10 @@ export class SocketIOOrchestrator {
     return this.preferencesSyncService.onPreferencesUpdated(listener);
   }
 
+  onParticipantRoleUpdated(listener: (data: { conversationId: string; userId: string; newRole: string }) => void): UnsubscribeFn {
+    return this.presenceService.onParticipantRoleUpdated(listener);
+  }
+
   // ============ CLEANUP ============
 
   cleanup(): void {

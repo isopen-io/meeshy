@@ -68,10 +68,7 @@ export const SERVER_EVENTS = {
   CONVERSATION_JOINED: 'conversation:joined',
   CONVERSATION_LEFT: 'conversation:left',
   AUTHENTICATED: 'authenticated',
-  MESSAGE_SENT: 'message:sent',
   ERROR: 'error',
-  TRANSLATION_RECEIVED: 'translation:received',
-  TRANSLATION_ERROR: 'translation:error',
   NOTIFICATION: 'notification',
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_READ: 'notification:read',
@@ -223,39 +220,11 @@ export interface AuthenticatedEventData {
 }
 
 /**
- * Données pour l'événement d'envoi de message
- */
-export interface MessageSentEventData {
-  readonly messageId: string;
-  readonly status: string;
-  readonly timestamp: string;
-}
-
-/**
  * Données pour l'événement d'erreur
  */
 export interface ErrorEventData {
   readonly message: string;
   readonly code?: string;
-}
-
-/**
- * Données pour l'événement de réception de traduction
- */
-export interface TranslationReceivedEventData {
-  readonly messageId: string;
-  readonly translatedText: string;
-  readonly targetLanguage: string;
-  readonly confidenceScore?: number;
-}
-
-/**
- * Données pour l'événement d'erreur de traduction
- */
-export interface TranslationErrorEventData {
-  readonly messageId: string;
-  readonly targetLanguage: string;
-  readonly error: string;
 }
 
 /**
@@ -627,10 +596,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.CONVERSATION_LEFT]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.AUTHENTICATED]: (data: AuthenticatedEventData) => void;
-  [SERVER_EVENTS.MESSAGE_SENT]: (data: MessageSentEventData) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
-  [SERVER_EVENTS.TRANSLATION_RECEIVED]: (data: TranslationReceivedEventData) => void;
-  [SERVER_EVENTS.TRANSLATION_ERROR]: (data: TranslationErrorEventData) => void;
   [SERVER_EVENTS.NOTIFICATION]: (data: NotificationEventData) => void;
   [SERVER_EVENTS.SYSTEM_MESSAGE]: (data: SystemMessageEventData) => void;
   [SERVER_EVENTS.CONVERSATION_STATS]: (data: ConversationStatsEventData) => void;

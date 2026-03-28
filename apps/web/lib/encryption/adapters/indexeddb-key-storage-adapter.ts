@@ -13,6 +13,7 @@ const DB_VERSION = 1;
 const KEYS_STORE = 'encryption_keys';
 const CONVERSATIONS_STORE = 'conversation_keys';
 const USER_KEYS_STORE = 'user_keys';
+const PBKDF2_ITERATIONS = 600_000;
 
 interface StoredKey {
   id: string;
@@ -323,16 +324,75 @@ export class IndexedDBKeyStorageAdapter implements KeyStorageAdapter {
       exportedAt: Date.now(),
     };
 
-    // TODO: Encrypt backup with password using PBKDF2 + AES-GCM
-    return btoa(JSON.stringify(backup));
+    const backupJson = JSON.stringify(backup);
+    const plaintext = new TextEncoder().encode(backupJson);
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(password),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+
+    const derivedKey = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt']
+    );
+
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      derivedKey,
+      plaintext
+    );
+
+    const result = {
+      salt: btoa(String.fromCharCode(...salt)),
+      iv: btoa(String.fromCharCode(...iv)),
+      ciphertext: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+      version: DB_VERSION,
+    };
+
+    return btoa(JSON.stringify(result));
   }
 
   /**
    * Import keys from backup
    */
   async importKeys(encryptedBackup: string, password: string): Promise<void> {
-    // TODO: Decrypt backup with password
-    const backup = JSON.parse(atob(encryptedBackup));
+    const envelope = JSON.parse(atob(encryptedBackup));
+    const salt = Uint8Array.from(atob(envelope.salt), c => c.charCodeAt(0));
+    const iv = Uint8Array.from(atob(envelope.iv), c => c.charCodeAt(0));
+    const ciphertext = Uint8Array.from(atob(envelope.ciphertext), c => c.charCodeAt(0));
+
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(password),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+
+    const derivedKey = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt']
+    );
+
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      derivedKey,
+      ciphertext
+    );
+
+    const backup = JSON.parse(new TextDecoder().decode(decrypted));
 
     await this.init();
     if (!this.db) throw new Error('Database not initialized');

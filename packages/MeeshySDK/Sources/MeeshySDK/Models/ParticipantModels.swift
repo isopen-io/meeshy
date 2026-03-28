@@ -146,6 +146,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
     public let displayName: String?
     public let avatar: String?
     public let role: String?
+    public let conversationRole: String?
     public let language: String?
     public let permissions: ParticipantPermissions?
     public let isActive: Bool?
@@ -165,6 +166,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
         displayName: String? = nil,
         avatar: String? = nil,
         role: String? = nil,
+        conversationRole: String? = nil,
         language: String? = nil,
         permissions: ParticipantPermissions? = nil,
         isActive: Bool? = nil,
@@ -183,6 +185,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
         self.displayName = displayName
         self.avatar = avatar
         self.role = role
+        self.conversationRole = conversationRole
         self.language = language
         self.permissions = permissions
         self.isActive = isActive
@@ -197,6 +200,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
 
     public var name: String { nickname ?? displayName ?? "Unknown" }
     public var resolvedAvatar: String? { avatar ?? user?.resolvedAvatar }
+    public var effectiveRole: String { conversationRole ?? role ?? "member" }
 }
 
 // MARK: - CacheIdentifiable Conformance

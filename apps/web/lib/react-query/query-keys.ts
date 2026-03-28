@@ -34,6 +34,10 @@ export const queryKeys = {
   preferences: {
     all: ['user-preferences'] as const,
     category: (category: string) => [...queryKeys.preferences.all, category] as const,
+    conversations: () => [...queryKeys.preferences.all, 'conversations'] as const,
+    conversation: (conversationId: string) =>
+      [...queryKeys.preferences.conversations(), conversationId] as const,
+    categories: () => [...queryKeys.preferences.all, 'categories'] as const,
   },
 
   notifications: {

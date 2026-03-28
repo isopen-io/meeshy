@@ -39,6 +39,8 @@ class WebSocketService {
   private translationListeners: Set<(data: TranslationEvent) => void> = new Set();
   private typingListeners: Set<(event: TypingEvent) => void> = new Set();
   private statusListeners: Set<(event: UserStatusEvent) => void> = new Set();
+  private reactionAddedListeners: Set<(data: { messageId: string; emoji: string; participantId?: string; conversationId?: string }) => void> = new Set();
+  private reactionRemovedListeners: Set<(data: { messageId: string; emoji: string; participantId?: string; conversationId?: string }) => void> = new Set();
   private authListeners: Set<() => void> = new Set();
 
   // Pending join: conversation à rejoindre dès que l'authentification est complète
@@ -193,8 +195,15 @@ class WebSocketService {
       this.statusListeners.forEach(listener => listener(event));
     });
     
-    // Erreurs
-    this.socket.on(SERVER_EVENTS.ERROR, (error: any) => {
+    this.socket.on(SERVER_EVENTS.REACTION_ADDED, (data: { messageId: string; emoji: string; participantId?: string; conversationId?: string }) => {
+      this.reactionAddedListeners.forEach(listener => listener(data));
+    });
+
+    this.socket.on(SERVER_EVENTS.REACTION_REMOVED, (data: { messageId: string; emoji: string; participantId?: string; conversationId?: string }) => {
+      this.reactionRemovedListeners.forEach(listener => listener(data));
+    });
+
+    this.socket.on(SERVER_EVENTS.ERROR, (error: unknown) => {
       console.error('❌ [WS] Erreur:', error);
     });
   }
@@ -373,6 +382,34 @@ class WebSocketService {
           toast.error(response?.error || 'Échec suppression');
           resolve(false);
         }
+      });
+    });
+  }
+
+  public onReactionAdded(listener: (data: { messageId: string; emoji: string; participantId?: string; conversationId?: string }) => void): () => void {
+    this.reactionAddedListeners.add(listener);
+    return () => this.reactionAddedListeners.delete(listener);
+  }
+
+  public onReactionRemoved(listener: (data: { messageId: string; emoji: string; participantId?: string; conversationId?: string }) => void): () => void {
+    this.reactionRemovedListeners.add(listener);
+    return () => this.reactionRemovedListeners.delete(listener);
+  }
+
+  public async addReaction(messageId: string, emoji: string): Promise<boolean> {
+    if (!this.socket?.connected) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit(CLIENT_EVENTS.REACTION_ADD, { messageId, emoji }, (response: { success?: boolean }) => {
+        resolve(!!response?.success);
+      });
+    });
+  }
+
+  public async removeReaction(messageId: string, emoji: string): Promise<boolean> {
+    if (!this.socket?.connected) return false;
+    return new Promise((resolve) => {
+      this.socket!.emit(CLIENT_EVENTS.REACTION_REMOVE, { messageId, emoji }, (response: { success?: boolean }) => {
+        resolve(!!response?.success);
       });
     });
   }
