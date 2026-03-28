@@ -62,3 +62,30 @@ export { useReactionsQuery } from './use-reactions-query';
 
 // Notifications manager (drop-in replacement)
 export { useNotificationsManagerRQ } from './use-notifications-manager-rq';
+
+// Community queries
+export {
+  useCommunitiesQuery,
+  useCommunityQuery,
+  useCommunitySearchQuery,
+  useCommunityConversationsQuery,
+  useCommunityMembersQuery,
+  useCheckIdentifierQuery,
+  useCreateCommunityMutation,
+  useUpdateCommunityMutation,
+  useDeleteCommunityMutation,
+  useJoinCommunityMutation,
+  useLeaveCommunityMutation,
+  useAddMemberMutation,
+  useRemoveMemberMutation,
+  useUpdateMemberRoleMutation,
+} from './use-communities-query';
+
+// Community preferences queries
+export {
+  useCommunityPreferencesQuery,
+  useCommunityPreferencesListQuery,
+  useUpdateCommunityPreferencesMutation,
+  useDeleteCommunityPreferencesMutation,
+  useReorderCommunitiesMutation,
+} from './use-community-preferences-query';
