@@ -646,6 +646,56 @@ export class MeeshySocketIOManager {
         }
       });
       
+      // ===== ÉDITION ET SUPPRESSION DE MESSAGES =====
+
+      socket.on(CLIENT_EVENTS.MESSAGE_EDIT, async (data: { messageId: string; content: string }, callback?: (response: SocketIOResponse) => void) => {
+        try {
+          const userId = this.socketToUser.get(socket.id);
+          if (!userId) { callback?.({ success: false, error: 'Not authenticated' }); return; }
+
+          const message = await this.prisma.message.findUnique({ where: { id: data.messageId }, select: { id: true, senderId: true, conversationId: true } });
+          if (!message) { callback?.({ success: false, error: 'Message not found' }); return; }
+          if (message.senderId !== userId) {
+            const participant = await this.prisma.participant.findFirst({ where: { userId, conversationId: message.conversationId, isActive: true }, select: { id: true } });
+            if (!participant || participant.id !== message.senderId) { callback?.({ success: false, error: 'Not authorized to edit this message' }); return; }
+          }
+
+          const updated = await this.prisma.message.update({ where: { id: data.messageId }, data: { content: data.content, isEdited: true, updatedAt: new Date() }, include: { sender: { include: { user: { select: { id: true, username: true, displayName: true, avatar: true } } } } } });
+          callback?.({ success: true, data: { messageId: updated.id } });
+
+          const normalizedId = await this.normalizeConversationId(message.conversationId);
+          this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, updated);
+        } catch (error) {
+          logger.error('[MESSAGE_EDIT] Error:', error);
+          callback?.({ success: false, error: 'Failed to edit message' });
+        }
+      });
+
+      socket.on(CLIENT_EVENTS.MESSAGE_DELETE, async (data: { messageId: string }, callback?: (response: SocketIOResponse) => void) => {
+        try {
+          const userId = this.socketToUser.get(socket.id);
+          if (!userId) { callback?.({ success: false, error: 'Not authenticated' }); return; }
+
+          const message = await this.prisma.message.findUnique({ where: { id: data.messageId }, select: { id: true, senderId: true, conversationId: true } });
+          if (!message) { callback?.({ success: false, error: 'Message not found' }); return; }
+          if (message.senderId !== userId) {
+            const participant = await this.prisma.participant.findFirst({ where: { userId, conversationId: message.conversationId, isActive: true }, select: { id: true, role: true } });
+            if (!participant || (participant.id !== message.senderId && !['creator', 'admin', 'moderator'].includes(participant.role))) {
+              callback?.({ success: false, error: 'Not authorized to delete this message' }); return;
+            }
+          }
+
+          await this.prisma.message.update({ where: { id: data.messageId }, data: { deletedAt: new Date() } });
+          callback?.({ success: true, data: { messageId: data.messageId } });
+
+          const normalizedId = await this.normalizeConversationId(message.conversationId);
+          this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_DELETED, { messageId: data.messageId, conversationId: normalizedId });
+        } catch (error) {
+          logger.error('[MESSAGE_DELETE] Error:', error);
+          callback?.({ success: false, error: 'Failed to delete message' });
+        }
+      });
+
       // Demande de traduction spécifique
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
         await this._handleTranslationRequest(socket, data);
