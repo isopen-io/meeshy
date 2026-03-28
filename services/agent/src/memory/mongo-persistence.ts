@@ -263,6 +263,13 @@ export class MongoPersistence {
     });
   }
 
+  async getConversationWithType(conversationId: string) {
+    return this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { title: true, description: true, type: true },
+    });
+  }
+
   async getRecentMessageCount(conversationId: string, withinMinutes: number, excludeAgent = false): Promise<number> {
     const since = new Date(Date.now() - withinMinutes * 60 * 1000);
     return this.prisma.message.count({
@@ -295,6 +302,12 @@ export class MongoPersistence {
   }
 
   async updateAnalytics(conversationId: string, data: { messagesSent: number; wordsSent: number; avgConfidence: number }) {
+    const existing = await this.prisma.agentAnalytic.findUnique({ where: { conversationId } });
+    const newTotal = (existing?.messagesSent ?? 0) + data.messagesSent;
+    const blendedConfidence = existing
+      ? (existing.avgConfidence * existing.messagesSent + data.avgConfidence * data.messagesSent) / Math.max(1, newTotal)
+      : data.avgConfidence;
+
     return this.prisma.agentAnalytic.upsert({
       where: { conversationId },
       create: {
@@ -307,7 +320,7 @@ export class MongoPersistence {
       update: {
         messagesSent: { increment: data.messagesSent },
         totalWordsSent: { increment: data.wordsSent },
-        avgConfidence: data.avgConfidence,
+        avgConfidence: blendedConfidence,
         lastResponseAt: new Date(),
       },
     });
@@ -319,6 +332,35 @@ export class MongoPersistence {
 
   async getSummaryRecord(conversationId: string) {
     return this.prisma.agentConversationSummary.findUnique({ where: { conversationId } });
+  }
+
+  async getAgentMessageEngagement(conversationId: string, withinHours: number): Promise<{ userId: string; repliesReceived: number; reactionsReceived: number }[]> {
+    const since = new Date(Date.now() - withinHours * 60 * 60 * 1000);
+    const agentMessages = await this.prisma.message.findMany({
+      where: {
+        conversationId,
+        messageSource: 'agent',
+        createdAt: { gte: since },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        senderId: true,
+        _count: { select: { reactions: true } },
+        replies: { where: { messageSource: { not: 'agent' }, deletedAt: null }, select: { id: true } },
+      },
+    });
+
+    const byUser = new Map<string, { repliesReceived: number; reactionsReceived: number }>();
+    for (const msg of agentMessages) {
+      const uid = msg.senderId ?? 'unknown';
+      const existing = byUser.get(uid) ?? { repliesReceived: 0, reactionsReceived: 0 };
+      existing.repliesReceived += msg.replies.length;
+      existing.reactionsReceived += msg._count.reactions;
+      byUser.set(uid, existing);
+    }
+
+    return [...byUser.entries()].map(([userId, stats]) => ({ userId, ...stats }));
   }
 
   async getRecentMessages(conversationId: string, limit: number) {

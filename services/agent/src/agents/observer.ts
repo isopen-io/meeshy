@@ -40,13 +40,13 @@ function safeString(value: unknown, fallback: string): string {
 }
 
 const CONFIDENCE_DECAY = 0.005;
-const MAX_LOCK_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function createObserverNode(llm: LlmProvider) {
   return async function observe(state: ConversationState) {
     if (state.messages.length === 0) return {};
 
     const participantIds = new Set(state.messages.map((m) => m.senderId));
+    const displayNameMap = new Map(state.messages.map((m) => [m.senderId, m.senderName]));
 
     const conversationText = state.messages
       .map((m) => `[${m.senderName}]: ${m.content}`)
@@ -86,10 +86,11 @@ export function createObserverNode(llm: LlmProvider) {
 
           if (existing?.locked) {
             if (existing.confidence > 0) {
+              const decayed = Math.max(0.5, existing.confidence - CONFIDENCE_DECAY);
               updatedProfiles[userId] = {
                 ...existing,
-                confidence: Math.max(0.5, existing.confidence - CONFIDENCE_DECAY),
-                locked: existing.confidence - CONFIDENCE_DECAY > 0.5,
+                confidence: decayed,
+                locked: decayed >= 0.5,
               };
             }
             continue;
@@ -105,7 +106,7 @@ export function createObserverNode(llm: LlmProvider) {
 
           updatedProfiles[userId] = {
             userId,
-            displayName: state.messages.find((m) => m.senderId === userId)?.senderName ?? existing?.displayName ?? userId,
+            displayName: displayNameMap.get(userId) ?? existing?.displayName ?? userId,
             origin: preservedOrigin,
             archetypeId: existing?.archetypeId,
             personaSummary: safeString(p.personaSummary, existing?.personaSummary ?? ''),

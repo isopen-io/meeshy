@@ -1,31 +1,35 @@
 import type { Push, Subscriber } from 'zeromq';
 import * as zmq from 'zeromq';
+import { z } from 'zod';
 
-type AgentResponse = {
-  type: 'agent:response';
-  conversationId: string;
-  asUserId: string;
-  content: string;
-  originalLanguage: string;
-  replyToId?: string;
-  mentionedUsernames?: string[];
-  messageSource: 'agent';
-  metadata: {
-    agentType: 'impersonator' | 'animator' | 'orchestrator';
-    roleConfidence: number;
-    archetypeId?: string;
-  };
-};
+const agentResponseSchema = z.object({
+  type: z.literal('agent:response'),
+  conversationId: z.string().min(1),
+  asUserId: z.string().min(1),
+  content: z.string().min(1),
+  originalLanguage: z.string().min(1),
+  replyToId: z.string().optional(),
+  mentionedUsernames: z.array(z.string()).optional(),
+  messageSource: z.literal('agent'),
+  metadata: z.object({
+    agentType: z.enum(['impersonator', 'animator', 'orchestrator']),
+    roleConfidence: z.number().min(0).max(1),
+    archetypeId: z.string().optional(),
+  }),
+});
 
-type AgentReaction = {
-  type: 'agent:reaction';
-  conversationId: string;
-  asUserId: string;
-  targetMessageId: string;
-  emoji: string;
-};
+const agentReactionSchema = z.object({
+  type: z.literal('agent:reaction'),
+  conversationId: z.string().min(1),
+  asUserId: z.string().min(1),
+  targetMessageId: z.string().min(1),
+  emoji: z.string().min(1),
+});
 
-type AgentMessage = AgentResponse | AgentReaction;
+const agentMessageSchema = z.discriminatedUnion('type', [agentResponseSchema, agentReactionSchema]);
+
+type AgentResponse = z.infer<typeof agentResponseSchema>;
+type AgentReaction = z.infer<typeof agentReactionSchema>;
 
 export class ZmqAgentClient {
   private pushSocket: Push | null = null;
@@ -76,12 +80,18 @@ export class ZmqAgentClient {
     for await (const [msg] of this.subSocket) {
       if (!this.running) break;
       try {
-        const parsed = JSON.parse(msg.toString()) as AgentMessage;
+        const raw = JSON.parse(msg.toString());
+        const result = agentMessageSchema.safeParse(raw);
+        if (!result.success) {
+          console.warn('[ZMQ-AgentClient] Invalid message schema:', result.error.issues.map((i) => i.message).join(', '));
+          continue;
+        }
+        const parsed = result.data;
 
         if (parsed.type === 'agent:response' && this.responseHandler) {
-          await this.responseHandler(parsed as AgentResponse);
+          await this.responseHandler(parsed);
         } else if (parsed.type === 'agent:reaction' && this.reactionHandler) {
-          await this.reactionHandler(parsed as AgentReaction);
+          await this.reactionHandler(parsed);
         }
       } catch (error) {
         console.error('[ZMQ-AgentClient] Error processing message:', error);

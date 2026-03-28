@@ -69,4 +69,12 @@ export class RedisStateManager {
     const key = `agent:budget:${conversationId}:${date}:users`;
     return this.redis.smembers(key);
   }
+
+  async getLastAgentUserId(conversationId: string): Promise<string | null> {
+    return this.redis.get(`agent:last-user:${conversationId}`);
+  }
+
+  async setLastAgentUserId(conversationId: string, userId: string): Promise<void> {
+    await this.redis.set(`agent:last-user:${conversationId}`, userId, 'EX', 86400);
+  }
 }
