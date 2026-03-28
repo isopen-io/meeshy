@@ -114,4 +114,40 @@ describe('LRUCache', () => {
     expect(cache.get('b')).toBe(2);
     expect(cache.size).toBe(1);
   });
+
+  it('keys() returns all keys in insertion order', () => {
+    const cache = new LRUCache<string, number>(5);
+    cache.set('a', 1);
+    cache.set('b', 2);
+    cache.set('c', 3);
+
+    expect([...cache.keys()]).toEqual(['a', 'b', 'c']);
+  });
+
+  it('entries() returns [key, value] pairs', () => {
+    const cache = new LRUCache<string, number>(5);
+    cache.set('x', 10);
+    cache.set('y', 20);
+
+    expect([...cache.entries()]).toEqual([
+      ['x', 10],
+      ['y', 20],
+    ]);
+  });
+
+  it('iteration order updates after get() (accessed item moves to end)', () => {
+    const cache = new LRUCache<string, number>(5);
+    cache.set('a', 1);
+    cache.set('b', 2);
+    cache.set('c', 3);
+
+    cache.get('a');
+
+    expect([...cache.keys()]).toEqual(['b', 'c', 'a']);
+    expect([...cache.entries()]).toEqual([
+      ['b', 2],
+      ['c', 3],
+      ['a', 1],
+    ]);
+  });
 });
