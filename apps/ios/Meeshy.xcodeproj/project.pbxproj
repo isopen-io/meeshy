@@ -212,6 +212,8 @@
 		VP01000000000002F001 /* VoiceProfileWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP01000000000001F001 /* VoiceProfileWizardView.swift */; };
 		VP02000000000002F002 /* VoiceProfileManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP02000000000001F002 /* VoiceProfileManageView.swift */; };
 		LGCT0100000002F001 /* Logger+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = LGCT0100000001F001 /* Logger+Categories.swift */; };
+		D5A1B2C3E4F506A7B8C9D0E2 /* DraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1B2C3E4F506A7B8C9D0E1 /* DraftStore.swift */; };
+		D5A1B2C3E4F506A7B8C9D0E4 /* DraftStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -469,6 +471,8 @@
 		VP01000000000001F001 /* VoiceProfileWizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardView.swift; sourceTree = "<group>"; };
 		VP02000000000001F002 /* VoiceProfileManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageView.swift; sourceTree = "<group>"; };
 		LGCT0100000001F001 /* Logger+Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Logger+Categories.swift"; sourceTree = "<group>"; };
+		D5A1B2C3E4F506A7B8C9D0E1 /* DraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStore.swift; sourceTree = "<group>"; };
+		D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -738,6 +742,7 @@
 				A35C370F515C4807CB86FA5E /* E2EEService.swift */,
 				LGCT0100000001F001 /* Logger+Categories.swift */,
 				PS3900000000001F39 /* ParticipantService.swift */,
+				D5A1B2C3E4F506A7B8C9D0E1 /* DraftStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -940,6 +945,7 @@
 				A0340CB5A3610F80C0D53F08 /* MediaCompressorTests.swift */,
 				5FEFAB456AD3F85FCBCDC078 /* PresenceManagerTests.swift */,
 				1DBCE13E5C724D3BCB34B45B /* APIServiceTests.swift */,
+				D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1270,6 +1276,7 @@
 				E1491C65FE46FF6941B00642 /* E2EAPI.swift in Sources */,
 				EDD817AE0118AEBF9FE37640 /* E2EEService.swift in Sources */,
 				42662443FBC51E2F08ABE46F /* UserProfileViewModel.swift in Sources */,
+				D5A1B2C3E4F506A7B8C9D0E2 /* DraftStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1311,6 +1318,7 @@
 				DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */,
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,
 				D240F5AC635D4F38FD26A6A1 /* APIServiceTests.swift in Sources */,
+				D5A1B2C3E4F506A7B8C9D0E4 /* DraftStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
