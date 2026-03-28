@@ -1,182 +1,132 @@
 import { apiService } from './api.service';
-import type { 
-  Conversation, 
-  User,
-  ApiResponse 
+import type {
+  Community,
+  CommunityMember,
+  CreateCommunityData,
+  UpdateCommunityData,
+  AddCommunityMemberData,
+  UpdateMemberRoleData,
+  Conversation,
+  ApiResponse,
+  UserCommunityPreferences,
+  UpdateUserCommunityPreferencesRequest,
 } from '@meeshy/shared/types';
 
-export interface Community {
-  id: string;
-  name: string;
-  identifier: string;
-  description?: string;
-  avatar?: string;
-  isPrivate: boolean;
-  createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
-  creator?: {
-    id: string;
-    username: string;
-    displayName?: string;
-    avatar?: string;
-  };
-  members?: Array<{
-    id: string;
-    userId: string;
-    role: string;
-    joinedAt: Date;
-    user: {
-      id: string;
-      username: string;
-      displayName?: string;
-      avatar?: string;
-      isOnline: boolean;
-    };
-  }>;
-  conversationCount?: number;
-  memberCount?: number;
-  _count?: {
-    members: number;
-    Conversation: number;
-  };
+interface CommunitySearchParams {
+  readonly search?: string;
+  readonly offset?: number;
+  readonly limit?: number;
 }
 
-export interface CreateCommunityRequest {
-  name: string;
-  identifier?: string;
-  description?: string;
-  avatar?: string;
-  isPrivate?: boolean;
+interface IdentifierAvailability {
+  readonly available: boolean;
+  readonly identifier: string;
 }
 
-export interface UpdateCommunityRequest {
-  name?: string;
-  identifier?: string;
-  description?: string;
-  avatar?: string;
-  isPrivate?: boolean;
+interface ReorderItem {
+  readonly communityId: string;
+  readonly orderInCategory: number;
 }
 
-/**
- * Service pour gérer les communautés
- */
 export const communitiesService = {
-  /**
-   * Récupère toutes les communautés de l'utilisateur connecté
-   */
-  async getCommunities(search?: string): Promise<ApiResponse<Community[]>> {
-    try {
-      const params = search ? { search } : {};
-      const response = await apiService.get<Community[]>('/communities', { params });
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de la récupération des communautés:', error);
-      throw error;
-    }
+  getCommunities(params?: CommunitySearchParams): Promise<ApiResponse<Community[]>> {
+    const queryParams: Record<string, unknown> = {};
+    if (params?.search) queryParams.search = params.search;
+    if (params?.offset !== undefined) queryParams.offset = params.offset;
+    if (params?.limit !== undefined) queryParams.limit = params.limit;
+    return apiService.get<Community[]>('/communities', queryParams);
   },
 
-  /**
-   * Récupère une communauté par son ID
-   */
-  async getCommunity(id: string): Promise<ApiResponse<Community>> {
-    try {
-      const response = await apiService.get<Community>(`/communities/${id}`);
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de la récupération de la communauté:', error);
-      throw error;
-    }
+  getCommunity(id: string): Promise<ApiResponse<Community>> {
+    return apiService.get<Community>(`/communities/${id}`);
   },
 
-  /**
-   * Récupère une communauté par son identifiant
-   */
-  async getCommunityByIdentifier(identifier: string): Promise<ApiResponse<Community>> {
-    try {
-      const response = await apiService.get<Community>(`/communities/identifier/${identifier}`);
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de la récupération de la communauté par identifiant:', error);
-      throw error;
-    }
+  searchCommunities(query: string, offset = 0, limit = 20): Promise<ApiResponse<Community[]>> {
+    return apiService.get<Community[]>('/communities/search', { q: query, offset, limit });
   },
 
-  /**
-   * Récupère les conversations d'une communauté
-   */
-  async getCommunityConversations(communityId: string): Promise<ApiResponse<Conversation[]>> {
-    try {
-      const response = await apiService.get<Conversation[]>(`/communities/${communityId}/conversations`);
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de la récupération des conversations de la communauté:', error);
-      throw error;
-    }
+  checkIdentifier(identifier: string): Promise<ApiResponse<IdentifierAvailability>> {
+    return apiService.get<IdentifierAvailability>(
+      `/communities/check-identifier/${encodeURIComponent(identifier)}`
+    );
   },
 
-  /**
-   * Crée une nouvelle communauté
-   */
-  async createCommunity(data: CreateCommunityRequest): Promise<ApiResponse<Community>> {
-    try {
-      const response = await apiService.post<Community>('/communities', data);
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de la création de la communauté:', error);
-      throw error;
-    }
+  getCommunityConversations(communityId: string): Promise<ApiResponse<Conversation[]>> {
+    return apiService.get<Conversation[]>(`/communities/${communityId}/conversations`);
   },
 
-  /**
-   * Met à jour une communauté
-   */
-  async updateCommunity(id: string, data: UpdateCommunityRequest): Promise<ApiResponse<Community>> {
-    try {
-      const response = await apiService.put<Community>(`/communities/${id}`, data);
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour de la communauté:', error);
-      throw error;
-    }
+  createCommunity(data: CreateCommunityData): Promise<ApiResponse<Community>> {
+    return apiService.post<Community>('/communities', data);
   },
 
-  /**
-   * Supprime une communauté
-   */
-  async deleteCommunity(id: string): Promise<ApiResponse<void>> {
-    try {
-      const response = await apiService.delete<void>(`/communities/${id}`);
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de la suppression de la communauté:', error);
-      throw error;
-    }
+  updateCommunity(id: string, data: UpdateCommunityData): Promise<ApiResponse<Community>> {
+    return apiService.put<Community>(`/communities/${id}`, data);
   },
 
-  /**
-   * Ajoute un membre à une communauté
-   */
-  async addMember(communityId: string, userId: string): Promise<ApiResponse<void>> {
-    try {
-      const response = await apiService.post<void>(`/communities/${communityId}/members`, { userId });
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de l\'ajout du membre:', error);
-      throw error;
-    }
+  deleteCommunity(id: string): Promise<ApiResponse<void>> {
+    return apiService.delete<void>(`/communities/${id}`);
   },
 
-  /**
-   * Retire un membre d'une communauté
-   */
-  async removeMember(communityId: string, memberId: string): Promise<ApiResponse<void>> {
-    try {
-      const response = await apiService.delete<void>(`/communities/${communityId}/members/${memberId}`);
-      return response;
-    } catch (error) {
-      console.error('Erreur lors de la suppression du membre:', error);
-      throw error;
-    }
-  }
+  getMembers(communityId: string, offset = 0, limit = 50): Promise<ApiResponse<CommunityMember[]>> {
+    return apiService.get<CommunityMember[]>(
+      `/communities/${communityId}/members`,
+      { offset, limit }
+    );
+  },
+
+  addMember(communityId: string, data: AddCommunityMemberData): Promise<ApiResponse<CommunityMember>> {
+    return apiService.post<CommunityMember>(`/communities/${communityId}/members`, data);
+  },
+
+  updateMemberRole(communityId: string, memberId: string, data: UpdateMemberRoleData): Promise<ApiResponse<CommunityMember>> {
+    return apiService.patch<CommunityMember>(
+      `/communities/${communityId}/members/${memberId}/role`,
+      data
+    );
+  },
+
+  removeMember(communityId: string, memberId: string): Promise<ApiResponse<void>> {
+    return apiService.delete<void>(`/communities/${communityId}/members/${memberId}`);
+  },
+
+  // TODO: Backend join/leave routes need to be migrated from legacy monolith to modular routes
+  // For now, join = addMember(self), leave = removeMember(self)
+  joinCommunity(communityId: string): Promise<ApiResponse<CommunityMember>> {
+    return apiService.post<CommunityMember>(`/communities/${communityId}/join`);
+  },
+
+  leaveCommunity(communityId: string): Promise<ApiResponse<void>> {
+    return apiService.post<void>(`/communities/${communityId}/leave`);
+  },
+
+  getPreferences(communityId: string): Promise<ApiResponse<UserCommunityPreferences>> {
+    return apiService.get<UserCommunityPreferences>(
+      `/user-preferences/communities/${communityId}`
+    );
+  },
+
+  listPreferences(offset = 0, limit = 50): Promise<ApiResponse<UserCommunityPreferences[]>> {
+    return apiService.get<UserCommunityPreferences[]>(
+      '/user-preferences/communities',
+      { offset, limit }
+    );
+  },
+
+  updatePreferences(
+    communityId: string,
+    data: UpdateUserCommunityPreferencesRequest
+  ): Promise<ApiResponse<UserCommunityPreferences>> {
+    return apiService.put<UserCommunityPreferences>(
+      `/user-preferences/communities/${communityId}`,
+      data
+    );
+  },
+
+  deletePreferences(communityId: string): Promise<ApiResponse<void>> {
+    return apiService.delete<void>(`/user-preferences/communities/${communityId}`);
+  },
+
+  reorderPreferences(updates: readonly ReorderItem[]): Promise<ApiResponse<void>> {
+    return apiService.post<void>('/user-preferences/communities/reorder', { updates });
+  },
 };

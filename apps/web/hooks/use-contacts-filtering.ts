@@ -1,8 +1,13 @@
+/**
+ * @deprecated Use `useContactsV2` from `@/hooks/v2` instead.
+ * Filtering, sorting, and search are now built into the V2 hook.
+ */
 import { useState, useMemo, useCallback } from 'react';
 import { User } from '@/types';
 import { usersService } from '@/services';
 import { toast } from 'sonner';
 
+/** @deprecated Use FriendRequest from '@/types/contacts' */
 interface FriendRequest {
   id: string;
   senderId: string;

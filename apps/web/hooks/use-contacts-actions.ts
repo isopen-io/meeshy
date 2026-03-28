@@ -1,3 +1,7 @@
+/**
+ * @deprecated Use `useFriendRequestsV2` from `@/hooks/v2` instead.
+ * Actions are now handled via React Query mutations with optimistic updates.
+ */
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -5,6 +9,7 @@ import { authManager } from '@/services/auth-manager.service';
 import { buildApiUrl } from '@/lib/config';
 import { User } from '@/types';
 
+/** @deprecated Use useFriendRequestsV2 from @/hooks/v2 */
 export function useContactsActions(
   t: (key: string) => string,
   getUserDisplayName: (user: User) => string,

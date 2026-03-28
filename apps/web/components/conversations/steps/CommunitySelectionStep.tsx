@@ -8,24 +8,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Building2, Globe, Lock, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
-
-interface Community {
-  id: string;
-  name: string;
-  description?: string;
-  identifier?: string;
-  isPrivate: boolean;
-  members: Array<{
-    id: string;
-    username: string;
-    displayName?: string;
-    avatar?: string;
-  }>;
-  _count: {
-    members: number;
-    Conversation: number;
-  };
-}
+import type { Community } from '@meeshy/shared/types';
 
 interface CommunitySelectionStepProps {
   showCommunitySection: boolean;
@@ -139,8 +122,8 @@ const CommunitySelectionStepComponent: React.FC<CommunitySelectionStepProps> = (
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {t('createConversationModal.community.membersCount', {
-                            count: community._count.members,
-                            conversations: community._count.Conversation
+                            count: community._count?.members ?? 0,
+                            conversations: community._count?.Conversation ?? community._count?.conversations ?? 0
                           })}
                         </p>
                       </div>

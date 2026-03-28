@@ -11,6 +11,17 @@ export type AffiliateRelationStatus = 'pending' | 'completed' | 'expired';
 export type FriendRequestStatus = 'pending' | 'accepted' | 'rejected' | 'blocked';
 
 /**
+ * Utilisateur bloque — retourne par GET /users/me/blocked-users
+ * @see schema.prisma User.blockedUserIds
+ */
+export interface BlockedUser {
+  readonly id: string;
+  readonly username: string;
+  readonly displayName?: string | null;
+  readonly avatar?: string | null;
+}
+
+/**
  * Informations de base d'un utilisateur
  */
 export interface BaseUserInfo {
@@ -94,7 +105,9 @@ export interface FriendRequest {
   readonly id: string;
   readonly senderId: string;
   readonly receiverId: string;
+  readonly message?: string;
   readonly status: FriendRequestStatus;
+  readonly respondedAt?: Date;
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly sender?: UserInfoWithOnlineStatus;

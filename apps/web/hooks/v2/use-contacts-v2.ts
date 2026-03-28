@@ -1,18 +1,12 @@
-/**
- * Hook for V2 Contacts Management
- *
- * Provides contact list, search, and online status tracking.
- * Replaces mock data in /v2/contacts page.
- */
-
 'use client';
 
-import { useCallback, useMemo, useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usersService } from '@/services/users.service';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { User, UserStatusEvent } from '@meeshy/shared/types';
+import type { ContactSortOption } from '@/types/contacts';
 
 export interface ContactV2 {
   id: string;
@@ -22,6 +16,8 @@ export interface ContactV2 {
   languageCode: string;
   isOnline: boolean;
   lastSeen?: string;
+  lastActiveAt?: string;
+  createdAt?: string;
 }
 
 export interface UseContactsV2Options {
@@ -29,33 +25,21 @@ export interface UseContactsV2Options {
 }
 
 export interface ContactsV2Return {
-  // Data
   contacts: ContactV2[];
   onlineContacts: ContactV2[];
   offlineContacts: ContactV2[];
-
-  // Search
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   searchResults: ContactV2[];
   isSearching: boolean;
-
-  // Loading states
   isLoading: boolean;
-
-  // Online users tracking
   onlineUserIds: Set<string>;
-
-  // Actions
+  sortBy: ContactSortOption;
+  setSortBy: (sort: ContactSortOption) => void;
   refreshContacts: () => Promise<void>;
-
-  // Error
   error: string | null;
 }
 
-/**
- * Transform User to ContactV2 format
- */
 function transformToContact(user: User, isOnline: boolean): ContactV2 {
   const displayName =
     user.displayName ||
@@ -67,33 +51,38 @@ function transformToContact(user: User, isOnline: boolean): ContactV2 {
     name: displayName,
     username: `@${user.username}`,
     avatar: user.avatar,
-    languageCode: (user as any).systemLanguage || (user as any).regionalLanguage || 'fr',
+    languageCode: user.systemLanguage || user.regionalLanguage || 'fr',
     isOnline,
     lastSeen: usersService.getLastSeenFormatted(user),
+    lastActiveAt: user.lastActiveAt ? String(user.lastActiveAt) : undefined,
+    createdAt: 'createdAt' in user ? String((user as unknown as Record<string, unknown>).createdAt) : undefined,
   };
 }
 
-/**
- * Format last seen time
- */
-function formatLastSeen(date: Date | string | undefined): string {
-  if (!date) return '';
+function safeTime(dateStr?: string): number {
+  if (!dateStr) return 0;
+  const t = new Date(dateStr).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
 
-  const now = new Date();
-  const lastSeenDate = typeof date === 'string' ? new Date(date) : date;
-  const diffMs = now.getTime() - lastSeenDate.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return 'En ligne';
-  if (diffMins < 60) return `Il y a ${diffMins} min`;
-  if (diffHours < 24) return `Il y a ${diffHours}h`;
-  if (diffDays < 7) return `Il y a ${diffDays}j`;
-
-  return lastSeenDate.toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'short',
+function sortContacts(contacts: ContactV2[], sortBy: ContactSortOption): ContactV2[] {
+  return [...contacts].sort((a, b) => {
+    switch (sortBy) {
+      case 'name':
+        return a.name.localeCompare(b.name);
+      case 'lastSeen': {
+        const aTime = safeTime(a.lastActiveAt);
+        const bTime = safeTime(b.lastActiveAt);
+        return bTime - aTime;
+      }
+      case 'recentlyAdded': {
+        const aTime = safeTime(a.createdAt);
+        const bTime = safeTime(b.createdAt);
+        return bTime - aTime;
+      }
+      default:
+        return 0;
+    }
   });
 }
 
@@ -101,12 +90,24 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
   const { enabled = true } = options;
   const queryClient = useQueryClient();
 
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQueryRaw] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<ContactSortOption>('name');
+  const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Query for all users (contacts)
-  // In a real app, this would be a dedicated contacts endpoint
+  const setSearchQuery = useCallback((query: string) => {
+    setSearchQueryRaw(query);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => setDebouncedSearch(query), 300);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
+
   const {
     data: users,
     isLoading,
@@ -121,20 +122,18 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
     enabled,
   });
 
-  // Search query
   const {
     data: searchData,
     isLoading: isSearching,
   } = useQuery({
-    queryKey: [...queryKeys.users.all, 'search', searchQuery],
+    queryKey: [...queryKeys.users.all, 'search', debouncedSearch],
     queryFn: async () => {
-      const users = await usersService.searchUsers(searchQuery);
-      return Array.isArray(users) ? users : [];
+      const results = await usersService.searchUsers(debouncedSearch);
+      return Array.isArray(results) ? results : [];
     },
-    enabled: searchQuery.length >= 2,
+    enabled: debouncedSearch.length >= 2,
   });
 
-  // Handle user status events from WebSocket
   const handleUserStatus = useCallback((event: UserStatusEvent) => {
     setOnlineUserIds((prev) => {
       const next = new Set(prev);
@@ -147,12 +146,8 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
     });
   }, []);
 
-  // WebSocket for real-time status updates
-  useWebSocket({
-    onUserStatus: handleUserStatus,
-  });
+  useWebSocket({ onUserStatus: handleUserStatus });
 
-  // Initialize online status from user data
   useEffect(() => {
     if (users && Array.isArray(users)) {
       const online = new Set<string>();
@@ -165,53 +160,48 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
     }
   }, [users]);
 
-  // Transform users to contacts
   const contacts = useMemo(() => {
     if (!users || !Array.isArray(users)) return [];
-    return users.map((user) => transformToContact(user, onlineUserIds.has(user.id)));
-  }, [users, onlineUserIds]);
+    const transformed = users.map((user) => transformToContact(user, onlineUserIds.has(user.id)));
+    return sortContacts(transformed, sortBy);
+  }, [users, onlineUserIds, sortBy]);
 
-  // Split by online status
-  const onlineContacts = useMemo(() => {
-    return contacts.filter((c) => c.isOnline);
-  }, [contacts]);
+  const onlineContacts = useMemo(() => contacts.filter((c) => c.isOnline), [contacts]);
+  const offlineContacts = useMemo(() => contacts.filter((c) => !c.isOnline), [contacts]);
 
-  const offlineContacts = useMemo(() => {
-    return contacts.filter((c) => !c.isOnline);
-  }, [contacts]);
-
-  // Search results
   const searchResults = useMemo(() => {
     if (!searchData || !Array.isArray(searchData)) return [];
-    return searchData.map((user) => transformToContact(user, onlineUserIds.has(user.id)));
-  }, [searchData, onlineUserIds]);
+    const transformed = searchData.map((user) =>
+      transformToContact(user, onlineUserIds.has(user.id))
+    );
+    return sortContacts(transformed, sortBy);
+  }, [searchData, onlineUserIds, sortBy]);
 
-  // Filter contacts by search query (local filter for already loaded contacts)
   const filteredContacts = useMemo(() => {
-    if (!searchQuery || searchQuery.length < 2) return contacts;
-
-    const query = searchQuery.toLowerCase();
+    if (!debouncedSearch || debouncedSearch.length < 2) return contacts;
+    const query = debouncedSearch.toLowerCase();
     return contacts.filter(
       (c) =>
         c.name.toLowerCase().includes(query) || c.username.toLowerCase().includes(query)
     );
-  }, [contacts, searchQuery]);
+  }, [contacts, debouncedSearch]);
 
-  // Actions
   const refreshContacts = useCallback(async () => {
     await refetch();
   }, [refetch]);
 
   return {
-    contacts: searchQuery.length >= 2 ? filteredContacts : contacts,
+    contacts: debouncedSearch.length >= 2 ? filteredContacts : contacts,
     onlineContacts,
     offlineContacts,
     searchQuery,
     setSearchQuery,
-    searchResults: searchQuery.length >= 2 ? searchResults : [],
+    searchResults: debouncedSearch.length >= 2 ? searchResults : [],
     isSearching,
     isLoading,
     onlineUserIds,
+    sortBy,
+    setSortBy,
     refreshContacts,
     error: error?.message ?? null,
   };

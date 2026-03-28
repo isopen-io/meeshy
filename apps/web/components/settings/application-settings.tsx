@@ -38,7 +38,7 @@ export default function ApplicationSettings() {
     isUpdating: isSaving,
     error,
     updatePreferences,
-  } = usePreferences('accessibility');
+  } = usePreferences('application');
 
   const preferences = preferencesData as any;
 

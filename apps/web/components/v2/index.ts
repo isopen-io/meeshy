@@ -155,13 +155,23 @@ export { StoryViewer } from './StoryViewer';
 export type { StoryData, StoryViewerProps } from './StoryViewer';
 
 export { StoryComposer } from './StoryComposer';
-export type { StoryComposerProps } from './StoryComposer';
+export type { StoryComposerProps, StoryVisibility } from './StoryComposer';
 
 export { StatusBar } from './StatusBar';
 export type { StatusBarProps, StatusItem } from './StatusBar';
 
 export { StatusComposer } from './StatusComposer';
 export type { StatusComposerProps } from './StatusComposer';
+
+// Contacts
+export { ContactCard } from './ContactCard';
+export type { ContactCardProps, ContactAction } from './ContactCard';
+
+export { FriendRequestCard } from './FriendRequestCard';
+export type { FriendRequestCardProps, FriendRequestAction } from './FriendRequestCard';
+
+export { BlockedUserCard } from './BlockedUserCard';
+export type { BlockedUserCardProps } from './BlockedUserCard';
 
 // Auth
 export { AuthGuardV2 } from './auth/AuthGuardV2';
