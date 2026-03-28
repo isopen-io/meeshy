@@ -308,8 +308,12 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeUnread = meeshySocketIOService.onUnreadUpdated(handleUnreadUpdated);
     const unsubscribeTranscription = meeshySocketIOService.onTranscription(handleTranscription);
     const unsubscribeAudioTranslation = meeshySocketIOService.onAudioTranslation(handleAudioTranslation);
+    const unsubscribePreferences = meeshySocketIOService.onPreferencesUpdated((data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.preferences.category(data.category),
+      });
+    });
 
-    // Cleanup on unmount
     return () => {
       unsubscribeMessage?.();
       unsubscribeEdit?.();
@@ -318,6 +322,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeUnread?.();
       unsubscribeTranscription?.();
       unsubscribeAudioTranslation?.();
+      unsubscribePreferences?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

@@ -182,21 +182,16 @@ export function PrivacySettings() {
         <CardContent className="space-y-4 sm:space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
-              <Label className="text-sm sm:text-base">Visibilité du profil</Label>
+              <Label className="text-sm sm:text-base">Masquer le profil de la recherche</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Contrôlez qui peut voir votre profil
+                Empêche votre profil d'apparaître dans les résultats de recherche
               </p>
             </div>
-            <select
-              value={preferences.profileVisibility}
-              onChange={(e) => handlePreferenceChange('profileVisibility', e.target.value)}
+            <Switch
+              checked={preferences?.hideProfileFromSearch ?? false}
+              onCheckedChange={(checked) => handlePreferenceChange('hideProfileFromSearch', checked)}
               disabled={isUpdating}
-              className="px-3 py-2 border rounded-md"
-            >
-              <option value="public">Public</option>
-              <option value="friends">Amis</option>
-              <option value="private">Privé</option>
-            </select>
+            />
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -257,14 +252,14 @@ export function PrivacySettings() {
         <CardContent className="space-y-4 sm:space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
-              <Label className="text-sm sm:text-base">Demandes de messages</Label>
+              <Label className="text-sm sm:text-base">Demandes de contact</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Permet aux utilisateurs de vous envoyer des demandes de messages
+                Permet aux utilisateurs de vous envoyer des demandes de contact
               </p>
             </div>
             <Switch
-              checked={preferences.allowMessageRequests}
-              onCheckedChange={(checked) => handlePreferenceChange('allowMessageRequests', checked)}
+              checked={preferences?.allowContactRequests ?? true}
+              onCheckedChange={(checked) => handlePreferenceChange('allowContactRequests', checked)}
               disabled={isUpdating}
             />
           </div>

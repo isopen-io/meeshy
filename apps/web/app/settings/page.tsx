@@ -266,7 +266,6 @@ export default function SettingsPage() {
       queryClient.prefetchQuery({
         queryKey: queryKeys.preferences.category(cat),
         queryFn: () => apiService.get(`/api/v1/me/preferences/${cat}`).then(r => r.data),
-        staleTime: 5 * 60 * 1000,
       });
     }
   }, [activeTab, tabs, queryClient, TAB_TO_CATEGORY]);
