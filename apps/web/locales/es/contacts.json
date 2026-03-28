@@ -21,6 +21,7 @@
     "connected": "Conectados",
     "pending": "Pendientes",
     "refused": "Rechazados",
+    "blocked": "Bloqueados",
     "affiliates": "Afiliados"
   },
   "status": {
@@ -48,6 +49,8 @@
     "connection": "Conexión",
     "add": "Agregar",
     "cancel": "Cancelar",
+    "block": "Bloquear",
+    "unblock": "Desbloquear",
     "continueConversation": "Continuar",
     "newConversation": "Nueva conversación",
     "newConversationDescription": "Iniciar una nueva discusión"
@@ -55,7 +58,8 @@
   "conversations": {
     "existing": "Conversaciones existentes",
     "untitled": "Sin título",
-    "latest": "Última"
+    "latest": "Última",
+    "lastActivity": "Última actividad: {date}"
   },
   "messages": {
     "noContacts": "No hay contactos",
@@ -66,6 +70,8 @@
     "noPendingRequestsDescription": "Todas las solicitudes de amistad han sido procesadas",
     "noRefusedRequests": "No hay solicitudes rechazadas",
     "noRefusedRequestsDescription": "No ha rechazado ninguna solicitud de amistad",
+    "noBlockedUsers": "No hay usuarios bloqueados",
+    "noBlockedUsersDescription": "No ha bloqueado ningún usuario",
     "noAffiliateContacts": "No hay contactos afiliados",
     "noAffiliateContactsDescription": "Invite personas usando su enlace de afiliado",
     "noContactsFound": "No se encontraron contactos",
@@ -95,5 +101,19 @@
     "connectionError": "Error de conexión",
     "conversationCreationError": "Error al crear la conversación",
     "sessionExpired": "Sesión expirada"
+  },
+  "sort": {
+    "label": "Ordenar",
+    "alphabetical": "Alfabético",
+    "lastSeen": "Última actividad",
+    "recentlyAdded": "Recién añadido"
+  },
+  "sections": {
+    "online": "En línea",
+    "offline": "Fuera de línea"
+  },
+  "blocked": {
+    "confirmTitle": "Desbloquear usuario",
+    "confirmMessage": "¿Está seguro de que desea desbloquear a {name}? Podrá contactarle de nuevo."
   }
 }

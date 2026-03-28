@@ -21,6 +21,7 @@
     "connected": "Connected",
     "pending": "Pending",
     "refused": "Refused",
+    "blocked": "Blocked",
     "affiliates": "Affiliates"
   },
   "status": {
@@ -48,6 +49,8 @@
     "connection": "Connection",
     "add": "Add",
     "cancel": "Cancel",
+    "block": "Block",
+    "unblock": "Unblock",
     "continueConversation": "Continue",
     "newConversation": "New conversation",
     "newConversationDescription": "Start a new discussion"
@@ -55,7 +58,8 @@
   "conversations": {
     "existing": "Existing conversations",
     "untitled": "Untitled",
-    "latest": "Latest"
+    "latest": "Latest",
+    "lastActivity": "Last activity: {date}"
   },
   "messages": {
     "noContacts": "No contacts",
@@ -66,6 +70,8 @@
     "noPendingRequestsDescription": "All friend requests have been processed",
     "noRefusedRequests": "No refused requests",
     "noRefusedRequestsDescription": "You haven't refused any friend requests",
+    "noBlockedUsers": "No blocked users",
+    "noBlockedUsersDescription": "You haven't blocked any users",
     "noAffiliateContacts": "No affiliate contacts",
     "noAffiliateContactsDescription": "Invite people using your affiliate link",
     "noContactsFound": "No contacts found",
@@ -95,5 +101,19 @@
     "connectionError": "Connection error",
     "conversationCreationError": "Error creating conversation",
     "sessionExpired": "Session expired"
+  },
+  "sort": {
+    "label": "Sort",
+    "alphabetical": "Alphabetical",
+    "lastSeen": "Last seen",
+    "recentlyAdded": "Recently added"
+  },
+  "sections": {
+    "online": "Online",
+    "offline": "Offline"
+  },
+  "blocked": {
+    "confirmTitle": "Unblock user",
+    "confirmMessage": "Are you sure you want to unblock {name}? They will be able to contact you again."
   }
 }

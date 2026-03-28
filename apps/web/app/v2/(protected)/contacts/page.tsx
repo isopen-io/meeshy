@@ -1,8 +1,57 @@
 'use client';
 
-import Link from 'next/link';
-import { Button, Card, Input, LanguageOrb, PageHeader, Avatar, Skeleton } from '@/components/v2';
-import { useContactsV2 } from '@/hooks/v2';
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Button,
+  Card,
+  Input,
+  Badge,
+  Skeleton,
+  PageHeader,
+  EmptyState,
+  Dialog,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
+  ContactCard,
+  FriendRequestCard,
+  BlockedUserCard,
+} from '@/components/v2';
+import { useContactsV2, useFriendRequestsV2, useBlockedUsersV2 } from '@/hooks/v2';
+import { useUser } from '@/stores';
+import { useI18n } from '@/hooks/useI18n';
+import { apiService } from '@/services/api.service';
+import {
+  Users,
+  UserCheck,
+  Clock,
+  UserX,
+  ShieldBan,
+  Share2,
+  Search,
+  SortAsc,
+  RefreshCw,
+  ArrowUpDown,
+} from 'lucide-react';
+import type { ContactTab, ContactSortOption } from '@/types/contacts';
+import type { ContactAction } from '@/components/v2/ContactCard';
+import type { FriendRequestAction } from '@/components/v2/FriendRequestCard';
+
+const TABS: { key: ContactTab; icon: React.ElementType; colorVar: string }[] = [
+  { key: 'all', icon: Users, colorVar: '--gp-terracotta' },
+  { key: 'connected', icon: UserCheck, colorVar: '--gp-deep-teal' },
+  { key: 'pending', icon: Clock, colorVar: '--gp-golden' },
+  { key: 'refused', icon: UserX, colorVar: '--gp-error' },
+  { key: 'blocked', icon: ShieldBan, colorVar: '--gp-text-muted' },
+  { key: 'affiliates', icon: Share2, colorVar: '--gp-deep-teal' },
+];
+
+const SORT_OPTIONS: { key: ContactSortOption; labelKey: string }[] = [
+  { key: 'name', labelKey: 'sort.alphabetical' },
+  { key: 'lastSeen', labelKey: 'sort.lastSeen' },
+  { key: 'recentlyAdded', labelKey: 'sort.recentlyAdded' },
+];
 
 function ContactSkeleton() {
   return (
@@ -17,181 +66,453 @@ function ContactSkeleton() {
 }
 
 export default function V2ContactsPage() {
+  const router = useRouter();
+  const user = useUser();
+  const { t } = useI18n('contacts');
+  const [activeTab, setActiveTab] = useState<ContactTab>('all');
+  const [showSortMenu, setShowSortMenu] = useState(false);
+
   const {
     contacts,
     onlineContacts,
     offlineContacts,
     searchQuery,
     setSearchQuery,
-    isLoading,
-    error,
+    searchResults,
+    isSearching,
+    isLoading: isLoadingContacts,
+    sortBy,
+    setSortBy,
     refreshContacts,
+    error: contactsError,
   } = useContactsV2();
+
+  const {
+    connected,
+    pending,
+    refused,
+    stats: requestStats,
+    isLoading: isLoadingRequests,
+    sendRequest,
+    acceptRequest,
+    rejectRequest,
+    cancelRequest,
+    getPendingRequestWithUser,
+    refresh: refreshRequests,
+  } = useFriendRequestsV2({ currentUserId: user?.id });
+
+  const {
+    blockedUsers,
+    isLoading: isLoadingBlocked,
+    blockUser,
+    unblockUser,
+    isBlocked,
+    refresh: refreshBlocked,
+  } = useBlockedUsersV2();
+
+  const isLoading = isLoadingContacts || isLoadingRequests || isLoadingBlocked;
+
+  const handleRefreshAll = useCallback(async () => {
+    await Promise.all([refreshContacts(), refreshRequests(), refreshBlocked()]);
+  }, [refreshContacts, refreshRequests, refreshBlocked]);
+
+  const handleContactAction = useCallback(
+    async (action: ContactAction, contactId: string, requestId?: string) => {
+      switch (action) {
+        case 'add':
+          await sendRequest(contactId);
+          break;
+        case 'cancel':
+          if (requestId) await cancelRequest(requestId);
+          break;
+        case 'message': {
+          try {
+            const response = await apiService.post<{ id: string }>('/conversations', {
+              type: 'direct',
+              participantIds: [contactId],
+            });
+            const data = response as { data?: { success?: boolean; data?: { id: string } } };
+            if (data?.data?.data?.id) {
+              router.push(`/v2/chats/${data.data.data.id}`);
+            }
+          } catch {
+            // toast handled by apiService
+          }
+          break;
+        }
+        case 'block':
+          await blockUser(contactId);
+          break;
+        case 'viewProfile':
+          router.push(`/v2/profile/${contactId}`);
+          break;
+        case 'call':
+          // Future: implement calling
+          break;
+      }
+    },
+    [sendRequest, cancelRequest, blockUser, router]
+  );
+
+  const handleFriendRequestAction = useCallback(
+    async (action: FriendRequestAction, requestId: string, userId?: string) => {
+      switch (action) {
+        case 'accept':
+          await acceptRequest(requestId);
+          break;
+        case 'reject':
+          await rejectRequest(requestId);
+          break;
+        case 'cancel':
+          await cancelRequest(requestId);
+          break;
+        case 'resend':
+          if (userId) await sendRequest(userId);
+          break;
+      }
+    },
+    [acceptRequest, rejectRequest, cancelRequest, sendRequest]
+  );
+
+  const connectedUserIds = new Set(
+    connected.map((r) =>
+      r.senderId === user?.id ? r.receiverId : r.senderId
+    )
+  );
+
+  const displayContacts = searchQuery.length >= 2 ? searchResults : contacts;
+
+  const tabCounts: Record<ContactTab, number> = {
+    all: displayContacts.length,
+    connected: requestStats.connected,
+    pending: requestStats.pending,
+    refused: requestStats.refused,
+    blocked: blockedUsers.length,
+    affiliates: 0,
+  };
 
   return (
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
       <PageHeader
-        title="Mes contacts"
+        title={t('title')}
         actionButtons={
-          <Button variant="ghost" size="sm" onClick={refreshContacts}>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSortMenu(!showSortMenu)}
+                aria-label={t('sort.label') || 'Sort'}
+              >
+                <ArrowUpDown className="w-4 h-4" />
+              </Button>
+              {showSortMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowSortMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg py-1 bg-[var(--gp-surface-elevated)] border border-[var(--gp-border)] shadow-lg">
+                    {SORT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.key}
+                        className={`w-full px-4 py-2.5 text-sm text-left flex items-center gap-2 hover:bg-[var(--gp-hover)] ${
+                          sortBy === opt.key
+                            ? 'text-[var(--gp-terracotta)] font-medium'
+                            : 'text-[var(--gp-text-primary)]'
+                        }`}
+                        onClick={() => {
+                          setSortBy(opt.key);
+                          setShowSortMenu(false);
+                        }}
+                      >
+                        <SortAsc className="w-4 h-4" />
+                        {t(opt.labelKey)}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" onClick={handleRefreshAll}>
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          </div>
         }
       >
         <div className="mt-4">
           <Input
-            placeholder="Rechercher un contact..."
+            placeholder={t('searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            }
+            icon={<Search className="w-4 h-4" />}
           />
+        </div>
+
+        {/* Tabs */}
+        <div className="mt-4 flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+          {TABS.map(({ key, icon: Icon }) => (
+            <button
+              key={key}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                activeTab === key
+                  ? 'bg-[var(--gp-terracotta)] text-white'
+                  : 'text-[var(--gp-text-muted)] hover:bg-[var(--gp-hover)]'
+              }`}
+              onClick={() => setActiveTab(key)}
+            >
+              <Icon className="w-4 h-4" />
+              {t(`tabs.${key}`)}
+              {tabCounts[key] > 0 && (
+                <span
+                  className={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
+                    activeTab === key
+                      ? 'bg-white/20'
+                      : 'bg-[var(--gp-parchment)]'
+                  }`}
+                >
+                  {tabCounts[key]}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       </PageHeader>
 
       <main className="max-w-2xl mx-auto px-6 py-6">
-        {/* Error state */}
-        {error && (
-          <div className="p-4 mb-4 rounded-xl" style={{ background: 'color-mix(in srgb, var(--gp-error) 15%, transparent)' }}>
-            <p style={{ color: 'var(--gp-error)' }}>{error}</p>
+        {/* Error */}
+        {contactsError && (
+          <div
+            className="p-4 mb-4 rounded-xl"
+            style={{
+              background: 'color-mix(in srgb, var(--gp-error) 15%, transparent)',
+            }}
+          >
+            <p style={{ color: 'var(--gp-error)' }}>{contactsError}</p>
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Loading */}
         {isLoading && (
           <Card variant="outlined" hover={false} className="divide-y divide-[var(--gp-border)]">
-            <ContactSkeleton />
             <ContactSkeleton />
             <ContactSkeleton />
             <ContactSkeleton />
           </Card>
         )}
 
-        {/* Empty state */}
-        {!isLoading && contacts.length === 0 && !searchQuery && (
-          <div className="text-center py-16 px-4">
-            <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-[var(--gp-parchment)]">
-              <svg className="w-8 h-8 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <h2 className="text-lg font-semibold mb-2 text-[var(--gp-text-primary)]">
-              Aucun contact
-            </h2>
-            <p className="text-[var(--gp-text-secondary)]">
-              Commencez a discuter pour ajouter des contacts
-            </p>
-          </div>
+        {/* ===== TAB: ALL ===== */}
+        {!isLoading && activeTab === 'all' && (
+          <>
+            {displayContacts.length === 0 ? (
+              searchQuery ? (
+                <EmptyState
+                  icon="🔍"
+                  title={t('messages.noContactsFound')}
+                  description={t('messages.noContactsFoundDescription')}
+                />
+              ) : (
+                <EmptyState
+                  icon="👥"
+                  title={t('messages.noContacts')}
+                  description={t('messages.noContactsDescription')}
+                />
+              )
+            ) : (
+              <>
+                {/* Online contacts */}
+                {onlineContacts.length > 0 && !searchQuery && (
+                  <section className="mb-6">
+                    <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)] uppercase tracking-wider">
+                      {t('sections.online')} ({onlineContacts.length})
+                    </h2>
+                    <Card
+                      variant="outlined"
+                      hover={false}
+                      className="divide-y divide-[var(--gp-border)]"
+                    >
+                      {onlineContacts.map((contact) => {
+                        const pendingReq = getPendingRequestWithUser(contact.id);
+                        return (
+                          <ContactCard
+                            key={contact.id}
+                            contact={contact}
+                            hasPendingRequest={!!pendingReq}
+                            pendingRequestId={pendingReq?.id}
+                            isFriend={connectedUserIds.has(contact.id)}
+                            onAction={handleContactAction}
+                            t={t}
+                          />
+                        );
+                      })}
+                    </Card>
+                  </section>
+                )}
+
+                {/* Offline contacts / All when searching */}
+                <section>
+                  {!searchQuery && offlineContacts.length > 0 && (
+                    <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)] uppercase tracking-wider">
+                      {t('sections.offline')} ({offlineContacts.length})
+                    </h2>
+                  )}
+                  <Card
+                    variant="outlined"
+                    hover={false}
+                    className="divide-y divide-[var(--gp-border)]"
+                  >
+                    {(searchQuery ? displayContacts : offlineContacts).map((contact) => {
+                      const pendingReq = getPendingRequestWithUser(contact.id);
+                      return (
+                        <ContactCard
+                          key={contact.id}
+                          contact={contact}
+                          hasPendingRequest={!!pendingReq}
+                          pendingRequestId={pendingReq?.id}
+                          isFriend={connectedUserIds.has(contact.id)}
+                          onAction={handleContactAction}
+                          t={t}
+                        />
+                      );
+                    })}
+                  </Card>
+                </section>
+              </>
+            )}
+          </>
         )}
 
-        {/* No search results */}
-        {!isLoading && contacts.length === 0 && searchQuery && (
-          <div className="text-center py-16 px-4">
-            <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-[var(--gp-parchment)]">
-              <svg className="w-8 h-8 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <h2 className="text-lg font-semibold mb-2 text-[var(--gp-text-primary)]">
-              Aucun resultat
-            </h2>
-            <p className="text-[var(--gp-text-secondary)]">
-              Aucun contact ne correspond a "{searchQuery}"
-            </p>
-          </div>
-        )}
-
-        {/* Online contacts */}
-        {!isLoading && onlineContacts.length > 0 && (
-          <section className="mb-6">
-            <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">
-              EN LIGNE ({onlineContacts.length})
-            </h2>
-            <Card variant="outlined" hover={false} className="divide-y divide-[var(--gp-border)]">
-              {onlineContacts.map((contact) => (
-                <div key={contact.id} className="p-4 flex items-center gap-4">
-                  <Avatar
-                    src={contact.avatar}
-                    name={contact.name}
-                    size="lg"
-                    isOnline
-                    languageOrb={
-                      <LanguageOrb
-                        code={contact.languageCode}
-                        size="sm"
-                        pulse={false}
-                        className="w-5 h-5 text-xs border-2 border-[var(--gp-surface)]"
-                      />
-                    }
+        {/* ===== TAB: CONNECTED ===== */}
+        {!isLoading && activeTab === 'connected' && (
+          <>
+            {connected.length === 0 ? (
+              <EmptyState
+                icon="🤝"
+                title={t('messages.noConnectedContacts')}
+                description={t('messages.noConnectedContactsDescription')}
+              />
+            ) : (
+              <Card
+                variant="outlined"
+                hover={false}
+                className="divide-y divide-[var(--gp-border)]"
+              >
+                {connected.map((request) => (
+                  <FriendRequestCard
+                    key={request.id}
+                    request={request}
+                    currentUserId={user?.id}
+                    onAction={handleFriendRequestAction}
+                    t={t}
                   />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate text-[var(--gp-text-primary)]">{contact.name}</p>
-                    <p className="text-sm truncate text-[var(--gp-text-muted)]">{contact.username}</p>
-                  </div>
-                  <Link href={`/v2/chats?user=${contact.id}`}>
-                    <Button variant="ghost" size="sm">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                    </Button>
-                  </Link>
-                </div>
-              ))}
-            </Card>
-          </section>
+                ))}
+              </Card>
+            )}
+          </>
         )}
 
-        {/* Offline contacts */}
-        {!isLoading && offlineContacts.length > 0 && (
-          <section>
-            <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">
-              HORS LIGNE ({offlineContacts.length})
-            </h2>
-            <Card variant="outlined" hover={false} className="divide-y divide-[var(--gp-border)]">
-              {offlineContacts.map((contact) => (
-                <div key={contact.id} className="p-4 flex items-center gap-4 opacity-70">
-                  <Avatar
-                    src={contact.avatar}
-                    name={contact.name}
-                    size="lg"
-                    languageOrb={
-                      <LanguageOrb
-                        code={contact.languageCode}
-                        size="sm"
-                        pulse={false}
-                        className="w-5 h-5 text-xs border-2 border-[var(--gp-surface)]"
-                      />
-                    }
+        {/* ===== TAB: PENDING ===== */}
+        {!isLoading && activeTab === 'pending' && (
+          <>
+            {pending.length === 0 ? (
+              <EmptyState
+                icon="⏳"
+                title={t('messages.noPendingRequests')}
+                description={t('messages.noPendingRequestsDescription')}
+              />
+            ) : (
+              <Card
+                variant="outlined"
+                hover={false}
+                className="divide-y divide-[var(--gp-border)]"
+              >
+                {pending.map((request) => (
+                  <FriendRequestCard
+                    key={request.id}
+                    request={request}
+                    currentUserId={user?.id}
+                    onAction={handleFriendRequestAction}
+                    t={t}
                   />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate text-[var(--gp-text-primary)]">{contact.name}</p>
-                    <p className="text-sm truncate text-[var(--gp-text-muted)]">{contact.username}</p>
-                    {contact.lastSeen && (
-                      <p className="text-xs text-[var(--gp-text-muted)]">{contact.lastSeen}</p>
-                    )}
-                  </div>
-                  <Link href={`/v2/chats?user=${contact.id}`}>
-                    <Button variant="ghost" size="sm">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                    </Button>
-                  </Link>
-                </div>
-              ))}
-            </Card>
-          </section>
+                ))}
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* ===== TAB: REFUSED ===== */}
+        {!isLoading && activeTab === 'refused' && (
+          <>
+            {refused.length === 0 ? (
+              <EmptyState
+                icon="❌"
+                title={t('messages.noRefusedRequests')}
+                description={t('messages.noRefusedRequestsDescription')}
+              />
+            ) : (
+              <Card
+                variant="outlined"
+                hover={false}
+                className="divide-y divide-[var(--gp-border)]"
+              >
+                {refused.map((request) => (
+                  <FriendRequestCard
+                    key={request.id}
+                    request={request}
+                    currentUserId={user?.id}
+                    onAction={handleFriendRequestAction}
+                    t={t}
+                  />
+                ))}
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* ===== TAB: BLOCKED ===== */}
+        {!isLoading && activeTab === 'blocked' && (
+          <>
+            {blockedUsers.length === 0 ? (
+              <EmptyState
+                icon="🛡️"
+                title={t('messages.noBlockedUsers')}
+                description={t('messages.noBlockedUsersDescription')}
+              />
+            ) : (
+              <Card
+                variant="outlined"
+                hover={false}
+                className="divide-y divide-[var(--gp-border)]"
+              >
+                {blockedUsers.map((blockedUser) => (
+                  <BlockedUserCard
+                    key={blockedUser.id}
+                    user={blockedUser}
+                    onUnblock={unblockUser}
+                    t={t}
+                  />
+                ))}
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* ===== TAB: AFFILIATES ===== */}
+        {!isLoading && activeTab === 'affiliates' && (
+          <EmptyState
+            icon="🔗"
+            title={t('messages.noAffiliateContacts')}
+            description={t('messages.noAffiliateContactsDescription')}
+          />
+        )}
+
+        {/* Loading search indicator */}
+        {isSearching && (
+          <div className="flex justify-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-2 border-[var(--gp-terracotta)] border-t-transparent" />
+          </div>
         )}
       </main>
-
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet" />
     </div>
   );
 }
