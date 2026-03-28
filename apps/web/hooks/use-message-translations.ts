@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { BubbleTranslation, User, Message, TranslationModel } from '@meeshy/shared/types';
 import { resolveUserPreferredLanguage as resolveUserPreferredLanguageUtil } from '@/utils/user-language-preferences';
+import { LRUCache } from '@/lib/lru-cache';
 
 interface BubbleStreamMessage extends Omit<Message, 'translations'> {
   location?: string;
@@ -75,7 +76,7 @@ export function useMessageTranslations({
   const processMessageWithTranslations = useCallback((message: any): BubbleStreamMessage => {
     // Convertir les traductions backend vers le format BubbleTranslation
     // CORRECTION: Déduplication des traductions par langue pour éviter les doublons
-    const translationsMap = new Map<string, BubbleTranslation>();
+    const translationsMap = new LRUCache<string, BubbleTranslation>(500);
     
     const validTranslations = (message.translations || [])
       .filter((t: any) => {
