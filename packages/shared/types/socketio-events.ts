@@ -586,6 +586,16 @@ export interface UserPreferencesUpdatedEventData {
   readonly category: string;
 }
 
+export interface MentionCreatedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly senderId: string;
+  readonly mentionedUserId: string;
+  readonly mentionedParticipantId?: string;
+  readonly content: string;
+  readonly timestamp: string;
+}
+
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
@@ -622,6 +632,9 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
   [SERVER_EVENTS.TRANSCRIPTION_READY]: (data: TranscriptionReadyEventData) => void;
+
+  // Mentions
+  [SERVER_EVENTS.MENTION_CREATED]: (data: MentionCreatedEventData) => void;
 
   // Location sharing
   [SERVER_EVENTS.LOCATION_SHARED]: (data: LocationSharedEventData) => void;

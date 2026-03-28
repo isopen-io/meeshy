@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { validateQuery } from '../../validation/helpers.js';
+import { AnalyticsMessageTypesQuerySchema, AnalyticsLanguageDistQuerySchema, AnalyticsKpisQuerySchema } from '../../validation/admin-schemas.js';
 
 // Middleware pour vérifier les permissions analytics
 const requireAnalyticsPermission = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -153,7 +155,8 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    * Distribution des types de messages
    */
   fastify.get('/message-types', {
-    onRequest: [fastify.authenticate, requireAnalyticsPermission]
+    onRequest: [fastify.authenticate, requireAnalyticsPermission],
+    preHandler: [validateQuery(AnalyticsMessageTypesQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
@@ -287,7 +290,8 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    * Distribution des langues utilisées
    */
   fastify.get('/language-distribution', {
-    onRequest: [fastify.authenticate, requireAnalyticsPermission]
+    onRequest: [fastify.authenticate, requireAnalyticsPermission],
+    preHandler: [validateQuery(AnalyticsLanguageDistQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
@@ -336,7 +340,8 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    * KPIs avancés
    */
   fastify.get('/kpis', {
-    onRequest: [fastify.authenticate, requireAnalyticsPermission]
+    onRequest: [fastify.authenticate, requireAnalyticsPermission],
+    preHandler: [validateQuery(AnalyticsKpisQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;

@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { validateQuery } from '../../validation/helpers.js';
+import { AdminMessagesStatsQuerySchema, AdminMessagesEngagementQuerySchema } from '../../validation/admin-schemas.js';
 
 // Middleware pour vérifier les permissions admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -29,7 +31,8 @@ export async function messagesRoutes(fastify: FastifyInstance) {
    * Statistiques détaillées des messages
    */
   fastify.get('/stats', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateQuery(AdminMessagesStatsQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
@@ -321,7 +324,8 @@ export async function messagesRoutes(fastify: FastifyInstance) {
    * Métriques d'engagement (réactions, réponses, etc.)
    */
   fastify.get('/engagement', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateQuery(AdminMessagesEngagementQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;

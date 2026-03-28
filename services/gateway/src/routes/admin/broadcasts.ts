@@ -4,6 +4,8 @@ import { BroadcastTranslationService } from '../../services/admin/broadcast-tran
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { EmailService } from '../../services/EmailService';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
+import { BroadcastsListQuerySchema, CreateBroadcastBodySchema, UpdateBroadcastBodySchema, BroadcastIdParamSchema } from '../../validation/admin-schemas.js';
 
 const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 
@@ -33,7 +35,8 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
   // =========================================================================
 
   fastify.get('/', {
-    onRequest: [fastify.authenticate, requireBroadcastPermission]
+    onRequest: [fastify.authenticate, requireBroadcastPermission],
+    preHandler: [validateQuery(BroadcastsListQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { offset = '0', limit = '20', status } = request.query as {
@@ -86,7 +89,8 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
   // =========================================================================
 
   fastify.post('/', {
-    onRequest: [fastify.authenticate, requireBroadcastPermission]
+    onRequest: [fastify.authenticate, requireBroadcastPermission],
+    preHandler: [validateBody(CreateBroadcastBodySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -151,7 +155,8 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
   // =========================================================================
 
   fastify.get('/:id', {
-    onRequest: [fastify.authenticate, requireBroadcastPermission]
+    onRequest: [fastify.authenticate, requireBroadcastPermission],
+    preHandler: [validateParams(BroadcastIdParamSchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -185,7 +190,8 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
   // =========================================================================
 
   fastify.put('/:id', {
-    onRequest: [fastify.authenticate, requireBroadcastPermission]
+    onRequest: [fastify.authenticate, requireBroadcastPermission],
+    preHandler: [validateParams(BroadcastIdParamSchema), validateBody(UpdateBroadcastBodySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -246,7 +252,8 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
   // =========================================================================
 
   fastify.post('/:id/preview', {
-    onRequest: [fastify.authenticate, requireBroadcastPermission]
+    onRequest: [fastify.authenticate, requireBroadcastPermission],
+    preHandler: [validateParams(BroadcastIdParamSchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -380,7 +387,8 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
   // =========================================================================
 
   fastify.post('/:id/send', {
-    onRequest: [fastify.authenticate, requireBroadcastPermission]
+    onRequest: [fastify.authenticate, requireBroadcastPermission],
+    preHandler: [validateParams(BroadcastIdParamSchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -454,7 +462,8 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
   // =========================================================================
 
   fastify.delete('/:id', {
-    onRequest: [fastify.authenticate, requireBroadcastPermission]
+    onRequest: [fastify.authenticate, requireBroadcastPermission],
+    preHandler: [validateParams(BroadcastIdParamSchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };

@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { type RankingQuery } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { validateQuery } from '../../validation/helpers.js';
+import { RankingsQuerySchema } from '../../validation/admin-schemas.js';
 
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
@@ -874,7 +876,8 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
 
 export async function systemRankingsRoutes(fastify: FastifyInstance) {
   fastify.get('/ranking', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateQuery(RankingsQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { entityType = 'users', criterion = 'messages_sent', period = '30d', limit = '50' } = request.query as RankingQuery;

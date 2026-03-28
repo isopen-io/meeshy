@@ -17,6 +17,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  transpilePackages: ['@meeshy/shared'],
   // Configuration Docker - standalone pour optimiser la taille de l'image
   output: 'standalone',
 
