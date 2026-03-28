@@ -2296,6 +2296,25 @@ export class MeeshySocketIOManager {
       } else {
       }
 
+      // 2b. Emit mention:created to each mentioned user's personal room
+      const mentions = (message as any).validatedMentions as Array<{ participantId?: string; userId?: string; username?: string }> | undefined;
+      if (mentions && mentions.length > 0) {
+        for (const mention of mentions) {
+          const targetUserId = mention.userId;
+          if (targetUserId && targetUserId !== message.senderId) {
+            this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
+              messageId: message.id,
+              conversationId: normalizedId,
+              senderId: message.senderId,
+              mentionedUserId: targetUserId,
+              mentionedParticipantId: mention.participantId,
+              content: (message as any).content,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
       const roomClients = this.io.sockets.adapter.rooms.get(room);
 
       // 3. Mettre à jour le unreadCount pour tous les participants (sauf l'expéditeur)

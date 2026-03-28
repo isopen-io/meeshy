@@ -124,6 +124,10 @@ export class MessagingService {
     socket.on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
       this.attachmentStatusListeners.forEach(listener => listener(data));
     });
+
+    socket.on(SERVER_EVENTS.MENTION_CREATED, (data: unknown) => {
+      this.mentionListeners.forEach(listener => listener(data));
+    });
   }
 
   /**

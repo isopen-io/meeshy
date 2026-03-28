@@ -330,9 +330,13 @@ public struct AttachmentStatusEvent: Decodable, Sendable {
 // MARK: - Mention Event Data
 
 public struct MentionCreatedEvent: Decodable, Sendable {
-    public let messageId: String?
-    public let conversationId: String?
-    public let userId: String?
+    public let messageId: String
+    public let conversationId: String
+    public let senderId: String?
+    public let mentionedUserId: String?
+    public let mentionedParticipantId: String?
+    public let content: String?
+    public let timestamp: String?
 }
 
 // MARK: - Notification Socket Event Data
@@ -1095,6 +1099,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(ConversationOnlineStatsEvent.self, from: data) { [weak self] event in
                 self?.conversationOnlineStats.send(event)
+            }
+        }
+
+        // --- Mention events ---
+
+        socket.on("mention:created") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MentionCreatedEvent.self, from: data) { [weak self] event in
+                self?.mentionCreated.send(event)
             }
         }
 
