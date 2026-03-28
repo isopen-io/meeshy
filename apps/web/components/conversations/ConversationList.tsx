@@ -130,11 +130,17 @@ export const ConversationList = memo(function ConversationList({
   const renderContent = useMemo(() => {
     if (isLoading || isLoadingPreferences) {
       return (
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">{t('loadingConversations')}</p>
-          </div>
+        <div className="flex flex-col gap-1 p-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 p-3 rounded-lg animate-pulse">
+              <div className="h-10 w-10 rounded-full bg-muted shrink-0" />
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="h-3.5 bg-muted rounded w-3/4" />
+                <div className="h-3 bg-muted/60 rounded w-1/2" />
+              </div>
+              <div className="h-3 bg-muted/40 rounded w-8 shrink-0" />
+            </div>
+          ))}
         </div>
       );
     }

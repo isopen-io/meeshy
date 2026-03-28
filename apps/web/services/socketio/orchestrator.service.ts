@@ -543,6 +543,10 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationJoined(listener);
   }
 
+  onConversationLeft(listener: (data: { conversationId: string; userId: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationLeft(listener);
+  }
+
   onUnreadUpdated(listener: (data: { conversationId: string; unreadCount: number }) => void): UnsubscribeFn {
     return this.presenceService.onUnreadUpdated(listener);
   }

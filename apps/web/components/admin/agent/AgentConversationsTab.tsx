@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Settings, Trash2, ChevronLeft, ChevronRight, Plus, Search as SearchIcon } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Settings, Trash2, ChevronLeft, ChevronRight, Plus, Search as SearchIcon, MessageSquare, Clock } from 'lucide-react';
 import { agentAdminService, type AgentConfigData } from '@/services/agent-admin.service';
 import { AgentConfigDialog } from './AgentConfigDialog';
 import { UserDisplay } from './UserDisplay';
@@ -26,6 +27,18 @@ const TYPE_LABELS: Record<string, string> = {
 function conversationLabel(config: AgentConfigData): string {
   if (config.conversation?.title) return config.conversation.title;
   return config.conversationId.slice(0, 8) + '...';
+}
+
+function formatTimeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return '-';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'maintenant';
+  if (minutes < 60) return `${minutes}min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}j`;
 }
 
 export function AgentConversationsTab() {
@@ -113,7 +126,10 @@ export function AgentConversationsTab() {
     <>
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <CardTitle className="text-lg">Configurations Agent</CardTitle>
+          <div>
+            <CardTitle className="text-lg">Configurations Agent</CardTitle>
+            <p className="text-xs text-gray-500 mt-0.5">{total} conversations configurées</p>
+          </div>
           <div className="flex w-full sm:w-auto gap-2">
             <div className="relative flex-1 sm:w-64">
               <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -137,97 +153,139 @@ export function AgentConversationsTab() {
               Aucune conversation configur&eacute;e pour l&apos;agent
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {/* Desktop header */}
-              <div className="hidden lg:grid grid-cols-6 gap-4 px-4 py-2 text-xs font-medium text-gray-500 uppercase">
-                <span className="col-span-2">Conversation</span>
+              <div className="hidden lg:grid grid-cols-12 gap-3 px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                <span className="col-span-3">Conversation</span>
                 <span>Statut</span>
                 <span>Triggers</span>
-                <span>Contr&ocirc;l&eacute;s</span>
+                <span className="col-span-2">Contrôlés</span>
+                <span className="text-right">Messages</span>
+                <span className="text-right">Confiance</span>
+                <span className="text-right">Dernière rép.</span>
                 <span>Actions</span>
               </div>
 
-              {configs.map(config => (
-                <div
-                  key={config.id}
-                  className="grid grid-cols-1 lg:grid-cols-6 gap-3 lg:gap-4 items-start lg:items-center px-4 py-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                  {/* Conversation name + type */}
-                  <div className="col-span-1 lg:col-span-2 min-w-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-medium truncate flex-1 text-gray-900 dark:text-gray-100" title={config.conversationId}>
-                        {conversationLabel(config)}
+              {configs.map(config => {
+                const analytics = config.analytics;
+                const controlledUsers = config.controlledUserIds ?? [];
+
+                return (
+                  <div
+                    key={config.id}
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:gap-3 items-start lg:items-center px-4 py-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                  >
+                    {/* Conversation name + type */}
+                    <div className="col-span-1 lg:col-span-3 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-medium truncate flex-1 text-gray-900 dark:text-gray-100" title={config.conversationId}>
+                          {conversationLabel(config)}
+                        </span>
+                        {config.conversation?.type && (
+                          <Badge variant="outline" className="text-[10px] shrink-0">
+                            {TYPE_LABELS[config.conversation.type] ?? config.conversation.type}
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-400 font-mono block mt-0.5">
+                        {config.conversationId.slice(0, 12)}...
                       </span>
-                      {config.conversation?.type && (
-                        <Badge variant="outline" className="text-xs shrink-0">
-                          {TYPE_LABELS[config.conversation.type] ?? config.conversation.type}
+                    </div>
+
+                    {/* Mobile: compact row / Desktop: individual columns */}
+                    <div className="flex items-center gap-2 lg:contents flex-wrap">
+                      {/* Status */}
+                      <div className="flex items-center gap-1.5">
+                        <Switch
+                          checked={config.enabled}
+                          onCheckedChange={() => handleToggle(config)}
+                        />
+                        <Badge variant={config.enabled ? 'default' : 'secondary'} className="text-[10px]">
+                          {config.enabled ? 'Actif' : 'Off'}
                         </Badge>
-                      )}
+                      </div>
+
+                      {/* Triggers */}
+                      <div className="flex flex-wrap gap-0.5">
+                        {config.triggerOnTimeout && <Badge variant="outline" className="text-[10px] px-1.5">T</Badge>}
+                        {config.triggerOnUserMessage && <Badge variant="outline" className="text-[10px] px-1.5">M</Badge>}
+                        {config.triggerOnReplyTo && <Badge variant="outline" className="text-[10px] px-1.5">R</Badge>}
+                      </div>
+
+                      {/* Controlled users */}
+                      <div className="flex items-center gap-1 overflow-hidden col-span-2">
+                        {controlledUsers.slice(0, 4).map(id => (
+                          <UserDisplay key={id} userId={id} size="sm" showUsername={false} className="w-6" />
+                        ))}
+                        {controlledUsers.length > 4 && (
+                          <Badge variant="secondary" className="h-5 min-w-[20px] rounded-full p-0 flex items-center justify-center text-[9px]">
+                            +{controlledUsers.length - 4}
+                          </Badge>
+                        )}
+                        {controlledUsers.length === 0 && (
+                          <span className="text-[10px] text-gray-400">0/{config.maxControlledUsers}</span>
+                        )}
+                      </div>
+
+                      {/* Messages sent */}
+                      <div className="text-right">
+                        <div className="flex items-center gap-1 justify-end">
+                          <MessageSquare className="h-3 w-3 text-gray-400 hidden lg:block" />
+                          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
+                            {analytics?.messagesSent ?? 0}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Avg confidence */}
+                      <div className="text-right">
+                        {analytics ? (
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <Progress value={analytics.avgConfidence * 100} className="w-10 h-1.5 hidden lg:block" />
+                            <span className="text-xs font-mono text-gray-600 dark:text-gray-300 tabular-nums">
+                              {(analytics.avgConfidence * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-gray-400">-</span>
+                        )}
+                      </div>
+
+                      {/* Last response */}
+                      <div className="text-right">
+                        <div className="flex items-center gap-1 justify-end">
+                          <Clock className="h-3 w-3 text-gray-400 hidden lg:block" />
+                          <span className="text-xs text-gray-500 tabular-nums">
+                            {formatTimeAgo(analytics?.lastResponseAt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-0.5 shrink-0">
+                        <Button variant="ghost" size="sm" onClick={() => handleEdit(config)} className="h-7 w-7 p-0">
+                          <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(config.conversationId)}
+                          className="text-red-500 hover:text-red-700 h-7 w-7 p-0"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                    <span className="text-xs text-gray-400 font-mono block mt-0.5">
-                      {config.conversationId.slice(0, 12)}...
-                    </span>
                   </div>
-
-                  {/* Mobile: row with status + triggers + controlled + actions */}
-                  <div className="flex items-center gap-2 lg:contents">
-                    {/* Status */}
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={config.enabled}
-                        onCheckedChange={() => handleToggle(config)}
-                      />
-                      <Badge variant={config.enabled ? 'default' : 'secondary'} className="text-xs">
-                        {config.enabled ? 'Actif' : 'Inactif'}
-                      </Badge>
-                    </div>
-
-                    {/* Triggers */}
-                    <div className="flex flex-wrap gap-1 flex-1">
-                      {config.triggerOnTimeout && <Badge variant="outline" className="text-xs">Timeout</Badge>}
-                      {config.triggerOnUserMessage && <Badge variant="outline" className="text-xs">Message</Badge>}
-                      {config.triggerOnReplyTo && <Badge variant="outline" className="text-xs">Reply</Badge>}
-                    </div>
-
-                    {/* Controlled */}
-                    <div className="flex flex-wrap gap-1 overflow-hidden">
-                      {(config.manualUserIds ?? []).slice(0, 3).map(id => (
-                        <UserDisplay key={id} userId={id} size="sm" showUsername={false} className="w-8" />
-                      ))}
-                      {(config.manualUserIds ?? []).length > 3 && (
-                        <Badge variant="secondary" className="h-6 w-6 rounded-full p-0 flex items-center justify-center text-[10px]">
-                          +{(config.manualUserIds ?? []).length - 3}
-                        </Badge>
-                      )}
-                      {(config.manualUserIds ?? []).length === 0 && (
-                        <span className="text-xs text-gray-400">0/{config.maxControlledUsers}</span>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-1 shrink-0">
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(config)}>
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(config.conversationId)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
           {total > limit && (
             <div className="flex items-center justify-between mt-4 pt-4 border-t">
               <span className="text-sm text-gray-500">
-                Page {page} - {total} r&eacute;sultats
+                Page {page} sur {Math.ceil(total / limit)} ({total} résultats)
               </span>
               <div className="flex gap-2">
                 <Button

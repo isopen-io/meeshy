@@ -69,7 +69,8 @@ export function BubbleStreamPage({
   conversationId = 'meeshy',
   isAnonymousMode = false,
   linkId,
-  initialParticipants
+  initialParticipants,
+  anonymousPermissionHints,
 }: BubbleStreamPageProps) {
 
   // i18n
@@ -173,6 +174,9 @@ export function BubbleStreamPage({
     user.regionalLanguage,
     user.customDestinationLanguage
   ]);
+
+  // Permission hints for anonymous users (passed from parent via props)
+  const permissionHints = anonymousPermissionHints;
 
   // Hook UI (NOUVEAU - extrait)
   const {
@@ -551,6 +555,13 @@ export function BubbleStreamPage({
       `}</style>
 
       <div className="flex h-full min-h-0 w-full flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        {/* Offline banner for anonymous users */}
+        {isAnonymousMode && !connectionStatus.isConnected && (
+          <div className="bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 px-4 py-2 text-center text-sm text-amber-700 dark:text-amber-300">
+            {tCommon('connection.offlineAnonymous') || 'Mode hors ligne — vos messages seront envoyés à la reconnexion'}
+          </div>
+        )}
+
         <div className="flex h-full min-h-0 w-full flex-col xl:flex-row">
           {/* Colonne principale */}
           <section className="grid flex-1 min-h-0 grid-rows-[auto,1fr,auto] overflow-hidden">
@@ -616,6 +627,7 @@ export function BubbleStreamPage({
               token={typeof window !== 'undefined' ? getAuthToken()?.value : undefined}
               userRole={user?.role}
               conversationId={normalizedConversationId || conversationId}
+              permissionHints={permissionHints}
             />
           </section>
 
