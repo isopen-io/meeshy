@@ -52,6 +52,17 @@ export const queryKeys = {
     members: (communityId: string) =>
       [...queryKeys.communities.detail(communityId), 'members'] as const,
   },
+
+  friendRequests: {
+    all: ['friendRequests'] as const,
+    received: () => [...queryKeys.friendRequests.all, 'received'] as const,
+    sent: () => [...queryKeys.friendRequests.all, 'sent'] as const,
+  },
+
+  blockedUsers: {
+    all: ['blockedUsers'] as const,
+    list: () => [...queryKeys.blockedUsers.all, 'list'] as const,
+  },
 } as const;
 
 export type QueryKeys = typeof queryKeys;

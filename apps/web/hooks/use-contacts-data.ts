@@ -1,11 +1,15 @@
+/**
+ * @deprecated Use `useContactsV2`, `useFriendRequestsV2`, and `useBlockedUsersV2` from `@/hooks/v2` instead.
+ * This hook uses raw useState/fetch patterns. The V2 hooks use React Query with optimistic updates.
+ */
 import { useState, useEffect, useCallback } from 'react';
 import { User } from '@/types';
 import { usersService, type ParticipantsFilters } from '@/services';
 import { toast } from 'sonner';
 import { authManager } from '@/services/auth-manager.service';
 import { buildApiUrl } from '@/lib/config';
-
-interface FriendRequest {
+/** @deprecated Use FriendRequest from '@/types/contacts' */
+interface LegacyFriendRequest {
   id: string;
   senderId: string;
   receiverId: string;
@@ -40,7 +44,7 @@ interface AffiliateRelation {
 
 export function useContactsData(t: (key: string) => string) {
   const [contacts, setContacts] = useState<User[]>([]);
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [friendRequests, setFriendRequests] = useState<LegacyFriendRequest[]>([]);
   const [affiliateRelations, setAffiliateRelations] = useState<AffiliateRelation[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<ParticipantsFilters>({});
