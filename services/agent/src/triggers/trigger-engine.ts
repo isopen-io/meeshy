@@ -1,3 +1,9 @@
+/**
+ * @deprecated NOT WIRED INTO server.ts — reactive interpellation handling is done
+ * directly via ZmqListener + ReactiveHandler in server.ts.
+ * This trigger engine supports timeout/user_message/reply_to triggers but is
+ * not instantiated anywhere. Consider wiring it into the scanner or removing it.
+ */
 import type { TriggerConfig, TriggerCallback } from './types';
 import type { TriggerContext } from '../graph/state';
 

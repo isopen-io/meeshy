@@ -251,6 +251,18 @@ export const ConversationStateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => [],
   }),
+  lastAgentUserId: Annotation<string | null>({
+    reducer: (_current, update) => update,
+    default: () => null,
+  }),
+  recentTopicCategories: Annotation<string[]>({
+    reducer: (_current, update) => update,
+    default: () => [],
+  }),
+  engagementData: Annotation<Array<{ userId: string; repliesReceived: number; reactionsReceived: number }>>({
+    reducer: (_current, update) => update,
+    default: () => [],
+  }),
 });
 
 export type ConversationState = typeof ConversationStateAnnotation.State;

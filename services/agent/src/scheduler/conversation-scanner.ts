@@ -13,6 +13,21 @@ type CompiledGraph = {
   invoke: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
 };
 
+function extractRecentTopicCategories(
+  history: Array<{ topic: string; timestamp: number }>,
+): string[] {
+  const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
+  const recentTopics = history
+    .filter((h) => h.timestamp > sixHoursAgo)
+    .map((h) => h.topic.toLowerCase().trim());
+
+  const seen = new Set<string>();
+  for (const topic of recentTopics) {
+    if (topic.length > 3) seen.add(topic);
+  }
+  return [...seen];
+}
+
 export class ConversationScanner {
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
   private scanning = false;
@@ -56,12 +71,12 @@ export class ConversationScanner {
   async scanConversation(conversationId: string): Promise<void> {
     const config = await this.persistence.getAgentConfig(conversationId);
     if (config?.enabled === false) return;
-    const context = await this.persistence.getConversationContext(conversationId);
+    const conversation = await this.persistence.getConversationWithType(conversationId);
     const conv: EligibleConversation = {
       conversationId,
-      conversationType: 'group',
-      title: context?.title ?? null,
-      description: context?.description ?? null,
+      conversationType: conversation?.type ?? 'group',
+      title: conversation?.title ?? null,
+      description: conversation?.description ?? null,
       lastMessageAt: new Date(),
       memberCount: 0,
       scanIntervalMinutes: config?.scanIntervalMinutes ?? 3,
@@ -163,13 +178,18 @@ export class ConversationScanner {
       return false;
     }
 
-    const [messages, summary, toneProfiles, manualControlledUsers, agentHistory, todayActiveUserIds] = await Promise.all([
+    const [messages, summary, toneProfiles, manualControlledUsers, agentHistory, todayActiveUserIds, lastAgentUserId, engagementData] = await Promise.all([
       this.stateManager.getMessages(conversationId),
       this.stateManager.getSummary(conversationId),
       this.stateManager.getToneProfiles(conversationId),
       this.persistence.getControlledUsers(conversationId),
       this.stateManager.getAgentHistory(conversationId),
       this.stateManager.getTodayActiveUserIds(conversationId),
+      this.stateManager.getLastAgentUserId(conversationId),
+      this.persistence.getAgentMessageEngagement(conversationId, 48).catch((err) => {
+        console.warn(`[Scanner] Failed to fetch engagement data for conv=${conversationId}:`, err instanceof Error ? err.message : 'unknown');
+        return [];
+      }),
     ]);
 
     let controlledUsers = manualControlledUsers.map((u) => {
@@ -189,12 +209,14 @@ export class ConversationScanner {
     const autoPickup = config?.autoPickupEnabled ?? true;
     if (autoPickup && controlledUsers.length < (config?.maxControlledUsers ?? 5)) {
       // STRATEGY: Pick up multiple inactive users per cycle to diversify agent personas faster.
-      // When very few controlled users exist (< 3), use a reduced inactivity threshold (24h)
-      // to accelerate population. Once >= 3 users, use the standard threshold.
+      // For global/public conversations or when very few controlled users exist (< 3),
+      // use a reduced inactivity threshold (24h) to accelerate population.
+      const isPublicConversation = conv.conversationType === 'global' || conv.conversationType === 'public';
       const remainingSlots = (config?.maxControlledUsers ?? 5) - controlledUsers.length;
       const limit = Math.min(3, remainingSlots);
       const baseThreshold = config?.inactivityThresholdHours ?? 30;
-      const effectiveThreshold = controlledUsers.length < 3 ? Math.min(baseThreshold, 24) : baseThreshold;
+      const needsAcceleration = controlledUsers.length < 3 || isPublicConversation;
+      const effectiveThreshold = needsAcceleration ? Math.min(baseThreshold, 24) : baseThreshold;
       const potentialUsers = await this.persistence.getPotentialControlledUsers(
         conversationId,
         limit,
@@ -368,9 +390,19 @@ export class ConversationScanner {
     const day = new Date().getUTCDay();
     const maxUsersToday = day === 0 || day === 6 ? conv.weekendMaxUsers : conv.weekdayMaxUsers;
 
-    console.log(`[Scanner] Processing conv=${conversationId} activity=${activity.activityScore.toFixed(2)} msgs=${effectiveMessages.length} users=${controlledUsers.length}`);
+    if (todayStats.usersActive >= maxUsersToday) {
+      console.log(`[Scanner] User budget exhausted for conv=${conversationId}: ${todayStats.usersActive}/${maxUsersToday} users today`);
+      return false;
+    }
 
-    const result = await this.graph.invoke({
+    // Extract recent topic categories from agent history to enforce diversity at code level
+    const recentTopicCategories = extractRecentTopicCategories(agentHistory);
+
+    console.log(`[Scanner] Processing conv=${conversationId} activity=${activity.activityScore.toFixed(2)} msgs=${effectiveMessages.length} users=${controlledUsers.length} lastUser=${lastAgentUserId ?? 'none'} recentTopics=${recentTopicCategories.length}`);
+
+    let result: Record<string, unknown>;
+    try {
+      result = await this.graph.invoke({
       conversationId,
       messages: effectiveMessages,
       summary,
@@ -406,10 +438,22 @@ export class ConversationScanner {
       reactionBoostFactor: conv.reactionBoostFactor,
       agentHistory,
       todayActiveUserIds,
+      lastAgentUserId,
+      recentTopicCategories,
+      engagementData,
     });
+    } catch (graphError) {
+      console.error(`[Scanner] Graph invocation failed for conv=${conversationId}:`, graphError);
+      return false;
+    }
 
-    if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);
-    if (result.toneProfiles) await this.stateManager.setToneProfiles(conversationId, result.toneProfiles as Record<string, any>);
+    try {
+      if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);
+    } catch (err) { console.error(`[Scanner] Error persisting summary for conv=${conversationId}:`, err); }
+
+    try {
+      if (result.toneProfiles) await this.stateManager.setToneProfiles(conversationId, result.toneProfiles as Record<string, any>);
+    } catch (err) { console.error(`[Scanner] Error persisting tone profiles for conv=${conversationId}:`, err); }
 
     // P1.1: Persist global profiles for non-controlled users (enables auto-pickup)
     // P3.2: Persist updated Observer profiles for controlled users
@@ -430,11 +474,13 @@ export class ConversationScanner {
       }
     }
 
-    const updatedHistory = result.agentHistory as Array<{ userId: string; topic: string; contentHash: string; timestamp: number }> | undefined;
-    if (updatedHistory && updatedHistory.length > 0) {
-      const merged = [...agentHistory, ...updatedHistory].slice(-100);
-      await this.stateManager.setAgentHistory(conversationId, merged);
-    }
+    try {
+      const updatedHistory = result.agentHistory as Array<{ userId: string; topic: string; contentHash: string; timestamp: number }> | undefined;
+      if (updatedHistory && updatedHistory.length > 0) {
+        const merged = [...agentHistory, ...updatedHistory].slice(-100);
+        await this.stateManager.setAgentHistory(conversationId, merged);
+      }
+    } catch (err) { console.error(`[Scanner] Error persisting agent history for conv=${conversationId}:`, err); }
 
     const pendingActions = (result.pendingActions ?? []) as Array<{ type: string; content?: string }>;
     if (pendingActions.length > 0) {
@@ -452,6 +498,11 @@ export class ConversationScanner {
           console.error(`[Scanner] Burst record error:`, err));
       }
       if (messageActions.length > 0) {
+        // Track last agent user for rotation enforcement
+        const lastMsg = messageActions[messageActions.length - 1];
+        this.stateManager.setLastAgentUserId(conversationId, lastMsg.asUserId).catch((err) =>
+          console.error(`[Scanner] Error tracking last agent user:`, err));
+
         const wordsSent = messageActions.reduce((sum, m) => sum + (m.content?.split(/\s+/).length ?? 0), 0);
         const controlledUsersList = (result.controlledUsers ?? []) as Array<{ role: { confidence: number } }>;
         const avgConfidence = controlledUsersList.length > 0

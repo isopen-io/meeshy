@@ -43,9 +43,13 @@ server.register(configRoutes);
 server.register(rolesRoutes);
 
 async function start() {
+  const apiKey = env.LLM_PROVIDER === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error(`Missing API key for LLM provider "${env.LLM_PROVIDER}". Set ${env.LLM_PROVIDER === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'} env var.`);
+  }
   const llm = createLlmProvider({
     provider: env.LLM_PROVIDER,
-    apiKey: env.LLM_PROVIDER === 'openai' ? env.OPENAI_API_KEY! : env.ANTHROPIC_API_KEY!,
+    apiKey,
     model: env.LLM_PROVIDER === 'openai' ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL,
   });
 

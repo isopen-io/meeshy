@@ -10,6 +10,7 @@ type GlobalProfile = {
   topicsOfExpertise: string[];
   topicsAvoided: string[];
   responsePatterns: string[];
+  responseTriggers?: string[];
   commonEmojis: string[];
   reactionPatterns: string[];
   messagesAnalyzed: number;

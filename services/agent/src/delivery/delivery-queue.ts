@@ -204,8 +204,10 @@ export class DeliveryQueue {
       const remaining = Math.max(0, item.scheduledAt - Date.now());
       const newDelay = remaining + additionalDelaySeconds * 1000;
       item.scheduledAt = Date.now() + newDelay;
+      const capturedConvId = item.conversationId;
+      const capturedAction = item.action;
       item.timer = setTimeout(async () => {
-        await this.deliver(item.conversationId, item.action);
+        await this.deliver(capturedConvId, capturedAction);
       }, newDelay);
     }
     return items.length;
