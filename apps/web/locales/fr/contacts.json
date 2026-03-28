@@ -21,11 +21,13 @@
     "connected": "Connectés",
     "pending": "En attente",
     "refused": "Refusés",
+    "blocked": "Bloqués",
     "affiliates": "Affiliés"
   },
   "status": {
     "online": "En ligne",
     "offline": "Hors ligne",
+    "away": "Absent",
     "pending": "En attente",
     "rejected": "Refusé",
     "neverSeen": "Jamais vu",
@@ -48,6 +50,8 @@
     "connection": "Connexion",
     "add": "Ajouter",
     "cancel": "Annuler",
+    "block": "Bloquer",
+    "unblock": "Débloquer",
     "continueConversation": "Poursuivre",
     "newConversation": "Nouvelle conversation",
     "newConversationDescription": "Démarrer une nouvelle discussion"
@@ -55,7 +59,8 @@
   "conversations": {
     "existing": "Conversations existantes",
     "untitled": "Sans titre",
-    "latest": "Dernière"
+    "latest": "Dernière",
+    "lastActivity": "Dernière activité : {date}"
   },
   "messages": {
     "noContacts": "Aucun contact",
@@ -66,6 +71,8 @@
     "noPendingRequestsDescription": "Toutes les demandes d'amis ont été traitées",
     "noRefusedRequests": "Aucune demande refusée",
     "noRefusedRequestsDescription": "Vous n'avez refusé aucune demande d'ami",
+    "noBlockedUsers": "Aucun utilisateur bloqué",
+    "noBlockedUsersDescription": "Vous n'avez bloqué aucun utilisateur",
     "noAffiliateContacts": "Aucun contact affilié",
     "noAffiliateContactsDescription": "Invitez des personnes en utilisant votre lien d'affiliation",
     "noContactsFound": "Aucun contact trouvé",
@@ -95,5 +102,19 @@
     "connectionError": "Erreur de connexion",
     "conversationCreationError": "Erreur lors de la création de la conversation",
     "sessionExpired": "Session expirée"
+  },
+  "sort": {
+    "label": "Trier",
+    "alphabetical": "Alphabétique",
+    "lastSeen": "Dernière activité",
+    "recentlyAdded": "Récemment ajouté"
+  },
+  "sections": {
+    "online": "En ligne",
+    "offline": "Hors ligne"
+  },
+  "blocked": {
+    "confirmTitle": "Débloquer l'utilisateur",
+    "confirmMessage": "Voulez-vous vraiment débloquer {name} ? Cette personne pourra à nouveau vous contacter."
   }
 }

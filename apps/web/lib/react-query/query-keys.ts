@@ -53,9 +53,34 @@ export const queryKeys = {
   communities: {
     all: ['communities'] as const,
     lists: () => [...queryKeys.communities.all, 'list'] as const,
+    list: (filters?: { search?: string }) =>
+      [...queryKeys.communities.lists(), filters] as const,
+    search: (query: string) =>
+      [...queryKeys.communities.all, 'search', query] as const,
     detail: (id: string) => [...queryKeys.communities.all, id] as const,
     members: (communityId: string) =>
       [...queryKeys.communities.detail(communityId), 'members'] as const,
+    conversations: (communityId: string) =>
+      [...queryKeys.communities.detail(communityId), 'conversations'] as const,
+    identifierCheck: (identifier: string) =>
+      [...queryKeys.communities.all, 'identifier-check', identifier] as const,
+    preferences: {
+      all: [...['communities'], 'preferences'] as const,
+      detail: (communityId: string) =>
+        ['communities', 'preferences', communityId] as const,
+      list: () => ['communities', 'preferences', 'list'] as const,
+    },
+  },
+
+  friendRequests: {
+    all: ['friendRequests'] as const,
+    received: () => [...queryKeys.friendRequests.all, 'received'] as const,
+    sent: () => [...queryKeys.friendRequests.all, 'sent'] as const,
+  },
+
+  blockedUsers: {
+    all: ['blockedUsers'] as const,
+    list: () => [...queryKeys.blockedUsers.all, 'list'] as const,
   },
 } as const;
 
