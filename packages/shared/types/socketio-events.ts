@@ -148,6 +148,9 @@ export const SERVER_EVENTS = {
   // --- Post/Comment Translations ---
   POST_TRANSLATION_UPDATED: 'post:translation-updated',
   COMMENT_TRANSLATION_UPDATED: 'comment:translation-updated',
+
+  // --- User Preferences ---
+  USER_PREFERENCES_UPDATED: 'user:preferences-updated',
 } as const;
 
 // Événements du client vers le serveur
@@ -606,6 +609,11 @@ export interface StoryTranslationUpdatedEventData {
   readonly translations: Record<string, string>;
 }
 
+export interface UserPreferencesUpdatedEventData {
+  readonly userId: string;
+  readonly category: string;
+}
+
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
@@ -681,6 +689,9 @@ export interface ServerToClientEvents {
   // Post/Comment Translations
   [SERVER_EVENTS.POST_TRANSLATION_UPDATED]: (data: PostTranslationUpdatedEventData) => void;
   [SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED]: (data: CommentTranslationUpdatedEventData) => void;
+
+  // User Preferences
+  [SERVER_EVENTS.USER_PREFERENCES_UPDATED]: (data: UserPreferencesUpdatedEventData) => void;
 
   // Notifications
   [SERVER_EVENTS.NOTIFICATION_NEW]: (data: NotificationEventData) => void;

@@ -15,6 +15,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
+import { queryKeys } from '@/lib/react-query/query-keys';
+import { broadcastPreferenceUpdate } from '@/lib/settings-sync';
 import {
   isConsentRequiredError,
   isPreferenceErrorResponse,
@@ -28,25 +30,10 @@ import type {
   ConsentViolation,
 } from '@/types/preferences';
 
-// ===== CONSTANTES =====
-
-/**
- * Clé de base pour les queries de préférences
- */
-const PREFERENCES_QUERY_KEY = 'user-preferences';
-
-/**
- * Configuration du stale time (5 minutes)
- */
 const STALE_TIME = 5 * 60 * 1000;
 
-// ===== HELPERS =====
-
-/**
- * Génère une clé de query pour une catégorie de préférences
- */
-function getPreferenceQueryKey(category: PreferenceCategory): string[] {
-  return [PREFERENCES_QUERY_KEY, category];
+function getPreferenceQueryKey(category: PreferenceCategory): readonly string[] {
+  return queryKeys.preferences.category(category);
 }
 
 /**
@@ -234,12 +221,9 @@ export function usePreferences<C extends PreferenceCategory>(
       onError?.(err);
     },
     onSuccess: (newData) => {
-      // Mettre à jour le cache avec les données du serveur
       queryClient.setQueryData(queryKey, newData);
-
-      // Réinitialiser les violations
       setConsentViolations(null);
-
+      broadcastPreferenceUpdate(category);
       onSuccess?.(newData);
     },
   });
@@ -297,6 +281,7 @@ export function usePreferences<C extends PreferenceCategory>(
     onSuccess: (newData) => {
       queryClient.setQueryData(queryKey, newData);
       setConsentViolations(null);
+      broadcastPreferenceUpdate(category);
       onSuccess?.(newData);
     },
   });
@@ -338,4 +323,4 @@ export function usePreferences<C extends PreferenceCategory>(
 // ===== EXPORTS =====
 
 export type { UsePreferencesOptions, UsePreferencesResult };
-export { getPreferenceQueryKey, PREFERENCES_QUERY_KEY };
+export { getPreferenceQueryKey };

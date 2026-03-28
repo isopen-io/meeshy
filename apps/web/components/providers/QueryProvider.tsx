@@ -1,18 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createQueryClient } from '@/lib/react-query/query-client';
 import { indexedDbPersister } from '@/lib/react-query/persister';
+import { initSettingsSync, destroySettingsSync } from '@/lib/settings-sync';
 
 interface QueryProviderProps {
   children: React.ReactNode;
 }
 
 export function QueryProvider({ children }: QueryProviderProps) {
-  // Create a stable QueryClient instance per component lifecycle
   const [queryClient] = useState(() => createQueryClient());
+
+  useEffect(() => {
+    initSettingsSync(queryClient);
+    return () => destroySettingsSync();
+  }, [queryClient]);
 
   return (
     <PersistQueryClientProvider
