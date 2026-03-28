@@ -109,25 +109,6 @@ describe('ConversationsService', () => {
       expect(result.pagination.total).toBe(0);
     });
 
-    it('should use cache on subsequent calls', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: [mockConversationData],
-          pagination: { limit: 20, offset: 0, total: 1, hasMore: false },
-        },
-        success: true,
-      });
-
-      // First call
-      await conversationsService.getConversations();
-      // Second call should use cache
-      await conversationsService.getConversations();
-
-      // API should only be called once due to caching
-      expect(mockApiService.get).toHaveBeenCalledTimes(1);
-    });
-
     it('should always call API (no service-level cache)', async () => {
       mockApiService.get.mockResolvedValue({
         data: {
@@ -472,7 +453,7 @@ describe('ConversationsService', () => {
       );
     });
 
-    it('should get participants with caching', async () => {
+    it('should always call API for participants (no service-level cache)', async () => {
       mockApiService.get.mockResolvedValue({
         data: {
           success: true,
@@ -481,13 +462,10 @@ describe('ConversationsService', () => {
         success: true,
       });
 
-      // First call
       await conversationsService.getParticipants('conv-123');
-      // Second call should use cache
       await conversationsService.getParticipants('conv-123');
 
-      // API should only be called once due to caching
-      expect(mockApiService.get).toHaveBeenCalledTimes(1);
+      expect(mockApiService.get).toHaveBeenCalledTimes(2);
     });
 
     it('should filter participants by online status', async () => {
