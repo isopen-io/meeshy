@@ -33,6 +33,8 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
+import { AttachmentService } from '../../services/AttachmentService';
+import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketMessageSendSchema, SocketMessageSendWithAttachmentsSchema } from '../../validation/socket-event-schemas.js';
 
@@ -48,6 +50,8 @@ export interface MessageHandlerDependencies {
   socketToUser: Map<string, string>;
   stats: { messages_processed: number; errors: number };
   agentClient?: ZmqAgentClient | null;
+  attachmentService: AttachmentService;
+  readStatusService: MessageReadStatusService;
 }
 
 export class MessageHandler {
@@ -61,6 +65,8 @@ export class MessageHandler {
   private socketToUser: Map<string, string>;
   private stats: { messages_processed: number; errors: number };
   private agentClient: ZmqAgentClient | null;
+  private attachmentService: AttachmentService;
+  private readStatusService: MessageReadStatusService;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: MessageHandlerDependencies) {
@@ -74,6 +80,8 @@ export class MessageHandler {
     this.socketToUser = deps.socketToUser;
     this.stats = deps.stats;
     this.agentClient = deps.agentClient ?? null;
+    this.attachmentService = deps.attachmentService;
+    this.readStatusService = deps.readStatusService;
   }
 
   /**
@@ -287,8 +295,7 @@ export class MessageHandler {
         return;
       }
 
-      const { AttachmentService } = await import('../../services/AttachmentService');
-      const attachmentService = new AttachmentService(this.prisma);
+      const attachmentService = this.attachmentService;
 
       for (const attachmentId of validated.attachmentIds) {
         const attachment = await attachmentService.getAttachment(attachmentId);
@@ -626,8 +633,7 @@ export class MessageHandler {
         select: { id: true, userId: true }
       });
 
-      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
-      const readStatusService = new MessageReadStatusService(this.prisma);
+      const readStatusService = this.readStatusService;
 
       await Promise.all(participants.map(async (participant) => {
         // Use userId for registered users (for their personal room), participantId for anonymous

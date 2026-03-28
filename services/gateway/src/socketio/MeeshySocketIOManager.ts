@@ -21,6 +21,8 @@ import { ReactionHandler } from './handlers/ReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
+import { ReactionService } from '../services/ReactionService.js';
+import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -190,6 +192,9 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
     });
 
+    const reactionService = new ReactionService(prisma);
+    const readStatusService = new MessageReadStatusService(prisma);
+
     this.messageHandler = new MessageHandler({
       io: this.io,
       prisma: this.prisma,
@@ -201,6 +206,8 @@ export class MeeshySocketIOManager {
       socketToUser: this.socketToUser,
       stats: this.stats,
       agentClient: this.agentClient,
+      attachmentService: new AttachmentService(prisma),
+      readStatusService,
     });
 
     this.statusHandler = new StatusHandler({
@@ -215,6 +222,7 @@ export class MeeshySocketIOManager {
       io: this.io,
       prisma: this.prisma,
       notificationService: this.notificationService,
+      reactionService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
     });

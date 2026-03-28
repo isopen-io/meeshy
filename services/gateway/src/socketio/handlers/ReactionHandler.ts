@@ -7,6 +7,7 @@ import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/NotificationService';
+import { ReactionService } from '../../services/ReactionService.js';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -18,6 +19,7 @@ export interface ReactionHandlerDependencies {
   io: SocketIOServer;
   prisma: PrismaClient;
   notificationService: NotificationService;
+  reactionService: ReactionService;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
 }
@@ -26,6 +28,7 @@ export class ReactionHandler {
   private io: SocketIOServer;
   private prisma: PrismaClient;
   private notificationService: NotificationService;
+  private reactionService: ReactionService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
 
@@ -33,6 +36,7 @@ export class ReactionHandler {
     this.io = deps.io;
     this.prisma = deps.prisma;
     this.notificationService = deps.notificationService;
+    this.reactionService = deps.reactionService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
   }
@@ -76,8 +80,7 @@ export class ReactionHandler {
         return;
       }
 
-      const { ReactionService } = await import('../../services/ReactionService.js');
-      const reactionService = new ReactionService(this.prisma);
+      const reactionService = this.reactionService;
 
       const reaction = await reactionService.addReaction({
         messageId: validated.messageId,
@@ -167,8 +170,7 @@ export class ReactionHandler {
         return;
       }
 
-      const { ReactionService } = await import('../../services/ReactionService.js');
-      const reactionService = new ReactionService(this.prisma);
+      const reactionService = this.reactionService;
 
       const removed = await reactionService.removeReaction({
         messageId: validated.messageId,
@@ -249,8 +251,7 @@ export class ReactionHandler {
         return;
       }
 
-      const { ReactionService } = await import('../../services/ReactionService.js');
-      const reactionService = new ReactionService(this.prisma);
+      const reactionService = this.reactionService;
 
       const reactionSync = await reactionService.getMessageReactions({
         messageId,
