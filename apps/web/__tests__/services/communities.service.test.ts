@@ -78,18 +78,6 @@ describe('CommunitiesService', () => {
     });
   });
 
-  describe('getCommunityByIdentifier', () => {
-    it('should fetch community by identifier', async () => {
-      const community = createMockCommunity({ identifier: 'my-community' });
-      mockApiService.get.mockResolvedValue({ success: true, data: community });
-
-      const result = await communitiesService.getCommunityByIdentifier('my-community');
-
-      expect(mockApiService.get).toHaveBeenCalledWith('/communities/identifier/my-community');
-      expect(result.data?.identifier).toBe('my-community');
-    });
-  });
-
   describe('searchCommunities', () => {
     it('should search public communities', async () => {
       mockApiService.get.mockResolvedValue({ success: true, data: [] });

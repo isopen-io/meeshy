@@ -138,7 +138,7 @@ export default function V2CommunitiesPage() {
                             {(community._count?.members ?? 0).toLocaleString()} membres
                           </span>
                           <span className="text-sm text-[var(--gp-text-muted)]">
-                            {(community._count?.conversations ?? 0)} conversations
+                            {(community._count?.Conversation ?? community._count?.conversations ?? 0)} conversations
                           </span>
                         </div>
                         <Button

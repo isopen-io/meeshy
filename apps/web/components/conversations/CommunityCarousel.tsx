@@ -74,7 +74,7 @@ export function CommunityCarousel({
       communities.forEach(community => {
         if (!community || !community.id) return;
 
-        const conversationCountFromBackend = community._count?.conversations ?? 0;
+        const conversationCountFromBackend = community._count?.Conversation ?? community._count?.conversations ?? 0;
 
         result.push({
           id: community.id,

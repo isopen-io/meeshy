@@ -41,10 +41,6 @@ export const communitiesService = {
     return apiService.get<Community>(`/communities/${id}`);
   },
 
-  getCommunityByIdentifier(identifier: string): Promise<ApiResponse<Community>> {
-    return apiService.get<Community>(`/communities/identifier/${identifier}`);
-  },
-
   searchCommunities(query: string, offset = 0, limit = 20): Promise<ApiResponse<Community[]>> {
     return apiService.get<Community[]>('/communities/search', { q: query, offset, limit });
   },
@@ -93,6 +89,8 @@ export const communitiesService = {
     return apiService.delete<void>(`/communities/${communityId}/members/${memberId}`);
   },
 
+  // TODO: Backend join/leave routes need to be migrated from legacy monolith to modular routes
+  // For now, join = addMember(self), leave = removeMember(self)
   joinCommunity(communityId: string): Promise<ApiResponse<CommunityMember>> {
     return apiService.post<CommunityMember>(`/communities/${communityId}/join`);
   },

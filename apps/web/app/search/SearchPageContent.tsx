@@ -39,17 +39,12 @@ import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
 import { useUser } from '@/stores';
-import type { ConversationType } from '@meeshy/shared/types';
+import type { ConversationType, Community as BaseCommunity } from '@meeshy/shared/types';
 
-interface Community {
-  id: string;
-  name: string;
-  description?: string;
-  avatar?: string;
-  memberCount: number;
-  isPrivate: boolean;
-  createdAt: string;
-}
+type Community = BaseCommunity & {
+  readonly memberCount?: number;
+  readonly conversationCount?: number;
+};
 
 interface Conversation {
   id: string;
