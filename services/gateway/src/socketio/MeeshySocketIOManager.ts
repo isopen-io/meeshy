@@ -45,6 +45,7 @@ import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService } from '../services/MentionService';
+import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { hashSessionToken } from '../utils/session-token';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 
@@ -89,6 +90,7 @@ export class MeeshySocketIOManager {
   private agentClient: ZmqAgentClient | null = null;
   private mentionService: MentionService;
   private rateLimiter = getSocketRateLimiter();
+  private deliveryQueue: RedisDeliveryQueue | null = null;
 
   // Mapping des utilisateurs connectés
   private connectedUsers: Map<string, SocketUser> = new Map();
@@ -179,6 +181,26 @@ export class MeeshySocketIOManager {
     // Initialiser le StoryTextObjectTranslationService singleton
     StoryTextObjectTranslationService.init(this.prisma, this.io as any);
 
+  }
+
+  setDeliveryQueue(queue: RedisDeliveryQueue): void {
+    this.deliveryQueue = queue;
+  }
+
+  private async _drainPendingMessages(socket: any, userId: string): Promise<void> {
+    if (!this.deliveryQueue) return;
+    try {
+      const pending = await this.deliveryQueue.drain(userId);
+      if (pending.length === 0) return;
+
+      logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
+      for (const entry of pending) {
+        socket.emit(SERVER_EVENTS.MESSAGE_NEW, entry.payload);
+      }
+      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length });
+    } catch (error) {
+      logger.warn('Failed to drain pending messages', { userId, error });
+    }
   }
 
   /**
@@ -917,8 +939,9 @@ export class MeeshySocketIOManager {
             };
             
             socket.emit(SERVER_EVENTS.AUTHENTICATED, authResponse);
-            
-            
+
+            await this._drainPendingMessages(socket, user.id);
+
             return; // Authentification réussie
           } else {
           }
@@ -994,6 +1017,7 @@ export class MeeshySocketIOManager {
 
             socket.emit(SERVER_EVENTS.AUTHENTICATED, authResponse);
 
+            await this._drainPendingMessages(socket, user.id);
 
             return; // Authentification anonyme réussie
         } else {
@@ -1133,11 +1157,13 @@ export class MeeshySocketIOManager {
           user: { id: user.id, language: user.language },
           version: process.env.APP_VERSION || '1.1.0'
         });
-        
+
+        await this._drainPendingMessages(socket, user.id);
+
       } else {
         socket.emit(SERVER_EVENTS.AUTHENTICATED, { success: false, error: 'Authentication failed' });
       }
-      
+
     } catch (error) {
       logger.error(`❌ Erreur authentification: ${error}`);
       socket.emit(SERVER_EVENTS.AUTHENTICATED, { success: false, error: 'Authentication error' });
@@ -2415,6 +2441,8 @@ export class MeeshySocketIOManager {
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
 
+          const connectedUserIds = new Set(this.getConnectedUsers());
+
           for (const participant of participants) {
             const roomTarget = participant.userId || participant.id;
             const unreadCount = await readStatusService.getUnreadCount(roomTarget, normalizedId);
@@ -2424,6 +2452,16 @@ export class MeeshySocketIOManager {
               conversationId: normalizedId,
               unreadCount
             });
+
+            // Queue message for offline participants
+            if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
+              this.deliveryQueue.enqueue(roomTarget, {
+                messageId: message.id,
+                conversationId: normalizedId,
+                payload: messagePayload as Record<string, unknown>,
+                enqueuedAt: new Date().toISOString(),
+              }).catch(err => logger.warn('Failed to enqueue message for offline user', { userId: roomTarget, error: err }));
+            }
           }
         }
       } catch (unreadError) {

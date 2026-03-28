@@ -110,6 +110,9 @@ export const SERVER_EVENTS = {
    */
   TRANSCRIPTION_READY: 'audio:transcription-ready',
 
+  // --- Delivery queue ---
+  PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
+
   // --- Location sharing ---
   LOCATION_SHARED: 'location:shared',
   LOCATION_LIVE_STARTED: 'location:live-started',
@@ -664,6 +667,9 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.NOTIFICATION_READ]: (data: NotificationReadEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_DELETED]: (data: NotificationDeletedEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_COUNTS]: (data: NotificationCountsEventData) => void;
+
+  // Delivery queue
+  [SERVER_EVENTS.PENDING_MESSAGES_DELIVERED]: (data: { count: number }) => void;
 }
 
 /**
