@@ -120,7 +120,8 @@
       "select": "Sélectionner",
       "selectAll": "Tout sélectionner",
       "deselectAll": "Tout désélectionner",
-      "clearSearch": "Effacer la recherche"
+      "clearSearch": "Effacer la recherche",
+      "allMarkedRead": "Toutes les notifications marquées comme lues"
     },
     "selection": {
       "count": "{selected} sur {total} sélectionnée",
@@ -141,6 +142,7 @@
     "unreadCount": {
       "single": "{count} non lue sur {total}",
       "plural": "{count} non lues sur {total}",
+      "active": "{count} non lues sur {total}",
       "allRead": "Toutes vos {total} notification{plural} sont lues",
       "empty": "Vous n'avez aucune notification"
     },
@@ -169,6 +171,14 @@
       "pdf": "PDF",
       "document": "Document",
       "file": "Fichier"
-    }
+    },
+    "groups": {
+      "today": "Aujourd'hui",
+      "yesterday": "Hier",
+      "thisWeek": "Cette semaine",
+      "thisMonth": "Ce mois",
+      "older": "Plus ancien"
+    },
+    "settings": "Paramètres"
   }
 }

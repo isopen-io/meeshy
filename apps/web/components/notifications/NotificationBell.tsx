@@ -7,10 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Bell } from 'lucide-react';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 
-if (typeof window !== 'undefined') {
-  (window as any).__NOTIFICATION_BELL_LOADED__ = true;
-}
-
 interface NotificationBellProps {
   className?: string;
   showBadge?: boolean;
@@ -41,7 +37,6 @@ export function NotificationBell({
     </>
   );
 
-  // Si onClick personnalisé, utiliser Button avec onClick
   if (onClick) {
     return (
       <Button
@@ -56,7 +51,6 @@ export function NotificationBell({
     );
   }
 
-  // Par défaut, utiliser Link pour navigation instantanée
   return (
     <Button
       variant="ghost"
@@ -70,4 +64,3 @@ export function NotificationBell({
     </Button>
   );
 }
-

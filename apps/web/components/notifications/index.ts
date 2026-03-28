@@ -1,3 +1,11 @@
-// Composants de notifications
 export { NotificationBell } from './NotificationBell';
+export { NotificationItem } from './NotificationItem';
+export { NotificationFilters, matchesFilter } from './NotificationFilters';
+export type { FilterType } from './NotificationFilters';
+export { NotificationEmptyState } from './NotificationEmptyState';
+export { NotificationList } from './NotificationList';
+export { NotificationSkeleton } from './NotificationSkeleton';
+export { NotificationDropdown } from './NotificationDropdown';
+export { ConnectionStatusIndicator } from './ConnectionStatusIndicator';
+export { PushPermissionBanner } from './PushPermissionBanner';
 export { NotificationTest } from './NotificationTest';
