@@ -52,6 +52,9 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       translationCallback = callback;
       return mockUnsubscribeTranslation;
     },
+    onUnreadUpdated: jest.fn(() => jest.fn()),
+    onTranscription: jest.fn(() => jest.fn()),
+    onAudioTranslation: jest.fn(() => jest.fn()),
   },
 }));
 
@@ -405,7 +408,10 @@ describe('useSocketCacheSync', () => {
       };
 
       const message = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
-      expect(message?.translations).toHaveProperty('fr', 'Bonjour');
+      const translations = message?.translations as Array<{ targetLanguage: string; translatedContent: string }>;
+      expect(translations).toEqual(
+        expect.arrayContaining([expect.objectContaining({ targetLanguage: 'fr', translatedContent: 'Bonjour' })])
+      );
     });
 
     it('should not update when conversationId not provided', () => {
