@@ -3,6 +3,45 @@ import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData } from '@/components/v2/StoryViewer';
 
 // ============================================================================
+// Shared StoryEffects shape (used by StoryViewer)
+// ============================================================================
+
+type TextStyle = 'bold' | 'neon' | 'typewriter' | 'handwriting';
+type StoryFilter = 'vintage' | 'bw' | 'warm' | 'cool' | 'dramatic' | null;
+
+const VALID_TEXT_STYLES = new Set<string>(['bold', 'neon', 'typewriter', 'handwriting']);
+const VALID_FILTERS = new Set<string>(['vintage', 'bw', 'warm', 'cool', 'dramatic']);
+
+function parseTextStyle(value: unknown): TextStyle | undefined {
+  return typeof value === 'string' && VALID_TEXT_STYLES.has(value) ? value as TextStyle : undefined;
+}
+
+function parseFilter(value: unknown): StoryFilter | undefined {
+  if (value === null) return null;
+  return typeof value === 'string' && VALID_FILTERS.has(value) ? value as StoryFilter : undefined;
+}
+
+function parseTextPosition(value: unknown): { x: number; y: number } | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const pos = value as Record<string, unknown>;
+  if (typeof pos.x === 'number' && typeof pos.y === 'number') return { x: pos.x, y: pos.y };
+  return undefined;
+}
+
+function parseStickers(value: unknown): Array<{ emoji: string; x: number; y: number; scale: number; rotation: number }> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter(
+    (s): s is { emoji: string; x: number; y: number; scale: number; rotation: number } =>
+      s && typeof s === 'object' &&
+      typeof s.emoji === 'string' &&
+      typeof s.x === 'number' &&
+      typeof s.y === 'number' &&
+      typeof s.scale === 'number' &&
+      typeof s.rotation === 'number'
+  );
+}
+
+// ============================================================================
 // Post -> StoryItem (for StoryTray)
 // ============================================================================
 
@@ -30,7 +69,9 @@ export function postToStoryItem(
 
 export function postToStoryData(post: Post): StoryData {
   const author = post.author;
-  const effects = post.storyEffects as Record<string, unknown> | undefined;
+  const effects = (post.storyEffects && typeof post.storyEffects === 'object')
+    ? post.storyEffects as Record<string, unknown>
+    : undefined;
   const firstMedia = post.media?.[0];
 
   let mediaUrl: string | undefined;
@@ -43,20 +84,21 @@ export function postToStoryData(post: Post): StoryData {
 
   return {
     id: post.id,
+    authorId: post.authorId,
     author: {
       name: author?.displayName ?? author?.username ?? 'Unknown',
       avatar: author?.avatar ?? undefined,
     },
     content: post.content ?? undefined,
     originalLanguage: post.originalLanguage ?? undefined,
-    translations: undefined, // translations come from storyEffects or post translation events
+    translations: undefined,
     storyEffects: effects ? {
-      background: effects.backgroundColor as string | undefined,
-      textStyle: effects.textStyle as StoryData['storyEffects'] extends { textStyle?: infer T } ? T : undefined,
-      textColor: effects.textColor as string | undefined,
-      textPosition: effects.textPosition as { x: number; y: number } | undefined,
-      filter: effects.filter as StoryData['storyEffects'] extends { filter?: infer T } ? T : undefined,
-      stickers: effects.stickers as Array<{ emoji: string; x: number; y: number; scale: number; rotation: number }> | undefined,
+      background: typeof effects.backgroundColor === 'string' ? effects.backgroundColor : undefined,
+      textStyle: parseTextStyle(effects.textStyle),
+      textColor: typeof effects.textColor === 'string' ? effects.textColor : undefined,
+      textPosition: parseTextPosition(effects.textPosition),
+      filter: parseFilter(effects.filter),
+      stickers: parseStickers(effects.stickers),
     } : undefined,
     mediaUrl,
     mediaType,

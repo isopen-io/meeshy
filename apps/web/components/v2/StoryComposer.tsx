@@ -24,7 +24,7 @@ interface StoryComposerProps {
   onPublish: (story: {
     content?: string;
     storyEffects: Record<string, unknown>;
-    visibility: string;
+    visibility: StoryVisibility;
     mediaIds?: string[];
   }) => void;
   defaultVisibility?: StoryVisibility;
@@ -494,4 +494,4 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
 StoryComposer.displayName = 'StoryComposer';
 
 export { StoryComposer };
-export type { StoryComposerProps };
+export type { StoryComposerProps, StoryVisibility };

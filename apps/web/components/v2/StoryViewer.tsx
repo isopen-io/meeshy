@@ -12,6 +12,7 @@ import { TranslationToggle } from './TranslationToggle';
 
 interface StoryData {
   id: string;
+  authorId?: string;
   author: { name: string; avatar?: string };
   content?: string;
   originalLanguage?: string;
@@ -471,7 +472,7 @@ function StoryViewer({
                 return <span className="text-xs text-white/40">{remaining}</span>;
               })()}
             </div>
-            {onDelete && currentUserId && story.id && (
+            {onDelete && currentUserId && story.authorId === currentUserId && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();

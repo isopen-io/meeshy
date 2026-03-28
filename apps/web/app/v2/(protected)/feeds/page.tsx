@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { Button, Card, useToast, PageHeader, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
-import type { StatusItem, TranslationItem } from '@/components/v2';
+import type { StatusItem, TranslationItem, StoryVisibility } from '@/components/v2';
 import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
 import { useStoriesRealtime } from '@/hooks/social/use-stories-realtime';
 import { postToStoryItem, postToStoryData } from '@/lib/story-transforms';
@@ -108,8 +108,11 @@ const mockStatuses: StatusItem[] = [
 
 export default function V2FeedsPage() {
   const toastCtx = useToast();
-  const toast = (opts: { title?: string; description?: string; type?: string }) =>
-    toastCtx.addToast(opts.title || opts.description || '', opts.type as 'success' | 'error' | 'info');
+  const showToast = useCallback(
+    (title: string, type: 'success' | 'error' | 'info', description?: string) =>
+      toastCtx.addToast(title || description || '', type),
+    [toastCtx]
+  );
 
   // Auth & language
   const currentUser = useAuthStore(s => s.user);
@@ -127,11 +130,11 @@ export default function V2FeedsPage() {
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
   const [storyViewerIndex, setStoryViewerIndex] = useState(0);
   const [storyComposerOpen, setStoryComposerOpen] = useState(false);
-  const [viewedStoryIds] = useState(() => new Set<string>());
+  const viewedStoryIdsRef = useRef(new Set<string>());
 
   const storyItems = useMemo(
-    () => (stories ?? []).map(s => postToStoryItem(s, currentUserId, viewedStoryIds)),
-    [stories, currentUserId, viewedStoryIds]
+    () => (stories ?? []).map(s => postToStoryItem(s, currentUserId, viewedStoryIdsRef.current)),
+    [stories, currentUserId]
   );
 
   const storyDataList = useMemo(
@@ -147,12 +150,12 @@ export default function V2FeedsPage() {
     }
   }, [storyDataList]);
 
-  const handleStoryPublish = useCallback((story: { content?: string; storyEffects: Record<string, unknown>; visibility: string; mediaIds?: string[] }) => {
+  const handleStoryPublish = useCallback((story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; mediaIds?: string[] }) => {
     setStoryComposerOpen(false);
     createStoryMutation.mutate({
       content: story.content,
       storyEffects: story.storyEffects,
-      visibility: story.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE',
+      visibility: story.visibility,
       mediaIds: story.mediaIds,
       originalLanguage: userLanguage,
     }, {
@@ -161,29 +164,35 @@ export default function V2FeedsPage() {
         const desc = mediaCount > 0
           ? `Votre story est visible par vos amis (${mediaCount} media).`
           : 'Votre story est visible par vos amis.';
-        toast({ title: 'Story publi\u00e9e !', description: desc, type: 'success' });
+        showToast('Story publi\u00e9e !', 'success', desc);
       },
       onError: () => {
-        toast({ title: 'Erreur', description: 'Impossible de publier la story.', type: 'error' });
+        showToast('Erreur', 'error', 'Impossible de publier la story.');
       },
     });
-  }, [createStoryMutation, userLanguage, toast]);
+  }, [createStoryMutation, userLanguage, showToast]);
 
   const handleStoryView = useCallback((storyId: string) => {
-    viewedStoryIds.add(storyId);
+    viewedStoryIdsRef.current.add(storyId);
     recordView(storyId);
-  }, [viewedStoryIds, recordView]);
+  }, [recordView]);
 
   const handleStoryDelete = useCallback((storyId: string) => {
     deleteStoryMutation.mutate(storyId, {
       onSuccess: () => {
-        toast({ title: 'Story supprim\u00e9e', type: 'success' });
+        showToast('Story supprim\u00e9e', 'success');
       },
       onError: () => {
-        toast({ title: 'Erreur', description: 'Impossible de supprimer la story.', type: 'error' });
+        showToast('Erreur', 'error', 'Impossible de supprimer la story.');
       },
     });
-  }, [deleteStoryMutation, toast]);
+  }, [deleteStoryMutation, showToast]);
+
+  const handleStoryViewerClose = useCallback(() => setStoryViewerOpen(false), []);
+  const handleStoryComposerClose = useCallback(() => setStoryComposerOpen(false), []);
+  const handleStoryReply = useCallback((id: string, text: string) => {
+    showToast('R\u00e9ponse envoy\u00e9e', 'success', text);
+  }, [showToast]);
 
   // ─── Posts (mock - to be replaced later) ──────────────────────────────
   const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
@@ -193,7 +202,7 @@ export default function V2FeedsPage() {
 
   const handlePublish = () => {
     if (!newPostContent.trim()) {
-      toast({ title: 'Contenu vide', description: '\u00c9crivez quelque chose avant de publier.', type: 'error' });
+      showToast('Contenu vide', 'error', '\u00c9crivez quelque chose avant de publier.');
       return;
     }
 
@@ -211,7 +220,7 @@ export default function V2FeedsPage() {
 
     setPosts([newPost, ...posts]);
     setNewPostContent('');
-    toast({ title: 'Publi\u00e9 !', description: 'Votre post a \u00e9t\u00e9 partag\u00e9 avec la communaut\u00e9.', type: 'success' });
+    showToast('Publi\u00e9 !', 'success', 'Votre post a \u00e9t\u00e9 partag\u00e9 avec la communaut\u00e9.');
   };
 
   const handleLike = (postId: number) => {
@@ -243,15 +252,15 @@ export default function V2FeedsPage() {
   };
 
   const handleComment = () => {
-    toast({ title: 'Bient\u00f4t disponible', description: 'Les commentaires arrivent bient\u00f4t.', type: 'info' });
+    showToast('Bient\u00f4t disponible', 'info', 'Les commentaires arrivent bient\u00f4t.');
   };
 
   const handleShare = async (postId: number) => {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/v2/feeds/post/${postId}`);
-      toast({ title: 'Lien copi\u00e9 !', description: 'Le lien du post est dans le presse-papiers.', type: 'success' });
+      showToast('Lien copi\u00e9 !', 'success', 'Le lien du post est dans le presse-papiers.');
     } catch {
-      toast({ title: 'Erreur', description: 'Impossible de copier le lien.', type: 'error' });
+      showToast('Erreur', 'error', 'Impossible de copier le lien.');
     }
   };
 
@@ -259,12 +268,12 @@ export default function V2FeedsPage() {
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
   const handleStatusPress = (statusId: string) => {
-    toast({ title: 'Status', description: `Status ${statusId} s\u00e9lectionn\u00e9`, type: 'info' });
+    showToast('Status', 'info', `Status ${statusId} s\u00e9lectionn\u00e9`);
   };
 
   const handleStatusPublish = (status: { moodEmoji: string; content?: string }) => {
     setStatusComposerOpen(false);
-    toast({ title: 'Mood publi\u00e9 !', description: `${status.moodEmoji} ${status.content || ''}`, type: 'success' });
+    showToast('Mood publi\u00e9 !', 'success', `${status.moodEmoji} ${status.content || ''}`);
   };
 
   return (
@@ -348,11 +357,9 @@ export default function V2FeedsPage() {
           initialIndex={storyViewerIndex}
           userLanguage={userLanguage}
           currentUserId={currentUserId}
-          onClose={() => setStoryViewerOpen(false)}
+          onClose={handleStoryViewerClose}
           onView={handleStoryView}
-          onReply={(id, text) => {
-            toast({ title: 'R\u00e9ponse envoy\u00e9e', description: text, type: 'success' });
-          }}
+          onReply={handleStoryReply}
           onDelete={handleStoryDelete}
         />
       )}
@@ -360,7 +367,7 @@ export default function V2FeedsPage() {
       {/* Story Composer */}
       <StoryComposer
         open={storyComposerOpen}
-        onClose={() => setStoryComposerOpen(false)}
+        onClose={handleStoryComposerClose}
         onPublish={handleStoryPublish}
         defaultVisibility={storyPrefs.defaultVisibility}
       />
