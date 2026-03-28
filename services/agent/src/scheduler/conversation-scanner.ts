@@ -178,7 +178,7 @@ export class ConversationScanner {
       return false;
     }
 
-    const [messages, summary, toneProfiles, manualControlledUsers, agentHistory, todayActiveUserIds, lastAgentUserId] = await Promise.all([
+    const [messages, summary, toneProfiles, manualControlledUsers, agentHistory, todayActiveUserIds, lastAgentUserId, engagementData] = await Promise.all([
       this.stateManager.getMessages(conversationId),
       this.stateManager.getSummary(conversationId),
       this.stateManager.getToneProfiles(conversationId),
@@ -186,6 +186,7 @@ export class ConversationScanner {
       this.stateManager.getAgentHistory(conversationId),
       this.stateManager.getTodayActiveUserIds(conversationId),
       this.stateManager.getLastAgentUserId(conversationId),
+      this.persistence.getAgentMessageEngagement(conversationId, 48).catch(() => []),
     ]);
 
     let controlledUsers = manualControlledUsers.map((u) => {
@@ -368,6 +369,7 @@ export class ConversationScanner {
       todayActiveUserIds,
       lastAgentUserId,
       recentTopicCategories,
+      engagementData,
     });
 
     if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);

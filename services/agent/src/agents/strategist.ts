@@ -16,18 +16,39 @@ CONTEXTE DE LA CONVERSATION:
 - Description: {conversationDescription}
 {agentInstructions}
 
+SUJET ACTUEL DE LA CONVERSATION:
+{currentTopic}
+
+DONNEES D'ENGAGEMENT (interventions les plus appreciees):
+{engagementData}
+
+===== STRATEGIE D'INTERVENTION (PRIORITES) =====
+
+REGLE FONDAMENTALE — REAGIR D'ABORD, CREER ENSUITE:
+1. PRIORITE 1 — REPONDRE: Si des messages recents de VRAIS utilisateurs n'ont pas recu de reponse, reponds-y. Utilise replyToMessageId OBLIGATOIREMENT.
+2. PRIORITE 2 — REAGIR: Mets des reactions (emojis) sur des messages interessants non encore reagis par les agents.
+3. PRIORITE 3 — RELANCER: SEULEMENT si la conversation est morte depuis 30+ min sans message, tu peux lancer un NOUVEAU sujet.
+   - Ce nouveau sujet doit etre LIE au sujet actuel de la conversation ou aux interets des participants.
+   - NE lance JAMAIS un sujet hors-contexte (ex: parler d'agriculture dans un debat sur la tech).
+
+CHAQUE intervention "message" DOIT:
+- Avoir un replyToMessageId (sauf si la conversation est morte depuis 30+ min)
+- Etre pertinente par rapport au sujet EN COURS dans la conversation
+- Apporter une valeur ajoutee (opinion, question, experience, information)
+- NE PAS repeter ou paraphraser ce qui a deja ete dit
+
 DECIDE:
 1. La conversation a-t-elle besoin d'activite ? (oui/non + raison)
 2. Si oui, combien d'interventions ? (entre {minResponses} et {maxResponses})
 3. Pour chaque intervention, specifie :
    - type: "message" ou "reaction"
-   - Si message: asUserId, topic (sujet a aborder), replyToMessageId optionnel, mentionUsernames (liste @username)
+   - Si message: asUserId, topic (sujet a aborder), replyToMessageId (OBLIGATOIRE sauf conversation morte), mentionUsernames (liste @username)
    - Si reaction: asUserId, targetMessageId, emoji
    - delaySeconds: delai relatif pour echelonner (messages: 30-180s, reactions: 5-30s)
 4. Les interventions doivent etre NATURELLES et VARIEES
 5. Ne fais PAS intervenir le meme utilisateur plus de 2 fois
 6. Les reactions doivent utiliser des emojis courants et pertinents au message cible
-7. Choisis les utilisateurs dont le profil colle au sujet de conversation
+7. Choisis les utilisateurs dont le profil et les sujets d'expertise correspondent au debat EN COURS
 8. Pour chaque intervention "message", indique "needsWebSearch": true/false
    - true si le sujet requiert des informations actuelles ou factuelles
    - false pour conversation sociale, opinions, sujets generaux
@@ -35,7 +56,7 @@ DECIDE:
 HISTORIQUE DES INTERVENTIONS RECENTES (NE PAS REPETER):
 {agentHistory}
 
-SUJETS RECEMMENT ABORDES (INTERDITS - trouver un angle COMPLETEMENT different):
+SUJETS RECEMMENT ABORDES PAR LES AGENTS (INTERDITS - trouver un angle COMPLETEMENT different):
 {recentTopicCategories}
 
 REGLES ANTI-REPETITION:
@@ -79,11 +100,13 @@ IMPORTANT:
 - Analyse semantique pure. Fonctionne en TOUTES langues.
 - Ne reponds PAS si l'activite est deja suffisante (score > 0.7)
 - Varie les types d'interventions (mix messages + reactions)
+- REPONDRE aux vrais utilisateurs > REAGIR > LANCER un nouveau sujet
 
 REPONSE JSON STRICTE (aucun texte autour):
 {
   "shouldIntervene": boolean,
   "reason": "string",
+  "currentConversationTopic": "string",
   "interventions": [
     {
       "type": "message",
@@ -158,6 +181,20 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     return user ? `${user.displayName} (${user.userId})` : state.lastAgentUserId;
   })();
 
+  // Extract current conversation topic from last 10 messages
+  const currentTopicMessages = recentMessages.slice(-10).map((m) => m.content).join(' ');
+  const currentTopicText = currentTopicMessages.length > 0
+    ? `Analyse les 10 derniers messages pour detecter le sujet actuel. Contenu: "${currentTopicMessages.slice(0, 500)}"`
+    : 'Aucun message recent — conversation potentiellement morte.';
+
+  // Format engagement data if available
+  const engagementText = (state.engagementData ?? []).length > 0
+    ? state.engagementData.map((e) => {
+        const user = state.controlledUsers.find((u) => u.userId === e.userId);
+        return `- ${user?.displayName ?? e.userId}: ${e.repliesReceived} reponses, ${e.reactionsReceived} reactions recues`;
+      }).join('\n')
+    : 'Pas encore de donnees d\'engagement.';
+
   return STRATEGIST_SYSTEM_PROMPT
     .replace('{messages}', messagesText)
     .replace('{inactiveUsers}', inactiveUsersText)
@@ -166,6 +203,8 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     .replace('{conversationTitle}', state.conversationTitle || 'Sans titre')
     .replace('{conversationDescription}', state.conversationDescription || 'Aucune')
     .replace('{agentInstructions}', instructionsText)
+    .replace('{currentTopic}', currentTopicText)
+    .replace('{engagementData}', engagementText)
     .replace('{minResponses}', String(minResponses))
     .replace('{maxResponses}', String(maxResponses + effectiveMaxReactions))
     .replace('{agentHistory}', historyText)

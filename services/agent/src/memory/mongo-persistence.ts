@@ -136,7 +136,8 @@ export class MongoPersistence {
     });
     const existingRoleUserIds = existingRoles.map((r) => r.userId);
 
-    return this.prisma.user.findMany({
+    // First: users with a full agentGlobalProfile (10+ messages analyzed)
+    const profiledUsers = await this.prisma.user.findMany({
       where: {
         participations: { some: { conversationId, isActive: true } },
         lastActiveAt: { lt: threshold },
@@ -153,6 +154,56 @@ export class MongoPersistence {
       },
       take: limit,
     });
+
+    if (profiledUsers.length >= limit) return profiledUsers;
+
+    // Fallback: users WITHOUT agentGlobalProfile but with enough conversation history.
+    // These users get a bootstrap profile created from their recent messages.
+    const remaining = limit - profiledUsers.length;
+    const profiledIds = profiledUsers.map((u) => u.id);
+    const bootstrapUsers = await this.prisma.user.findMany({
+      where: {
+        participations: { some: { conversationId, isActive: true } },
+        lastActiveAt: { lt: threshold },
+        role: { notIn: excludedRoles as unknown as any[] },
+        id: { notIn: [...excludedUserIds, ...existingRoleUserIds, ...profiledIds] },
+        agentGlobalProfile: null,
+      },
+      select: {
+        id: true,
+        displayName: true,
+        username: true,
+        systemLanguage: true,
+        bio: true,
+      },
+      take: remaining,
+    });
+
+    // Create minimal bootstrap profiles for users without agentGlobalProfile
+    const bootstrapWithProfiles = bootstrapUsers.map((u) => ({
+      id: u.id,
+      displayName: u.displayName,
+      username: u.username,
+      systemLanguage: u.systemLanguage,
+      agentGlobalProfile: {
+        personaSummary: u.bio ?? null,
+        tone: null,
+        vocabularyLevel: null,
+        typicalLength: null,
+        emojiUsage: null,
+        catchphrases: [],
+        topicsOfExpertise: [],
+        topicsAvoided: [],
+        responsePatterns: [],
+        commonEmojis: [],
+        reactionPatterns: [],
+        messagesAnalyzed: 0,
+        confidence: 0.1,
+        locked: false,
+      },
+    }));
+
+    return [...profiledUsers, ...bootstrapWithProfiles];
   }
 
   async getGlobalProfile(userId: string) {
@@ -258,6 +309,35 @@ export class MongoPersistence {
 
   async getSummaryRecord(conversationId: string) {
     return this.prisma.agentConversationSummary.findUnique({ where: { conversationId } });
+  }
+
+  async getAgentMessageEngagement(conversationId: string, withinHours: number): Promise<{ userId: string; repliesReceived: number; reactionsReceived: number }[]> {
+    const since = new Date(Date.now() - withinHours * 60 * 60 * 1000);
+    const agentMessages = await this.prisma.message.findMany({
+      where: {
+        conversationId,
+        messageSource: 'agent',
+        createdAt: { gte: since },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        senderId: true,
+        _count: { select: { reactions: true } },
+        replies: { where: { messageSource: { not: 'agent' }, deletedAt: null }, select: { id: true } },
+      },
+    });
+
+    const byUser = new Map<string, { repliesReceived: number; reactionsReceived: number }>();
+    for (const msg of agentMessages) {
+      const uid = msg.senderId ?? 'unknown';
+      const existing = byUser.get(uid) ?? { repliesReceived: 0, reactionsReceived: 0 };
+      existing.repliesReceived += msg.replies.length;
+      existing.reactionsReceived += msg._count.reactions;
+      byUser.set(uid, existing);
+    }
+
+    return [...byUser.entries()].map(([userId, stats]) => ({ userId, ...stats }));
   }
 
   async getRecentMessages(conversationId: string, limit: number) {
