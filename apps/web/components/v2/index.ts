@@ -155,7 +155,7 @@ export { StoryViewer } from './StoryViewer';
 export type { StoryData, StoryViewerProps } from './StoryViewer';
 
 export { StoryComposer } from './StoryComposer';
-export type { StoryComposerProps } from './StoryComposer';
+export type { StoryComposerProps, StoryVisibility } from './StoryComposer';
 
 export { StatusBar } from './StatusBar';
 export type { StatusBarProps, StatusItem } from './StatusBar';
