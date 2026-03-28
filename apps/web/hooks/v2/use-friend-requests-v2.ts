@@ -36,8 +36,11 @@ export interface UseFriendRequestsV2Return {
 }
 
 function extractRequests(response: unknown): FriendRequest[] {
-  const data = response as { data?: { success?: boolean; data?: FriendRequest[]; pagination?: unknown } };
-  return data?.data?.data ?? [];
+  if (!response || typeof response !== 'object') return [];
+  const outer = (response as Record<string, unknown>).data;
+  if (!outer || typeof outer !== 'object') return [];
+  const inner = (outer as Record<string, unknown>).data;
+  return Array.isArray(inner) ? inner : [];
 }
 
 export function useFriendRequestsV2(
@@ -128,15 +131,17 @@ export function useFriendRequestsV2(
       await apiService.post('/friend-requests', { receiverId, ...(message && { message }) });
     },
     onMutate: async ({ receiverId }) => {
+      if (!currentUserId) return {};
       await queryClient.cancelQueries({ queryKey: sentQueryKey });
       const previous = queryClient.getQueryData<FriendRequest[]>(sentQueryKey);
+      const now = new Date().toISOString();
       const optimistic: FriendRequest = {
         id: `optimistic-${Date.now()}`,
-        senderId: currentUserId ?? '',
+        senderId: currentUserId,
         receiverId,
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: now,
+        updatedAt: now,
       };
       queryClient.setQueryData<FriendRequest[]>(sentQueryKey, (old) => [...(old ?? []), optimistic]);
       return { previous };

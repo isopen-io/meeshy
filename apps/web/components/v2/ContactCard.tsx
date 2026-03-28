@@ -137,6 +137,7 @@ export const ContactCard = memo(function ContactCard({
           {menuOpen && (
             <>
               <div
+                role="presentation"
                 className="fixed inset-0 z-40"
                 onClick={() => setMenuOpen(false)}
               />

@@ -37,8 +37,11 @@ export function useBlockedUsersV2(
         success: boolean;
         data: BlockedUser[];
       }>('/users/me/blocked-users');
-      const raw = response as { data?: { success?: boolean; data?: BlockedUser[] } };
-      return raw?.data?.data ?? [];
+      if (!response || typeof response !== 'object') return [];
+      const outer = (response as unknown as Record<string, unknown>).data;
+      if (!outer || typeof outer !== 'object') return [];
+      const inner = (outer as Record<string, unknown>).data;
+      return Array.isArray(inner) ? inner : [];
     },
     enabled,
   });
@@ -52,20 +55,6 @@ export function useBlockedUsersV2(
   const blockMutation = useMutation({
     mutationFn: async (userId: string) => {
       await apiService.post(`/users/${userId}/block`);
-    },
-    onMutate: async (userId: string) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.blockedUsers.list() });
-      const previous = queryClient.getQueryData<BlockedUser[]>(queryKeys.blockedUsers.list());
-      queryClient.setQueryData<BlockedUser[]>(queryKeys.blockedUsers.list(), (old) => [
-        ...(old ?? []),
-        { id: userId, username: '', displayName: undefined, avatar: undefined },
-      ]);
-      return { previous };
-    },
-    onError: (_err, _userId, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKeys.blockedUsers.list(), context.previous);
-      }
     },
     onSettled: () => invalidate(),
   });

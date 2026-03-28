@@ -8,8 +8,6 @@ import { usersService, type ParticipantsFilters } from '@/services';
 import { toast } from 'sonner';
 import { authManager } from '@/services/auth-manager.service';
 import { buildApiUrl } from '@/lib/config';
-import type { FriendRequest, AffiliateRelation } from '@/types/contacts';
-
 /** @deprecated Use FriendRequest from '@/types/contacts' */
 interface LegacyFriendRequest {
   id: string;
@@ -46,7 +44,7 @@ interface AffiliateRelation {
 
 export function useContactsData(t: (key: string) => string) {
   const [contacts, setContacts] = useState<User[]>([]);
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [friendRequests, setFriendRequests] = useState<LegacyFriendRequest[]>([]);
   const [affiliateRelations, setAffiliateRelations] = useState<AffiliateRelation[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<ParticipantsFilters>({});

@@ -209,6 +209,7 @@ export default function V2ContactsPage() {
               {showSortMenu && (
                 <>
                   <div
+                    role="presentation"
                     className="fixed inset-0 z-40"
                     onClick={() => setShowSortMenu(false)}
                   />

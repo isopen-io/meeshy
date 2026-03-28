@@ -55,8 +55,14 @@ function transformToContact(user: User, isOnline: boolean): ContactV2 {
     isOnline,
     lastSeen: usersService.getLastSeenFormatted(user),
     lastActiveAt: user.lastActiveAt ? String(user.lastActiveAt) : undefined,
-    createdAt: (user as { createdAt?: string }).createdAt,
+    createdAt: 'createdAt' in user ? String((user as unknown as Record<string, unknown>).createdAt) : undefined,
   };
+}
+
+function safeTime(dateStr?: string): number {
+  if (!dateStr) return 0;
+  const t = new Date(dateStr).getTime();
+  return Number.isNaN(t) ? 0 : t;
 }
 
 function sortContacts(contacts: ContactV2[], sortBy: ContactSortOption): ContactV2[] {
@@ -65,13 +71,13 @@ function sortContacts(contacts: ContactV2[], sortBy: ContactSortOption): Contact
       case 'name':
         return a.name.localeCompare(b.name);
       case 'lastSeen': {
-        const aTime = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0;
-        const bTime = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
+        const aTime = safeTime(a.lastActiveAt);
+        const bTime = safeTime(b.lastActiveAt);
         return bTime - aTime;
       }
       case 'recentlyAdded': {
-        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        const aTime = safeTime(a.createdAt);
+        const bTime = safeTime(b.createdAt);
         return bTime - aTime;
       }
       default:
@@ -88,7 +94,7 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<ContactSortOption>('name');
-  const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
+  const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const setSearchQuery = useCallback((query: string) => {
     setSearchQueryRaw(query);
