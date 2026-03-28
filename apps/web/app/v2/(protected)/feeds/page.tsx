@@ -1,12 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Button, Card, useToast, PageHeader, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
-import type { StoryItem, StoryData, StatusItem, TranslationItem } from '@/components/v2';
+import type { StatusItem, TranslationItem } from '@/components/v2';
+import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
+import { useStoriesRealtime } from '@/hooks/social/use-stories-realtime';
+import { postToStoryItem, postToStoryData } from '@/lib/story-transforms';
+import { useAuthStore } from '@/stores/auth-store';
+import { useLanguageStore } from '@/stores/language-store';
+import { useStoryPreferences } from '@/stores/user-preferences-store';
 
-// ─── Mock Data ───────────────────────────────────────────────────────────
+// ─── Mock Data (Posts & Statuses - to be replaced in future phases) ──────
 
-interface Post {
+interface FeedPost {
   id: number;
   author: string;
   avatar: string;
@@ -19,9 +25,7 @@ interface Post {
   reactionSummary?: Record<string, number>;
 }
 
-const USER_LANGUAGE = 'fr';
-
-const initialPosts: Post[] = [
+const initialPosts: FeedPost[] = [
   {
     id: 1,
     author: 'Marie Dubois',
@@ -69,97 +73,6 @@ const initialPosts: Post[] = [
   },
 ];
 
-const mockStories: StoryItem[] = [
-  { id: 's1', author: { name: 'Marie D.' }, hasUnviewed: true, isOwn: true },
-  { id: 's2', author: { name: 'Yuki T.' }, hasUnviewed: true, isOwn: false },
-  { id: 's3', author: { name: 'Carlos M.' }, hasUnviewed: true, isOwn: false },
-  { id: 's4', author: { name: 'Li Wei' }, hasUnviewed: false, isOwn: false },
-  { id: 's5', author: { name: 'Sophie M.' }, hasUnviewed: true, isOwn: false },
-  { id: 's6', author: { name: 'Ahmed H.' }, hasUnviewed: false, isOwn: false },
-];
-
-const mockStoryData: StoryData[] = [
-  {
-    id: 's1',
-    author: { name: 'Marie D.' },
-    content: 'Premier jour sur Meeshy !',
-    originalLanguage: 'fr',
-    translations: [
-      { languageCode: 'en', languageName: 'English', content: 'First day on Meeshy!' },
-    ],
-    storyEffects: { background: 'gradient:#C4704B,#1A6B5A', textStyle: 'bold' as const, textColor: '#ffffff', textPosition: { x: 50, y: 50 } },
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    expiresAt: new Date(Date.now() + 72000000).toISOString(),
-    viewCount: 24,
-  },
-  {
-    id: 's2',
-    author: { name: 'Yuki T.' },
-    content: '\u6771\u4EAC\u306E\u591C\u666F',
-    originalLanguage: 'ja',
-    translations: [
-      { languageCode: 'fr', languageName: 'Francais', content: 'Vue nocturne de Tokyo' },
-      { languageCode: 'en', languageName: 'English', content: 'Tokyo night view' },
-    ],
-    storyEffects: { background: '#2D3748', textStyle: 'neon' as const, textColor: '#00ffcc', textPosition: { x: 50, y: 40 }, stickers: [{ emoji: '\uD83C\uDF03', x: 80, y: 70, scale: 2, rotation: -10 }] },
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    expiresAt: new Date(Date.now() + 68400000).toISOString(),
-    viewCount: 56,
-  },
-  {
-    id: 's3',
-    author: { name: 'Carlos M.' },
-    content: 'Hola desde Barcelona!',
-    originalLanguage: 'es',
-    translations: [
-      { languageCode: 'fr', languageName: 'Francais', content: 'Bonjour depuis Barcelone !' },
-    ],
-    storyEffects: { background: '#E8C547', textStyle: 'handwriting' as const, textColor: '#2D3748', textPosition: { x: 50, y: 50 } },
-    createdAt: new Date(Date.now() - 5400000).toISOString(),
-    expiresAt: new Date(Date.now() + 70200000).toISOString(),
-    viewCount: 33,
-  },
-  {
-    id: 's4',
-    author: { name: 'Li Wei' },
-    content: '\u4ECA\u5929\u5B66\u4E60\u4E86\u65B0\u8BCD\u6C47',
-    originalLanguage: 'zh',
-    translations: [
-      { languageCode: 'fr', languageName: 'Francais', content: "Aujourd'hui j'ai appris du nouveau vocabulaire" },
-    ],
-    storyEffects: { background: '#1A6B5A', textStyle: 'typewriter' as const, textColor: '#ffffff', textPosition: { x: 50, y: 45 } },
-    createdAt: new Date(Date.now() - 10800000).toISOString(),
-    expiresAt: new Date(Date.now() + 64800000).toISOString(),
-    viewCount: 12,
-  },
-  {
-    id: 's5',
-    author: { name: 'Sophie M.' },
-    content: 'Code & coffee',
-    originalLanguage: 'en',
-    translations: [
-      { languageCode: 'fr', languageName: 'Francais', content: 'Code et caf\u00e9' },
-    ],
-    storyEffects: { background: 'gradient:#2D3748,#C4704B', textStyle: 'bold' as const, textColor: '#ffffff', textPosition: { x: 50, y: 50 }, stickers: [{ emoji: '\u2615', x: 75, y: 65, scale: 1.5, rotation: 15 }] },
-    createdAt: new Date(Date.now() - 1800000).toISOString(),
-    expiresAt: new Date(Date.now() + 73800000).toISOString(),
-    viewCount: 41,
-  },
-  {
-    id: 's6',
-    author: { name: 'Ahmed H.' },
-    content: '\u0645\u0631\u062D\u0628\u0627 \u0645\u0646 \u0627\u0644\u0642\u0627\u0647\u0631\u0629',
-    originalLanguage: 'ar',
-    translations: [
-      { languageCode: 'fr', languageName: 'Francais', content: 'Bonjour depuis Le Caire' },
-    ],
-    storyEffects: { background: '#C4704B', textStyle: 'bold' as const, textColor: '#ffffff', textPosition: { x: 50, y: 50 } },
-    createdAt: new Date(Date.now() - 14400000).toISOString(),
-    expiresAt: new Date(Date.now() + 61200000).toISOString(),
-    viewCount: 8,
-  },
-];
-
 const mockStatuses: StatusItem[] = [
   {
     id: 'st1', author: { name: 'Marie D.' }, moodEmoji: '\uD83C\uDF89', content: 'Trop contente !',
@@ -195,31 +108,96 @@ const mockStatuses: StatusItem[] = [
 
 export default function V2FeedsPage() {
   const toastCtx = useToast();
-  const toast = (opts: any) => toastCtx.addToast(opts.title || opts.description || '', opts.type);
-  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const toast = (opts: { title?: string; description?: string; type?: string }) =>
+    toastCtx.addToast(opts.title || opts.description || '', opts.type as 'success' | 'error' | 'info');
+
+  // Auth & language
+  const currentUser = useAuthStore(s => s.user);
+  const currentUserId = currentUser?.id ?? '';
+  const userLanguage = useLanguageStore(s => s.userLanguageConfig.systemLanguage);
+  const { preferences: storyPrefs } = useStoryPreferences();
+
+  // ─── Stories (real data) ──────────────────────────────────────────────
+  const { data: stories, isLoading: storiesLoading } = useStoriesFeedQuery();
+  const createStoryMutation = useCreateStoryMutation();
+  const deleteStoryMutation = useDeleteStoryMutation();
+  const { recordView } = useRecordStoryViewMutation();
+  useStoriesRealtime();
+
+  const [storyViewerOpen, setStoryViewerOpen] = useState(false);
+  const [storyViewerIndex, setStoryViewerIndex] = useState(0);
+  const [storyComposerOpen, setStoryComposerOpen] = useState(false);
+  const [viewedStoryIds] = useState(() => new Set<string>());
+
+  const storyItems = useMemo(
+    () => (stories ?? []).map(s => postToStoryItem(s, currentUserId, viewedStoryIds)),
+    [stories, currentUserId, viewedStoryIds]
+  );
+
+  const storyDataList = useMemo(
+    () => (stories ?? []).map(postToStoryData),
+    [stories]
+  );
+
+  const handleStoryPress = useCallback((storyId: string) => {
+    const idx = storyDataList.findIndex(s => s.id === storyId);
+    if (idx >= 0) {
+      setStoryViewerIndex(idx);
+      setStoryViewerOpen(true);
+    }
+  }, [storyDataList]);
+
+  const handleStoryPublish = useCallback((story: { content?: string; storyEffects: Record<string, unknown>; visibility: string; mediaIds?: string[] }) => {
+    setStoryComposerOpen(false);
+    createStoryMutation.mutate({
+      content: story.content,
+      storyEffects: story.storyEffects,
+      visibility: story.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE',
+      mediaIds: story.mediaIds,
+      originalLanguage: userLanguage,
+    }, {
+      onSuccess: () => {
+        const mediaCount = story.mediaIds?.length ?? 0;
+        const desc = mediaCount > 0
+          ? `Votre story est visible par vos amis (${mediaCount} media).`
+          : 'Votre story est visible par vos amis.';
+        toast({ title: 'Story publi\u00e9e !', description: desc, type: 'success' });
+      },
+      onError: () => {
+        toast({ title: 'Erreur', description: 'Impossible de publier la story.', type: 'error' });
+      },
+    });
+  }, [createStoryMutation, userLanguage, toast]);
+
+  const handleStoryView = useCallback((storyId: string) => {
+    viewedStoryIds.add(storyId);
+    recordView(storyId);
+  }, [viewedStoryIds, recordView]);
+
+  const handleStoryDelete = useCallback((storyId: string) => {
+    deleteStoryMutation.mutate(storyId, {
+      onSuccess: () => {
+        toast({ title: 'Story supprim\u00e9e', type: 'success' });
+      },
+      onError: () => {
+        toast({ title: 'Erreur', description: 'Impossible de supprimer la story.', type: 'error' });
+      },
+    });
+  }, [deleteStoryMutation, toast]);
+
+  // ─── Posts (mock - to be replaced later) ──────────────────────────────
+  const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
   const [newPostContent, setNewPostContent] = useState('');
   const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
   const [userReactions, setUserReactions] = useState<Record<number, string>>({});
 
-  // Story state
-  const [storyViewerOpen, setStoryViewerOpen] = useState(false);
-  const [storyViewerIndex, setStoryViewerIndex] = useState(0);
-  const [storyComposerOpen, setStoryComposerOpen] = useState(false);
-
-  // Status state
-  const [statusComposerOpen, setStatusComposerOpen] = useState(false);
-
   const handlePublish = () => {
     if (!newPostContent.trim()) {
-      toast({
-        title: 'Contenu vide',
-        description: '\u00c9crivez quelque chose avant de publier.',
-        type: 'error',
-      });
+      toast({ title: 'Contenu vide', description: '\u00c9crivez quelque chose avant de publier.', type: 'error' });
       return;
     }
 
-    const newPost: Post = {
+    const newPost: FeedPost = {
       id: Date.now(),
       author: 'Vous',
       avatar: '\uD83D\uDC64',
@@ -233,11 +211,7 @@ export default function V2FeedsPage() {
 
     setPosts([newPost, ...posts]);
     setNewPostContent('');
-    toast({
-      title: 'Publi\u00e9 !',
-      description: 'Votre post a \u00e9t\u00e9 partag\u00e9 avec la communaut\u00e9.',
-      type: 'success',
-    });
+    toast({ title: 'Publi\u00e9 !', description: 'Votre post a \u00e9t\u00e9 partag\u00e9 avec la communaut\u00e9.', type: 'success' });
   };
 
   const handleLike = (postId: number) => {
@@ -281,22 +255,8 @@ export default function V2FeedsPage() {
     }
   };
 
-  const handleStoryPress = (storyId: string) => {
-    const idx = mockStoryData.findIndex((s) => s.id === storyId);
-    if (idx >= 0) {
-      setStoryViewerIndex(idx);
-      setStoryViewerOpen(true);
-    }
-  };
-
-  const handleStoryPublish = (story: { content?: string; storyEffects: Record<string, unknown>; visibility: string; mediaIds?: string[] }) => {
-    setStoryComposerOpen(false);
-    const mediaCount = story.mediaIds?.length ?? 0;
-    const desc = mediaCount > 0
-      ? `Votre story est visible par vos amis (${mediaCount} media).`
-      : 'Votre story est visible par vos amis.';
-    toast({ title: 'Story publi\u00e9e !', description: desc, type: 'success' });
-  };
+  // ─── Status (mock - to be replaced later) ─────────────────────────────
+  const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
   const handleStatusPress = (statusId: string) => {
     toast({ title: 'Status', description: `Status ${statusId} s\u00e9lectionn\u00e9`, type: 'info' });
@@ -314,9 +274,10 @@ export default function V2FeedsPage() {
       <main className="max-w-2xl mx-auto px-6 py-8">
         {/* Story Tray */}
         <StoryTray
-          stories={mockStories}
+          stories={storyItems}
           onStoryPress={handleStoryPress}
           onAddStory={() => setStoryComposerOpen(true)}
+          isLoading={storiesLoading}
           className="mb-4"
         />
 
@@ -325,7 +286,7 @@ export default function V2FeedsPage() {
           statuses={mockStatuses}
           onStatusPress={handleStatusPress}
           onAddStatus={() => setStatusComposerOpen(true)}
-          userLanguage={USER_LANGUAGE}
+          userLanguage={userLanguage}
           className="mb-6"
         />
 
@@ -333,7 +294,7 @@ export default function V2FeedsPage() {
         <Card variant="default" hover={false} className="p-4 mb-6">
           <div className="flex gap-4">
             <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl bg-[var(--gp-parchment)]">
-              \uD83D\uDC64
+              {'\uD83D\uDC64'}
             </div>
             <div className="flex-1">
               <textarea
@@ -345,9 +306,9 @@ export default function V2FeedsPage() {
               />
               <div className="flex items-center justify-between mt-2">
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm">\uD83D\uDCF7</Button>
-                  <Button variant="ghost" size="sm">\uD83C\uDFA5</Button>
-                  <Button variant="ghost" size="sm">\uD83D\uDCCE</Button>
+                  <Button variant="ghost" size="sm">{'\uD83D\uDCF7'}</Button>
+                  <Button variant="ghost" size="sm">{'\uD83C\uDFA5'}</Button>
+                  <Button variant="ghost" size="sm">{'\uD83D\uDCCE'}</Button>
                 </div>
                 <Button variant="primary" size="sm" onClick={handlePublish}>Publier</Button>
               </div>
@@ -364,7 +325,7 @@ export default function V2FeedsPage() {
               lang={post.lang}
               content={post.content}
               translations={post.translations}
-              userLanguage={USER_LANGUAGE}
+              userLanguage={userLanguage}
               time={post.time}
               likes={likedPosts.has(post.id) ? post.likes + 1 : post.likes}
               comments={post.comments}
@@ -381,16 +342,18 @@ export default function V2FeedsPage() {
       </main>
 
       {/* Story Viewer */}
-      {storyViewerOpen && (
+      {storyViewerOpen && storyDataList.length > 0 && (
         <StoryViewer
-          stories={mockStoryData}
+          stories={storyDataList}
           initialIndex={storyViewerIndex}
-          userLanguage={USER_LANGUAGE}
+          userLanguage={userLanguage}
+          currentUserId={currentUserId}
           onClose={() => setStoryViewerOpen(false)}
-          onView={(id) => console.log('Viewed story:', id)}
+          onView={handleStoryView}
           onReply={(id, text) => {
             toast({ title: 'R\u00e9ponse envoy\u00e9e', description: text, type: 'success' });
           }}
+          onDelete={handleStoryDelete}
         />
       )}
 
@@ -399,6 +362,7 @@ export default function V2FeedsPage() {
         open={storyComposerOpen}
         onClose={() => setStoryComposerOpen(false)}
         onPublish={handleStoryPublish}
+        defaultVisibility={storyPrefs.defaultVisibility}
       />
 
       {/* Status Composer */}

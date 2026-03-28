@@ -35,9 +35,11 @@ interface StoryViewerProps {
   stories: StoryData[];
   initialIndex?: number;
   userLanguage?: string;
+  currentUserId?: string;
   onClose: () => void;
   onView?: (storyId: string) => void;
   onReply?: (storyId: string, text: string) => void;
+  onDelete?: (storyId: string) => void;
 }
 
 // ============================================================================
@@ -170,9 +172,11 @@ function StoryViewer({
   stories,
   initialIndex = 0,
   userLanguage,
+  currentUserId,
   onClose,
   onView,
   onReply,
+  onDelete,
 }: StoryViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [replyText, setReplyText] = useState('');
@@ -452,11 +456,36 @@ function StoryViewer({
             )}
           </div>
 
-          {/* View count */}
-          <div className="px-4 pb-1 pointer-events-none">
-            <span className="text-xs text-white/50">
-              {story.viewCount} vue{story.viewCount !== 1 ? 's' : ''}
-            </span>
+          {/* View count & actions */}
+          <div className="px-4 pb-1 flex items-center justify-between pointer-events-auto">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-white/50">
+                {story.viewCount} vue{story.viewCount !== 1 ? 's' : ''}
+              </span>
+              {story.expiresAt && (() => {
+                const diff = new Date(story.expiresAt).getTime() - Date.now();
+                if (diff <= 0) return null;
+                const mins = Math.floor(diff / 60000);
+                const hrs = Math.floor(mins / 60);
+                const remaining = hrs >= 1 ? `${hrs}h${mins % 60 > 0 ? `${mins % 60}m` : ''}` : `${mins}m`;
+                return <span className="text-xs text-white/40">{remaining}</span>;
+              })()}
+            </div>
+            {onDelete && currentUserId && story.id && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(story.id);
+                  onClose();
+                }}
+                className="p-1.5 rounded-full text-white/40 hover:text-red-400 hover:bg-white/10 transition-colors duration-300"
+                aria-label="Supprimer la story"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
           </div>
 
           {/* Reply input */}

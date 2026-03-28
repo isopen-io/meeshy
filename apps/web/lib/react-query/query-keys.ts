@@ -82,6 +82,12 @@ export const queryKeys = {
     all: ['blockedUsers'] as const,
     list: () => [...queryKeys.blockedUsers.all, 'list'] as const,
   },
+
+  stories: {
+    all: ['stories'] as const,
+    feed: () => [...queryKeys.stories.all, 'feed'] as const,
+    viewers: (storyId: string) => [...queryKeys.stories.all, 'viewers', storyId] as const,
+  },
 } as const;
 
 export type QueryKeys = typeof queryKeys;
