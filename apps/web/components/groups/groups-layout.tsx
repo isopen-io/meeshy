@@ -271,6 +271,13 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
                 isLoadingConversations={isLoadingConversations}
                 copiedIdentifier={copiedIdentifier}
                 isMobile={isMobile}
+                currentUserId={user?.id}
+                currentUserRole={
+                  selectedGroup.createdBy === user?.id
+                    ? 'admin'
+                    : (selectedGroup.members as Array<{ userId: string; role: string }>)
+                        ?.find((m) => m.userId === user?.id)?.role as 'admin' | 'moderator' | 'member' ?? 'member'
+                }
                 onBack={handleBackToList}
                 onCopyIdentifier={copyIdentifier}
                 onSettingsClick={() => setIsSettingsModalOpen(true)}
