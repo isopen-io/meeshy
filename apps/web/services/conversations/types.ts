@@ -91,6 +91,10 @@ export interface ConversationParticipantResponse {
   canSendMessages: boolean;
   canSendFiles: boolean;
   canSendImages: boolean;
+  canSendVideos: boolean;
+  canSendAudios: boolean;
+  canSendLocations: boolean;
+  canSendLinks: boolean;
   createdAt: string;
   updatedAt: string;
   permissions: {

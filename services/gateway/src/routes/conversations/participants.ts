@@ -187,6 +187,10 @@ export function registerParticipantsRoutes(
         canSendMessages: participant.permissions?.canSendMessages ?? true,
         canSendFiles: participant.permissions?.canSendFiles ?? true,
         canSendImages: participant.permissions?.canSendImages ?? true,
+        canSendVideos: participant.permissions?.canSendVideos ?? true,
+        canSendAudios: participant.permissions?.canSendAudios ?? true,
+        canSendLocations: participant.permissions?.canSendLocations ?? false,
+        canSendLinks: participant.permissions?.canSendLinks ?? false,
         permissions: {
           canAccessAdmin: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
           canManageUsers: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
