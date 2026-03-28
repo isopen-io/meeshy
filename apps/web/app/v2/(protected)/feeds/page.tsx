@@ -2,8 +2,9 @@
 
 import { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card, useToast, PageHeader, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
+import { Button, useToast, PageHeader, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
 import type { StatusItem, StoryVisibility } from '@/components/v2';
+import { PostComposer } from '@/components/v2/PostComposer';
 import { Skeleton } from '@/components/v2/Skeleton';
 
 // Stories (dedicated hooks from stories feature)
@@ -14,7 +15,7 @@ import { useStoryPreferences } from '@/stores/user-preferences-store';
 
 // Posts (real API integration)
 import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
-import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation } from '@/hooks/queries/use-post-mutations';
+import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 
@@ -109,11 +110,27 @@ export default function V2FeedsPage() {
   const likeMutation = useLikePostMutation();
   const unlikeMutation = useUnlikePostMutation();
   const shareMutation = useSharePostMutation();
+  const bookmarkMutation = useBookmarkPostMutation();
+  const unbookmarkMutation = useUnbookmarkPostMutation();
+  const translateMutation = useTranslatePostMutation();
+  const deletePostMutation = useDeletePostMutation();
+  const pinPostMutation = usePinPostMutation();
 
-  // Local state for post interactions
-  const [newPostContent, setNewPostContent] = useState('');
+  // Local interaction state
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
   const [userReactions, setUserReactions] = useState<Record<string, string>>({});
+
+  // New posts banner
+  const [newPostsCount, setNewPostsCount] = useState(0);
+  const prevPostsLengthRef = useRef(posts.length);
+
+  useEffect(() => {
+    if (posts.length > prevPostsLengthRef.current && prevPostsLengthRef.current > 0) {
+      setNewPostsCount((c) => c + (posts.length - prevPostsLengthRef.current));
+    }
+    prevPostsLengthRef.current = posts.length;
+  }, [posts.length]);
 
   // Infinite scroll
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -205,24 +222,18 @@ export default function V2FeedsPage() {
 
   // ─── Post handlers ────────────────────────────────────────────────────
 
-  const handlePublish = useCallback(() => {
-    if (!newPostContent.trim()) {
-      showToast('Contenu vide', 'error', '\u00c9crivez quelque chose avant de publier.');
-      return;
-    }
-    createPostMutation.mutate(
-      { content: newPostContent.trim(), type: 'POST', visibility: 'PUBLIC' },
-      {
-        onSuccess: () => {
-          setNewPostContent('');
-          showToast('Publi\u00e9 !', 'success', 'Votre post a \u00e9t\u00e9 partag\u00e9.');
+  const handlePublish = useCallback(
+    (data: { content: string; type: 'POST' | 'STORY' | 'STATUS'; visibility: string }) => {
+      createPostMutation.mutate(
+        { content: data.content, type: data.type, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
+        {
+          onSuccess: () => showToast('Publi\u00e9 !', 'success', 'Votre post a \u00e9t\u00e9 partag\u00e9.'),
+          onError: () => showToast('Erreur', 'error', 'Impossible de publier le post.'),
         },
-        onError: () => {
-          showToast('Erreur', 'error', 'Impossible de publier le post.');
-        },
-      },
-    );
-  }, [newPostContent, createPostMutation, showToast]);
+      );
+    },
+    [createPostMutation, showToast],
+  );
 
   const handleLike = useCallback((postId: string) => {
     const isLiked = likedPosts.has(postId);
@@ -266,6 +277,41 @@ export default function V2FeedsPage() {
     }
   }, [shareMutation, showToast]);
 
+  const handleBookmark = useCallback((postId: string) => {
+    const isBookmarked = bookmarkedPosts.has(postId);
+    setBookmarkedPosts((prev) => {
+      const next = new Set(prev);
+      if (isBookmarked) next.delete(postId);
+      else next.add(postId);
+      return next;
+    });
+
+    if (isBookmarked) {
+      unbookmarkMutation.mutate(postId);
+    } else {
+      bookmarkMutation.mutate(postId);
+    }
+  }, [bookmarkedPosts, bookmarkMutation, unbookmarkMutation]);
+
+  const handleTranslate = useCallback((postId: string) => {
+    translateMutation.mutate({ postId, targetLanguage: userLanguage });
+  }, [translateMutation, userLanguage]);
+
+  const handleDeletePost = useCallback((postId: string) => {
+    deletePostMutation.mutate(postId, {
+      onSuccess: () => showToast('Post supprim\u00e9', 'success'),
+    });
+  }, [deletePostMutation, showToast]);
+
+  const handlePinPost = useCallback((postId: string, isPinned: boolean) => {
+    pinPostMutation.mutate({ postId, pin: !isPinned });
+  }, [pinPostMutation]);
+
+  const handleDismissNewPosts = useCallback(() => {
+    setNewPostsCount(0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   // ─── Status handlers (mock) ───────────────────────────────────────────
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
@@ -303,38 +349,13 @@ export default function V2FeedsPage() {
           className="mb-6"
         />
 
-        {/* New Post Composer */}
-        <Card variant="default" hover={false} className="p-4 mb-6">
-          <div className="flex gap-4">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl bg-[var(--gp-parchment)]">
-              {'\uD83D\uDC64'}
-            </div>
-            <div className="flex-1">
-              <textarea
-                placeholder="Partagez quelque chose avec la communaut\u00e9..."
-                className="w-full resize-none border-0 bg-transparent text-base outline-none text-[var(--gp-text-primary)]"
-                rows={2}
-                value={newPostContent}
-                onChange={(e) => setNewPostContent(e.target.value)}
-              />
-              <div className="flex items-center justify-between mt-2">
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm">{'\uD83D\uDCF7'}</Button>
-                  <Button variant="ghost" size="sm">{'\uD83C\uDFA5'}</Button>
-                  <Button variant="ghost" size="sm">{'\uD83D\uDCCE'}</Button>
-                </div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handlePublish}
-                  disabled={createPostMutation.isPending}
-                >
-                  {createPostMutation.isPending ? 'Publication...' : 'Publier'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Card>
+        {/* Post Composer */}
+        <PostComposer
+          currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
+          onPublish={handlePublish}
+          disabled={createPostMutation.isPending}
+          className="mb-6"
+        />
 
         {/* Feed loading state */}
         {feedQuery.isLoading && (
@@ -365,6 +386,17 @@ export default function V2FeedsPage() {
           </div>
         )}
 
+        {/* New posts banner */}
+        {newPostsCount > 0 && (
+          <button
+            onClick={handleDismissNewPosts}
+            className="w-full py-2.5 mb-4 rounded-xl bg-[var(--gp-terracotta)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+            data-testid="new-posts-banner"
+          >
+            {newPostsCount} {newPostsCount === 1 ? 'new post' : 'new posts'}
+          </button>
+        )}
+
         {/* Posts */}
         {feedQuery.isSuccess && (
           <div className="space-y-6">
@@ -386,12 +418,21 @@ export default function V2FeedsPage() {
                   likes={post.likeCount}
                   comments={post.commentCount}
                   isLiked={likedPosts.has(post.id)}
+                  isBookmarked={bookmarkedPosts.has(post.id)}
+                  isAuthor={post.authorId === currentUserId}
+                  isPinned={post.isPinned}
                   reactionSummary={post.reactionSummary ?? undefined}
                   userReaction={userReactions[post.id]}
+                  media={post.media}
                   onLike={() => handleLike(post.id)}
                   onReact={(emoji) => handleReact(post.id, emoji)}
                   onComment={() => handleComment(post.id)}
                   onShare={() => handleShare(post.id)}
+                  onBookmark={() => handleBookmark(post.id)}
+                  onTranslate={() => handleTranslate(post.id)}
+                  onDelete={() => handleDeletePost(post.id)}
+                  onPin={() => handlePinPost(post.id, post.isPinned)}
+                  onClick={() => router.push(`/v2/feeds/post/${post.id}`)}
                 />
               </div>
             ))}

@@ -1,17 +1,8 @@
 'use client';
 
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { postsService } from '@/services/posts.service';
-
-export function useStoriesQuery(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.posts.stories(),
-    queryFn: () => postsService.getStories(),
-    enabled,
-    select: (response) => response.data,
-  });
-}
 
 interface UseStatusesQueryOptions {
   limit?: number;

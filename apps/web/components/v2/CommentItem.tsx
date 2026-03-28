@@ -16,6 +16,7 @@ export interface CommentItemProps {
   onReply?: (commentId: string) => void;
   onDelete?: (commentId: string) => void;
   onShowReplies?: (commentId: string) => void;
+  onTranslate?: (commentId: string) => void;
   isLiked?: boolean;
   depth?: number;
   className?: string;
@@ -54,6 +55,7 @@ function CommentItem({
   onReply,
   onDelete,
   onShowReplies,
+  onTranslate,
   isLiked = false,
   depth = 0,
   className,
@@ -107,9 +109,20 @@ function CommentItem({
             variant="inline"
           />
         ) : (
-          <p className="text-sm text-[var(--gp-text-primary)] whitespace-pre-wrap break-words">
-            {comment.content}
-          </p>
+          <div>
+            <p className="text-sm text-[var(--gp-text-primary)] whitespace-pre-wrap break-words">
+              {comment.content}
+            </p>
+            {onTranslate && userLanguage && comment.originalLanguage !== userLanguage && (
+              <button
+                onClick={() => onTranslate(comment.id)}
+                className="mt-0.5 text-xs text-[var(--gp-terracotta)] hover:underline"
+                aria-label="Translate comment"
+              >
+                Translate
+              </button>
+            )}
+          </div>
         )}
 
         {/* Actions row */}

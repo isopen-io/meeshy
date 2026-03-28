@@ -152,6 +152,9 @@ export type { CommentComposerProps } from './CommentComposer';
 export { CommentList } from './CommentList';
 export type { CommentListProps } from './CommentList';
 
+export { CommentThread } from './CommentThread';
+export type { CommentThreadProps } from './CommentThread';
+
 export { PostComposer } from './PostComposer';
 export type { PostComposerProps } from './PostComposer';
 
