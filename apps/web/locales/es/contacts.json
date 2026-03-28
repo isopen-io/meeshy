@@ -27,6 +27,7 @@
   "status": {
     "online": "En línea",
     "offline": "Fuera de línea",
+    "away": "Ausente",
     "pending": "Pendiente",
     "rejected": "Rechazado",
     "neverSeen": "Nunca visto",
