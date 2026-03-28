@@ -51,7 +51,8 @@ final class ConversationListViewModelTests: XCTestCase {
         type: Conversation.ConversationType = .direct,
         lastMessageAt: Date = Date(),
         reaction: String? = nil,
-        isAnnouncementChannel: Bool = false
+        isAnnouncementChannel: Bool = false,
+        sectionId: String? = nil
     ) -> Conversation {
         Conversation(
             id: id,
@@ -65,6 +66,7 @@ final class ConversationListViewModelTests: XCTestCase {
             unreadCount: unreadCount,
             isAnnouncementChannel: isAnnouncementChannel,
             isPinned: isPinned,
+            sectionId: sectionId,
             isMuted: isMuted,
             reaction: reaction
         )
@@ -620,5 +622,407 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(conversationService.deleteForMeCallCount, 0)
         XCTAssertEqual(sut.conversations.count, 1)
+    }
+
+    // MARK: - Initial State
+
+    func test_initialState_hasEmptyConversationsAndNotLoading() {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+
+        XCTAssertTrue(sut.conversations.isEmpty)
+        XCTAssertTrue(sut.filteredConversations.isEmpty)
+        XCTAssertTrue(sut.groupedConversations.isEmpty)
+        XCTAssertFalse(sut.isLoading)
+        XCTAssertFalse(sut.isLoadingMore)
+        XCTAssertEqual(sut.searchText, "")
+        XCTAssertEqual(sut.selectedFilter, .all)
+        XCTAssertTrue(sut.typingUsernames.isEmpty)
+        XCTAssertEqual(sut.totalUnreadCount, 0)
+    }
+
+    // MARK: - Filter: ouvertes (public + community)
+
+    func test_filterPipeline_ouvertesFilterShowsPublicAndCommunity() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [
+            makeConversation(id: "pub", type: .public),
+            makeConversation(id: "com", type: .community),
+            makeConversation(id: "dm", type: .direct),
+            makeConversation(id: "grp", type: .group)
+        ]
+        sut.selectedFilter = .ouvertes
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(sut.filteredConversations.count, 2)
+        let ids = Set(sut.filteredConversations.map(\.id))
+        XCTAssertTrue(ids.contains("pub"))
+        XCTAssertTrue(ids.contains("com"))
+    }
+
+    // MARK: - Filter: globales
+
+    func test_filterPipeline_globalesFilterShowsGlobalOnly() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [
+            makeConversation(id: "glob", type: .global),
+            makeConversation(id: "dm", type: .direct),
+            makeConversation(id: "pub", type: .public)
+        ]
+        sut.selectedFilter = .globales
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(sut.filteredConversations.count, 1)
+        XCTAssertEqual(sut.filteredConversations[0].id, "glob")
+    }
+
+    // MARK: - Filter: all excludes archived
+
+    func test_filterPipeline_allFilterExcludesArchivedConversations() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [
+            makeConversation(id: "active1", isActive: true),
+            makeConversation(id: "active2", isActive: true),
+            makeConversation(id: "archived", isActive: false)
+        ]
+        sut.selectedFilter = .all
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(sut.filteredConversations.count, 2)
+        XCTAssertFalse(sut.filteredConversations.contains(where: { $0.id == "archived" }))
+    }
+
+    // MARK: - Search + Filter Combined
+
+    func test_filterPipeline_searchCombinedWithFilterNarrowsResults() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [
+            makeConversation(id: "c1", name: "Alice DM", unreadCount: 3),
+            makeConversation(id: "c2", name: "Alice Group", unreadCount: 0),
+            makeConversation(id: "c3", name: "Bob DM", unreadCount: 2)
+        ]
+        sut.selectedFilter = .unread
+        sut.searchText = "Alice"
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(sut.filteredConversations.count, 1)
+        XCTAssertEqual(sut.filteredConversations[0].id, "c1")
+    }
+
+    // MARK: - Search: case insensitive
+
+    func test_filterPipeline_searchIsCaseInsensitive() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [
+            makeConversation(id: "c1", name: "ALICE"),
+            makeConversation(id: "c2", name: "Bob")
+        ]
+        sut.selectedFilter = .all
+        sut.searchText = "alice"
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(sut.filteredConversations.count, 1)
+        XCTAssertEqual(sut.filteredConversations[0].id, "c1")
+    }
+
+    // MARK: - Search: empty text shows all
+
+    func test_filterPipeline_emptySearchShowsAllMatchingFilter() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [
+            makeConversation(id: "c1", name: "Alice"),
+            makeConversation(id: "c2", name: "Bob")
+        ]
+        sut.selectedFilter = .all
+        sut.searchText = ""
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(sut.filteredConversations.count, 2)
+    }
+
+    // MARK: - Sorting: most recent first
+
+    func test_filterPipeline_sortsMostRecentFirst() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let old = Date(timeIntervalSince1970: 1000)
+        let recent = Date(timeIntervalSince1970: 2000)
+        let newest = Date(timeIntervalSince1970: 3000)
+        sut.conversations = [
+            makeConversation(id: "old", lastMessageAt: old),
+            makeConversation(id: "newest", lastMessageAt: newest),
+            makeConversation(id: "recent", lastMessageAt: recent)
+        ]
+        sut.selectedFilter = .all
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertFalse(sut.groupedConversations.isEmpty)
+        let firstSection = sut.groupedConversations[0].conversations
+        XCTAssertEqual(firstSection[0].id, "newest")
+        XCTAssertEqual(firstSection[1].id, "recent")
+        XCTAssertEqual(firstSection[2].id, "old")
+    }
+
+    // MARK: - Grouping: pinned section appears first
+
+    func test_grouping_pinnedConversationsAppearInPinnedSection() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [
+            makeConversation(id: "normal", isPinned: false),
+            makeConversation(id: "pinned1", isPinned: true),
+            makeConversation(id: "pinned2", isPinned: true)
+        ]
+        sut.selectedFilter = .all
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertGreaterThanOrEqual(sut.groupedConversations.count, 1)
+        let pinnedSection = sut.groupedConversations.first(where: { $0.section.id == "pinned" })
+        XCTAssertNotNil(pinnedSection)
+        XCTAssertEqual(pinnedSection?.conversations.count, 2)
+        let pinnedIds = Set(pinnedSection?.conversations.map(\.id) ?? [])
+        XCTAssertTrue(pinnedIds.contains("pinned1"))
+        XCTAssertTrue(pinnedIds.contains("pinned2"))
+    }
+
+    // MARK: - Grouping: user categories
+
+    func test_grouping_conversationsGroupedByUserCategory() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let workSection = ConversationSection(id: "cat-work", name: "Work", icon: "briefcase.fill", color: "3498DB", order: 0)
+        let familySection = ConversationSection(id: "cat-family", name: "Family", icon: "house.fill", color: "2ECC71", order: 1)
+        sut.userCategories = [workSection, familySection]
+        sut.conversations = [
+            makeConversation(id: "c1", sectionId: "cat-work"),
+            makeConversation(id: "c2", sectionId: "cat-family"),
+            makeConversation(id: "c3")
+        ]
+        sut.selectedFilter = .all
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let sectionIds = sut.groupedConversations.map(\.section.id)
+        XCTAssertTrue(sectionIds.contains("cat-work"))
+        XCTAssertTrue(sectionIds.contains("cat-family"))
+
+        let workConvs = sut.groupedConversations.first(where: { $0.section.id == "cat-work" })?.conversations
+        XCTAssertEqual(workConvs?.count, 1)
+        XCTAssertEqual(workConvs?.first?.id, "c1")
+    }
+
+    // MARK: - Grouping: uncategorized go to "other"
+
+    func test_grouping_uncategorizedConversationsGoToOtherSection() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.userCategories = []
+        sut.conversations = [
+            makeConversation(id: "c1"),
+            makeConversation(id: "c2")
+        ]
+        sut.selectedFilter = .all
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let otherSection = sut.groupedConversations.first(where: { $0.section.id == "other" })
+        XCTAssertNotNil(otherSection)
+        XCTAssertEqual(otherSection?.conversations.count, 2)
+    }
+
+    // MARK: - Grouping: orphaned category conversations go to other
+
+    func test_grouping_orphanedCategoryConversationsGoToOther() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.userCategories = []
+        sut.conversations = [
+            makeConversation(id: "c1", sectionId: "deleted-category-id")
+        ]
+        sut.selectedFilter = .all
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let otherSection = sut.groupedConversations.first(where: { $0.section.id == "other" })
+        XCTAssertNotNil(otherSection)
+        XCTAssertEqual(otherSection?.conversations.count, 1)
+        XCTAssertEqual(otherSection?.conversations.first?.id, "c1")
+    }
+
+    // MARK: - Typing: multiple conversations
+
+    func test_socketTyping_tracksMultipleConversationsIndependently() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+
+        messageSocket.typingStarted.send(TypingEvent(userId: "u1", username: "Alice", conversationId: "conv1"))
+        messageSocket.typingStarted.send(TypingEvent(userId: "u2", username: "Bob", conversationId: "conv2"))
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.typingUsernames["conv1"], "Alice")
+        XCTAssertEqual(sut.typingUsernames["conv2"], "Bob")
+    }
+
+    // MARK: - Typing: stopped clears only that conversation
+
+    func test_socketTypingStopped_clearsOnlyTargetConversation() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.typingUsernames["conv1"] = "Alice"
+        sut.typingUsernames["conv2"] = "Bob"
+
+        messageSocket.typingStopped.send(TypingEvent(userId: "u1", username: "Alice", conversationId: "conv1"))
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertNil(sut.typingUsernames["conv1"])
+        XCTAssertEqual(sut.typingUsernames["conv2"], "Bob")
+    }
+
+    // MARK: - moveToSection
+
+    func test_moveToSection_updatesSectionIdOptimistically() {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [makeConversation(id: "conv1")]
+
+        sut.moveToSection(conversationId: "conv1", sectionId: "cat-work")
+
+        XCTAssertEqual(sut.conversations[0].sectionId, "cat-work")
+    }
+
+    func test_moveToSection_emptySectionIdSetsNil() {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [makeConversation(id: "conv1", sectionId: "cat-work")]
+
+        sut.moveToSection(conversationId: "conv1", sectionId: "")
+
+        XCTAssertNil(sut.conversations[0].sectionId)
+    }
+
+    func test_moveToSection_ignoredForUnknownConversation() {
+        let (sut, _, _, preferenceService, _, _, _) = makeSUT()
+        sut.conversations = [makeConversation(id: "conv1")]
+
+        sut.moveToSection(conversationId: "unknown", sectionId: "cat-work")
+
+        XCTAssertEqual(preferenceService.updateConversationPreferencesCallCount, 0)
+    }
+
+    // MARK: - totalUnreadCount edge cases
+
+    func test_totalUnreadCount_returnsZeroWhenNoConversations() {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+
+        XCTAssertEqual(sut.totalUnreadCount, 0)
+    }
+
+    func test_totalUnreadCount_updatesAfterMarkAsRead() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [
+            makeConversation(id: "c1", unreadCount: 3),
+            makeConversation(id: "c2", unreadCount: 5)
+        ]
+        XCTAssertEqual(sut.totalUnreadCount, 8)
+
+        await sut.markAsRead(conversationId: "c1")
+
+        XCTAssertEqual(sut.totalUnreadCount, 5)
+    }
+
+    // MARK: - Socket: user preferences updated
+
+    func test_socketUserPreferencesUpdated_updatesPinState() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.conversations = [makeConversation(id: "conv1", isPinned: false)]
+
+        messageSocket.userPreferencesUpdated.send(
+            UserPreferencesUpdatedEvent(userId: "user1", category: "conversation", conversationId: "conv1", isPinned: true, isMuted: nil)
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(sut.conversations[0].isPinned)
+    }
+
+    func test_socketUserPreferencesUpdated_updatesMuteState() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.conversations = [makeConversation(id: "conv1", isMuted: false)]
+
+        messageSocket.userPreferencesUpdated.send(
+            UserPreferencesUpdatedEvent(userId: "user1", category: "conversation", conversationId: "conv1", isPinned: nil, isMuted: true)
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(sut.conversations[0].isMuted)
+    }
+
+    func test_socketUserPreferencesUpdated_ignoresUnknownConversation() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.conversations = [makeConversation(id: "conv1", isPinned: false)]
+
+        messageSocket.userPreferencesUpdated.send(
+            UserPreferencesUpdatedEvent(userId: "user1", category: "conversation", conversationId: "unknown", isPinned: true, isMuted: nil)
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertFalse(sut.conversations[0].isPinned)
+    }
+
+    // MARK: - markAsUnread: preserves existing unread count
+
+    func test_markAsUnread_preservesExistingNonZeroUnreadCount() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [makeConversation(id: "conv1", unreadCount: 5)]
+
+        await sut.markAsUnread(conversationId: "conv1")
+
+        XCTAssertEqual(sut.conversations[0].unreadCount, 5)
+    }
+
+    // MARK: - unarchiveConversation: rollback on failure
+
+    func test_unarchiveConversation_rollsBackOnFailure() async {
+        let preferenceService = MockPreferenceService()
+        preferenceService.updateConversationPreferencesResult = .failure(NSError(domain: "test", code: 500))
+        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
+        sut.conversations = [makeConversation(id: "conv1", isActive: false)]
+
+        await sut.unarchiveConversation(conversationId: "conv1")
+
+        XCTAssertFalse(sut.conversations[0].isActive, "Should rollback to inactive on failure")
+    }
+
+    // MARK: - loadConversations: concurrent guard
+
+    func test_loadConversations_guardsPreviousFetchInProgress() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.invalidateCache()
+
+        async let first: () = sut.loadConversations()
+        async let second: () = sut.loadConversations()
+        _ = await (first, second)
+
+        XCTAssertFalse(sut.isLoading)
+    }
+
+    // MARK: - invalidateCache
+
+    func test_invalidateCache_allowsNextLoadToFetch() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [makeConversation(id: "c1")]
+
+        sut.invalidateCache()
+
+        await sut.loadConversations()
+
+        XCTAssertFalse(sut.isLoading)
     }
 }

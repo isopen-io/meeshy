@@ -34,11 +34,13 @@ public enum MessageTextRenderer {
         color: Color,
         mentionColor: Color? = nil,
         accentColor: Color? = nil,
-        mentionDisplayNames: [String: String]? = nil
+        mentionDisplayNames: [String: String]? = nil,
+        highlightTerm: String? = nil
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
         let segments = parse(text, mentionDisplayNames: mentionDisplayNames)
-        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor, mentionDisplayNames: mentionDisplayNames)
+        let ranges = highlightTerm.flatMap { highlightRanges(in: text, term: $0) } ?? []
+        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor, mentionDisplayNames: mentionDisplayNames, highlightRanges: ranges, fullText: text)
     }
 
     /// Extract all URLs found in the text (for link preview / OG cards).
@@ -71,6 +73,25 @@ public enum MessageTextRenderer {
         }
 
         return urls
+    }
+
+    // MARK: - Highlight Ranges
+
+    /// Find all case-insensitive occurrences of `term` in `text`.
+    /// Returns NSRanges suitable for AttributedString highlighting.
+    public static func highlightRanges(in text: String, term: String) -> [NSRange] {
+        guard !term.isEmpty else { return [] }
+        let ns = text as NSString
+        let lowered = text.lowercased()
+        let termLower = term.lowercased()
+        var ranges: [NSRange] = []
+        var searchStart = lowered.startIndex
+        while let range = lowered.range(of: termLower, range: searchStart..<lowered.endIndex) {
+            let nsRange = NSRange(range, in: text)
+            ranges.append(nsRange)
+            searchStart = range.upperBound
+        }
+        return ranges
     }
 
     // MARK: - Segment Model
@@ -254,9 +275,12 @@ public enum MessageTextRenderer {
         color: Color,
         mentionColor: Color?,
         accentColor: Color?,
-        mentionDisplayNames: [String: String]?
+        mentionDisplayNames: [String: String]?,
+        highlightRanges: [NSRange] = [],
+        fullText: String = ""
     ) -> Text {
         var result = AttributedString()
+        var charOffset = 0
 
         for segment in segments {
             switch segment {
@@ -271,6 +295,8 @@ public enum MessageTextRenderer {
                 attr.foregroundColor = color
                 if styles.contains(.strikethrough) { attr.strikethroughStyle = .single }
                 if styles.contains(.underline) { attr.underlineStyle = .single }
+                applyHighlight(to: &attr, segmentText: str, charOffset: charOffset, ranges: highlightRanges)
+                charOffset += str.count
                 result.append(attr)
 
             case .mentionLink(let display, let url, let username):
@@ -282,6 +308,7 @@ public enum MessageTextRenderer {
                 if let mentionColor {
                     attr.foregroundColor = mentionColor
                 }
+                charOffset += display.count
                 result.append(attr)
 
             case .meeshyTokenLink(let display, let url, _):
@@ -292,6 +319,7 @@ public enum MessageTextRenderer {
                 if let accentColor {
                     attr.foregroundColor = accentColor
                 }
+                charOffset += display.count
                 result.append(attr)
 
             case .urlLink(let display, let url):
@@ -302,10 +330,32 @@ public enum MessageTextRenderer {
                 if let accentColor {
                     attr.foregroundColor = accentColor
                 }
+                charOffset += display.count
                 result.append(attr)
             }
         }
 
         return Text(result)
+    }
+
+    // MARK: - Highlight Application
+
+    private static func applyHighlight(
+        to attr: inout AttributedString,
+        segmentText: String,
+        charOffset: Int,
+        ranges: [NSRange]
+    ) {
+        guard !ranges.isEmpty else { return }
+        let segmentRange = NSRange(location: charOffset, length: segmentText.count)
+        for hlRange in ranges {
+            let intersection = NSIntersectionRange(segmentRange, hlRange)
+            guard intersection.length > 0 else { continue }
+            let localStart = intersection.location - charOffset
+            let localNS = NSRange(location: localStart, length: intersection.length)
+            guard let swiftRange = Range(localNS, in: segmentText) else { continue }
+            let attrRange = attr.index(attr.startIndex, offsetByCharacters: localStart)..<attr.index(attr.startIndex, offsetByCharacters: localStart + intersection.length)
+            attr[attrRange].backgroundColor = Color.yellow.opacity(0.4)
+        }
     }
 }

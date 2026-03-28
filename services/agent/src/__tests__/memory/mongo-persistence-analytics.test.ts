@@ -86,9 +86,11 @@ describe('MongoPersistence.getSummaryRecord()', () => {
 
 describe('MongoPersistence.updateAnalytics()', () => {
   it('calls upsert with atomic increment for messagesSent and totalWordsSent', async () => {
+    const existing = makeAnalyticRecord({ messagesSent: 10, totalWordsSent: 120, avgConfidence: 0.8 });
     const upserted = makeAnalyticRecord({ messagesSent: 13, totalWordsSent: 165 });
     const prisma = {
       agentAnalytic: {
+        findUnique: jest.fn().mockResolvedValue(existing),
         upsert: jest.fn().mockResolvedValue(upserted),
       },
     } as any;
@@ -112,7 +114,7 @@ describe('MongoPersistence.updateAnalytics()', () => {
       update: expect.objectContaining({
         messagesSent: { increment: 3 },
         totalWordsSent: { increment: 45 },
-        avgConfidence: 0.6,
+        avgConfidence: expect.closeTo(0.7538, 3),
         lastResponseAt: expect.any(Date),
       }),
     });
@@ -123,6 +125,7 @@ describe('MongoPersistence.updateAnalytics()', () => {
     const created = makeAnalyticRecord({ messagesSent: 5, totalWordsSent: 60, avgConfidence: 0.9 });
     const prisma = {
       agentAnalytic: {
+        findUnique: jest.fn().mockResolvedValue(null),
         upsert: jest.fn().mockResolvedValue(created),
       },
     } as any;

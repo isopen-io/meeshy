@@ -351,6 +351,8 @@ struct SettingsView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            .accessibilityLabel("Gerer le profil vocal")
+            .accessibilityHint("Ouvre la gestion du profil vocal")
 
             Button {
                 HapticFeedback.light()
@@ -362,6 +364,8 @@ struct SettingsView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            .accessibilityLabel("Creer un profil vocal")
+            .accessibilityHint("Lance l'assistant de creation de profil vocal")
         }
         .sheet(isPresented: $showVoiceProfileWizard) {
             VoiceProfileWizardView(accentColor: "A855F7")
@@ -382,11 +386,14 @@ struct SettingsView: View {
                 ))
                     .labelsHidden()
                     .tint(Color(hex: accentColor))
+                    .accessibilityLabel("Transcription automatique")
+                    .accessibilityValue(prefs.audio.autoTranscribeIncoming ? "active" : "desactive")
             }
 
             settingsRow(icon: "info.circle", title: "Apple Speech (on-device)", color: "6B7280") {
                 EmptyView()
             }
+            .accessibilityLabel("Moteur de transcription: Apple Speech sur l'appareil")
         }
     }
 
@@ -404,6 +411,8 @@ struct SettingsView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            .accessibilityLabel("Statistiques")
+            .accessibilityHint("Ouvre les statistiques d'utilisation")
 
             Button {
                 HapticFeedback.light()
@@ -415,6 +424,8 @@ struct SettingsView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            .accessibilityLabel("Parrainage")
+            .accessibilityHint("Ouvre le programme de parrainage")
         }
     }
 

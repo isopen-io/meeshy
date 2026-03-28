@@ -57,10 +57,15 @@ struct FeedPostCard: View {
                     HStack(spacing: 4) {
                         Image(systemName: "translate")
                             .font(.system(size: 11))
+                            .accessibilityHidden(true)
                         Text("Traduit depuis \(Locale.current.localizedString(forLanguageCode: post.originalLanguage ?? "?") ?? post.originalLanguage ?? "?")")
                             .font(.system(size: 11))
                     }
                     .foregroundColor(theme.textMuted)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Traduit depuis \(Locale.current.localizedString(forLanguageCode: post.originalLanguage ?? "?") ?? post.originalLanguage ?? "?")")
+                    .accessibilityHint("Affiche les options de traduction")
+                    .accessibilityAddTraits(.isButton)
                     .onTapGesture {
                         HapticFeedback.light()
                         showTranslationSheet = true
@@ -153,6 +158,7 @@ struct FeedPostCard: View {
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(.system(size: 10))
+                                .accessibilityHidden(true)
                             Text("a republié")
                                 .font(.system(size: 11))
                         }
@@ -262,10 +268,13 @@ struct FeedPostCard: View {
                     HStack(spacing: 4) {
                         Image(systemName: "heart.fill")
                             .font(.system(size: 10))
+                            .accessibilityHidden(true)
                         Text("\(repost.likes)")
                             .font(.system(size: 11, weight: .medium))
                     }
                     .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(repost.likes) j'aime")
                 }
             }
             .padding(12)
@@ -279,6 +288,8 @@ struct FeedPostCard: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel("Publication originale de \(repost.author)")
+        .accessibilityHint("Ouvre la publication originale")
     }
 
     // MARK: - Media Preview
@@ -445,6 +456,7 @@ struct FeedPostCard: View {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(theme.textMuted)
+                            .accessibilityHidden(true)
                     }
                     .padding(.top, 4)
                 }
@@ -452,6 +464,8 @@ struct FeedPostCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel("Voir les \(post.comments.count) commentaires")
+        .accessibilityHint("Ouvre la liste des commentaires")
     }
 
     // MARK: - Top Comment Row

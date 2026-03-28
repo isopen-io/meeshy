@@ -17,7 +17,8 @@
     "baseUrl": ".",
     "paths": {
       "@meeshy/shared": ["../../packages/shared/dist/types/index.d.ts"],
-      "@meeshy/shared/*": ["../../packages/shared/dist/*"]
+      "@meeshy/shared/prisma/client": ["../../packages/shared/prisma/client", "./src/__mocks__/prisma-client"],
+      "@meeshy/shared/*": ["../../packages/shared/dist/*", "../../packages/shared/*"]
     }
   },
   "include": ["src/**/*"],

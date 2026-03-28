@@ -71,22 +71,23 @@ export class MongoPersistence {
     const roles = await this.prisma.agentUserRole.findMany({ where: { conversationId } });
     if (roles.length === 0) return [];
 
-    const userIds = roles.map((r) => r.userId);
+    const userIds = roles.map((r: { userId: string }) => r.userId);
     const users = await this.prisma.user.findMany({
       where: { id: { in: userIds } },
       select: { id: true, displayName: true, username: true, systemLanguage: true },
     });
-    const userMap = new Map(users.map((u) => [u.id, { displayName: u.displayName ?? u.username ?? u.id, username: u.username ?? u.id, systemLanguage: u.systemLanguage }]));
+    type UserInfo = { displayName: string; username: string; systemLanguage: string | null };
+    const userMap: Map<string, UserInfo> = new Map(users.map((u: { id: string; displayName: string | null; username: string | null; systemLanguage: string | null }) => [u.id, { displayName: u.displayName ?? u.username ?? u.id, username: u.username ?? u.id, systemLanguage: u.systemLanguage }]));
 
-    return roles.map((r) => ({
-      userId: r.userId,
-      displayName: userMap.get(r.userId)?.displayName ?? r.userId,
-      username: userMap.get(r.userId)?.username ?? r.userId,
-      systemLanguage: userMap.get(r.userId)?.systemLanguage ?? 'fr',
+    return roles.map((r: Record<string, any>) => ({
+      userId: r.userId as string,
+      displayName: userMap.get(r.userId as string)?.displayName ?? r.userId,
+      username: userMap.get(r.userId as string)?.username ?? r.userId,
+      systemLanguage: userMap.get(r.userId as string)?.systemLanguage ?? 'fr',
       source: 'manual' as const,
       role: {
-        userId: r.userId,
-        displayName: userMap.get(r.userId)?.displayName ?? r.userId,
+        userId: r.userId as string,
+        displayName: userMap.get(r.userId as string)?.displayName ?? r.userId,
         origin: r.origin as ToneProfile['origin'],
         archetypeId: r.archetypeId ?? undefined,
         personaSummary: r.personaSummary,
@@ -124,8 +125,8 @@ export class MongoPersistence {
       },
     });
     return participants
-      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
-      .map((p) => p.user);
+      .filter((p: Record<string, unknown>): p is Record<string, unknown> & { user: NonNullable<Record<string, unknown>> } => p.user != null)
+      .map((p: { user: Record<string, unknown> }) => p.user);
   }
 
   async getPotentialControlledUsers(
@@ -140,7 +141,7 @@ export class MongoPersistence {
       where: { conversationId },
       select: { userId: true },
     });
-    const existingRoleUserIds = existingRoles.map((r) => r.userId);
+    const existingRoleUserIds = existingRoles.map((r: { userId: string }) => r.userId);
 
     const participants = await this.prisma.participant.findMany({
       where: {
@@ -166,8 +167,8 @@ export class MongoPersistence {
     });
 
     return participants
-      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
-      .map((p) => p.user);
+      .filter((p: Record<string, unknown>): p is Record<string, unknown> & { user: NonNullable<Record<string, unknown>> } => p.user != null)
+      .map((p: { user: Record<string, unknown> }) => p.user);
   }
 
   async getLeastActiveParticipants(
@@ -198,8 +199,8 @@ export class MongoPersistence {
     });
 
     return participants
-      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
-      .map((p) => p.user);
+      .filter((p: Record<string, unknown>): p is Record<string, unknown> & { user: NonNullable<Record<string, unknown>> } => p.user != null)
+      .map((p: { user: Record<string, unknown> }) => p.user);
   }
 
   async getGlobalProfile(userId: string) {
@@ -247,10 +248,10 @@ export class MongoPersistence {
       }),
     ]);
 
-    const seen = new Set(configuredConversations.map((c) => c.id));
+    const seen = new Set(configuredConversations.map((c: { id: string }) => c.id));
     const merged = [
       ...configuredConversations,
-      ...freshConversations.filter((c) => !seen.has(c.id)),
+      ...freshConversations.filter((c: { id: string }) => !seen.has(c.id)),
     ];
 
     return maxConversations > 0 ? merged.slice(0, maxConversations) : merged;

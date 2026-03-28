@@ -859,7 +859,7 @@ struct UniversalComposerBar: View {
             )
         }
         .accessibilityLabel(isActive
-                            ? "Mode ephemere actif: \(ephemeralDuration.wrappedValue!.displayLabel)"
+                            ? "Mode ephemere actif: \(ephemeralDuration.wrappedValue?.displayLabel ?? "")"
                             : "Activer le mode ephemere")
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }

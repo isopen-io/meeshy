@@ -38,6 +38,7 @@ struct ThemedMessageBubble: View {
     /// Vrai uniquement pour le dernier message reçu (non envoyé par moi) — limite l'icône réaction
     var isLastReceivedMessage: Bool = false
     var mentionDisplayNames: [String: String] = [:]
+    var highlightSearchTerm: String? = nil
 
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
@@ -511,6 +512,10 @@ struct ThemedMessageBubble: View {
 
                                     if !message.content.isEmpty {
                                         expandableTextView
+                                            .onLongPressGesture {
+                                                HapticFeedback.medium()
+                                                onShowTranslationDetail?(message.id)
+                                            }
                                     }
 
                                     secondaryContentView
@@ -709,7 +714,7 @@ struct ThemedMessageBubble: View {
         if needsTruncation {
             let truncated = Self.truncateAtWord(content, limit: Self.textTruncateLimit)
             VStack(alignment: .leading, spacing: 4) {
-                (MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames)
+                (MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightSearchTerm)
                 + timestampSpacerText)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
@@ -728,7 +733,7 @@ struct ThemedMessageBubble: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                (MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames)
+                (MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightSearchTerm)
                 + timestampSpacerText)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
