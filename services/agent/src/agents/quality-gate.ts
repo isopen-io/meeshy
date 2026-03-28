@@ -7,11 +7,20 @@ import { contentHash } from '../utils/content-hash';
 export const AI_REVEAL_PATTERNS = [
   /en tant qu['']ia/i,
   /je suis un(e)? (agent|bot|ia|intelligence artificielle|assistant ia)/i,
-  /as an ai/i,
-  /i am an ai/i,
-  /i'm an ai/i,
+  /as an ai\b/i,
+  /i am an ai\b/i,
+  /i'm an ai\b/i,
   /comme ia je/i,
   /en tant qu['']assistant ia/i,
+  /as a language model/i,
+  /as an ai (assistant|model)/i,
+  /i'm a (virtual assistant|chatbot)/i,
+  /i'm designed to\b/i,
+  /i'm trained to\b/i,
+  /my programming (tells|says|requires)/i,
+  /en tant que mod[eè]le/i,
+  /como (una? )?inteligencia artificial/i,
+  /als k[iü]nstliche intelligenz/i,
 ];
 
 const GREETING_PATTERNS = [
@@ -155,22 +164,33 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolea
           const response = await llm.chat({
             messages: [{ role: 'user', content: checkPrompt }],
             temperature: 0.1,
-            maxTokens: 128,
+            maxTokens: 192,
           });
 
-          const result = parseJsonLlm<{ coherent: boolean; score: number; correctLanguage?: boolean; reason: string }>(response.content);
+          let result: { coherent: boolean; score: number; correctLanguage?: boolean; reason: string };
+          try {
+            result = parseJsonLlm<typeof result>(response.content);
+          } catch {
+            console.warn(`[QualityGate] Failed to parse LLM response for ${userId}, allowing message through`);
+            seenContents.add(contentKey);
+            validatedMessages.push(msg);
+            continue;
+          }
 
           if (result.correctLanguage === false) {
             console.warn(`[QualityGate] Wrong language for user ${userId} (expected ${expectedLanguage}): ${result.reason}`);
             continue;
           }
 
-          if (result.score < minScore) {
-            console.warn(`[QualityGate] Low score (${result.score}) for user ${userId}: ${result.reason}`);
+          const score = Math.max(0, Math.min(1, result.score ?? 0));
+          if (score < minScore) {
+            console.warn(`[QualityGate] Low score (${score}) for user ${userId}: ${result.reason}`);
             continue;
           }
         } catch (error) {
-          console.error(`[QualityGate] Error validating message for ${userId}:`, error);
+          console.warn(`[QualityGate] LLM error for ${userId}, allowing message through:`, error instanceof Error ? error.message : 'unknown');
+          seenContents.add(contentKey);
+          validatedMessages.push(msg);
           continue;
         }
       }

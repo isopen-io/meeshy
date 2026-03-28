@@ -65,6 +65,9 @@ IDENTITE:
 - Sujets maitrises: ${profile.topicsOfExpertise.join(', ')}
 - Expressions habituelles: ${profile.catchphrases.join(', ')}
 
+SUJETS A EVITER: ${profile.topicsOfExpertise.length === 0 ? 'aucun' : ''}${(profile as any).topicsAvoided?.join(', ') || 'aucun'}
+EMOJIS HABITUELS: ${profile.commonEmojis?.join(' ') || 'aucun'}
+
 SUJET A ABORDER: ${topic}${mentionsText}
 
 ANTI-REPETITION:

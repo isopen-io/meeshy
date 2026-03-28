@@ -374,17 +374,17 @@ export function createStrategistNode(llm: LlmProvider) {
       const messageIds = new Set(state.messages.map((m) => m.id));
 
       // CODE-LEVEL USER ROTATION: If the LLM picked the same user as last cycle
-      // and there are other available users, rewrite the first intervention to use a different user.
+      // and there are other available users, rewrite interventions to use different users (sequential cycling).
       if (state.lastAgentUserId && state.controlledUsers.length > 1 && parsed.interventions) {
-        const otherUsers = state.controlledUsers.filter((u) => u.userId !== state.lastAgentUserId);
+        const otherUsers = shuffleArray(state.controlledUsers.filter((u) => u.userId !== state.lastAgentUserId));
         if (otherUsers.length > 0) {
           const messageInterventions = (parsed.interventions as Array<Record<string, unknown>>).filter(
             (i) => i.type === 'message' && i.asUserId === state.lastAgentUserId,
           );
-          for (const intervention of messageInterventions) {
-            const replacement = otherUsers[Math.floor(Math.random() * otherUsers.length)];
+          for (let idx = 0; idx < messageInterventions.length; idx++) {
+            const replacement = otherUsers[idx % otherUsers.length];
             console.log(`[Strategist] Rotating user: ${state.lastAgentUserId} → ${replacement.userId} (${replacement.displayName})`);
-            intervention.asUserId = replacement.userId;
+            messageInterventions[idx].asUserId = replacement.userId;
           }
         }
       }

@@ -292,6 +292,12 @@ export class MongoPersistence {
   }
 
   async updateAnalytics(conversationId: string, data: { messagesSent: number; wordsSent: number; avgConfidence: number }) {
+    const existing = await this.prisma.agentAnalytic.findUnique({ where: { conversationId } });
+    const newTotal = (existing?.messagesSent ?? 0) + data.messagesSent;
+    const blendedConfidence = existing
+      ? (existing.avgConfidence * existing.messagesSent + data.avgConfidence * data.messagesSent) / Math.max(1, newTotal)
+      : data.avgConfidence;
+
     return this.prisma.agentAnalytic.upsert({
       where: { conversationId },
       create: {
@@ -304,7 +310,7 @@ export class MongoPersistence {
       update: {
         messagesSent: { increment: data.messagesSent },
         totalWordsSent: { increment: data.wordsSent },
-        avgConfidence: data.avgConfidence,
+        avgConfidence: blendedConfidence,
         lastResponseAt: new Date(),
       },
     });

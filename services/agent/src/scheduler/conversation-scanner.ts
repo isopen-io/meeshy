@@ -186,7 +186,10 @@ export class ConversationScanner {
       this.stateManager.getAgentHistory(conversationId),
       this.stateManager.getTodayActiveUserIds(conversationId),
       this.stateManager.getLastAgentUserId(conversationId),
-      this.persistence.getAgentMessageEngagement(conversationId, 48).catch(() => []),
+      this.persistence.getAgentMessageEngagement(conversationId, 48).catch((err) => {
+        console.warn(`[Scanner] Failed to fetch engagement data for conv=${conversationId}:`, err instanceof Error ? err.message : 'unknown');
+        return [];
+      }),
     ]);
 
     let controlledUsers = manualControlledUsers.map((u) => {
@@ -326,12 +329,19 @@ export class ConversationScanner {
     const day = new Date().getUTCDay();
     const maxUsersToday = day === 0 || day === 6 ? conv.weekendMaxUsers : conv.weekdayMaxUsers;
 
+    if (todayStats.usersActive >= maxUsersToday) {
+      console.log(`[Scanner] User budget exhausted for conv=${conversationId}: ${todayStats.usersActive}/${maxUsersToday} users today`);
+      return false;
+    }
+
     // Extract recent topic categories from agent history to enforce diversity at code level
     const recentTopicCategories = extractRecentTopicCategories(agentHistory);
 
     console.log(`[Scanner] Processing conv=${conversationId} activity=${activity.activityScore.toFixed(2)} msgs=${effectiveMessages.length} users=${controlledUsers.length} lastUser=${lastAgentUserId ?? 'none'} recentTopics=${recentTopicCategories.length}`);
 
-    const result = await this.graph.invoke({
+    let result: Record<string, unknown>;
+    try {
+      result = await this.graph.invoke({
       conversationId,
       messages: effectiveMessages,
       summary,
@@ -371,6 +381,10 @@ export class ConversationScanner {
       recentTopicCategories,
       engagementData,
     });
+    } catch (graphError) {
+      console.error(`[Scanner] Graph invocation failed for conv=${conversationId}:`, graphError);
+      return false;
+    }
 
     if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);
     if (result.toneProfiles) await this.stateManager.setToneProfiles(conversationId, result.toneProfiles as Record<string, any>);
