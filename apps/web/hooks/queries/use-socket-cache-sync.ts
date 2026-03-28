@@ -181,7 +181,13 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               ...old,
               pages: old.pages.map((page) => ({
                 ...page,
-                messages: page.messages.filter((m) => m.id !== messageId),
+                messages: page.messages
+                  .filter((m) => m.id !== messageId)
+                  .map((m) =>
+                    m.replyToId === messageId
+                      ? { ...m, replyToId: undefined, replyTo: undefined }
+                      : m
+                  ),
               })),
             };
           }

@@ -125,16 +125,15 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const mergeParticipants = useUserStore(state => state.mergeParticipants);
   useEffect(() => {
     if (!conversations.length) return;
-    const users: any[] = [];
+    const users: Array<{ id: string; [key: string]: unknown }> = [];
     for (const conv of conversations) {
-      const participants = (conv as any).participants;
-      if (!Array.isArray(participants)) continue;
-      for (const p of participants) {
-        const u = p.user || p;
-        if (u?.id) users.push(u);
+      if (!Array.isArray(conv.participants)) continue;
+      for (const p of conv.participants) {
+        const u = p.user ?? p;
+        if (u?.id) users.push(u as { id: string; [key: string]: unknown });
       }
     }
-    if (users.length > 0) mergeParticipants(users);
+    if (users.length > 0) mergeParticipants(users as Parameters<typeof mergeParticipants>[0]);
   }, [conversations, mergeParticipants]);
 
   // Derived stable value for effect deps - avoids re-runs when conversation objects change but IDs don't (#10, #11)
