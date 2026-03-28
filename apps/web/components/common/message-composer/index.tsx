@@ -59,6 +59,7 @@ interface MessageComposerProps {
   token?: string;
   userRole?: string;
   conversationId?: string;
+  permissionHints?: string[];
 }
 
 /**
@@ -381,6 +382,20 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                 remainingSlots={Math.max(0, 50 - (composerState.selectedFiles.length + composerState.uploadedAttachments.length))}
               />
             ) : null}
+          </div>
+        ) : null}
+
+        {/* Permission hints for anonymous users */}
+        {props.permissionHints && props.permissionHints.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5 px-1 mb-1.5">
+            {props.permissionHints.map((hint) => (
+              <span
+                key={hint}
+                className="inline-flex items-center text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full"
+              >
+                {hint}
+              </span>
+            ))}
           </div>
         ) : null}
 
