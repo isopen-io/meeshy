@@ -12,6 +12,7 @@ export interface PostComposerProps {
     content: string;
     type: PostType;
     visibility: PostVisibility;
+    visibilityUserIds?: string[];
     mediaIds?: string[];
   }) => void;
   disabled?: boolean;
@@ -21,6 +22,8 @@ export interface PostComposerProps {
 const VISIBILITY_OPTIONS: { value: PostVisibility; label: string; icon: string }[] = [
   { value: 'PUBLIC', label: 'Public', icon: '🌍' },
   { value: 'FRIENDS', label: 'Friends', icon: '👥' },
+  { value: 'EXCEPT', label: 'Friends except...', icon: '🚫' },
+  { value: 'ONLY', label: 'Only...', icon: '🎯' },
   { value: 'PRIVATE', label: 'Private', icon: '🔒' },
 ];
 
@@ -122,7 +125,7 @@ function PostComposer({
                     </button>
 
                     {showVisibilityPicker && (
-                      <div className="absolute bottom-full left-0 mb-1 bg-[var(--gp-surface)] border border-[var(--gp-border)] rounded-xl shadow-lg z-20 min-w-[140px]">
+                      <div className="absolute bottom-full left-0 mb-1 bg-[var(--gp-surface)] border border-[var(--gp-border)] rounded-xl shadow-lg z-20 min-w-[160px]">
                         {VISIBILITY_OPTIONS.map((opt) => (
                           <button
                             key={opt.value}

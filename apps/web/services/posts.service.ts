@@ -98,6 +98,11 @@ export const postsService = {
     return unwrap(response);
   },
 
+  async getStatusesDiscover(filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
+    const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/feed/statuses/discover${buildQuery(filters)}`);
+    return unwrap(response);
+  },
+
   async getUserPosts(userId: string, filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
     const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/user/${userId}${buildQuery(filters)}`);
     return unwrap(response);

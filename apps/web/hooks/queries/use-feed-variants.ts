@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { postsService } from '@/services/posts.service';
 
@@ -16,6 +16,27 @@ export function useStatusesQuery(options: UseStatusesQueryOptions = {}) {
     queryKey: queryKeys.posts.statuses(),
     queryFn: ({ pageParam }) =>
       postsService.getStatuses({
+        cursor: pageParam as string | undefined,
+        limit,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.meta?.nextCursor ?? undefined,
+    enabled,
+  });
+}
+
+interface UseStatusesDiscoverQueryOptions {
+  limit?: number;
+  enabled?: boolean;
+}
+
+export function useStatusesDiscoverQuery(options: UseStatusesDiscoverQueryOptions = {}) {
+  const { limit = 20, enabled = true } = options;
+
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.posts.statuses(), 'discover'] as const,
+    queryFn: ({ pageParam }) =>
+      postsService.getStatusesDiscover({
         cursor: pageParam as string | undefined,
         limit,
       }),
@@ -65,5 +86,21 @@ export function useBookmarksQuery(options: UseBookmarksQueryOptions = {}) {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.meta?.nextCursor ?? undefined,
     enabled,
+  });
+}
+
+interface UsePostViewersQueryOptions {
+  postId: string;
+  limit?: number;
+  enabled?: boolean;
+}
+
+export function usePostViewersQuery(options: UsePostViewersQueryOptions) {
+  const { postId, limit = 50, enabled = true } = options;
+
+  return useQuery({
+    queryKey: [...queryKeys.posts.detail(postId), 'viewers'] as const,
+    queryFn: () => postsService.getPostViews(postId, limit),
+    enabled: !!postId && enabled,
   });
 }

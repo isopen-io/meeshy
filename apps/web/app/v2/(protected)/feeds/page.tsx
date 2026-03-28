@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Button, useToast, PageHeader, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
 import type { StatusItem, StoryVisibility } from '@/components/v2';
 import { PostComposer } from '@/components/v2/PostComposer';
+import { PostEditor } from '@/components/v2/PostEditor';
+import { RepostModal } from '@/components/v2/RepostModal';
 import { Skeleton } from '@/components/v2/Skeleton';
 
 // Stories (dedicated hooks from stories feature)
@@ -15,7 +17,7 @@ import { useStoryPreferences } from '@/stores/user-preferences-store';
 
 // Posts (real API integration)
 import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
-import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation } from '@/hooks/queries/use-post-mutations';
+import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 
@@ -115,6 +117,12 @@ export default function V2FeedsPage() {
   const translateMutation = useTranslatePostMutation();
   const deletePostMutation = useDeletePostMutation();
   const pinPostMutation = usePinPostMutation();
+  const repostMutation = useRepostMutation();
+  const updatePostMutation = useUpdatePostMutation();
+
+  // Edit + Repost modals
+  const [editingPost, setEditingPost] = useState<{ id: string; content: string; visibility: string } | null>(null);
+  const [repostingPost, setRepostingPost] = useState<{ id: string; author?: string; content?: string } | null>(null);
 
   // Local interaction state
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
@@ -307,6 +315,49 @@ export default function V2FeedsPage() {
     pinPostMutation.mutate({ postId, pin: !isPinned });
   }, [pinPostMutation]);
 
+  const handleEditPost = useCallback((postId: string) => {
+    const post = posts.find((p) => p.id === postId);
+    if (post) setEditingPost({ id: post.id, content: post.content ?? '', visibility: post.visibility });
+  }, [posts]);
+
+  const handleSaveEdit = useCallback((data: { content: string; visibility: string }) => {
+    if (!editingPost) return;
+    updatePostMutation.mutate(
+      { postId: editingPost.id, data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' } },
+      {
+        onSuccess: () => { setEditingPost(null); showToast('Post modifi\u00e9', 'success'); },
+        onError: () => showToast('Erreur', 'error'),
+      },
+    );
+  }, [editingPost, updatePostMutation, showToast]);
+
+  const handleRepostOpen = useCallback((postId: string) => {
+    const post = posts.find((p) => p.id === postId);
+    if (post) setRepostingPost({ id: post.id, author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined });
+  }, [posts]);
+
+  const handleRepost = useCallback(() => {
+    if (!repostingPost) return;
+    repostMutation.mutate(
+      { postId: repostingPost.id, data: { isQuote: false } },
+      {
+        onSuccess: () => { setRepostingPost(null); showToast('Repost\u00e9 !', 'success'); },
+        onError: () => showToast('Erreur', 'error'),
+      },
+    );
+  }, [repostingPost, repostMutation, showToast]);
+
+  const handleQuote = useCallback((content: string) => {
+    if (!repostingPost) return;
+    repostMutation.mutate(
+      { postId: repostingPost.id, data: { content, isQuote: true } },
+      {
+        onSuccess: () => { setRepostingPost(null); showToast('Cit\u00e9 !', 'success'); },
+        onError: () => showToast('Erreur', 'error'),
+      },
+    );
+  }, [repostingPost, repostMutation, showToast]);
+
   const handleDismissNewPosts = useCallback(() => {
     setNewPostsCount(0);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -430,6 +481,8 @@ export default function V2FeedsPage() {
                   onShare={() => handleShare(post.id)}
                   onBookmark={() => handleBookmark(post.id)}
                   onTranslate={() => handleTranslate(post.id)}
+                  onRepost={() => handleRepostOpen(post.id)}
+                  onEdit={() => handleEditPost(post.id)}
                   onDelete={() => handleDeletePost(post.id)}
                   onPin={() => handlePinPost(post.id, post.isPinned)}
                   onClick={() => router.push(`/v2/feeds/post/${post.id}`)}
@@ -484,6 +537,31 @@ export default function V2FeedsPage() {
         onClose={() => setStatusComposerOpen(false)}
         onPublish={handleStatusPublish}
       />
+
+      {/* Post Editor */}
+      {editingPost && (
+        <PostEditor
+          open
+          initialContent={editingPost.content}
+          initialVisibility={editingPost.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE'}
+          onSave={handleSaveEdit}
+          onClose={() => setEditingPost(null)}
+          saving={updatePostMutation.isPending}
+        />
+      )}
+
+      {/* Repost Modal */}
+      {repostingPost && (
+        <RepostModal
+          open
+          originalAuthor={repostingPost.author}
+          originalContent={repostingPost.content}
+          onRepost={handleRepost}
+          onQuote={handleQuote}
+          onClose={() => setRepostingPost(null)}
+          saving={repostMutation.isPending}
+        />
+      )}
     </div>
   );
 }
