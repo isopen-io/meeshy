@@ -33,6 +33,8 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
+import { validateSocketEvent } from '../../middleware/validation.js';
+import { SocketMessageSendSchema, SocketMessageSendWithAttachmentsSchema } from '../../validation/socket-event-schemas.js';
 
 
 export interface MessageHandlerDependencies {
@@ -92,6 +94,13 @@ export class MessageHandler {
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
     try {
+      const schemaValidation = validateSocketEvent(SocketMessageSendSchema, data);
+      if (!schemaValidation.success) {
+        this._sendError(callback, schemaValidation.error, socket);
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const userContext = this._getUserContext(socket);
       if (!userContext) {
         this._sendError(callback, 'User not authenticated', socket);
@@ -114,18 +123,15 @@ export class MessageHandler {
         return;
       }
 
-      // Validation longueur du message
-      const validation = validateMessageLength(data.content);
+      const validation = validateMessageLength(validated.content);
       if (!validation.isValid && !data.encryptedPayload) {
         this._sendError(callback, validation.error || 'Message invalide', socket);
         return;
       }
 
-      // Vérifier si l'expéditeur est bloqué par un membre de la conversation (DM uniquement)
-      // For registered users, check via userId; for anonymous, skip block check
       if (!isAnonymous && userId) {
         const conversation = await this.prisma.conversation.findUnique({
-          where: { id: data.conversationId },
+          where: { id: validated.conversationId },
           select: {
             type: true,
             participants: {
@@ -154,20 +160,18 @@ export class MessageHandler {
       // Mettre à jour l'activité
       this.statusService.updateLastSeen(userId || participantId, isAnonymous);
 
-      // Resolve participantId for this conversation
-      const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, data.conversationId, isAnonymous);
+      const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, validated.conversationId, isAnonymous);
       if (!resolvedParticipantId) {
         this._sendError(callback, 'Not a participant in this conversation', socket);
         return;
       }
 
-      // Créer la requête de message
       const messageRequest: MessageRequest = {
-        conversationId: data.conversationId,
-        content: data.content,
-        originalLanguage: data.originalLanguage,
-        messageType: data.messageType || 'text',
-        replyToId: data.replyToId,
+        conversationId: validated.conversationId,
+        content: validated.content,
+        originalLanguage: validated.originalLanguage,
+        messageType: validated.messageType || 'text',
+        replyToId: validated.replyToId,
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
         encryptedPayload: data.encryptedPayload,
@@ -240,6 +244,13 @@ export class MessageHandler {
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
     try {
+      const schemaValidation = validateSocketEvent(SocketMessageSendWithAttachmentsSchema, data);
+      if (!schemaValidation.success) {
+        this._sendError(callback, schemaValidation.error, socket);
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const userContext = this._getUserContext(socket);
       if (!userContext) {
         this._sendError(callback, 'User not authenticated', socket);
@@ -262,26 +273,24 @@ export class MessageHandler {
         return;
       }
 
-      if (data.content && data.content.trim()) {
-        const validation = validateMessageLength(data.content);
+      if (validated.content && validated.content.trim()) {
+        const validation = validateMessageLength(validated.content);
         if (!validation.isValid) {
           this._sendError(callback, validation.error || 'Message invalide', socket);
           return;
         }
       }
 
-      // Resolve participantId for this conversation
-      const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, data.conversationId, isAnonymous);
+      const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, validated.conversationId, isAnonymous);
       if (!resolvedParticipantId) {
         this._sendError(callback, 'Not a participant in this conversation', socket);
         return;
       }
 
-      // Vérifier les attachments
       const { AttachmentService } = await import('../../services/AttachmentService');
       const attachmentService = new AttachmentService(this.prisma);
 
-      for (const attachmentId of data.attachmentIds) {
+      for (const attachmentId of validated.attachmentIds) {
         const attachment = await attachmentService.getAttachment(attachmentId);
         if (!attachment || attachment.uploadedBy !== (userId || participantId)) {
           this._sendError(callback, `Attachment ${attachmentId} invalid`, socket);
@@ -290,16 +299,16 @@ export class MessageHandler {
       }
 
       const messageRequest: MessageRequest = {
-        conversationId: data.conversationId,
-        content: data.content,
-        originalLanguage: data.originalLanguage,
+        conversationId: validated.conversationId,
+        content: validated.content,
+        originalLanguage: validated.originalLanguage,
         messageType: 'text',
-        replyToId: data.replyToId,
+        replyToId: validated.replyToId,
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
-        attachmentIds: data.attachmentIds,
+        attachmentIds: validated.attachmentIds,
         metadata: {
           source: 'websocket',
           socketId: socket.id,

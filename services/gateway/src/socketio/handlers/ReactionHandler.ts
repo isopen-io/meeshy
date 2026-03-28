@@ -10,6 +10,8 @@ import { NotificationService } from '../../services/NotificationService';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { validateSocketEvent } from '../../middleware/validation.js';
+import { SocketReactionAddSchema, SocketReactionRemoveSchema } from '../../validation/socket-event-schemas.js';
 
 
 export interface ReactionHandlerDependencies {
@@ -44,6 +46,13 @@ export class ReactionHandler {
     callback?: (response: SocketIOResponse<unknown>) => void
   ): Promise<void> {
     try {
+      const schemaValidation = validateSocketEvent(SocketReactionAddSchema, data);
+      if (!schemaValidation.success) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
         console.error('❌ [REACTION_ADD] No userId found for socket:', socket.id);
@@ -60,7 +69,7 @@ export class ReactionHandler {
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
-      const participantId = await this._resolveParticipantId(user, userId, isAnonymous, data.messageId);
+      const participantId = await this._resolveParticipantId(user, userId, isAnonymous, validated.messageId);
       if (!participantId) {
         const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
         if (callback) callback(errorResponse);
@@ -71,8 +80,8 @@ export class ReactionHandler {
       const reactionService = new ReactionService(this.prisma);
 
       const reaction = await reactionService.addReaction({
-        messageId: data.messageId,
-        emoji: data.emoji,
+        messageId: validated.messageId,
+        emoji: validated.emoji,
         participantId
       });
 
@@ -86,13 +95,13 @@ export class ReactionHandler {
       }
 
       const message = await this.prisma.message.findUnique({
-        where: { id: data.messageId },
+        where: { id: validated.messageId },
         select: { conversationId: true }
       });
 
       const updateEvent = await reactionService.createUpdateEvent(
-        data.messageId,
-        data.emoji,
+        validated.messageId,
+        validated.emoji,
         'add',
         participantId,
         message?.conversationId ?? ''
@@ -109,8 +118,7 @@ export class ReactionHandler {
         await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED);
       }
 
-      // Créer une notification
-      await this._createReactionNotification(data.messageId, data.emoji, userId, isAnonymous, reaction.id);
+      await this._createReactionNotification(validated.messageId, validated.emoji, userId, isAnonymous, reaction.id);
     } catch (error: unknown) {
       console.error('❌ Erreur lors de l\'ajout de réaction:', error);
       const errorResponse: SocketIOResponse<unknown> = {
@@ -130,6 +138,13 @@ export class ReactionHandler {
     callback?: (response: SocketIOResponse<unknown>) => void
   ): Promise<void> {
     try {
+      const schemaValidation = validateSocketEvent(SocketReactionRemoveSchema, data);
+      if (!schemaValidation.success) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
         const errorResponse: SocketIOResponse<unknown> = {
@@ -145,7 +160,7 @@ export class ReactionHandler {
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
-      const participantId = await this._resolveParticipantId(user, userId, isAnonymous, data.messageId);
+      const participantId = await this._resolveParticipantId(user, userId, isAnonymous, validated.messageId);
       if (!participantId) {
         const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
         if (callback) callback(errorResponse);
@@ -156,8 +171,8 @@ export class ReactionHandler {
       const reactionService = new ReactionService(this.prisma);
 
       const removed = await reactionService.removeReaction({
-        messageId: data.messageId,
-        emoji: data.emoji,
+        messageId: validated.messageId,
+        emoji: validated.emoji,
         participantId
       });
 
@@ -171,13 +186,13 @@ export class ReactionHandler {
       }
 
       const message = await this.prisma.message.findUnique({
-        where: { id: data.messageId },
+        where: { id: validated.messageId },
         select: { conversationId: true }
       });
 
       const updateEvent = await reactionService.createUpdateEvent(
-        data.messageId,
-        data.emoji,
+        validated.messageId,
+        validated.emoji,
         'remove',
         participantId,
         message?.conversationId ?? ''

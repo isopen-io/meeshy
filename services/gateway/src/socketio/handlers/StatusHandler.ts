@@ -13,6 +13,8 @@ import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesServ
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { TypingEvent } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { validateSocketEvent } from '../../middleware/validation.js';
+import { SocketTypingSchema } from '../../validation/socket-event-schemas.js';
 
 export interface StatusHandlerDependencies {
   prisma: PrismaClient;
@@ -41,6 +43,10 @@ export class StatusHandler {
    * Gère l'événement typing:start
    */
   async handleTypingStart(socket: Socket, data: { conversationId: string }): Promise<void> {
+    const schemaValidation = validateSocketEvent(SocketTypingSchema, data);
+    if (!schemaValidation.success) return;
+    const validated = schemaValidation.data;
+
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) {
       console.warn('⚠️ [TYPING] Typing start sans userId pour socket', socket.id);
@@ -49,7 +55,7 @@ export class StatusHandler {
 
     try {
       const normalizedId = await normalizeConversationId(
-        data.conversationId,
+        validated.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
@@ -93,6 +99,10 @@ export class StatusHandler {
    * Gère l'événement typing:stop
    */
   async handleTypingStop(socket: Socket, data: { conversationId: string }): Promise<void> {
+    const schemaValidation = validateSocketEvent(SocketTypingSchema, data);
+    if (!schemaValidation.success) return;
+    const validated = schemaValidation.data;
+
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) {
       console.warn('⚠️ [TYPING] Typing stop sans userId pour socket', socket.id);
@@ -101,7 +111,7 @@ export class StatusHandler {
 
     try {
       const normalizedId = await normalizeConversationId(
-        data.conversationId,
+        validated.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 

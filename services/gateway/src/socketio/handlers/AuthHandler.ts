@@ -7,6 +7,8 @@ import { hashSessionToken } from '../../utils/session-token';
 import { extractJWTToken, extractSessionToken, type SocketUser } from '../utils/socket-helpers';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
+import { validateSocketEvent } from '../../middleware/validation.js';
+import { SocketAuthenticateSchema } from '../../validation/socket-event-schemas.js';
 
 export interface AuthHandlerDependencies {
   prisma: PrismaClient;
@@ -67,7 +69,14 @@ export class AuthHandler {
     data: { userId?: string; sessionToken?: string; language?: string }
   ): Promise<void> {
     try {
-      const { userId, sessionToken, language } = data;
+      const schemaValidation = validateSocketEvent(SocketAuthenticateSchema, data);
+      if (!schemaValidation.success) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const { userId, sessionToken, language } = validated;
 
       if (!userId && !sessionToken) {
         socket.emit(SERVER_EVENTS.ERROR, { message: 'userId or sessionToken required' });
