@@ -54,6 +54,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
     let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
+    let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+    let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
 
     // MARK: - Call Tracking
 

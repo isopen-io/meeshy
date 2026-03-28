@@ -64,6 +64,10 @@
 		AA00BB11CC22DD33EE440074 /* BookmarksViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440084 /* BookmarksViewModel.swift */; };
 		VP01WZ01A001A001A001A001 /* VoiceProfileWizardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP01WZ01B001B001B001B001 /* VoiceProfileWizardViewModel.swift */; };
 		VP01MG01A001A001A001A001 /* VoiceProfileManageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP01MG01B001B001B001B001 /* VoiceProfileManageViewModel.swift */; };
+		TFA0VM01A001A001A001A001 /* TwoFactorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = TFA0VM01B001B001B001B001 /* TwoFactorViewModel.swift */; };
+		TFA0SV01A001A001A001A001 /* TwoFactorSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TFA0SV01B001B001B001B001 /* TwoFactorSetupView.swift */; };
+		TFA0VT01A001A001A001A001 /* TwoFactorViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TFA0VT01B001B001B001B001 /* TwoFactorViewModelTests.swift */; };
+		TFA0MK01A001A001A001A001 /* MockTwoFactorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = TFA0MK01B001B001B001B001 /* MockTwoFactorService.swift */; };
 		AA1000000000002FA1 /* UploadProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000001FA1 /* UploadProgressBar.swift */; };
 		AA11BB22CC33DD44EE55FF02 /* StoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */; };
 		AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */; };
@@ -331,6 +335,10 @@
 		AA00BB11CC22DD33EE440084 /* BookmarksViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksViewModel.swift; sourceTree = "<group>"; };
 		VP01WZ01B001B001B001B001 /* VoiceProfileWizardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardViewModel.swift; sourceTree = "<group>"; };
 		VP01MG01B001B001B001B001 /* VoiceProfileManageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageViewModel.swift; sourceTree = "<group>"; };
+		TFA0VM01B001B001B001B001 /* TwoFactorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwoFactorViewModel.swift; sourceTree = "<group>"; };
+		TFA0SV01B001B001B001B001 /* TwoFactorSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwoFactorSetupView.swift; sourceTree = "<group>"; };
+		TFA0VT01B001B001B001B001 /* TwoFactorViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TwoFactorViewModelTests.swift; sourceTree = "<group>"; };
+		TFA0MK01B001B001B001B001 /* MockTwoFactorService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MockTwoFactorService.swift; sourceTree = "<group>"; };
 		AA1000000000001FA1 /* UploadProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadProgressBar.swift; sourceTree = "<group>"; };
 		AA2000000000001FA2 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
 		AA3000000000001FA3 /* MediaCompressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaCompressor.swift; sourceTree = "<group>"; };
@@ -631,6 +639,7 @@
 				NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */,
 				CHPW001A001A001A001A0001 /* ChangePasswordView.swift */,
 				SECV001A001A001A001A0001 /* SecurityView.swift */,
+				TFA0SV01B001B001B001B001 /* TwoFactorSetupView.swift */,
 				ABTV001A001A001A001A0001 /* AboutView.swift */,
 				ACSV001A001A001A001A0001 /* ActiveSessionsView.swift */,
 				PPOL001A001A001A001A0001 /* PrivacyPolicyView.swift */,
@@ -788,6 +797,7 @@
 				E4A4562A9E8160E9EF7098B7 /* StatusViewModelTests.swift */,
 				19B9EAF13A41EDB150DBC0DB /* StoryViewModelTests.swift */,
 				4FF8351314E9A302F775DBCE /* UserProfileViewModelTests.swift */,
+				TFA0VT01B001B001B001B001 /* TwoFactorViewModelTests.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -807,6 +817,7 @@
 				7B489B1DA15CF189E770686F /* UserProfileViewModel.swift */,
 				VP01WZ01B001B001B001B001 /* VoiceProfileWizardViewModel.swift */,
 				VP01MG01B001B001B001B001 /* VoiceProfileManageViewModel.swift */,
+				TFA0VM01B001B001B001B001 /* TwoFactorViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -901,6 +912,7 @@
 				MOCK0009000900090009000 /* MockStatusService.swift */,
 				MOCK000A000A000A000A000 /* MockUserService.swift */,
 				MOCK000B000B000B000B000 /* MockBlockService.swift */,
+				TFA0MK01B001B001B001B001 /* MockTwoFactorService.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -1162,6 +1174,8 @@
 				AA00BB11CC22DD33EE440074 /* BookmarksViewModel.swift in Sources */,
 				VP01WZ01A001A001A001A001 /* VoiceProfileWizardViewModel.swift in Sources */,
 				VP01MG01A001A001A001A001 /* VoiceProfileManageViewModel.swift in Sources */,
+				TFA0VM01A001A001A001A001 /* TwoFactorViewModel.swift in Sources */,
+				TFA0SV01A001A001A001A001 /* TwoFactorSetupView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF02 /* StoryViewModel.swift in Sources */,
 				AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */,
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
@@ -1315,6 +1329,8 @@
 				84522147F0B370813212EA59 /* StatusViewModelTests.swift in Sources */,
 				A5FCBF3B6F6D49097164DC92 /* StoryViewModelTests.swift in Sources */,
 				24AFF57E3E63AF37DB547005 /* UserProfileViewModelTests.swift in Sources */,
+				TFA0VT01A001A001A001A001 /* TwoFactorViewModelTests.swift in Sources */,
+				TFA0MK01A001A001A001A001 /* MockTwoFactorService.swift in Sources */,
 				127A142C97C0430D1BB5C01B /* ConversationLockManagerTests.swift in Sources */,
 				4BD0B3391A67AE86286F93AF /* PresenceManagerTests.swift in Sources */,
 				D122AA121095AFDB22A7662F /* AuthServiceTests.swift in Sources */,

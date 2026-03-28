@@ -8,7 +8,7 @@ final class MockTwoFactorService: TwoFactorServiceProviding {
     // MARK: - Stubbing
 
     var getStatusResult: Result<TwoFactorStatus, Error> = .success(
-        TwoFactorStatus(enabled: false, enabledAt: nil, hasBackupCodes: nil, backupCodesCount: nil)
+        TwoFactorStatus(enabled: false)
     )
     var setupResult: Result<TwoFactorSetup, Error> = .success(
         TwoFactorSetup(secret: "JBSWY3DPEHPK3PXP", qrCodeDataUrl: "data:image/png;base64,ABC", otpauthUrl: "otpauth://totp/Meeshy:user?secret=JBSWY3DPEHPK3PXP")
@@ -38,46 +38,38 @@ final class MockTwoFactorService: TwoFactorServiceProviding {
 
     // MARK: - Protocol Conformance
 
-    nonisolated func getStatus() async throws -> TwoFactorStatus {
-        await MainActor.run { getStatusCallCount += 1 }
-        return try await MainActor.run { try getStatusResult.get() }
+    func getStatus() async throws -> TwoFactorStatus {
+        getStatusCallCount += 1
+        return try getStatusResult.get()
     }
 
-    nonisolated func setup() async throws -> TwoFactorSetup {
-        await MainActor.run { setupCallCount += 1 }
-        return try await MainActor.run { try setupResult.get() }
+    func setup() async throws -> TwoFactorSetup {
+        setupCallCount += 1
+        return try setupResult.get()
     }
 
-    nonisolated func enable(code: String) async throws -> TwoFactorBackupCodes {
-        await MainActor.run {
-            enableCallCount += 1
-            lastEnableCode = code
-        }
-        return try await MainActor.run { try enableResult.get() }
+    func enable(code: String) async throws -> TwoFactorBackupCodes {
+        enableCallCount += 1
+        lastEnableCode = code
+        return try enableResult.get()
     }
 
-    nonisolated func disable(code: String, password: String) async throws {
-        await MainActor.run {
-            disableCallCount += 1
-            lastDisableCode = code
-            lastDisablePassword = password
-        }
-        try await MainActor.run { try disableResult.get() }
+    func disable(code: String, password: String) async throws {
+        disableCallCount += 1
+        lastDisableCode = code
+        lastDisablePassword = password
+        try disableResult.get()
     }
 
-    nonisolated func verify(code: String) async throws {
-        await MainActor.run {
-            verifyCallCount += 1
-            lastVerifyCode = code
-        }
-        try await MainActor.run { try verifyResult.get() }
+    func verify(code: String) async throws {
+        verifyCallCount += 1
+        lastVerifyCode = code
+        try verifyResult.get()
     }
 
-    nonisolated func getBackupCodes(code: String) async throws -> TwoFactorBackupCodes {
-        await MainActor.run {
-            getBackupCodesCallCount += 1
-            lastGetBackupCodesCode = code
-        }
-        return try await MainActor.run { try getBackupCodesResult.get() }
+    func getBackupCodes(code: String) async throws -> TwoFactorBackupCodes {
+        getBackupCodesCallCount += 1
+        lastGetBackupCodesCode = code
+        return try getBackupCodesResult.get()
     }
 }
