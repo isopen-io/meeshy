@@ -57,13 +57,18 @@ jest.mock('@/stores/reply-store', () => ({
   },
 }));
 
-jest.mock('@/stores/failed-messages-store', () => ({
-  useFailedMessagesStore: jest.fn(() => ({
+jest.mock('@/stores/failed-messages-store', () => {
+  const store = {
     failedMessages: [],
     addFailedMessage: jest.fn(),
     removeFailedMessage: jest.fn(),
-  })),
-}));
+    incrementRetryCount: jest.fn(),
+    updateFailedMessage: jest.fn(),
+  };
+  const hook = jest.fn(() => store);
+  hook.getState = jest.fn(() => store);
+  return { useFailedMessagesStore: hook };
+});
 
 jest.mock('@/stores/user-store', () => ({
   useUserStore: jest.fn(() => ({
