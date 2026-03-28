@@ -66,10 +66,22 @@ export class ReactiveHandler {
       const messages = await this.stateManager.getMessages(input.conversationId);
       const recentMessages = messages.slice(-30);
 
-      const triageResult = await this.callTriage(input, targetUsers, recentMessages, input.interpellationType);
+      let triageResult: TriageResponse;
+      try {
+        triageResult = await this.callTriage(input, targetUsers, recentMessages, input.interpellationType);
+      } catch (triageError) {
+        console.error(`[ReactiveHandler] Triage LLM call failed for conv=${input.conversationId}:`, triageError instanceof Error ? triageError.message : 'unknown');
+        return;
+      }
       if (!triageResult.shouldRespond) return;
 
-      const genResult = await this.callGeneration(input, targetUsers, recentMessages, triageResult);
+      let genResult: GenerationResponse;
+      try {
+        genResult = await this.callGeneration(input, targetUsers, recentMessages, triageResult);
+      } catch (genError) {
+        console.error(`[ReactiveHandler] Generation LLM call failed for conv=${input.conversationId}:`, genError instanceof Error ? genError.message : 'unknown');
+        return;
+      }
       if (!genResult.messages || genResult.messages.length === 0) return;
 
       const agentHistory = await this.stateManager.getAgentHistory(input.conversationId);
