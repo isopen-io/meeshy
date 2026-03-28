@@ -226,6 +226,9 @@ export {
 // Re-import GlobalUserRole and GLOBAL_ROLE_HIERARCHY as values for legacy aliases below
 import { GlobalUserRole, GLOBAL_ROLE_HIERARCHY } from './role-types.js';
 
+// Delivery queue types
+export * from './delivery-queue.js';
+
 // Action types (pas de conflits majeurs)
 export * from './action-types.js';
 
