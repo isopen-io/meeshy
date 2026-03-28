@@ -1,17 +1,21 @@
 import type { User } from '@meeshy/shared/types';
-
-export type FriendRequestStatus = 'pending' | 'accepted' | 'rejected' | 'blocked';
+export type { FriendRequestStatus, BlockedUser } from '@meeshy/shared/types';
 
 export type ContactTab = 'all' | 'connected' | 'pending' | 'refused' | 'blocked' | 'affiliates';
 
 export type ContactSortOption = 'name' | 'lastSeen' | 'recentlyAdded';
 
+/**
+ * FriendRequest as returned by the API (dates are ISO strings, not Date objects).
+ * Extends the shared FriendRequest shape but with string dates for JSON responses.
+ * @see packages/shared/types/affiliate.ts FriendRequest
+ */
 export interface FriendRequest {
   id: string;
   senderId: string;
   receiverId: string;
   message?: string;
-  status: FriendRequestStatus;
+  status: import('@meeshy/shared/types').FriendRequestStatus;
   respondedAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -39,13 +43,6 @@ export interface AffiliateRelation {
     token: string;
     createdAt?: string;
   };
-}
-
-export interface BlockedUser {
-  id: string;
-  username: string;
-  displayName?: string;
-  avatar?: string;
 }
 
 export interface ContactsStats {
