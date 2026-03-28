@@ -4,17 +4,12 @@ export { useSignupV2 } from './use-signup-v2';
 export { useForgotPasswordV2 } from './use-forgot-password-v2';
 export type { ForgotPasswordState, ResetPasswordState, UseForgotPasswordV2Return } from './use-forgot-password-v2';
 
-// Chat (legacy)
-export { useChatV2 } from './use-chat-v2';
-
 // Messaging V2
 export { useConversationsV2 } from './use-conversations-v2';
 export type { UseConversationsV2Options, ConversationsV2Return } from './use-conversations-v2';
 
 export { useMessagesV2 } from './use-messages-v2';
 export type { UseMessagesV2Options, MessagesV2Return, SendMessageOptions } from './use-messages-v2';
-
-export { useConversationUrlSync } from './use-conversation-url-sync';
 
 // Contacts V2
 export { useContactsV2 } from './use-contacts-v2';

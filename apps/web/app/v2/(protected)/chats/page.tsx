@@ -19,6 +19,8 @@ import {
 } from '@/components/v2';
 import type { TagItem } from '@/components/v2';
 import { useConversationsV2, useMessagesV2 } from '@/hooks/v2';
+import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
+import { useAutoRetryFailedMessages } from '@/hooks/use-auto-retry-failed-messages';
 import { useAuth } from '@/hooks/use-auth';
 import type { User, Message } from '@meeshy/shared/types';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
@@ -252,6 +254,11 @@ export default function V2ChatsPage() {
 
   // Get selected conversation from URL
   const selectedConversationId = searchParams.get('id');
+
+  // Cache sync: edits, deletes, translations, transcriptions, preferences, participant roles
+  useSocketCacheSync({ conversationId: selectedConversationId, enabled: !!selectedConversationId });
+  useInvalidateOnReconnect();
+  useAutoRetryFailedMessages();
 
   // State
   const [message, setMessage] = useState('');
