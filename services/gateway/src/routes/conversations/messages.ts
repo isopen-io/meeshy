@@ -24,6 +24,26 @@ import type {
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { z } from 'zod';
+import { CommonSchemas } from '@meeshy/shared/utils/validation';
+
+const SendMessageBodySchema = z.object({
+  content: CommonSchemas.messageContent,
+  originalLanguage: CommonSchemas.language.optional(),
+  messageType: CommonSchemas.messageType.optional(),
+  replyToId: z.string().optional(),
+  storyReplyToId: z.string().optional(),
+  forwardedFromId: z.string().optional(),
+  forwardedFromConversationId: z.string().optional(),
+  encryptedContent: z.string().optional(),
+  encryptionMode: z.enum(['e2ee', 'server', 'hybrid']).optional(),
+  encryptionMetadata: z.record(z.unknown()).optional(),
+  isEncrypted: z.boolean().optional(),
+  attachmentIds: z.array(z.string()).optional(),
+  isBlurred: z.boolean().optional(),
+  expiresAt: z.string().optional(),
+  mentionedUserIds: z.array(z.string()).optional(),
+});
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
@@ -1147,6 +1167,11 @@ export function registerMessagesRoutes(
         return sendUnauthorized(reply, 'Authentification requise pour envoyer des messages');
       }
 
+      const bodyResult = SendMessageBodySchema.safeParse(request.body);
+      if (!bodyResult.success) {
+        return sendBadRequest(reply, 'Validation error', { message: bodyResult.error.message });
+      }
+
       const { id } = request.params;
       const {
         content,
@@ -1164,7 +1189,7 @@ export function registerMessagesRoutes(
         isBlurred,
         expiresAt,
         mentionedUserIds
-      } = request.body;
+      } = bodyResult.data as SendMessageBody;
 
       const userId = authRequest.authContext.userId;
       let participantId: string;

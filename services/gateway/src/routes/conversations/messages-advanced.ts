@@ -21,6 +21,13 @@ import type {
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { z } from 'zod';
+import { CommonSchemas } from '@meeshy/shared/utils/validation';
+
+const EditMessageBodySchema = z.object({
+  content: CommonSchemas.messageContent,
+  originalLanguage: CommonSchemas.language.optional(),
+});
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
 
@@ -87,8 +94,13 @@ export function registerMessagesAdvancedRoutes(
     preHandler: [messageValidationHook]
   }, async (request, reply) => {
     try {
+      const bodyResult = EditMessageBodySchema.safeParse(request.body);
+      if (!bodyResult.success) {
+        return sendBadRequest(reply, 'Validation error', { message: bodyResult.error.message });
+      }
+
       const { id, messageId } = request.params;
-      const { content, originalLanguage = 'fr' } = request.body;
+      const { content, originalLanguage = 'fr' } = bodyResult.data;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
