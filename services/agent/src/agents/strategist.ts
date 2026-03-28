@@ -195,20 +195,12 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
       }).join('\n')
     : 'Pas encore de donnees d\'engagement.';
 
+  // Replace safe (config/numeric) placeholders FIRST, then user-content placeholders LAST
+  // to prevent template injection from user messages containing {placeholder} strings.
   return STRATEGIST_SYSTEM_PROMPT
-    .replace('{messages}', messagesText)
-    .replace('{inactiveUsers}', inactiveUsersText)
     .replace('{activityScore}', String(state.activityScore))
-    .replace('{participants}', participantsText)
-    .replace('{conversationTitle}', state.conversationTitle || 'Sans titre')
-    .replace('{conversationDescription}', state.conversationDescription || 'Aucune')
-    .replace('{agentInstructions}', instructionsText)
-    .replace('{currentTopic}', currentTopicText)
-    .replace('{engagementData}', engagementText)
     .replace('{minResponses}', String(minResponses))
     .replace('{maxResponses}', String(maxResponses + effectiveMaxReactions))
-    .replace('{agentHistory}', historyText)
-    .replace('{recentTopicCategories}', recentTopicsText)
     .replace(/\{budgetRemaining\}/g, String(state.budgetRemaining))
     .replace('{todayUsersActive}', String(state.todayUsersActive))
     .replace('{maxUsersToday}', String(state.maxUsersToday))
@@ -221,7 +213,17 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
         .filter((u) => activeSet.has(u.userId))
         .map((u) => u.displayName);
       return activeNames.length > 0 ? activeNames.join(', ') : 'aucun';
-    })());
+    })())
+    .replace('{conversationTitle}', state.conversationTitle || 'Sans titre')
+    .replace('{conversationDescription}', state.conversationDescription || 'Aucune')
+    .replace('{agentInstructions}', instructionsText)
+    .replace('{agentHistory}', historyText)
+    .replace('{recentTopicCategories}', recentTopicsText)
+    .replace('{engagementData}', engagementText)
+    .replace('{inactiveUsers}', inactiveUsersText)
+    .replace('{participants}', participantsText)
+    .replace('{currentTopic}', currentTopicText)
+    .replace('{messages}', messagesText);
 }
 
 function calculateWordLimits(
@@ -369,7 +371,6 @@ export function createStrategistNode(llm: LlmProvider) {
         };
       }
 
-      const controlledUserIds = new Set(state.controlledUsers.map((u) => u.userId));
       const messageIds = new Set(state.messages.map((m) => m.id));
 
       // CODE-LEVEL USER ROTATION: If the LLM picked the same user as last cycle

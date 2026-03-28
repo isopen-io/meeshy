@@ -71,12 +71,12 @@ export class ConversationScanner {
   async scanConversation(conversationId: string): Promise<void> {
     const config = await this.persistence.getAgentConfig(conversationId);
     if (config?.enabled === false) return;
-    const context = await this.persistence.getConversationContext(conversationId);
+    const conversation = await this.persistence.getConversationWithType(conversationId);
     const conv: EligibleConversation = {
       conversationId,
-      conversationType: 'group',
-      title: context?.title ?? null,
-      description: context?.description ?? null,
+      conversationType: conversation?.type ?? 'group',
+      title: conversation?.title ?? null,
+      description: conversation?.description ?? null,
       lastMessageAt: new Date(),
       memberCount: 0,
       scanIntervalMinutes: config?.scanIntervalMinutes ?? 3,

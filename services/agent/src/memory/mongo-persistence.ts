@@ -253,6 +253,13 @@ export class MongoPersistence {
     });
   }
 
+  async getConversationWithType(conversationId: string) {
+    return this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { title: true, description: true, type: true },
+    });
+  }
+
   async getRecentMessageCount(conversationId: string, withinMinutes: number, excludeAgent = false): Promise<number> {
     const since = new Date(Date.now() - withinMinutes * 60 * 1000);
     return this.prisma.message.count({
