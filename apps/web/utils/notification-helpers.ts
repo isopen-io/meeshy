@@ -171,6 +171,53 @@ export function getNotificationLink(notification: Notification): string | null {
 }
 
 /**
+ * Groups notifications by date period.
+ * Returns entries in order: today, yesterday, this week, this month, older.
+ */
+export function groupNotificationsByDate(
+  notifications: Notification[],
+  labels: { today: string; yesterday: string; thisWeek: string; thisMonth: string; older: string }
+): Array<{ label: string; notifications: Notification[] }> {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
+  const startOfWeek = new Date(startOfToday.getTime() - startOfToday.getDay() * 86400000);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const groups = new Map<string, Notification[]>([
+    [labels.today, []],
+    [labels.yesterday, []],
+    [labels.thisWeek, []],
+    [labels.thisMonth, []],
+    [labels.older, []],
+  ]);
+
+  for (const notification of notifications) {
+    const createdAt = notification.state.createdAt instanceof Date
+      ? notification.state.createdAt
+      : new Date(notification.state.createdAt);
+
+    const time = createdAt.getTime();
+
+    if (time >= startOfToday.getTime()) {
+      groups.get(labels.today)!.push(notification);
+    } else if (time >= startOfYesterday.getTime()) {
+      groups.get(labels.yesterday)!.push(notification);
+    } else if (time >= startOfWeek.getTime()) {
+      groups.get(labels.thisWeek)!.push(notification);
+    } else if (time >= startOfMonth.getTime()) {
+      groups.get(labels.thisMonth)!.push(notification);
+    } else {
+      groups.get(labels.older)!.push(notification);
+    }
+  }
+
+  return Array.from(groups.entries())
+    .filter(([, items]) => items.length > 0)
+    .map(([label, items]) => ({ label, notifications: items }));
+}
+
+/**
  * Détermine si la notification requiert une action utilisateur
  */
 export function requiresUserAction(notification: Notification): boolean {

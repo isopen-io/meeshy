@@ -56,11 +56,17 @@ export interface LanguagePreferences {
   translationTargetLanguage: string;
 }
 
+export interface StoryPreferences {
+  defaultVisibility: 'PUBLIC' | 'FRIENDS' | 'PRIVATE';
+  storyNotificationsEnabled: boolean;
+}
+
 export interface UserPreferencesState {
   notifications: StoreNotificationPreferences;
   encryption: EncryptionPreferences;
   privacy: StorePrivacyPreferences;
   language: LanguagePreferences;
+  story: StoryPreferences;
 
   // Loading states
   isLoading: boolean;
@@ -87,6 +93,7 @@ export interface UserPreferencesActions {
   updateEncryptionLocalSettings: (settings: Partial<EncryptionPreferences>) => Promise<void>;
   updatePrivacy: (prefs: Partial<StorePrivacyPreferences>) => Promise<void>;
   updateLanguage: (prefs: Partial<LanguagePreferences>) => void;
+  updateStory: (prefs: Partial<StoryPreferences>) => void;
 
   // Utility checks
   shouldShowEncryptionWarning: (conversationEncrypted: boolean) => boolean;
@@ -141,11 +148,17 @@ const DEFAULT_LANGUAGE_PREFERENCES: LanguagePreferences = {
   translationTargetLanguage: 'fr',
 };
 
+const DEFAULT_STORY_PREFERENCES: StoryPreferences = {
+  defaultVisibility: 'FRIENDS',
+  storyNotificationsEnabled: true,
+};
+
 const DEFAULT_STATE: UserPreferencesState = {
   notifications: DEFAULT_NOTIFICATION_PREFERENCES,
   encryption: DEFAULT_ENCRYPTION_PREFERENCES,
   privacy: DEFAULT_PRIVACY_PREFERENCES,
   language: DEFAULT_LANGUAGE_PREFERENCES,
+  story: DEFAULT_STORY_PREFERENCES,
   isLoading: false,
   isInitialized: false,
   lastSyncedAt: null,
@@ -413,6 +426,12 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         }));
       },
 
+      updateStory: (prefs) => {
+        set(state => ({
+          story: { ...state.story, ...prefs }
+        }));
+      },
+
       // ========================================================================
       // UTILITY CHECKS
       // ========================================================================
@@ -480,6 +499,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         encryption: state.encryption,
         privacy: state.privacy,
         language: state.language,
+        story: state.story,
         lastSyncedAt: state.lastSyncedAt,
       }),
     }
@@ -534,6 +554,16 @@ export const useLanguagePreferencesFromStore = () => {
   return useUserPreferencesStore(useShallow(state => ({
     preferences: state.language,
     update: state.updateLanguage,
+  })));
+};
+
+/**
+ * Hook for story preferences only
+ */
+export const useStoryPreferences = () => {
+  return useUserPreferencesStore(useShallow(state => ({
+    preferences: state.story,
+    update: state.updateStory,
   })));
 };
 
