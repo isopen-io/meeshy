@@ -314,8 +314,23 @@ export const MessagesDisplay = memo(function MessagesDisplay({
 
   if (isLoadingMessages && displayMessages.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex flex-col gap-4 p-6 animate-pulse">
+        {/* Skeleton message bubbles alternating sides */}
+        {Array.from({ length: 5 }).map((_, i) => {
+          const isRight = i % 3 === 0;
+          return (
+            <div key={i} className={`flex gap-2 ${isRight ? 'flex-row-reverse' : ''}`}>
+              <div className="h-8 w-8 rounded-full bg-muted shrink-0" />
+              <div className={`flex flex-col gap-1.5 ${isRight ? 'items-end' : ''}`}>
+                <div className="h-3 bg-muted rounded w-20" />
+                <div className={`rounded-2xl bg-muted/60 p-3 space-y-1.5`} style={{ width: `${120 + (i * 40) % 160}px` }}>
+                  <div className="h-3 bg-muted/40 rounded w-full" />
+                  {i % 2 === 0 && <div className="h-3 bg-muted/40 rounded w-2/3" />}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   }

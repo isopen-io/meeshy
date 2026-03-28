@@ -300,6 +300,39 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
+    // Handler for participant joined — update memberCount in conversation lists
+    const handleConversationJoined = (data: { conversationId: string; userId: string }) => {
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) =>
+          old?.map((conv) =>
+            conv.id === data.conversationId
+              ? { ...conv, memberCount: (conv.memberCount ?? 0) + 1 }
+              : conv
+          )
+      );
+      // Invalidate participants query to refetch fresh list
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
+    // Handler for participant left — update memberCount in conversation lists
+    const handleConversationLeft = (data: { conversationId: string; userId: string }) => {
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) =>
+          old?.map((conv) =>
+            conv.id === data.conversationId
+              ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
+              : conv
+          )
+      );
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
     // Register listeners
     const unsubscribeMessage = meeshySocketIOService.onNewMessage(handleNewMessage);
     const unsubscribeEdit = meeshySocketIOService.onMessageEdited(handleMessageEdited);
@@ -308,8 +341,14 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeUnread = meeshySocketIOService.onUnreadUpdated(handleUnreadUpdated);
     const unsubscribeTranscription = meeshySocketIOService.onTranscription(handleTranscription);
     const unsubscribeAudioTranslation = meeshySocketIOService.onAudioTranslation(handleAudioTranslation);
+    const unsubscribePreferences = meeshySocketIOService.onPreferencesUpdated((data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.preferences.category(data.category),
+      });
+    });
+    const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
+    const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
 
-    // Cleanup on unmount
     return () => {
       unsubscribeMessage?.();
       unsubscribeEdit?.();
@@ -318,6 +357,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeUnread?.();
       unsubscribeTranscription?.();
       unsubscribeAudioTranslation?.();
+      unsubscribePreferences?.();
+      unsubscribeJoined?.();
+      unsubscribeLeft?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

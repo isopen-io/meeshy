@@ -1,16 +1,24 @@
 'use client';
 
-import { useCallback, useRef, useEffect, useState } from 'react';
+import { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, useToast, PageHeader, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
-import type { StoryItem, StoryData, StatusItem } from '@/components/v2';
+import type { StatusItem, StoryVisibility } from '@/components/v2';
+import { Skeleton } from '@/components/v2/Skeleton';
+
+// Stories (dedicated hooks from stories feature)
+import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
+import { useStoriesRealtime } from '@/hooks/social/use-stories-realtime';
+import { postToStoryItem, postToStoryData } from '@/lib/story-transforms';
+import { useStoryPreferences } from '@/stores/user-preferences-store';
+
+// Posts (real API integration)
 import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
-import { useStoriesQuery, useStatusesQuery } from '@/hooks/queries/use-feed-variants';
 import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+
 import { useAuthStore } from '@/stores/auth-store';
-import { Skeleton } from '@/components/v2/Skeleton';
 import type { Post } from '@meeshy/shared/types/post';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -38,79 +46,76 @@ function postToTranslations(post: Post) {
     }));
 }
 
-function postToStoryItem(post: Post): StoryItem {
-  return {
-    id: post.id,
-    author: { name: post.author?.displayName ?? post.author?.username ?? 'Unknown' },
-    hasUnviewed: true,
-    isOwn: false,
-  };
-}
+// ─── Mock Data (Statuses - to be replaced in future phase) ──────────────
 
-function postToStoryData(post: Post): StoryData {
-  return {
-    id: post.id,
-    author: { name: post.author?.displayName ?? post.author?.username ?? 'Unknown' },
-    content: post.content ?? '',
-    originalLanguage: post.originalLanguage ?? 'unknown',
-    translations: postToTranslations(post),
-    storyEffects: (post.storyEffects as Record<string, unknown>) ?? { background: '#2D3748', textStyle: 'bold' as const, textColor: '#ffffff', textPosition: { x: 50, y: 50 } },
-    createdAt: typeof post.createdAt === 'string' ? post.createdAt : post.createdAt.toISOString(),
-    expiresAt: post.expiresAt ? (typeof post.expiresAt === 'string' ? post.expiresAt : post.expiresAt.toISOString()) : new Date(Date.now() + 72000000).toISOString(),
-    viewCount: post.viewCount,
-  };
-}
-
-function postToStatusItem(post: Post): StatusItem {
-  return {
-    id: post.id,
-    author: { name: post.author?.displayName ?? post.author?.username ?? 'Unknown' },
-    moodEmoji: post.moodEmoji ?? '💭',
-    content: post.content ?? undefined,
-    originalLanguage: post.originalLanguage ?? 'unknown',
-    translations: postToTranslations(post),
-    expiresAt: post.expiresAt ? (typeof post.expiresAt === 'string' ? post.expiresAt : post.expiresAt.toISOString()) : new Date(Date.now() + 3600000).toISOString(),
-    isOwn: false,
-  };
-}
+const mockStatuses: StatusItem[] = [
+  {
+    id: 'st1', author: { name: 'Marie D.' }, moodEmoji: '\uD83C\uDF89', content: 'Trop contente !',
+    originalLanguage: 'fr',
+    translations: [{ languageCode: 'en', languageName: 'English', content: 'So happy!' }],
+    expiresAt: new Date(Date.now() + 2400000).toISOString(), isOwn: true,
+  },
+  {
+    id: 'st2', author: { name: 'Yuki T.' }, moodEmoji: '\u2615', content: '\u30B3\u30FC\u30D2\u30FC\u30BF\u30A4\u30E0',
+    originalLanguage: 'ja',
+    translations: [{ languageCode: 'fr', languageName: 'Francais', content: "C'est l'heure du caf\u00e9" }],
+    expiresAt: new Date(Date.now() + 1800000).toISOString(), isOwn: false,
+  },
+  {
+    id: 'st3', author: { name: 'Carlos M.' }, moodEmoji: '\uD83D\uDD25', content: 'En mode focus',
+    originalLanguage: 'fr', expiresAt: new Date(Date.now() + 3000000).toISOString(), isOwn: false,
+  },
+  {
+    id: 'st4', author: { name: 'Li Wei' }, moodEmoji: '\uD83D\uDCDA',
+    originalLanguage: 'zh',
+    translations: [{ languageCode: 'fr', languageName: 'Francais', content: 'En train de lire' }],
+    expiresAt: new Date(Date.now() + 1200000).toISOString(), isOwn: false,
+  },
+  {
+    id: 'st5', author: { name: 'Sophie M.' }, moodEmoji: '\uD83C\uDFB5', content: 'Coding with music',
+    originalLanguage: 'en',
+    translations: [{ languageCode: 'fr', languageName: 'Francais', content: 'Je code en musique' }],
+    expiresAt: new Date(Date.now() + 2000000).toISOString(), isOwn: false,
+  },
+];
 
 // ─── Page ────────────────────────────────────────────────────────────────
 
 export default function V2FeedsPage() {
   const router = useRouter();
   const toastCtx = useToast();
-  const toast = (opts: { title?: string; description?: string; type?: 'success' | 'error' | 'info' }) =>
-    toastCtx.addToast(opts.title || opts.description || '', opts.type);
+  const showToast = useCallback(
+    (title: string, type: 'success' | 'error' | 'info', description?: string) =>
+      toastCtx.addToast(title || description || '', type),
+    [toastCtx],
+  );
 
+  // Auth & language
   const currentUser = useAuthStore((s) => s.user);
+  const currentUserId = currentUser?.id ?? '';
   const userLanguage = usePreferredLanguage();
+  const { preferences: storyPrefs } = useStoryPreferences();
 
-  // ─── Data hooks ──────────────────────────────────────────────────────
+  // ─── Posts (real data) ────────────────────────────────────────────────
   const feedQuery = useFeedQuery();
   const posts = useFeedPosts(feedQuery);
-  const storiesQuery = useStoriesQuery();
-  const statusesQuery = useStatusesQuery();
   const prefetchPost = usePrefetchPost();
 
-  // Socket.IO → React Query cache sync
+  // Socket.IO → React Query cache sync for posts
   usePostSocketCacheSync();
 
-  // ─── Mutations ───────────────────────────────────────────────────────
+  // Post mutations
   const createPostMutation = useCreatePostMutation();
   const likeMutation = useLikePostMutation();
   const unlikeMutation = useUnlikePostMutation();
   const shareMutation = useSharePostMutation();
 
-  // ─── Local state ─────────────────────────────────────────────────────
+  // Local state for post interactions
   const [newPostContent, setNewPostContent] = useState('');
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [userReactions, setUserReactions] = useState<Record<string, string>>({});
-  const [storyViewerOpen, setStoryViewerOpen] = useState(false);
-  const [storyViewerIndex, setStoryViewerIndex] = useState(0);
-  const [storyComposerOpen, setStoryComposerOpen] = useState(false);
-  const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
-  // ─── Infinite scroll ─────────────────────────────────────────────────
+  // Infinite scroll
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -128,11 +133,81 @@ export default function V2FeedsPage() {
     return () => observer.disconnect();
   }, [feedQuery.hasNextPage, feedQuery.isFetchingNextPage, feedQuery.fetchNextPage]);
 
-  // ─── Handlers ────────────────────────────────────────────────────────
+  // ─── Stories (real data) ──────────────────────────────────────────────
+  const { data: stories, isLoading: storiesLoading } = useStoriesFeedQuery();
+  const createStoryMutation = useCreateStoryMutation();
+  const deleteStoryMutation = useDeleteStoryMutation();
+  const { recordView } = useRecordStoryViewMutation();
+  useStoriesRealtime();
+
+  const [storyViewerOpen, setStoryViewerOpen] = useState(false);
+  const [storyViewerIndex, setStoryViewerIndex] = useState(0);
+  const [storyComposerOpen, setStoryComposerOpen] = useState(false);
+  const viewedStoryIdsRef = useRef(new Set<string>());
+
+  const storyItems = useMemo(
+    () => (stories ?? []).map(s => postToStoryItem(s, currentUserId, viewedStoryIdsRef.current)),
+    [stories, currentUserId],
+  );
+
+  const storyDataList = useMemo(
+    () => (stories ?? []).map(postToStoryData),
+    [stories],
+  );
+
+  const handleStoryPress = useCallback((storyId: string) => {
+    const idx = storyDataList.findIndex(s => s.id === storyId);
+    if (idx >= 0) {
+      setStoryViewerIndex(idx);
+      setStoryViewerOpen(true);
+    }
+  }, [storyDataList]);
+
+  const handleStoryPublish = useCallback((story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; mediaIds?: string[] }) => {
+    setStoryComposerOpen(false);
+    createStoryMutation.mutate({
+      content: story.content,
+      storyEffects: story.storyEffects,
+      visibility: story.visibility,
+      mediaIds: story.mediaIds,
+      originalLanguage: userLanguage,
+    }, {
+      onSuccess: () => {
+        const mediaCount = story.mediaIds?.length ?? 0;
+        const desc = mediaCount > 0
+          ? `Votre story est visible par vos amis (${mediaCount} media).`
+          : 'Votre story est visible par vos amis.';
+        showToast('Story publi\u00e9e !', 'success', desc);
+      },
+      onError: () => {
+        showToast('Erreur', 'error', 'Impossible de publier la story.');
+      },
+    });
+  }, [createStoryMutation, userLanguage, showToast]);
+
+  const handleStoryView = useCallback((storyId: string) => {
+    viewedStoryIdsRef.current.add(storyId);
+    recordView(storyId);
+  }, [recordView]);
+
+  const handleStoryDelete = useCallback((storyId: string) => {
+    deleteStoryMutation.mutate(storyId, {
+      onSuccess: () => showToast('Story supprim\u00e9e', 'success'),
+      onError: () => showToast('Erreur', 'error', 'Impossible de supprimer la story.'),
+    });
+  }, [deleteStoryMutation, showToast]);
+
+  const handleStoryViewerClose = useCallback(() => setStoryViewerOpen(false), []);
+  const handleStoryComposerClose = useCallback(() => setStoryComposerOpen(false), []);
+  const handleStoryReply = useCallback((_id: string, text: string) => {
+    showToast('R\u00e9ponse envoy\u00e9e', 'success', text);
+  }, [showToast]);
+
+  // ─── Post handlers ────────────────────────────────────────────────────
 
   const handlePublish = useCallback(() => {
     if (!newPostContent.trim()) {
-      toast({ title: 'Contenu vide', description: 'Écrivez quelque chose avant de publier.', type: 'error' });
+      showToast('Contenu vide', 'error', '\u00c9crivez quelque chose avant de publier.');
       return;
     }
     createPostMutation.mutate(
@@ -140,14 +215,14 @@ export default function V2FeedsPage() {
       {
         onSuccess: () => {
           setNewPostContent('');
-          toast({ title: 'Publié !', description: 'Votre post a été partagé.', type: 'success' });
+          showToast('Publi\u00e9 !', 'success', 'Votre post a \u00e9t\u00e9 partag\u00e9.');
         },
         onError: () => {
-          toast({ title: 'Erreur', description: 'Impossible de publier le post.', type: 'error' });
+          showToast('Erreur', 'error', 'Impossible de publier le post.');
         },
       },
     );
-  }, [newPostContent, createPostMutation, toast]);
+  }, [newPostContent, createPostMutation, showToast]);
 
   const handleLike = useCallback((postId: string) => {
     const isLiked = likedPosts.has(postId);
@@ -185,48 +260,29 @@ export default function V2FeedsPage() {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/v2/feeds/post/${postId}`);
       shareMutation.mutate({ postId });
-      toast({ title: 'Lien copié !', type: 'success' });
+      showToast('Lien copi\u00e9 !', 'success');
     } catch {
-      toast({ title: 'Erreur', description: 'Impossible de copier le lien.', type: 'error' });
+      showToast('Erreur', 'error', 'Impossible de copier le lien.');
     }
-  }, [shareMutation, toast]);
+  }, [shareMutation, showToast]);
 
-  // ─── Story / Status data mapping ────────────────────────────────────
-  const storyItems: StoryItem[] = (storiesQuery.data ?? []).map(postToStoryItem);
-  const storyDataList: StoryData[] = (storiesQuery.data ?? []).map(postToStoryData);
-  const statusItems: StatusItem[] = statusesQuery.data
-    ? statusesQuery.data.pages.flatMap((p) => p.data).map(postToStatusItem)
-    : [];
-
-  const handleStoryPress = useCallback((storyId: string) => {
-    const idx = storyDataList.findIndex((s) => s.id === storyId);
-    if (idx >= 0) {
-      setStoryViewerIndex(idx);
-      setStoryViewerOpen(true);
-    }
-  }, [storyDataList]);
-
-  const handleStoryPublish = useCallback((story: { content?: string; storyEffects: Record<string, unknown>; visibility: string; mediaIds?: string[] }) => {
-    setStoryComposerOpen(false);
-    createPostMutation.mutate({ content: story.content, type: 'STORY', visibility: 'FRIENDS', storyEffects: story.storyEffects });
-    toast({ title: 'Story publiée !', type: 'success' });
-  }, [createPostMutation, toast]);
+  // ─── Status handlers (mock) ───────────────────────────────────────────
+  const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
   const handleStatusPress = useCallback((statusId: string) => {
-    toast({ title: 'Status', description: `Status ${statusId} sélectionné`, type: 'info' });
-  }, [toast]);
+    showToast('Status', 'info', `Status ${statusId} s\u00e9lectionn\u00e9`);
+  }, [showToast]);
 
   const handleStatusPublish = useCallback((status: { moodEmoji: string; content?: string }) => {
     setStatusComposerOpen(false);
-    createPostMutation.mutate({ content: status.content, type: 'STATUS', visibility: 'FRIENDS', moodEmoji: status.moodEmoji });
-    toast({ title: 'Mood publié !', description: `${status.moodEmoji} ${status.content || ''}`, type: 'success' });
-  }, [createPostMutation, toast]);
+    showToast('Mood publi\u00e9 !', 'success', `${status.moodEmoji} ${status.content || ''}`);
+  }, [showToast]);
 
   // ─── Render ──────────────────────────────────────────────────────────
 
   return (
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-      <PageHeader title="Découvrir Meeshy" />
+      <PageHeader title="D\u00e9couvrir Meeshy" />
 
       <main className="max-w-2xl mx-auto px-6 py-8">
         {/* Story Tray */}
@@ -234,12 +290,13 @@ export default function V2FeedsPage() {
           stories={storyItems}
           onStoryPress={handleStoryPress}
           onAddStory={() => setStoryComposerOpen(true)}
+          isLoading={storiesLoading}
           className="mb-4"
         />
 
         {/* Status Bar */}
         <StatusBar
-          statuses={statusItems}
+          statuses={mockStatuses}
           onStatusPress={handleStatusPress}
           onAddStatus={() => setStatusComposerOpen(true)}
           userLanguage={userLanguage}
@@ -250,11 +307,11 @@ export default function V2FeedsPage() {
         <Card variant="default" hover={false} className="p-4 mb-6">
           <div className="flex gap-4">
             <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl bg-[var(--gp-parchment)]">
-              👤
+              {'\uD83D\uDC64'}
             </div>
             <div className="flex-1">
               <textarea
-                placeholder="Partagez quelque chose avec la communauté..."
+                placeholder="Partagez quelque chose avec la communaut\u00e9..."
                 className="w-full resize-none border-0 bg-transparent text-base outline-none text-[var(--gp-text-primary)]"
                 rows={2}
                 value={newPostContent}
@@ -262,9 +319,9 @@ export default function V2FeedsPage() {
               />
               <div className="flex items-center justify-between mt-2">
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm">📷</Button>
-                  <Button variant="ghost" size="sm">🎥</Button>
-                  <Button variant="ghost" size="sm">📎</Button>
+                  <Button variant="ghost" size="sm">{'\uD83D\uDCF7'}</Button>
+                  <Button variant="ghost" size="sm">{'\uD83C\uDFA5'}</Button>
+                  <Button variant="ghost" size="sm">{'\uD83D\uDCCE'}</Button>
                 </div>
                 <Button
                   variant="primary"
@@ -364,19 +421,20 @@ export default function V2FeedsPage() {
           stories={storyDataList}
           initialIndex={storyViewerIndex}
           userLanguage={userLanguage}
-          onClose={() => setStoryViewerOpen(false)}
-          onView={(id) => console.log('Viewed story:', id)}
-          onReply={(id, text) => {
-            toast({ title: 'Réponse envoyée', description: text, type: 'success' });
-          }}
+          currentUserId={currentUserId}
+          onClose={handleStoryViewerClose}
+          onView={handleStoryView}
+          onReply={handleStoryReply}
+          onDelete={handleStoryDelete}
         />
       )}
 
       {/* Story Composer */}
       <StoryComposer
         open={storyComposerOpen}
-        onClose={() => setStoryComposerOpen(false)}
+        onClose={handleStoryComposerClose}
         onPublish={handleStoryPublish}
+        defaultVisibility={storyPrefs.defaultVisibility}
       />
 
       {/* Status Composer */}

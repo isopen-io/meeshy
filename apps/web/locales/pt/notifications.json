@@ -108,11 +108,13 @@
       "select": "Selecionar",
       "markAsRead": "Marcar como lida",
       "delete": "Excluir",
-      "clearSearch": "Limpar pesquisa"
+      "clearSearch": "Limpar pesquisa",
+      "allMarkedRead": "Todas as notificações marcadas como lidas"
     },
     "unreadCount": {
       "single": "{count} não lida de {total}",
       "plural": "{count} não lidas de {total}",
+      "active": "{count} não lidas de {total}",
       "allRead": "Todas as suas {total} notificação{plural} estão lidas",
       "empty": "Você não tem notificações"
     },
@@ -135,6 +137,15 @@
       "pdf": "PDF",
       "document": "Documento",
       "file": "Arquivo"
-    }
+    },
+    "groups": {
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "thisWeek": "Esta semana",
+      "thisMonth": "Este mês",
+      "older": "Mais antigo"
+    },
+    "markAllRead": "Marcar tudo como lido",
+    "settings": "Configurações"
   }
 }

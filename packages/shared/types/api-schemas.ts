@@ -1648,12 +1648,12 @@ export const sendFriendRequestSchema = {
  */
 export const respondFriendRequestSchema = {
   type: 'object',
-  required: ['action'],
+  required: ['status'],
   properties: {
-    action: {
+    status: {
       type: 'string',
-      enum: ['accept', 'reject', 'block'],
-      description: 'Response action'
+      enum: ['accepted', 'rejected'],
+      description: 'New status for the friend request'
     }
   }
 } as const;
