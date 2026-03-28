@@ -289,6 +289,11 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
+      const addMemberRoles = ['creator', 'admin', 'moderator'];
+      if (!addMemberRoles.includes(currentUserParticipant.role)) {
+        return sendForbidden(reply, 'Only admins and moderators can add participants');
+      }
+
       const userToAdd = await prisma.user.findFirst({
         where: { id: userId }
       });

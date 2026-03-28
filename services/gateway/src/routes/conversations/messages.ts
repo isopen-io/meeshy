@@ -263,10 +263,18 @@ export function registerMessagesRoutes(
       if (participant?.shareLinkId) {
         const shareLink = await prisma.conversationShareLink.findFirst({
           where: { id: participant.shareLinkId },
-          select: { allowViewHistory: true }
+          select: { allowViewHistory: true, expiresAt: true, maxUses: true, currentUses: true }
         });
-        if (shareLink && !shareLink.allowViewHistory) {
-          historyStartDate = participant.joinedAt;
+        if (shareLink) {
+          if (shareLink.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
+            return reply.status(403).send({ success: false, error: { code: 'SHARE_LINK_EXPIRED', message: 'This share link has expired' } });
+          }
+          if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
+            return reply.status(403).send({ success: false, error: { code: 'SHARE_LINK_MAX_USES', message: 'This share link has reached its usage limit' } });
+          }
+          if (!shareLink.allowViewHistory) {
+            historyStartDate = participant.joinedAt;
+          }
         }
       }
 
