@@ -31,6 +31,8 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onAudioTranslation: jest.fn(() => () => {}),
     onParticipantRoleUpdated: jest.fn(() => () => {}),
     onPreferencesUpdated: jest.fn(() => () => {}),
+    onConversationJoined: jest.fn(() => () => {}),
+    onConversationLeft: jest.fn(() => () => {}),
   },
 }));
 

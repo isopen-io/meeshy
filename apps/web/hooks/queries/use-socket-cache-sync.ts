@@ -362,7 +362,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         queryKey: queryKeys.preferences.category(data.category),
       });
     });
-<<<<<<< HEAD
     const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
     const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
