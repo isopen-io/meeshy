@@ -20,6 +20,9 @@ export function useAutoRetryFailedMessages() {
 
     if (retryable.length === 0) return;
 
+    const diagnostics = meeshySocketIOService.getConnectionDiagnostics();
+    if (!diagnostics.isConnected) return;
+
     isRetrying.current = true;
 
     const retrySequential = async () => {

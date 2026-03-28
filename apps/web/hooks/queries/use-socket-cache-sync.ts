@@ -242,6 +242,12 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
+    const handleParticipantRoleUpdated = (data: { conversationId: string; userId: string; newRole: string }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
     // W6: Handler for transcription results — updates attachment transcription in cache
     const handleTranscription = (data: { messageId: string; transcription: string; language?: string; [key: string]: unknown }) => {
       if (!conversationId) return;
@@ -350,8 +356,10 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         queryKey: queryKeys.preferences.category(data.category),
       });
     });
+<<<<<<< HEAD
     const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
+    const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
 
     return () => {
       unsubscribeMessage?.();
@@ -364,6 +372,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribePreferences?.();
       unsubscribeJoined?.();
       unsubscribeLeft?.();
+      unsubscribeParticipantRole?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

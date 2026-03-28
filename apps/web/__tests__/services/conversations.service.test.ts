@@ -40,10 +40,6 @@ const mockApiService = apiService as jest.Mocked<typeof apiService>;
 describe('ConversationsService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
-    // Clear internal caches to prevent test pollution
-    (conversationsService as any).conversationsCache = null;
-    (conversationsService as any).messagesCache?.clear();
-    (conversationsService as any).participantsCache?.clear();
   });
 
   describe('getConversations', () => {
@@ -132,7 +128,7 @@ describe('ConversationsService', () => {
       expect(mockApiService.get).toHaveBeenCalledTimes(1);
     });
 
-    it('should skip cache when skipCache option is true', async () => {
+    it('should always call API (no service-level cache)', async () => {
       mockApiService.get.mockResolvedValue({
         data: {
           success: true,
@@ -143,7 +139,7 @@ describe('ConversationsService', () => {
       });
 
       await conversationsService.getConversations();
-      await conversationsService.getConversations({ skipCache: true });
+      await conversationsService.getConversations({});
 
       expect(mockApiService.get).toHaveBeenCalledTimes(2);
     });
@@ -158,7 +154,7 @@ describe('ConversationsService', () => {
         success: true,
       });
 
-      await conversationsService.getConversations({ type: 'group', skipCache: true });
+      await conversationsService.getConversations({ type: 'group' });
 
       expect(mockApiService.get).toHaveBeenCalledWith('/conversations', {
         limit: '20',
@@ -177,7 +173,7 @@ describe('ConversationsService', () => {
         success: true,
       });
 
-      await conversationsService.getConversations({ withUserId: 'user-123', skipCache: true });
+      await conversationsService.getConversations({ withUserId: 'user-123' });
 
       expect(mockApiService.get).toHaveBeenCalledWith('/conversations', {
         limit: '20',
@@ -674,7 +670,7 @@ describe('ConversationsService', () => {
       const apiError = new Error('Network error');
       mockApiService.get.mockRejectedValue(apiError);
 
-      await expect(conversationsService.getConversations({ skipCache: true })).rejects.toThrow(
+      await expect(conversationsService.getConversations({})).rejects.toThrow(
         'Network error'
       );
     });
@@ -708,7 +704,7 @@ describe('ConversationsService', () => {
           success: true,
         });
 
-        const result = await conversationsService.getConversations({ skipCache: true });
+        const result = await conversationsService.getConversations({});
         expect(result.conversations[0].type).toBe(testCase.expected);
       }
     });

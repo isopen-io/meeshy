@@ -326,6 +326,10 @@ class MeeshySocketIOService {
     return this.orchestrator.onPreferencesUpdated(listener);
   }
 
+  public onParticipantRoleUpdated(listener: (data: { conversationId: string; userId: string; newRole: string }) => void): () => void {
+    return this.orchestrator.onParticipantRoleUpdated(listener);
+  }
+
   /**
    * Obtient le statut de connexion
    */

@@ -64,7 +64,6 @@ import { useMessageActions } from '@/hooks/conversations/useMessageActions';
 import { useTranslationState } from '@/hooks/conversations/use-translation-state';
 import { useParticipants } from '@/hooks/conversations/use-participants';
 import { useVideoCall } from '@/hooks/conversations/use-video-call';
-import type { TranslationEvent } from '@meeshy/shared/types';
 
 // Dynamic imports (bundle-dynamic-imports) - chargés uniquement quand nécessaires
 const AttachmentGallery = dynamic(

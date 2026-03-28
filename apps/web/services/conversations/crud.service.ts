@@ -155,7 +155,6 @@ export class ConversationsCrudService {
   async getConversationsWithUser(userId: string): Promise<Conversation[]> {
     try {
       const { conversations } = await this.getConversations({
-        skipCache: true,
         type: 'direct',
         withUserId: userId
       });

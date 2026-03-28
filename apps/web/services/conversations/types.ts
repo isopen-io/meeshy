@@ -32,7 +32,6 @@ export interface ParticipantsFilters {
 export interface GetConversationsOptions {
   limit?: number;
   offset?: number;
-  skipCache?: boolean;
   type?: ConversationType;
   withUserId?: string;
   before?: string;
