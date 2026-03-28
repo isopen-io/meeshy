@@ -1,76 +1,53 @@
-/**
- * Unified User Preferences Store
- *
- * Centralized state management for all user-level preferences:
- * - Notification preferences
- * - Encryption preferences
- * - Privacy settings
- * - Language preferences (merged from language-store)
- *
- * This store provides a single source of truth for checking user preferences
- * across the entire application before displaying content or performing operations.
- */
-
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
-import type { EncryptionPreference } from '@meeshy/shared/types';
+import type {
+  NotificationPreference,
+  PrivacyPreference,
+} from '@meeshy/shared/types/preferences';
 
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
-
-// Re-export from shared for backwards compatibility
 export type { EncryptionPreference } from '@meeshy/shared/types';
 
-export interface NotificationPreferences {
-  // Global toggles
-  pushEnabled: boolean;
-  emailEnabled: boolean;
-  soundEnabled: boolean;
+export type StoreNotificationPreferences = Pick<
+  NotificationPreference,
+  | 'pushEnabled'
+  | 'emailEnabled'
+  | 'soundEnabled'
+  | 'newMessageEnabled'
+  | 'missedCallEnabled'
+  | 'systemEnabled'
+  | 'conversationEnabled'
+  | 'replyEnabled'
+  | 'mentionEnabled'
+  | 'reactionEnabled'
+  | 'contactRequestEnabled'
+  | 'memberJoinedEnabled'
+  | 'dndEnabled'
+  | 'dndStartTime'
+  | 'dndEndTime'
+>;
 
-  // Per-type preferences
-  newMessageEnabled: boolean;
-  missedCallEnabled: boolean;
-  systemEnabled: boolean;
-  conversationEnabled: boolean;
-  replyEnabled: boolean;
-  mentionEnabled: boolean;
-  reactionEnabled: boolean;
-  contactRequestEnabled: boolean;
-  memberJoinedEnabled: boolean;
+export type EncryptionPreferences = Pick<
+  PrivacyPreference,
+  | 'encryptionPreference'
+  | 'autoEncryptNewConversations'
+  | 'showEncryptionStatus'
+  | 'warnOnUnencrypted'
+>;
 
-  // Do Not Disturb
-  dndEnabled: boolean;
-  dndStartTime?: string;
-  dndEndTime?: string;
-}
-
-export interface EncryptionPreferences {
-  // Server-side preferences (synced with backend via /me/preferences/privacy)
-  encryptionPreference: EncryptionPreference;
-  autoEncryptNewConversations: boolean;
-  showEncryptionStatus: boolean;
-  warnOnUnencrypted: boolean;
-}
-
-export interface PrivacyPreferences {
-  // Profile visibility
-  showOnlineStatus: boolean;
-  showLastSeen: boolean;
-  showReadReceipts: boolean;
-  showTypingIndicator: boolean;
-
-  // Contact settings
-  allowContactRequests: boolean;
-  allowGroupInvites: boolean;
-
-  // Data settings
-  saveMediaToGallery: boolean;
-  allowAnalytics: boolean;
-}
+export type StorePrivacyPreferences = Pick<
+  PrivacyPreference,
+  | 'showOnlineStatus'
+  | 'showLastSeen'
+  | 'showReadReceipts'
+  | 'showTypingIndicator'
+  | 'allowContactRequests'
+  | 'allowGroupInvites'
+  | 'saveMediaToGallery'
+  | 'allowAnalytics'
+>;
 
 export interface LanguagePreferences {
   preferredLanguage: string;
@@ -79,12 +56,17 @@ export interface LanguagePreferences {
   translationTargetLanguage: string;
 }
 
+export interface StoryPreferences {
+  defaultVisibility: 'PUBLIC' | 'FRIENDS' | 'PRIVATE';
+  storyNotificationsEnabled: boolean;
+}
+
 export interface UserPreferencesState {
-  // All preference categories
-  notifications: NotificationPreferences;
+  notifications: StoreNotificationPreferences;
   encryption: EncryptionPreferences;
-  privacy: PrivacyPreferences;
+  privacy: StorePrivacyPreferences;
   language: LanguagePreferences;
+  story: StoryPreferences;
 
   // Loading states
   isLoading: boolean;
@@ -106,24 +88,24 @@ export interface UserPreferencesActions {
   syncEncryption: () => Promise<void>;
   syncPrivacy: () => Promise<void>;
 
-  // Update preferences
-  updateNotifications: (prefs: Partial<NotificationPreferences>) => Promise<void>;
+  updateNotifications: (prefs: Partial<StoreNotificationPreferences>) => Promise<void>;
   updateEncryption: (prefs: Partial<EncryptionPreferences>) => Promise<void>;
   updateEncryptionLocalSettings: (settings: Partial<EncryptionPreferences>) => Promise<void>;
-  updatePrivacy: (prefs: Partial<PrivacyPreferences>) => Promise<void>;
+  updatePrivacy: (prefs: Partial<StorePrivacyPreferences>) => Promise<void>;
   updateLanguage: (prefs: Partial<LanguagePreferences>) => void;
+  updateStory: (prefs: Partial<StoryPreferences>) => void;
 
   // Utility checks
   shouldShowEncryptionWarning: (conversationEncrypted: boolean) => boolean;
   isInDndPeriod: () => boolean;
-  canReceiveNotification: (type: keyof NotificationPreferences) => boolean;
+  canReceiveNotification: (type: keyof StoreNotificationPreferences) => boolean;
 }
 
 // ============================================================================
 // DEFAULT VALUES
 // ============================================================================
 
-const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+const DEFAULT_NOTIFICATION_PREFERENCES: StoreNotificationPreferences = {
   pushEnabled: true,
   emailEnabled: true,
   soundEnabled: true,
@@ -148,7 +130,7 @@ const DEFAULT_ENCRYPTION_PREFERENCES: EncryptionPreferences = {
   warnOnUnencrypted: false,
 };
 
-const DEFAULT_PRIVACY_PREFERENCES: PrivacyPreferences = {
+const DEFAULT_PRIVACY_PREFERENCES: StorePrivacyPreferences = {
   showOnlineStatus: true,
   showLastSeen: true,
   showReadReceipts: true,
@@ -166,11 +148,17 @@ const DEFAULT_LANGUAGE_PREFERENCES: LanguagePreferences = {
   translationTargetLanguage: 'fr',
 };
 
+const DEFAULT_STORY_PREFERENCES: StoryPreferences = {
+  defaultVisibility: 'FRIENDS',
+  storyNotificationsEnabled: true,
+};
+
 const DEFAULT_STATE: UserPreferencesState = {
   notifications: DEFAULT_NOTIFICATION_PREFERENCES,
   encryption: DEFAULT_ENCRYPTION_PREFERENCES,
   privacy: DEFAULT_PRIVACY_PREFERENCES,
   language: DEFAULT_LANGUAGE_PREFERENCES,
+  story: DEFAULT_STORY_PREFERENCES,
   isLoading: false,
   isInitialized: false,
   lastSyncedAt: null,
@@ -438,6 +426,12 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         }));
       },
 
+      updateStory: (prefs) => {
+        set(state => ({
+          story: { ...state.story, ...prefs }
+        }));
+      },
+
       // ========================================================================
       // UTILITY CHECKS
       // ========================================================================
@@ -488,7 +482,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         if (!notifications.pushEnabled) return false;
 
         // Check specific type
-        const key = type as keyof NotificationPreferences;
+        const key = type as keyof StoreNotificationPreferences;
         if (typeof notifications[key] === 'boolean') {
           return notifications[key] as boolean;
         }
@@ -505,6 +499,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         encryption: state.encryption,
         privacy: state.privacy,
         language: state.language,
+        story: state.story,
         lastSyncedAt: state.lastSyncedAt,
       }),
     }
@@ -559,6 +554,16 @@ export const useLanguagePreferencesFromStore = () => {
   return useUserPreferencesStore(useShallow(state => ({
     preferences: state.language,
     update: state.updateLanguage,
+  })));
+};
+
+/**
+ * Hook for story preferences only
+ */
+export const useStoryPreferences = () => {
+  return useUserPreferencesStore(useShallow(state => ({
+    preferences: state.story,
+    update: state.updateStory,
   })));
 };
 

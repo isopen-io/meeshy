@@ -284,6 +284,7 @@ class ConversationViewModel: ObservableObject {
     private let conversationService: ConversationServiceProviding
     private let reactionService: ReactionServiceProviding
     private let reportService: ReportServiceProviding
+    private let syncEngine: ConversationSyncEngineProviding
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
     private var currentUsername: String? { authManager.currentUser?.username }
@@ -421,7 +422,8 @@ class ConversationViewModel: ObservableObject {
         messageService: MessageServiceProviding = MessageService.shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
         reactionService: ReactionServiceProviding = ReactionService.shared,
-        reportService: ReportServiceProviding = ReportService.shared
+        reportService: ReportServiceProviding = ReportService.shared,
+        syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared
     ) {
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
@@ -433,6 +435,7 @@ class ConversationViewModel: ObservableObject {
         self.conversationService = conversationService
         self.reactionService = reactionService
         self.reportService = reportService
+        self.syncEngine = syncEngine
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: authManager.currentUser?.id ?? ""
@@ -494,50 +497,58 @@ class ConversationViewModel: ObservableObject {
         isLoadingInitial = true
         error = nil
 
-        // Show cached messages immediately while fetching from API
-        if messages.isEmpty {
-            let cached = await CacheCoordinator.shared.messages.load(for: conversationId).value ?? []
-            if !cached.isEmpty {
-                messages = cached
+        let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
+        switch cached {
+        case .fresh(let data, _):
+            messages = data
+        case .stale(let data, _):
+            messages = data
+            Task { [weak self] in
+                guard let self else { return }
+                await self.syncEngine.ensureMessages(for: self.conversationId)
+            }
+        case .expired, .empty:
+            await syncEngine.ensureMessages(for: conversationId)
+            let reloaded = await CacheCoordinator.shared.messages.load(for: conversationId)
+            if let data = reloaded.value {
+                messages = data
             }
         }
 
-        do {
-            let response = try await messageService.list(
-                conversationId: conversationId, offset: 0, limit: limit, includeReplies: true
-            )
-
-            let loadedMessages = await processAPIMessages(response.data)
-
-            // Merge: keep any socket-delivered messages that arrived during the await
-            let loadedIds = Set(loadedMessages.map(\.id))
-            let socketOnly = messages.filter { !loadedIds.contains($0.id) && $0.createdAt > (loadedMessages.last?.createdAt ?? .distantPast) }
-            messages = loadedMessages + socketOnly
-            self.nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? false
-
-            // Calculate first unread message position
-            if initialUnreadCount > 0 && messages.count >= initialUnreadCount {
-                let unreadStartIndex = messages.count - initialUnreadCount
-                let candidate = messages[unreadStartIndex]
-                if !candidate.isMe {
-                    firstUnreadMessageId = candidate.id
-                }
+        // Calculate first unread message position
+        if initialUnreadCount > 0 && messages.count >= initialUnreadCount {
+            let unreadStartIndex = messages.count - initialUnreadCount
+            let candidate = messages[unreadStartIndex]
+            if !candidate.isMe {
+                firstUnreadMessageId = candidate.id
             }
-
-            // Mark conversation as read (fire-and-forget)
-            markAsRead()
-
-            // Update cache in background
-            let conversationId = self.conversationId
-            Task.detached(priority: .utility) { [messages] in
-                await CacheCoordinator.shared.messages.save(messages, for: conversationId)
-            }
-        } catch {
-            self.error = error.localizedDescription
         }
+
+        // Mark conversation as read (fire-and-forget)
+        markAsRead()
 
         isLoadingInitial = false
+    }
+
+    // MARK: - Sync Engine Observation
+
+    func observeSync() {
+        syncEngine.messagesDidChange
+            .filter { [weak self] id in id == self?.conversationId }
+            .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { [weak self] in
+                    guard let self else { return }
+                    let cached = await CacheCoordinator.shared.messages.load(for: self.conversationId)
+                    switch cached {
+                    case .fresh(let data, _), .stale(let data, _):
+                        self.messages = data
+                    case .expired, .empty:
+                        break
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Load Older Messages (infinite scroll)
@@ -557,35 +568,14 @@ class ConversationViewModel: ObservableObject {
 
         let beforeValue = nextMessageCursor ?? oldestId
 
-        var lastError: Error?
-        for attempt in 1...Self.paginationRetryCount {
-            do {
-                let response = try await messageService.listBefore(
-                    conversationId: conversationId, before: beforeValue, limit: limit, includeReplies: true
-                )
+        await syncEngine.fetchOlderMessages(for: conversationId, before: beforeValue)
 
-                let olderMessages = await processAPIMessages(response.data)
-
-                // Dedup and prepend (single array assignment to avoid O(N) insert + multiple didSet)
-                let newMessages = olderMessages.filter { !self.containsMessage(id: $0.id) }
-                messages = newMessages + messages
-
-                self.nextMessageCursor = response.cursorPagination?.nextCursor
-                hasOlderMessages = response.cursorPagination?.hasMore ?? false
-                lastError = nil
-                break
-            } catch {
-                lastError = error
-                if attempt < Self.paginationRetryCount {
-                    Logger.messages.warning("loadOlderMessages attempt \(attempt) failed, retrying: \(error.localizedDescription)")
-                    try? await Task.sleep(nanoseconds: Self.paginationRetryDelay)
-                }
-            }
-        }
-
-        if let lastError {
-            Logger.messages.error("loadOlderMessages failed after \(Self.paginationRetryCount) attempts: \(lastError.localizedDescription)")
-            self.error = lastError.localizedDescription
+        // Reload from cache
+        let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
+        if let data = cached.value {
+            let previousCount = messages.count
+            messages = data
+            hasOlderMessages = data.count > previousCount
         }
 
         isLoadingOlder = false

@@ -16,6 +16,10 @@ import React from 'react';
 import { useContactsV2, type ContactV2 } from '@/hooks/v2/use-contacts-v2';
 import type { User } from '@meeshy/shared/types';
 
+// Use fake timers for debounce testing
+beforeEach(() => jest.useFakeTimers());
+afterEach(() => jest.useRealTimers());
+
 // Mock users service
 const mockGetAllUsers = jest.fn();
 const mockSearchUsers = jest.fn();
@@ -179,7 +183,7 @@ describe('useContactsV2', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      const contact = result.current.contacts[0];
+      const contact = result.current.contacts.find(c => c.id === 'user-1');
       expect(contact).toMatchObject({
         id: 'user-1',
         name: 'Yuki Tanaka',
@@ -329,13 +333,16 @@ describe('useContactsV2', () => {
         result.current.setSearchQuery('yu');
       });
 
+      // Advance debounce timer
+      act(() => jest.advanceTimersByTime(300));
+
       await waitFor(() => {
         expect(mockSearchUsers).toHaveBeenCalledWith('yu');
       });
     });
 
     it('should return search results', async () => {
-      mockSearchUsers.mockResolvedValue({ data: [mockUsers[0], mockUsers[2]] });
+      mockSearchUsers.mockResolvedValue([mockUsers[0], mockUsers[2]]);
 
       const { result } = renderHook(() => useContactsV2(), {
         wrapper: createWrapper(),
@@ -348,6 +355,9 @@ describe('useContactsV2', () => {
       act(() => {
         result.current.setSearchQuery('test');
       });
+
+      // Advance debounce timer
+      act(() => jest.advanceTimersByTime(300));
 
       await waitFor(() => {
         expect(result.current.searchResults).toHaveLength(2);
@@ -367,6 +377,9 @@ describe('useContactsV2', () => {
         result.current.setSearchQuery('yuki');
       });
 
+      // Advance debounce timer
+      act(() => jest.advanceTimersByTime(300));
+
       await waitFor(() => {
         // contacts should be filtered locally
         expect(result.current.contacts.length).toBeLessThan(4);
@@ -374,8 +387,9 @@ describe('useContactsV2', () => {
     });
 
     it('should show isSearching state', async () => {
+      let resolveSearch: (value: unknown[]) => void;
       mockSearchUsers.mockImplementation(
-        () => new Promise(resolve => setTimeout(() => resolve({ data: [] }), 100))
+        () => new Promise<unknown[]>(resolve => { resolveSearch = resolve; })
       );
 
       const { result } = renderHook(() => useContactsV2(), {
@@ -390,8 +404,16 @@ describe('useContactsV2', () => {
         result.current.setSearchQuery('test');
       });
 
-      // isSearching should be true while searching
-      expect(result.current.isSearching).toBe(true);
+      // Advance debounce timer to trigger search
+      act(() => jest.advanceTimersByTime(300));
+
+      // isSearching should be true while search promise is pending
+      await waitFor(() => {
+        expect(result.current.isSearching).toBe(true);
+      });
+
+      // Resolve the search to clean up
+      await act(async () => { resolveSearch!([]); });
     });
   });
 

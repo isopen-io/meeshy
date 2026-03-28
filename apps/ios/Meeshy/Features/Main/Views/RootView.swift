@@ -283,6 +283,19 @@ struct RootView: View {
             // Connect Socket.IO early so the backend knows we're online
             MessageSocketManager.shared.connect()
             statusViewModel.subscribeToSocketEvents()
+
+            // Start SyncEngine socket relay
+            await ConversationSyncEngine.shared.startSocketRelay()
+
+            // Deferred cleanup
+            Task.detached(priority: .background) {
+                try? await Task.sleep(for: .seconds(5))
+                await ConversationSyncEngine.shared.cleanupRetentionIfNeeded()
+            }
+
+            // Observe sync events for conversation list
+            conversationViewModel.observeSync()
+
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
             await conversationViewModel.loadConversations()

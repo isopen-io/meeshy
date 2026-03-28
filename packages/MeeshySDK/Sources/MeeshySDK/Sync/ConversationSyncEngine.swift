@@ -144,7 +144,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var merged = existing
 
             for delta in deltaConversations {
-                if delta.deletedAt != nil {
+                if !delta.isActive {
                     merged.removeAll { $0.id == delta.id }
                     await cache.messages.invalidate(for: delta.id)
                 } else if let idx = merged.firstIndex(where: { $0.id == delta.id }) {
@@ -379,7 +379,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == msg.conversationId }) {
-                updated[idx].lastMessage = msg
+                updated[idx].lastMessagePreview = msg.content
+                updated[idx].lastMessageId = msg.id
+                updated[idx].lastMessageSenderName = msg.senderName
+                updated[idx].lastMessageAt = msg.createdAt
                 updated[idx].unreadCount += 1
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)
@@ -407,41 +410,52 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     private func handleReactionAdded(_ event: ReactionUpdateEvent) async {
-        await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
+        guard let convId = event.conversationId else { return }
+        await cache.messages.upsertPatch(for: convId, itemId: event.messageId) { msg in
             let reaction = MeeshyReaction(
-                id: event.reactionId ?? UUID().uuidString,
-                emoji: event.emoji,
-                userId: event.userId,
-                username: event.username ?? "",
-                createdAt: Date()
+                messageId: event.messageId,
+                participantId: event.participantId,
+                emoji: event.emoji
             )
-            if !msg.reactions.contains(where: { $0.id == reaction.id }) {
+            if !msg.reactions.contains(where: { $0.emoji == reaction.emoji && $0.participantId == reaction.participantId }) {
                 msg.reactions.append(reaction)
             }
         }
-        _messagesDidChange.send(event.conversationId)
+        _messagesDidChange.send(convId)
     }
 
     private func handleReactionRemoved(_ event: ReactionUpdateEvent) async {
-        await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
-            msg.reactions.removeAll { $0.id == event.reactionId }
+        guard let convId = event.conversationId else { return }
+        await cache.messages.upsertPatch(for: convId, itemId: event.messageId) { msg in
+            msg.reactions.removeAll { $0.emoji == event.emoji && $0.participantId == event.participantId }
         }
-        _messagesDidChange.send(event.conversationId)
+        _messagesDidChange.send(convId)
     }
 
     private func handleReactionSynced(_ event: ReactionSyncEvent) async {
-        await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
-            msg.reactions = event.reactions.map { apiReaction in
-                MeeshyReaction(
-                    id: apiReaction.id,
-                    emoji: apiReaction.emoji,
-                    userId: apiReaction.userId,
-                    username: apiReaction.username ?? "",
-                    createdAt: apiReaction.createdAt ?? Date()
-                )
+        let messageId = event.messageId
+        let reactions = event.reactions
+        let keys = await cache.messages.loadedKeys()
+        for key in keys {
+            await cache.messages.update(for: key) { existing in
+                existing.map { msg in
+                    guard msg.id == messageId else { return msg }
+                    var updated = msg
+                    updated.reactions = reactions.flatMap { agg in
+                        let pids = agg.participantIds ?? []
+                        return (0..<agg.count).map { index in
+                            let pid: String? = index < pids.count ? pids[index] : nil
+                            return MeeshyReaction(
+                                messageId: messageId,
+                                participantId: pid,
+                                emoji: agg.emoji
+                            )
+                        }
+                    }
+                    return updated
+                }
             }
         }
-        _messagesDidChange.send(event.conversationId)
     }
 
     private func handleUnreadUpdated(_ event: UnreadUpdateEvent) async {

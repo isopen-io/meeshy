@@ -1,6 +1,6 @@
 // Export des services principaux
 export { apiService, ApiService, ApiServiceError } from './api.service';
-export { groupsService, GroupsService } from './groups.service';
+export { communitiesService } from './communities.service';
 export { conversationsService, ConversationsService } from './conversations.service';
 export { usersService } from './users.service';
 export { messagesService } from './messages.service';
@@ -13,13 +13,7 @@ export { NotificationService } from './notification.service';
 // Export des types - API Response types now come from shared
 export type { ApiResponse, ApiError, ApiConfig, PaginationMeta } from '@meeshy/shared/types';
 export type { ParticipantsFilters } from './conversations.service';
-export type {
-  CreateGroupDto,
-  UpdateGroupDto,
-  InviteMemberDto,
-  GroupFilters,
-  GroupsResponse,
-} from './groups.service';
+// Community types are now from @meeshy/shared/types
 
 // Notification types from @/types/notification
 export type {

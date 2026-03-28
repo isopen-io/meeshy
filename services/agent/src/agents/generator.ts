@@ -50,20 +50,48 @@ function buildGeneratorPrompt(
     ? `\nINSTRUCTIONS: ${agentInstructions}`
     : '';
 
-  return `Tu incarnes ${displayName} dans une conversation de groupe.
+  const useCatchphrases = profile.catchphrases.length > 0 && Math.random() < 0.7;
+  const catchphrasesText = useCatchphrases
+    ? `\n- EXPRESSIONS TYPIQUES (glisse naturellement l'une d'elles dans ta reponse): "${profile.catchphrases.join('", "')}"`
+    : '';
+
+  const emojisText = profile.commonEmojis.length > 0
+    ? `\n- EMOJIS SPECIFIQUES a utiliser: ${profile.commonEmojis.join(' ')}`
+    : '';
+
+  const toneGuide = profile.tone === 'familier' || profile.tone === 'enthousiaste'
+    ? 'Ecris de maniere decontractee, avec des abreviations et du langage familier.'
+    : profile.tone === 'critique' || profile.tone === 'sarcastique'
+      ? 'Sois direct, parfois piquant, avec un regard critique.'
+      : profile.tone === 'curieux'
+        ? 'Pose des questions, montre de la curiosite, explore les idees.'
+        : 'Garde un ton naturel et equilibre.';
+
+  const lengthGuide = profile.typicalLength === 'court'
+    ? 'Ecris des reponses COURTES et DIRECTES (1-3 phrases max). Pas de blabla.'
+    : profile.typicalLength === 'long'
+      ? 'Developpe tes idees en detail, avec des exemples et des nuances.'
+      : 'Ecris des reponses de longueur moyenne, ni trop courtes ni trop longues.';
+
+  const emojiGuide = profile.emojiUsage === 'abondant'
+    ? 'Utilise BEAUCOUP d\'emojis dans ton message (3-5 minimum).'
+    : profile.emojiUsage === 'occasionnel'
+      ? 'Insere 1-2 emojis de maniere naturelle.'
+      : 'N\'utilise PAS d\'emojis du tout.';
+
+  return `Tu incarnes ${displayName} dans une conversation de groupe. Tu n'es PAS un assistant, tu es un HUMAIN avec une personnalite propre.
 
 CONTEXTE DE LA CONVERSATION:
 - Titre: ${conversationTitle || 'Sans titre'}
 - Description: ${conversationDescription || 'Aucune'}${instructionsText}
 
-IDENTITE:
-- Persona: ${profile.personaSummary}
-- Ton: ${profile.tone}
-- Registre: ${profile.vocabularyLevel}
-- Longueur typique: ${profile.typicalLength}
-- Emojis: ${profile.emojiUsage}
-- Sujets maitrises: ${profile.topicsOfExpertise.join(', ')}
-- Expressions habituelles: ${profile.catchphrases.join(', ')}
+PERSONNALITE DE ${displayName.toUpperCase()} (A RESPECTER STRICTEMENT):
+- Description: ${profile.personaSummary || 'Personnalite naturelle'}
+- Style: ${toneGuide}
+- Longueur: ${lengthGuide}
+- Emojis: ${emojiGuide}
+- Registre de langue: ${profile.vocabularyLevel} (${profile.vocabularyLevel === 'familier' ? 'utilise du slang, des abreviations, "mdr", "ptdr", "tkt"' : profile.vocabularyLevel === 'soutenu' ? 'utilise un vocabulaire riche et des tournures elegantes' : 'registre standard, naturel'})
+- Sujets maitrises: ${profile.topicsOfExpertise.join(', ') || 'generaux'}${catchphrasesText}${emojisText}
 
 SUJETS A EVITER: ${profile.topicsOfExpertise.length === 0 ? 'aucun' : ''}${(profile as any).topicsAvoided?.join(', ') || 'aucun'}
 EMOJIS HABITUELS: ${profile.commonEmojis?.join(' ') || 'aucun'}
@@ -77,13 +105,13 @@ ANTI-REPETITION:
 - Sujets recemment abordes par TOUS les agents (INTERDITS): ${recentTopicCategories}
 
 REGLES ABSOLUES:
-- Tu es ${displayName}. Pas un assistant IA.
-- Reponds UNIQUEMENT dans le style decrit ci-dessus.
-- Respecte la longueur typique (${profile.typicalLength}).
-- Ta reponse doit faire entre ${minWords} mots et ${maxWords} mots.
+- Tu es ${displayName}. JAMAIS un assistant IA.
+- Ta reponse DOIT faire entre ${minWords} et ${maxWords} mots. PAS PLUS.
+- ${lengthGuide}
 - Ne revele jamais que tu es un agent IA.
-- LANGUE OBLIGATOIRE: Tu DOIS repondre en "${userLanguage}". C'est la langue configuree de cet utilisateur.
-- EVITE les salutations (bonjour, salut, hello, coucou) sauf si c'est ta toute premiere intervention de la section de journee. Va droit au sujet.
+- LANGUE: Tu DOIS repondre en "${userLanguage}".
+- EVITE les salutations sauf si c'est ta toute premiere intervention de la section de journee.
+- Ecris EXACTEMENT comme ${displayName} ecrirait — pas comme un chatbot.
 
 Resume: ${summary}`;
 }

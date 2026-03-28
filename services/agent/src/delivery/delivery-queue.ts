@@ -20,6 +20,17 @@ function jitterMs(value: number, percent = 0.2): number {
   return Math.round(value + value * (Math.random() * 2 * percent - percent));
 }
 
+function conversationGap(action: PendingAction): { gapMs: number; jitterPercent: number } {
+  if (action.type !== 'message') return { gapMs: 0, jitterPercent: 0 };
+  const wordCount = action.content?.split(/\s+/).length ?? 0;
+  if (wordCount <= 4) return { gapMs: 10_000, jitterPercent: 0.4 };
+  if (wordCount <= 15) return { gapMs: 15_000, jitterPercent: 0.6 };
+  if (wordCount <= 35) return { gapMs: 30_000, jitterPercent: 0.5 };
+  if (wordCount <= 65) return { gapMs: 90_000, jitterPercent: 0.3 };
+  if (wordCount <= 105) return { gapMs: 120_000, jitterPercent: 0.2 };
+  return { gapMs: 330_000, jitterPercent: 0.4 };
+}
+
 export class DeliveryQueue {
   private queue: DeliveryItem[] = [];
   private cancelled = new Set<string>();
@@ -65,11 +76,35 @@ export class DeliveryQueue {
   }
 
   private scheduleAction(conversationId: string, action: PendingAction, delayMs: number): void {
-    const scheduledAt = Date.now() + delayMs;
+    const now = Date.now();
+    let scheduledAt = now + delayMs;
+
+    if (action.type === 'message') {
+      const latestForConv = this.getLatestMessageScheduledAt(conversationId);
+      if (latestForConv > 0) {
+        const { gapMs, jitterPercent } = conversationGap(action);
+        const minNext = latestForConv + jitterMs(gapMs, jitterPercent);
+        if (scheduledAt < minNext) {
+          scheduledAt = minNext;
+        }
+      }
+    }
+
+    const effectiveDelay = Math.max(0, scheduledAt - now);
     const timer = setTimeout(async () => {
       await this.deliver(conversationId, action);
-    }, delayMs);
+    }, effectiveDelay);
     this.queue.push({ action, conversationId, scheduledAt, timer });
+  }
+
+  private getLatestMessageScheduledAt(conversationId: string): number {
+    let latest = 0;
+    for (const item of this.queue) {
+      if (item.conversationId === conversationId && item.action.type === 'message' && item.scheduledAt > latest) {
+        latest = item.scheduledAt;
+      }
+    }
+    return latest;
   }
 
   cancelForConversation(conversationId: string): number {

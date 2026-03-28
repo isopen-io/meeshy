@@ -1,4 +1,4 @@
-import type { ConversationState, InterventionPlan, InterventionDirective, ControlledUser } from '../graph/state';
+import type { ConversationState, InterventionPlan, InterventionDirective, ReactionDirective, ControlledUser } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 import { getArchetype } from '@meeshy/shared/agent/archetypes';
@@ -162,10 +162,17 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
 
   const effectiveMaxReactions = reactionsEnabled ? maxReactions : 0;
 
-  const historyText = (state.agentHistory ?? [])
+  const recentHistory = (state.agentHistory ?? []).slice(-30);
+
+  const historyText = recentHistory
     .slice(-20)
     .map((h) => `- ${h.userId}: "${h.topic}" (il y a ${Math.round((Date.now() - h.timestamp) / 60000)}min)`)
     .join('\n') || 'Aucune intervention recente.';
+
+  const bannedTopics = [...new Set(recentHistory.map((h) => h.topic).filter(Boolean))];
+  const bannedTopicsText = bannedTopics.length > 0
+    ? `\nSUJETS INTERDITS (deja abordes recemment - NE PAS Y REVENIR, propose un sujet COMPLETEMENT DIFFERENT):\n${bannedTopics.map((t) => `- "${t}"`).join('\n')}`
+    : '';
 
   const instructionsText = state.agentInstructions
     ? `INSTRUCTIONS SPECIFIQUES: ${state.agentInstructions}`
@@ -217,7 +224,7 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     .replace('{conversationTitle}', state.conversationTitle || 'Sans titre')
     .replace('{conversationDescription}', state.conversationDescription || 'Aucune')
     .replace('{agentInstructions}', instructionsText)
-    .replace('{agentHistory}', historyText)
+    .replace('{agentHistory}', historyText + bannedTopicsText)
     .replace('{recentTopicCategories}', recentTopicsText)
     .replace('{engagementData}', engagementText)
     .replace('{inactiveUsers}', inactiveUsersText)
@@ -226,6 +233,14 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     .replace('{messages}', messagesText);
 }
 
+const TYPICAL_LENGTH_RANGES: Record<string, { min: number; max: number }> = {
+  expeditif: { min: 1, max: 15 },
+  court: { min: 10, max: 60 },
+  moyen: { min: 30, max: 150 },
+  long: { min: 100, max: 250 },
+  'tres long': { min: 200, max: 500 },
+};
+
 function calculateWordLimits(
   user: ControlledUser,
   isInterpelle: boolean,
@@ -233,7 +248,7 @@ function calculateWordLimits(
 ) {
   const archetype = user.role.archetypeId ? getArchetype(user.role.archetypeId) : null;
 
-  // 1. User Override
+  // 1. User Override (highest priority)
   let minWords = (user.role as any).overrideMinWordsPerMessage;
   let maxWords = (user.role as any).overrideMaxWordsPerMessage;
 
@@ -241,21 +256,42 @@ function calculateWordLimits(
   if (minWords === undefined || minWords === null) minWords = archetype?.minWords;
   if (maxWords === undefined || maxWords === null) maxWords = archetype?.maxWords;
 
-  // 3. Response Mode / Conversation Default
+  // 3. Per-user typicalLength (maps to distinct word ranges)
+  if (minWords === undefined || minWords === null) {
+    const range = TYPICAL_LENGTH_RANGES[user.role.typicalLength];
+    if (range) minWords = range.min;
+  }
+  if (maxWords === undefined || maxWords === null) {
+    const range = TYPICAL_LENGTH_RANGES[user.role.typicalLength];
+    if (range) maxWords = range.max;
+  }
+
+  // 4. Conversation default fallback
   if (minWords === undefined || minWords === null) minWords = state.minWordsPerMessage;
   if (maxWords === undefined || maxWords === null) {
-    if (!isInterpelle) {
-      // Default to 300 words for "dynamique" (auto-pick) mode
-      maxWords = Math.min(300, state.maxWordsPerMessage);
-    } else {
-      maxWords = state.maxWordsPerMessage;
-    }
+    maxWords = isInterpelle ? state.maxWordsPerMessage : Math.min(300, state.maxWordsPerMessage);
   }
 
   return {
-    minWords: Number(minWords) || 3,
-    maxWords: Number(maxWords) || 300,
+    minWords: Number(minWords) || 10,
+    maxWords: Number(maxWords) || 150,
   };
+}
+
+function extractSignificantWords(text: string): string[] {
+  return text.toLowerCase()
+    .replace(/[^\w\sàâäéèêëïîôùûüÿçæœ]/g, '')
+    .split(/\s+/)
+    .filter((w) => w.length > 4);
+}
+
+function isTopicTooSimilar(topic: string, recentTopics: string[]): boolean {
+  const topicWords = extractSignificantWords(topic);
+  if (topicWords.length === 0) return false;
+  const recentWords = new Set(recentTopics.flatMap((t) => extractSignificantWords(t)));
+  if (recentWords.size === 0) return false;
+  const overlap = topicWords.filter((w) => recentWords.has(w));
+  return overlap.length / topicWords.length > 0.5;
 }
 
 function validateInterventions(
@@ -284,6 +320,13 @@ function validateInterventions(
     if (currentCount >= 2) continue;
 
     if (item.type === 'message' && messageCount < maxMessages) {
+      const topic = String(item.topic ?? '');
+      const recentTopics = (state.agentHistory ?? []).slice(-30).map((h) => h.topic).filter(Boolean);
+      if (topic && isTopicTooSimilar(topic, recentTopics)) {
+        console.warn(`[Strategist] Rejected intervention: topic "${topic}" too similar to recent history`);
+        continue;
+      }
+
       const isInterpelle = Boolean(item.replyToMessageId) || (Array.isArray(item.mentionUsernames) && item.mentionUsernames.length > 0);
       const limits = calculateWordLimits(user, isInterpelle, state);
 
@@ -317,6 +360,77 @@ function validateInterventions(
   }
 
   return validated;
+}
+
+const DEFAULT_REACTION_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '💯', '😮', '🙌', '✨', '🤔'];
+
+function getUserReactionEmojis(user: ControlledUser): string[] {
+  if (user.role.reactionPatterns.length > 0) return user.role.reactionPatterns;
+  if (user.role.commonEmojis.length > 0) return user.role.commonEmojis;
+  return DEFAULT_REACTION_EMOJIS;
+}
+
+function ensureMinimumReactions(
+  interventions: InterventionDirective[],
+  state: ConversationState,
+  maxReactions: number,
+): InterventionDirective[] {
+  if (maxReactions <= 0) return interventions;
+
+  const messageInterventions = interventions.filter((i) => i.type === 'message');
+  if (messageInterventions.length === 0) return interventions;
+
+  const controlledUserIds = new Set(state.controlledUsers.map((u) => u.userId));
+  const controlledUserMap = new Map(state.controlledUsers.map((u) => [u.userId, u]));
+  const reactableMessages = state.messages
+    .filter((m) => !controlledUserIds.has(m.senderId))
+    .slice(-20);
+
+  if (reactableMessages.length === 0) return interventions;
+
+  const alreadyReactedTo = new Set(
+    interventions
+      .filter((i): i is ReactionDirective => i.type === 'reaction')
+      .map((i) => `${i.asUserId}:${i.targetMessageId}`),
+  );
+
+  const result = [...interventions];
+  let totalReactions = interventions.filter((i) => i.type === 'reaction').length;
+
+  const usersWhoSpeak = new Set(messageInterventions.map((i) => i.asUserId));
+
+  for (const userId of usersWhoSpeak) {
+    const user = controlledUserMap.get(userId);
+    if (!user || totalReactions >= maxReactions) break;
+
+    const userExistingReactions = interventions.filter(
+      (i) => i.type === 'reaction' && i.asUserId === userId,
+    ).length;
+    if (userExistingReactions >= 1) continue;
+
+    const reactionCount = 1 + Math.floor(Math.random() * 3);
+    const userEmojis = getUserReactionEmojis(user);
+    const candidateMessages = reactableMessages.filter(
+      (m) => !alreadyReactedTo.has(`${userId}:${m.id}`) && m.senderId !== userId,
+    );
+
+    for (let i = 0; i < reactionCount && i < candidateMessages.length && totalReactions < maxReactions; i++) {
+      const targetMsg = candidateMessages[candidateMessages.length - 1 - i];
+      const emoji = userEmojis[Math.floor(Math.random() * userEmojis.length)];
+
+      result.push({
+        type: 'reaction',
+        asUserId: userId,
+        targetMessageId: targetMsg.id,
+        emoji,
+        delaySeconds: Math.round((3 + Math.random() * 20) * (0.8 + Math.random() * 0.4)),
+      });
+      alreadyReactedTo.add(`${userId}:${targetMsg.id}`);
+      totalReactions++;
+    }
+  }
+
+  return result;
 }
 
 export function createStrategistNode(llm: LlmProvider) {
@@ -403,11 +517,17 @@ export function createStrategistNode(llm: LlmProvider) {
         state,
       );
 
+      const withReactions = ensureMinimumReactions(
+        validatedInterventions,
+        state,
+        reactionsEnabled ? maxReactions : 0,
+      );
+
       return {
         interventionPlan: {
-          shouldIntervene: validatedInterventions.length > 0,
+          shouldIntervene: withReactions.length > 0,
           reason: parsed.reason ?? '',
-          interventions: validatedInterventions,
+          interventions: withReactions,
         } satisfies InterventionPlan,
       };
     } catch (error) {

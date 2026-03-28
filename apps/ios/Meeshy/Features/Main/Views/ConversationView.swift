@@ -444,7 +444,11 @@ struct ConversationView: View {
         bodyContent
             // Réactive le swipe de bord gauche pour revenir en arrière (désactivé par navigationBarHidden)
             .background(InteractivePopEnabler())
-            .task { await viewModel.loadMessages(); MessageSocketManager.shared.connect() }
+            .task {
+                viewModel.observeSync()
+                await viewModel.loadMessages()
+                MessageSocketManager.shared.connect()
+            }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
                 if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {

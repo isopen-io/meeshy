@@ -3,15 +3,16 @@
  * Suit les Vercel React Best Practices: bundle-dynamic-imports
  */
 
-import { memo, lazy, Suspense } from 'react';
+import { memo, lazy, Suspense, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft, Lock, Copy, CheckCircle2, UserPlus, Settings, Globe, Users, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Group, Conversation } from '@meeshy/shared/types';
+import { CommunityMembersPanel } from './CommunityMembersPanel';
+import { CommunityPreferencesMenu } from './CommunityPreferencesMenu';
 
-// Lazy load du composant conversations (bundle-dynamic-imports)
 const ConversationsList = lazy(() => import('./ConversationsList'));
 
 interface GroupDetailsProps {
@@ -20,6 +21,8 @@ interface GroupDetailsProps {
   isLoadingConversations: boolean;
   copiedIdentifier: string | null;
   isMobile: boolean;
+  currentUserId?: string;
+  currentUserRole?: 'admin' | 'moderator' | 'member';
   onBack: () => void;
   onCopyIdentifier: (identifier: string) => void;
   onSettingsClick: () => void;
@@ -32,6 +35,8 @@ export const GroupDetails = memo(function GroupDetails({
   isLoadingConversations,
   copiedIdentifier,
   isMobile,
+  currentUserId,
+  currentUserRole = 'member',
   onBack,
   onCopyIdentifier,
   onSettingsClick,
@@ -39,6 +44,7 @@ export const GroupDetails = memo(function GroupDetails({
 }: GroupDetailsProps) {
   const router = useRouter();
   const displayIdentifier = group.identifier?.replace(/^mshy_/, '') || '';
+  const [showMembers, setShowMembers] = useState(false);
 
   return (
     <>
@@ -99,6 +105,24 @@ export const GroupDetails = memo(function GroupDetails({
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Section À propos */}
           <AboutSection group={group} tGroups={tGroups} />
+
+          {/* Section Préférences utilisateur */}
+          <div className="bg-background/80 dark:bg-background/90 backdrop-blur-sm rounded-2xl border border-border/30 dark:border-border/50 p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+              {tGroups('preferences.title')}
+            </h3>
+            <CommunityPreferencesMenu communityId={group.id} t={tGroups} />
+          </div>
+
+          {/* Section Membres */}
+          {currentUserId && (
+            <CommunityMembersPanel
+              communityId={group.id}
+              currentUserId={currentUserId}
+              currentUserRole={currentUserRole}
+              t={tGroups}
+            />
+          )}
 
           {/* Section Conversations avec lazy loading */}
           <Suspense

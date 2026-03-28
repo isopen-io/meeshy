@@ -84,7 +84,7 @@ export const GroupCard = memo(function GroupCard({
           </div>
           <div className="flex items-center gap-1">
             <MessageSquare className="h-3 w-3" />
-            <span>{group._count?.conversations || 0}</span>
+            <span>{group._count?.Conversation ?? group._count?.conversations ?? 0}</span>
           </div>
           {group.createdAt && (
             <div className="flex items-center gap-1">

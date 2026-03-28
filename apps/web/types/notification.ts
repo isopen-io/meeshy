@@ -94,84 +94,12 @@ export interface NotificationSocketEvent {
 }
 
 /**
- * Configuration du store
+ * UI-only store state (data lives in React Query)
  */
-export interface NotificationStoreConfig {
-  maxNotifications?: number;
-  pollingInterval?: number;
-  enableSound?: boolean;
-  enableToast?: boolean;
-}
-
-/**
- * État du store de notifications
- */
-export interface NotificationStoreState {
-  // État des données
-  notifications: Notification[];
-  unreadCount: number;
-  counts: NotificationCounts;
-
-  // État de l'UI
-  isLoading: boolean;
-  isLoadingMore: boolean;
-  error: string | null;
-
-  // Pagination
-  page: number;
-  hasMore: boolean;
-
-  // Filtres
-  filters: NotificationFilters;
-
-  // Connexion
-  isConnected: boolean;
-  lastSync?: Date;
-
-  // Conversation active (pour filtrer les notifications)
+export interface NotificationUIStoreState {
   activeConversationId: string | null;
+  isConnected: boolean;
 }
-
-/**
- * Actions du store de notifications
- */
-export interface NotificationStoreActions {
-  // Initialisation
-  initialize: () => Promise<void>;
-  disconnect: () => void;
-
-  // Chargement
-  fetchNotifications: (options?: { offset?: number; limit?: number }) => Promise<void>;
-  fetchMore: () => Promise<void>;
-  refresh: () => Promise<void>;
-
-  // Actions sur les notifications
-  addNotification: (notification: Notification) => void;
-  removeNotification: (id: string) => void;
-  markAsRead: (id: string) => Promise<void>;
-  markAllAsRead: () => Promise<void>;
-  deleteNotification: (id: string) => Promise<void>;
-  deleteAllRead: () => Promise<void>;
-
-  // Filtres
-  setFilters: (filters: Partial<NotificationFilters>) => void;
-  clearFilters: () => void;
-
-  // Compteurs
-  updateCounts: (counts: NotificationCounts) => void;
-  updateCountsFromNotifications: () => void;
-
-  // État
-  setLoading: (isLoading: boolean) => void;
-  setError: (error: string | null) => void;
-  setConnected: (isConnected: boolean) => void;
-  setActiveConversationId: (conversationId: string | null) => void;
-}
-
-/**
- * Type complet du store
- */
-export type NotificationStore = NotificationStoreState & NotificationStoreActions;
 
 /**
  * Props pour les composants de notification

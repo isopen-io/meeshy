@@ -3,18 +3,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-
-interface Community {
-  id: string;
-  name: string;
-  description?: string;
-  isPrivate?: boolean;
-  members?: Array<{ id: string }>;
-  memberCount?: number;
-}
+import type { DashboardCommunity } from '@/services/dashboard.service';
 
 interface CommunitiesWidgetProps {
-  communities: Community[];
+  communities: DashboardCommunity[];
   t: (key: string, params?: Record<string, string>) => string;
   onCommunityClick: (id: string) => void;
   onViewAll: () => void;

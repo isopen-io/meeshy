@@ -4,6 +4,34 @@ import { parseJsonLlm } from '../utils/parse-json-llm';
 import { getArchetype } from '@meeshy/shared/agent/archetypes';
 import { contentHash } from '../utils/content-hash';
 
+const STOP_WORDS = new Set([
+  'alors', 'aussi', 'autre', 'avant', 'avoir', 'cette', 'comme', 'dans',
+  'depuis', 'devrait', 'encore', 'entre', 'faire', 'leurs', 'mieux',
+  'moins', 'notre', 'nous', 'parce', 'plus', 'point', 'pour', 'quand',
+  'quel', 'quelle', 'sans', 'serait', 'sont', 'sous', 'suite', 'tous',
+  'tout', 'toute', 'toutes', 'tres', 'votre', 'vous', 'vraiment',
+  'about', 'after', 'because', 'before', 'being', 'between', 'could',
+  'every', 'from', 'have', 'into', 'just', 'more', 'most', 'much',
+  'other', 'over', 'should', 'some', 'still', 'such', 'than', 'that',
+  'their', 'them', 'then', 'there', 'these', 'they', 'this', 'those',
+  'through', 'very', 'what', 'when', 'where', 'which', 'while', 'will',
+  'with', 'would', 'your',
+]);
+
+function extractSignificantWords(text: string): string[] {
+  return text.toLowerCase()
+    .replace(/[^\w\sàâäéèêëïîôùûüÿçæœ]/g, '')
+    .split(/\s+/)
+    .filter((w) => w.length > 4)
+    .filter((w) => !STOP_WORDS.has(w));
+}
+
+function extractTopicSummary(content: string): string {
+  const words = extractSignificantWords(content);
+  if (words.length === 0) return content.slice(0, 50);
+  return words.slice(0, 8).join(' ');
+}
+
 export const AI_REVEAL_PATTERNS = [
   /en tant qu['']ia/i,
   /je suis un(e)? (agent|bot|ia|intelligence artificielle|assistant ia)/i,
@@ -140,6 +168,20 @@ export function createQualityGateNode(llm: LlmProvider) {
         continue;
       }
 
+      const significantWords = extractSignificantWords(msg.content);
+      const recentTopicWords = (state.agentHistory ?? [])
+        .slice(-20)
+        .flatMap((h) => extractSignificantWords(h.topic));
+      if (significantWords.length > 0 && recentTopicWords.length > 0) {
+        const recentTopicSet = new Set(recentTopicWords);
+        const overlap = significantWords.filter((w) => recentTopicSet.has(w));
+        const overlapRatio = overlap.length / significantWords.length;
+        if (overlapRatio > 0.5) {
+          console.warn(`[QualityGate] Topic too similar to recent history (${Math.round(overlapRatio * 100)}% keyword overlap), skipping`);
+          continue;
+        }
+      }
+
       if (isGreeting(msg.content) && hasRecentGreeting(state.agentHistory ?? [], 240)) {
         console.warn(`[QualityGate] Greeting blocked — recent greeting already in history (4h window)`);
         continue;
@@ -205,7 +247,7 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolea
       .filter((a): a is PendingMessage => a.type === 'message')
       .map((a) => ({
         userId: a.asUserId,
-        topic: a.content.slice(0, 50),
+        topic: extractTopicSummary(a.content),
         contentHash: contentHash(a.content),
         timestamp: Date.now(),
       }));

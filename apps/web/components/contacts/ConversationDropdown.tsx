@@ -22,23 +22,22 @@ interface ConversationDropdownProps {
   variant?: 'default' | 'outline';
 }
 
-/**
- * Formatte une date au format court (ex: "Il y a 2h", "Hier", "12/01/2024")
- */
-function formatShortDate(date: Date): string {
+function formatShortDate(
+  date: Date,
+  t: (key: string, params?: Record<string, unknown>) => string
+): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return "À l'instant";
-  if (diffMins < 60) return `Il y a ${diffMins}min`;
-  if (diffHours < 24) return `Il y a ${diffHours}h`;
-  if (diffDays === 1) return 'Hier';
-  if (diffDays < 7) return `Il y a ${diffDays}j`;
+  if (diffMins < 1) return t('status.justNow');
+  if (diffMins < 60) return t('status.minutesAgo', { count: diffMins });
+  if (diffHours < 24) return t('status.hoursAgo', { count: diffHours });
+  if (diffDays < 7) return t('status.daysAgo', { count: diffDays });
 
-  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return date.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 /**
@@ -208,7 +207,7 @@ export function ConversationDropdown({
                     <div className="flex items-center gap-2 text-xs text-muted-foreground dark:text-gray-400">
                       <Clock className="h-3 w-3 flex-shrink-0" />
                       <span className="flex-shrink-0">
-                        {formatShortDate(new Date(conv.createdAt))}
+                        {formatShortDate(new Date(conv.createdAt), t)}
                       </span>
                     </div>
                     {conv.lastMessage && (
@@ -218,7 +217,7 @@ export function ConversationDropdown({
                     )}
                     {conv.lastActivityAt && (
                       <p className="text-xs text-muted-foreground dark:text-gray-500 mt-1">
-                        Dernière activité: {formatShortDate(new Date(conv.lastActivityAt))}
+                        {t('conversations.lastActivity', { date: formatShortDate(new Date(conv.lastActivityAt), t) })}
                       </p>
                     )}
                   </div>

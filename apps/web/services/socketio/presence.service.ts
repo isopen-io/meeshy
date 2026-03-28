@@ -36,6 +36,7 @@ export class PresenceService {
   private reactionAddedListeners: Set<ReactionListener> = new Set();
   private reactionRemovedListeners: Set<ReactionListener> = new Set();
   private conversationJoinedListeners: Set<ConversationJoinedListener> = new Set();
+  private conversationLeftListeners: Set<ConversationJoinedListener> = new Set();
   private readStatusListeners: Set<ReadStatusListener> = new Set();
   private unreadUpdatedListeners: Set<(data: { conversationId: string; unreadCount: number }) => void> = new Set();
 
@@ -82,8 +83,8 @@ export class PresenceService {
     });
 
     // Conversation left
-    socket.on(SERVER_EVENTS.CONVERSATION_LEFT as any, (data: any) => {
-      this.conversationJoinedListeners.forEach(listener => listener(data));
+    socket.on(SERVER_EVENTS.CONVERSATION_LEFT as any, (data: { conversationId: string; userId: string }) => {
+      this.conversationLeftListeners.forEach(listener => listener(data));
     });
 
     // Reaction sync (full state reconciliation after reconnect)
@@ -153,6 +154,11 @@ export class PresenceService {
     return () => this.conversationJoinedListeners.delete(listener);
   }
 
+  onConversationLeft(listener: ConversationJoinedListener): UnsubscribeFn {
+    this.conversationLeftListeners.add(listener);
+    return () => this.conversationLeftListeners.delete(listener);
+  }
+
   /**
    * Event listener: Read status updated
    */
@@ -179,6 +185,7 @@ export class PresenceService {
     this.reactionAddedListeners.clear();
     this.reactionRemovedListeners.clear();
     this.conversationJoinedListeners.clear();
+    this.conversationLeftListeners.clear();
     this.readStatusListeners.clear();
     this.unreadUpdatedListeners.clear();
   }

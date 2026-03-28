@@ -16,15 +16,18 @@ type TextStyle = 'bold' | 'neon' | 'typewriter' | 'handwriting';
 
 type MediaCategory = 'image' | 'video' | 'audio';
 
+type StoryVisibility = 'PUBLIC' | 'FRIENDS' | 'PRIVATE';
+
 interface StoryComposerProps {
   open: boolean;
   onClose: () => void;
   onPublish: (story: {
     content?: string;
     storyEffects: Record<string, unknown>;
-    visibility: string;
+    visibility: StoryVisibility;
     mediaIds?: string[];
   }) => void;
+  defaultVisibility?: StoryVisibility;
 }
 
 // ============================================================================
@@ -61,6 +64,12 @@ const TEXT_STYLES: { id: TextStyle; label: string }[] = [
   { id: 'neon', label: 'Ne' },
   { id: 'typewriter', label: 'Tt' },
   { id: 'handwriting', label: 'Hh' },
+];
+
+const VISIBILITY_OPTIONS: { id: StoryVisibility; label: string; icon: string }[] = [
+  { id: 'PUBLIC', label: 'Public', icon: '\uD83C\uDF0D' },
+  { id: 'FRIENDS', label: 'Amis', icon: '\uD83D\uDC65' },
+  { id: 'PRIVATE', label: 'Priv\u00e9', icon: '\uD83D\uDD12' },
 ];
 
 // ============================================================================
@@ -105,10 +114,11 @@ function getCategoryLabel(category: MediaCategory): string {
 // StoryComposer
 // ============================================================================
 
-function StoryComposer({ open, onClose, onPublish }: StoryComposerProps) {
+function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS' }: StoryComposerProps) {
   const [selectedBg, setSelectedBg] = useState<string>(BACKGROUND_COLORS[0].value);
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyle>('bold');
   const [content, setContent] = useState<string>('');
+  const [visibility, setVisibility] = useState<StoryVisibility>(defaultVisibility);
 
   const token = useAuthStore(s => s.authToken);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -166,7 +176,7 @@ function StoryComposer({ open, onClose, onPublish }: StoryComposerProps) {
         backgroundColor: selectedBg,
         textStyle: selectedTextStyle,
       },
-      visibility: 'public',
+      visibility,
       mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
     });
     setContent('');
@@ -180,8 +190,9 @@ function StoryComposer({ open, onClose, onPublish }: StoryComposerProps) {
     setContent('');
     setSelectedBg(BACKGROUND_COLORS[0].value);
     setSelectedTextStyle('bold');
+    setVisibility(defaultVisibility);
     clearAttachments();
-  }, [onClose, clearAttachments]);
+  }, [onClose, clearAttachments, defaultVisibility]);
 
   const hasContent = content.trim().length > 0 || selectedFiles.length > 0;
 
@@ -419,6 +430,26 @@ function StoryComposer({ open, onClose, onPublish }: StoryComposerProps) {
               </button>
             ))}
           </div>
+
+          {/* Visibility Selector */}
+          <div className="flex items-center justify-center gap-2">
+            {VISIBILITY_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setVisibility(opt.id)}
+                className={cn(
+                  'flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-300',
+                  visibility === opt.id
+                    ? 'bg-[var(--gp-terracotta)] text-white'
+                    : 'bg-[var(--gp-hover)] text-[var(--gp-text-secondary)] hover:text-[var(--gp-text-primary)]'
+                )}
+              >
+                <span>{opt.icon}</span>
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Hidden file inputs */}
@@ -463,4 +494,4 @@ function StoryComposer({ open, onClose, onPublish }: StoryComposerProps) {
 StoryComposer.displayName = 'StoryComposer';
 
 export { StoryComposer };
-export type { StoryComposerProps };
+export type { StoryComposerProps, StoryVisibility };

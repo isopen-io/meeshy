@@ -98,6 +98,35 @@ describe('ReactiveHandler', () => {
     const enqueuedActions = queue.enqueue.mock.calls[0][1];
     expect(enqueuedActions).toHaveLength(1);
     expect(enqueuedActions[0].content).toBe('React est vraiment top pour les interfaces');
+    expect(enqueuedActions[0].replyToId).toBe('msg-trigger');
+  });
+
+  it('forces replyToId to trigger message ID on reply interpellation', async () => {
+    const triageResponse = JSON.stringify({
+      shouldRespond: true,
+      responses: [{ asUserId: 'bot-alice', urgency: 'high', isGreeting: false,
+        needsElaboration: false, suggestedTopic: 'reply' }],
+    });
+    const genResponse = JSON.stringify({
+      messages: [{ asUserId: 'bot-alice', content: 'Merci pour ton retour',
+        wordCount: 4, isGreeting: false }],
+    });
+    const llm = makeLlm([triageResponse, genResponse]);
+    const queue = makeDeliveryQueue();
+    const handler = new ReactiveHandler(llm, makePersistence(), makeStateManager(), queue);
+
+    await handler.handleInterpellation({
+      conversationId: 'conv1',
+      triggerMessage: makeTriggerMessage({ id: 'reply-msg-42' }),
+      mentionedUserIds: [],
+      replyToUserId: 'bot-alice',
+      targetUserIds: ['bot-alice'],
+      interpellationType: 'reply',
+    });
+
+    expect(queue.enqueue).toHaveBeenCalledTimes(1);
+    const actions = queue.enqueue.mock.calls[0][1];
+    expect(actions[0].replyToId).toBe('reply-msg-42');
   });
 
   it('skips when triage says shouldRespond=false', async () => {

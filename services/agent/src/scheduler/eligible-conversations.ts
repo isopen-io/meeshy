@@ -65,7 +65,7 @@ export async function findEligibleConversations(
       contextWindowSize: Math.max(5, Math.min(config?.contextWindowSize ?? 50, 250)),
       useFullHistory: config?.useFullHistory ?? false,
       agentType: config?.agentType ?? 'personal',
-      inactivityThresholdHours: Math.max(1, config?.inactivityThresholdHours ?? 72),
+      inactivityThresholdHours: Math.max(1, config?.inactivityThresholdHours ?? 30),
       excludedRoles: config?.excludedRoles ?? [],
       excludedUserIds: config?.excludedUserIds ?? [],
       agentInstructions: config?.agentInstructions ?? null,

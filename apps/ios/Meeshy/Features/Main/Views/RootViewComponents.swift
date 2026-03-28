@@ -205,7 +205,33 @@ struct ThemedFeedOverlay: View {
 
                     // Feed posts with infinite scroll
                     ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
-                        FeedPostCard(post: post)
+                        FeedPostCard(
+                            post: post,
+                            onLike: { postId in
+                                Task { await viewModel.likePost(postId) }
+                            },
+                            onRepost: { postId in
+                                Task { await viewModel.repostPost(postId) }
+                            },
+                            onShare: { postId in
+                                Task { await viewModel.sharePost(postId) }
+                            },
+                            onBookmark: { postId in
+                                Task { await viewModel.bookmarkPost(postId) }
+                            },
+                            onSendComment: { postId, content, parentId in
+                                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
+                            },
+                            onLikeComment: { postId, commentId in
+                                Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
+                            },
+                            onDelete: post.authorId == AuthManager.shared.currentUser?.userId ? { postId in
+                                Task { await viewModel.deletePost(postId) }
+                            } : nil,
+                            onReport: post.authorId != AuthManager.shared.currentUser?.userId ? { postId in
+                                Task { await viewModel.reportPost(postId) }
+                            } : nil
+                        )
                             .staggeredAppear(index: index, baseDelay: 0.06)
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
@@ -484,6 +510,8 @@ struct ThemedFeedCard: View {
     let item: FeedItem
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
+    @State private var isBookmarked = false
+    @State private var showCopiedToast = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -500,14 +528,31 @@ struct ThemedFeedCard: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
-                    Text("2h")
+                    Text(timeAgoShort(from: item.timestamp))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color(hex: item.color))
                 }
 
                 Spacer()
 
-                Button {} label: {
+                Menu {
+                    Button {
+                        UIPasteboard.general.string = item.content
+                        HapticFeedback.success()
+                    } label: {
+                        Label("Copier le texte", systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        let activityVC = UIActivityViewController(activityItems: [item.content], applicationActivities: nil)
+                        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                           let root = scene.windows.first?.rootViewController {
+                            root.present(activityVC, animated: true)
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        Label("Partager", systemImage: "square.and.arrow.up")
+                    }
+                } label: {
                     Image(systemName: "ellipsis")
                         .foregroundColor(theme.textMuted)
                 }
@@ -524,15 +569,19 @@ struct ThemedFeedCard: View {
                 FeedActionButton(icon: isLiked ? "heart.fill" : "heart", color: "FF6B6B", count: item.likes + (isLiked ? 1 : 0), isActive: isLiked) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isLiked.toggle() }
                 }
-                FeedActionButton(icon: "bubble.right", color: "4ECDC4", count: Int.random(in: 0...30))
-                FeedActionButton(icon: "arrow.2.squarepath", color: "9B59B6", count: Int.random(in: 0...15))
+                FeedActionButton(icon: "bubble.right", color: "4ECDC4", count: 0)
+                FeedActionButton(icon: "arrow.2.squarepath", color: "9B59B6", count: 0)
 
                 Spacer()
 
-                Button {} label: {
-                    Image(systemName: "bookmark")
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isBookmarked.toggle() }
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                         .foregroundColor(Color(hex: "F8B500"))
                 }
+                .accessibilityLabel(isBookmarked ? "Retirer des favoris" : "Ajouter aux favoris")
             }
             .padding(.top, 4)
         }
@@ -546,6 +595,14 @@ struct ThemedFeedCard: View {
                 )
                 .shadow(color: Color(hex: item.color).opacity(theme.mode.isDark ? 0.15 : 0.1), radius: 8, y: 4)
         )
+    }
+
+    private func timeAgoShort(from date: Date) -> String {
+        let seconds = Int(Date().timeIntervalSince(date))
+        if seconds < 60 { return "maintenant" }
+        if seconds < 3600 { return "\(seconds / 60)m" }
+        if seconds < 86400 { return "\(seconds / 3600)h" }
+        return "\(seconds / 86400)j"
     }
 }
 

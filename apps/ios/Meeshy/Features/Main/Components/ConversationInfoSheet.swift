@@ -729,7 +729,7 @@ struct ConversationInfoSheet: View {
                 }
             }
         } catch {
-            // Silently fail
+            ToastManager.shared.showError("Erreur lors de la creation du lien")
         }
     }
 
@@ -738,7 +738,7 @@ struct ConversationInfoSheet: View {
             try await ConversationService.shared.delete(conversationId: conversation.id)
             dismiss()
         } catch {
-            // Silently fail
+            ToastManager.shared.showError("Erreur lors du depart de la conversation")
         }
     }
 

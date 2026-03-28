@@ -28,10 +28,10 @@
         "./*"
       ],
       "@meeshy/shared": [
-        "../../packages/shared/dist/types/index.d.ts"
+        "../../packages/shared/types/index.ts"
       ],
       "@meeshy/shared/*": [
-        "../../packages/shared/dist/*"
+        "../../packages/shared/*"
       ],
       "@shared/*": [
         "./shared/*"

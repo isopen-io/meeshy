@@ -15,12 +15,17 @@ struct BookmarksView: View {
                     ForEach(viewModel.posts) { post in
                         FeedPostCard(
                             post: post,
-                            onLike: { _ in },
                             onBookmark: { postId in
                                 Task { await viewModel.removeBookmark(postId) }
                             },
                             onTapPost: { postId in
                                 router.push(.postDetail(postId))
+                            },
+                            onReport: { postId in
+                                Task {
+                                    try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
+                                    ToastManager.shared.showSuccess("Signalement envoye")
+                                }
                             }
                         )
                     }

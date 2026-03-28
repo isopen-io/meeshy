@@ -284,8 +284,10 @@ struct ThemedMessageBubble: View {
     private static let defaultBlurRevealDuration: TimeInterval = 5
 
     private var blurRevealDuration: TimeInterval {
-        // TODO: source from UserPreferencesManager when available
-        Self.defaultBlurRevealDuration
+        if case .double(let value) = UserPreferencesManager.shared.message.extras["blurRevealDuration"] {
+            return value
+        }
+        return Self.defaultBlurRevealDuration
     }
 
     private func revealBlurredContent() {
@@ -1094,12 +1096,20 @@ struct ThemedMessageBubble: View {
             )
 
         case .file:
-            // TODO: Re-enable CodeViewerView once async loading is optimized
-            DocumentViewerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor
-            )
+            if let lang = CodeLanguage.detect(fileName: attachment.originalName, mimeType: attachment.mimeType) {
+                CodeViewerView(
+                    attachment: attachment,
+                    language: lang,
+                    context: .messageBubble,
+                    accentColor: contactColor
+                )
+            } else {
+                DocumentViewerView(
+                    attachment: attachment,
+                    context: .messageBubble,
+                    accentColor: contactColor
+                )
+            }
 
         case .location:
             if let lat = attachment.latitude, let lon = attachment.longitude {

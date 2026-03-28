@@ -25,6 +25,8 @@ final class MockReportService: ReportServiceProviding {
     var lastReportUserType: String?
     var lastReportUserReason: String?
 
+    var reportPostCallCount = 0
+
     var reportStoryCallCount = 0
     var lastReportStoryId: String?
     var lastReportStoryType: String?
@@ -55,6 +57,12 @@ final class MockReportService: ReportServiceProviding {
             lastReportUserReason = reason
         }
         try await MainActor.run { try reportUserResult.get() }
+    }
+
+    nonisolated func reportPost(postId: String, reportType: String, reason: String?) async throws {
+        await MainActor.run {
+            reportPostCallCount += 1
+        }
     }
 
     nonisolated func reportStory(storyId: String, reportType: String, reason: String?) async throws {
@@ -88,6 +96,7 @@ final class MockReportService: ReportServiceProviding {
         lastReportUserId = nil
         lastReportUserType = nil
         lastReportUserReason = nil
+        reportPostCallCount = 0
         reportStoryCallCount = 0
         lastReportStoryId = nil
         lastReportStoryType = nil

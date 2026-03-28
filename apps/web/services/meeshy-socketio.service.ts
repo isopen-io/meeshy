@@ -314,8 +314,16 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationJoined(listener);
   }
 
+  public onConversationLeft(listener: (data: { conversationId: string; userId: string }) => void): () => void {
+    return this.orchestrator.onConversationLeft(listener);
+  }
+
   public onUnreadUpdated(listener: (data: { conversationId: string; unreadCount: number }) => void): () => void {
     return this.orchestrator.onUnreadUpdated(listener);
+  }
+
+  public onPreferencesUpdated(listener: (data: { userId: string; category: string }) => void): () => void {
+    return this.orchestrator.onPreferencesUpdated(listener);
   }
 
   /**

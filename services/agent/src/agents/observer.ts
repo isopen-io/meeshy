@@ -2,23 +2,30 @@ import type { ConversationState, ToneProfile } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 
-const OBSERVER_SYSTEM_PROMPT = `Tu es un analyste conversationnel. Analyse la conversation et retourne un JSON avec:
+const OBSERVER_SYSTEM_PROMPT = `Tu es un analyste conversationnel expert en profilage stylistique. Tu dois identifier ce qui rend CHAQUE participant UNIQUE.
+
+Analyse la conversation et retourne un JSON avec:
 1. "summary": un resume concis de la conversation (max 200 mots)
-2. "overallTone": le ton general (ex: "professionnel", "decontracte", "tendu")
-3. "profiles": un objet avec chaque userId comme cle et un profil contenant:
-   - "tone": le ton de cet utilisateur
+2. "overallTone": le ton general
+3. "profiles": un objet avec chaque userId comme cle et un profil DISTINCTIF contenant:
+   - "tone": le ton SPECIFIQUE (pas juste "neutre" — sois precis: "sarcastique et joueur", "enthousiaste et direct", "reserve mais bienveillant", "critique constructif", "blagueur decontracte", "factuel et concis")
    - "vocabularyLevel": "familier" | "courant" | "soutenu"
-   - "typicalLength": "court" | "moyen" | "long"
+   - "typicalLength": "expeditif" | "court" | "moyen" | "long" | "tres long" (base sur le NOMBRE MOYEN DE MOTS par message: expeditif=1-15, court=10-60, moyen=30-150, long=100-250, tres long=200-500)
    - "emojiUsage": "jamais" | "occasionnel" | "abondant"
-   - "topicsOfExpertise": liste de sujets sur lesquels il intervient
-   - "catchphrases": expressions recurrentes
+   - "topicsOfExpertise": sujets sur lesquels il intervient
+   - "catchphrases": expressions recurrentes et TICS DE LANGAGE (ex: "du coup", "en vrai", "c'est ouf", "perso je", "clairement"). MINIMUM 3 si possible.
    - "responseTriggers": types de messages qui le font reagir
    - "silenceTriggers": types de messages qu'il ignore
-   - "commonEmojis": emojis frequemment utilises dans ses messages (liste de strings)
-   - "reactionPatterns": emojis qu'il utilise typiquement en reaction (liste de strings)
-   - "personaSummary": resume court de sa personnalite
+   - "commonEmojis": emojis SPECIFIQUES qu'il utilise dans ses messages (pas generiques)
+   - "reactionPatterns": emojis qu'il utilise en reaction (liste de strings, MINIMUM 2)
+   - "personaSummary": description DETAILLEE et UNIQUE de sa personnalite (50-100 mots). Decris ses traits distinctifs, ses opinions, son style de communication, ce qui le differencie des autres. NE PAS utiliser des descriptions generiques.
 
-IMPORTANT: Retourne les valeurs de champ TOUJOURS en francais (familier/courant/soutenu, court/moyen/long, jamais/occasionnel/abondant), quelle que soit la langue de la conversation.
+REGLES CRITIQUES:
+- Chaque profil DOIT etre DIFFERENT des autres. Si deux profils se ressemblent, enrichis les distinctions.
+- "personaSummary" doit capturer l'ESSENCE UNIQUE de la personne — comme un portrait psychologique.
+- "tone" doit etre une DESCRIPTION RICHE, pas un seul mot. Combine 2-3 adjectifs.
+- "catchphrases" doit contenir des VRAIS tics de langage observes dans les messages.
+- Valeurs categoriques TOUJOURS en francais (familier/courant/soutenu, court/moyen/long, jamais/occasionnel/abondant).
 Retourne UNIQUEMENT du JSON valide, aucun texte autour.`;
 
 function mergeStringArrays(incoming: unknown, existing: string[] | undefined): string[] {
@@ -107,8 +114,8 @@ export function createObserverNode(llm: LlmProvider) {
             vocabularyLevel: safeString(p.vocabularyLevel, existing?.vocabularyLevel ?? 'courant'),
             typicalLength: safeString(p.typicalLength, existing?.typicalLength ?? 'moyen'),
             emojiUsage: safeString(p.emojiUsage, existing?.emojiUsage ?? 'occasionnel'),
-            topicsOfExpertise: mergeStringArrays(p.topicsOfExpertise, existing?.topicsOfExpertise),
-            topicsAvoided: mergeStringArrays(p.topicsAvoided, existing?.topicsAvoided),
+            topicsOfExpertise: mergeStringArrays(p.topicsOfExpertise, existing?.topicsOfExpertise).slice(-10),
+            topicsAvoided: mergeStringArrays(p.topicsAvoided, existing?.topicsAvoided).slice(-10),
             relationshipMap: existing?.relationshipMap ?? {},
             catchphrases: mergeStringArrays(p.catchphrases, existing?.catchphrases),
             responseTriggers: mergeStringArrays(p.responseTriggers, existing?.responseTriggers),

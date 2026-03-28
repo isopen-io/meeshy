@@ -49,9 +49,9 @@ export {
   useLanguagePreferencesFromStore,
   initializeUserPreferences,
   resetUserPreferences,
-  type NotificationPreferences,
+  type StoreNotificationPreferences,
   type EncryptionPreferences,
-  type PrivacyPreferences,
+  type StorePrivacyPreferences,
   type LanguagePreferences,
   type EncryptionPreference,
 } from './user-preferences-store';

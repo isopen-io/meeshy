@@ -31,6 +31,11 @@ export const queryKeys = {
     settings: () => [...queryKeys.users.current(), 'settings'] as const,
   },
 
+  preferences: {
+    all: ['user-preferences'] as const,
+    category: (category: string) => [...queryKeys.preferences.all, category] as const,
+  },
+
   notifications: {
     all: ['notifications'] as const,
     lists: () => [...queryKeys.notifications.all, 'list'] as const,
@@ -48,9 +53,40 @@ export const queryKeys = {
   communities: {
     all: ['communities'] as const,
     lists: () => [...queryKeys.communities.all, 'list'] as const,
+    list: (filters?: { search?: string }) =>
+      [...queryKeys.communities.lists(), filters] as const,
+    search: (query: string) =>
+      [...queryKeys.communities.all, 'search', query] as const,
     detail: (id: string) => [...queryKeys.communities.all, id] as const,
     members: (communityId: string) =>
       [...queryKeys.communities.detail(communityId), 'members'] as const,
+    conversations: (communityId: string) =>
+      [...queryKeys.communities.detail(communityId), 'conversations'] as const,
+    identifierCheck: (identifier: string) =>
+      [...queryKeys.communities.all, 'identifier-check', identifier] as const,
+    preferences: {
+      all: [...['communities'], 'preferences'] as const,
+      detail: (communityId: string) =>
+        ['communities', 'preferences', communityId] as const,
+      list: () => ['communities', 'preferences', 'list'] as const,
+    },
+  },
+
+  friendRequests: {
+    all: ['friendRequests'] as const,
+    received: () => [...queryKeys.friendRequests.all, 'received'] as const,
+    sent: () => [...queryKeys.friendRequests.all, 'sent'] as const,
+  },
+
+  blockedUsers: {
+    all: ['blockedUsers'] as const,
+    list: () => [...queryKeys.blockedUsers.all, 'list'] as const,
+  },
+
+  stories: {
+    all: ['stories'] as const,
+    feed: () => [...queryKeys.stories.all, 'feed'] as const,
+    viewers: (storyId: string) => [...queryKeys.stories.all, 'viewers', storyId] as const,
   },
 } as const;
 

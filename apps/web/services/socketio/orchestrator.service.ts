@@ -25,6 +25,7 @@ import { MessagingService } from './messaging.service';
 import { TypingService } from './typing.service';
 import { PresenceService } from './presence.service';
 import { TranslationService } from './translation.service';
+import { PreferencesSyncService } from './preferences-sync.service';
 import { e2eeCrypto } from '@/lib/encryption/e2ee-crypto';
 
 /**
@@ -59,6 +60,7 @@ export class SocketIOOrchestrator {
   private typingService: TypingService;
   private presenceService: PresenceService;
   private translationService: TranslationService;
+  private preferencesSyncService: PreferencesSyncService;
 
   // Message conversion helper
   private messageConverter: ((msg: SocketIOMessage) => Message) | null = null;
@@ -78,6 +80,7 @@ export class SocketIOOrchestrator {
     this.typingService = new TypingService();
     this.presenceService = new PresenceService();
     this.translationService = new TranslationService();
+    this.preferencesSyncService = new PreferencesSyncService();
   }
 
   /**
@@ -123,6 +126,7 @@ export class SocketIOOrchestrator {
     this.typingService.setupEventListeners(socket);
     this.presenceService.setupEventListeners(socket);
     this.translationService.setupEventListeners(socket);
+    this.preferencesSyncService.setupEventListeners(socket);
 
     // Connect the socket
     this.connectionService.connect();
@@ -543,8 +547,16 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationJoined(listener);
   }
 
+  onConversationLeft(listener: (data: { conversationId: string; userId: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationLeft(listener);
+  }
+
   onUnreadUpdated(listener: (data: { conversationId: string; unreadCount: number }) => void): UnsubscribeFn {
     return this.presenceService.onUnreadUpdated(listener);
+  }
+
+  onPreferencesUpdated(listener: (data: { userId: string; category: string }) => void): UnsubscribeFn {
+    return this.preferencesSyncService.onPreferencesUpdated(listener);
   }
 
   // ============ CLEANUP ============
@@ -563,6 +575,7 @@ export class SocketIOOrchestrator {
     this.typingService.cleanup();
     this.presenceService.cleanup();
     this.translationService.cleanup();
+    this.preferencesSyncService.cleanup();
   }
 
   /**

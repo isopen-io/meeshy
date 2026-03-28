@@ -3,6 +3,38 @@ import MeeshySDK
 
 // MARK: - MessageInfoSheet
 
+struct ParticipantReceipt: Identifiable {
+    let id: String
+    let name: String
+    let avatarURL: String?
+    let color: String
+    let deliveredAt: Date?
+    let readAt: Date?
+}
+
+struct MessageReadStatusResponse: Decodable {
+    let messageId: String
+    let totalMembers: Int
+    let receivedCount: Int
+    let readCount: Int
+    let receivedBy: [ReceivedEntry]
+    let readBy: [ReadEntry]
+
+    struct ReceivedEntry: Decodable {
+        let participantId: String
+        let displayName: String
+        let avatarURL: String?
+        let receivedAt: Date
+    }
+
+    struct ReadEntry: Decodable {
+        let participantId: String
+        let displayName: String
+        let avatarURL: String?
+        let readAt: Date
+    }
+}
+
 struct MessageInfoSheet: View {
     let message: Message
     let contactColor: String
@@ -10,6 +42,8 @@ struct MessageInfoSheet: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     @State private var appearAnimation = false
+    @State private var receipts: [ParticipantReceipt] = []
+    @State private var isLoadingReceipts = false
 
     // MARK: - Computed Properties
 
@@ -76,8 +110,7 @@ struct MessageInfoSheet: View {
                     senderSection
                     statusTimeline
                     messagePreview
-                    // TODO: Per-participant read receipts (when backend supports it)
-                    // participantReceiptsSection
+                    participantReceiptsSection
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -90,6 +123,7 @@ struct MessageInfoSheet: View {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 appearAnimation = true
             }
+            Task { await loadReadReceipts() }
         }
     }
 
@@ -425,67 +459,113 @@ struct MessageInfoSheet: View {
             )
     }
 
-    // MARK: - Future: Per-Participant Read Receipts
-    //
-    // When the backend supports per-participant delivery/read receipts,
-    // uncomment and adapt this section. Expected data model:
-    //
-    // struct ParticipantReceipt: Identifiable {
-    //     let id: String          // participant userId
-    //     let name: String
-    //     let avatarURL: String?
-    //     let color: String
-    //     let deliveredAt: Date?
-    //     let readAt: Date?
-    // }
-    //
-    // private var participantReceiptsSection: some View {
-    //     VStack(alignment: .leading, spacing: 10) {
-    //         Text("Participants")
-    //             .font(.system(size: 13, weight: .semibold))
-    //             .foregroundColor(theme.textSecondary)
-    //
-    //         ForEach(receipts) { receipt in
-    //             HStack(spacing: 10) {
-    //                 MeeshyAvatar(
-    //                     name: receipt.name,
-    //                     mode: .messageBubble,
-    //                     accentColor: receipt.color,
-    //                     avatarURL: receipt.avatarURL
-    //                 )
-    //
-    //                 VStack(alignment: .leading, spacing: 2) {
-    //                     Text(receipt.name)
-    //                         .font(.system(size: 13, weight: .medium))
-    //                         .foregroundColor(theme.textPrimary)
-    //
-    //                     HStack(spacing: 8) {
-    //                         if let readAt = receipt.readAt {
-    //                             Label(timeFormatter.string(from: readAt), systemImage: "checkmark.circle.fill")
-    //                                 .font(.system(size: 10))
-    //                                 .foregroundColor(Color(hex: "34B7F1"))
-    //                         } else if let deliveredAt = receipt.deliveredAt {
-    //                             Label(timeFormatter.string(from: deliveredAt), systemImage: "checkmark.circle")
-    //                                 .font(.system(size: 10))
-    //                                 .foregroundColor(Color(hex: "8E8E93"))
-    //                         } else {
-    //                             Text("En attente")
-    //                                 .font(.system(size: 10))
-    //                                 .foregroundColor(theme.textMuted)
-    //                                 .italic()
-    //                         }
-    //                     }
-    //                 }
-    //
-    //                 Spacer()
-    //             }
-    //             .padding(.vertical, 4)
-    //         }
-    //     }
-    //     .padding(14)
-    //     .background(sectionBackground)
-    //     .opacity(appearAnimation ? 1 : 0)
-    //     .offset(y: appearAnimation ? 0 : 25)
-    //     .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15), value: appearAnimation)
-    // }
+    // MARK: - Per-Participant Read Receipts
+
+    private var participantReceiptsSection: some View {
+        Group {
+            if isLoadingReceipts {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(accentColor)
+                    Spacer()
+                }
+                .padding(14)
+                .background(sectionBackground)
+            } else if !receipts.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Participants")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textSecondary)
+
+                    ForEach(receipts) { receipt in
+                        HStack(spacing: 10) {
+                            MeeshyAvatar(
+                                name: receipt.name,
+                                context: .messageBubble,
+                                accentColor: receipt.color,
+                                avatarURL: receipt.avatarURL
+                            )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(receipt.name)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(theme.textPrimary)
+
+                                HStack(spacing: 8) {
+                                    if let readAt = receipt.readAt {
+                                        Label(timeFormatter.string(from: readAt), systemImage: "checkmark.circle.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(MeeshyColors.readReceipt)
+                                    } else if let deliveredAt = receipt.deliveredAt {
+                                        Label(timeFormatter.string(from: deliveredAt), systemImage: "checkmark.circle")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(theme.textMuted)
+                                    } else {
+                                        Text("En attente")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(theme.textMuted)
+                                            .italic()
+                                    }
+                                }
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                .padding(14)
+                .background(sectionBackground)
+                .opacity(appearAnimation ? 1 : 0)
+                .offset(y: appearAnimation ? 0 : 25)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15), value: appearAnimation)
+            }
+        }
+    }
+
+    // MARK: - Fetch Read Receipts
+
+    private func loadReadReceipts() async {
+        isLoadingReceipts = true
+        defer { isLoadingReceipts = false }
+
+        do {
+            let response: APIResponse<MessageReadStatusResponse> = try await APIClient.shared.request(
+                endpoint: "/messages/\(message.id)/read-status"
+            )
+            let status = response.data
+
+            var allReceipts: [String: ParticipantReceipt] = [:]
+
+            let readByIds = Set(status.readBy.map(\.participantId))
+            let receivedLookup = Dictionary(uniqueKeysWithValues: status.receivedBy.map { ($0.participantId, $0) })
+
+            for entry in status.readBy {
+                allReceipts[entry.participantId] = ParticipantReceipt(
+                    id: entry.participantId,
+                    name: entry.displayName,
+                    avatarURL: entry.avatarURL,
+                    color: DynamicColorGenerator.colorForName(entry.displayName),
+                    deliveredAt: receivedLookup[entry.participantId]?.receivedAt,
+                    readAt: entry.readAt
+                )
+            }
+
+            for entry in status.receivedBy where !readByIds.contains(entry.participantId) {
+                allReceipts[entry.participantId] = ParticipantReceipt(
+                    id: entry.participantId,
+                    name: entry.displayName,
+                    avatarURL: entry.avatarURL,
+                    color: DynamicColorGenerator.colorForName(entry.displayName),
+                    deliveredAt: entry.receivedAt,
+                    readAt: nil
+                )
+            }
+
+            receipts = Array(allReceipts.values).sorted { ($0.readAt ?? .distantPast) > ($1.readAt ?? .distantPast) }
+        } catch {
+            // Non-critical — aggregated counts still visible in timeline
+        }
+    }
 }

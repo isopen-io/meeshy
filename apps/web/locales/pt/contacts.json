@@ -21,11 +21,13 @@
     "connected": "Conectados",
     "pending": "Pendentes",
     "refused": "Recusados",
+    "blocked": "Bloqueados",
     "affiliates": "Afiliados"
   },
   "status": {
     "online": "Online",
     "offline": "Offline",
+    "away": "Ausente",
     "pending": "Pendente",
     "rejected": "Recusado",
     "neverSeen": "Nunca visto",
@@ -48,6 +50,8 @@
     "connection": "Conexão",
     "add": "Adicionar",
     "cancel": "Cancelar",
+    "block": "Bloquear",
+    "unblock": "Desbloquear",
     "continueConversation": "Continuar",
     "newConversation": "Nova conversa",
     "newConversationDescription": "Iniciar uma nova discussão"
@@ -55,7 +59,8 @@
   "conversations": {
     "existing": "Conversas existentes",
     "untitled": "Sem título",
-    "latest": "Última"
+    "latest": "Última",
+    "lastActivity": "Última atividade: {date}"
   },
   "messages": {
     "noContacts": "Nenhum contato",
@@ -66,6 +71,8 @@
     "noPendingRequestsDescription": "Todas as solicitações de amizade foram processadas",
     "noRefusedRequests": "Nenhuma solicitação recusada",
     "noRefusedRequestsDescription": "Você não recusou nenhuma solicitação de amizade",
+    "noBlockedUsers": "Nenhum usuário bloqueado",
+    "noBlockedUsersDescription": "Você não bloqueou nenhum usuário",
     "noAffiliateContacts": "Nenhum contato afiliado",
     "noAffiliateContactsDescription": "Convide pessoas usando seu link de afiliado",
     "noContactsFound": "Nenhum contato encontrado",
@@ -95,5 +102,19 @@
     "connectionError": "Erro de conexão",
     "conversationCreationError": "Erro ao criar conversa",
     "sessionExpired": "Sessão expirada"
+  },
+  "sort": {
+    "label": "Ordenar",
+    "alphabetical": "Alfabético",
+    "lastSeen": "Última atividade",
+    "recentlyAdded": "Recém-adicionado"
+  },
+  "sections": {
+    "online": "Online",
+    "offline": "Offline"
+  },
+  "blocked": {
+    "confirmTitle": "Desbloquear usuário",
+    "confirmMessage": "Tem certeza de que deseja desbloquear {name}? Essa pessoa poderá entrar em contato novamente."
   }
 }

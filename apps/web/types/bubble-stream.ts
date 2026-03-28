@@ -14,10 +14,11 @@ export type { MessageWithTranslations as BubbleStreamMessageV2 };
 
 export interface BubbleStreamPageProps {
   user: User;
-  conversationId?: string; // ID MongoDB ou identifier (ex: "meeshy" pour la conversation globale). Par défaut "meeshy"
-  isAnonymousMode?: boolean; // Mode anonyme pour les liens partagés
-  linkId?: string; // ID du lien partagé en mode anonyme
-  initialParticipants?: User[]; // Participants initiaux pour les sessions anonymes
+  conversationId?: string;
+  isAnonymousMode?: boolean;
+  linkId?: string;
+  initialParticipants?: User[];
+  anonymousPermissionHints?: string[];
 }
 
 /**
