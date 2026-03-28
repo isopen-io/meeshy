@@ -22,6 +22,7 @@ import {
   normalizeConversationId,
   type SocketUser
 } from '../utils/socket-helpers';
+import { resolveParticipant } from '../utils/participant-resolver.js';
 import type {
   SocketIOResponse,
   MessageRequest,
@@ -30,6 +31,8 @@ import type {
 import type { Message } from '@meeshy/shared/types/index';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
 
 
 export interface MessageHandlerDependencies {
@@ -42,6 +45,7 @@ export interface MessageHandlerDependencies {
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
   stats: { messages_processed: number; errors: number };
+  agentClient?: ZmqAgentClient | null;
 }
 
 export class MessageHandler {
@@ -54,6 +58,8 @@ export class MessageHandler {
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
   private stats: { messages_processed: number; errors: number };
+  private agentClient: ZmqAgentClient | null;
+  private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: MessageHandlerDependencies) {
     this.io = deps.io;
@@ -65,6 +71,7 @@ export class MessageHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.stats = deps.stats;
+    this.agentClient = deps.agentClient ?? null;
   }
 
   /**
@@ -92,6 +99,20 @@ export class MessageHandler {
       }
 
       const { participantId, userId, isAnonymous } = userContext;
+
+      const rateLimitAllowed = await this.rateLimiter.checkLimit(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
+      if (!rateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
+        const errorResponse: SocketIOResponse<{ messageId: string }> = {
+          success: false,
+          error: 'Rate limit exceeded'
+        };
+        if (callback) callback(errorResponse);
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
 
       // Validation longueur du message
       const validation = validateMessageLength(data.content);
@@ -172,6 +193,26 @@ export class MessageHandler {
       if (response.success && response.data) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
         await this.broadcastNewMessage(message, message.conversationId, socket);
+
+        this._notifyAgent({
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          senderDisplayName: (message as unknown as Record<string, unknown>).sender
+            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.displayName as string | undefined
+              ?? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
+            : undefined,
+          senderUsername: (message as unknown as Record<string, unknown>).sender
+            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
+            : undefined,
+          content: message.content,
+          originalLanguage: message.originalLanguage,
+          replyToId: message.replyToId,
+          mentionedUserIds: await this._resolveMentionUserIds(
+            ((message as never)['validatedMentions'] as string[]) ?? []
+          ),
+          createdAt: message.createdAt,
+        });
       }
 
       this.stats.messages_processed++;
@@ -207,7 +248,20 @@ export class MessageHandler {
 
       const { participantId, userId, isAnonymous } = userContext;
 
-      // Validation
+      const rateLimitAllowed = await this.rateLimiter.checkLimit(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
+      if (!rateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
+        const errorResponse: SocketIOResponse<{ messageId: string }> = {
+          success: false,
+          error: 'Rate limit exceeded'
+        };
+        if (callback) callback(errorResponse);
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
+
       if (data.content && data.content.trim()) {
         const validation = validateMessageLength(data.content);
         if (!validation.isValid) {
@@ -261,6 +315,26 @@ export class MessageHandler {
       if (response.success && response.data) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
         await this.broadcastNewMessage(message, message.conversationId, socket);
+
+        this._notifyAgent({
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          senderDisplayName: (message as unknown as Record<string, unknown>).sender
+            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.displayName as string | undefined
+              ?? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
+            : undefined,
+          senderUsername: (message as unknown as Record<string, unknown>).sender
+            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
+            : undefined,
+          content: message.content,
+          originalLanguage: message.originalLanguage,
+          replyToId: message.replyToId,
+          mentionedUserIds: await this._resolveMentionUserIds(
+            ((message as never)['validatedMentions'] as string[]) ?? []
+          ),
+          createdAt: message.createdAt,
+        });
       }
 
       this._sendResponse(callback, response);
@@ -377,16 +451,14 @@ export class MessageHandler {
 
     if (!userId) return null;
 
-    const participant = await this.prisma.participant.findFirst({
-      where: {
-        conversationId,
-        userId,
-        isActive: true
-      },
-      select: { id: true }
+    const result = await resolveParticipant({
+      prisma: this.prisma,
+      userIdOrToken: userId,
+      conversationId,
+      connectedUsers: this.connectedUsers,
     });
 
-    return participant?.id || null;
+    return result?.participantId ?? null;
   }
 
   /**
@@ -563,9 +635,47 @@ export class MessageHandler {
   }
 
 
-  /**
-   * Envoie une réponse d'erreur
-   */
+  private async _resolveMentionUserIds(usernames: string[]): Promise<string[]> {
+    if (usernames.length === 0) return [];
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { username: { in: usernames.map((u) => u.toLowerCase()) } },
+        select: { id: true },
+      });
+      return users.map((u) => u.id);
+    } catch {
+      return [];
+    }
+  }
+
+  private _notifyAgent(message: {
+    id: string;
+    conversationId: string;
+    senderId: string | null;
+    senderDisplayName?: string;
+    senderUsername?: string;
+    content: string | null;
+    originalLanguage: string | null;
+    replyToId?: string | null;
+    mentionedUserIds?: string[];
+    createdAt: Date;
+  }): void {
+    if (!this.agentClient || !message.senderId || !message.content) return;
+    this.agentClient.sendEvent({
+      type: 'agent:new-message',
+      conversationId: message.conversationId,
+      messageId: message.id,
+      senderId: message.senderId,
+      senderDisplayName: message.senderDisplayName,
+      senderUsername: message.senderUsername,
+      content: message.content,
+      originalLanguage: message.originalLanguage ?? 'fr',
+      replyToId: message.replyToId ?? undefined,
+      mentionedUserIds: message.mentionedUserIds ?? [],
+      timestamp: message.createdAt.getTime(),
+    }).catch(() => {});
+  }
+
   private _sendError(
     callback: ((response: SocketIOResponse<{ messageId: string }>) => void) | undefined,
     error: string,
