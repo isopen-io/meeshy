@@ -70,6 +70,23 @@ public struct UserPreferencesUpdatedEvent: Decodable, Sendable {
     }
 }
 
+public struct ConversationStatsEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let stats: ConversationStats
+
+    public struct ConversationStats: Decodable, Sendable {
+        public let participantCount: Int?
+        public let onlineUsers: [OnlineUser]?
+        public let messagesPerLanguage: [String: Int]?
+        public let participantsPerLanguage: [String: Int]?
+    }
+
+    public struct OnlineUser: Decodable, Sendable {
+        public let userId: String
+        public let displayName: String?
+    }
+}
+
 public struct UserStatusEvent: Decodable, Sendable {
     public let userId: String
     public let username: String
@@ -366,6 +383,7 @@ public protocol MessageSocketProviding: Sendable {
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
     var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
+    var conversationStatsReceived: PassthroughSubject<ConversationStatsEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
     var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
     var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
@@ -449,6 +467,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — user preferences
     public let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+
+    // Combine publishers — conversation stats
+    public let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
 
     // Combine publishers — view-once
     public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
@@ -957,6 +978,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        socket.on("conversation:stats") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationStatsEvent.self, from: data) { [weak self] event in
+                self?.conversationStatsReceived.send(event)
+            }
+        }
+
         // --- Location events ---
 
         socket.on("location:shared") { [weak self] data, _ in
@@ -988,6 +1016,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         }
 
         // --- Notification events ---
+
+        socket.on("notification:new") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketNotificationEvent.self, from: data) { [weak self] event in
+                self?.notificationReceived.send(event)
+            }
+        }
 
         socket.on("notification") { [weak self] data, _ in
             guard let self else { return }
