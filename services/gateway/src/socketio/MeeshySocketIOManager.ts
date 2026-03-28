@@ -14,6 +14,7 @@ import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
 import { SocialEventsHandler } from './handlers/SocialEventsHandler';
+import { LocationHandler } from './handlers/LocationHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { EmailService } from '../services/EmailService';
@@ -83,6 +84,7 @@ export class MeeshySocketIOManager {
   private callService: CallService;
   private notificationService: NotificationService;
   private socialEventsHandler: SocialEventsHandler;
+  private locationHandler: LocationHandler;
   private privacyPreferencesService: PrivacyPreferencesService;
   private agentClient: ZmqAgentClient | null = null;
   private mentionService: MentionService;
@@ -160,6 +162,15 @@ export class MeeshySocketIOManager {
     this.socialEventsHandler = new SocialEventsHandler({
       io: this.io as any,
       prisma: this.prisma,
+    });
+
+    // Initialiser le LocationHandler pour les événements de partage de localisation
+    this.locationHandler = new LocationHandler({
+      io: this.io as any,
+      prisma: this.prisma,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      normalizeConversationId: (id: string) => this.normalizeConversationId(id),
     });
 
     // Initialiser le PostAudioService singleton (dépend de socialEventsHandler)
@@ -746,6 +757,24 @@ export class MeeshySocketIOManager {
       // Demander la synchronisation des réactions d'un message
       socket.on(CLIENT_EVENTS.REACTION_REQUEST_SYNC, async (messageId: string, callback?: (response: SocketIOResponse<any>) => void) => {
         await this._handleReactionSync(socket, messageId, callback);
+      });
+
+      // ===== ÉVÉNEMENTS DE LOCALISATION =====
+
+      socket.on(CLIENT_EVENTS.LOCATION_SHARE, async (data, callback) => {
+        await this.locationHandler.handleLocationShare(socket, data, callback);
+      });
+
+      socket.on(CLIENT_EVENTS.LOCATION_LIVE_START, async (data, callback) => {
+        await this.locationHandler.handleLiveLocationStart(socket, data, callback);
+      });
+
+      socket.on(CLIENT_EVENTS.LOCATION_LIVE_UPDATE, async (data) => {
+        await this.locationHandler.handleLiveLocationUpdate(socket, data);
+      });
+
+      socket.on(CLIENT_EVENTS.LOCATION_LIVE_STOP, async (data) => {
+        await this.locationHandler.handleLiveLocationStop(socket, data);
       });
     });
   }
