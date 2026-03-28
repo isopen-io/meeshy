@@ -53,6 +53,23 @@ public struct UnreadUpdateEvent: Decodable, Sendable {
     }
 }
 
+public struct UserPreferencesUpdatedEvent: Decodable, Sendable {
+    public let userId: String
+    public let category: String
+    public let conversationId: String?
+    public let isPinned: Bool?
+    public let isMuted: Bool?
+    public let isArchived: Bool?
+    public let categoryId: String?
+    public let reaction: String?
+
+    public init(userId: String, category: String, conversationId: String? = nil, isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, reaction: String? = nil) {
+        self.userId = userId; self.category = category; self.conversationId = conversationId
+        self.isPinned = isPinned; self.isMuted = isMuted; self.isArchived = isArchived
+        self.categoryId = categoryId; self.reaction = reaction
+    }
+}
+
 public struct UserStatusEvent: Decodable, Sendable {
     public let userId: String
     public let username: String
@@ -348,6 +365,7 @@ public protocol MessageSocketProviding: Sendable {
     var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
+    var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
     var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
     var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
@@ -428,6 +446,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — participant role
     public let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
+
+    // Combine publishers — user preferences
+    public let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
 
     // Combine publishers — view-once
     public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
@@ -926,6 +947,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(ParticipantRoleUpdatedEvent.self, from: data) { [weak self] event in
                 self?.participantRoleUpdated.send(event)
+            }
+        }
+
+        socket.on("user:preferences-updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(UserPreferencesUpdatedEvent.self, from: data) { [weak self] event in
+                self?.userPreferencesUpdated.send(event)
             }
         }
 
