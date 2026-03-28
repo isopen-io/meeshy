@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import type { BubbleTranslation, User, Message, TranslationModel } from '@meeshy/shared/types';
 import { resolveUserPreferredLanguage as resolveUserPreferredLanguageUtil } from '@/utils/user-language-preferences';
 import { LRUCache } from '@/lib/lru-cache';
@@ -56,7 +56,8 @@ interface UseMessageTranslationsReturn {
 export function useMessageTranslations({ 
   currentUser 
 }: UseMessageTranslationsProps): UseMessageTranslationsReturn {
-  
+  const processedCacheRef = useRef(new LRUCache<string, BubbleStreamMessage>(500));
+
   /**
    * Résout la langue préférée de l'utilisateur selon la logique Meeshy.
    * Délègue à resolveUserPreferredLanguage() depuis utils/user-language-preferences — source de vérité unique.
@@ -94,9 +95,11 @@ export function useMessageTranslations({
    * Traite un message brut et le convertit en BubbleStreamMessage avec traductions
    */
   const processMessageWithTranslations = useCallback((message: RawMessage): BubbleStreamMessage => {
-    // Convertir les traductions backend vers le format BubbleTranslation
-    // CORRECTION: Déduplication des traductions par langue pour éviter les doublons
-    const translationsMap = new LRUCache<string, BubbleTranslation>(500);
+    const cacheKey = `${message.id}:${(message.translations || []).length}:${message.updatedAt}`;
+    const cached = processedCacheRef.current.get(cacheKey);
+    if (cached) return cached;
+
+    const translationsMap = new Map<string, BubbleTranslation>();
     
     const validTranslations = (message.translations || [])
       .filter((t: RawTranslation) => {
@@ -176,8 +179,8 @@ export function useMessageTranslations({
 
     const result: BubbleStreamMessage = {
       ...message,
-      content: displayContent, // Contenu d'affichage (peut être traduit)
-      originalContent: message.originalContent || message.content, // CORRECTION: Préserver le contenu original de l'auteur
+      content: displayContent,
+      originalContent: message.originalContent || message.content,
       originalLanguage,
       isTranslated,
       translatedFrom,
@@ -185,6 +188,7 @@ export function useMessageTranslations({
       translations
     };
 
+    processedCacheRef.current.set(cacheKey, result);
     return result;
   }, [resolveUserPreferredLanguage]);
 

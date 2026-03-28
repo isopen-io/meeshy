@@ -13,6 +13,7 @@ const DB_VERSION = 1;
 const KEYS_STORE = 'encryption_keys';
 const CONVERSATIONS_STORE = 'conversation_keys';
 const USER_KEYS_STORE = 'user_keys';
+const PBKDF2_ITERATIONS = 600_000;
 
 interface StoredKey {
   id: string;
@@ -337,7 +338,7 @@ export class IndexedDBKeyStorageAdapter implements KeyStorageAdapter {
     );
 
     const derivedKey = await crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' },
+      { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
       keyMaterial,
       { name: 'AES-GCM', length: 256 },
       false,
@@ -378,7 +379,7 @@ export class IndexedDBKeyStorageAdapter implements KeyStorageAdapter {
     );
 
     const derivedKey = await crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' },
+      { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
       keyMaterial,
       { name: 'AES-GCM', length: 256 },
       false,

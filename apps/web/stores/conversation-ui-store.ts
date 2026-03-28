@@ -101,7 +101,8 @@ export const useConversationUIStore = create<ConversationUIStore>()(
         addTypingUser: (conversationId, userId) => {
           set((state) => {
             const newTypingUsers = new Map(state.typingUsers);
-            const users = newTypingUsers.get(conversationId) || new Set();
+            const existing = newTypingUsers.get(conversationId);
+            const users = new Set(existing);
             users.add(userId);
             newTypingUsers.set(conversationId, users);
             return { typingUsers: newTypingUsers };
