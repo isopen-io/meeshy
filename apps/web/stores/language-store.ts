@@ -94,11 +94,11 @@ export const useLanguageStore = create<LanguageStore>()(
           }));
         },
 
+        // PRISME LINGUISTIQUE: Browser locale is for UI rendering only.
+        // Content language resolution uses systemLanguage/regionalLanguage via resolveUserLanguage().
+        // This function MUST NEVER modify userLanguageConfig.
         detectAndSetBrowserLanguage: () => {
           const browserLang = detectBrowserLanguage();
-          if (process.env.NODE_ENV === 'development') {
-          }
-          
           set({
             currentInterfaceLanguage: browserLang,
           });

@@ -3,33 +3,12 @@ import { conversationsService } from '@/services/conversations.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { useAuthStore } from '@/stores/auth-store';
+import { createOptimisticMessage } from '@/utils/optimistic-message';
 import type { Conversation, SendMessageRequest } from '@meeshy/shared/types';
 
 interface SendMessageParams {
   conversationId: string;
   data: SendMessageRequest;
-}
-
-interface OptimisticMessage {
-  id: string;
-  _tempId: string;
-  _localStatus: 'sending' | 'failed';
-  conversationId: string;
-  content: string;
-  senderId?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  isEdited: boolean;
-  messageType: string;
-  originalLanguage: string;
-  translations: never[];
-  status: 'sending' | 'sent' | 'failed';
-  sender?: {
-    id: string;
-    username: string;
-    displayName?: string;
-    avatar?: string;
-  };
 }
 
 interface MessagePage {
@@ -62,31 +41,22 @@ export function useSendMessageMutation() {
         queryKeys.messages.infinite(conversationId)
       );
 
-      // Create an optimistic message with _tempId + _localStatus for dedup
-      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const optimisticMessage: OptimisticMessage = {
-        id: tempId,
-        _tempId: tempId,
-        _localStatus: 'sending',
-        conversationId,
+      // Create an optimistic message via shared utility (single source of truth)
+      const optimisticMessage = createOptimisticMessage({
         content: data.content,
-        messageType: 'text',
-        originalLanguage: currentUser?.systemLanguage || 'en',
-        senderId: currentUser?.id,
+        senderId: currentUser?.id ?? '',
+        conversationId,
+        language: currentUser?.systemLanguage || 'en',
         sender: currentUser
           ? {
               id: currentUser.id,
+              userId: currentUser.id,
               username: currentUser.username,
               displayName: currentUser.displayName || currentUser.username,
               avatar: currentUser.avatar,
             }
           : undefined,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        isEdited: false,
-        translations: [],
-        status: 'sending',
-      };
+      });
 
       // Optimistically update the messages cache
       queryClient.setQueryData<InfiniteMessagesData>(
@@ -173,16 +143,8 @@ export function useSendMessageMutation() {
               : conv
           )
       );
-
-      // Invalidate conversations lists (nouveau message = conversation modifiée)
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
-    },
-
-    onSettled: (_data, _error, { conversationId }) => {
-      // Always refetch after error or success to ensure cache is in sync
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.messages.list(conversationId),
-      });
+      // No invalidateQueries needed — useSocketCacheSync handles conversation updates
+      // from the message:new broadcast, and setQueryData above already updates lastMessageAt.
     },
   });
 }
@@ -229,7 +191,21 @@ export function useEditMessageMutation() {
         }
       );
 
-      return { previousMessages };
+      // Optimistically update lastMessage content in conversation list if this is the last message
+      const previousConversations = queryClient.getQueryData<Conversation[]>(
+        queryKeys.conversations.list()
+      );
+      queryClient.setQueryData<Conversation[]>(
+        queryKeys.conversations.list(),
+        (old) =>
+          old?.map((conv) =>
+            conv.id === conversationId && conv.lastMessage?.id === messageId
+              ? { ...conv, lastMessage: { ...conv.lastMessage, content } }
+              : conv
+          )
+      );
+
+      return { previousMessages, previousConversations };
     },
 
     onError: (_error, { conversationId }, context) => {
@@ -239,11 +215,16 @@ export function useEditMessageMutation() {
           context.previousMessages
         );
       }
+      if (context?.previousConversations) {
+        queryClient.setQueryData(
+          queryKeys.conversations.list(),
+          context.previousConversations
+        );
+      }
     },
 
     onSuccess: () => {
-      // Invalidate conversations lists (message édité = conversation modifiée)
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
+      // No invalidation needed — useSocketCacheSync handles message:edited broadcast
     },
   });
 }
@@ -299,8 +280,7 @@ export function useDeleteMessageMutation() {
     },
 
     onSuccess: () => {
-      // Invalidate conversations lists (message supprimé = conversation modifiée)
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists() });
+      // No invalidation needed — useSocketCacheSync handles message:deleted broadcast
     },
   });
 }

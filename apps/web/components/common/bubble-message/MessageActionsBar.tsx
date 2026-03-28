@@ -368,16 +368,30 @@ export const MessageActionsBar = memo(function MessageActionsBar({
               {FREQUENT_REACTIONS.map((emoji, index) => (
                 <motion.button
                   key={`${emoji}-${index}`}
+                  tabIndex={index === 0 ? 0 : -1}
                   onClick={() => handleQuickReaction(emoji)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
+                    const cols = 6;
+                    const total = FREQUENT_REACTIONS.length;
+                    let nextIndex = index;
+                    if (e.key === 'ArrowRight') nextIndex = (index + 1) % total;
+                    else if (e.key === 'ArrowLeft') nextIndex = (index - 1 + total) % total;
+                    else if (e.key === 'ArrowDown') nextIndex = Math.min(index + cols, total - 1);
+                    else if (e.key === 'ArrowUp') nextIndex = Math.max(index - cols, 0);
+                    else if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       handleQuickReaction(emoji);
-                    }
+                      return;
+                    } else return;
+                    e.preventDefault();
+                    const grid = e.currentTarget.parentElement;
+                    const buttons = grid?.querySelectorAll('button');
+                    (buttons?.[nextIndex] as HTMLElement)?.focus();
                   }}
                   whileHover={{ scale: 1.2 }}
                   whileTap={{ scale: 0.9 }}
                   transition={{ duration: 0.1 }}
+                  role="gridcell"
                   className="w-9 h-9 flex items-center justify-center rounded-md text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   aria-label={`Réagir avec ${emoji}`}
                 >

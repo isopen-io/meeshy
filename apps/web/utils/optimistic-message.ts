@@ -51,7 +51,16 @@ export function createOptimisticMessage(
     ? { content: contentOrOpts, senderId: senderId!, conversationId: conversationId!, language: language!, replyToId, sender, sendPayload }
     : contentOrOpts;
 
-  const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const tempId = typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map((b, i) => {
+          if (i === 6) b = (b & 0x0f) | 0x40;
+          if (i === 8) b = (b & 0x3f) | 0x80;
+          return b.toString(16).padStart(2, '0');
+        })
+        .join('')
+        .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
   const now = new Date();
   return {
     id: tempId,

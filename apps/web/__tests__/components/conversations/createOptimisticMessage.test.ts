@@ -29,9 +29,40 @@ describe('createOptimisticMessage', () => {
     );
 
     expect(result._tempId).toBeDefined();
-    expect(result._tempId).toMatch(/^temp-/);
+    expect(result._tempId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    );
     expect(result._localStatus).toBe('sending');
     expect(result.id).toBe(result._tempId);
+  });
+
+  it('should generate unique IDs using crypto.randomUUID format', () => {
+    const result = createOptimisticMessage({
+      content: 'Test',
+      senderId: 'user-123',
+      conversationId: 'conv-456',
+      language: 'en',
+      sender: baseSender,
+    });
+
+    // UUID v4 format: 8-4-4-4-12 hex chars
+    expect(result._tempId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    );
+  });
+
+  it('should generate unique IDs across 100 rapid calls', () => {
+    const ids = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      const result = createOptimisticMessage({
+        content: 'Same content',
+        senderId: 'user-123',
+        conversationId: 'conv-456',
+        language: 'en',
+      });
+      ids.add(result._tempId);
+    }
+    expect(ids.size).toBe(100);
   });
 
   it('should set senderId and sender.id to the same value (own-message invariant)', () => {
