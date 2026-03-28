@@ -8,6 +8,7 @@ import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
+import type { SocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 import type { AudioTranslationReadyEventData } from '@meeshy/shared/types/socketio-events';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
 
@@ -16,7 +17,7 @@ function isOptimisticMessage(m: Message): m is OptimisticMessage {
 }
 
 type CachedMessage = Message & {
-  translatedAudios?: Record<string, unknown>;
+  translatedAudios?: Record<string, SocketIOTranslation>;
 };
 
 interface UseSocketCacheSyncOptions {
@@ -45,15 +46,22 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
           const currentUser = useAuthStore.getState().user;
           const isOwnMessage = currentUser && message.senderId === currentUser.id;
           let optimisticTempId: string | null = null;
+          let bestTimeDiff = Infinity;
 
           for (const page of old.pages) {
             for (const m of page.messages) {
               if (m.id === message.id) return old; // already have this server message
               // If own message:new arrives while optimistic is still 'sending', replace it
-              // Match by content to avoid cross-replacing when multiple messages are sending
-              if (isOwnMessage && !optimisticTempId && isOptimisticMessage(m) && m._localStatus === 'sending'
-                  && m.content === message.content) {
-                optimisticTempId = m._tempId;
+              // Match by closest createdAt timestamp (within 5s window) instead of content
+              // to avoid cross-replacing when multiple identical messages are sending
+              if (isOwnMessage && isOptimisticMessage(m) && m._localStatus === 'sending') {
+                const timeDiff = Math.abs(
+                  new Date(message.createdAt).getTime() - new Date(m.createdAt).getTime()
+                );
+                if (timeDiff < 5000 && timeDiff < bestTimeDiff) {
+                  bestTimeDiff = timeDiff;
+                  optimisticTempId = m._tempId;
+                }
               }
             }
           }
@@ -168,9 +176,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
 
     // Handler for deleted messages
     const handleMessageDeleted = (messageId: string) => {
-      if (conversationId) {
+      const removeFromCache = (targetConversationId: string) => {
         queryClient.setQueryData(
-          queryKeys.messages.infinite(conversationId),
+          queryKeys.messages.infinite(targetConversationId),
           (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
             if (!old) return old;
             return {
@@ -182,11 +190,29 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
             };
           }
         );
+      };
+
+      if (conversationId) {
+        removeFromCache(conversationId);
       } else {
-        // No conversationId available — invalidate all message queries so stale
-        // data is refetched. This handles the case where delete events arrive
-        // without a conversationId context.
-        queryClient.invalidateQueries({ queryKey: queryKeys.messages.all });
+        // No conversationId available — scan all cached infinite message queries
+        // and remove the message from whichever conversation contains it.
+        // This avoids invalidating ALL message queries which causes mass refetching.
+        const queryCache = queryClient.getQueryCache();
+        const messageQueries = queryCache.findAll({ queryKey: queryKeys.messages.all });
+        for (const query of messageQueries) {
+          const data = query.state.data as { pages?: { messages?: Message[] }[] } | undefined;
+          if (!data?.pages) continue;
+          const found = data.pages.some(
+            (page) => page.messages?.some((m) => m.id === messageId)
+          );
+          if (found) {
+            // Extract conversationId from the query key (format: ['messages', 'list', convId, ...])
+            const convId = query.queryKey[2] as string;
+            if (convId) removeFromCache(convId);
+            break;
+          }
+        }
       }
     };
 
@@ -283,15 +309,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                 if (m.id !== data.messageId) return m;
                 // Store translated audio metadata keyed by target language
                 const translatedAudios = { ...((m as CachedMessage).translatedAudios || {}) };
-                translatedAudios[targetLang] = {
-                  url: data.translatedAudio.url,
-                  targetLanguage: targetLang,
-                  transcription: data.translatedAudio.transcription,
-                  durationMs: data.translatedAudio.durationMs,
-                  format: data.translatedAudio.format,
-                  cloned: data.translatedAudio.cloned,
-                  segments: data.translatedAudio.segments,
-                };
+                translatedAudios[targetLang] = data.translatedAudio;
                 return { ...m, translatedAudios };
               }),
             })),

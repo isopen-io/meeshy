@@ -16,7 +16,7 @@ interface UseMessageTranslationsProps {
 }
 
 interface UseMessageTranslationsReturn {
-  processMessageWithTranslations: (message: any) => BubbleStreamMessage;
+  processMessageWithTranslations: (message: Message) => BubbleStreamMessage;
   getPreferredLanguageContent: (message: BubbleStreamMessage) => {
     content: string;
     isTranslated: boolean;
@@ -72,7 +72,7 @@ export function useMessageTranslations({
   /**
    * Traite un message brut et le convertit en BubbleStreamMessage avec traductions
    */
-  const processMessageWithTranslations = useCallback((message: any): BubbleStreamMessage => {
+  const processMessageWithTranslations = useCallback((message: Message): BubbleStreamMessage => {
     // Convertir les traductions backend vers le format BubbleTranslation
     // CORRECTION: Déduplication des traductions par langue pour éviter les doublons
     const translationsMap = new Map<string, BubbleTranslation>();
@@ -160,7 +160,7 @@ export function useMessageTranslations({
       originalLanguage,
       isTranslated,
       translatedFrom,
-      location: message.location || 'Paris',
+      location: (message as any).location,
       translations
     };
 

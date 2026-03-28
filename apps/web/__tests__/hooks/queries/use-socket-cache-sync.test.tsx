@@ -34,6 +34,20 @@ const mockUnsubscribeEdit = jest.fn();
 const mockUnsubscribeDelete = jest.fn();
 const mockUnsubscribeTranslation = jest.fn();
 
+jest.mock('@/stores/auth-store', () => ({
+  useAuthStore: {
+    getState: () => ({
+      user: { id: 'current-user', username: 'me' },
+    }),
+  },
+}));
+
+jest.mock('@/services/api.service', () => ({
+  apiService: {
+    post: jest.fn().mockResolvedValue({}),
+  },
+}));
+
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     onNewMessage: (callback: (message: Message) => void) => {
@@ -52,6 +66,9 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       translationCallback = callback;
       return mockUnsubscribeTranslation;
     },
+    onUnreadUpdated: jest.fn(() => jest.fn()),
+    onTranscription: jest.fn(() => jest.fn()),
+    onAudioTranslation: jest.fn(() => jest.fn()),
   },
 }));
 
@@ -276,6 +293,55 @@ describe('useSocketCacheSync', () => {
       expect(cachedData.pages[0].messages).toHaveLength(2);
     });
 
+    it('should not confuse two different optimistic messages with same content', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      // Two optimistic messages with identical content but different _tempIds
+      // senderId matches the mocked current user (current-user)
+      const optimistic1 = {
+        ...createMockMessage('temp-1', 'Same content'),
+        senderId: 'current-user',
+        _tempId: 'temp-1',
+        _localStatus: 'sending' as const,
+        createdAt: new Date('2024-01-01T12:00:00Z'),
+      };
+      const optimistic2 = {
+        ...createMockMessage('temp-2', 'Same content'),
+        senderId: 'current-user',
+        _tempId: 'temp-2',
+        _localStatus: 'sending' as const,
+        createdAt: new Date('2024-01-01T12:00:01Z'),
+      };
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [optimistic2, optimistic1], hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      // Server message for optimistic1 arrives (same senderId as current user)
+      const serverMessage = {
+        ...createMockMessage('server-msg-1', 'Same content'),
+        senderId: 'current-user',
+        createdAt: new Date('2024-01-01T12:00:00Z'),
+      };
+      act(() => {
+        newMessageCallback?.(serverMessage as any);
+      });
+
+      const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
+        pages: { messages: any[] }[];
+      };
+
+      // Should replace exactly ONE optimistic (the closest in time), not both
+      const remainingOptimistics = cachedData.pages[0].messages.filter(
+        (m: any) => m._tempId !== undefined
+      );
+      expect(remainingOptimistics).toHaveLength(1);
+      expect(remainingOptimistics[0]._tempId).toBe('temp-2');
+    });
+
     it('should update conversation with latest message', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
@@ -343,11 +409,17 @@ describe('useSocketCacheSync', () => {
       expect(cachedData.pages[0].messages).toHaveLength(1);
     });
 
-    it('should not remove message when conversationId not provided', () => {
+    it('should scan and remove message from correct conversation when conversationId not provided', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
 
+      // Set up messages in two different conversations
       queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
         pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+      queryClient.setQueryData(['messages', 'list', 'conv-2', 'infinite'], {
+        pages: [{ messages: [createMockMessage('msg-3', 'Other conv', 'conv-2')], hasMore: false, total: 1 }],
         pageParams: [1],
       });
 
@@ -358,12 +430,21 @@ describe('useSocketCacheSync', () => {
         messageDeletedCallback?.('msg-1');
       });
 
-      const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
+      // Should remove msg-1 from conv-1 via cache scan
+      const conv1Data = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
         pages: { messages: Message[] }[];
       };
+      expect(conv1Data.pages[0].messages).toHaveLength(1);
+      expect(conv1Data.pages[0].messages[0].id).toBe('msg-2');
 
-      // Message should still be there (can't determine which conversation)
-      expect(cachedData.pages[0].messages).toHaveLength(2);
+      // conv-2 should be untouched
+      const conv2Data = queryClient.getQueryData(['messages', 'list', 'conv-2', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+      expect(conv2Data.pages[0].messages).toHaveLength(1);
+
+      // Should NOT have called invalidateQueries for all messages
+      expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['messages'] });
     });
   });
 
@@ -405,7 +486,11 @@ describe('useSocketCacheSync', () => {
       };
 
       const message = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
-      expect(message?.translations).toHaveProperty('fr', 'Bonjour');
+      // Translations are stored as an array deduped by targetLanguage
+      const translations = message?.translations as any[];
+      expect(translations).toHaveLength(1);
+      expect(translations[0].targetLanguage).toBe('fr');
+      expect(translations[0].translatedContent).toBe('Bonjour');
     });
 
     it('should not update when conversationId not provided', () => {
