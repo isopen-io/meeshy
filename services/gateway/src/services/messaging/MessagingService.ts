@@ -63,9 +63,8 @@ export class MessagingService {
         select: { id: true, conversationId: true, isActive: true }
       });
 
-      // Fallback: participantId might be a userId from uncorrected callers — log warning
       if (!participant || participant.conversationId !== conversationId) {
-        console.warn('[MessagingService] Fallback userId→participant resolution triggered — caller should pass Participant.id', { participantId, conversationId });
+        console.error('[MessagingService] DEPRECATED: userId passed as participantId — caller MUST pass Participant.id. This fallback will be removed.', { participantId, conversationId });
         participant = await this.prisma.participant.findFirst({
           where: { userId: participantId, conversationId, isActive: true },
           select: { id: true, conversationId: true, isActive: true }
