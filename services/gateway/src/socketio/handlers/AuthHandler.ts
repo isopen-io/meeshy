@@ -70,7 +70,7 @@ export class AuthHandler {
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketAuthenticateSchema, data);
-      if (!schemaValidation.success) {
+      if (schemaValidation.success === false) {
         socket.emit(SERVER_EVENTS.ERROR, { message: schemaValidation.error });
         return;
       }

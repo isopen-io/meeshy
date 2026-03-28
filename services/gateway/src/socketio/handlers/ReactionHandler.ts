@@ -6,7 +6,7 @@
 import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { NotificationService } from '../../services/NotificationService';
+import { NotificationService } from '../../services/notifications/NotificationService';
 import { ReactionService } from '../../services/ReactionService.js';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
@@ -51,7 +51,7 @@ export class ReactionHandler {
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketReactionAddSchema, data);
-      if (!schemaValidation.success) {
+      if (schemaValidation.success === false) {
         if (callback) callback({ success: false, error: schemaValidation.error });
         return;
       }
@@ -142,7 +142,7 @@ export class ReactionHandler {
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketReactionRemoveSchema, data);
-      if (!schemaValidation.success) {
+      if (schemaValidation.success === false) {
         if (callback) callback({ success: false, error: schemaValidation.error });
         return;
       }
