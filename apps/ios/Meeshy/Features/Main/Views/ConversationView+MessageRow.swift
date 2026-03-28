@@ -640,6 +640,7 @@ extension ConversationView {
                                 .font(.system(size: 18))
                                 .frame(width: 28, height: 28)
                         }
+                        .accessibilityLabel("Reagir avec \(emoji)")
                         .buttonStyle(EmojiScaleButtonStyle())
                     }
                 }
@@ -685,6 +686,8 @@ extension ConversationView {
                         .overlay(Circle().stroke(accent.opacity(0.3), lineWidth: 0.5))
                 )
         }
+        .accessibilityLabel("Plus de reactions")
+        .accessibilityHint("Ouvre le selecteur d'emoji complet")
     }
 
     private func quickReactionActionsRow(messageId: String) -> some View {
@@ -733,6 +736,7 @@ extension ConversationView {
             }
             .frame(width: 60, height: 44)
         }
+        .accessibilityLabel(label)
     }
 
     func closeReactionBar() {
