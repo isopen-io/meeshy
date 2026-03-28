@@ -166,13 +166,20 @@ export class MessagingService {
       } as Message & { _isEncrypted?: boolean; _encryptionMode?: string };
 
     } catch (decryptionError) {
-      console.error('[MessagingService] Decryption failed:', decryptionError);
+      const errorMsg = decryptionError instanceof Error ? decryptionError.message : 'Unknown error';
+      const decryptionErrorCode = errorMsg.includes('key')
+        ? 'KEY_MISSING'
+        : errorMsg.includes('session')
+          ? 'SESSION_NOT_FOUND'
+          : 'DECRYPTION_FAILED';
+      console.error(`[MessagingService] Decryption failed (${decryptionErrorCode}):`, decryptionError);
       return {
         ...message,
         content: message.content || '[Encrypted message - Unable to decrypt]',
         _isEncrypted: true,
-        _decryptionFailed: true
-      } as Message & { _isEncrypted?: boolean; _decryptionFailed?: boolean };
+        _decryptionFailed: true,
+        _decryptionErrorCode: decryptionErrorCode,
+      } as Message & { _isEncrypted?: boolean; _decryptionFailed?: boolean; _decryptionErrorCode?: string };
     }
   }
 
