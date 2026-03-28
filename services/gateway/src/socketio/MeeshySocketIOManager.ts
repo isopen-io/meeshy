@@ -15,6 +15,11 @@ import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
 import { SocialEventsHandler } from './handlers/SocialEventsHandler';
 import { LocationHandler } from './handlers/LocationHandler';
+import { AuthHandler } from './handlers/AuthHandler';
+import { MessageHandler } from './handlers/MessageHandler';
+import { StatusHandler } from './handlers/StatusHandler';
+import { ReactionHandler } from './handlers/ReactionHandler';
+import { ConversationHandler } from './handlers/ConversationHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { EmailService } from '../services/EmailService';
@@ -91,6 +96,12 @@ export class MeeshySocketIOManager {
   private mentionService: MentionService;
   private rateLimiter = getSocketRateLimiter();
   private deliveryQueue: RedisDeliveryQueue | null = null;
+
+  private authHandler!: AuthHandler;
+  private messageHandler!: MessageHandler;
+  private statusHandler!: StatusHandler;
+  private reactionHandler!: ReactionHandler;
+  private conversationHandler!: ConversationHandler;
 
   // Mapping des utilisateurs connectés
   private connectedUsers: Map<string, SocketUser> = new Map();
@@ -181,6 +192,50 @@ export class MeeshySocketIOManager {
     // Initialiser le StoryTextObjectTranslationService singleton
     StoryTextObjectTranslationService.init(this.prisma, this.io as any);
 
+    this.authHandler = new AuthHandler({
+      prisma: this.prisma,
+      statusService: this.statusService,
+      maintenanceService: this.maintenanceService,
+      callService: this.callService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      userSockets: this.userSockets,
+    });
+
+    this.messageHandler = new MessageHandler({
+      io: this.io,
+      prisma: this.prisma,
+      messagingService: this.messagingService,
+      translationService: this.translationService,
+      statusService: this.statusService,
+      notificationService: this.notificationService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      stats: this.stats,
+      agentClient: this.agentClient,
+    });
+
+    this.statusHandler = new StatusHandler({
+      prisma: this.prisma,
+      statusService: this.statusService,
+      privacyPreferencesService: this.privacyPreferencesService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+    });
+
+    this.reactionHandler = new ReactionHandler({
+      io: this.io,
+      prisma: this.prisma,
+      notificationService: this.notificationService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+    });
+
+    this.conversationHandler = new ConversationHandler({
+      prisma: this.prisma,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+    });
   }
 
   setDeliveryQueue(queue: RedisDeliveryQueue): void {
@@ -318,13 +373,11 @@ export class MeeshySocketIOManager {
     this.io.on('connection', (socket) => {
       this.stats.total_connections++;
       this.stats.active_connections++;
-      
-      // Authentification automatique via le token envoyé dans socket.auth
-      this._handleTokenAuthentication(socket);
-      
-      // Authentification manuelle (fallback)
-      socket.on(CLIENT_EVENTS.AUTHENTICATE, async (data: { userId?: string; sessionToken?: string; language?: string }) => {
-        await this._handleAuthentication(socket, data);
+
+      this.authHandler.handleTokenAuthentication(socket);
+
+      socket.on(CLIENT_EVENTS.AUTHENTICATE, async (data) => {
+        await this.authHandler.handleManualAuthentication(socket, data);
       });
       
       // Réception d'un nouveau message (avec ACK) - PHASE 3.1: MessagingService Integration
