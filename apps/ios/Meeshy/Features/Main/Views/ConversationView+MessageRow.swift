@@ -121,7 +121,8 @@ extension ConversationView {
                     activeAudioLanguage: viewModel.activeAudioLanguageOverrides[msg.id] ?? nil,
                     isLastInGroup: isLastInGroup,
                     isLastReceivedMessage: isLastReceived,
-                    mentionDisplayNames: viewModel.mentionDisplayNames
+                    mentionDisplayNames: viewModel.mentionDisplayNames,
+                    highlightSearchTerm: viewModel.currentSearchQuery
                 )
                 .equatable()
                 .onLongPressGesture(minimumDuration: 0.5) {
