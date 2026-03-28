@@ -130,6 +130,11 @@ const nextConfig: NextConfig = {
       };
     }
 
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js', '.jsx'],
+      '.mjs': ['.mts', '.mjs'],
+    };
+
     // Exclure dompurify du bundle serveur (client-only)
     if (isServer) {
       config.externals = config.externals || [];

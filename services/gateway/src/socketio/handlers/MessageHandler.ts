@@ -12,7 +12,7 @@ import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessagingService } from '../../services/MessagingService';
 import { StatusService } from '../../services/StatusService';
-import { NotificationService } from '../../services/NotificationService';
+import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { validateMessageLength } from '../../config/message-limits';
 import {
@@ -24,16 +24,16 @@ import {
 } from '../utils/socket-helpers';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import type {
-  SocketIOResponse,
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types/messaging';
+import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import type { Message } from '@meeshy/shared/types/index';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
-import { AttachmentService } from '../../services/AttachmentService';
+import { AttachmentService } from '../../services/attachments/AttachmentService';
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketMessageSendSchema, SocketMessageSendWithAttachmentsSchema } from '../../validation/socket-event-schemas.js';
@@ -103,7 +103,7 @@ export class MessageHandler {
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketMessageSendSchema, data);
-      if (!schemaValidation.success) {
+      if (schemaValidation.success === false) {
         this._sendError(callback, schemaValidation.error, socket);
         return;
       }
@@ -182,7 +182,7 @@ export class MessageHandler {
         replyToId: validated.replyToId,
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
-        encryptedPayload: data.encryptedPayload,
+        encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
         isAnonymous,
         metadata: {
           source: 'websocket',
@@ -244,7 +244,7 @@ export class MessageHandler {
       conversationId: string;
       content: string;
       originalLanguage?: string;
-      attachmentIds: string[];
+      attachmentIds: readonly string[];
       replyToId?: string;
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
@@ -253,7 +253,7 @@ export class MessageHandler {
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketMessageSendWithAttachmentsSchema, data);
-      if (!schemaValidation.success) {
+      if (schemaValidation.success === false) {
         this._sendError(callback, schemaValidation.error, socket);
         return;
       }
@@ -483,7 +483,7 @@ export class MessageHandler {
    * Still needed for attachment and forward paths where relations are added post-create
    */
   private async _fetchMessageForBroadcast(messageId: string): Promise<Message | null> {
-    return this.prisma.message.findUnique({
+    const msg = await this.prisma.message.findUnique({
       where: { id: messageId },
       include: {
         sender: {
@@ -532,7 +532,9 @@ export class MessageHandler {
           }
         }
       }
-    }) as Promise<Message | null>;
+    });
+    if (!msg) return null;
+    return { ...msg, timestamp: msg.createdAt, translations: [] } as unknown as Message;
   }
 
   /**
@@ -541,19 +543,15 @@ export class MessageHandler {
   private async _getMessageTranslations(messageId: string): Promise<unknown[]> {
     const msg = await this.prisma.message.findUnique({
       where: { id: messageId },
-      include: {
-        translations: {
-          select: {
-            id: true,
-            targetLanguage: true,
-            translatedContent: true,
-            translationModel: true,
-            confidenceScore: true
-          }
-        }
-      }
+      select: { translations: true }
     });
-    return msg?.translations || [];
+    const translations = msg?.translations;
+    if (!translations || typeof translations !== 'object') return [];
+    if (Array.isArray(translations)) return translations;
+    return Object.entries(translations as Record<string, unknown>).map(([lang, data]) => ({
+      targetLanguage: lang,
+      ...(typeof data === 'object' && data !== null ? data : {})
+    }));
   }
 
   /**

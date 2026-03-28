@@ -34,7 +34,7 @@ export class ConversationHandler {
   async handleConversationJoin(socket: Socket, data: { conversationId: string }): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketConversationJoinSchema, data);
-      if (!schemaValidation.success) {
+      if (schemaValidation.success === false) {
         socket.emit(SERVER_EVENTS.ERROR, { message: schemaValidation.error });
         return;
       }
@@ -69,7 +69,7 @@ export class ConversationHandler {
   async handleConversationLeave(socket: Socket, data: { conversationId: string }): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketConversationLeaveSchema, data);
-      if (!schemaValidation.success) {
+      if (schemaValidation.success === false) {
         socket.emit(SERVER_EVENTS.ERROR, { message: schemaValidation.error });
         return;
       }
