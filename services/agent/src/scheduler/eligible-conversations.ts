@@ -59,7 +59,7 @@ export async function findEligibleConversations(
       memberCount: conv.memberCount,
       scanIntervalMinutes: Math.max(1, config?.scanIntervalMinutes ?? 3),
       minResponsesPerCycle: Math.max(0, config?.minResponsesPerCycle ?? 2),
-      maxResponsesPerCycle: Math.max(1, config?.maxResponsesPerCycle ?? 12),
+      maxResponsesPerCycle: Math.max(1, Math.min(config?.maxResponsesPerCycle ?? 12, 50)),
       reactionsEnabled: config?.reactionsEnabled ?? true,
       maxReactionsPerCycle: Math.max(0, config?.maxReactionsPerCycle ?? 8),
       contextWindowSize: Math.max(5, Math.min(config?.contextWindowSize ?? 50, 250)),

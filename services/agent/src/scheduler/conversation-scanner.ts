@@ -386,8 +386,13 @@ export class ConversationScanner {
       return false;
     }
 
-    if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);
-    if (result.toneProfiles) await this.stateManager.setToneProfiles(conversationId, result.toneProfiles as Record<string, any>);
+    try {
+      if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);
+    } catch (err) { console.error(`[Scanner] Error persisting summary for conv=${conversationId}:`, err); }
+
+    try {
+      if (result.toneProfiles) await this.stateManager.setToneProfiles(conversationId, result.toneProfiles as Record<string, any>);
+    } catch (err) { console.error(`[Scanner] Error persisting tone profiles for conv=${conversationId}:`, err); }
 
     // P1.1: Persist global profiles for non-controlled users (enables auto-pickup)
     // P3.2: Persist updated Observer profiles for controlled users
@@ -408,11 +413,13 @@ export class ConversationScanner {
       }
     }
 
-    const updatedHistory = result.agentHistory as Array<{ userId: string; topic: string; contentHash: string; timestamp: number }> | undefined;
-    if (updatedHistory && updatedHistory.length > 0) {
-      const merged = [...agentHistory, ...updatedHistory].slice(-100);
-      await this.stateManager.setAgentHistory(conversationId, merged);
-    }
+    try {
+      const updatedHistory = result.agentHistory as Array<{ userId: string; topic: string; contentHash: string; timestamp: number }> | undefined;
+      if (updatedHistory && updatedHistory.length > 0) {
+        const merged = [...agentHistory, ...updatedHistory].slice(-100);
+        await this.stateManager.setAgentHistory(conversationId, merged);
+      }
+    } catch (err) { console.error(`[Scanner] Error persisting agent history for conv=${conversationId}:`, err); }
 
     const pendingActions = (result.pendingActions ?? []) as Array<{ type: string; content?: string }>;
     if (pendingActions.length > 0) {
