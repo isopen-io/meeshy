@@ -4,7 +4,7 @@ import { ReactNode, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useI18n } from '@/hooks/useI18n';
-import { NotificationBell } from '@/components/notifications';
+import { NotificationDropdown } from '@/components/notifications';
 import { ShareAffiliateButton } from '@/components/affiliate/share-affiliate-button';
 import {
   MessageSquare,
@@ -192,7 +192,7 @@ export function DashboardLayout({
               />
 
               {/* Notifications */}
-              <NotificationBell />
+              <NotificationDropdown />
 
               {/* Menu déroulant utilisateur */}
               <DropdownMenu>

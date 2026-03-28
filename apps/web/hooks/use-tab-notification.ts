@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { useUnreadCount } from '@/stores/notification-store';
+import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 
-// Pre-computed SVG data URLs (hoisted, never recreated)
 const ORIGINAL_FAVICON_URL = `data:image/svg+xml,${encodeURIComponent(
   `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -35,12 +34,8 @@ const BADGE_FAVICON_URL = `data:image/svg+xml,${encodeURIComponent(
 
 const ORIGINAL_TITLE = 'Meeshy - Messagerie multilingue en temps réel';
 
-/**
- * Hook qui affiche un badge bleu sur le favicon et un compteur dans le titre
- * quand l'onglet n'est pas visible et qu'il y a des messages non lus.
- */
 export function useTabNotification() {
-  const unreadCount = useUnreadCount();
+  const { unreadCount } = useNotificationsManagerRQ();
   const hasUnread = unreadCount > 0;
   const isTabVisibleRef = useRef(true);
   const faviconLinkRef = useRef<HTMLLinkElement | null>(null);
@@ -63,7 +58,6 @@ export function useTabNotification() {
     getFaviconLink().href = badge ? BADGE_FAVICON_URL : ORIGINAL_FAVICON_URL;
   }, [getFaviconLink]);
 
-  // Favicon: dépend seulement du booléen hasUnread (pas du nombre exact)
   useEffect(() => {
     const handleVisibilityChange = () => {
       const visible = document.visibilityState === 'visible';
@@ -73,7 +67,6 @@ export function useTabNotification() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Sync immédiat si tab déjà caché
     if (!isTabVisibleRef.current) {
       setFavicon(hasUnread);
     }
@@ -83,7 +76,6 @@ export function useTabNotification() {
     };
   }, [hasUnread, setFavicon]);
 
-  // Titre: dépend du nombre exact (pour afficher le compteur)
   useEffect(() => {
     const handleVisibilityChange = () => {
       const visible = document.visibilityState === 'visible';
@@ -95,7 +87,6 @@ export function useTabNotification() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Sync immédiat si tab déjà caché
     if (!isTabVisibleRef.current) {
       document.title = unreadCount > 0
         ? `(${unreadCount}) ${ORIGINAL_TITLE}`

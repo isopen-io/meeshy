@@ -6,7 +6,7 @@
  * Utilise le hook usePreferences (React Query) avec optimistic updates
  */
 
-import { useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -149,22 +149,27 @@ export function NotificationSettings() {
     }
   }, [updatePreferences]);
 
-  /**
-   * Vérifier l'état des permissions navigateur
-   */
-  const browserPermission = useMemo(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      return 'unsupported';
-    }
+  const [browserPermission, setBrowserPermission] = useState<NotificationPermission | 'unsupported'>(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
     return Notification.permission;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+
+    if ('permissions' in navigator) {
+      navigator.permissions.query({ name: 'notifications' as PermissionName }).then((status) => {
+        status.onchange = () => {
+          setBrowserPermission(Notification.permission);
+        };
+      }).catch(() => {});
+    }
   }, []);
 
-  /**
-   * Demander la permission navigateur
-   */
   const requestNotificationPermission = async () => {
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
+      setBrowserPermission(permission);
       if (permission === 'granted') {
         toast.success('Notifications autorisées');
       } else {
