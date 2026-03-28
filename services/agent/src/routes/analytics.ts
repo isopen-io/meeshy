@@ -48,7 +48,7 @@ export async function analyticsRoutes(fastify: FastifyInstance, deps: AnalyticsD
               messageCount: summaryRecord.messageCount,
             }
           : null,
-        controlledUsers: controlledUsers.map((cu) => ({
+        controlledUsers: controlledUsers.map((cu: { userId: string; displayName: string; systemLanguage: string; role: { confidence: number; locked: boolean } }) => ({
           userId: cu.userId,
           displayName: cu.displayName,
           systemLanguage: cu.systemLanguage,

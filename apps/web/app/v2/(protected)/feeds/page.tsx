@@ -1,77 +1,58 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef } from 'react';
-import { Button, Card, useToast, PageHeader, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
-import type { StatusItem, TranslationItem, StoryVisibility } from '@/components/v2';
+import { useCallback, useRef, useEffect, useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button, useToast, PageHeader, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
+import type { StatusItem, StoryVisibility } from '@/components/v2';
+import { PostComposer } from '@/components/v2/PostComposer';
+import { PostEditor } from '@/components/v2/PostEditor';
+import { RepostModal } from '@/components/v2/RepostModal';
+import { AudioPostComposer } from '@/components/v2/AudioPostComposer';
+import { Skeleton } from '@/components/v2/Skeleton';
+
+// Stories (dedicated hooks from stories feature)
 import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
 import { useStoriesRealtime } from '@/hooks/social/use-stories-realtime';
 import { postToStoryItem, postToStoryData } from '@/lib/story-transforms';
-import { useAuthStore } from '@/stores/auth-store';
-import { useLanguageStore } from '@/stores/language-store';
 import { useStoryPreferences } from '@/stores/user-preferences-store';
 
-// ─── Mock Data (Posts & Statuses - to be replaced in future phases) ──────
+// Posts (real API integration)
+import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
+import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
+import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
+import { usePreferredLanguage } from '@/hooks/use-post-translation';
 
-interface FeedPost {
-  id: number;
-  author: string;
-  avatar: string;
-  lang: string;
-  content: string;
-  translations: TranslationItem[];
-  likes: number;
-  comments: number;
-  time: string;
-  reactionSummary?: Record<string, number>;
+import { useAuthStore } from '@/stores/auth-store';
+import { TusUploadService } from '@/services/tusUploadService';
+import type { MobileTranscription } from '@/services/posts.service';
+import type { Post } from '@meeshy/shared/types/post';
+
+// ─── Helpers ────────────────────────────────────────────────────────────
+
+function formatRelativeTime(date: string | Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const diff = Date.now() - d.getTime();
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "À l'instant";
+  if (minutes < 60) return `Il y a ${minutes}min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Il y a ${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `Il y a ${days}j`;
 }
 
-const initialPosts: FeedPost[] = [
-  {
-    id: 1,
-    author: 'Marie Dubois',
-    avatar: '\uD83D\uDC69',
-    lang: 'fr',
-    content: "Aujourd'hui j'ai d\u00e9couvert Meeshy et c'est incroyable ! Je peux enfin discuter avec mes amis japonais sans barri\u00e8re linguistique \uD83C\uDF89",
-    translations: [
-      { languageCode: 'en', languageName: 'English', content: "Today I discovered Meeshy and it's amazing! I can finally chat with my Japanese friends without language barriers \uD83C\uDF89" },
-      { languageCode: 'ja', languageName: 'Nihongo', content: '\u4ECA\u65E5Meeshy\u3092\u767A\u898B\u3057\u3066\u3001\u3059\u3054\u3044\u3067\u3059\uFF01\u65E5\u672C\u306E\u53CB\u9054\u3068\u8A00\u8449\u306E\u58C1\u306A\u304F\u8A71\u305B\u308B\u3088\u3046\u306B\u306A\u308A\u307E\u3057\u305F \uD83C\uDF89' },
-    ],
-    likes: 42,
-    comments: 8,
-    time: 'Il y a 2h',
-    reactionSummary: { '\u2764\uFE0F': 28, '\uD83D\uDD25': 10, '\uD83D\uDC4F': 4 },
-  },
-  {
-    id: 2,
-    author: '\u7530\u4E2D \u512A\u5B50',
-    avatar: '\uD83D\uDC67',
-    lang: 'ja',
-    content: '\u65B0\u3057\u3044\u30D7\u30ED\u30B8\u30A7\u30AF\u30C8\u306E\u30A2\u30A4\u30C7\u30A2\u3092\u5171\u6709\u3057\u305F\u3044\u3067\u3059\u3002\u8AB0\u304B\u8208\u5473\u304C\u3042\u308A\u307E\u3059\u304B\uFF1F',
-    translations: [
-      { languageCode: 'fr', languageName: 'Francais', content: "Je voudrais partager une id\u00e9e de nouveau projet. Quelqu'un est int\u00e9ress\u00e9 ?" },
-      { languageCode: 'en', languageName: 'English', content: "I'd like to share a new project idea. Anyone interested?" },
-    ],
-    likes: 28,
-    comments: 15,
-    time: 'Il y a 4h',
-    reactionSummary: { '\u2764\uFE0F': 15, '\uD83D\uDE2E': 8, '\uD83D\uDD25': 5 },
-  },
-  {
-    id: 3,
-    author: 'Carlos Mendez',
-    avatar: '\uD83D\uDC68',
-    lang: 'es',
-    content: '\u00A1La traducci\u00F3n en tiempo real es incre\u00EDble! Nunca pens\u00E9 que podr\u00EDa comunicarme tan f\u00E1cilmente con personas de todo el mundo.',
-    translations: [
-      { languageCode: 'fr', languageName: 'Francais', content: "La traduction en temps r\u00e9el est incroyable ! Je n'aurais jamais pens\u00e9 pouvoir communiquer aussi facilement avec des gens du monde entier." },
-      { languageCode: 'en', languageName: 'English', content: "Real-time translation is incredible! I never thought I could communicate so easily with people from all over the world." },
-    ],
-    likes: 56,
-    comments: 12,
-    time: 'Il y a 6h',
-    reactionSummary: { '\uD83D\uDD25': 30, '\uD83D\uDC4F': 15, '\uD83D\uDE02': 11 },
-  },
-];
+function postToTranslations(post: Post) {
+  if (!post.translations || typeof post.translations !== 'object') return [];
+  return Object.entries(post.translations as Record<string, { text?: string }>)
+    .filter(([, v]) => v && typeof v.text === 'string')
+    .map(([lang, v]) => ({
+      languageCode: lang,
+      languageName: lang.toUpperCase(),
+      content: v.text!,
+    }));
+}
+
+// ─── Mock Data (Statuses - to be replaced in future phase) ──────────────
 
 const mockStatuses: StatusItem[] = [
   {
@@ -107,18 +88,79 @@ const mockStatuses: StatusItem[] = [
 // ─── Page ────────────────────────────────────────────────────────────────
 
 export default function V2FeedsPage() {
+  const router = useRouter();
   const toastCtx = useToast();
   const showToast = useCallback(
     (title: string, type: 'success' | 'error' | 'info', description?: string) =>
       toastCtx.addToast(title || description || '', type),
-    [toastCtx]
+    [toastCtx],
   );
 
   // Auth & language
-  const currentUser = useAuthStore(s => s.user);
+  const currentUser = useAuthStore((s) => s.user);
   const currentUserId = currentUser?.id ?? '';
-  const userLanguage = useLanguageStore(s => s.userLanguageConfig.systemLanguage);
+  const userLanguage = usePreferredLanguage();
   const { preferences: storyPrefs } = useStoryPreferences();
+
+  // ─── Posts (real data) ────────────────────────────────────────────────
+  const feedQuery = useFeedQuery();
+  const posts = useFeedPosts(feedQuery);
+  const prefetchPost = usePrefetchPost();
+
+  // Socket.IO → React Query cache sync for posts
+  usePostSocketCacheSync();
+
+  // Post mutations
+  const createPostMutation = useCreatePostMutation();
+  const likeMutation = useLikePostMutation();
+  const unlikeMutation = useUnlikePostMutation();
+  const shareMutation = useSharePostMutation();
+  const bookmarkMutation = useBookmarkPostMutation();
+  const unbookmarkMutation = useUnbookmarkPostMutation();
+  const translateMutation = useTranslatePostMutation();
+  const deletePostMutation = useDeletePostMutation();
+  const pinPostMutation = usePinPostMutation();
+  const repostMutation = useRepostMutation();
+  const updatePostMutation = useUpdatePostMutation();
+
+  // Edit + Repost + Audio modals
+  const [editingPost, setEditingPost] = useState<{ id: string; content: string; visibility: string } | null>(null);
+  const [repostingPost, setRepostingPost] = useState<{ id: string; author?: string; content?: string } | null>(null);
+  const [audioComposerOpen, setAudioComposerOpen] = useState(false);
+
+  // Local interaction state
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
+  const [userReactions, setUserReactions] = useState<Record<string, string>>({});
+
+  // New posts banner
+  const [newPostsCount, setNewPostsCount] = useState(0);
+  const prevPostsLengthRef = useRef(posts.length);
+
+  useEffect(() => {
+    if (posts.length > prevPostsLengthRef.current && prevPostsLengthRef.current > 0) {
+      setNewPostsCount((c) => c + (posts.length - prevPostsLengthRef.current));
+    }
+    prevPostsLengthRef.current = posts.length;
+  }, [posts.length]);
+
+  // Infinite scroll
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && feedQuery.hasNextPage && !feedQuery.isFetchingNextPage) {
+          feedQuery.fetchNextPage();
+        }
+      },
+      { threshold: 0.5 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [feedQuery.hasNextPage, feedQuery.isFetchingNextPage, feedQuery.fetchNextPage]);
 
   // ─── Stories (real data) ──────────────────────────────────────────────
   const { data: stories, isLoading: storiesLoading } = useStoriesFeedQuery();
@@ -134,12 +176,12 @@ export default function V2FeedsPage() {
 
   const storyItems = useMemo(
     () => (stories ?? []).map(s => postToStoryItem(s, currentUserId, viewedStoryIdsRef.current)),
-    [stories, currentUserId]
+    [stories, currentUserId],
   );
 
   const storyDataList = useMemo(
     () => (stories ?? []).map(postToStoryData),
-    [stories]
+    [stories],
   );
 
   const handleStoryPress = useCallback((storyId: string) => {
@@ -179,68 +221,49 @@ export default function V2FeedsPage() {
 
   const handleStoryDelete = useCallback((storyId: string) => {
     deleteStoryMutation.mutate(storyId, {
-      onSuccess: () => {
-        showToast('Story supprim\u00e9e', 'success');
-      },
-      onError: () => {
-        showToast('Erreur', 'error', 'Impossible de supprimer la story.');
-      },
+      onSuccess: () => showToast('Story supprim\u00e9e', 'success'),
+      onError: () => showToast('Erreur', 'error', 'Impossible de supprimer la story.'),
     });
   }, [deleteStoryMutation, showToast]);
 
   const handleStoryViewerClose = useCallback(() => setStoryViewerOpen(false), []);
   const handleStoryComposerClose = useCallback(() => setStoryComposerOpen(false), []);
-  const handleStoryReply = useCallback((id: string, text: string) => {
+  const handleStoryReply = useCallback((_id: string, text: string) => {
     showToast('R\u00e9ponse envoy\u00e9e', 'success', text);
   }, [showToast]);
 
-  // ─── Posts (mock - to be replaced later) ──────────────────────────────
-  const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
-  const [newPostContent, setNewPostContent] = useState('');
-  const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
-  const [userReactions, setUserReactions] = useState<Record<number, string>>({});
+  // ─── Post handlers ────────────────────────────────────────────────────
 
-  const handlePublish = () => {
-    if (!newPostContent.trim()) {
-      showToast('Contenu vide', 'error', '\u00c9crivez quelque chose avant de publier.');
-      return;
-    }
+  const handlePublish = useCallback(
+    (data: { content: string; type: 'POST' | 'STORY' | 'STATUS'; visibility: string }) => {
+      createPostMutation.mutate(
+        { content: data.content, type: data.type, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
+        {
+          onSuccess: () => showToast('Publi\u00e9 !', 'success', 'Votre post a \u00e9t\u00e9 partag\u00e9.'),
+          onError: () => showToast('Erreur', 'error', 'Impossible de publier le post.'),
+        },
+      );
+    },
+    [createPostMutation, showToast],
+  );
 
-    const newPost: FeedPost = {
-      id: Date.now(),
-      author: 'Vous',
-      avatar: '\uD83D\uDC64',
-      lang: 'fr',
-      content: newPostContent.trim(),
-      translations: [],
-      likes: 0,
-      comments: 0,
-      time: "\u00c0 l'instant",
-    };
-
-    setPosts([newPost, ...posts]);
-    setNewPostContent('');
-    showToast('Publi\u00e9 !', 'success', 'Votre post a \u00e9t\u00e9 partag\u00e9 avec la communaut\u00e9.');
-  };
-
-  const handleLike = (postId: number) => {
+  const handleLike = useCallback((postId: string) => {
     const isLiked = likedPosts.has(postId);
     setLikedPosts((prev) => {
-      const newSet = new Set(prev);
-      if (isLiked) newSet.delete(postId);
-      else newSet.add(postId);
-      return newSet;
+      const next = new Set(prev);
+      if (isLiked) next.delete(postId);
+      else next.add(postId);
+      return next;
     });
-    setPosts((prev) =>
-      prev.map((post) =>
-        post.id === postId
-          ? { ...post, likes: isLiked ? post.likes - 1 : post.likes + 1 }
-          : post
-      )
-    );
-  };
 
-  const handleReact = (postId: number, emoji: string) => {
+    if (isLiked) {
+      unlikeMutation.mutate(postId);
+    } else {
+      likeMutation.mutate({ postId });
+    }
+  }, [likedPosts, likeMutation, unlikeMutation]);
+
+  const handleReact = useCallback((postId: string, emoji: string) => {
     setUserReactions((prev) => {
       if (prev[postId] === emoji) {
         const next = { ...prev };
@@ -249,32 +272,145 @@ export default function V2FeedsPage() {
       }
       return { ...prev, [postId]: emoji };
     });
-  };
+    likeMutation.mutate({ postId, emoji });
+  }, [likeMutation]);
 
-  const handleComment = () => {
-    showToast('Bient\u00f4t disponible', 'info', 'Les commentaires arrivent bient\u00f4t.');
-  };
+  const handleComment = useCallback((postId: string) => {
+    router.push(`/v2/feeds/post/${postId}`);
+  }, [router]);
 
-  const handleShare = async (postId: number) => {
+  const handleShare = useCallback(async (postId: string) => {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/v2/feeds/post/${postId}`);
-      showToast('Lien copi\u00e9 !', 'success', 'Le lien du post est dans le presse-papiers.');
+      shareMutation.mutate({ postId });
+      showToast('Lien copi\u00e9 !', 'success');
     } catch {
       showToast('Erreur', 'error', 'Impossible de copier le lien.');
     }
-  };
+  }, [shareMutation, showToast]);
 
-  // ─── Status (mock - to be replaced later) ─────────────────────────────
+  const handleBookmark = useCallback((postId: string) => {
+    const isBookmarked = bookmarkedPosts.has(postId);
+    setBookmarkedPosts((prev) => {
+      const next = new Set(prev);
+      if (isBookmarked) next.delete(postId);
+      else next.add(postId);
+      return next;
+    });
+
+    if (isBookmarked) {
+      unbookmarkMutation.mutate(postId);
+    } else {
+      bookmarkMutation.mutate(postId);
+    }
+  }, [bookmarkedPosts, bookmarkMutation, unbookmarkMutation]);
+
+  const handleTranslate = useCallback((postId: string) => {
+    translateMutation.mutate({ postId, targetLanguage: userLanguage });
+  }, [translateMutation, userLanguage]);
+
+  const handleDeletePost = useCallback((postId: string) => {
+    deletePostMutation.mutate(postId, {
+      onSuccess: () => showToast('Post supprim\u00e9', 'success'),
+    });
+  }, [deletePostMutation, showToast]);
+
+  const handlePinPost = useCallback((postId: string, isPinned: boolean) => {
+    pinPostMutation.mutate({ postId, pin: !isPinned });
+  }, [pinPostMutation]);
+
+  const handleEditPost = useCallback((postId: string) => {
+    const post = posts.find((p) => p.id === postId);
+    if (post) setEditingPost({ id: post.id, content: post.content ?? '', visibility: post.visibility });
+  }, [posts]);
+
+  const handleSaveEdit = useCallback((data: { content: string; visibility: string }) => {
+    if (!editingPost) return;
+    updatePostMutation.mutate(
+      { postId: editingPost.id, data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' } },
+      {
+        onSuccess: () => { setEditingPost(null); showToast('Post modifi\u00e9', 'success'); },
+        onError: () => showToast('Erreur', 'error'),
+      },
+    );
+  }, [editingPost, updatePostMutation, showToast]);
+
+  const handleRepostOpen = useCallback((postId: string) => {
+    const post = posts.find((p) => p.id === postId);
+    if (post) setRepostingPost({ id: post.id, author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined });
+  }, [posts]);
+
+  const handleRepost = useCallback(() => {
+    if (!repostingPost) return;
+    repostMutation.mutate(
+      { postId: repostingPost.id, data: { isQuote: false } },
+      {
+        onSuccess: () => { setRepostingPost(null); showToast('Repost\u00e9 !', 'success'); },
+        onError: () => showToast('Erreur', 'error'),
+      },
+    );
+  }, [repostingPost, repostMutation, showToast]);
+
+  const handleQuote = useCallback((content: string) => {
+    if (!repostingPost) return;
+    repostMutation.mutate(
+      { postId: repostingPost.id, data: { content, isQuote: true } },
+      {
+        onSuccess: () => { setRepostingPost(null); showToast('Cit\u00e9 !', 'success'); },
+        onError: () => showToast('Erreur', 'error'),
+      },
+    );
+  }, [repostingPost, repostMutation, showToast]);
+
+  const handleDismissNewPosts = useCallback(() => {
+    setNewPostsCount(0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleAudioPublish = useCallback(async (data: { audioFile: File; transcription: MobileTranscription | null; content?: string }) => {
+    try {
+      const tusService = new TusUploadService();
+      const results = await tusService.uploadFiles(
+        [data.audioFile],
+        [{ uploadcontext: 'post' }],
+      );
+      const mediaId = results[0]?.id;
+      if (!mediaId) throw new Error('Upload failed');
+
+      createPostMutation.mutate(
+        {
+          content: data.content,
+          type: 'POST',
+          visibility: 'PUBLIC',
+          mediaIds: [mediaId],
+          mobileTranscription: data.transcription ?? undefined,
+        },
+        {
+          onSuccess: () => {
+            setAudioComposerOpen(false);
+            showToast('Audio post publi\u00e9 !', 'success');
+          },
+          onError: () => showToast('Erreur', 'error', 'Impossible de publier.'),
+        },
+      );
+    } catch {
+      showToast('Erreur upload', 'error', 'Impossible d\'uploader l\'audio.');
+    }
+  }, [createPostMutation, showToast]);
+
+  // ─── Status handlers (mock) ───────────────────────────────────────────
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
-  const handleStatusPress = (statusId: string) => {
+  const handleStatusPress = useCallback((statusId: string) => {
     showToast('Status', 'info', `Status ${statusId} s\u00e9lectionn\u00e9`);
-  };
+  }, [showToast]);
 
-  const handleStatusPublish = (status: { moodEmoji: string; content?: string }) => {
+  const handleStatusPublish = useCallback((status: { moodEmoji: string; content?: string }) => {
     setStatusComposerOpen(false);
     showToast('Mood publi\u00e9 !', 'success', `${status.moodEmoji} ${status.content || ''}`);
-  };
+  }, [showToast]);
+
+  // ─── Render ──────────────────────────────────────────────────────────
 
   return (
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
@@ -299,55 +435,126 @@ export default function V2FeedsPage() {
           className="mb-6"
         />
 
-        {/* New Post Composer */}
-        <Card variant="default" hover={false} className="p-4 mb-6">
-          <div className="flex gap-4">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl bg-[var(--gp-parchment)]">
-              {'\uD83D\uDC64'}
-            </div>
-            <div className="flex-1">
-              <textarea
-                placeholder="Partagez quelque chose avec la communaut\u00e9..."
-                className="w-full resize-none border-0 bg-transparent text-base outline-none text-[var(--gp-text-primary)]"
-                rows={2}
-                value={newPostContent}
-                onChange={(e) => setNewPostContent(e.target.value)}
-              />
-              <div className="flex items-center justify-between mt-2">
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm">{'\uD83D\uDCF7'}</Button>
-                  <Button variant="ghost" size="sm">{'\uD83C\uDFA5'}</Button>
-                  <Button variant="ghost" size="sm">{'\uD83D\uDCCE'}</Button>
-                </div>
-                <Button variant="primary" size="sm" onClick={handlePublish}>Publier</Button>
-              </div>
-            </div>
+        {/* Post Composer */}
+        <div className="flex gap-3 items-start mb-6">
+          <div className="flex-1">
+            <PostComposer
+              currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
+              onPublish={handlePublish}
+              disabled={createPostMutation.isPending}
+            />
           </div>
-        </Card>
+          <button
+            onClick={() => setAudioComposerOpen(true)}
+            className="mt-3 flex-shrink-0 w-12 h-12 rounded-full bg-[var(--gp-terracotta)] text-white flex items-center justify-center hover:opacity-90 transition-opacity"
+            aria-label="Record audio post"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Feed loading state */}
+        {feedQuery.isLoading && (
+          <div className="space-y-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-2xl border border-[var(--gp-border)] bg-[var(--gp-surface)] p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 rounded-full" />
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                </div>
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-8 w-48" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Feed error */}
+        {feedQuery.isError && (
+          <div className="text-center py-12">
+            <p className="text-[var(--gp-text-muted)] mb-4">Unable to load feed.</p>
+            <Button variant="secondary" size="sm" onClick={() => feedQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {/* New posts banner */}
+        {newPostsCount > 0 && (
+          <button
+            onClick={handleDismissNewPosts}
+            className="w-full py-2.5 mb-4 rounded-xl bg-[var(--gp-terracotta)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+            data-testid="new-posts-banner"
+          >
+            {newPostsCount} {newPostsCount === 1 ? 'new post' : 'new posts'}
+          </button>
+        )}
 
         {/* Posts */}
-        <div className="space-y-6">
-          {posts.map((post) => (
-            <PostCard
-              key={post.id}
-              author={{ name: post.author, emoji: post.avatar }}
-              lang={post.lang}
-              content={post.content}
-              translations={post.translations}
-              userLanguage={userLanguage}
-              time={post.time}
-              likes={likedPosts.has(post.id) ? post.likes + 1 : post.likes}
-              comments={post.comments}
-              isLiked={likedPosts.has(post.id)}
-              reactionSummary={post.reactionSummary}
-              userReaction={userReactions[post.id]}
-              onLike={() => handleLike(post.id)}
-              onReact={(emoji) => handleReact(post.id, emoji)}
-              onComment={handleComment}
-              onShare={() => handleShare(post.id)}
-            />
-          ))}
-        </div>
+        {feedQuery.isSuccess && (
+          <div className="space-y-6">
+            {posts.map((post) => (
+              <div
+                key={post.id}
+                onMouseEnter={() => prefetchPost(post.id)}
+              >
+                <PostCard
+                  author={{
+                    name: post.author?.displayName ?? post.author?.username ?? 'Unknown',
+                    avatar: post.author?.avatar ?? undefined,
+                  }}
+                  lang={post.originalLanguage ?? 'unknown'}
+                  content={post.content ?? ''}
+                  translations={postToTranslations(post)}
+                  userLanguage={userLanguage}
+                  time={formatRelativeTime(post.createdAt)}
+                  likes={post.likeCount}
+                  comments={post.commentCount}
+                  isLiked={likedPosts.has(post.id)}
+                  isBookmarked={bookmarkedPosts.has(post.id)}
+                  isAuthor={post.authorId === currentUserId}
+                  isPinned={post.isPinned}
+                  reactionSummary={post.reactionSummary ?? undefined}
+                  userReaction={userReactions[post.id]}
+                  media={post.media}
+                  onLike={() => handleLike(post.id)}
+                  onReact={(emoji) => handleReact(post.id, emoji)}
+                  onComment={() => handleComment(post.id)}
+                  onShare={() => handleShare(post.id)}
+                  onBookmark={() => handleBookmark(post.id)}
+                  onTranslate={() => handleTranslate(post.id)}
+                  onRepost={() => handleRepostOpen(post.id)}
+                  onEdit={() => handleEditPost(post.id)}
+                  onDelete={() => handleDeletePost(post.id)}
+                  onPin={() => handlePinPost(post.id, post.isPinned)}
+                  onClick={() => router.push(`/v2/feeds/post/${post.id}`)}
+                />
+              </div>
+            ))}
+
+            {/* Empty state */}
+            {posts.length === 0 && !feedQuery.isLoading && (
+              <div className="text-center py-12">
+                <p className="text-[var(--gp-text-muted)]">No posts yet. Be the first to share something!</p>
+              </div>
+            )}
+
+            {/* Infinite scroll sentinel */}
+            <div ref={loadMoreRef} className="h-10">
+              {feedQuery.isFetchingNextPage && (
+                <div className="flex justify-center py-4">
+                  <div className="w-6 h-6 border-2 border-[var(--gp-terracotta)] border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Story Viewer */}
@@ -378,6 +585,40 @@ export default function V2FeedsPage() {
         onClose={() => setStatusComposerOpen(false)}
         onPublish={handleStatusPublish}
       />
+
+      {/* Audio Post Composer */}
+      <AudioPostComposer
+        open={audioComposerOpen}
+        currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
+        onPublish={handleAudioPublish}
+        onClose={() => setAudioComposerOpen(false)}
+        disabled={createPostMutation.isPending}
+      />
+
+      {/* Post Editor */}
+      {editingPost && (
+        <PostEditor
+          open
+          initialContent={editingPost.content}
+          initialVisibility={editingPost.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE'}
+          onSave={handleSaveEdit}
+          onClose={() => setEditingPost(null)}
+          saving={updatePostMutation.isPending}
+        />
+      )}
+
+      {/* Repost Modal */}
+      {repostingPost && (
+        <RepostModal
+          open
+          originalAuthor={repostingPost.author}
+          originalContent={repostingPost.content}
+          onRepost={handleRepost}
+          onQuote={handleQuote}
+          onClose={() => setRepostingPost(null)}
+          saving={repostMutation.isPending}
+        />
+      )}
     </div>
   );
 }

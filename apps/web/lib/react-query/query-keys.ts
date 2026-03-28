@@ -88,6 +88,30 @@ export const queryKeys = {
     feed: () => [...queryKeys.stories.all, 'feed'] as const,
     viewers: (storyId: string) => [...queryKeys.stories.all, 'viewers', storyId] as const,
   },
+
+  posts: {
+    all: ['posts'] as const,
+    lists: () => [...queryKeys.posts.all, 'list'] as const,
+    feed: (filters?: { type?: string }) =>
+      [...queryKeys.posts.lists(), 'feed', filters] as const,
+    infinite: (type?: string) =>
+      [...queryKeys.posts.lists(), 'infinite', type] as const,
+    details: () => [...queryKeys.posts.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.posts.details(), id] as const,
+    comments: (postId: string) =>
+      [...queryKeys.posts.detail(postId), 'comments'] as const,
+    commentsInfinite: (postId: string) =>
+      [...queryKeys.posts.comments(postId), 'infinite'] as const,
+    commentReplies: (postId: string, commentId: string) =>
+      [...queryKeys.posts.comments(postId), 'replies', commentId] as const,
+    bookmarks: () => [...queryKeys.posts.lists(), 'bookmarks'] as const,
+    userPosts: (userId: string) =>
+      [...queryKeys.posts.lists(), 'user', userId] as const,
+    communityPosts: (communityId: string) =>
+      [...queryKeys.posts.lists(), 'community', communityId] as const,
+    stories: () => [...queryKeys.posts.lists(), 'stories'] as const,
+    statuses: () => [...queryKeys.posts.lists(), 'statuses'] as const,
+  },
 } as const;
 
 export type QueryKeys = typeof queryKeys;

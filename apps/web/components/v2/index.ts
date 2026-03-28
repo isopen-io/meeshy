@@ -140,6 +140,33 @@ export type { ProgressStepsProps } from './ProgressSteps';
 export { PostCard } from './PostCard';
 export type { PostCardProps } from './PostCard';
 
+export { PostDetail } from './PostDetail';
+export type { PostDetailProps } from './PostDetail';
+
+export { CommentItem } from './CommentItem';
+export type { CommentItemProps } from './CommentItem';
+
+export { CommentComposer } from './CommentComposer';
+export type { CommentComposerProps } from './CommentComposer';
+
+export { CommentList } from './CommentList';
+export type { CommentListProps } from './CommentList';
+
+export { CommentThread } from './CommentThread';
+export type { CommentThreadProps } from './CommentThread';
+
+export { PostComposer } from './PostComposer';
+export type { PostComposerProps } from './PostComposer';
+
+export { PostEditor } from './PostEditor';
+export type { PostEditorProps } from './PostEditor';
+
+export { RepostModal } from './RepostModal';
+export type { RepostModalProps } from './RepostModal';
+
+export { AudioPostComposer } from './AudioPostComposer';
+export type { AudioPostComposerProps } from './AudioPostComposer';
+
 export { TranslationToggle } from './TranslationToggle';
 export type { TranslationToggleProps, TranslationItem } from './TranslationToggle';
 

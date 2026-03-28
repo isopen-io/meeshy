@@ -61,6 +61,8 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
       excludedUserIds: [],
     }),
     getConversationContext: jest.fn().mockResolvedValue({ title: 'Test', description: null }),
+    getConversationWithType: jest.fn().mockResolvedValue({ type: 'group', title: 'Test' }),
+    getAgentMessageEngagement: jest.fn().mockResolvedValue([]),
     getRecentMessages: jest.fn().mockResolvedValue([]),
     getPotentialControlledUsers: jest.fn().mockResolvedValue([]),
     getLeastActiveParticipants: jest.fn().mockResolvedValue([]),
@@ -82,6 +84,8 @@ function makeStateManager(messages = [makeMessage()]) {
     setAgentHistory: jest.fn().mockResolvedValue(undefined),
     getTodayActiveUserIds: jest.fn().mockResolvedValue([]),
     isOnCooldown: jest.fn().mockResolvedValue(false),
+    getLastAgentUserId: jest.fn().mockResolvedValue(null),
+    getEngagementData: jest.fn().mockResolvedValue([]),
   } as any;
 }
 

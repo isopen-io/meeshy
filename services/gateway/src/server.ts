@@ -1187,10 +1187,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         if (manager) {
           manager.setAgentClient(this.agentClient);
           this.agentClient.onResponse(async (response) => {
-            await manager.handleAgentResponse(response);
+            await manager.handleAgentResponse(response as Parameters<typeof manager.handleAgentResponse>[0]);
           });
           this.agentClient.onReaction(async (reaction) => {
-            await manager.handleAgentReaction(reaction);
+            await manager.handleAgentReaction(reaction as Parameters<typeof manager.handleAgentReaction>[0]);
           });
           this.agentClient.startListening().catch((err) => {
             logger.error('[GWY] Agent ZMQ listener error:', err);

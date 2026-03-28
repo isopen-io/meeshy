@@ -77,6 +77,17 @@ final class MockPostService: PostServiceProviding {
     var createWithTypeCallCount = 0
     var lastCreateWithTypeType: PostType?
 
+    var updateCallCount = 0
+    var lastUpdatePostId: String?
+
+    var viewPostCallCount = 0
+    var lastViewPostId: String?
+
+    var getPostViewsCallCount = 0
+    var getUserPostsCallCount = 0
+    var getCommentRepliesCallCount = 0
+    var getCommunityPostsCallCount = 0
+
     // MARK: - Protocol Conformance
 
     func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -167,6 +178,39 @@ final class MockPostService: PostServiceProviding {
 
     func unpinPost(postId: String) async throws {}
 
+    func update(postId: String, content: String?, visibility: String?, moodEmoji: String?) async throws -> APIPost {
+        updateCallCount += 1
+        lastUpdatePostId = postId
+        return try createResult.get()
+    }
+
+    func viewPost(postId: String, duration: Int?) async throws {
+        viewPostCallCount += 1
+        lastViewPostId = postId
+    }
+
+    func getPostViews(postId: String, limit: Int, offset: Int) async throws -> PostViewersResponse {
+        getPostViewsCallCount += 1
+        return PostViewersResponse(items: [], pagination: PostViewersPagination(total: 0, offset: 0, limit: limit, hasMore: false))
+    }
+
+    func getUserPosts(userId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        getUserPostsCallCount += 1
+        return try getFeedResult.get()
+    }
+
+    func getCommentReplies(postId: String, commentId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]> {
+        getCommentRepliesCallCount += 1
+        return JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"error":null}
+        """)
+    }
+
+    func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        getCommunityPostsCallCount += 1
+        return try getFeedResult.get()
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -223,5 +267,14 @@ final class MockPostService: PostServiceProviding {
         createWithTypeResult = .success(stubPost)
         createWithTypeCallCount = 0
         lastCreateWithTypeType = nil
+
+        updateCallCount = 0
+        lastUpdatePostId = nil
+        viewPostCallCount = 0
+        lastViewPostId = nil
+        getPostViewsCallCount = 0
+        getUserPostsCallCount = 0
+        getCommentRepliesCallCount = 0
+        getCommunityPostsCallCount = 0
     }
 }
