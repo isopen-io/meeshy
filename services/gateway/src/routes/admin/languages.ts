@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { validateQuery } from '../../validation/helpers.js';
+import { LanguageStatsQuerySchema, LanguageTimelineQuerySchema, TranslationAccuracyQuerySchema } from '../../validation/admin-schemas.js';
 
 // Middleware pour vérifier les permissions admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {

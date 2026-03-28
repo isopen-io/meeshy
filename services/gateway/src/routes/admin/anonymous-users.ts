@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { validatePagination, type AnonymousUserListQuery } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { validateQuery } from '../../validation/helpers.js';
+import { AnonymousUsersQuerySchema } from '../../validation/admin-schemas.js';
 
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;

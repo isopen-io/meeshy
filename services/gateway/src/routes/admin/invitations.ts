@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
+import { InvitationsListQuerySchema, InvitationIdParamSchema, UpdateInvitationBodySchema } from '../../validation/admin-schemas.js';
 
 // Middleware pour vérifier les permissions admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {

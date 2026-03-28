@@ -4,6 +4,8 @@ import { BroadcastTranslationService } from '../../services/admin/broadcast-tran
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { EmailService } from '../../services/EmailService';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
+import { BroadcastsListQuerySchema, CreateBroadcastBodySchema, UpdateBroadcastBodySchema, BroadcastIdParamSchema } from '../../validation/admin-schemas.js';
 
 const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 
