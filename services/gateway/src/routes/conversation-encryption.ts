@@ -15,6 +15,8 @@
 import { FastifyInstance } from 'fastify';
 import { getEncryptionService } from '../services/EncryptionService';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
+import { validateParams, validateBody } from '../validation/helpers.js';
+import { ConversationIdParamSchema, SetEncryptionModeBodySchema } from '../validation/conversation-encryption-schemas.js';
 
 // EncryptionMode type - defined locally to avoid build order issues
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
@@ -70,6 +72,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
     '/api/conversations/:conversationId/encryption-status',
     {
       preValidation: [authMiddleware],
+      preHandler: [validateParams(ConversationIdParamSchema)],
     },
     async (request, reply) => {
       try {
@@ -142,6 +145,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
     '/api/conversations/:conversationId/encryption',
     {
       preValidation: [authMiddleware],
+      preHandler: [validateParams(ConversationIdParamSchema), validateBody(SetEncryptionModeBodySchema)],
     },
     async (request, reply) => {
       try {

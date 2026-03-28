@@ -3,6 +3,8 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { validateParams, validateQuery } from '../validation/helpers.js';
+import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema } from '../validation/message-read-status-schemas.js';
 
 interface MessageParams {
   messageId: string;
@@ -34,7 +36,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   fastify.get<{
     Params: MessageParams;
   }>('/messages/:messageId/read-status', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(MessageIdParamSchema)]
   }, async (request, reply) => {
     try {
       const { messageId } = request.params;
@@ -102,7 +105,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     Params: ConversationParams;
     Querystring: MessageIdsQuery;
   }>('/conversations/:conversationId/read-statuses', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(ConversationIdParamSchema), validateQuery(ReadStatusesQuerySchema)]
   }, async (request, reply) => {
     try {
       const { conversationId } = request.params;
@@ -167,7 +171,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   fastify.post<{
     Params: ConversationParams;
   }>('/conversations/:conversationId/mark-as-read', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(ConversationIdParamSchema)]
   }, async (request, reply) => {
     try {
       const { conversationId } = request.params;
@@ -245,7 +250,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   fastify.post<{
     Params: ConversationParams;
   }>('/conversations/:conversationId/mark-as-received', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(ConversationIdParamSchema)]
   }, async (request, reply) => {
     try {
       const { conversationId } = request.params;

@@ -335,7 +335,8 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [(fastify as any).authenticate],
+    preHandler: [validateBody(VerifyBodySchema)]
   }, async (request: FastifyRequest<{ Body: VerifyBody }>, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;
@@ -372,13 +373,6 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       description: 'Regenerate backup codes. Requires 2FA verification (TOTP only, not backup code).',
       tags: ['auth', '2fa'],
       summary: 'Regenerate backup codes',
-      body: {
-        type: 'object',
-        required: ['code'],
-        properties: {
-          code: { type: 'string', minLength: 6, maxLength: 6, description: '6-digit TOTP code (backup codes not accepted)' }
-        }
-      },
       response: {
         200: {
           description: 'Backup codes regenerated successfully',
@@ -408,7 +402,8 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [(fastify as any).authenticate],
+    preHandler: [validateBody(BackupCodesBodySchema)]
   }, async (request: FastifyRequest<{ Body: RegenerateBackupCodesBody }>, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;
