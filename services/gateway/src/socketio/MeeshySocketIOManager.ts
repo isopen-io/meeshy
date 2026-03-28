@@ -33,6 +33,7 @@ import type {
   ClientToServerEvents,
   SocketIOResponse,
   TranslationEvent,
+  MessageType,
 } from '@meeshy/shared/types/socketio-events';
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
@@ -1083,7 +1084,7 @@ export class MeeshySocketIOManager {
         content: message.content,
         originalLanguage: message.originalLanguage || 'fr',
         originalContent: (message as any).originalContent || message.content,
-        messageType: message.messageType || 'text',
+        messageType: (message.messageType || 'text') as MessageType,
         isEdited: Boolean(message.isEdited),
         deletedAt: message.deletedAt || undefined,
         isBlurred: Boolean((message as any).isBlurred),
@@ -1120,7 +1121,7 @@ export class MeeshySocketIOManager {
           senderId: (message as any).replyTo.senderId || undefined,
           content: (message as any).replyTo.content,
           originalLanguage: (message as any).replyTo.originalLanguage || 'fr',
-          messageType: (message as any).replyTo.messageType || 'text',
+          messageType: ((message as any).replyTo.messageType || 'text') as MessageType,
           createdAt: (message as any).replyTo.createdAt || new Date(),
           sender: (message as any).replyTo.sender ? {
             id: (message as any).replyTo.sender.id,
