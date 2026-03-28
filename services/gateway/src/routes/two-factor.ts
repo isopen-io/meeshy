@@ -13,6 +13,8 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { TwoFactorService } from '../services/TwoFactorService';
+import { validateBody } from '../validation/helpers.js';
+import { EnableBodySchema, DisableBodySchema, VerifyBodySchema, BackupCodesBodySchema } from '../validation/two-factor-schemas.js';
 
 // Request body types
 interface EnableBody {
@@ -162,13 +164,6 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       description: 'Enable 2FA by verifying the first TOTP code. Returns backup codes that should be stored safely.',
       tags: ['auth', '2fa'],
       summary: 'Enable 2FA',
-      body: {
-        type: 'object',
-        required: ['code'],
-        properties: {
-          code: { type: 'string', minLength: 6, maxLength: 6, description: '6-digit TOTP code from authenticator app' }
-        }
-      },
       response: {
         200: {
           description: '2FA enabled successfully - backup codes returned (save them!)',
@@ -198,7 +193,8 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [(fastify as any).authenticate],
+    preHandler: [validateBody(EnableBodySchema)]
   }, async (request: FastifyRequest<{ Body: EnableBody }>, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;
@@ -244,14 +240,6 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       description: 'Disable 2FA. Requires password verification and optionally a 2FA code.',
       tags: ['auth', '2fa'],
       summary: 'Disable 2FA',
-      body: {
-        type: 'object',
-        required: ['password'],
-        properties: {
-          password: { type: 'string', minLength: 1, description: 'Current password for verification' },
-          code: { type: 'string', minLength: 6, maxLength: 8, description: 'Optional 2FA code for additional security' }
-        }
-      },
       response: {
         200: {
           description: '2FA disabled successfully',
@@ -276,7 +264,8 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [(fastify as any).authenticate],
+    preHandler: [validateBody(DisableBodySchema)]
   }, async (request: FastifyRequest<{ Body: DisableBody }>, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;
@@ -321,13 +310,6 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       description: 'Verify a 2FA code. Accepts both TOTP codes (6 digits) and backup codes (8 alphanumeric characters).',
       tags: ['auth', '2fa'],
       summary: 'Verify 2FA code',
-      body: {
-        type: 'object',
-        required: ['code'],
-        properties: {
-          code: { type: 'string', minLength: 6, maxLength: 9, description: 'TOTP code (6 digits) or backup code (XXXX-XXXX format)' }
-        }
-      },
       response: {
         200: {
           description: 'Code verified successfully',
