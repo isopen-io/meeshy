@@ -36,6 +36,9 @@ interface StreamComposerProps {
 
   // i18n
   placeholder: string;
+
+  // Permission hints for anonymous users
+  permissionHints?: string[];
 }
 
 /**
@@ -57,6 +60,7 @@ export const StreamComposer = memo(forwardRef<any, StreamComposerProps>(
       token,
       userRole,
       placeholder,
+      permissionHints,
     } = props;
 
     return (
@@ -78,6 +82,7 @@ export const StreamComposer = memo(forwardRef<any, StreamComposerProps>(
             token={token}
             userRole={userRole}
             conversationId={conversationId}
+            permissionHints={permissionHints}
           />
         </div>
       </div>

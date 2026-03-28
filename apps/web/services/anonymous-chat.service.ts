@@ -7,6 +7,7 @@ import { buildApiUrl } from '@/lib/config';
 import { toast } from 'sonner';
 import { authManager } from './auth-manager.service';
 import type { Participant } from '@meeshy/shared/types/participant';
+import type { Message } from '@meeshy/shared/types';
 
 export interface AnonymousChatData {
   participant: Participant;
@@ -77,7 +78,7 @@ export class AnonymousChatService {
   /**
    * Charge les messages de la conversation
    */
-  public async loadMessages(limit: number = 50, offset: number = 0): Promise<any> {
+  public async loadMessages(limit: number = 50, offset: number = 0): Promise<{ messages: Message[]; hasMore: boolean; total: number }> {
     if (!this.sessionToken || !this.linkId) {
       throw new Error('Session non initialisée');
     }
@@ -113,7 +114,7 @@ export class AnonymousChatService {
   /**
    * Envoie un message
    */
-  public async sendMessage(content: string, originalLanguage: string = 'fr', replyToId?: string): Promise<any> {
+  public async sendMessage(content: string, originalLanguage: string = 'fr', replyToId?: string): Promise<Message> {
     if (!this.sessionToken || !this.linkId) {
       throw new Error('Session non initialisée');
     }
