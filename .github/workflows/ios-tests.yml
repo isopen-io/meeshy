@@ -32,7 +32,7 @@ jobs:
           xcodebuild test \
             -scheme MeeshySDK-Package \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
-            -quiet
+            2>&1 | tail -100
         working-directory: packages/MeeshySDK
 
   ios-tests:
@@ -54,4 +54,4 @@ jobs:
             -scheme Meeshy \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             -only-testing:MeeshyTests \
-            -quiet
+            2>&1 | tail -200
