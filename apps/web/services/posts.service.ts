@@ -6,7 +6,6 @@ import type {
   PostVisibility,
   PostView,
 } from '@meeshy/shared/types/post';
-import type { ApiResponse } from '@meeshy/shared/types';
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -59,7 +58,7 @@ export interface CursorPaginatedResponse<T> {
 }
 
 // ---------------------------------------------------------------------------
-// Service
+// Helpers
 // ---------------------------------------------------------------------------
 
 function buildQuery(filters: FeedFilters): string {
@@ -70,160 +69,176 @@ function buildQuery(filters: FeedFilters): string {
   return qs ? `?${qs}` : '';
 }
 
+// apiService.get<T>() returns ApiResponse<T> = { success, data: T }
+// The server response body is at response.data
+// For cursor-paginated endpoints, the body IS the CursorPaginatedResponse
+function unwrap<T>(response: { data?: T }): T {
+  return response.data as T;
+}
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
+
 export const postsService = {
   // ── Feed ────────────────────────────────────────────────────────────────
 
   async getFeed(filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
-    const response = await apiService.get<CursorPaginatedResponse<Post>>(
-      `/posts/feed${buildQuery(filters)}`,
-    );
-    return response as unknown as CursorPaginatedResponse<Post>;
+    const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/feed${buildQuery(filters)}`);
+    return unwrap(response);
   },
 
-  async getStories(): Promise<ApiResponse<Post[]>> {
-    return apiService.get<ApiResponse<Post[]>>('/posts/feed/stories') as unknown as ApiResponse<Post[]>;
+  async getStories(): Promise<{ success: boolean; data: Post[] }> {
+    const response = await apiService.get<{ success: boolean; data: Post[] }>('/posts/feed/stories');
+    return unwrap(response);
   },
 
   async getStatuses(filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
-    return apiService.get<CursorPaginatedResponse<Post>>(
-      `/posts/feed/statuses${buildQuery(filters)}`,
-    ) as unknown as CursorPaginatedResponse<Post>;
+    const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/feed/statuses${buildQuery(filters)}`);
+    return unwrap(response);
   },
 
   async getUserPosts(userId: string, filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
-    return apiService.get<CursorPaginatedResponse<Post>>(
-      `/posts/user/${userId}${buildQuery(filters)}`,
-    ) as unknown as CursorPaginatedResponse<Post>;
+    const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/user/${userId}${buildQuery(filters)}`);
+    return unwrap(response);
   },
 
   async getCommunityPosts(communityId: string, filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
-    return apiService.get<CursorPaginatedResponse<Post>>(
-      `/posts/community/${communityId}${buildQuery(filters)}`,
-    ) as unknown as CursorPaginatedResponse<Post>;
+    const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/community/${communityId}${buildQuery(filters)}`);
+    return unwrap(response);
   },
 
   async getBookmarks(filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
-    return apiService.get<CursorPaginatedResponse<Post>>(
-      `/posts/bookmarks${buildQuery(filters)}`,
-    ) as unknown as CursorPaginatedResponse<Post>;
+    const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/bookmarks${buildQuery(filters)}`);
+    return unwrap(response);
   },
 
   // ── Single Post ─────────────────────────────────────────────────────────
 
-  async getPost(postId: string): Promise<ApiResponse<Post>> {
-    return apiService.get<ApiResponse<Post>>(`/posts/${postId}`) as unknown as ApiResponse<Post>;
+  async getPost(postId: string): Promise<{ success: boolean; data: Post }> {
+    const response = await apiService.get<{ success: boolean; data: Post }>(`/posts/${postId}`);
+    return unwrap(response);
   },
 
   // ── CRUD ────────────────────────────────────────────────────────────────
 
-  async createPost(data: CreatePostRequest): Promise<ApiResponse<Post>> {
-    return apiService.post<ApiResponse<Post>>('/posts', data) as unknown as ApiResponse<Post>;
+  async createPost(data: CreatePostRequest): Promise<{ success: boolean; data: Post }> {
+    const response = await apiService.post<{ success: boolean; data: Post }>('/posts', data);
+    return unwrap(response);
   },
 
-  async updatePost(postId: string, data: UpdatePostRequest): Promise<ApiResponse<Post>> {
-    return apiService.put<ApiResponse<Post>>(`/posts/${postId}`, data) as unknown as ApiResponse<Post>;
+  async updatePost(postId: string, data: UpdatePostRequest): Promise<{ success: boolean; data: Post }> {
+    const response = await apiService.put<{ success: boolean; data: Post }>(`/posts/${postId}`, data);
+    return unwrap(response);
   },
 
-  async deletePost(postId: string): Promise<ApiResponse<{ deleted: boolean }>> {
-    return apiService.delete<ApiResponse<{ deleted: boolean }>>(`/posts/${postId}`) as unknown as ApiResponse<{ deleted: boolean }>;
+  async deletePost(postId: string): Promise<{ success: boolean; data: { deleted: boolean } }> {
+    const response = await apiService.delete<{ success: boolean; data: { deleted: boolean } }>(`/posts/${postId}`);
+    return unwrap(response);
   },
 
   // ── Interactions ────────────────────────────────────────────────────────
 
-  async likePost(postId: string, emoji = '❤️'): Promise<ApiResponse<Post>> {
-    return apiService.post<ApiResponse<Post>>(`/posts/${postId}/like`, { emoji }) as unknown as ApiResponse<Post>;
+  async likePost(postId: string, emoji = '❤️'): Promise<unknown> {
+    const response = await apiService.post(`/posts/${postId}/like`, { emoji });
+    return unwrap(response);
   },
 
-  async unlikePost(postId: string): Promise<ApiResponse<Post>> {
-    return apiService.delete<ApiResponse<Post>>(`/posts/${postId}/like`) as unknown as ApiResponse<Post>;
+  async unlikePost(postId: string): Promise<unknown> {
+    const response = await apiService.delete(`/posts/${postId}/like`);
+    return unwrap(response);
   },
 
-  async bookmarkPost(postId: string): Promise<ApiResponse<{ bookmarked: boolean }>> {
-    return apiService.post<ApiResponse<{ bookmarked: boolean }>>(`/posts/${postId}/bookmark`) as unknown as ApiResponse<{ bookmarked: boolean }>;
+  async bookmarkPost(postId: string): Promise<{ bookmarked: boolean }> {
+    const response = await apiService.post<{ bookmarked: boolean }>(`/posts/${postId}/bookmark`);
+    return unwrap(response);
   },
 
-  async unbookmarkPost(postId: string): Promise<ApiResponse<{ bookmarked: boolean }>> {
-    return apiService.delete<ApiResponse<{ bookmarked: boolean }>>(`/posts/${postId}/bookmark`) as unknown as ApiResponse<{ bookmarked: boolean }>;
+  async unbookmarkPost(postId: string): Promise<{ bookmarked: boolean }> {
+    const response = await apiService.delete<{ bookmarked: boolean }>(`/posts/${postId}/bookmark`);
+    return unwrap(response);
   },
 
-  async repost(postId: string, data: RepostRequest = {}): Promise<ApiResponse<Post>> {
-    return apiService.post<ApiResponse<Post>>(`/posts/${postId}/repost`, data) as unknown as ApiResponse<Post>;
+  async repost(postId: string, data: RepostRequest = {}): Promise<{ success: boolean; data: Post }> {
+    const response = await apiService.post<{ success: boolean; data: Post }>(`/posts/${postId}/repost`, data);
+    return unwrap(response);
   },
 
-  async sharePost(postId: string, platform?: string): Promise<ApiResponse<{ shared: boolean; shareCount: number }>> {
-    return apiService.post<ApiResponse<{ shared: boolean; shareCount: number }>>(
+  async sharePost(postId: string, platform?: string): Promise<{ shared: boolean; shareCount: number }> {
+    const response = await apiService.post<{ shared: boolean; shareCount: number }>(
       `/posts/${postId}/share`,
       platform ? { platform } : undefined,
-    ) as unknown as ApiResponse<{ shared: boolean; shareCount: number }>;
+    );
+    return unwrap(response);
   },
 
-  async pinPost(postId: string): Promise<ApiResponse<{ pinned: boolean }>> {
-    return apiService.post<ApiResponse<{ pinned: boolean }>>(`/posts/${postId}/pin`) as unknown as ApiResponse<{ pinned: boolean }>;
+  async pinPost(postId: string): Promise<{ pinned: boolean }> {
+    const response = await apiService.post<{ pinned: boolean }>(`/posts/${postId}/pin`);
+    return unwrap(response);
   },
 
-  async unpinPost(postId: string): Promise<ApiResponse<{ pinned: boolean }>> {
-    return apiService.delete<ApiResponse<{ pinned: boolean }>>(`/posts/${postId}/pin`) as unknown as ApiResponse<{ pinned: boolean }>;
+  async unpinPost(postId: string): Promise<{ pinned: boolean }> {
+    const response = await apiService.delete<{ pinned: boolean }>(`/posts/${postId}/pin`);
+    return unwrap(response);
   },
 
-  async viewPost(postId: string, duration?: number): Promise<ApiResponse<{ viewed: boolean }>> {
-    return apiService.post<ApiResponse<{ viewed: boolean }>>(
+  async viewPost(postId: string, duration?: number): Promise<{ viewed: boolean }> {
+    const response = await apiService.post<{ viewed: boolean }>(
       `/posts/${postId}/view`,
       duration ? { duration } : undefined,
-    ) as unknown as ApiResponse<{ viewed: boolean }>;
+    );
+    return unwrap(response);
   },
 
-  async getPostViews(postId: string, limit = 50, offset = 0): Promise<ApiResponse<{ items: PostView[]; pagination: { total: number; offset: number; limit: number; hasMore: boolean } }>> {
-    return apiService.get<ApiResponse<{ items: PostView[]; pagination: { total: number; offset: number; limit: number; hasMore: boolean } }>>(
+  async getPostViews(postId: string, limit = 50, offset = 0): Promise<{ items: PostView[]; pagination: { total: number; offset: number; limit: number; hasMore: boolean } }> {
+    const response = await apiService.get<{ items: PostView[]; pagination: { total: number; offset: number; limit: number; hasMore: boolean } }>(
       `/posts/${postId}/views?limit=${limit}&offset=${offset}`,
-    ) as unknown as ApiResponse<{ items: PostView[]; pagination: { total: number; offset: number; limit: number; hasMore: boolean } }>;
+    );
+    return unwrap(response);
   },
 
   // ── Translation ─────────────────────────────────────────────────────────
 
-  async translatePost(postId: string, targetLanguage: string): Promise<ApiResponse<{ requested: boolean; targetLanguage: string }>> {
-    return apiService.post<ApiResponse<{ requested: boolean; targetLanguage: string }>>(
+  async translatePost(postId: string, targetLanguage: string): Promise<{ requested: boolean; targetLanguage: string }> {
+    const response = await apiService.post<{ requested: boolean; targetLanguage: string }>(
       `/posts/${postId}/translate`,
       { targetLanguage },
-    ) as unknown as ApiResponse<{ requested: boolean; targetLanguage: string }>;
+    );
+    return unwrap(response);
   },
 
   // ── Comments ────────────────────────────────────────────────────────────
 
   async getComments(postId: string, filters: FeedFilters = {}): Promise<CursorPaginatedResponse<PostComment>> {
-    return apiService.get<CursorPaginatedResponse<PostComment>>(
-      `/posts/${postId}/comments${buildQuery(filters)}`,
-    ) as unknown as CursorPaginatedResponse<PostComment>;
+    const response = await apiService.get<CursorPaginatedResponse<PostComment>>(`/posts/${postId}/comments${buildQuery(filters)}`);
+    return unwrap(response);
   },
 
   async getCommentReplies(postId: string, commentId: string, filters: FeedFilters = {}): Promise<CursorPaginatedResponse<PostComment>> {
-    return apiService.get<CursorPaginatedResponse<PostComment>>(
-      `/posts/${postId}/comments/${commentId}/replies${buildQuery(filters)}`,
-    ) as unknown as CursorPaginatedResponse<PostComment>;
+    const response = await apiService.get<CursorPaginatedResponse<PostComment>>(`/posts/${postId}/comments/${commentId}/replies${buildQuery(filters)}`);
+    return unwrap(response);
   },
 
-  async createComment(postId: string, content: string, parentId?: string): Promise<ApiResponse<PostComment>> {
-    return apiService.post<ApiResponse<PostComment>>(
+  async createComment(postId: string, content: string, parentId?: string): Promise<{ success: boolean; data: PostComment }> {
+    const response = await apiService.post<{ success: boolean; data: PostComment }>(
       `/posts/${postId}/comments`,
       parentId ? { content, parentId } : { content },
-    ) as unknown as ApiResponse<PostComment>;
+    );
+    return unwrap(response);
   },
 
-  async deleteComment(postId: string, commentId: string): Promise<ApiResponse<{ deleted: boolean }>> {
-    return apiService.delete<ApiResponse<{ deleted: boolean }>>(
-      `/posts/${postId}/comments/${commentId}`,
-    ) as unknown as ApiResponse<{ deleted: boolean }>;
+  async deleteComment(postId: string, commentId: string): Promise<{ success: boolean; data: { deleted: boolean } }> {
+    const response = await apiService.delete<{ success: boolean; data: { deleted: boolean } }>(`/posts/${postId}/comments/${commentId}`);
+    return unwrap(response);
   },
 
-  async likeComment(postId: string, commentId: string, emoji = '❤️'): Promise<ApiResponse<PostComment>> {
-    return apiService.post<ApiResponse<PostComment>>(
-      `/posts/${postId}/comments/${commentId}/like`,
-      { emoji },
-    ) as unknown as ApiResponse<PostComment>;
+  async likeComment(postId: string, commentId: string, emoji = '❤️'): Promise<unknown> {
+    const response = await apiService.post(`/posts/${postId}/comments/${commentId}/like`, { emoji });
+    return unwrap(response);
   },
 
-  async unlikeComment(postId: string, commentId: string): Promise<ApiResponse<PostComment>> {
-    return apiService.delete<ApiResponse<PostComment>>(
-      `/posts/${postId}/comments/${commentId}/like`,
-    ) as unknown as ApiResponse<PostComment>;
+  async unlikeComment(postId: string, commentId: string): Promise<unknown> {
+    const response = await apiService.delete(`/posts/${postId}/comments/${commentId}/like`);
+    return unwrap(response);
   },
 };

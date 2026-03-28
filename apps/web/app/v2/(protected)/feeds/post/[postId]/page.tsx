@@ -6,6 +6,7 @@ import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-c
 import { useLikePostMutation, useUnlikePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useDeletePostMutation, useSharePostMutation } from '@/hooks/queries/use-post-mutations';
 import { useCreateCommentMutation, useDeleteCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
+import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { PostDetail } from '@/components/v2/PostDetail';
 import { PageHeader } from '@/components/v2';
 import { Skeleton } from '@/components/v2/Skeleton';
@@ -17,6 +18,7 @@ export default function PostDetailPage() {
   const postId = params.postId as string;
 
   const currentUser = useAuthStore((s) => s.user);
+  const userLanguage = usePreferredLanguage();
 
   const postQuery = usePostQuery(postId);
   const commentsQuery = useCommentsInfiniteQuery({ postId, enabled: !!postId });
@@ -82,6 +84,7 @@ export default function PostDetailPage() {
           comments={comments}
           currentUserId={currentUser?.id}
           currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
+          userLanguage={userLanguage}
           commentsLoading={commentsQuery.isLoading}
           commentsHasMore={commentsQuery.hasNextPage ?? false}
           commentsLoadingMore={commentsQuery.isFetchingNextPage}

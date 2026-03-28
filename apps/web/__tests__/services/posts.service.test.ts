@@ -21,13 +21,13 @@ describe('postsService', () => {
 
   describe('getFeed', () => {
     it('calls GET /posts/feed with no params by default', async () => {
-      const mockResponse = { success: true, data: [], meta: { pagination: { total: 0, offset: 0, limit: 20, hasMore: false }, nextCursor: null } };
-      mockApi.get.mockResolvedValue(mockResponse);
+      const innerResponse = { success: true, data: [], meta: { pagination: { total: 0, offset: 0, limit: 20, hasMore: false }, nextCursor: null } };
+      mockApi.get.mockResolvedValue({ success: true, data: innerResponse });
 
       const result = await postsService.getFeed();
 
       expect(mockApi.get).toHaveBeenCalledWith('/posts/feed');
-      expect(result).toEqual(mockResponse);
+      expect(result).toEqual(innerResponse);
     });
 
     it('passes cursor and limit as query params', async () => {
@@ -75,13 +75,13 @@ describe('postsService', () => {
 
   describe('getPost', () => {
     it('calls GET /posts/:postId', async () => {
-      const mockPost = { success: true, data: { id: 'post-1', content: 'Hello' } };
-      mockApi.get.mockResolvedValue(mockPost);
+      const innerResponse = { success: true, data: { id: 'post-1', content: 'Hello' } };
+      mockApi.get.mockResolvedValue({ success: true, data: innerResponse });
 
       const result = await postsService.getPost('post-1');
 
       expect(mockApi.get).toHaveBeenCalledWith('/posts/post-1');
-      expect(result).toEqual(mockPost);
+      expect(result).toEqual(innerResponse);
     });
   });
 

@@ -5,21 +5,12 @@ import { queryKeys } from '@/lib/react-query/query-keys';
 import { postsService } from '@/services/posts.service';
 import type { CreatePostRequest, UpdatePostRequest, RepostRequest } from '@/services/posts.service';
 import type { Post } from '@meeshy/shared/types/post';
+import type { InfiniteFeedData } from './types';
 import { useAuthStore } from '@/stores/auth-store';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-interface FeedPage {
-  data: Post[];
-  meta: { pagination: { total: number; offset: number; limit: number; hasMore: boolean }; nextCursor: string | null };
-}
-
-interface InfiniteFeedData {
-  pages: FeedPage[];
-  pageParams: (string | undefined)[];
-}
 
 function patchPostInFeed(
   old: InfiniteFeedData | undefined,

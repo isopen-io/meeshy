@@ -8,6 +8,7 @@ import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use
 import { useStoriesQuery, useStatusesQuery } from '@/hooks/queries/use-feed-variants';
 import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
+import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useAuthStore } from '@/stores/auth-store';
 import { Skeleton } from '@/components/v2/Skeleton';
 import type { Post } from '@meeshy/shared/types/post';
@@ -82,7 +83,7 @@ export default function V2FeedsPage() {
     toastCtx.addToast(opts.title || opts.description || '', opts.type);
 
   const currentUser = useAuthStore((s) => s.user);
-  const USER_LANGUAGE = 'fr';
+  const userLanguage = usePreferredLanguage();
 
   // ─── Data hooks ──────────────────────────────────────────────────────
   const feedQuery = useFeedQuery();
@@ -241,7 +242,7 @@ export default function V2FeedsPage() {
           statuses={statusItems}
           onStatusPress={handleStatusPress}
           onAddStatus={() => setStatusComposerOpen(true)}
-          userLanguage={USER_LANGUAGE}
+          userLanguage={userLanguage}
           className="mb-6"
         />
 
@@ -323,7 +324,7 @@ export default function V2FeedsPage() {
                   lang={post.originalLanguage ?? 'unknown'}
                   content={post.content ?? ''}
                   translations={postToTranslations(post)}
-                  userLanguage={USER_LANGUAGE}
+                  userLanguage={userLanguage}
                   time={formatRelativeTime(post.createdAt)}
                   likes={post.likeCount}
                   comments={post.commentCount}
@@ -362,7 +363,7 @@ export default function V2FeedsPage() {
         <StoryViewer
           stories={storyDataList}
           initialIndex={storyViewerIndex}
-          userLanguage={USER_LANGUAGE}
+          userLanguage={userLanguage}
           onClose={() => setStoryViewerOpen(false)}
           onView={(id) => console.log('Viewed story:', id)}
           onReply={(id, text) => {

@@ -240,3 +240,80 @@ describe('useBookmarkPostMutation', () => {
     expect(data?.pages[0].data[0].bookmarkCount).toBe(2);
   });
 });
+
+describe('useCreatePostMutation - rollback', () => {
+  it('rolls back optimistic post on error', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockCreatePost.mockRejectedValue(new Error('Server error'));
+
+    const { result } = renderHook(() => useCreatePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ content: 'Will fail' });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: unknown[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data).toHaveLength(1);
+    expect((data?.pages[0].data[0] as typeof mockPost).id).toBe('post-1');
+  });
+});
+
+describe('useLikePostMutation - rollback', () => {
+  it('rolls back likeCount on error', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockLikePost.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ postId: 'post-1' });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data[0].likeCount).toBe(5);
+  });
+});
+
+describe('useUnlikePostMutation - rollback', () => {
+  it('rolls back likeCount on error', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockUnlikePost.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data[0].likeCount).toBe(5);
+  });
+});
+
+describe('useBookmarkPostMutation - rollback', () => {
+  it('rolls back bookmarkCount on error', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockBookmarkPost.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useBookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data[0].bookmarkCount).toBe(1);
+  });
+});

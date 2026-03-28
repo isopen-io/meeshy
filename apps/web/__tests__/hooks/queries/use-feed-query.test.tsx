@@ -83,6 +83,17 @@ describe('useFeedQuery', () => {
     expect(mockGetFeed).not.toHaveBeenCalled();
   });
 
+  it('sets isError on API failure', async () => {
+    mockGetFeed.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useFeedQuery(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(Error);
+  });
+
   it('supports pagination via nextCursor', async () => {
     const page1 = {
       success: true,

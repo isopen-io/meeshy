@@ -188,3 +188,45 @@ describe('useLikeCommentMutation', () => {
     });
   });
 });
+
+describe('useCreateCommentMutation - rollback', () => {
+  it('rolls back on error', async () => {
+    const qc = createQueryClient();
+    seedComments(qc);
+    seedFeed(qc);
+    mockCreateComment.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useCreateCommentMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ postId: 'post-1', content: 'Will fail' });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const comments = qc.getQueryData<{ pages: { data: unknown[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+    expect(comments?.pages[0].data).toHaveLength(1);
+
+    const feed = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(feed?.pages[0].data[0].commentCount).toBe(5);
+  });
+});
+
+describe('useLikeCommentMutation - rollback', () => {
+  it('rolls back likeCount on error', async () => {
+    const qc = createQueryClient();
+    seedComments(qc);
+    mockLikeComment.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useLikeCommentMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ postId: 'post-1', commentId: 'comment-1' });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const comments = qc.getQueryData<{ pages: { data: typeof mockComment[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+    expect(comments?.pages[0].data[0].likeCount).toBe(3);
+  });
+});

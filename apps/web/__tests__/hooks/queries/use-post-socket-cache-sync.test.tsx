@@ -37,6 +37,13 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     COMMENT_LIKED: 'comment:liked',
     POST_TRANSLATION_UPDATED: 'post:translation-updated',
     COMMENT_TRANSLATION_UPDATED: 'comment:translation-updated',
+    STORY_CREATED: 'story:created',
+    STORY_VIEWED: 'story:viewed',
+    STORY_REACTED: 'story:reacted',
+    STATUS_CREATED: 'status:created',
+    STATUS_UPDATED: 'status:updated',
+    STATUS_DELETED: 'status:deleted',
+    STATUS_REACTED: 'status:reacted',
   },
 }));
 
@@ -51,6 +58,8 @@ jest.mock('@/lib/react-query/query-keys', () => ({
       comments: (postId: string) => ['posts', 'detail', postId, 'comments'],
       commentsInfinite: (postId: string) => ['posts', 'detail', postId, 'comments', 'infinite'],
       bookmarks: () => ['posts', 'list', 'bookmarks'],
+      stories: () => ['posts', 'list', 'stories'],
+      statuses: () => ['posts', 'list', 'statuses'],
     },
   },
 }));
@@ -107,17 +116,17 @@ describe('usePostSocketCacheSync', () => {
     Object.keys(listeners).forEach((k) => delete listeners[k]);
   });
 
-  it('registers 12 socket listeners on mount', () => {
+  it('registers 19 socket listeners on mount (12 post/comment + 7 story/status)', () => {
     const qc = createQueryClient();
     renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
-    expect(mockSocket.on).toHaveBeenCalledTimes(12);
+    expect(mockSocket.on).toHaveBeenCalledTimes(19);
   });
 
-  it('unregisters all listeners on unmount', () => {
+  it('unregisters all 19 listeners on unmount', () => {
     const qc = createQueryClient();
     const { unmount } = renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
     unmount();
-    expect(mockSocket.off).toHaveBeenCalledTimes(12);
+    expect(mockSocket.off).toHaveBeenCalledTimes(19);
   });
 
   it('does not register when enabled=false', () => {
@@ -231,6 +240,45 @@ describe('usePostSocketCacheSync', () => {
 
       const posts = getFeedPosts(qc) as (typeof mockPost & { translations: Record<string, unknown> })[];
       expect(posts[0].translations).toHaveProperty('en');
+    });
+  });
+
+  describe('story:created', () => {
+    it('invalidates stories cache', () => {
+      const qc = createQueryClient();
+      const spy = jest.spyOn(qc, 'invalidateQueries');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('story:created', { story: mockPost }));
+
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
+      spy.mockRestore();
+    });
+  });
+
+  describe('status:created', () => {
+    it('invalidates statuses cache', () => {
+      const qc = createQueryClient();
+      const spy = jest.spyOn(qc, 'invalidateQueries');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('status:created', { status: mockPost }));
+
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'statuses'] });
+      spy.mockRestore();
+    });
+  });
+
+  describe('status:deleted', () => {
+    it('invalidates statuses cache', () => {
+      const qc = createQueryClient();
+      const spy = jest.spyOn(qc, 'invalidateQueries');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('status:deleted', { statusId: 'st-1', authorId: 'user-1' }));
+
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'statuses'] });
+      spy.mockRestore();
     });
   });
 });

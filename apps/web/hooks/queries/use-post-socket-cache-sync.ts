@@ -15,36 +15,20 @@ import type {
   PostUnlikedEventData,
   PostRepostedEventData,
   PostBookmarkedEventData,
+  StoryCreatedEventData,
+  StoryViewedEventData,
+  StoryReactedEventData,
+  StatusCreatedEventData,
+  StatusUpdatedEventData,
+  StatusDeletedEventData,
+  StatusReactedEventData,
   CommentAddedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
 } from '@meeshy/shared/types/post';
-
-// ---------------------------------------------------------------------------
-// Cache types
-// ---------------------------------------------------------------------------
-
-interface FeedPage {
-  data: Post[];
-  meta: { pagination: { total: number; offset: number; limit: number; hasMore: boolean }; nextCursor: string | null };
-}
-
-interface InfiniteFeedData {
-  pages: FeedPage[];
-  pageParams: (string | undefined)[];
-}
-
-interface CommentPage {
-  data: PostComment[];
-  meta: { pagination: { total: number; offset: number; limit: number; hasMore: boolean }; nextCursor: string | null };
-}
-
-interface InfiniteCommentsData {
-  pages: CommentPage[];
-  pageParams: (string | undefined)[];
-}
+import type { InfiniteFeedData, InfiniteCommentsData } from './types';
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -258,6 +242,38 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       );
     }
 
+    // ── Story events ────────────────────────────────────────────────────
+
+    function handleStoryCreated(_data: StoryCreatedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    }
+
+    function handleStoryViewed(_data: StoryViewedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    }
+
+    function handleStoryReacted(_data: StoryReactedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    }
+
+    // ── Status events ───────────────────────────────────────────────────
+
+    function handleStatusCreated(_data: StatusCreatedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.statuses() });
+    }
+
+    function handleStatusUpdated(_data: StatusUpdatedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.statuses() });
+    }
+
+    function handleStatusDeleted(_data: StatusDeletedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.statuses() });
+    }
+
+    function handleStatusReacted(_data: StatusReactedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.statuses() });
+    }
+
     // ── Register listeners ──────────────────────────────────────────────
 
     socket.on(SERVER_EVENTS.POST_CREATED, handlePostCreated);
@@ -273,6 +289,14 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     socket.on(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
     socket.on(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
 
+    socket.on(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
+    socket.on(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
+    socket.on(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
+    socket.on(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
+    socket.on(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
+    socket.on(SERVER_EVENTS.STATUS_DELETED, handleStatusDeleted);
+    socket.on(SERVER_EVENTS.STATUS_REACTED, handleStatusReacted);
+
     return () => {
       socket.off(SERVER_EVENTS.POST_CREATED, handlePostCreated);
       socket.off(SERVER_EVENTS.POST_UPDATED, handlePostUpdated);
@@ -286,6 +310,14 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       socket.off(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
       socket.off(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
       socket.off(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
+
+      socket.off(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
+      socket.off(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
+      socket.off(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
+      socket.off(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
+      socket.off(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
+      socket.off(SERVER_EVENTS.STATUS_DELETED, handleStatusDeleted);
+      socket.off(SERVER_EVENTS.STATUS_REACTED, handleStatusReacted);
     };
   }, [enabled, queryClient]);
 }
