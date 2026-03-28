@@ -98,16 +98,15 @@ public struct CreateCommentRequest: Encodable {
     }
 }
 
-public struct UpdatePostRequest: Encodable {
+public struct UpdatePostRequest: Encodable, Sendable {
     public let content: String?
     public let visibility: String?
     public let visibilityUserIds: [String]?
-    public let storyEffects: StoryEffects?
     public let moodEmoji: String?
 
-    public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil, storyEffects: StoryEffects? = nil, moodEmoji: String? = nil) {
+    public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil, moodEmoji: String? = nil) {
         self.content = content; self.visibility = visibility
-        self.visibilityUserIds = visibilityUserIds; self.storyEffects = storyEffects
+        self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
     }
 }
