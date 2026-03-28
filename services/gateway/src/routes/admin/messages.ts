@@ -31,7 +31,8 @@ export async function messagesRoutes(fastify: FastifyInstance) {
    * Statistiques détaillées des messages
    */
   fastify.get('/stats', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateQuery(AdminMessagesStatsQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
@@ -323,7 +324,8 @@ export async function messagesRoutes(fastify: FastifyInstance) {
    * Métriques d'engagement (réactions, réponses, etc.)
    */
   fastify.get('/engagement', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateQuery(AdminMessagesEngagementQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;

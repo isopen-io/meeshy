@@ -31,7 +31,8 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
    * Liste des participants anonymes avec pagination et filtres
    */
   fastify.get('/anonymous-users', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateQuery(AnonymousUsersQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { offset = '0', limit = '20', search, status } = request.query as AnonymousUserListQuery;

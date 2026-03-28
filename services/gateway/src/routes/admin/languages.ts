@@ -31,7 +31,8 @@ export async function languagesRoutes(fastify: FastifyInstance) {
    * Statistiques détaillées des langues
    */
   fastify.get('/stats', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateQuery(LanguageStatsQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
@@ -251,7 +252,8 @@ export async function languagesRoutes(fastify: FastifyInstance) {
    * Évolution des langues dans le temps
    */
   fastify.get('/timeline', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateQuery(LanguageTimelineQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
@@ -337,7 +339,8 @@ export async function languagesRoutes(fastify: FastifyInstance) {
    * Précision des traductions par paire de langues
    */
   fastify.get('/translation-accuracy', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateQuery(TranslationAccuracyQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;

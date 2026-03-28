@@ -523,7 +523,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     Params: MessageParams;
     Body: MessageStatusBody;
   }>('/messages/:messageId/status', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(MessageParamsSchema), validateBody(MessageStatusBodySchema)]
   }, async (request, reply) => {
     try {
       const { messageId } = request.params;
@@ -625,7 +626,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: MessageParams;
   }>('/messages/:messageId/history', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(MessageParamsSchema)]
   }, async (request, reply) => {
     try {
       const { messageId } = request.params;
@@ -705,7 +707,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: MessageParams;
   }>('/messages/:messageId/translations', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(MessageParamsSchema)]
   }, async (request, reply) => {
     try {
       const { messageId } = request.params;
@@ -786,7 +789,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       filter?: 'all' | 'delivered' | 'read' | 'unread';
     };
   }>('/messages/:messageId/status-details', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(MessageParamsSchema), validateQuery(MessageStatusDetailsQuerySchema)]
   }, async (request, reply) => {
     try {
       const { messageId } = request.params;
@@ -854,7 +858,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       filter?: 'all' | 'viewed' | 'downloaded' | 'listened' | 'watched';
     };
   }>('/attachments/:attachmentId/status-details', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(AttachmentParamsSchema)]
   }, async (request, reply) => {
     try {
       const { attachmentId } = request.params;
@@ -924,7 +929,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       wasZoomed?: boolean;
     };
   }>('/attachments/:attachmentId/status', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(AttachmentParamsSchema), validateBody(AttachmentStatusBodySchema)]
   }, async (request, reply) => {
     try {
       const { attachmentId } = request.params;

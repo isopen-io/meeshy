@@ -32,7 +32,8 @@ export async function invitationRoutes(fastify: FastifyInstance) {
    * Liste des invitations avec pagination et filtres
    */
   fastify.get('/', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateQuery(InvitationsListQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
@@ -192,7 +193,8 @@ export async function invitationRoutes(fastify: FastifyInstance) {
    * Détails d'une invitation
    */
   fastify.get('/:id', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateParams(InvitationIdParamSchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -261,7 +263,8 @@ export async function invitationRoutes(fastify: FastifyInstance) {
    * Modifier le statut d'une invitation (admin action)
    */
   fastify.patch('/:id', {
-    onRequest: [fastify.authenticate, requireAdmin]
+    onRequest: [fastify.authenticate, requireAdmin],
+    preHandler: [validateParams(InvitationIdParamSchema), validateBody(UpdateInvitationBodySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
