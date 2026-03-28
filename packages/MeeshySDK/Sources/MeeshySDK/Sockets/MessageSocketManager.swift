@@ -357,6 +357,33 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     }
 }
 
+public struct NotificationReadEvent: Decodable, Sendable {
+    public let notificationId: String
+}
+
+public struct NotificationDeletedEvent: Decodable, Sendable {
+    public let notificationId: String
+}
+
+public struct NotificationCountsEvent: Decodable, Sendable {
+    public let total: Int
+    public let unread: Int
+    public let byType: [String: Int]?
+}
+
+public struct ConversationOnlineStatsEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let onlineUsers: [OnlineUserInfo]
+    public let updatedAt: Date?
+
+    public struct OnlineUserInfo: Decodable, Sendable {
+        public let id: String
+        public let username: String
+        public let firstName: String?
+        public let lastName: String?
+    }
+}
+
 // MARK: - Connection State
 
 public enum ConnectionState: Equatable, Sendable {
@@ -396,6 +423,10 @@ public protocol MessageSocketProviding: Sendable {
     var audioTranslationCompleted: PassthroughSubject<AudioTranslationEvent, Never> { get }
     var didReconnect: PassthroughSubject<Void, Never> { get }
     var notificationReceived: PassthroughSubject<SocketNotificationEvent, Never> { get }
+    var notificationRead: PassthroughSubject<NotificationReadEvent, Never> { get }
+    var notificationDeleted: PassthroughSubject<NotificationDeletedEvent, Never> { get }
+    var notificationCounts: PassthroughSubject<NotificationCountsEvent, Never> { get }
+    var conversationOnlineStats: PassthroughSubject<ConversationOnlineStatsEvent, Never> { get }
     var callOfferReceived: PassthroughSubject<CallOfferData, Never> { get }
     var callAnswerReceived: PassthroughSubject<CallAnswerData, Never> { get }
     var callICECandidateReceived: PassthroughSubject<CallICECandidateData, Never> { get }
@@ -494,6 +525,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — notifications
     public let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
+    public let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
+    public let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
+    public let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
+
+    // Combine publishers — conversation online stats
+    public let conversationOnlineStats = PassthroughSubject<ConversationOnlineStatsEvent, Never>()
 
     // Combine publishers — call signaling
     public let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
@@ -1031,6 +1068,36 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        socket.on("notification:read") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(NotificationReadEvent.self, from: data) { [weak self] event in
+                self?.notificationRead.send(event)
+            }
+        }
+
+        socket.on("notification:deleted") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(NotificationDeletedEvent.self, from: data) { [weak self] event in
+                self?.notificationDeleted.send(event)
+            }
+        }
+
+        socket.on("notification:counts") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(NotificationCountsEvent.self, from: data) { [weak self] event in
+                self?.notificationCounts.send(event)
+            }
+        }
+
+        // --- Conversation online stats events ---
+
+        socket.on("conversation:online-stats") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationOnlineStatsEvent.self, from: data) { [weak self] event in
+                self?.conversationOnlineStats.send(event)
+            }
+        }
+
         // --- Call signaling events ---
 
         socket.on("call:initiated") { [weak self] data, _ in
@@ -1122,14 +1189,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        // --- Mention events ---
-
-        socket.on("mention:created") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(MentionCreatedEvent.self, from: data) { [weak self] event in
-                self?.mentionCreated.send(event)
-            }
-        }
     }
 
     // MARK: - Decode Helper

@@ -1135,14 +1135,7 @@ export class MeeshySocketIOManager {
       const result = await this.translationService.handleNewMessage(messageData);
       this.stats.messages_processed++;
       
-      // 2. (Optionnel) Notifier l'état de sauvegarde — laissé pour compat rétro
-      socket.emit(SERVER_EVENTS.MESSAGE_SENT, {
-        messageId: result.messageId,
-        status: result.status,
-        timestamp: new Date().toISOString()
-      });
-      
-      // 3. RÉCUPÉRER LE MESSAGE SAUVEGARDÉ ET LE DIFFUSER À TOUS (Y COMPRIS L'AUTEUR)
+      // 2. RÉCUPÉRER LE MESSAGE SAUVEGARDÉ ET LE DIFFUSER À TOUS (Y COMPRIS L'AUTEUR)
       const saved = await this.prisma.message.findUnique({
         where: { id: result.messageId },
         include: {
@@ -1284,15 +1277,15 @@ export class MeeshySocketIOManager {
       const translation = await this.translationService.getTranslation(data.messageId, data.targetLanguage);
       
       if (translation) {
-        socket.emit(SERVER_EVENTS.TRANSLATION_RECEIVED, {
+        socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, {
           messageId: data.messageId,
           translatedText: translation.translatedText,
           targetLanguage: data.targetLanguage,
           confidenceScore: translation.confidenceScore
         });
-        
+
         this.stats.translations_sent++;
-        
+
       } else {
         // No cached translation — trigger on-demand translation via ZMQ
         try {
@@ -1302,10 +1295,8 @@ export class MeeshySocketIOManager {
           });
 
           if (!message || !message.content) {
-            socket.emit(SERVER_EVENTS.TRANSLATION_ERROR, {
-              messageId: data.messageId,
-              targetLanguage: data.targetLanguage,
-              error: 'Message not found or empty'
+            socket.emit(SERVER_EVENTS.ERROR, {
+              message: 'Message not found or empty'
             });
             return;
           }
@@ -1323,10 +1314,8 @@ export class MeeshySocketIOManager {
           logger.info(`🔄 On-demand translation requested for message ${data.messageId} -> ${data.targetLanguage}`);
         } catch (translationError) {
           logger.error(`❌ On-demand translation failed: ${translationError}`);
-          socket.emit(SERVER_EVENTS.TRANSLATION_ERROR, {
-            messageId: data.messageId,
-            targetLanguage: data.targetLanguage,
-            error: 'Translation request failed'
+          socket.emit(SERVER_EVENTS.ERROR, {
+            message: 'Translation request failed'
           });
         }
       }
