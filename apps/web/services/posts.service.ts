@@ -11,6 +11,21 @@ import type {
 // Request / Response types
 // ---------------------------------------------------------------------------
 
+export interface MobileTranscriptionSegment {
+  readonly text: string;
+  readonly start?: number;
+  readonly end?: number;
+  readonly speaker_id?: string;
+}
+
+export interface MobileTranscription {
+  readonly text: string;
+  readonly language: string;
+  readonly confidence?: number;
+  readonly duration_ms?: number;
+  readonly segments?: MobileTranscriptionSegment[];
+}
+
 export interface CreatePostRequest {
   readonly type?: PostType;
   readonly visibility?: PostVisibility;
@@ -23,6 +38,7 @@ export interface CreatePostRequest {
   readonly audioDuration?: number;
   readonly originalLanguage?: string;
   readonly mediaIds?: string[];
+  readonly mobileTranscription?: MobileTranscription;
 }
 
 export interface UpdatePostRequest {
@@ -245,5 +261,22 @@ export const postsService = {
   async unlikeComment(postId: string, commentId: string): Promise<unknown> {
     const response = await apiService.delete(`/posts/${postId}/comments/${commentId}/like`);
     return unwrap(response);
+  },
+
+  // ── Story Background Audio ──────────────────────────────────────────────
+
+  async getStoryAudioLibrary(query?: string, limit = 20): Promise<{ id: string; title: string; duration: number; fileUrl: string; usageCount: number }[]> {
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    params.set('limit', String(limit));
+    const qs = params.toString();
+    const response = await apiService.get<{ id: string; title: string; duration: number; fileUrl: string; usageCount: number }[]>(
+      `/stories/audio${qs ? `?${qs}` : ''}`,
+    );
+    return unwrap(response);
+  },
+
+  async trackStoryAudioUse(audioId: string): Promise<void> {
+    await apiService.post(`/stories/audio/${audioId}/use`);
   },
 };

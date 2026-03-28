@@ -7,6 +7,7 @@ import type { StatusItem, StoryVisibility } from '@/components/v2';
 import { PostComposer } from '@/components/v2/PostComposer';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
+import { AudioPostComposer } from '@/components/v2/AudioPostComposer';
 import { Skeleton } from '@/components/v2/Skeleton';
 
 // Stories (dedicated hooks from stories feature)
@@ -22,6 +23,8 @@ import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sy
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 
 import { useAuthStore } from '@/stores/auth-store';
+import { TusUploadService } from '@/services/tusUploadService';
+import type { MobileTranscription } from '@/services/posts.service';
 import type { Post } from '@meeshy/shared/types/post';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -120,9 +123,10 @@ export default function V2FeedsPage() {
   const repostMutation = useRepostMutation();
   const updatePostMutation = useUpdatePostMutation();
 
-  // Edit + Repost modals
+  // Edit + Repost + Audio modals
   const [editingPost, setEditingPost] = useState<{ id: string; content: string; visibility: string } | null>(null);
   const [repostingPost, setRepostingPost] = useState<{ id: string; author?: string; content?: string } | null>(null);
+  const [audioComposerOpen, setAudioComposerOpen] = useState(false);
 
   // Local interaction state
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
@@ -363,6 +367,37 @@ export default function V2FeedsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
+  const handleAudioPublish = useCallback(async (data: { audioFile: File; transcription: MobileTranscription | null; content?: string }) => {
+    try {
+      const tusService = new TusUploadService();
+      const results = await tusService.uploadFiles(
+        [data.audioFile],
+        [{ uploadcontext: 'post' }],
+      );
+      const mediaId = results[0]?.id;
+      if (!mediaId) throw new Error('Upload failed');
+
+      createPostMutation.mutate(
+        {
+          content: data.content,
+          type: 'POST',
+          visibility: 'PUBLIC',
+          mediaIds: [mediaId],
+          mobileTranscription: data.transcription ?? undefined,
+        },
+        {
+          onSuccess: () => {
+            setAudioComposerOpen(false);
+            showToast('Audio post publi\u00e9 !', 'success');
+          },
+          onError: () => showToast('Erreur', 'error', 'Impossible de publier.'),
+        },
+      );
+    } catch {
+      showToast('Erreur upload', 'error', 'Impossible d\'uploader l\'audio.');
+    }
+  }, [createPostMutation, showToast]);
+
   // ─── Status handlers (mock) ───────────────────────────────────────────
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
@@ -401,12 +436,25 @@ export default function V2FeedsPage() {
         />
 
         {/* Post Composer */}
-        <PostComposer
-          currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
-          onPublish={handlePublish}
-          disabled={createPostMutation.isPending}
-          className="mb-6"
-        />
+        <div className="flex gap-3 items-start mb-6">
+          <div className="flex-1">
+            <PostComposer
+              currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
+              onPublish={handlePublish}
+              disabled={createPostMutation.isPending}
+            />
+          </div>
+          <button
+            onClick={() => setAudioComposerOpen(true)}
+            className="mt-3 flex-shrink-0 w-12 h-12 rounded-full bg-[var(--gp-terracotta)] text-white flex items-center justify-center hover:opacity-90 transition-opacity"
+            aria-label="Record audio post"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+            </svg>
+          </button>
+        </div>
 
         {/* Feed loading state */}
         {feedQuery.isLoading && (
@@ -536,6 +584,15 @@ export default function V2FeedsPage() {
         open={statusComposerOpen}
         onClose={() => setStatusComposerOpen(false)}
         onPublish={handleStatusPublish}
+      />
+
+      {/* Audio Post Composer */}
+      <AudioPostComposer
+        open={audioComposerOpen}
+        currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
+        onPublish={handleAudioPublish}
+        onClose={() => setAudioComposerOpen(false)}
+        disabled={createPostMutation.isPending}
       />
 
       {/* Post Editor */}

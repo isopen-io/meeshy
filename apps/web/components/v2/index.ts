@@ -164,6 +164,9 @@ export type { PostEditorProps } from './PostEditor';
 export { RepostModal } from './RepostModal';
 export type { RepostModalProps } from './RepostModal';
 
+export { AudioPostComposer } from './AudioPostComposer';
+export type { AudioPostComposerProps } from './AudioPostComposer';
+
 export { TranslationToggle } from './TranslationToggle';
 export type { TranslationToggleProps, TranslationItem } from './TranslationToggle';
 
