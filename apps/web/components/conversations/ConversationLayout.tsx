@@ -45,6 +45,7 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 import { useUserStore } from '@/stores/user-store';
 import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
+import { useAutoRetryFailedMessages } from '@/hooks/use-auto-retry-failed-messages';
 import { useFCMNotifications } from '@/hooks/use-fcm-notifications';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 
@@ -227,6 +228,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   // Sync Socket.IO events avec le cache React Query
   useSocketCacheSync({ conversationId: effectiveSelectedId, enabled: !!effectiveSelectedId });
   useInvalidateOnReconnect();
+  useAutoRetryFailedMessages();
 
   // Clavier virtuel mobile
   const keyboardState = useVirtualKeyboard();

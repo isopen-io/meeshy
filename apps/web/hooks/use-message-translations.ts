@@ -3,6 +3,26 @@ import type { BubbleTranslation, User, Message, TranslationModel } from '@meeshy
 import { resolveUserPreferredLanguage as resolveUserPreferredLanguageUtil } from '@/utils/user-language-preferences';
 import { LRUCache } from '@/lib/lru-cache';
 
+type RawTranslation = {
+  targetLanguage?: string;
+  language?: string;
+  translatedContent?: string;
+  content?: string;
+  translationModel?: string;
+  model?: string;
+  confidenceScore?: number;
+  confidence?: number;
+  cached?: boolean;
+  fromCache?: boolean;
+  createdAt?: string | Date;
+};
+
+type RawMessage = Message & {
+  translations?: ReadonlyArray<RawTranslation>;
+  originalContent?: string;
+  location?: string;
+};
+
 interface BubbleStreamMessage extends Omit<Message, 'translations'> {
   location?: string;
   originalLanguage: string;
@@ -17,7 +37,7 @@ interface UseMessageTranslationsProps {
 }
 
 interface UseMessageTranslationsReturn {
-  processMessageWithTranslations: (message: any) => BubbleStreamMessage;
+  processMessageWithTranslations: (message: RawMessage) => BubbleStreamMessage;
   getPreferredLanguageContent: (message: BubbleStreamMessage) => {
     content: string;
     isTranslated: boolean;
@@ -73,13 +93,13 @@ export function useMessageTranslations({
   /**
    * Traite un message brut et le convertit en BubbleStreamMessage avec traductions
    */
-  const processMessageWithTranslations = useCallback((message: any): BubbleStreamMessage => {
+  const processMessageWithTranslations = useCallback((message: RawMessage): BubbleStreamMessage => {
     // Convertir les traductions backend vers le format BubbleTranslation
     // CORRECTION: Déduplication des traductions par langue pour éviter les doublons
     const translationsMap = new LRUCache<string, BubbleTranslation>(500);
     
     const validTranslations = (message.translations || [])
-      .filter((t: any) => {
+      .filter((t: RawTranslation) => {
         // Support des deux formats possibles: targetLanguage/translatedContent OU language/content
         const hasValidStructure = t && (
           (t.targetLanguage && t.translatedContent) || 
@@ -99,7 +119,7 @@ export function useMessageTranslations({
         return true;
       });
     
-    validTranslations.forEach((t: any) => {
+    validTranslations.forEach((t: RawTranslation) => {
         // Support des deux formats de propriétés
         const language = t.targetLanguage || t.language;
         const content = t.translatedContent || t.content;
