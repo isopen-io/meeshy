@@ -14,6 +14,7 @@ import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
 import { SocialEventsHandler } from './handlers/SocialEventsHandler';
+import { LocationHandler } from './handlers/LocationHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { EmailService } from '../services/EmailService';
@@ -44,6 +45,7 @@ import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService } from '../services/MentionService';
+import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { hashSessionToken } from '../utils/session-token';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 
@@ -83,10 +85,12 @@ export class MeeshySocketIOManager {
   private callService: CallService;
   private notificationService: NotificationService;
   private socialEventsHandler: SocialEventsHandler;
+  private locationHandler: LocationHandler;
   private privacyPreferencesService: PrivacyPreferencesService;
   private agentClient: ZmqAgentClient | null = null;
   private mentionService: MentionService;
   private rateLimiter = getSocketRateLimiter();
+  private deliveryQueue: RedisDeliveryQueue | null = null;
 
   // Mapping des utilisateurs connectés
   private connectedUsers: Map<string, SocketUser> = new Map();
@@ -162,12 +166,41 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
     });
 
+    // Initialiser le LocationHandler pour les événements de partage de localisation
+    this.locationHandler = new LocationHandler({
+      io: this.io as any,
+      prisma: this.prisma,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      normalizeConversationId: (id: string) => this.normalizeConversationId(id),
+    });
+
     // Initialiser le PostAudioService singleton (dépend de socialEventsHandler)
     PostAudioService.init(this.prisma, this.socialEventsHandler);
 
     // Initialiser le StoryTextObjectTranslationService singleton
     StoryTextObjectTranslationService.init(this.prisma, this.io as any);
 
+  }
+
+  setDeliveryQueue(queue: RedisDeliveryQueue): void {
+    this.deliveryQueue = queue;
+  }
+
+  private async _drainPendingMessages(socket: any, userId: string): Promise<void> {
+    if (!this.deliveryQueue) return;
+    try {
+      const pending = await this.deliveryQueue.drain(userId);
+      if (pending.length === 0) return;
+
+      logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
+      for (const entry of pending) {
+        socket.emit(SERVER_EVENTS.MESSAGE_NEW, entry.payload);
+      }
+      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length });
+    } catch (error) {
+      logger.warn('Failed to drain pending messages', { userId, error });
+    }
   }
 
   /**
@@ -635,6 +668,56 @@ export class MeeshySocketIOManager {
         }
       });
       
+      // ===== ÉDITION ET SUPPRESSION DE MESSAGES =====
+
+      socket.on(CLIENT_EVENTS.MESSAGE_EDIT, async (data: { messageId: string; content: string }, callback?: (response: SocketIOResponse) => void) => {
+        try {
+          const userId = this.socketToUser.get(socket.id);
+          if (!userId) { callback?.({ success: false, error: 'Not authenticated' }); return; }
+
+          const message = await this.prisma.message.findUnique({ where: { id: data.messageId }, select: { id: true, senderId: true, conversationId: true } });
+          if (!message) { callback?.({ success: false, error: 'Message not found' }); return; }
+          if (message.senderId !== userId) {
+            const participant = await this.prisma.participant.findFirst({ where: { userId, conversationId: message.conversationId, isActive: true }, select: { id: true } });
+            if (!participant || participant.id !== message.senderId) { callback?.({ success: false, error: 'Not authorized to edit this message' }); return; }
+          }
+
+          const updated = await this.prisma.message.update({ where: { id: data.messageId }, data: { content: data.content, isEdited: true, updatedAt: new Date() }, include: { sender: { include: { user: { select: { id: true, username: true, displayName: true, avatar: true } } } } } });
+          callback?.({ success: true, data: { messageId: updated.id } });
+
+          const normalizedId = await this.normalizeConversationId(message.conversationId);
+          this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, updated);
+        } catch (error) {
+          logger.error('[MESSAGE_EDIT] Error:', error);
+          callback?.({ success: false, error: 'Failed to edit message' });
+        }
+      });
+
+      socket.on(CLIENT_EVENTS.MESSAGE_DELETE, async (data: { messageId: string }, callback?: (response: SocketIOResponse) => void) => {
+        try {
+          const userId = this.socketToUser.get(socket.id);
+          if (!userId) { callback?.({ success: false, error: 'Not authenticated' }); return; }
+
+          const message = await this.prisma.message.findUnique({ where: { id: data.messageId }, select: { id: true, senderId: true, conversationId: true } });
+          if (!message) { callback?.({ success: false, error: 'Message not found' }); return; }
+          if (message.senderId !== userId) {
+            const participant = await this.prisma.participant.findFirst({ where: { userId, conversationId: message.conversationId, isActive: true }, select: { id: true, role: true } });
+            if (!participant || (participant.id !== message.senderId && !['creator', 'admin', 'moderator'].includes(participant.role))) {
+              callback?.({ success: false, error: 'Not authorized to delete this message' }); return;
+            }
+          }
+
+          await this.prisma.message.update({ where: { id: data.messageId }, data: { deletedAt: new Date() } });
+          callback?.({ success: true, data: { messageId: data.messageId } });
+
+          const normalizedId = await this.normalizeConversationId(message.conversationId);
+          this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_DELETED, { messageId: data.messageId, conversationId: normalizedId });
+        } catch (error) {
+          logger.error('[MESSAGE_DELETE] Error:', error);
+          callback?.({ success: false, error: 'Failed to delete message' });
+        }
+      });
+
       // Demande de traduction spécifique
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
         await this._handleTranslationRequest(socket, data);
@@ -747,6 +830,24 @@ export class MeeshySocketIOManager {
       socket.on(CLIENT_EVENTS.REACTION_REQUEST_SYNC, async (messageId: string, callback?: (response: SocketIOResponse<any>) => void) => {
         await this._handleReactionSync(socket, messageId, callback);
       });
+
+      // ===== ÉVÉNEMENTS DE LOCALISATION =====
+
+      socket.on(CLIENT_EVENTS.LOCATION_SHARE, async (data, callback) => {
+        await this.locationHandler.handleLocationShare(socket, data, callback);
+      });
+
+      socket.on(CLIENT_EVENTS.LOCATION_LIVE_START, async (data, callback) => {
+        await this.locationHandler.handleLiveLocationStart(socket, data, callback);
+      });
+
+      socket.on(CLIENT_EVENTS.LOCATION_LIVE_UPDATE, async (data) => {
+        await this.locationHandler.handleLiveLocationUpdate(socket, data);
+      });
+
+      socket.on(CLIENT_EVENTS.LOCATION_LIVE_STOP, async (data) => {
+        await this.locationHandler.handleLiveLocationStop(socket, data);
+      });
     });
   }
 
@@ -838,8 +939,9 @@ export class MeeshySocketIOManager {
             };
             
             socket.emit(SERVER_EVENTS.AUTHENTICATED, authResponse);
-            
-            
+
+            await this._drainPendingMessages(socket, user.id);
+
             return; // Authentification réussie
           } else {
           }
@@ -915,6 +1017,7 @@ export class MeeshySocketIOManager {
 
             socket.emit(SERVER_EVENTS.AUTHENTICATED, authResponse);
 
+            await this._drainPendingMessages(socket, user.id);
 
             return; // Authentification anonyme réussie
         } else {
@@ -1054,11 +1157,13 @@ export class MeeshySocketIOManager {
           user: { id: user.id, language: user.language },
           version: process.env.APP_VERSION || '1.1.0'
         });
-        
+
+        await this._drainPendingMessages(socket, user.id);
+
       } else {
         socket.emit(SERVER_EVENTS.AUTHENTICATED, { success: false, error: 'Authentication failed' });
       }
-      
+
     } catch (error) {
       logger.error(`❌ Erreur authentification: ${error}`);
       socket.emit(SERVER_EVENTS.AUTHENTICATED, { success: false, error: 'Authentication error' });
@@ -1135,14 +1240,7 @@ export class MeeshySocketIOManager {
       const result = await this.translationService.handleNewMessage(messageData);
       this.stats.messages_processed++;
       
-      // 2. (Optionnel) Notifier l'état de sauvegarde — laissé pour compat rétro
-      socket.emit(SERVER_EVENTS.MESSAGE_SENT, {
-        messageId: result.messageId,
-        status: result.status,
-        timestamp: new Date().toISOString()
-      });
-      
-      // 3. RÉCUPÉRER LE MESSAGE SAUVEGARDÉ ET LE DIFFUSER À TOUS (Y COMPRIS L'AUTEUR)
+      // 2. RÉCUPÉRER LE MESSAGE SAUVEGARDÉ ET LE DIFFUSER À TOUS (Y COMPRIS L'AUTEUR)
       const saved = await this.prisma.message.findUnique({
         where: { id: result.messageId },
         include: {
@@ -1284,15 +1382,15 @@ export class MeeshySocketIOManager {
       const translation = await this.translationService.getTranslation(data.messageId, data.targetLanguage);
       
       if (translation) {
-        socket.emit(SERVER_EVENTS.TRANSLATION_RECEIVED, {
+        socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, {
           messageId: data.messageId,
           translatedText: translation.translatedText,
           targetLanguage: data.targetLanguage,
           confidenceScore: translation.confidenceScore
         });
-        
+
         this.stats.translations_sent++;
-        
+
       } else {
         // No cached translation — trigger on-demand translation via ZMQ
         try {
@@ -1302,10 +1400,8 @@ export class MeeshySocketIOManager {
           });
 
           if (!message || !message.content) {
-            socket.emit(SERVER_EVENTS.TRANSLATION_ERROR, {
-              messageId: data.messageId,
-              targetLanguage: data.targetLanguage,
-              error: 'Message not found or empty'
+            socket.emit(SERVER_EVENTS.ERROR, {
+              message: 'Message not found or empty'
             });
             return;
           }
@@ -1323,10 +1419,8 @@ export class MeeshySocketIOManager {
           logger.info(`🔄 On-demand translation requested for message ${data.messageId} -> ${data.targetLanguage}`);
         } catch (translationError) {
           logger.error(`❌ On-demand translation failed: ${translationError}`);
-          socket.emit(SERVER_EVENTS.TRANSLATION_ERROR, {
-            messageId: data.messageId,
-            targetLanguage: data.targetLanguage,
-            error: 'Translation request failed'
+          socket.emit(SERVER_EVENTS.ERROR, {
+            message: 'Translation request failed'
           });
         }
       }
@@ -2307,6 +2401,25 @@ export class MeeshySocketIOManager {
       } else {
       }
 
+      // 2b. Emit mention:created to each mentioned user's personal room
+      const mentions = (message as any).validatedMentions as Array<{ participantId?: string; userId?: string; username?: string }> | undefined;
+      if (mentions && mentions.length > 0) {
+        for (const mention of mentions) {
+          const targetUserId = mention.userId;
+          if (targetUserId && targetUserId !== message.senderId) {
+            this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
+              messageId: message.id,
+              conversationId: normalizedId,
+              senderId: message.senderId,
+              mentionedUserId: targetUserId,
+              mentionedParticipantId: mention.participantId,
+              content: (message as any).content,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
       const roomClients = this.io.sockets.adapter.rooms.get(room);
 
       // 3. Mettre à jour le unreadCount pour tous les participants (sauf l'expéditeur)
@@ -2328,6 +2441,8 @@ export class MeeshySocketIOManager {
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
 
+          const connectedUserIds = new Set(this.getConnectedUsers());
+
           for (const participant of participants) {
             const roomTarget = participant.userId || participant.id;
             const unreadCount = await readStatusService.getUnreadCount(roomTarget, normalizedId);
@@ -2337,6 +2452,16 @@ export class MeeshySocketIOManager {
               conversationId: normalizedId,
               unreadCount
             });
+
+            // Queue message for offline participants
+            if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
+              this.deliveryQueue.enqueue(roomTarget, {
+                messageId: message.id,
+                conversationId: normalizedId,
+                payload: messagePayload as Record<string, unknown>,
+                enqueuedAt: new Date().toISOString(),
+              }).catch(err => logger.warn('Failed to enqueue message for offline user', { userId: roomTarget, error: err }));
+            }
           }
         }
       } catch (unreadError) {

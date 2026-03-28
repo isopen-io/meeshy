@@ -26,6 +26,13 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onMessageEdited: jest.fn(() => () => {}),
     onMessageDeleted: jest.fn(() => () => {}),
     onTranslation: jest.fn(() => () => {}),
+    onUnreadUpdated: jest.fn(() => () => {}),
+    onTranscription: jest.fn(() => () => {}),
+    onAudioTranslation: jest.fn(() => () => {}),
+    onParticipantRoleUpdated: jest.fn(() => () => {}),
+    onPreferencesUpdated: jest.fn(() => () => {}),
+    onConversationJoined: jest.fn(() => () => {}),
+    onConversationLeft: jest.fn(() => () => {}),
   },
 }));
 
@@ -123,12 +130,12 @@ describe('useSocketCacheSync — B1 ID-only dedup', () => {
     expect(cached.pages[0].messages).toHaveLength(1);
   });
 
-  it('does NOT false-positive dedup on same content from same sender with different ID', () => {
+  it('replaces optimistic message with server message when content matches', () => {
     const { queryClient, wrapper } = createTestHarness('conv-1');
 
-    // Seed with an optimistic message (has _tempId)
+    // Seed with an optimistic message (has _tempId, _localStatus: 'sending')
     const optimistic = {
-      ...makeMessage({ id: 'temp-1', conversationId: 'conv-1', content: 'Hello world', senderId: 'user-1' }),
+      ...makeMessage({ id: 'temp-1', conversationId: 'conv-1', content: 'Hello world', senderId: 'current-user' }),
       _tempId: 'temp-1',
       _localStatus: 'sending',
     };
@@ -139,15 +146,41 @@ describe('useSocketCacheSync — B1 ID-only dedup', () => {
 
     renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
 
-    // Server message with same content but different ID
-    const serverMsg = makeMessage({ id: 'server-1', conversationId: 'conv-1', content: 'Hello world', senderId: 'user-1' });
+    // Server message with same content from same user (message:new before ACK)
+    const serverMsg = makeMessage({ id: 'server-1', conversationId: 'conv-1', content: 'Hello world', senderId: 'current-user' });
     act(() => { capturedMessageListener!(serverMsg); });
 
     const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-1')) as any;
-    // After B1: no content-based dedup, so both messages should exist
+    // Optimistic should be replaced by server message
+    expect(cached.pages[0].messages).toHaveLength(1);
+    expect(cached.pages[0].messages[0].id).toBe('server-1');
+  });
+
+  it('does NOT replace stale optimistic messages older than 30s', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+
+    // Seed with a stale optimistic message (created 60s ago)
+    const staleDate = new Date(Date.now() - 60_000);
+    const optimistic = {
+      ...makeMessage({ id: 'temp-1', conversationId: 'conv-1', content: 'Hello world', senderId: 'current-user' }),
+      _tempId: 'temp-1',
+      _localStatus: 'sending',
+      createdAt: staleDate.toISOString(),
+    };
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-1'), {
+      pages: [{ messages: [optimistic], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    // Server message with same content — should NOT replace stale optimistic
+    const serverMsg = makeMessage({ id: 'server-1', conversationId: 'conv-1', content: 'Hello world', senderId: 'current-user' });
+    act(() => { capturedMessageListener!(serverMsg); });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-1')) as any;
+    // Both messages should exist (no replacement of stale optimistic)
     expect(cached.pages[0].messages).toHaveLength(2);
-    expect(cached.pages[0].messages.map((m: any) => m.id)).toContain('server-1');
-    expect(cached.pages[0].messages.map((m: any) => m.id)).toContain('temp-1');
   });
 
   it('moves conversation to top of list on new message', () => {

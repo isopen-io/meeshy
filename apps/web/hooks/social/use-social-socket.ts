@@ -33,7 +33,10 @@ import type {
   CommentAddedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
+  PostTranslationUpdatedEventData,
+  CommentTranslationUpdatedEventData,
 } from '@meeshy/shared/types/post';
+import type { StoryTranslationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,6 +67,11 @@ export interface UseSocialSocketOptions {
   onCommentAdded?: (data: CommentAddedEventData) => void;
   onCommentDeleted?: (data: CommentDeletedEventData) => void;
   onCommentLiked?: (data: CommentLikedEventData) => void;
+
+  /** Translation events */
+  onPostTranslationUpdated?: (data: PostTranslationUpdatedEventData) => void;
+  onCommentTranslationUpdated?: (data: CommentTranslationUpdatedEventData) => void;
+  onStoryTranslationUpdated?: (data: StoryTranslationUpdatedEventData) => void;
 
   /** When false the hook skips subscription and listener setup. Defaults to true. */
   enabled?: boolean;
@@ -160,6 +168,16 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
       handlersRef.current.onCommentLiked?.(data);
     }
 
+    function handlePostTranslationUpdated(data: PostTranslationUpdatedEventData): void {
+      handlersRef.current.onPostTranslationUpdated?.(data);
+    }
+    function handleCommentTranslationUpdated(data: CommentTranslationUpdatedEventData): void {
+      handlersRef.current.onCommentTranslationUpdated?.(data);
+    }
+    function handleStoryTranslationUpdated(data: StoryTranslationUpdatedEventData): void {
+      handlersRef.current.onStoryTranslationUpdated?.(data);
+    }
+
     // ---- Register listeners ----
 
     socket.on(SERVER_EVENTS.POST_CREATED, handlePostCreated);
@@ -182,6 +200,10 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     socket.on(SERVER_EVENTS.COMMENT_ADDED, handleCommentAdded);
     socket.on(SERVER_EVENTS.COMMENT_DELETED, handleCommentDeleted);
     socket.on(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
+
+    socket.on(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
+    socket.on(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
+    socket.on(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, handleStoryTranslationUpdated);
 
     // ---- Cleanup ----
 
@@ -208,6 +230,10 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
       socket.off(SERVER_EVENTS.COMMENT_ADDED, handleCommentAdded);
       socket.off(SERVER_EVENTS.COMMENT_DELETED, handleCommentDeleted);
       socket.off(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
+
+      socket.off(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
+      socket.off(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
+      socket.off(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, handleStoryTranslationUpdated);
     };
   }, [enabled]);
 }

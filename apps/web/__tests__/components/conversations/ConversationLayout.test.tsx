@@ -57,13 +57,18 @@ jest.mock('@/stores/reply-store', () => ({
   },
 }));
 
-jest.mock('@/stores/failed-messages-store', () => ({
-  useFailedMessagesStore: jest.fn(() => ({
+jest.mock('@/stores/failed-messages-store', () => {
+  const store = {
     failedMessages: [],
     addFailedMessage: jest.fn(),
     removeFailedMessage: jest.fn(),
-  })),
-}));
+    incrementRetryCount: jest.fn(),
+    updateFailedMessage: jest.fn(),
+  };
+  const hook = jest.fn(() => store);
+  hook.getState = jest.fn(() => store);
+  return { useFailedMessagesStore: hook };
+});
 
 jest.mock('@/stores/user-store', () => ({
   useUserStore: jest.fn(() => ({
@@ -223,16 +228,6 @@ jest.mock('@/hooks/conversations/use-video-call', () => ({
   useVideoCall: jest.fn(() => ({
     startCall: jest.fn(),
     isCallActive: false,
-  })),
-}));
-
-jest.mock('@/hooks/conversations/use-socket-callbacks', () => ({
-  useSocketCallbacks: jest.fn(() => ({
-    onNewMessage: jest.fn(),
-    onMessageEdited: jest.fn(),
-    onMessageDeleted: jest.fn(),
-    onTranslation: jest.fn(),
-    onUserTyping: jest.fn(),
   })),
 }));
 

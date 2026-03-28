@@ -57,6 +57,17 @@ export {
   useInvalidateOnReconnect,
 } from './use-socket-cache-sync';
 
+// Conversation preferences
+export {
+  useConversationPreferencesQuery,
+  useCategoriesQuery,
+  usePreferencesMap,
+  useTogglePinMutation,
+  useToggleMuteMutation,
+  useToggleArchiveMutation,
+  useSetReactionMutation,
+} from './use-conversation-preferences-query';
+
 // Reactions
 export { useReactionsQuery } from './use-reactions-query';
 

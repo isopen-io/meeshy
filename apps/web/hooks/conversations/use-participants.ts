@@ -70,10 +70,10 @@ function mapResponseToParticipant(
       canSendMessages: response.canSendMessages ?? true,
       canSendFiles: response.canSendFiles ?? true,
       canSendImages: response.canSendImages ?? true,
-      canSendVideos: true,
-      canSendAudios: true,
-      canSendLocations: true,
-      canSendLinks: true,
+      canSendVideos: response.canSendVideos ?? true,
+      canSendAudios: response.canSendAudios ?? true,
+      canSendLocations: response.canSendLocations ?? false,
+      canSendLinks: response.canSendLinks ?? false,
     },
     isActive: response.isActive,
     isOnline: response.isOnline,
@@ -164,7 +164,7 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
         .map(p => p.user)
         .filter((u): u is NonNullable<typeof u> => Boolean(u));
 
-      userStore.setParticipants(users as any[]);
+      userStore.setParticipants(users as Parameters<typeof userStore.setParticipants>[0]);
       setParticipants(uniqueParticipants);
       setTotalCount(participantsData.totalCount);
     } catch (error) {

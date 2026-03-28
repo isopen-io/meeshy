@@ -14,6 +14,8 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import type { ReadStatusSummary } from '@meeshy/shared/types/socketio-events';
 
+const TYPING_INDICATOR_TIMEOUT_MS = 5000;
+
 interface DraftMessage {
   content: string;
   attachments?: string[];
@@ -99,7 +101,8 @@ export const useConversationUIStore = create<ConversationUIStore>()(
         addTypingUser: (conversationId, userId) => {
           set((state) => {
             const newTypingUsers = new Map(state.typingUsers);
-            const users = newTypingUsers.get(conversationId) || new Set();
+            const existing = newTypingUsers.get(conversationId);
+            const users = new Set(existing);
             users.add(userId);
             newTypingUsers.set(conversationId, users);
             return { typingUsers: newTypingUsers };
@@ -108,7 +111,7 @@ export const useConversationUIStore = create<ConversationUIStore>()(
           // Auto-remove after 5 seconds
           setTimeout(() => {
             get().removeTypingUser(conversationId, userId);
-          }, 5000);
+          }, TYPING_INDICATOR_TIMEOUT_MS);
         },
 
         removeTypingUser: (conversationId, userId) => {

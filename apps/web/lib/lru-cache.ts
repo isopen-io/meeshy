@@ -41,6 +41,18 @@ export class LRUCache<K, V> {
     return this.cache.size;
   }
 
+  keys(): IterableIterator<K> {
+    return this.cache.keys();
+  }
+
+  values(): IterableIterator<V> {
+    return this.cache.values();
+  }
+
+  entries(): IterableIterator<[K, V]> {
+    return this.cache.entries();
+  }
+
   clear(): void {
     this.cache.clear();
   }

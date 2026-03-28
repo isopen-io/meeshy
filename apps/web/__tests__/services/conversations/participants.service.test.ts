@@ -7,7 +7,6 @@
 
 import { participantsService } from '@/services/conversations/participants.service';
 import { apiService } from '@/services/api.service';
-import { cacheService } from '@/services/conversations/cache.service';
 
 jest.mock('@/services/api.service', () => ({
   apiService: {
@@ -18,16 +17,7 @@ jest.mock('@/services/api.service', () => ({
   },
 }));
 
-jest.mock('@/services/conversations/cache.service', () => ({
-  cacheService: {
-    getParticipantsFromCache: jest.fn(),
-    setParticipantsCache: jest.fn(),
-    invalidateParticipantsCache: jest.fn(),
-  },
-}));
-
 const mockApi = apiService as jest.Mocked<typeof apiService>;
-const mockCache = cacheService as jest.Mocked<typeof cacheService>;
 
 const createMockUser = (overrides: Record<string, unknown> = {}) => ({
   id: 'user-123',
@@ -60,18 +50,7 @@ describe('ParticipantsService', () => {
   describe('getParticipants', () => {
     const conversationId = 'conv-abc';
 
-    it('should return cached data when available', async () => {
-      const cached = [createMockUser()];
-      mockCache.getParticipantsFromCache.mockReturnValue(cached as any);
-
-      const result = await participantsService.getParticipants(conversationId);
-
-      expect(result).toBe(cached);
-      expect(mockApi.get).not.toHaveBeenCalled();
-    });
-
-    it('should call API when cache miss and cache the result', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
+    it('should call API and return participants', async () => {
       const participants = [createMockUser({ id: 'u1' }), createMockUser({ id: 'u2' })];
       mockApi.get.mockResolvedValue({
         data: { success: true, data: participants },
@@ -84,14 +63,9 @@ describe('ParticipantsService', () => {
         {}
       );
       expect(result).toEqual(participants);
-      expect(mockCache.setParticipantsCache).toHaveBeenCalledWith(
-        expect.any(String),
-        participants
-      );
     });
 
     it('should build correct query params for onlineOnly filter', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockResolvedValue({ data: { data: [] } } as any);
 
       await participantsService.getParticipants(conversationId, { onlineOnly: true });
@@ -103,7 +77,6 @@ describe('ParticipantsService', () => {
     });
 
     it('should build correct query params for role filter', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockResolvedValue({ data: { data: [] } } as any);
 
       await participantsService.getParticipants(conversationId, { role: 'ADMIN' });
@@ -115,7 +88,6 @@ describe('ParticipantsService', () => {
     });
 
     it('should build correct query params for search filter', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockResolvedValue({ data: { data: [] } } as any);
 
       await participantsService.getParticipants(conversationId, { search: 'john' });
@@ -127,7 +99,6 @@ describe('ParticipantsService', () => {
     });
 
     it('should build correct query params for limit filter', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockResolvedValue({ data: { data: [] } } as any);
 
       await participantsService.getParticipants(conversationId, { limit: 25 });
@@ -139,7 +110,6 @@ describe('ParticipantsService', () => {
     });
 
     it('should build correct query params for cursor filter', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockResolvedValue({ data: { data: [] } } as any);
 
       await participantsService.getParticipants(conversationId, { cursor: 'abc123' });
@@ -151,7 +121,6 @@ describe('ParticipantsService', () => {
     });
 
     it('should build correct query params with all filters combined', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockResolvedValue({ data: { data: [] } } as any);
 
       await participantsService.getParticipants(conversationId, {
@@ -175,7 +144,6 @@ describe('ParticipantsService', () => {
     });
 
     it('should not add params for undefined filters', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockResolvedValue({ data: { data: [] } } as any);
 
       await participantsService.getParticipants(conversationId, {});
@@ -187,7 +155,6 @@ describe('ParticipantsService', () => {
     });
 
     it('should not add onlineOnly param when false', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockResolvedValue({ data: { data: [] } } as any);
 
       await participantsService.getParticipants(conversationId, { onlineOnly: false });
@@ -196,19 +163,7 @@ describe('ParticipantsService', () => {
       expect(calledParams).not.toHaveProperty('onlineOnly');
     });
 
-    it('should use conversationId and stringified params as cache key', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
-      mockApi.get.mockResolvedValue({ data: { data: [] } } as any);
-
-      await participantsService.getParticipants(conversationId, { role: 'ADMIN' });
-
-      const expectedKey = `${conversationId}-${JSON.stringify({ role: 'ADMIN' })}`;
-      expect(mockCache.getParticipantsFromCache).toHaveBeenCalledWith(expectedKey);
-      expect(mockCache.setParticipantsCache).toHaveBeenCalledWith(expectedKey, []);
-    });
-
     it('should return empty array on API error', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockRejectedValue(new Error('Network error'));
 
       const result = await participantsService.getParticipants(conversationId);
@@ -217,7 +172,6 @@ describe('ParticipantsService', () => {
     });
 
     it('should log error on failure', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       const error = new Error('Server error');
       mockApi.get.mockRejectedValue(error);
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
@@ -232,7 +186,6 @@ describe('ParticipantsService', () => {
     });
 
     it('should return empty array when response.data.data is null', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockResolvedValue({ data: { success: true, data: null } } as any);
 
       const result = await participantsService.getParticipants(conversationId);
@@ -241,7 +194,6 @@ describe('ParticipantsService', () => {
     });
 
     it('should call API without filters when none provided', async () => {
-      mockCache.getParticipantsFromCache.mockReturnValue(null as any);
       mockApi.get.mockResolvedValue({ data: { data: [] } } as any);
 
       await participantsService.getParticipants(conversationId);
@@ -641,14 +593,6 @@ describe('ParticipantsService', () => {
       );
     });
 
-    it('should invalidate cache after success', async () => {
-      mockApi.post.mockResolvedValue({} as any);
-
-      await participantsService.addParticipant(conversationId, userId);
-
-      expect(mockCache.invalidateParticipantsCache).toHaveBeenCalledTimes(1);
-    });
-
     it('should propagate errors without catching', async () => {
       const error = new Error('Add failed');
       mockApi.post.mockRejectedValue(error);
@@ -658,17 +602,6 @@ describe('ParticipantsService', () => {
       ).rejects.toThrow('Add failed');
     });
 
-    it('should not invalidate cache when API call fails', async () => {
-      mockApi.post.mockRejectedValue(new Error('fail'));
-
-      try {
-        await participantsService.addParticipant(conversationId, userId);
-      } catch {
-        // expected
-      }
-
-      expect(mockCache.invalidateParticipantsCache).not.toHaveBeenCalled();
-    });
   });
 
   describe('removeParticipant', () => {
@@ -685,14 +618,6 @@ describe('ParticipantsService', () => {
       );
     });
 
-    it('should invalidate cache after success', async () => {
-      mockApi.delete.mockResolvedValue({} as any);
-
-      await participantsService.removeParticipant(conversationId, userId);
-
-      expect(mockCache.invalidateParticipantsCache).toHaveBeenCalledTimes(1);
-    });
-
     it('should propagate errors without catching', async () => {
       const error = new Error('Remove failed');
       mockApi.delete.mockRejectedValue(error);
@@ -700,18 +625,6 @@ describe('ParticipantsService', () => {
       await expect(
         participantsService.removeParticipant(conversationId, userId)
       ).rejects.toThrow('Remove failed');
-    });
-
-    it('should not invalidate cache when API call fails', async () => {
-      mockApi.delete.mockRejectedValue(new Error('fail'));
-
-      try {
-        await participantsService.removeParticipant(conversationId, userId);
-      } catch {
-        // expected
-      }
-
-      expect(mockCache.invalidateParticipantsCache).not.toHaveBeenCalled();
     });
   });
 
@@ -752,14 +665,6 @@ describe('ParticipantsService', () => {
       );
     });
 
-    it('should invalidate cache after success', async () => {
-      mockApi.patch.mockResolvedValue({} as any);
-
-      await participantsService.updateParticipantRole(conversationId, userId, 'admin');
-
-      expect(mockCache.invalidateParticipantsCache).toHaveBeenCalledTimes(1);
-    });
-
     it('should propagate errors without catching', async () => {
       const error = new Error('Role update failed');
       mockApi.patch.mockRejectedValue(error);
@@ -767,18 +672,6 @@ describe('ParticipantsService', () => {
       await expect(
         participantsService.updateParticipantRole(conversationId, userId, 'admin')
       ).rejects.toThrow('Role update failed');
-    });
-
-    it('should not invalidate cache when API call fails', async () => {
-      mockApi.patch.mockRejectedValue(new Error('fail'));
-
-      try {
-        await participantsService.updateParticipantRole(conversationId, userId, 'admin');
-      } catch {
-        // expected
-      }
-
-      expect(mockCache.invalidateParticipantsCache).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useRef, useEffect, memo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect, memo, useDeferredValue } from 'react';
 import { MessageSquare, Link2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
@@ -60,6 +60,7 @@ export const ConversationList = memo(function ConversationList({
 }: ConversationListProps) {
   // State local
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedFilter, setSelectedFilter] = useState<CommunityFilter>({ type: 'all' });
 
   // Refs
@@ -76,7 +77,7 @@ export const ConversationList = memo(function ConversationList({
 
   const filteredConversations = useConversationFiltering({
     conversations,
-    searchQuery,
+    searchQuery: deferredSearchQuery,
     selectedFilter,
     preferencesMap
   });

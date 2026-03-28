@@ -53,6 +53,40 @@ public struct UnreadUpdateEvent: Decodable, Sendable {
     }
 }
 
+public struct UserPreferencesUpdatedEvent: Decodable, Sendable {
+    public let userId: String
+    public let category: String
+    public let conversationId: String?
+    public let isPinned: Bool?
+    public let isMuted: Bool?
+    public let isArchived: Bool?
+    public let categoryId: String?
+    public let reaction: String?
+
+    public init(userId: String, category: String, conversationId: String? = nil, isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, reaction: String? = nil) {
+        self.userId = userId; self.category = category; self.conversationId = conversationId
+        self.isPinned = isPinned; self.isMuted = isMuted; self.isArchived = isArchived
+        self.categoryId = categoryId; self.reaction = reaction
+    }
+}
+
+public struct ConversationStatsEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let stats: ConversationStats
+
+    public struct ConversationStats: Decodable, Sendable {
+        public let participantCount: Int?
+        public let onlineUsers: [OnlineUser]?
+        public let messagesPerLanguage: [String: Int]?
+        public let participantsPerLanguage: [String: Int]?
+    }
+
+    public struct OnlineUser: Decodable, Sendable {
+        public let userId: String
+        public let displayName: String?
+    }
+}
+
 public struct UserStatusEvent: Decodable, Sendable {
     public let userId: String
     public let username: String
@@ -296,9 +330,13 @@ public struct AttachmentStatusEvent: Decodable, Sendable {
 // MARK: - Mention Event Data
 
 public struct MentionCreatedEvent: Decodable, Sendable {
-    public let messageId: String?
-    public let conversationId: String?
-    public let userId: String?
+    public let messageId: String
+    public let conversationId: String
+    public let senderId: String?
+    public let mentionedUserId: String?
+    public let mentionedParticipantId: String?
+    public let content: String?
+    public let timestamp: String?
 }
 
 // MARK: - Notification Socket Event Data
@@ -320,6 +358,33 @@ public struct SocketNotificationEvent: Decodable, Sendable {
 
     public var notificationType: MeeshyNotificationType {
         MeeshyNotificationType(rawValue: type) ?? .system
+    }
+}
+
+public struct NotificationReadEvent: Decodable, Sendable {
+    public let notificationId: String
+}
+
+public struct NotificationDeletedEvent: Decodable, Sendable {
+    public let notificationId: String
+}
+
+public struct NotificationCountsEvent: Decodable, Sendable {
+    public let total: Int
+    public let unread: Int
+    public let byType: [String: Int]?
+}
+
+public struct ConversationOnlineStatsEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let onlineUsers: [OnlineUserInfo]
+    public let updatedAt: Date?
+
+    public struct OnlineUserInfo: Decodable, Sendable {
+        public let id: String
+        public let username: String
+        public let firstName: String?
+        public let lastName: String?
     }
 }
 
@@ -348,6 +413,8 @@ public protocol MessageSocketProviding: Sendable {
     var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
+    var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
+    var conversationStatsReceived: PassthroughSubject<ConversationStatsEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
     var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
     var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
@@ -360,6 +427,10 @@ public protocol MessageSocketProviding: Sendable {
     var audioTranslationCompleted: PassthroughSubject<AudioTranslationEvent, Never> { get }
     var didReconnect: PassthroughSubject<Void, Never> { get }
     var notificationReceived: PassthroughSubject<SocketNotificationEvent, Never> { get }
+    var notificationRead: PassthroughSubject<NotificationReadEvent, Never> { get }
+    var notificationDeleted: PassthroughSubject<NotificationDeletedEvent, Never> { get }
+    var notificationCounts: PassthroughSubject<NotificationCountsEvent, Never> { get }
+    var conversationOnlineStats: PassthroughSubject<ConversationOnlineStatsEvent, Never> { get }
     var callOfferReceived: PassthroughSubject<CallOfferData, Never> { get }
     var callAnswerReceived: PassthroughSubject<CallAnswerData, Never> { get }
     var callICECandidateReceived: PassthroughSubject<CallICECandidateData, Never> { get }
@@ -429,6 +500,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — participant role
     public let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
 
+    // Combine publishers — user preferences
+    public let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+
+    // Combine publishers — conversation stats
+    public let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
+
     // Combine publishers — view-once
     public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
 
@@ -452,6 +529,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — notifications
     public let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
+    public let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
+    public let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
+    public let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
+
+    // Combine publishers — conversation online stats
+    public let conversationOnlineStats = PassthroughSubject<ConversationOnlineStatsEvent, Never>()
 
     // Combine publishers — call signaling
     public let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
@@ -929,6 +1012,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        socket.on("user:preferences-updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(UserPreferencesUpdatedEvent.self, from: data) { [weak self] event in
+                self?.userPreferencesUpdated.send(event)
+            }
+        }
+
+        socket.on("conversation:stats") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationStatsEvent.self, from: data) { [weak self] event in
+                self?.conversationStatsReceived.send(event)
+            }
+        }
+
         // --- Location events ---
 
         socket.on("location:shared") { [weak self] data, _ in
@@ -961,10 +1058,56 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         // --- Notification events ---
 
+        socket.on("notification:new") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketNotificationEvent.self, from: data) { [weak self] event in
+                self?.notificationReceived.send(event)
+            }
+        }
+
         socket.on("notification") { [weak self] data, _ in
             guard let self else { return }
             self.decode(SocketNotificationEvent.self, from: data) { [weak self] event in
                 self?.notificationReceived.send(event)
+            }
+        }
+
+        socket.on("notification:read") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(NotificationReadEvent.self, from: data) { [weak self] event in
+                self?.notificationRead.send(event)
+            }
+        }
+
+        socket.on("notification:deleted") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(NotificationDeletedEvent.self, from: data) { [weak self] event in
+                self?.notificationDeleted.send(event)
+            }
+        }
+
+        socket.on("notification:counts") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(NotificationCountsEvent.self, from: data) { [weak self] event in
+                self?.notificationCounts.send(event)
+            }
+        }
+
+        // --- Conversation online stats events ---
+
+        socket.on("conversation:online-stats") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationOnlineStatsEvent.self, from: data) { [weak self] event in
+                self?.conversationOnlineStats.send(event)
+            }
+        }
+
+        // --- Mention events ---
+
+        socket.on("mention:created") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MentionCreatedEvent.self, from: data) { [weak self] event in
+                self?.mentionCreated.send(event)
             }
         }
 
@@ -1059,14 +1202,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        // --- Mention events ---
-
-        socket.on("mention:created") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(MentionCreatedEvent.self, from: data) { [weak self] event in
-                self?.mentionCreated.send(event)
-            }
-        }
     }
 
     // MARK: - Decode Helper

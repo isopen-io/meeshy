@@ -11,7 +11,6 @@ import { conversationsCrudService } from './crud.service';
 import { messagesService } from './messages.service';
 import { participantsService } from './participants.service';
 import { linksService } from './links.service';
-import { cacheService } from './cache.service';
 import type {
   Conversation,
   Message,
@@ -36,21 +35,6 @@ import type {
  * Maintient la compatibilité avec l'API existante tout en utilisant les services spécialisés
  */
 export class ConversationsService {
-  // Expose cache properties for backward compatibility with tests
-  get conversationsCache() {
-    return (cacheService as any).conversationsCache;
-  }
-  set conversationsCache(value) {
-    (cacheService as any).conversationsCache = value;
-  }
-
-  get messagesCache() {
-    return (cacheService as any).messagesCache;
-  }
-
-  get participantsCache() {
-    return (cacheService as any).participantsCache;
-  }
   // ===== CRUD OPERATIONS =====
 
   /**
@@ -194,35 +178,6 @@ export class ConversationsService {
     return linksService.createConversationWithLink(linkData);
   }
 
-  // ===== CACHE OPERATIONS =====
-
-  /**
-   * Invalider tout le cache
-   */
-  invalidateAllCaches(): void {
-    cacheService.invalidateAllCaches();
-  }
-
-  /**
-   * Invalider le cache des conversations
-   */
-  invalidateConversationsCache(): void {
-    cacheService.invalidateConversationsCache();
-  }
-
-  /**
-   * Invalider le cache des messages
-   */
-  invalidateMessagesCache(conversationId?: string): void {
-    cacheService.invalidateMessagesCache(conversationId);
-  }
-
-  /**
-   * Invalider le cache des participants
-   */
-  invalidateParticipantsCache(cacheKey?: string): void {
-    cacheService.invalidateParticipantsCache(cacheKey);
-  }
 }
 
 // Instance singleton pour compatibilité avec l'ancien service
