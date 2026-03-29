@@ -414,6 +414,10 @@ export class MongoPersistence {
     return [...byUser.entries()].map(([userId, stats]) => ({ userId, ...stats }));
   }
 
+  async createScanLog(data: Record<string, unknown>) {
+    return this.prisma.agentScanLog.create({ data: data as any });
+  }
+
   async getRecentMessages(conversationId: string, limit: number) {
     return this.prisma.message.findMany({
       where: {

@@ -28,6 +28,11 @@ import {
   type ToneProfileEntry,
   type RecentConversationActivity,
 } from '@/services/agent-admin.service';
+import dynamic from 'next/dynamic';
+
+const AgentScheduleTimeline = dynamic(() => import('./AgentScheduleTimeline'), {
+  loading: () => <div className="h-24 animate-pulse bg-slate-200 dark:bg-slate-700 rounded" />,
+});
 import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 
@@ -510,11 +515,26 @@ export function AgentLiveTab() {
             )}
 
             {liveState && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ActivityCard data={liveState} />
-                <ToneProfilesCard profiles={liveState.toneProfiles} />
-                <SummaryCard data={liveState} />
-                <MetricsCard data={liveState} />
+              <div className="space-y-4">
+                {/* Schedule Timeline — full width */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-indigo-500" />
+                      Schedule
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <AgentScheduleTimeline conversationId={selectedId!} compact />
+                  </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <ActivityCard data={liveState} />
+                  <ToneProfilesCard profiles={liveState.toneProfiles} />
+                  <SummaryCard data={liveState} />
+                  <MetricsCard data={liveState} />
+                </div>
               </div>
             )}
           </>

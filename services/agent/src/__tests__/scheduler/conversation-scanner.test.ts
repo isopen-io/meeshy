@@ -69,6 +69,7 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     getLeastActiveParticipants: jest.fn().mockResolvedValue([]),
     updateAnalytics: jest.fn().mockResolvedValue(undefined),
     upsertUserRole: jest.fn().mockResolvedValue(undefined),
+    createScanLog: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   } as any;
 }

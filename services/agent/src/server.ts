@@ -4,7 +4,7 @@ import Redis from 'ioredis';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { env } from './env';
 import { createLlmProvider } from './llm/llm-factory';
-import { buildAgentGraph } from './graph/graph';
+import { buildAgentGraph, type TracerRef } from './graph/graph';
 import { ZmqAgentListener } from './zmq/zmq-listener';
 import { ZmqAgentPublisher } from './zmq/zmq-publisher';
 import { RedisStateManager } from './memory/redis-state';
@@ -53,7 +53,8 @@ async function start() {
     model: env.LLM_PROVIDER === 'openai' ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL,
   });
 
-  const graph = buildAgentGraph(llm);
+  const tracerRef: TracerRef = { current: null };
+  const graph = buildAgentGraph(llm, tracerRef);
   const stateManager = new RedisStateManager(redis);
   const persistence = new MongoPersistence(prisma);
 
@@ -71,7 +72,7 @@ async function start() {
 
   const deliveryQueue = new DeliveryQueue(zmqPublisher, persistence, stateManager);
   const reactiveHandler = new ReactiveHandler(llm, persistence, stateManager, deliveryQueue);
-  const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager);
+  const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager, tracerRef);
 
   zmqListener.onEvent(async (event) => {
     if (event.type !== 'agent:new-message') return;

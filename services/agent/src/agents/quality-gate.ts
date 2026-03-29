@@ -116,13 +116,19 @@ export function runDeterministicChecks(
 export function createQualityGateNode(llm: LlmProvider) {
   return async function qualityGate(state: ConversationState) {
     const actions = state.pendingActions;
-    if (actions.length === 0) return { pendingActions: [] };
+    if (actions.length === 0) return {
+      pendingActions: [],
+      _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true },
+    };
 
     const messages = actions.filter((a): a is PendingMessage => a.type === 'message');
     const reactions = actions.filter((a) => a.type === 'reaction');
 
     if (messages.length === 0) {
-      return { pendingActions: reactions };
+      return {
+        pendingActions: reactions,
+        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true, reactionsPassthrough: reactions.length },
+      };
     }
 
     const globalMinWords = state.minWordsPerMessage ?? 3;
@@ -131,6 +137,7 @@ export function createQualityGateNode(llm: LlmProvider) {
     const minScore = state.qualityGateMinScore ?? 0.5;
 
     const validatedMessages: PendingAction[] = [];
+    const rejectionReasons: Array<{ asUserId: string; reason: string }> = [];
     const seenContents = new Set<string>();
 
     const pastContents = new Set(
@@ -143,6 +150,7 @@ export function createQualityGateNode(llm: LlmProvider) {
 
       if (!profile) {
         console.warn(`[QualityGate] No profile found for user ${userId}, skipping`);
+        rejectionReasons.push({ asUserId: userId, reason: 'no_profile' });
         continue;
       }
 
@@ -158,17 +166,20 @@ export function createQualityGateNode(llm: LlmProvider) {
       );
       if (!deterministicResult.ok) {
         console.warn(`[QualityGate] Deterministic check failed for user ${userId}: ${deterministicResult.reason}`);
+        rejectionReasons.push({ asUserId: userId, reason: `deterministic: ${deterministicResult.reason}` });
         continue;
       }
 
       const contentKey = contentHash(msg.content);
       if (seenContents.has(contentKey)) {
         console.warn(`[QualityGate] Duplicate content detected, skipping`);
+        rejectionReasons.push({ asUserId: userId, reason: 'duplicate_content' });
         continue;
       }
 
       if (pastContents.has(contentKey)) {
         console.warn(`[QualityGate] Content too similar to past agent message, skipping`);
+        rejectionReasons.push({ asUserId: userId, reason: 'past_duplicate' });
         continue;
       }
 
@@ -182,12 +193,14 @@ export function createQualityGateNode(llm: LlmProvider) {
         const overlapRatio = overlap.length / significantWords.length;
         if (overlapRatio > 0.5) {
           console.warn(`[QualityGate] Topic too similar to recent history (${Math.round(overlapRatio * 100)}% keyword overlap), skipping`);
+          rejectionReasons.push({ asUserId: userId, reason: `topic_overlap_${Math.round(overlapRatio * 100)}pct` });
           continue;
         }
       }
 
       if (isGreeting(msg.content) && hasRecentGreeting(state.agentHistory ?? [], 240)) {
         console.warn(`[QualityGate] Greeting blocked — recent greeting already in history (4h window)`);
+        rejectionReasons.push({ asUserId: userId, reason: 'greeting_blocked' });
         continue;
       }
 
@@ -225,12 +238,14 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolea
 
           if (result.correctLanguage === false) {
             console.warn(`[QualityGate] Wrong language for user ${userId} (expected ${expectedLanguage}): ${result.reason}`);
+            rejectionReasons.push({ asUserId: userId, reason: `wrong_language: ${result.reason}` });
             continue;
           }
 
           const score = Math.max(0, Math.min(1, result.score ?? 0));
           if (score < minScore) {
             console.warn(`[QualityGate] Low score (${score}) for user ${userId}: ${result.reason}`);
+            rejectionReasons.push({ asUserId: userId, reason: `low_score_${score}: ${result.reason}` });
             continue;
           }
         } catch (error) {
@@ -256,7 +271,18 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolea
         timestamp: Date.now(),
       }));
 
-    return { pendingActions: [...validatedMessages, ...reactions], agentHistory: newHistory };
+    return {
+      pendingActions: [...validatedMessages, ...reactions],
+      agentHistory: newHistory,
+      _traceInputTokens: 0,
+      _traceOutputTokens: 0,
+      _traceModel: 'aggregate',
+      _traceExtra: {
+        accepted: validatedMessages.filter((a) => a.type === 'message').length,
+        rejected: rejectionReasons.length,
+        rejections: rejectionReasons,
+      },
+    };
   };
 }
 

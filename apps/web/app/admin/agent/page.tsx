@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, BarChart3, MessageSquare, Cpu, Users, Activity, Settings } from 'lucide-react';
+import { Loader2, BarChart3, MessageSquare, Cpu, Users, Activity, Settings, History } from 'lucide-react';
 
 const AgentOverviewTab = dynamic(
   () => import('@/components/admin/agent/AgentOverviewTab').then(mod => mod.AgentOverviewTab),
@@ -36,6 +36,11 @@ const AgentGlobalConfigTab = dynamic(
   { loading: () => <SectionLoader /> }
 );
 
+const AgentHistoryTab = dynamic(
+  () => import('@/components/admin/agent/AgentHistoryTab'),
+  { loading: () => <SectionLoader /> }
+);
+
 function SectionLoader() {
   return (
     <div className="flex items-center justify-center p-12">
@@ -51,6 +56,7 @@ const tabs = [
   { id: 'llm', label: 'Config LLM', icon: Cpu },
   { id: 'archetypes', label: 'Archétypes', icon: Users },
   { id: 'live', label: 'Live', icon: Activity },
+  { id: 'history', label: 'Historique', icon: History },
 ] as const;
 
 export default function AgentAdminPage() {
@@ -67,7 +73,7 @@ export default function AgentAdminPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 gap-1">
+          <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 gap-1">
             {tabs.map(tab => {
               const Icon = tab.icon;
               return (
@@ -101,6 +107,10 @@ export default function AgentAdminPage() {
 
           <TabsContent value="live" className="mt-6">
             <AgentLiveTab />
+          </TabsContent>
+
+          <TabsContent value="history" className="mt-6">
+            <AgentHistoryTab />
           </TabsContent>
         </Tabs>
       </div>

@@ -304,6 +304,103 @@ export type RecentConversationActivity = {
   controlledUsersCount: number;
 };
 
+export type ScheduleBudget = {
+  messagesUsed: number;
+  messagesMax: number;
+  remaining: number;
+  isWeekend: boolean;
+};
+
+export type ScheduleBurst = {
+  enabled: boolean;
+  lastBurst: number;
+  cooldownEndsAt: number;
+  cooldownActive: boolean;
+  quietIntervalMinutes: number;
+};
+
+export type AgentScheduleData = {
+  conversationId: string;
+  scanIntervalMinutes: number;
+  lastScan: number;
+  nextScan: number;
+  upcomingScans: number[];
+  budget: ScheduleBudget;
+  burst: ScheduleBurst;
+};
+
+export type TriggerResult = {
+  conversationId: string;
+  triggered: boolean;
+  triggeredAt: number;
+};
+
+export type ScanLogSummary = {
+  id: string;
+  conversationId: string;
+  trigger: string;
+  startedAt: string;
+  durationMs: number;
+  outcome: string;
+  messagesSent: number;
+  reactionsSent: number;
+  messagesRejected: number;
+  userIdsUsed: string[];
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  estimatedCostUsd: number;
+  conversation: AgentConfigConversation | null;
+};
+
+export type ScanLogNodeResult = {
+  inputTokens: number;
+  outputTokens: number;
+  latencyMs: number;
+  model: string;
+  costUsd: number;
+  extra: Record<string, unknown>;
+};
+
+export type ScanLogDetail = ScanLogSummary & {
+  triggeredBy: string | null;
+  completedAt: string;
+  activityScore: number;
+  messagesInWindow: number;
+  budgetBefore: { messagesUsed: number; messagesMax: number; usersActive: number; maxUsers: number } | null;
+  controlledUserIds: string[];
+  configSnapshot: Record<string, unknown> | null;
+  nodeResults: Record<string, ScanLogNodeResult> | null;
+  configChangedAt: string | null;
+};
+
+export type ScanStatsBucket = {
+  date: string;
+  scans: number;
+  conversations: number;
+  users: number;
+  messagesSent: number;
+  reactionsSent: number;
+  costUsd: number;
+  configChanges: number;
+  outcomes: Record<string, number>;
+};
+
+export type ScanStatsData = {
+  buckets: ScanStatsBucket[];
+  totalLogs: number;
+  since: string;
+};
+
+export type ScanLogsFilters = {
+  page?: number;
+  limit?: number;
+  conversationId?: string;
+  trigger?: string;
+  outcome?: string;
+  from?: string;
+  to?: string;
+};
+
 export type ResetDeletedCounts = {
   configs?: number;
   roles?: number;
@@ -400,6 +497,31 @@ export const agentAdminService = {
   async getLiveState(conversationId: string): Promise<ApiResponse<LiveStateData>> {
     const response = await apiService.get(`/admin/agent/configs/${conversationId}/live`);
     return unwrapResponse<LiveStateData>(response);
+  },
+
+  async getSchedule(conversationId: string): Promise<ApiResponse<AgentScheduleData>> {
+    const response = await apiService.get(`/admin/agent/configs/${conversationId}/schedule`);
+    return unwrapResponse<AgentScheduleData>(response);
+  },
+
+  async triggerScan(conversationId: string): Promise<ApiResponse<TriggerResult>> {
+    const response = await apiService.post(`/admin/agent/configs/${conversationId}/trigger`, {});
+    return unwrapResponse<TriggerResult>(response);
+  },
+
+  async getScanLogs(filters: ScanLogsFilters = {}): Promise<ApiResponse<ScanLogSummary[]>> {
+    const response = await apiService.get('/admin/agent/scan-logs', filters);
+    return unwrapResponse<ScanLogSummary[]>(response);
+  },
+
+  async getScanLogDetail(logId: string): Promise<ApiResponse<ScanLogDetail>> {
+    const response = await apiService.get(`/admin/agent/scan-logs/${logId}`);
+    return unwrapResponse<ScanLogDetail>(response);
+  },
+
+  async getScanStats(params: { conversationId?: string; months?: number; bucket?: 'day' | 'week' } = {}): Promise<ApiResponse<ScanStatsData>> {
+    const response = await apiService.get('/admin/agent/scan-logs/stats', params);
+    return unwrapResponse<ScanStatsData>(response);
   },
 
   async resetAll(): Promise<ApiResponse<ResetResult>> {

@@ -535,6 +535,7 @@ export function createStrategistNode(llm: LlmProvider) {
     if (state.controlledUsers.length === 0) {
       return {
         interventionPlan: { shouldIntervene: false, reason: 'No controlled users available', interventions: [] } satisfies InterventionPlan,
+        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { decision: 'skip_no_users' },
       };
     }
 
@@ -552,6 +553,7 @@ export function createStrategistNode(llm: LlmProvider) {
           reason: 'Conversation active — lurker reactions only',
           interventions: lurkerReactions,
         } satisfies InterventionPlan,
+        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { decision: 'skip_active' },
       };
     }
 
@@ -566,6 +568,7 @@ export function createStrategistNode(llm: LlmProvider) {
           reason: 'Budget exhausted — lurker reactions only',
           interventions: lurkerReactions,
         } satisfies InterventionPlan,
+        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { decision: 'skip_budget' },
       };
     }
 
@@ -600,6 +603,10 @@ export function createStrategistNode(llm: LlmProvider) {
             reason: parsed.reason ?? 'No messages — lurker reactions only',
             interventions: lurkerReactions,
           } satisfies InterventionPlan,
+          _traceInputTokens: response.usage.inputTokens,
+          _traceOutputTokens: response.usage.outputTokens,
+          _traceModel: response.model,
+          _traceExtra: { decision: 'skip_no_intervene', reason: parsed.reason ?? '' },
         };
       }
 
@@ -647,11 +654,21 @@ export function createStrategistNode(llm: LlmProvider) {
           reason: parsed.reason ?? '',
           interventions: withReactions,
         } satisfies InterventionPlan,
+        _traceInputTokens: response.usage?.inputTokens ?? 0,
+        _traceOutputTokens: response.usage?.outputTokens ?? 0,
+        _traceModel: response.model ?? 'unknown',
+        _traceExtra: {
+          decision: withReactions.length > 0 ? 'intervene' : 'skip',
+          reason: parsed.reason ?? '',
+          plannedMessages: withReactions.filter((i) => i.type === 'message').length,
+          plannedReactions: withReactions.filter((i) => i.type === 'reaction').length,
+        },
       };
     } catch (error) {
       console.error('[Strategist] Error:', error);
       return {
         interventionPlan: { shouldIntervene: false, reason: 'Strategist error', interventions: [] } satisfies InterventionPlan,
+        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'error', _traceExtra: { decision: 'error' },
       };
     }
   };

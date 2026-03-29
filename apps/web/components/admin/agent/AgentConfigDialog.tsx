@@ -19,6 +19,11 @@ import { Loader2 } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type AgentConfigData, type AgentConfigUpsert } from '@/services/agent-admin.service';
 import { AgentRolesSection } from './AgentRolesSection';
+import dynamic from 'next/dynamic';
+
+const AgentScheduleTimeline = dynamic(() => import('./AgentScheduleTimeline'), {
+  loading: () => <div className="h-24 animate-pulse bg-slate-200 dark:bg-slate-700 rounded" />,
+});
 import { UserDisplay } from './UserDisplay';
 import { UserPicker } from './UserPicker';
 import { ConversationPicker } from './ConversationPicker';
@@ -749,6 +754,14 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               </div>
             </div>
           </div>
+
+          {/* Timeline planificateur (existing configs only) */}
+          {!isNew && conversationId && (
+            <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Planificateur — Timeline 24h</h3>
+              <AgentScheduleTimeline conversationId={conversationId} />
+            </div>
+          )}
 
           {/* Rôles (only for existing configs) */}
           {!isNew && (

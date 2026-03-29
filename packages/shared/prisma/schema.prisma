@@ -358,6 +358,7 @@ model Conversation {
   // Agent service
   agentConfig     AgentConfig?
   agentAnalytic   AgentAnalytic?
+  agentScanLogs   AgentScanLog[]
 
   // Unified participant model (replaces members + anonymousParticipants)
   participants Participant[]
@@ -3130,4 +3131,44 @@ model AgentGlobalConfig {
   weekendMaxConversations Int    @default(100)
 
   updatedAt             DateTime @updatedAt
+}
+
+model AgentScanLog {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId    String   @db.ObjectId
+
+  trigger           String   @default("auto")
+  triggeredBy       String?  @db.ObjectId
+
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  durationMs        Int      @default(0)
+
+  activityScore     Float    @default(0)
+  messagesInWindow  Int      @default(0)
+  budgetBefore      Json?
+  controlledUserIds String[] @db.ObjectId
+  configSnapshot    Json?
+
+  nodeResults       Json?
+
+  outcome           String   @default("skipped")
+  messagesSent      Int      @default(0)
+  reactionsSent     Int      @default(0)
+  messagesRejected  Int      @default(0)
+  userIdsUsed       String[] @db.ObjectId
+
+  totalInputTokens  Int      @default(0)
+  totalOutputTokens Int      @default(0)
+  totalLatencyMs    Int      @default(0)
+  estimatedCostUsd  Float    @default(0)
+
+  configChangedAt   DateTime?
+
+  conversation      Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId])
+  @@index([startedAt])
+  @@index([trigger])
+  @@index([outcome])
 }

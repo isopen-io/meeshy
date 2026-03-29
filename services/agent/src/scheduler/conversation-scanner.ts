@@ -8,6 +8,8 @@ import type { PendingMessage, ToneProfile } from '../graph/state';
 import { findEligibleConversations, type EligibleConversation } from './eligible-conversations';
 import { detectActivity } from './activity-detector';
 import { toneProfileToGlobalFields } from '../memory/profile-merger';
+import { ScanTracer } from '../tracing/scan-tracer';
+import type { TracerRef } from '../graph/graph';
 
 type CompiledGraph = {
   invoke: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
@@ -41,7 +43,10 @@ export class ConversationScanner {
     private redis: Redis,
     private configCache: ConfigCache,
     private budgetManager: DailyBudgetManager,
+    private tracerRef: TracerRef = { current: null },
   ) {}
+
+  private triggerSubscriber: Redis | null = null;
 
   start(intervalMs?: number): void {
     const baseInterval = intervalMs ?? this.defaultIntervalMs;
@@ -58,12 +63,40 @@ export class ConversationScanner {
         this.scanAll().catch((err) => console.error('[Scanner] Scan cycle error:', err));
       }, jitter);
     }, baseInterval);
+
+    this.startTriggerSubscriber();
+  }
+
+  private startTriggerSubscriber(): void {
+    this.triggerSubscriber = this.redis.duplicate();
+    this.triggerSubscriber.subscribe('agent:trigger-scan').catch((err) =>
+      console.error('[Scanner] Failed to subscribe to agent:trigger-scan:', err),
+    );
+    this.triggerSubscriber.on('message', (channel, message) => {
+      if (channel !== 'agent:trigger-scan') return;
+      try {
+        const { conversationId } = JSON.parse(message) as { conversationId: string };
+        if (!conversationId) return;
+        console.log(`[Scanner] Manual trigger received for conv=${conversationId}`);
+        this.scanConversation(conversationId).catch((err) =>
+          console.error(`[Scanner] Manual scan error for conv=${conversationId}:`, err),
+        );
+      } catch (err) {
+        console.error('[Scanner] Error parsing trigger message:', err);
+      }
+    });
+    console.log('[Scanner] Trigger subscriber started on channel agent:trigger-scan');
   }
 
   stop(): void {
     if (this.intervalHandle) {
       clearInterval(this.intervalHandle);
       this.intervalHandle = null;
+    }
+    if (this.triggerSubscriber) {
+      this.triggerSubscriber.unsubscribe('agent:trigger-scan').catch(() => {});
+      this.triggerSubscriber.disconnect();
+      this.triggerSubscriber = null;
     }
     console.log('[Scanner] Stopped');
   }
@@ -171,10 +204,17 @@ export class ConversationScanner {
 
   private async processConversation(conv: EligibleConversation): Promise<boolean> {
     const { conversationId } = conv;
+    const tracer = new ScanTracer(conversationId, 'auto');
+    this.tracerRef.current = tracer;
+
     const activity = await detectActivity(this.persistence, conversationId);
 
     if (activity.shouldSkip) {
       console.log(`[Scanner] Skipping conv=${conversationId}: ${activity.reason}`);
+      tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
+      this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
+      this.tracerRef.current = null;
       return false;
     }
 
@@ -322,6 +362,10 @@ export class ConversationScanner {
 
     if (controlledUsers.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no controlled users`);
+      tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
+      this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
+      this.tracerRef.current = null;
       return false;
     }
 
@@ -333,6 +377,10 @@ export class ConversationScanner {
     }
     if (availableUsers.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: all controlled users on cooldown`);
+      tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
+      this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
+      this.tracerRef.current = null;
       return false;
     }
     controlledUsers = availableUsers;
@@ -361,6 +409,10 @@ export class ConversationScanner {
 
     if (effectiveMessages.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no messages`);
+      tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
+      this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
+      this.tracerRef.current = null;
       return false;
     }
 
@@ -395,6 +447,10 @@ export class ConversationScanner {
 
     if (todayStats.usersActive >= maxUsersToday) {
       console.log(`[Scanner] User budget exhausted for conv=${conversationId}: ${todayStats.usersActive}/${maxUsersToday} users today`);
+      tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
+      this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
+      this.tracerRef.current = null;
       return false;
     }
 
@@ -447,6 +503,10 @@ export class ConversationScanner {
     });
     } catch (graphError) {
       console.error(`[Scanner] Graph invocation failed for conv=${conversationId}:`, graphError);
+      tracer.setOutcome({ outcome: 'error', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
+      this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
+      this.tracerRef.current = null;
       return false;
     }
 
@@ -519,6 +579,20 @@ export class ConversationScanner {
         }).catch((err) => console.error(`[Scanner] Analytics upsert error for conv=${conversationId}:`, err));
       }
     }
+
+    const msgActions = pendingActions.filter((a) => a.type === 'message');
+    const rxnActions = pendingActions.filter((a) => a.type !== 'message');
+    tracer.setOutcome({
+      outcome: msgActions.length > 0 ? 'messages_sent' : rxnActions.length > 0 ? 'reactions_only' : 'skipped',
+      messagesSent: msgActions.length,
+      reactionsSent: rxnActions.length,
+      messagesRejected: 0,
+      userIdsUsed: [...new Set(msgActions.map((a) => (a as any).asUserId).filter(Boolean))],
+    });
+    this.persistence.createScanLog(tracer.finalize()).catch(err =>
+      console.error(`[Scanner] Error persisting scan log:`, err));
+    this.tracerRef.current = null;
+
     return true;
   }
 }

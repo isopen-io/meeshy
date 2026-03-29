@@ -220,7 +220,10 @@ export function createGeneratorNode(llm: LlmProvider) {
   return async function generator(state: ConversationState) {
     const plan = state.interventionPlan;
     if (!plan?.shouldIntervene || plan.interventions.length === 0) {
-      return { pendingActions: [] };
+      return {
+        pendingActions: [],
+        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true },
+      };
     }
 
     const actions: PendingAction[] = [];
@@ -236,6 +239,15 @@ export function createGeneratorNode(llm: LlmProvider) {
 
     console.log(`[Generator] Produced ${actions.length} actions (${actions.filter((a) => a.type === 'message').length} messages, ${actions.filter((a) => a.type === 'reaction').length} reactions)`);
 
-    return { pendingActions: actions };
+    return {
+      pendingActions: actions,
+      _traceInputTokens: 0,
+      _traceOutputTokens: 0,
+      _traceModel: 'aggregate',
+      _traceExtra: {
+        messagesGenerated: actions.filter((a) => a.type === 'message').length,
+        reactionsBuilt: actions.filter((a) => a.type === 'reaction').length,
+      },
+    };
   };
 }

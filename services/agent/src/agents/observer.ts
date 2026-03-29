@@ -43,7 +43,9 @@ const CONFIDENCE_DECAY = 0.005;
 
 export function createObserverNode(llm: LlmProvider) {
   return async function observe(state: ConversationState) {
-    if (state.messages.length === 0) return {};
+    if (state.messages.length === 0) return {
+      _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true },
+    };
 
     const participantIds = new Set(state.messages.map((m) => m.senderId));
     const displayNameMap = new Map(state.messages.map((m) => [m.senderId, m.senderName]));
@@ -69,7 +71,13 @@ export function createObserverNode(llm: LlmProvider) {
         parsed = parseJsonLlm<typeof parsed>(response.content);
       } catch {
         console.warn('[Observer] Failed to parse LLM response, preserving existing state');
-        return { summary: state.summary };
+        return {
+          summary: state.summary,
+          _traceInputTokens: response.usage.inputTokens,
+          _traceOutputTokens: response.usage.outputTokens,
+          _traceModel: response.model,
+          _traceExtra: { parseError: true },
+        };
       }
 
       const updatedProfiles: Record<string, ToneProfile> = { ...state.toneProfiles };
@@ -133,10 +141,23 @@ export function createObserverNode(llm: LlmProvider) {
       return {
         summary: parsed.summary ?? state.summary,
         toneProfiles: updatedProfiles,
+        _traceInputTokens: response.usage?.inputTokens ?? 0,
+        _traceOutputTokens: response.usage?.outputTokens ?? 0,
+        _traceModel: response.model ?? 'unknown',
+        _traceExtra: {
+          profilesUpdated: Object.keys(parsed.profiles ?? {}).length,
+          summaryChanged: (parsed.summary ?? '') !== state.summary,
+        },
       };
     } catch (error) {
       console.error('[Observer] Error analyzing conversation:', error);
-      return { summary: state.summary };
+      return {
+        summary: state.summary,
+        _traceInputTokens: 0,
+        _traceOutputTokens: 0,
+        _traceModel: 'error',
+        _traceExtra: { error: true },
+      };
     }
   };
 }

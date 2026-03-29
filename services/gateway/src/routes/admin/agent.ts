@@ -1149,6 +1149,298 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     maxConversationsPerCycle: z.number().int().min(0).optional(),
   });
 
+  // GET /configs/:conversationId/schedule
+  fastify.get('/configs/:conversationId/schedule', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Get the 24h scan schedule, budget usage and burst cooldown for a conversation.',
+      tags: ['admin-agent'],
+      summary: 'Get conversation scan schedule',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
+
+      const config = await fastify.prisma.agentConfig.findUnique({ where: { conversationId } });
+      if (!config) return sendNotFound(reply, 'Config non trouvée');
+
+      const cache = getCacheStore();
+      const now = Date.now();
+      const date = new Date().toISOString().slice(0, 10);
+      const isWknd = [0, 6].includes(new Date().getUTCDay());
+
+      const [lastScanRaw, budgetRaw, usersCount, lastBurstRaw] = await Promise.all([
+        cache.get(`agent:last-scan:${conversationId}`),
+        cache.get(`agent:budget:${conversationId}:${date}`),
+        cache.get(`agent:budget:${conversationId}:${date}:users`),
+        cache.get(`agent:budget:${conversationId}:last-burst`),
+      ]);
+
+      const lastScan = parseInt(lastScanRaw ?? '0', 10);
+      const intervalMs = (config.scanIntervalMinutes ?? 3) * 60_000;
+      const nextScan = lastScan === 0 ? now : lastScan + intervalMs;
+
+      const upcomingScans: number[] = [];
+      const horizon = now + 24 * 60 * 60 * 1000;
+      let cursor = nextScan <= now ? now + intervalMs : nextScan;
+      while (cursor <= horizon && upcomingScans.length < 200) {
+        upcomingScans.push(cursor);
+        cursor += intervalMs;
+      }
+
+      const maxMessages = isWknd
+        ? (config.weekendMaxMessages ?? 25)
+        : (config.weekdayMaxMessages ?? 10);
+      const messagesUsed = parseInt(budgetRaw ?? '0', 10);
+
+      const lastBurst = parseInt(lastBurstRaw ?? '0', 10);
+      const cooldownMs = (config.quietIntervalMinutes ?? 90) * 60_000;
+      const burstCooldownEndsAt = lastBurst > 0 ? lastBurst + cooldownMs : 0;
+
+      return sendSuccess(reply, {
+        conversationId,
+        scanIntervalMinutes: config.scanIntervalMinutes ?? 3,
+        lastScan,
+        nextScan: Math.max(nextScan, now),
+        upcomingScans,
+        budget: {
+          messagesUsed,
+          messagesMax: maxMessages,
+          remaining: Math.max(0, maxMessages - messagesUsed),
+          isWeekend: isWknd,
+        },
+        burst: {
+          enabled: config.burstEnabled ?? true,
+          lastBurst,
+          cooldownEndsAt: burstCooldownEndsAt,
+          cooldownActive: burstCooldownEndsAt > now,
+          quietIntervalMinutes: config.quietIntervalMinutes ?? 90,
+        },
+      });
+    } catch (error) {
+      logError(fastify.log, 'Error fetching schedule:', error);
+      return sendInternalError(reply, 'Erreur serveur');
+    }
+  });
+
+  // POST /configs/:conversationId/trigger
+  fastify.post('/configs/:conversationId/trigger', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Trigger an immediate scan for a conversation by resetting lastScan and publishing a trigger event.',
+      tags: ['admin-agent'],
+      summary: 'Trigger immediate scan',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
+
+      const config = await fastify.prisma.agentConfig.findUnique({ where: { conversationId } });
+      if (!config) return sendNotFound(reply, 'Config non trouvée');
+
+      const cache = getCacheStore();
+      await cache.set(`agent:last-scan:${conversationId}`, '0', 86400);
+      await cache.publish('agent:trigger-scan', JSON.stringify({ conversationId }));
+
+      return sendSuccess(reply, {
+        conversationId,
+        triggered: true,
+        triggeredAt: Date.now(),
+      });
+    } catch (error) {
+      logError(fastify.log, 'Error triggering scan:', error);
+      return sendInternalError(reply, 'Erreur serveur');
+    }
+  });
+
+  // GET /scan-logs
+  fastify.get('/scan-logs', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'List scan logs with pagination and filters.',
+      tags: ['admin-agent'],
+      summary: 'List scan logs',
+      security: securityBearerAuth,
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', default: 1 },
+          limit: { type: 'integer', default: 20 },
+          conversationId: { type: 'string' },
+          trigger: { type: 'string' },
+          outcome: { type: 'string' },
+          from: { type: 'string' },
+          to: { type: 'string' },
+        },
+      },
+      response: { 200: paginatedArrayResponse, ...stdErrors },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { page = 1, limit = 20, conversationId, trigger, outcome, from, to } = request.query as {
+        page?: number; limit?: number; conversationId?: string; trigger?: string; outcome?: string; from?: string; to?: string;
+      };
+
+      const where: Record<string, unknown> = {};
+      if (conversationId) where.conversationId = conversationId;
+      if (trigger) where.trigger = trigger;
+      if (outcome) where.outcome = outcome;
+      if (from || to) {
+        where.startedAt = {};
+        if (from) (where.startedAt as Record<string, unknown>).gte = new Date(from);
+        if (to) (where.startedAt as Record<string, unknown>).lte = new Date(to);
+      }
+
+      const [logs, total] = await Promise.all([
+        fastify.prisma.agentScanLog.findMany({
+          where,
+          orderBy: { startedAt: 'desc' },
+          skip: (page - 1) * limit,
+          take: limit,
+          select: {
+            id: true, conversationId: true, trigger: true, startedAt: true,
+            durationMs: true, outcome: true, messagesSent: true, reactionsSent: true,
+            messagesRejected: true, userIdsUsed: true, totalInputTokens: true,
+            totalOutputTokens: true, estimatedCostUsd: true,
+            conversation: { select: { id: true, title: true, type: true } },
+          },
+        }),
+        fastify.prisma.agentScanLog.count({ where }),
+      ]);
+
+      return reply.send({
+        success: true, data: logs,
+        pagination: { total, page, limit, hasMore: page * limit < total },
+      });
+    } catch (error) {
+      logError(fastify.log, 'Error fetching scan logs:', error);
+      return sendInternalError(reply, 'Erreur serveur');
+    }
+  });
+
+  // GET /scan-logs/stats
+  fastify.get('/scan-logs/stats', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Get aggregated scan stats for charting (daily/weekly buckets over N months).',
+      tags: ['admin-agent'],
+      summary: 'Get scan stats for chart',
+      security: securityBearerAuth,
+      querystring: {
+        type: 'object',
+        properties: {
+          conversationId: { type: 'string' },
+          months: { type: 'integer', default: 6 },
+          bucket: { type: 'string', default: 'day' },
+        },
+      },
+      response: { 200: successDataResponse, ...stdErrors },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { conversationId, months = 6, bucket = 'day' } = request.query as {
+        conversationId?: string; months?: number; bucket?: 'day' | 'week';
+      };
+
+      const since = new Date();
+      since.setMonth(since.getMonth() - months);
+
+      const where: Record<string, unknown> = { startedAt: { gte: since } };
+      if (conversationId) where.conversationId = conversationId;
+
+      const logs = await fastify.prisma.agentScanLog.findMany({
+        where,
+        select: {
+          startedAt: true, conversationId: true, outcome: true,
+          messagesSent: true, reactionsSent: true, userIdsUsed: true,
+          estimatedCostUsd: true, configChangedAt: true,
+        },
+        orderBy: { startedAt: 'asc' },
+      });
+
+      const buckets = new Map<string, {
+        date: string; scans: number; conversations: Set<string>; users: Set<string>;
+        messagesSent: number; reactionsSent: number; costUsd: number;
+        configChanges: number; outcomes: Record<string, number>;
+      }>();
+
+      for (const log of logs) {
+        const d = log.startedAt;
+        let key: string;
+        if (bucket === 'week') {
+          const weekStart = new Date(d);
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+          key = weekStart.toISOString().slice(0, 10);
+        } else {
+          key = d.toISOString().slice(0, 10);
+        }
+
+        let b = buckets.get(key);
+        if (!b) {
+          b = { date: key, scans: 0, conversations: new Set(), users: new Set(), messagesSent: 0, reactionsSent: 0, costUsd: 0, configChanges: 0, outcomes: {} };
+          buckets.set(key, b);
+        }
+        b.scans++;
+        b.conversations.add(log.conversationId);
+        for (const uid of log.userIdsUsed) b.users.add(uid);
+        b.messagesSent += log.messagesSent;
+        b.reactionsSent += log.reactionsSent;
+        b.costUsd += log.estimatedCostUsd;
+        if (log.configChangedAt) b.configChanges++;
+        b.outcomes[log.outcome] = (b.outcomes[log.outcome] ?? 0) + 1;
+      }
+
+      const data = [...buckets.values()].map(b => ({
+        date: b.date, scans: b.scans, conversations: b.conversations.size,
+        users: b.users.size, messagesSent: b.messagesSent, reactionsSent: b.reactionsSent,
+        costUsd: Math.round(b.costUsd * 10000) / 10000, configChanges: b.configChanges,
+        outcomes: b.outcomes,
+      }));
+
+      return sendSuccess(reply, { buckets: data, totalLogs: logs.length, since: since.toISOString() });
+    } catch (error) {
+      logError(fastify.log, 'Error fetching scan stats:', error);
+      return sendInternalError(reply, 'Erreur serveur');
+    }
+  });
+
+  // GET /scan-logs/:logId
+  fastify.get('/scan-logs/:logId', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Get full detail of a single scan log.',
+      tags: ['admin-agent'],
+      summary: 'Get scan log detail',
+      security: securityBearerAuth,
+      params: { type: 'object', required: ['logId'], properties: { logId: objectIdParam } },
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { logId } = request.params as { logId: string };
+      if (!validateObjectId(logId, 'logId', reply)) return;
+
+      const log = await fastify.prisma.agentScanLog.findUnique({
+        where: { id: logId },
+        include: { conversation: { select: { id: true, title: true, type: true } } },
+      });
+      if (!log) return sendNotFound(reply, 'Scan log non trouve');
+
+      return sendSuccess(reply, log);
+    } catch (error) {
+      logError(fastify.log, 'Error fetching scan log detail:', error);
+      return sendInternalError(reply, 'Erreur serveur');
+    }
+  });
+
   // GET /global-config
   fastify.get('/global-config', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
