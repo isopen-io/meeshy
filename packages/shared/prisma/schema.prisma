@@ -672,6 +672,9 @@ model MessageAttachment {
   viewOnceCount    Int     @default(0)
   /// Content is blurred until user taps to reveal
   isBlurred        Boolean @default(false)
+  /// Bitfield for attachment effects (lifecycle, appearance, persistent)
+  /// @see packages/shared/types/message-effect-flags.ts
+  effectFlags      Int     @default(0)
 
   // Métadonnées spécifiques aux images
   width         Int?
