@@ -215,7 +215,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
 
 // MARK: - Notification Actor (who triggered)
 
-public struct NotificationActor: Decodable {
+public struct NotificationActor: Codable, Sendable {
     public let id: String
     public let username: String
     public let displayName: String?
@@ -228,7 +228,7 @@ public struct NotificationActor: Decodable {
 
 // MARK: - Notification Context (where it happened)
 
-public struct NotificationContext: Decodable {
+public struct NotificationContext: Codable, Sendable {
     public let conversationId: String?
     public let conversationTitle: String?
     public let conversationType: String?
@@ -243,7 +243,7 @@ public struct NotificationContext: Decodable {
 
 // MARK: - Notification State
 
-public struct NotificationState: Decodable {
+public struct NotificationState: Codable, Sendable {
     public let isRead: Bool
     public let readAt: String?
     public let createdAt: String
@@ -252,14 +252,14 @@ public struct NotificationState: Decodable {
 
 // MARK: - Notification Delivery
 
-public struct NotificationDelivery: Decodable {
+public struct NotificationDelivery: Codable, Sendable {
     public let emailSent: Bool
     public let pushSent: Bool
 }
 
 // MARK: - Notification Metadata
 
-public struct NotificationMetadata: Decodable {
+public struct NotificationMetadata: Codable, Sendable {
     public let messagePreview: String?
     public let action: String?
     public let reactionEmoji: String?
@@ -291,7 +291,7 @@ public struct NotificationMetadata: Decodable {
 
 // MARK: - API Notification (matches gateway NotificationFormatter output)
 
-public struct APINotification: Decodable, Identifiable {
+public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let id: String
     public let userId: String
     public let type: String

@@ -14,6 +14,11 @@ public actor CacheCoordinator {
     public let feed: GRDBCacheStore<String, FeedPost>
     public let stories: GRDBCacheStore<String, StoryGroup>
     public let stats: GRDBCacheStore<String, UserStats>
+    public let notifications: GRDBCacheStore<String, APINotification>
+    public let affiliateTokens: GRDBCacheStore<String, AffiliateToken>
+    public let shareLinks: GRDBCacheStore<String, MyShareLink>
+    public let trackingLinks: GRDBCacheStore<String, TrackingLink>
+    public let communityLinks: GRDBCacheStore<String, CommunityLink>
 
     public let images: DiskCacheStore
     public let audio: DiskCacheStore
@@ -60,6 +65,11 @@ public actor CacheCoordinator {
         self.feed = GRDBCacheStore(policy: .feedPosts, db: db, namespace: "feed")
         self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories")
         self.stats = GRDBCacheStore(policy: .userStats, db: db, namespace: "stats")
+        self.notifications = GRDBCacheStore(policy: .notifications, db: db, namespace: "notif")
+        self.affiliateTokens = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "affil")
+        self.shareLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "slinks")
+        self.trackingLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "tlinks")
+        self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
 
         self.images = DiskCacheStore(policy: .mediaImages)
         self.audio = DiskCacheStore(policy: .mediaAudio)

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Affiliate Token
 
-public struct AffiliateToken: Decodable, Identifiable {
+public struct AffiliateToken: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let id: String
     public let token: String
     public let name: String
@@ -39,13 +39,13 @@ public struct AffiliateToken: Decodable, Identifiable {
     }
 }
 
-public struct AffiliateCount: Decodable {
+public struct AffiliateCount: Codable, Sendable {
     public let affiliations: Int
 }
 
 // MARK: - Affiliate Stats
 
-public struct AffiliateStats: Decodable {
+public struct AffiliateStats: Codable, Sendable {
     public let totalTokens: Int?
     public let totalReferrals: Int?
     public let totalVisits: Int?

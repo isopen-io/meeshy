@@ -190,20 +190,19 @@ class TrackingLinksViewModel: ObservableObject {
     @Published var stats: TrackingLinkStats? = nil
     @Published var isLoading = false
 
-    private static var cachedLinks: [TrackingLink] = []
-    private static var cachedStats: TrackingLinkStats?
-    private static var cacheDate: Date?
-
     func load() async {
-        if !Self.cachedLinks.isEmpty, let cacheDate = Self.cacheDate {
-            links = Self.cachedLinks
-            stats = Self.cachedStats
-            let isStale = Date().timeIntervalSince(cacheDate) > 300
-            if isStale { await refreshFromAPI() }
+        let cached = await CacheCoordinator.shared.trackingLinks.load(for: "list")
+        switch cached {
+        case .fresh(let data, _):
+            links = data
             return
+        case .stale(let data, _):
+            links = data
+            await refreshFromAPI()
+        case .expired, .empty:
+            isLoading = links.isEmpty
+            await refreshFromAPI()
         }
-        isLoading = links.isEmpty
-        await refreshFromAPI()
     }
 
     private func refreshFromAPI() async {
@@ -211,14 +210,11 @@ class TrackingLinksViewModel: ObservableObject {
         async let s = TrackingLinkService.shared.fetchStats()
         links = (try? await l) ?? []
         stats = try? await s
-        Self.cachedLinks = links
-        Self.cachedStats = stats
-        Self.cacheDate = Date()
+        await CacheCoordinator.shared.trackingLinks.save(links, for: "list")
         isLoading = false
     }
 
     func loadStats() async {
         stats = try? await TrackingLinkService.shared.fetchStats()
-        Self.cachedStats = stats
     }
 }

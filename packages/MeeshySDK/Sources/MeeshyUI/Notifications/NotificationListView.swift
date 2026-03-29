@@ -355,9 +355,6 @@ final class NotificationListViewModel: ObservableObject {
     private var offset = 0
     private let limit = 30
 
-    private static var cachedNotifications: [APINotification] = []
-    private static var cacheDate: Date?
-
     var filteredNotifications: [APINotification] {
         guard selectedCategory != .all && selectedCategory != .unread else {
             return notifications
@@ -368,19 +365,21 @@ final class NotificationListViewModel: ObservableObject {
     func loadInitial() async {
         offset = 0
 
-        if !Self.cachedNotifications.isEmpty, let cacheDate = Self.cacheDate {
-            notifications = Self.cachedNotifications
-            offset = Self.cachedNotifications.count
-            hasMore = Self.cachedNotifications.count >= limit
-            let isStale = Date().timeIntervalSince(cacheDate) > 120
-            if isStale {
-                await refreshFromAPI()
-            }
+        let cached = await CacheCoordinator.shared.notifications.load(for: "all")
+        switch cached {
+        case .fresh(let data, _):
+            notifications = data
+            offset = data.count
+            hasMore = data.count >= limit
             return
+        case .stale(let data, _):
+            notifications = data
+            offset = data.count
+            await refreshFromAPI()
+        case .expired, .empty:
+            isLoading = notifications.isEmpty
+            await refreshFromAPI()
         }
-
-        isLoading = notifications.isEmpty
-        await refreshFromAPI()
     }
 
     private func refreshFromAPI() async {
@@ -392,8 +391,7 @@ final class NotificationListViewModel: ObservableObject {
             unreadCount = response.unreadCount ?? 0
             hasMore = response.pagination?.hasMore ?? false
             offset = limit
-            Self.cachedNotifications = response.data
-            Self.cacheDate = Date()
+            await CacheCoordinator.shared.notifications.save(response.data, for: "all")
         } catch {}
         isLoading = false
     }

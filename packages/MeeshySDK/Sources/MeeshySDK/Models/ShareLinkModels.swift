@@ -181,7 +181,7 @@ public struct CreatedShareLink: Decodable {
 
 // MARK: - User's Own Links (authenticated)
 
-public struct MyShareLink: Decodable, Identifiable {
+public struct MyShareLink: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let id: String
     public let linkId: String
     public let identifier: String?
@@ -197,7 +197,8 @@ public struct MyShareLink: Decodable, Identifiable {
     public var joinUrl: String { "\(MeeshyConfig.shared.serverOrigin)/join/\(identifier ?? linkId)" }
 }
 
-public struct MyShareLinkStats: Decodable {
+public struct MyShareLinkStats: Codable, Sendable, CacheIdentifiable {
+    public var id: String { "stats" }
     public let totalLinks: Int
     public let activeLinks: Int
     public let totalUses: Int

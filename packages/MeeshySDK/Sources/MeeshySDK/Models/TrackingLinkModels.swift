@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - TrackingLink Models
 
-public struct TrackingLink: Decodable, Identifiable {
+public struct TrackingLink: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let id: String
     public let token: String
     public let name: String?
@@ -21,7 +21,7 @@ public struct TrackingLink: Decodable, Identifiable {
     public var displayName: String { name ?? token }
 }
 
-public struct TrackingLinkClick: Decodable, Identifiable {
+public struct TrackingLinkClick: Codable, Identifiable, Sendable {
     public let id: String
     public let country: String?
     public let city: String?
@@ -34,13 +34,14 @@ public struct TrackingLinkClick: Decodable, Identifiable {
     public let clickedAt: Date
 }
 
-public struct TrackingLinkDetail: Decodable {
+public struct TrackingLinkDetail: Codable, Sendable {
     public let link: TrackingLink
     public let clicks: [TrackingLinkClick]
     public let total: Int
 }
 
-public struct TrackingLinkStats: Decodable {
+public struct TrackingLinkStats: Codable, Sendable, CacheIdentifiable {
+    public var id: String { "stats" }
     public let totalLinks: Int
     public let totalClicks: Int
     public let uniqueClicks: Int
