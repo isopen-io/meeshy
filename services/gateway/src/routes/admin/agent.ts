@@ -328,9 +328,12 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
 
       const enrichedConfigs = configs.map((c) => {
         const analytics = analyticsByConvId.get(c.conversationId);
+        const roleUserIds = rolesByConvId.get(c.conversationId) ?? [];
+        const manualIds = (c.manualUserIds ?? []) as string[];
+        const mergedUserIds = [...new Set([...roleUserIds, ...manualIds])];
         return {
           ...c,
-          controlledUserIds: rolesByConvId.get(c.conversationId) ?? [],
+          controlledUserIds: mergedUserIds,
           analytics: analytics
             ? {
                 messagesSent: analytics.messagesSent,
@@ -376,7 +379,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         where: { conversationId },
         select: { userId: true },
       });
-      return reply.send({ success: true, data: { ...config, controlledUserIds: roles.map((r) => r.userId) } });
+      const roleUserIds = roles.map((r) => r.userId);
+      const manualIds = (config.manualUserIds ?? []) as string[];
+      const mergedUserIds = [...new Set([...roleUserIds, ...manualIds])];
+      return reply.send({ success: true, data: { ...config, controlledUserIds: mergedUserIds } });
     } catch (error) {
       logError(fastify.log, 'Error fetching agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
@@ -410,6 +416,45 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         create: { conversationId, configuredBy: authContext.registeredUser.id, ...parsed.data },
         update: parsed.data,
       });
+
+      // Sync manualUserIds → AgentUserRole so they appear in admin lists
+      // and the scanner can pick them up immediately.
+      const manualIds = parsed.data.manualUserIds;
+      if (manualIds && manualIds.length > 0) {
+        const users = await fastify.prisma.user.findMany({
+          where: { id: { in: manualIds } },
+          select: { id: true, displayName: true, username: true, agentGlobalProfile: true },
+        });
+
+        for (const u of users) {
+          const gp = u.agentGlobalProfile;
+          await fastify.prisma.agentUserRole.upsert({
+            where: { userId_conversationId: { userId: u.id, conversationId } },
+            create: {
+              userId: u.id,
+              conversationId,
+              origin: gp ? 'observed' : 'archetype',
+              personaSummary: gp?.personaSummary ?? '',
+              tone: gp?.tone ?? 'neutre',
+              vocabularyLevel: gp?.vocabularyLevel ?? 'courant',
+              typicalLength: gp?.typicalLength ?? 'moyen',
+              emojiUsage: gp?.emojiUsage ?? 'occasionnel',
+              topicsOfExpertise: gp?.topicsOfExpertise ?? [],
+              topicsAvoided: gp?.topicsAvoided ?? [],
+              relationshipMap: {},
+              catchphrases: gp?.catchphrases ?? [],
+              responseTriggers: [],
+              silenceTriggers: [],
+              commonEmojis: gp?.commonEmojis ?? [],
+              reactionPatterns: gp?.reactionPatterns ?? [],
+              messagesAnalyzed: gp?.messagesAnalyzed ?? 0,
+              confidence: gp?.confidence ?? 0.1,
+              locked: false,
+            },
+            update: {},
+          });
+        }
+      }
 
       const cache = getCacheStore();
       await cache.publish('agent:config-invalidated', JSON.stringify({ conversationId }));
