@@ -3,14 +3,6 @@ import os
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Scroll Offset Preference Key
-private struct ScrollOffsetPreferenceKey: PreferenceKey {
-    nonisolated(unsafe) static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 // MARK: - Section Drop Delegate
 
 struct SectionDropDelegate: DropDelegate {
