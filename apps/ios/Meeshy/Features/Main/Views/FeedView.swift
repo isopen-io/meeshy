@@ -35,7 +35,7 @@ struct FeedView: View {
     @State var isLoadingMedia = false
     @StateObject var audioRecorder = AudioRecorderManager()
     @State private var pendingAttachmentType: String?
-    @State private var showEmojiPicker = false
+    @State var showEmojiPicker = false
 
     var composerHasContent: Bool {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
@@ -233,6 +233,62 @@ struct FeedView: View {
         .padding(.horizontal, 16)
     }
 
+    // MARK: - Feed Post Card
+    @ViewBuilder
+    private func feedPostCardView(for post: FeedPost) -> some View {
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        FeedPostCard(
+            post: post,
+            isCommentsExpanded: expandedComments.contains(post.id),
+            onToggleComments: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    if expandedComments.contains(post.id) {
+                        expandedComments.remove(post.id)
+                    } else {
+                        expandedComments.insert(post.id)
+                    }
+                }
+                HapticFeedback.light()
+            },
+            onLike: { postId in
+                Task { await viewModel.likePost(postId) }
+            },
+            onRepost: { postId in
+                Task { await viewModel.repostPost(postId) }
+            },
+            onShare: { postId in
+                Task { await viewModel.sharePost(postId) }
+            },
+            onBookmark: { postId in
+                Task { await viewModel.bookmarkPost(postId) }
+            },
+            onSendComment: { postId, content, parentId in
+                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
+            },
+            onLikeComment: { postId, commentId in
+                Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
+            },
+            onSelectLanguage: { postId, language in
+                viewModel.setTranslationOverride(postId: postId, language: language)
+            },
+            onTapPost: { postId in
+                router.push(.postDetail(postId))
+            },
+            onTapRepost: { repostId in
+                router.push(.postDetail(repostId))
+            },
+            onDelete: isOwnPost ? { postId in
+                Task { await viewModel.deletePost(postId) }
+            } : nil,
+            onReport: !isOwnPost ? { postId in
+                Task { await viewModel.reportPost(postId) }
+            } : nil,
+            onPin: isOwnPost ? { postId in
+                Task { await viewModel.pinPost(postId) }
+            } : nil
+        )
+    }
+
     // MARK: - Feed Scroll View
     private var feedScrollView: some View {
         ScrollViewReader { scrollProxy in
@@ -281,59 +337,10 @@ struct FeedView: View {
 
                     // Posts with infinite scroll
                     ForEach(posts) { post in
-                        FeedPostCard(
-                            post: post,
-                            isCommentsExpanded: expandedComments.contains(post.id),
-                            onToggleComments: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    if expandedComments.contains(post.id) {
-                                        expandedComments.remove(post.id)
-                                    } else {
-                                        expandedComments.insert(post.id)
-                                    }
-                                }
-                                HapticFeedback.light()
-                            },
-                            onLike: { postId in
-                                Task { await viewModel.likePost(postId) }
-                            },
-                            onRepost: { postId in
-                                Task { await viewModel.repostPost(postId) }
-                            },
-                            onShare: { postId in
-                                Task { await viewModel.sharePost(postId) }
-                            },
-                            onBookmark: { postId in
-                                Task { await viewModel.bookmarkPost(postId) }
-                            },
-                            onSendComment: { postId, content, parentId in
-                                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
-                            },
-                            onLikeComment: { postId, commentId in
-                                Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
-                            },
-                            onSelectLanguage: { postId, language in
-                                viewModel.setTranslationOverride(postId: postId, language: language)
-                            },
-                            onTapPost: { postId in
-                                router.push(.postDetail(postId))
-                            },
-                            onTapRepost: { repostId in
-                                router.push(.postDetail(repostId))
-                            },
-                            onDelete: post.authorId == AuthManager.shared.currentUser?.userId ? { postId in
-                                Task { await viewModel.deletePost(postId) }
-                            } : nil,
-                            onReport: post.authorId != AuthManager.shared.currentUser?.userId ? { postId in
-                                Task { await viewModel.reportPost(postId) }
-                            } : nil,
-                            onPin: post.authorId == AuthManager.shared.currentUser?.userId ? { postId in
-                                Task { await viewModel.pinPost(postId) }
-                            } : nil
-                        )
-                        .onAppear {
-                            Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
-                        }
+                        feedPostCardView(for: post)
+                            .onAppear {
+                                Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
+                            }
                     }
 
                     // Loading more indicator

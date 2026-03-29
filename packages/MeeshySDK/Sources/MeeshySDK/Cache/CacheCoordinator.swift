@@ -190,7 +190,7 @@ public actor CacheCoordinator {
            let decoded = try? decoder.decode([String: [AudioTranslationEvent]].self, from: data) {
             audioTranslationCache = decoded
         }
-        logger.info("Loaded translation caches: \(translationCache.count) translations, \(transcriptionCache.count) transcriptions, \(audioTranslationCache.count) audio translations")
+        logger.info("Loaded translation caches: \(self.translationCache.count) translations, \(self.transcriptionCache.count) transcriptions, \(self.audioTranslationCache.count) audio translations")
     }
 
     public func invalidateAll() async {

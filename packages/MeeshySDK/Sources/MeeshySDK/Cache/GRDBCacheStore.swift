@@ -38,7 +38,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     public func save(_ items: [Value], for key: Key) async {
         let trimmed: [Value]
         if let max = policy.maxItemCount, items.count > max {
-            trimmed = Array(items.prefix(max))
+            trimmed = Array(items.suffix(max))
         } else {
             trimmed = items
         }

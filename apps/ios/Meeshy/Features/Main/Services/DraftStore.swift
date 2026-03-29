@@ -1,6 +1,6 @@
 import Foundation
 
-final class DraftStore {
+final class DraftStore: @unchecked Sendable {
     static let shared = DraftStore()
 
     private let defaults: UserDefaults

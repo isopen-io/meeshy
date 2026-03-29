@@ -225,10 +225,10 @@ struct ThemedFeedOverlay: View {
                             onLikeComment: { postId, commentId in
                                 Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
                             },
-                            onDelete: post.authorId == AuthManager.shared.currentUser?.userId ? { postId in
+                            onDelete: post.authorId == AuthManager.shared.currentUser?.id ? { postId in
                                 Task { await viewModel.deletePost(postId) }
                             } : nil,
-                            onReport: post.authorId != AuthManager.shared.currentUser?.userId ? { postId in
+                            onReport: post.authorId != AuthManager.shared.currentUser?.id ? { postId in
                                 Task { await viewModel.reportPost(postId) }
                             } : nil
                         )

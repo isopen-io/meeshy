@@ -500,16 +500,14 @@ class ConversationViewModel: ObservableObject {
 
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
-        case .fresh(let data, _):
-            messages = data
-        case .stale(let data, _):
+        case .fresh(let data, _), .stale(let data, _):
             messages = data
             Task { [weak self] in
                 guard let self else { return }
-                await self.syncEngine.ensureMessages(for: self.conversationId)
+                await self.refreshMessagesFromAPI()
             }
         case .expired, .empty:
-            await syncEngine.ensureMessages(for: conversationId)
+            await refreshMessagesFromAPI()
             let reloaded = await CacheCoordinator.shared.messages.load(for: conversationId)
             if let data = reloaded.value {
                 messages = data
@@ -531,16 +529,36 @@ class ConversationViewModel: ObservableObject {
         isLoadingInitial = false
     }
 
+    private func refreshMessagesFromAPI() async {
+        do {
+            let response = try await messageService.list(
+                conversationId: conversationId, offset: 0, limit: 30, includeReplies: true
+            )
+            let freshMessages = await processAPIMessages(response.data)
+            let existing = messages
+            let existingIds = Set(existing.map(\.id))
+            let newOnly = freshMessages.filter { !existingIds.contains($0.id) }
+            if !newOnly.isEmpty {
+                messages = existing + newOnly
+            }
+            await CacheCoordinator.shared.messages.save(messages, for: conversationId)
+        } catch {
+            // Silent refresh failure — cached data is already displayed
+        }
+    }
+
     // MARK: - Sync Engine Observation
 
     func observeSync() {
-        syncEngine.messagesDidChange
-            .filter { [weak self] id in id == self?.conversationId }
-            .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
-            .sink { [weak self] _ in
-                Task { [weak self] in
+        let targetId = conversationId
+        let publisher = syncEngine.messagesDidChange
+        publisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] changedId in
+                guard changedId == targetId else { return }
+                Task { @MainActor [weak self] in
                     guard let self else { return }
-                    let cached = await CacheCoordinator.shared.messages.load(for: self.conversationId)
+                    let cached = await CacheCoordinator.shared.messages.load(for: targetId)
                     switch cached {
                     case .fresh(let data, _), .stale(let data, _):
                         self.messages = data

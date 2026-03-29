@@ -4,7 +4,7 @@ import os
 
 // MARK: - Protocol
 
-public protocol ConversationSyncEngineProviding: AnyObject {
+public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     var conversationsDidChange: AnyPublisher<Void, Never> { get }
     var messagesDidChange: AnyPublisher<String, Never> { get }
 

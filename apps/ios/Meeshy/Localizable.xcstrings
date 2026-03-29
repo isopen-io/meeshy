@@ -151,6 +151,9 @@
     "%@%%" : {
 
     },
+    "%@s" : {
+
+    },
     "%@x" : {
 
     },
@@ -181,9 +184,6 @@
 
     },
     "💭" : {
-
-    },
-    "2h" : {
 
     },
     "2024-2026 Meeshy. Tous droits reserves." : {
@@ -763,10 +763,16 @@
     "Ajouter" : {
 
     },
+    "Ajouter des echantillons" : {
+
+    },
     "Ajouter un membre" : {
 
     },
     "Ajoutez ces widgets a votre ecran d'accueil pour un acces rapide." : {
+
+    },
+    "Analyse en cours..." : {
 
     },
     "Annuler" : {
@@ -813,6 +819,9 @@
         }
       }
     },
+    "Aucun echantillon disponible" : {
+
+    },
     "Aucun favori" : {
 
     },
@@ -835,6 +844,9 @@
           }
         }
       }
+    },
+    "Aucun profil vocal" : {
+
     },
     "Aucun résultat" : {
 
@@ -1007,6 +1019,9 @@
     "Cette action est irréversible. Le lien ne sera plus accessible." : {
 
     },
+    "Cette action est irreversible. Toutes vos donnees vocales seront supprimees conformement au RGPD." : {
+
+    },
     "Cette etape est optionnelle" : {
 
     },
@@ -1050,13 +1065,13 @@
     "Choisir un lieu" : {
 
     },
+    "Clonage vocal actif" : {
+
+    },
     "Clone" : {
 
     },
     "Code envoye par SMS" : {
-
-    },
-    "Coming soon — record your voice to enable personalized voice cloning for translated audio messages." : {
 
     },
     "Commencer" : {
@@ -1738,6 +1753,9 @@
         }
       }
     },
+    "Creer un profil vocal" : {
+
+    },
     "Créez un groupe ou une communauté pour partager un lien d'invitation" : {
 
     },
@@ -1748,6 +1766,9 @@
 
     },
     "Créez un lien pour suivre vos clics et campagnes" : {
+
+    },
+    "Creez un profil vocal pour que vos messages traduits conservent votre voix naturelle." : {
 
     },
     "Criteres de securite" : {
@@ -1855,6 +1876,9 @@
 
     },
     "Discussion" : {
+
+    },
+    "Echantillons vocaux" : {
 
     },
     "Échec de l'envoi" : {
@@ -1985,8 +2009,24 @@
         }
       }
     },
+    "Enregistrez votre voix" : {
+
+    },
+    "Enregistrez votre voix pour activer le clonage vocal personnalise. Vos messages audio traduits garderont votre voix naturelle." : {
+
+    },
     "Entrez votre adresse email" : {
 
+    },
+    "Envoi %@/%@ echantillons" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Envoi %1$@/%2$@ echantillons"
+          }
+        }
+      }
     },
     "Envoye a %@" : {
 
@@ -2133,6 +2173,9 @@
     "Infos du message" : {
 
     },
+    "J'accepte et je continue" : {
+
+    },
     "J'accepte les conditions d'utilisation et la politique de confidentialite" : {
 
     },
@@ -2182,6 +2225,9 @@
     "Le cache permet de charger les medias plus rapidement et reduit la consommation de donnees. Les fichiers mis en cache sont automatiquement supprimes apres 7 jours." : {
 
     },
+    "Le clonage vocal necessite une verification d'age pour les mineurs." : {
+
+    },
     "Le clonage vocal traduit vos messages audio avec votre propre voix" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2208,6 +2254,9 @@
     "Les posts que vous sauvegardez apparaitront ici" : {
 
     },
+    "Les traductions audio utiliseront votre voix" : {
+
+    },
     "Licences" : {
 
     },
@@ -2230,6 +2279,9 @@
 
     },
     "Lire les conditions" : {
+
+    },
+    "Lisez les phrases affichees a voix haute. Minimum 3 echantillons de 10 secondes." : {
 
     },
     "loading" : {
@@ -2256,9 +2308,6 @@
 
     },
     "Maintenir pour voir" : {
-
-    },
-    "Manage Voice Profile" : {
 
     },
     "Marquer comme lu" : {
@@ -2527,6 +2576,9 @@
     "Partagez, suivez et monétisez votre audience" : {
 
     },
+    "Participants" : {
+
+    },
     "Pas de compte ?" : {
       "localizations" : {
         "en" : {
@@ -2675,6 +2727,12 @@
         }
       }
     },
+    "Profil vocal" : {
+
+    },
+    "Profil vocal cree !" : {
+
+    },
     "Public" : {
 
     },
@@ -2682,6 +2740,9 @@
 
     },
     "Qu'avez-vous en tête ?" : {
+
+    },
+    "Qualite" : {
 
     },
     "Quitter le groupe" : {
@@ -3068,6 +3129,9 @@
     "Supprimer le compte" : {
 
     },
+    "Supprimer le profil vocal" : {
+
+    },
     "swipe.archive" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3233,6 +3297,9 @@
     "Terminé" : {
 
     },
+    "Terminer" : {
+
+    },
     "Thème" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3379,6 +3446,9 @@
     "Utilisations max (optionnel)" : {
 
     },
+    "Verification de l'age" : {
+
+    },
     "Vérification non disponible" : {
 
     },
@@ -3454,9 +3524,6 @@
     "Vocal" : {
 
     },
-    "Voice Profile" : {
-
-    },
     "Voir le profil" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3507,6 +3574,12 @@
     "Vos donnees, votre controle" : {
 
     },
+    "Vos messages audio traduits utiliseront desormais votre voix clonee." : {
+
+    },
+    "Votre profil vocal est en cours de creation. Cela peut prendre quelques instants." : {
+
+    },
     "Votre voix, leurs langues" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3554,9 +3627,6 @@
 
     },
     "Widgets Meeshy" : {
-
-    },
-    "Your voice profiles will appear here once created." : {
 
     }
   },

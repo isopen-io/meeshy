@@ -197,10 +197,12 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Sync Engine Observation
 
     func observeSync() {
-        syncEngine.conversationsDidChange
+        let publisher = syncEngine.conversationsDidChange
+        publisher
+            .receive(on: DispatchQueue.main)
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] in
-                Task { [weak self] in
+                Task { @MainActor [weak self] in
                     await self?.reloadFromCache()
                 }
             }

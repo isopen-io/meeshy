@@ -526,6 +526,7 @@ struct FeedComposerSheet: View {
     @State private var uploadProgress: UploadQueueProgress?
     @State private var isLoadingMedia = false
     @State private var postVisibility: String = "PUBLIC"
+    @State private var showEmojiPicker = false
 
     private var hasContent: Bool {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
