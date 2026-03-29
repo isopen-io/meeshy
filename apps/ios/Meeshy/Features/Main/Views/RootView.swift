@@ -39,6 +39,9 @@ struct RootView: View {
     // Notification sheet
     @State private var showNotifications = false
 
+    // New conversation sheet
+    @State private var showNewConversation = false
+
     // Helper to get ButtonPosition for menu ladder alignment
     private var menuButtonPos: ButtonPosition {
         let parts = menuButtonPosition.split(separator: ",")
@@ -70,7 +73,8 @@ struct RootView: View {
                     onStoryViewRequest: { userId, _ in
                         selectedStoryUserIdFromConv = userId
                         showStoryViewerFromConv = true
-                    }
+                    },
+                    onNewConversation: { showNewConversation = true }
                 )
                 .navigationBarHidden(true)
                 .navigationDestination(for: Route.self) { route in
@@ -87,8 +91,8 @@ struct RootView: View {
                     case .profile:
                         ProfileView()
                             .navigationBarHidden(true)
-                    case .newConversation:
-                        NewConversationView()
+                    case .contacts:
+                        ContactsHubView()
                             .navigationBarHidden(true)
                     case .communityList:
                         CommunityListView(
@@ -204,7 +208,7 @@ struct RootView: View {
             }
 
             // 4. Draggable Floating buttons
-            if !router.isInConversation {
+            if !router.isDeepRoute {
                 draggableFloatingButtons
             }
 
@@ -220,7 +224,7 @@ struct RootView: View {
             }
 
             // 6. Menu ladder
-            if !router.isInConversation {
+            if !router.isDeepRoute {
                 menuLadder
             }
 
@@ -412,6 +416,18 @@ struct RootView: View {
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showNewConversation) {
+            NewConversationView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .onChange(of: router.path) { _, newPath in
+            if !newPath.isEmpty && showFeed {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showFeed = false
+                }
+            }
         }
         .onChange(of: deepLinkRouter.pendingDeepLink) { _, newValue in
             handleDeepLink(newValue)
@@ -712,14 +728,9 @@ struct RootView: View {
             // Menu items
             let menuItems: [(icon: String, color: String, action: () -> Void)] = [
                 ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.profile) }),
-                ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.newConversation) }),
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
                 ("bell.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; showNotifications = true }),
-                (theme.preference.icon, theme.preference.tintColor, {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        theme.cyclePreference(systemScheme: systemColorScheme)
-                    }
-                }),
+                ("person.2.fill", "6366F1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts) }),
                 ("gearshape.fill", "45B7D1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
             ]
 

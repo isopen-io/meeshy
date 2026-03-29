@@ -50,6 +50,7 @@ struct ConversationListView: View {
     @Binding var feedIsVisible: Bool  // Track Feed visibility to show search bar when Feed closes
     let onSelect: (Conversation) -> Void
     var onStoryViewRequest: ((String, Bool) -> Void)? = nil  // (userId, fromTray)
+    var onNewConversation: (() -> Void)? = nil
 
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var socketManager = MessageSocketManager.shared
@@ -517,7 +518,7 @@ struct ConversationListView: View {
                 Text("Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.")
             }
             .sheet(isPresented: $showWidgetPreview) {
-                WidgetPreviewView()
+                WidgetPreviewView(onNewConversation: onNewConversation)
                     .environmentObject(conversationViewModel)
                     .environmentObject(router)
                     .presentationDetents([.large])
@@ -593,7 +594,7 @@ struct ConversationListView: View {
                             subtitle: String(localized: "conversations.empty.subtitle", defaultValue: "Commencez a discuter avec vos amis ou rejoignez une communaute"),
                             actionLabel: String(localized: "conversations.empty.action", defaultValue: "Commencer une discussion"),
                             onAction: {
-                                router.push(.newConversation)
+                                onNewConversation?()
                             }
                         )
                         .padding(.top, 60)
