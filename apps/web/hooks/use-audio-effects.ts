@@ -234,14 +234,30 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
    * Toggle effect on/off
    */
   const toggleEffect = useCallback((effectType: AudioEffectType) => {
+    const VOICE_EFFECTS: AudioEffectType[] = ['voice-coder', 'baby-voice', 'demon-voice'];
+
     setEffectsState((prev) => {
       const effectKey = getEffectKey(effectType);
       const newEnabled = !prev[effectKey].enabled;
 
       logger.debug('[useAudioEffects]', 'Effect toggled', { effectType, enabled: newEnabled });
 
+      // Disable other voice effects when enabling one (mutually exclusive)
+      const voiceOverrides: Partial<AudioEffectsState> = {};
+      if (VOICE_EFFECTS.includes(effectType) && newEnabled) {
+        for (const voiceType of VOICE_EFFECTS) {
+          if (voiceType !== effectType) {
+            const key = getEffectKey(voiceType);
+            if (prev[key].enabled) {
+              voiceOverrides[key] = { ...prev[key], enabled: false };
+            }
+          }
+        }
+      }
+
       return {
         ...prev,
+        ...voiceOverrides,
         [effectKey]: {
           ...prev[effectKey],
           enabled: newEnabled,

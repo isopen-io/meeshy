@@ -13,6 +13,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { logger } from '@/utils/logger';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   ConnectionQualityLevel,
   ConnectionQualityStats,
@@ -20,11 +22,13 @@ import type {
 
 export interface UseCallQualityOptions {
   peerConnection: RTCPeerConnection | null;
+  callId?: string | null;
   updateInterval?: number; // milliseconds
 }
 
 export function useCallQuality({
   peerConnection,
+  callId = null,
   updateInterval = 1000,
 }: UseCallQualityOptions) {
   const [qualityStats, setQualityStats] = useState<ConnectionQualityStats | null>(null);
@@ -165,6 +169,26 @@ export function useCallQuality({
       logger.debug('[useCallQuality]', 'Stopped quality monitoring');
     };
   }, [peerConnection, updateInterval, updateStats]);
+
+  // Emit quality report to server every 10 seconds
+  useEffect(() => {
+    if (!callId || !qualityStats) return;
+
+    const socket = meeshySocketIOService.getSocket();
+    const interval = setInterval(() => {
+      socket?.emit(CLIENT_EVENTS.CALL_QUALITY_REPORT, {
+        callId,
+        stats: {
+          rtt: qualityStats.rtt ?? 0,
+          packetLoss: qualityStats.packetLoss ?? 0,
+          bitrate: qualityStats.bitrate?.audio ?? 0,
+          jitter: qualityStats.jitter ?? 0,
+        },
+      });
+    }, 10_000);
+
+    return () => clearInterval(interval);
+  }, [callId, qualityStats]);
 
   return {
     qualityStats,

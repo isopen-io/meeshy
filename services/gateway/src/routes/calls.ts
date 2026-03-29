@@ -8,6 +8,7 @@
  * - POST   /api/calls/:callId/participants     - Join call
  * - DELETE /api/calls/:callId/participants/:participantId - Leave call
  * - GET    /api/conversations/:conversationId/active-call - Get active call
+ * - GET    /api/calls/active                            - Get user's active call (crash recovery)
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
@@ -952,6 +953,142 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call', error);
+
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to get active call'
+        }
+      });
+    }
+  });
+
+  // ─── GET /api/calls/active — Get user's active call (crash recovery) ───
+
+  fastify.get('/calls/active', {
+    preValidation: [requiredAuth],
+    ...ROUTE_RATE_LIMITS.callOperations,
+    schema: {
+      description: 'Retrieve the currently active call for the authenticated user. Used for crash recovery — when the app restarts, it can check if the user was in an active call.',
+      tags: ['calls'],
+      summary: 'Get active call for current user (crash recovery)',
+      response: {
+        200: {
+          description: 'Active call retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: callSessionSchema
+          }
+        },
+        404: {
+          description: 'No active call found',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: {
+              type: 'object',
+              properties: {
+                code: { type: 'string', example: 'NO_ACTIVE_CALL' },
+                message: { type: 'string', description: 'Error message' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: {
+              type: 'object',
+              properties: {
+                code: { type: 'string', example: 'NOT_AUTHENTICATED' },
+                message: { type: 'string', description: 'Error message' }
+              }
+            }
+          }
+        },
+        500: {
+          description: 'Internal server error',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: {
+              type: 'object',
+              properties: {
+                code: { type: 'string', example: 'INTERNAL_ERROR' },
+                message: { type: 'string', description: 'Error message' }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      if (!userId) {
+        return reply.status(401).send({
+          success: false,
+          error: {
+            code: 'NOT_AUTHENTICATED',
+            message: 'Authentication required'
+          }
+        });
+      }
+
+      logger.info('📞 REST: Getting active call for user (crash recovery)', {
+        userId
+      });
+
+      const activeCall = await prisma.callSession.findFirst({
+        where: {
+          status: { in: ['initiated', 'ringing', 'connecting', 'active', 'reconnecting'] },
+          participants: {
+            some: {
+              participant: {
+                userId: userId,
+              },
+              leftAt: null,
+            },
+          },
+        },
+        include: {
+          participants: {
+            include: {
+              participant: {
+                select: {
+                  id: true,
+                  userId: true,
+                  user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { startedAt: 'desc' },
+      });
+
+      if (!activeCall) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: 'NO_ACTIVE_CALL',
+            message: 'No active call found'
+          }
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: activeCall
+      });
+    } catch (error: any) {
+      logger.error('❌ REST: Error getting active call for user', error);
 
       return reply.status(500).send({
         success: false,

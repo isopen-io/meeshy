@@ -3,6 +3,7 @@ import AVFoundation
 import CallKit
 import Combine
 import Network
+import UIKit
 import MeeshySDK
 import os
 
@@ -43,6 +44,7 @@ final class CallManager: ObservableObject {
     @Published private(set) var currentCallId: String?
     @Published private(set) var connectionQuality: PeerConnectionState = .new
     @Published var displayMode: CallDisplayMode = .fullScreen
+    @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool)?
 
     // MARK: - Internal
 
@@ -54,6 +56,9 @@ final class CallManager: ObservableObject {
     private var participantJoinedCancellable: AnyCancellable?
     private var pendingRemoteOffer: SessionDescription?
     private var cancellables = Set<AnyCancellable>()
+
+    // Screen capture monitoring
+    private var screenCaptureObserver: NSObjectProtocol?
 
     // Network monitoring
     private let networkMonitor = NWPathMonitor()
@@ -72,7 +77,7 @@ final class CallManager: ObservableObject {
         let config = CXProviderConfiguration()
         config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
-        config.maximumCallGroups = 1
+        config.maximumCallGroups = 2
         config.supportedHandleTypes = [.generic]
         config.iconTemplateImageData = nil
         callProvider = CXProvider(configuration: config)
@@ -138,8 +143,8 @@ final class CallManager: ObservableObject {
 
     func handleIncomingOffer(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, sdp: SessionDescription) {
         guard callState == .idle else {
-            Logger.calls.warning("Rejecting incoming call: already busy")
-            emitCallReject(callId: callId, toUserId: fromUserId)
+            Logger.calls.info("Incoming call while busy — storing as pending")
+            pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
             return
         }
 
@@ -338,6 +343,7 @@ final class CallManager: ObservableObject {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
         }
         endCallInternal(reason: .remote)
+        playNotificationHaptic(.warning)
         Logger.calls.info("Call ended by remote: \(callId)")
     }
 
@@ -345,6 +351,8 @@ final class CallManager: ObservableObject {
 
     private func transitionToConnected() {
         callState = .connected
+        playHaptic(.heavy)
+        startScreenCaptureMonitoring()
         callStartDate = Date()
         callDuration = 0
         reconnectAttempt = 0
@@ -393,6 +401,46 @@ final class CallManager: ObservableObject {
         heartbeatTimer = nil
     }
 
+    // MARK: - Haptic Helpers
+
+    private func playHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
+
+    private func playNotificationHaptic(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        UINotificationFeedbackGenerator().notificationOccurred(type)
+    }
+
+    // MARK: - Screen Capture Monitoring
+
+    private func startScreenCaptureMonitoring() {
+        screenCaptureObserver = NotificationCenter.default.addObserver(
+            forName: UIScreen.capturedDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let isCapturing = UIScreen.main.isCaptured
+                Logger.calls.info("Screen capture state changed: \(isCapturing)")
+                if let callId = self.currentCallId {
+                    MessageSocketManager.shared.emitCallSignal(
+                        callId: callId,
+                        type: "screen-capture-detected",
+                        payload: ["isCapturing": isCapturing ? "true" : "false"]
+                    )
+                }
+            }
+        }
+    }
+
+    private func stopScreenCaptureMonitoring() {
+        if let observer = screenCaptureObserver {
+            NotificationCenter.default.removeObserver(observer)
+            screenCaptureObserver = nil
+        }
+    }
+
     // MARK: - Network Monitoring
 
     private func startNetworkMonitoring() {
@@ -426,6 +474,7 @@ final class CallManager: ObservableObject {
         durationTimer?.invalidate()
         durationTimer = nil
         stopHeartbeat()
+        stopScreenCaptureMonitoring()
         if transcriptionService.isTranscribing {
             transcriptionService.stopTranscribing()
         }
@@ -651,6 +700,7 @@ extension CallManager: WebRTCServiceDelegate {
         }
 
         callState = .reconnecting(attempt: reconnectAttempt)
+        playHaptic(.light)
         Logger.calls.warning("Attempting ICE restart (\(self.reconnectAttempt)/\(QualityThresholds.maxReconnectAttempts))")
 
         Task { [weak self] in

@@ -435,6 +435,82 @@ export interface CallEndedEvent {
   readonly reason: CallEndReason;
 }
 
+export interface CallTranslationRequestEvent {
+  readonly callId: string
+  readonly sourceLanguage?: string
+  readonly disable?: boolean
+}
+
+export interface CallTranslationResponseEvent {
+  readonly callId: string
+  readonly accepted: boolean
+}
+
+export interface CallAudioChunkEvent {
+  readonly callId: string
+  readonly chunk: ArrayBuffer
+  readonly chunkIndex: number
+}
+
+export interface CallQualityFeedbackEvent {
+  readonly callId: string
+  readonly rating: 1 | 2 | 3 | 4 | 5
+  readonly issues?: readonly ('audio_quality' | 'video_quality' | 'dropped' | 'echo' | 'sync' | 'other')[]
+  readonly comment?: string
+}
+
+export interface CallScreenCaptureEvent {
+  readonly callId: string
+  readonly participantId: string
+  readonly isCapturing: boolean
+}
+
+export interface CallTranslationRequestedEvent {
+  readonly callId: string
+  readonly requesterId: string
+  readonly sourceLanguage?: string
+}
+
+export interface CallTranslationEnabledEvent {
+  readonly callId: string
+}
+
+export interface CallTranscriptionResultEvent {
+  readonly callId: string
+  readonly text: string
+  readonly language: string
+  readonly confidence: number
+}
+
+export interface CallAlreadyAnsweredEvent {
+  readonly callId: string
+}
+
+export interface CallQualityFeedback {
+  readonly rating: 1 | 2 | 3 | 4 | 5
+  readonly issues?: readonly ('audio_quality' | 'video_quality' | 'dropped' | 'echo' | 'sync' | 'other')[]
+  readonly comment?: string
+}
+
+export interface CallAnalytics {
+  readonly setupTimeMs: number
+  readonly iceMethod: 'direct' | 'stun' | 'turn'
+  readonly codec: { readonly audio: string; readonly video: string }
+  readonly averageRtt: number
+  readonly averagePacketLoss: number
+  readonly maxPacketLoss: number
+  readonly averageBitrate: { readonly audio: number; readonly video: number }
+  readonly reconnectionCount: number
+  readonly networkTransitions: number
+  readonly effectsUsed: readonly AudioEffectType[]
+  readonly filtersUsed: boolean
+  readonly transcriptionEnabled: boolean
+  readonly translationEnabled: boolean
+  readonly qualityDistribution: { readonly excellent: number; readonly good: number; readonly fair: number; readonly poor: number }
+  readonly platform: 'ios' | 'web'
+  readonly deviceModel?: string
+}
+
 /**
  * Event: call:mode-changed (Server → Client)
  */
