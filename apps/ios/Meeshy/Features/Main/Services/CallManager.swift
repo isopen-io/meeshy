@@ -256,7 +256,6 @@ final class CallManager: ObservableObject {
 
     func toggleSpeaker() {
         isSpeaker.toggle()
-        webRTCService.configureAudioSession(speaker: isSpeaker)
         HapticFeedback.light()
     }
 
@@ -523,8 +522,14 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCServiceDidConnect(_ service: WebRTCService) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if case .connecting = self.callState {
+            switch self.callState {
+            case .connecting:
                 self.transitionToConnected()
+            case .reconnecting:
+                Logger.calls.info("Reconnection successful")
+                self.transitionToConnected()
+            default:
+                break
             }
         }
     }
