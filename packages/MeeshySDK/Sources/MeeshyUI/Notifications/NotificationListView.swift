@@ -355,6 +355,9 @@ final class NotificationListViewModel: ObservableObject {
     private var offset = 0
     private let limit = 30
 
+    private static var cachedNotifications: [APINotification] = []
+    private static var cacheDate: Date?
+
     var filteredNotifications: [APINotification] {
         guard selectedCategory != .all && selectedCategory != .unread else {
             return notifications
@@ -363,8 +366,24 @@ final class NotificationListViewModel: ObservableObject {
     }
 
     func loadInitial() async {
-        isLoading = true
         offset = 0
+
+        if !Self.cachedNotifications.isEmpty, let cacheDate = Self.cacheDate {
+            notifications = Self.cachedNotifications
+            offset = Self.cachedNotifications.count
+            hasMore = Self.cachedNotifications.count >= limit
+            let isStale = Date().timeIntervalSince(cacheDate) > 120
+            if isStale {
+                await refreshFromAPI()
+            }
+            return
+        }
+
+        isLoading = notifications.isEmpty
+        await refreshFromAPI()
+    }
+
+    private func refreshFromAPI() async {
         do {
             let response = try await NotificationService.shared.list(
                 offset: 0, limit: limit, unreadOnly: false
@@ -373,6 +392,8 @@ final class NotificationListViewModel: ObservableObject {
             unreadCount = response.unreadCount ?? 0
             hasMore = response.pagination?.hasMore ?? false
             offset = limit
+            Self.cachedNotifications = response.data
+            Self.cacheDate = Date()
         } catch {}
         isLoading = false
     }

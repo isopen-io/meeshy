@@ -180,13 +180,28 @@ final class UserStatsViewModel: ObservableObject {
     @Published var isLoading = false
 
     func load() async {
-        isLoading = true
+        let userId = AuthManager.shared.currentUser?.id ?? ""
+        let cacheResult = await CacheCoordinator.shared.stats.load(for: userId)
+        switch cacheResult {
+        case .fresh(let cached, _):
+            stats = cached.first
+        case .stale(let cached, _):
+            stats = cached.first
+            await refreshFromAPI(userId: userId)
+        case .expired, .empty:
+            isLoading = stats == nil
+            await refreshFromAPI(userId: userId)
+        }
+    }
+
+    private func refreshFromAPI(userId: String) async {
         do {
             async let statsTask = StatsService.shared.fetchStats()
             async let timelineTask = StatsService.shared.fetchTimeline(days: 30)
             let (s, t) = try await (statsTask, timelineTask)
             stats = s
             timeline = t
+            await CacheCoordinator.shared.stats.save([s], for: userId)
         } catch {}
         isLoading = false
     }

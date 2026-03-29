@@ -2,7 +2,8 @@ import Foundation
 
 // MARK: - User Stats
 
-public struct UserStats: Codable, Sendable {
+public struct UserStats: Codable, Sendable, CacheIdentifiable {
+    public var id: String { "current" }
     public let totalMessages: Int
     public let totalConversations: Int
     public let totalTranslations: Int

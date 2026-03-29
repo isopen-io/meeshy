@@ -13,6 +13,7 @@ public actor CacheCoordinator {
     public let profiles: GRDBCacheStore<String, MeeshyUser>
     public let feed: GRDBCacheStore<String, FeedPost>
     public let stories: GRDBCacheStore<String, StoryGroup>
+    public let stats: GRDBCacheStore<String, UserStats>
 
     public let images: DiskCacheStore
     public let audio: DiskCacheStore
@@ -58,6 +59,7 @@ public actor CacheCoordinator {
         self.profiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "prof")
         self.feed = GRDBCacheStore(policy: .feedPosts, db: db, namespace: "feed")
         self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories")
+        self.stats = GRDBCacheStore(policy: .userStats, db: db, namespace: "stats")
 
         self.images = DiskCacheStore(policy: .mediaImages)
         self.audio = DiskCacheStore(policy: .mediaAudio)

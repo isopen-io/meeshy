@@ -527,15 +527,29 @@ struct ParticipantsView: View {
     // MARK: - API Calls
 
     private func loadParticipants() async {
-        isLoading = true
-        defer { isLoading = false }
+        let cacheResult = await CacheCoordinator.shared.participants.load(for: conversationId)
+        switch cacheResult {
+        case .fresh(let cached, _):
+            participants = cached
+            return
+        case .stale(let cached, _):
+            participants = cached
+            await refreshParticipantsFromAPI()
+        case .expired, .empty:
+            isLoading = participants.isEmpty
+            await refreshParticipantsFromAPI()
+        }
+    }
 
+    private func refreshParticipantsFromAPI() async {
+        defer { isLoading = false }
         do {
             let fetched = try await ParticipantService.shared.loadFirstPage(
                 for: conversationId
             )
             participants = fetched
             hasMore = await ParticipantService.shared.hasMore(for: conversationId)
+            await CacheCoordinator.shared.participants.save(fetched, for: conversationId)
         } catch {
             Logger.participants.error("Failed to load participants: \(error.localizedDescription)")
         }

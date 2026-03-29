@@ -320,6 +320,19 @@ struct SharePickerView: View {
             return
         }
 
+        let cacheResult = await CacheCoordinator.shared.conversations.load(for: "list")
+        switch cacheResult {
+        case .fresh(let cached, _), .stale(let cached, _):
+            conversations = cached
+            isLoading = false
+            if case .stale = cacheResult { await refreshConversationsForShare() }
+            return
+        case .expired, .empty:
+            await refreshConversationsForShare()
+        }
+    }
+
+    private func refreshConversationsForShare() async {
         do {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await APIClient.shared.offsetPaginatedRequest(
                 endpoint: "/conversations",

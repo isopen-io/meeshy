@@ -79,10 +79,24 @@ struct ProfileView: View {
         }
         .onAppear { loadUserData() }
         .task {
-            stats = try? await StatsService.shared.fetchStats()
-            if let response = try? await FriendService.shared.receivedRequests(limit: 1) {
-                pendingRequestCount = response.pagination?.total ?? response.data.count
+            let userId = authManager.currentUser?.id ?? ""
+            let cacheResult = await CacheCoordinator.shared.stats.load(for: userId)
+            switch cacheResult {
+            case .fresh(let cached, _):
+                stats = cached.first
+            case .stale(let cached, _):
+                stats = cached.first
+                if let fresh = try? await StatsService.shared.fetchStats() {
+                    stats = fresh
+                    await CacheCoordinator.shared.stats.save([fresh], for: userId)
+                }
+            case .expired, .empty:
+                if let fresh = try? await StatsService.shared.fetchStats() {
+                    stats = fresh
+                    await CacheCoordinator.shared.stats.save([fresh], for: userId)
+                }
             }
+            pendingRequestCount = FriendshipCache.shared.pendingReceivedCount
         }
         .onChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }

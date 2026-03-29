@@ -24,11 +24,27 @@ class PostDetailViewModel: ObservableObject {
     }
 
     func loadPost(_ postId: String) async {
-        isLoading = true
+        let cacheResult = await CacheCoordinator.shared.feed.load(for: postId)
+        switch cacheResult {
+        case .fresh(let cached, _):
+            post = cached.first
+            return
+        case .stale(let cached, _):
+            post = cached.first
+            await refreshPost(postId)
+        case .expired, .empty:
+            isLoading = post == nil
+            await refreshPost(postId)
+        }
+    }
+
+    private func refreshPost(_ postId: String) async {
         defer { isLoading = false }
         do {
             let apiPost = try await PostService.shared.getPost(postId: postId)
-            post = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
+            let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
+            post = feedPost
+            await CacheCoordinator.shared.feed.save([feedPost], for: postId)
         } catch {
             self.error = error.localizedDescription
         }
