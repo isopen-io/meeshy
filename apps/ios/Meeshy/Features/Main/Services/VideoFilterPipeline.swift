@@ -1,7 +1,12 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import CoreVideo
+import AVFoundation
 import os
+
+#if canImport(WebRTC)
+import WebRTC
+#endif
 
 // MARK: - Video Filter Configuration
 
@@ -90,3 +95,34 @@ final class VideoFilterPipeline: VideoFilterPipelineProviding {
         ])
     }
 }
+
+// MARK: - WebRTC Video Filter Capturer Delegate
+
+#if canImport(WebRTC)
+final class VideoFilterCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
+    private let target: RTCVideoCapturerDelegate
+    private let pipeline: VideoFilterPipeline
+
+    init(target: RTCVideoCapturerDelegate, pipeline: VideoFilterPipeline) {
+        self.target = target
+        self.pipeline = pipeline
+        super.init()
+    }
+
+    func capturer(_ capturer: RTCVideoCapturer, didCapture frame: RTCVideoFrame) {
+        guard pipeline.config.isEnabled else {
+            target.capturer(capturer, didCapture: frame)
+            return
+        }
+
+        guard let pixelBuffer = (frame.buffer as? RTCCVPixelBuffer)?.pixelBuffer else {
+            target.capturer(capturer, didCapture: frame)
+            return
+        }
+
+        _ = pipeline.process(pixelBuffer)
+
+        target.capturer(capturer, didCapture: frame)
+    }
+}
+#endif

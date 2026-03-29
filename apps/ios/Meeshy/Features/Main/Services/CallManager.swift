@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import CallKit
 import Combine
+import Network
 import MeeshySDK
 import os
 
@@ -54,6 +55,11 @@ final class CallManager: ObservableObject {
     private var pendingRemoteOffer: SessionDescription?
     private var cancellables = Set<AnyCancellable>()
 
+    // Network monitoring
+    private let networkMonitor = NWPathMonitor()
+    private let networkQueue = DispatchQueue(label: "me.meeshy.callmanager.network")
+    private var lastNetworkPath: NWPath.Status = .satisfied
+
     // CallKit
     private let callProvider: CXProvider
     private let callController = CXCallController()
@@ -78,6 +84,7 @@ final class CallManager: ObservableObject {
         self.webRTCService.delegate = self
 
         setupSocketListeners()
+        startNetworkMonitoring()
         Logger.calls.info("CallManager initialized")
     }
 
@@ -377,6 +384,35 @@ final class CallManager: ObservableObject {
     private func stopHeartbeat() {
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
+    }
+
+    // MARK: - Network Monitoring
+
+    private func startNetworkMonitoring() {
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let wasUnsatisfied = self.lastNetworkPath != .satisfied
+                let isNowSatisfied = path.status == .satisfied
+                self.lastNetworkPath = path.status
+
+                let isInActiveCall: Bool
+                switch self.callState {
+                case .connected, .reconnecting: isInActiveCall = true
+                default: isInActiveCall = false
+                }
+                guard isInActiveCall else { return }
+
+                if path.status != .satisfied {
+                    Logger.calls.warning("Network lost during call — starting reconnection")
+                    self.attemptReconnection()
+                } else if wasUnsatisfied && isNowSatisfied {
+                    Logger.calls.info("Network recovered during call — performing ICE restart")
+                    self.attemptReconnection()
+                }
+            }
+        }
+        networkMonitor.start(queue: networkQueue)
     }
 
     private func endCallInternal(reason: CallEndReason) {

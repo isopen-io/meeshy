@@ -13,9 +13,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
     private var localAudioTrack: RTCAudioTrack?
     private var localVideoTrack_: RTCVideoTrack?
     private var videoCapturer: RTCCameraVideoCapturer?
+    private var videoFilterDelegate: VideoFilterCapturerDelegate?
     private var remoteVideoTrack_: RTCVideoTrack?
     private var remoteAudioTrack_: RTCAudioTrack?
     private var usingFrontCamera = true
+    private(set) var videoFilterPipeline = VideoFilterPipeline()
 
     var isConnected: Bool {
         peerConnection?.connectionState == .connected
@@ -95,7 +97,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
         localVideoTrack_ = videoTrack
         peerConnection?.add(videoTrack, streamIds: ["meeshy-stream-0"])
 
-        let capturer = RTCCameraVideoCapturer(delegate: videoSource)
+        let filterDelegate = VideoFilterCapturerDelegate(target: videoSource, pipeline: videoFilterPipeline)
+        videoFilterDelegate = filterDelegate
+        let capturer = RTCCameraVideoCapturer(delegate: filterDelegate)
         videoCapturer = capturer
 
         guard let frontCamera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.position == .front }) else {

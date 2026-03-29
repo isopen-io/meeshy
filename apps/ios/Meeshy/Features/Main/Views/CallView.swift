@@ -546,6 +546,7 @@ struct CallView: View {
         case .remote: return "Appel termine"
         case .rejected: return "Appel refuse"
         case .missed: return "Appel manque"
+        case .connectionLost: return "Connexion perdue"
         case .failed(let msg): return "Echec: \(msg)"
         }
     }
