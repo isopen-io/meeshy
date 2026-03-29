@@ -748,10 +748,15 @@ class ConversationViewModel: ObservableObject {
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
             expiresAt: resolvedExpiresAt,
-            isViewOnce: resolvedIsViewOnce,
+            effects: {
+                var e: MessageEffects = .none
+                if resolvedIsViewOnce { e.flags.insert(.viewOnce) }
+                if resolvedBlur == true { e.flags.insert(.blurred) }
+                if resolvedExpiresAt != nil { e.flags.insert(.ephemeral) }
+                return e
+            }(),
             maxViewOnceCount: resolvedMaxViewOnceCount,
             viewOnceCount: 0,
-            isBlurred: resolvedBlur == true,
             createdAt: Date(),
             updatedAt: Date(),
             attachments: resolvedAttachments,
@@ -811,10 +816,15 @@ class ConversationViewModel: ObservableObject {
                     messageType: optimisticMessageType,
                     replyToId: replyToId,
                     expiresAt: resolvedExpiresAt,
-                    isViewOnce: resolvedIsViewOnce,
+                    effects: {
+                        var e: MessageEffects = .none
+                        if resolvedIsViewOnce { e.flags.insert(.viewOnce) }
+                        if resolvedBlur == true { e.flags.insert(.blurred) }
+                        if resolvedExpiresAt != nil { e.flags.insert(.ephemeral) }
+                        return e
+                    }(),
                     maxViewOnceCount: resolvedMaxViewOnceCount,
                     viewOnceCount: 0,
-                    isBlurred: resolvedBlur == true,
                     createdAt: responseData.createdAt,
                     updatedAt: responseData.createdAt,
                     attachments: resolvedAttachments,

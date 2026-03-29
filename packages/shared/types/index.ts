@@ -112,6 +112,9 @@ export * from './attachment-audio.js';
 // Export des types suppression de messages
 export * from './message-deletion.js';
 
+// Export des types message effect flags (bitfield)
+export * from './message-effect-flags.js';
+
 // Export des types notifications complètes (Structure Groupée V2)
 export {
   // Enums

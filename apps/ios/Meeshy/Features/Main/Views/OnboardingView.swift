@@ -357,7 +357,7 @@ struct OnboardingView: View {
             senderId: "user-yuki",
             content: "明日の午後、カフェで会えますか？楽しみにしています",
             originalLanguage: "ja",
-            isBlurred: true,
+            effects: MessageEffects(flags: .blurred),
             createdAt: Date().addingTimeInterval(-60),
             senderName: "Yuki",
             senderColor: "A855F7"

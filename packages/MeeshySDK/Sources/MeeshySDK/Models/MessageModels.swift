@@ -152,6 +152,7 @@ public struct APIMessage: Sendable {
     public let readByAllAt: Date?
     public let deliveredCount: Int?
     public let readCount: Int?
+    public let effectFlags: UInt32?
     public let translations: [APITextTranslation]?
 }
 
@@ -165,7 +166,7 @@ extension APIMessage: Decodable {
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
         case reactionSummary, reactionCount, currentUserReactions
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount
-        case translations
+        case effectFlags, translations
         // MongoDB fallback
         case _id
     }
@@ -211,6 +212,7 @@ extension APIMessage: Decodable {
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount)
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount)
+        effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
         translations = try c.decodeIfPresent([APITextTranslation].self, forKey: .translations)
     }
 }
@@ -236,16 +238,18 @@ public struct SendMessageRequest: Encodable, Sendable {
     public var isViewOnce: Bool?
     public var maxViewOnceCount: Int?
     public var isBlurred: Bool?
+    public var effectFlags: UInt32?
     public var isEncrypted: Bool?
     public var encryptionMode: String?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil) {
         self.content = content; self.originalLanguage = originalLanguage
         self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId; self.attachmentIds = attachmentIds
         self.expiresAt = expiresAt; self.ephemeralDuration = ephemeralDuration
         self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
-        self.isBlurred = isBlurred; self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
+        self.isBlurred = isBlurred; self.effectFlags = effectFlags
+        self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
     }
 }
 
@@ -357,13 +361,22 @@ extension APIMessage {
         }()
         let resolvedUsername = sender?.username ?? sender?.user?.username
 
+        var effects: MessageEffects = .none
+        if let flags = effectFlags, flags > 0 {
+            effects.flags = MessageEffectFlags(rawValue: flags)
+        } else {
+            if isBlurred == true { effects.flags.insert(.blurred) }
+            if isViewOnce == true { effects.flags.insert(.viewOnce) }
+            if expiresAt != nil { effects.flags.insert(.ephemeral) }
+        }
+
         return MeeshyMessage(
             id: id, conversationId: conversationId, senderId: senderId,
             content: content ?? "",
             originalLanguage: originalLanguage ?? "fr", messageType: msgType, messageSource: msgSource,
             isEdited: isEdited ?? false, deletedAt: deletedAt, replyToId: replyToId,
             forwardedFromId: forwardedFromId, forwardedFromConversationId: forwardedFromConversationId,
-            isViewOnce: isViewOnce ?? false, isBlurred: isBlurred ?? false,
+            expiresAt: expiresAt, effects: effects,
             pinnedAt: pinnedAt.flatMap { Self.pinnedAtFormatter.date(from: $0) },
             pinnedBy: pinnedBy,
             isEncrypted: isEncrypted ?? false, encryptionMode: encryptionMode,

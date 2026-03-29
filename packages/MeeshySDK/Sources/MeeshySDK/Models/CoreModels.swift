@@ -300,11 +300,20 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var forwardedFromId: String?
     public var forwardedFromConversationId: String?
     public var expiresAt: Date?
-    public var isViewOnce: Bool = false
+    public var effects: MessageEffects = .none
     public var maxViewOnceCount: Int?
     public var viewOnceCount: Int = 0
-    public var isBlurred: Bool = false
     public var pinnedAt: Date?
+
+    public var isViewOnce: Bool {
+        get { effects.flags.contains(.viewOnce) }
+        set { if newValue { effects.flags.insert(.viewOnce) } else { effects.flags.remove(.viewOnce) } }
+    }
+
+    public var isBlurred: Bool {
+        get { effects.flags.contains(.blurred) }
+        set { if newValue { effects.flags.insert(.blurred) } else { effects.flags.remove(.blurred) } }
+    }
     public var pinnedBy: String?
     public var isEncrypted: Bool = false
     public var encryptionMode: String?
@@ -347,8 +356,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 messageType: MessageType = .text, messageSource: MessageSource = .user,
                 isEdited: Bool = false, editedAt: Date? = nil, deletedAt: Date? = nil,
                 replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil,
-                expiresAt: Date? = nil, isViewOnce: Bool = false, maxViewOnceCount: Int? = nil,
-                viewOnceCount: Int = 0, isBlurred: Bool = false, pinnedAt: Date? = nil, pinnedBy: String? = nil,
+                expiresAt: Date? = nil, effects: MessageEffects = .none, maxViewOnceCount: Int? = nil,
+                viewOnceCount: Int = 0, pinnedAt: Date? = nil, pinnedBy: String? = nil,
                 isEncrypted: Bool = false, encryptionMode: String? = nil,
                 createdAt: Date = Date(), updatedAt: Date = Date(),
                 attachments: [MeeshyMessageAttachment] = [], reactions: [MeeshyReaction] = [],
@@ -363,8 +372,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.isEdited = isEdited; self.editedAt = editedAt; self.deletedAt = deletedAt
         self.replyToId = replyToId; self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
-        self.expiresAt = expiresAt; self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
-        self.viewOnceCount = viewOnceCount; self.isBlurred = isBlurred
+        self.expiresAt = expiresAt; self.effects = effects; self.maxViewOnceCount = maxViewOnceCount
+        self.viewOnceCount = viewOnceCount
         self.pinnedAt = pinnedAt; self.pinnedBy = pinnedBy
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.createdAt = createdAt; self.updatedAt = updatedAt
@@ -373,6 +382,112 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, conversationId, senderId, content, originalLanguage
+        case messageType, messageSource, isEdited, editedAt, deletedAt
+        case replyToId, forwardedFromId, forwardedFromConversationId
+        case expiresAt, effects, maxViewOnceCount, viewOnceCount
+        case pinnedAt, pinnedBy, isEncrypted, encryptionMode
+        case createdAt, updatedAt, attachments, reactions
+        case replyTo, forwardedFrom
+        case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId
+        case deliveryStatus, isMe
+        case deliveredToAllAt, readByAllAt, deliveredCount, readCount
+        // Legacy keys for migration from old cached data
+        case isViewOnce, isBlurred
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        conversationId = try c.decode(String.self, forKey: .conversationId)
+        senderId = try c.decodeIfPresent(String.self, forKey: .senderId) ?? ""
+        content = try c.decodeIfPresent(String.self, forKey: .content) ?? ""
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage) ?? "fr"
+        messageType = try c.decodeIfPresent(MessageType.self, forKey: .messageType) ?? .text
+        messageSource = try c.decodeIfPresent(MessageSource.self, forKey: .messageSource) ?? .user
+        isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited) ?? false
+        editedAt = try c.decodeIfPresent(Date.self, forKey: .editedAt)
+        deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+        replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
+        forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId)
+        forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        effects = try c.decodeIfPresent(MessageEffects.self, forKey: .effects) ?? .none
+        maxViewOnceCount = try c.decodeIfPresent(Int.self, forKey: .maxViewOnceCount)
+        viewOnceCount = try c.decodeIfPresent(Int.self, forKey: .viewOnceCount) ?? 0
+        pinnedAt = try c.decodeIfPresent(Date.self, forKey: .pinnedAt)
+        pinnedBy = try c.decodeIfPresent(String.self, forKey: .pinnedBy)
+        isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted) ?? false
+        encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+        attachments = try c.decodeIfPresent([MeeshyMessageAttachment].self, forKey: .attachments) ?? []
+        reactions = try c.decodeIfPresent([MeeshyReaction].self, forKey: .reactions) ?? []
+        replyTo = try c.decodeIfPresent(ReplyReference.self, forKey: .replyTo)
+        forwardedFrom = try c.decodeIfPresent(ForwardReference.self, forKey: .forwardedFrom)
+        senderName = try c.decodeIfPresent(String.self, forKey: .senderName)
+        senderUsername = try c.decodeIfPresent(String.self, forKey: .senderUsername)
+        senderColor = try c.decodeIfPresent(String.self, forKey: .senderColor)
+        senderAvatarURL = try c.decodeIfPresent(String.self, forKey: .senderAvatarURL)
+        senderUserId = try c.decodeIfPresent(String.self, forKey: .senderUserId)
+        deliveryStatus = try c.decodeIfPresent(DeliveryStatus.self, forKey: .deliveryStatus) ?? .sent
+        isMe = try c.decodeIfPresent(Bool.self, forKey: .isMe) ?? false
+        deliveredToAllAt = try c.decodeIfPresent(Date.self, forKey: .deliveredToAllAt)
+        readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
+        deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
+        readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
+        // Legacy migration: merge old isViewOnce/isBlurred bools into effects
+        if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
+            effects.flags.insert(.viewOnce)
+        }
+        if let legacyBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred), legacyBlurred {
+            effects.flags.insert(.blurred)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(conversationId, forKey: .conversationId)
+        try c.encode(senderId, forKey: .senderId)
+        try c.encode(content, forKey: .content)
+        try c.encode(originalLanguage, forKey: .originalLanguage)
+        try c.encode(messageType, forKey: .messageType)
+        try c.encode(messageSource, forKey: .messageSource)
+        try c.encode(isEdited, forKey: .isEdited)
+        try c.encodeIfPresent(editedAt, forKey: .editedAt)
+        try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(replyToId, forKey: .replyToId)
+        try c.encodeIfPresent(forwardedFromId, forKey: .forwardedFromId)
+        try c.encodeIfPresent(forwardedFromConversationId, forKey: .forwardedFromConversationId)
+        try c.encodeIfPresent(expiresAt, forKey: .expiresAt)
+        try c.encode(effects, forKey: .effects)
+        try c.encodeIfPresent(maxViewOnceCount, forKey: .maxViewOnceCount)
+        try c.encode(viewOnceCount, forKey: .viewOnceCount)
+        try c.encodeIfPresent(pinnedAt, forKey: .pinnedAt)
+        try c.encodeIfPresent(pinnedBy, forKey: .pinnedBy)
+        try c.encode(isEncrypted, forKey: .isEncrypted)
+        try c.encodeIfPresent(encryptionMode, forKey: .encryptionMode)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(attachments, forKey: .attachments)
+        try c.encode(reactions, forKey: .reactions)
+        try c.encodeIfPresent(replyTo, forKey: .replyTo)
+        try c.encodeIfPresent(forwardedFrom, forKey: .forwardedFrom)
+        try c.encodeIfPresent(senderName, forKey: .senderName)
+        try c.encodeIfPresent(senderUsername, forKey: .senderUsername)
+        try c.encodeIfPresent(senderColor, forKey: .senderColor)
+        try c.encodeIfPresent(senderAvatarURL, forKey: .senderAvatarURL)
+        try c.encodeIfPresent(senderUserId, forKey: .senderUserId)
+        try c.encode(deliveryStatus, forKey: .deliveryStatus)
+        try c.encode(isMe, forKey: .isMe)
+        try c.encodeIfPresent(deliveredToAllAt, forKey: .deliveredToAllAt)
+        try c.encodeIfPresent(readByAllAt, forKey: .readByAllAt)
+        try c.encode(deliveredCount, forKey: .deliveredCount)
+        try c.encode(readCount, forKey: .readCount)
     }
 
     public var text: String { content }

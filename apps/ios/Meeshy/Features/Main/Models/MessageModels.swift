@@ -155,8 +155,17 @@ extension APIMessage {
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
             expiresAt: expiresAt,
-            isViewOnce: isViewOnce ?? false,
-            isBlurred: isBlurred ?? false,
+            effects: {
+                var effects: MessageEffects = .none
+                if let flags = effectFlags, flags > 0 {
+                    effects.flags = MessageEffectFlags(rawValue: flags)
+                } else {
+                    if isBlurred == true { effects.flags.insert(.blurred) }
+                    if isViewOnce == true { effects.flags.insert(.viewOnce) }
+                    if expiresAt != nil { effects.flags.insert(.ephemeral) }
+                }
+                return effects
+            }(),
             pinnedAt: parsedPinnedAt,
             pinnedBy: pinnedBy,
             isEncrypted: isEncrypted ?? false,

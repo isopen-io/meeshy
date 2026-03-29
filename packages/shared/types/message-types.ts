@@ -117,6 +117,8 @@ export interface GatewayMessage {
   readonly viewOnceCount?: number;
   /** Contenu flouté jusqu'à ce que l'utilisateur clique */
   readonly isBlurred?: boolean;
+  /** Bitfield for message effects (lifecycle, appearance, persistent) */
+  readonly effectFlags?: number;
   /** Date d'expiration pour messages éphémères */
   readonly expiresAt?: Date;
 

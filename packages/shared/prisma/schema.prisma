@@ -535,6 +535,9 @@ model Message {
   viewOnceCount    Int     @default(0)
   /// Content is blurred until user taps to reveal
   isBlurred        Boolean @default(false)
+  /// Bitfield for message effects (lifecycle, appearance, persistent)
+  /// @see packages/shared/types/message-effect-flags.ts
+  effectFlags      Int     @default(0)
 
   // ============================================
   // PINNING
