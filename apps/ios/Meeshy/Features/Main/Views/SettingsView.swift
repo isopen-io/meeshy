@@ -28,6 +28,7 @@ struct SettingsView: View {
     @State private var showVoiceProfileWizard = false
     @State private var showVoiceProfileManage = false
     @State private var showMediaDownload = false
+    @State private var scrollOffset: CGFloat = 0
 
     private let accentColor = "08D9D6"
 
@@ -78,38 +79,28 @@ struct SettingsView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
-                    .frame(minWidth: 44, minHeight: 44)
-            }
-            .accessibilityLabel("Retour")
-
-            Spacer()
-
-            Text("Réglages")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 44, height: 44)
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        CollapsibleHeader(
+            title: "Réglages",
+            scrollOffset: scrollOffset,
+            onBack: { router.pop() },
+            titleColor: theme.textPrimary,
+            backArrowColor: Color(hex: accentColor),
+            backgroundColor: theme.backgroundPrimary
+        )
     }
 
     // MARK: - Scroll Content
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ScrollOffsetPreferenceKey.self,
+                    value: geo.frame(in: .named("scroll")).minY
+                )
+            }
+            .frame(height: 0)
+
             VStack(spacing: 20) {
                 accountSection
                 appearanceSection
@@ -127,6 +118,8 @@ struct SettingsView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
         }
+        .coordinateSpace(name: "scroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
     }
 
     // MARK: - Account Section

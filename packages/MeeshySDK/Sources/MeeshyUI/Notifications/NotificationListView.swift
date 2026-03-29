@@ -134,6 +134,8 @@ public struct NotificationListView: View {
     public var onNotificationTap: ((APINotification) -> Void)?
     public var onDismiss: (() -> Void)?
 
+    @State private var scrollOffset: CGFloat = 0
+
     private let brandColor = Color(hex: "6366F1")
 
     public init(
@@ -157,50 +159,37 @@ public struct NotificationListView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
+        VStack(spacing: 0) {
+            CollapsibleHeader(
+                title: "Notifications",
+                scrollOffset: scrollOffset,
+                onBack: { onDismiss?() },
+                titleColor: theme.textPrimary,
+                backArrowColor: brandColor,
+                backgroundColor: theme.backgroundPrimary,
+                trailing: {
+                    if viewModel.unreadCount > 0 {
+                        Button {
+                            HapticFeedback.light()
+                            Task { await viewModel.markAllRead() }
+                        } label: {
+                            Text("Tout lire")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(brandColor)
+                        }
+                    } else {
+                        EmptyView()
+                    }
+                }
+            )
+
             if viewModel.unreadCount > 0 {
-                Button {
-                    HapticFeedback.light()
-                    Task { await viewModel.markAllRead() }
-                } label: {
-                    Text("Tout lire")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(brandColor)
-                }
-            } else {
-                Color.clear.frame(width: 50, height: 24)
-            }
-
-            Spacer()
-
-            VStack(spacing: 2) {
-                Text("Notifications")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
-                if viewModel.unreadCount > 0 {
-                    Text("\(viewModel.unreadCount) non lue\(viewModel.unreadCount > 1 ? "s" : "")")
-                        .font(.system(size: 11))
-                        .foregroundColor(brandColor)
-                }
-            }
-
-            Spacer()
-
-            if let onDismiss {
-                Button {
-                    HapticFeedback.light()
-                    onDismiss()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(theme.textMuted.opacity(0.6))
-                }
-            } else {
-                Color.clear.frame(width: 50, height: 24)
+                Text("\(viewModel.unreadCount) non lue\(viewModel.unreadCount > 1 ? "s" : "")")
+                    .font(.system(size: 11))
+                    .foregroundColor(brandColor)
+                    .padding(.bottom, 4)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     // MARK: - Filter Bar
@@ -258,6 +247,14 @@ public struct NotificationListView: View {
                 emptyState
             } else {
                 ScrollView {
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geo.frame(in: .named("scroll")).minY
+                        )
+                    }
+                    .frame(height: 0)
+
                     LazyVStack(spacing: 0) {
                         ForEach(filteredNotifications) { notification in
                             NotificationRowView(
@@ -285,6 +282,8 @@ public struct NotificationListView: View {
                         }
                     }
                 }
+                .coordinateSpace(name: "scroll")
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
                 .refreshable {
                     await viewModel.loadInitial()
                 }
