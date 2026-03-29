@@ -15,25 +15,46 @@ struct LinksHubView: View {
     @State private var showCreateShareLink = false
     @State private var showCreateTrackingLink = false
     @State private var showCreateAffiliate = false
+    @State private var scrollOffset: CGFloat = 0
 
     var body: some View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    headerBanner
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
+            VStack(spacing: 0) {
+                CollapsibleHeader(
+                    title: "Mes liens",
+                    scrollOffset: scrollOffset,
+                    onBack: { router.pop() },
+                    titleColor: theme.textPrimary,
+                    backArrowColor: Color(hex: "F8B500"),
+                    backgroundColor: theme.backgroundPrimary
+                )
 
-                    linkCategoryCards
-                        .padding(.horizontal, 16)
+                ScrollView(showsIndicators: false) {
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geo.frame(in: .named("scroll")).minY
+                        )
+                    }
+                    .frame(height: 0)
+
+                    VStack(spacing: 20) {
+                        headerBanner
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+
+                        linkCategoryCards
+                            .padding(.horizontal, 16)
+                    }
+                    .padding(.bottom, 40)
                 }
-                .padding(.bottom, 40)
+                .coordinateSpace(name: "scroll")
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
             }
         }
-        .navigationTitle("Mes liens")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarHidden(true)
         // Sheets de création rapide
         .sheet(isPresented: $showCreateShareLink) {
             CreateShareLinkView { _ in }
