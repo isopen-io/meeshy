@@ -255,10 +255,13 @@ export class ConversationScanner {
 
         controlledUsers.push(newControlledUser);
 
-        // PERSISTENCE: Save the newly auto-picked user to AgentUserRole
-        // so that they are maintained for this conversation in future cycles.
-        this.persistence.upsertUserRole(conversationId, newControlledUser.role).catch((err) =>
-          console.error(`[Scanner] Error persisting auto-picked user ${u.id} for conv=${conversationId}:`, err));
+        // PERSISTENCE: Await profile creation BEFORE intervention to ensure
+        // the user appears in admin lists and survives across scan cycles.
+        try {
+          await this.persistence.upsertUserRole(conversationId, newControlledUser.role);
+        } catch (err) {
+          console.error(`[Scanner] Error persisting auto-picked user ${u.id} for conv=${conversationId}:`, err);
+        }
       }
     }
 
@@ -305,8 +308,11 @@ export class ConversationScanner {
         };
 
         controlledUsers.push(newControlledUser);
-        this.persistence.upsertUserRole(conversationId, newControlledUser.role).catch((err) =>
-          console.error(`[Scanner] Error persisting bootstrap user ${u.id} for conv=${conversationId}:`, err));
+        try {
+          await this.persistence.upsertUserRole(conversationId, newControlledUser.role);
+        } catch (err) {
+          console.error(`[Scanner] Error persisting bootstrap user ${u.id} for conv=${conversationId}:`, err);
+        }
       }
 
       if (controlledUsers.length > 0) {
