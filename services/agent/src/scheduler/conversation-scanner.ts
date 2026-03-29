@@ -87,7 +87,7 @@ export class ConversationScanner {
       contextWindowSize: config?.contextWindowSize ?? 50,
       useFullHistory: config?.useFullHistory ?? false,
       agentType: config?.agentType ?? 'personal',
-      inactivityThresholdHours: config?.inactivityThresholdHours ?? 30,
+      inactivityThresholdHours: config?.inactivityThresholdHours ?? 72,
       excludedRoles: config?.excludedRoles ?? [],
       excludedUserIds: config?.excludedUserIds ?? [],
       agentInstructions: config?.agentInstructions ?? null,
@@ -205,18 +205,15 @@ export class ConversationScanner {
         },
       };
     });
-    const config = await this.persistence.getAgentConfig(conversationId);
+    let config = await this.persistence.getAgentConfig(conversationId);
+    if (!config) {
+      config = await this.persistence.ensureAgentConfig(conversationId);
+    }
     const autoPickup = config?.autoPickupEnabled ?? true;
     if (autoPickup && controlledUsers.length < (config?.maxControlledUsers ?? 5)) {
-      // STRATEGY: Pick up multiple inactive users per cycle to diversify agent personas faster.
-      // For global/public conversations or when very few controlled users exist (< 3),
-      // use a reduced inactivity threshold (24h) to accelerate population.
-      const isPublicConversation = conv.conversationType === 'global' || conv.conversationType === 'public';
       const remainingSlots = (config?.maxControlledUsers ?? 5) - controlledUsers.length;
       const limit = Math.min(3, remainingSlots);
-      const baseThreshold = config?.inactivityThresholdHours ?? 30;
-      const needsAcceleration = controlledUsers.length < 3 || isPublicConversation;
-      const effectiveThreshold = needsAcceleration ? Math.min(baseThreshold, 24) : baseThreshold;
+      const effectiveThreshold = config?.inactivityThresholdHours ?? 72;
       const potentialUsers = await this.persistence.getPotentialControlledUsers(
         conversationId,
         limit,
