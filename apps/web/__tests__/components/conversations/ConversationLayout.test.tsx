@@ -65,8 +65,9 @@ jest.mock('@/stores/failed-messages-store', () => {
     incrementRetryCount: jest.fn(),
     updateFailedMessage: jest.fn(),
   };
-  const hook = jest.fn(() => store);
-  hook.getState = jest.fn(() => store);
+  const hook = Object.assign(jest.fn(() => store), {
+    getState: jest.fn(() => store),
+  });
   return { useFailedMessagesStore: hook };
 });
 

@@ -140,7 +140,7 @@ describe('participant-mapper', () => {
       const result = mapCurrentUserToUser(baseLinkData.currentUser!);
       // The user-level permissions should be DEFAULT_FRONTEND_PERMISSIONS
       // Participant-level permissions are separate
-      expect(result.permissions.canAccessAdmin).toBe(false);
+      expect(result.permissions!.canAccessAdmin).toBe(false);
     });
 
     it('defaults language to fr when not provided', () => {

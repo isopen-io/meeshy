@@ -490,7 +490,7 @@ describe('useSocketCacheSync', () => {
       };
 
       const message = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
-      const translations = message?.translations as Array<{ targetLanguage: string; translatedContent: string }>;
+      const translations = message?.translations as ReadonlyArray<{ targetLanguage: string; translatedContent: string }>;
       expect(translations).toEqual(
         expect.arrayContaining([expect.objectContaining({ targetLanguage: 'fr', translatedContent: 'Bonjour' })])
       );

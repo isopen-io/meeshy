@@ -29,6 +29,7 @@ import type {
   MessageDeleteListener,
   UnsubscribeFn,
   EncryptionHandlers,
+  GetMessageByIdCallback,
   MessageSendOptions,
   MessageAckResponse
 } from './types';
@@ -46,6 +47,7 @@ export class MessagingService {
   private attachmentStatusListeners: Set<(data: AttachmentStatusUpdatedEventData) => void> = new Set();
 
   private encryptionHandlers: EncryptionHandlers | null = null;
+  private getMessageByIdCallback: GetMessageByIdCallback | null = null;
 
   /**
    * Check if encryption handlers are already configured
@@ -68,6 +70,10 @@ export class MessagingService {
   clearEncryptionHandlers(): void {
     this.encryptionHandlers = null;
     logger.debug('[MessagingService]', 'Encryption handlers cleared');
+  }
+
+  setGetMessageByIdCallback(callback: GetMessageByIdCallback): void {
+    this.getMessageByIdCallback = callback;
   }
 
   /**

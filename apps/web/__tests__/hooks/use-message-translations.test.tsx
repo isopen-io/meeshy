@@ -14,7 +14,7 @@
 
 import { renderHook } from '@testing-library/react';
 import { useMessageTranslations } from '@/hooks/use-message-translations';
-import type { User } from '@meeshy/shared/types';
+import type { User, Message } from '@meeshy/shared/types';
 
 // Type for our test user that matches the expected User interface
 type TestUser = Pick<
@@ -44,20 +44,32 @@ describe('useMessageTranslations', () => {
     ...overrides,
   });
 
-  // Factory function to create test messages
-  const createTestMessage = (overrides: Partial<any> = {}) => ({
+  // Factory function to create test messages — satisfies RawMessage (Message & extras)
+  const createTestMessage = (overrides: Record<string, unknown> = {}) => ({
     id: 'msg-1',
     conversationId: 'conv-1',
     senderId: 'sender-1',
     content: 'Hello world',
     originalLanguage: 'en',
     messageType: 'text' as const,
+    messageSource: 'user' as const,
     isEdited: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    translations: [],
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    effectFlags: 0,
+    deliveredCount: 0,
+    readCount: 0,
+    reactionSummary: {},
+    reactionCount: 0,
+    isEncrypted: false,
+    currentUserReactions: [] as readonly string[],
+    timestamp: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    translations: [] as readonly never[],
     ...overrides,
-  });
+  }) as unknown as Message & { translations?: readonly unknown[]; originalContent?: string; location?: string };
 
   describe('resolveUserPreferredLanguage', () => {
     it('should return customDestinationLanguage when useCustomDestination is true', () => {
@@ -760,14 +772,13 @@ describe('useMessageTranslations', () => {
 
       const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
-      const message = {
-        id: 'msg-1',
+      const message = createTestMessage({
         content: 'Hello',
         originalLanguage: 'en',
         translations: undefined,
         isTranslated: false,
         originalContent: 'Hello',
-      };
+      });
 
       const processed = result.current.processMessageWithTranslations(message);
       expect(processed.translations).toEqual([]);
@@ -778,12 +789,11 @@ describe('useMessageTranslations', () => {
 
       const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
-      const message = {
-        id: 'msg-1',
+      const message = createTestMessage({
         content: 'Hello',
         originalContent: 'Original Hello',
         originalLanguage: 'en',
-      };
+      });
 
       const processed = result.current.processMessageWithTranslations(message);
       expect(processed.originalContent).toBe('Original Hello');

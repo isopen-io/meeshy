@@ -78,6 +78,7 @@ const mockPost = {
   shareCount: 0,
   isPinned: false,
   isEdited: false,
+  reactionSummary: {} as Record<string, number>,
   createdAt: '2026-03-28T00:00:00Z',
   updatedAt: '2026-03-28T00:00:00Z',
 };
