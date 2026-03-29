@@ -224,6 +224,22 @@ export const socketReconnectedSchema = z.object({
 });
 
 /**
+ * Socket.IO Event: call:transcription-segment (fire-and-forget)
+ */
+export const socketTranscriptionSegmentSchema = z.object({
+  callId: objectIdSchema,
+  segment: z.object({
+    text: z.string().min(1).max(5000),
+    speakerId: z.string().min(1),
+    startMs: z.number().min(0),
+    endMs: z.number().min(0),
+    isFinal: z.boolean(),
+    confidence: z.number().min(0).max(1),
+    language: z.string().min(2).max(10)
+  })
+});
+
+/**
  * Type exports for TypeScript
  */
 export type InitiateCallInput = z.infer<typeof initiateCallSchema>;
@@ -242,3 +258,4 @@ export type SocketHeartbeatInput = z.infer<typeof socketHeartbeatSchema>;
 export type SocketQualityReportInput = z.infer<typeof socketQualityReportSchema>;
 export type SocketReconnectingInput = z.infer<typeof socketReconnectingSchema>;
 export type SocketReconnectedInput = z.infer<typeof socketReconnectedSchema>;
+export type SocketTranscriptionSegmentInput = z.infer<typeof socketTranscriptionSegmentSchema>;

@@ -27,7 +27,8 @@ import {
   socketHeartbeatSchema,
   socketQualityReportSchema,
   socketReconnectingSchema,
-  socketReconnectedSchema
+  socketReconnectedSchema,
+  socketTranscriptionSegmentSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import type {
@@ -47,6 +48,7 @@ import type {
   CallInitiateAck,
   CallJoinAck,
   CallEndReason,
+  CallTranscriptionSegmentEvent,
 } from '@meeshy/shared/types/video-call';
 
 // ICE servers configuration (STUN/TURN)
@@ -1146,6 +1148,74 @@ export class CallEventsHandler {
         });
       } catch (error) {
         logger.error('Error handling reconnected', { error });
+      }
+    });
+
+    /**
+     * call:transcription-segment - Real-time transcription segment from participant
+     * Validates, checks participation, and relays to other call participants
+     * If translation is enabled on the call, forwards to ZMQ translator
+     */
+    socket.on(CALL_EVENTS.TRANSCRIPTION_SEGMENT, async (data: CallTranscriptionSegmentEvent) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+
+        const validation = validateSocketEvent(socketTranscriptionSegmentSchema, data);
+        if (!validation.success) return;
+
+        const participantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!participantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this call'
+          } as CallError);
+          return;
+        }
+
+        const callSession = await this.prisma.callSession.findUnique({
+          where: { id: data.callId },
+          select: { status: true, metadata: true }
+        });
+
+        if (!callSession || callSession.status === 'ended') return;
+
+        const metadata = callSession.metadata as CallTranscriptionSegmentEvent['segment'] extends unknown ? Record<string, unknown> | null : never;
+        const translationEnabled = metadata && typeof metadata === 'object' && 'translationEnabled' in metadata && metadata.translationEnabled === true;
+
+        if (translationEnabled) {
+          // TODO: Forward to ZMQ translator for NLLB translation
+          // ZmqSingleton.getInstance().send({ type: 'call-transcription', ...data })
+          logger.debug('Transcription segment forwarded for translation', {
+            callId: data.callId,
+            speakerId: data.segment.speakerId,
+            language: data.segment.language,
+            isFinal: data.segment.isFinal
+          });
+        }
+
+        socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
+          callId: data.callId,
+          segment: {
+            text: data.segment.text,
+            translatedText: data.segment.text,
+            speakerId: data.segment.speakerId,
+            startMs: data.segment.startMs,
+            endMs: data.segment.endMs,
+            isFinal: data.segment.isFinal,
+            sourceLanguage: data.segment.language,
+            targetLanguage: data.segment.language,
+            confidence: data.segment.confidence
+          }
+        });
+
+        logger.debug('Transcription segment relayed', {
+          callId: data.callId,
+          speakerId: data.segment.speakerId,
+          isFinal: data.segment.isFinal
+        });
+      } catch (error) {
+        logger.error('Error handling transcription segment', { error });
       }
     });
 

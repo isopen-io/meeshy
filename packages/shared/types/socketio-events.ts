@@ -25,6 +25,10 @@ import type {
   CallQualityAlertEvent,
   CallInitiateAck,
   CallJoinAck,
+  CallTranscriptionSegmentEvent,
+  CallTranslatedSegmentEvent,
+  CallTranscriptionCapabilityEvent,
+  CallTranscriptionRoleEvent,
 } from './video-call.js';
 
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
@@ -99,6 +103,7 @@ export const SERVER_EVENTS = {
   CALL_ERROR: 'call:error',
   CALL_MISSED: 'call:missed',
   CALL_QUALITY_ALERT: 'call:quality-alert',
+  CALL_TRANSLATED_SEGMENT: 'call:translated-segment',
   READ_STATUS_UPDATED: 'read-status:updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
@@ -194,6 +199,9 @@ export const CLIENT_EVENTS = {
   CALL_QUALITY_REPORT: 'call:quality-report',
   CALL_RECONNECTING: 'call:reconnecting',
   CALL_RECONNECTED: 'call:reconnected',
+  CALL_TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
+  CALL_TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
+  CALL_TRANSCRIPTION_ROLE: 'call:transcription-role',
 
   // --- Location sharing ---
   LOCATION_SHARE: 'location:share',
@@ -663,6 +671,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_ERROR]: (data: CallError) => void;
   [SERVER_EVENTS.CALL_MISSED]: (data: CallMissedEvent) => void;
   [SERVER_EVENTS.CALL_QUALITY_ALERT]: (data: CallQualityAlertEvent) => void;
+  [SERVER_EVENTS.CALL_TRANSLATED_SEGMENT]: (data: CallTranslatedSegmentEvent) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
@@ -852,6 +861,9 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_QUALITY_REPORT]: (data: CallQualityReportEvent) => void;
   [CLIENT_EVENTS.CALL_RECONNECTING]: (data: CallReconnectingEvent) => void;
   [CLIENT_EVENTS.CALL_RECONNECTED]: (data: CallReconnectedEvent) => void;
+  [CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT]: (data: CallTranscriptionSegmentEvent) => void;
+  [CLIENT_EVENTS.CALL_TRANSCRIPTION_CAPABILITY]: (data: CallTranscriptionCapabilityEvent) => void;
+  [CLIENT_EVENTS.CALL_TRANSCRIPTION_ROLE]: (data: CallTranscriptionRoleEvent) => void;
 
   // Location sharing
   [CLIENT_EVENTS.LOCATION_SHARE]: (data: LocationShareData, callback?: (response: SocketIOResponse<LocationSharedEventData>) => void) => void;

@@ -553,6 +553,81 @@ export interface RTCIceServerConfig {
   readonly credential?: string;
 }
 
+// ===== CALL TRANSCRIPTION CAPABILITY NEGOTIATION =====
+
+/**
+ * Transcription capability level — higher is better.
+ * During call setup, each peer declares its capability.
+ * The most capable peer becomes the transcription leader.
+ */
+export type TranscriptionCapabilityLevel =
+  | 'none'           // Device cannot transcribe (no Speech framework, old device)
+  | 'basic'          // On-device, limited languages, older model
+  | 'standard'       // On-device, SFSpeechRecognizer, good accuracy
+  | 'advanced';      // On-device, SpeechAnalyzer (iOS 26+) or WhisperKit, best accuracy
+
+/**
+ * Event: call:transcription-capability (Client → Client via Server relay)
+ * Each peer declares its transcription capability at call start.
+ * Server relays to the other peer. Peers negotiate: best capability wins.
+ */
+export interface CallTranscriptionCapabilityEvent {
+  readonly callId: string;
+  readonly participantId: string;
+  readonly capability: TranscriptionCapabilityLevel;
+  readonly supportedLanguages: readonly string[];
+  readonly onDeviceOnly: boolean;
+}
+
+/**
+ * Event: call:transcription-role (Client → Client via Server relay)
+ * After capability exchange, the leader announces its role.
+ * Leader transcribes BOTH streams and shares segments to peer.
+ */
+export interface CallTranscriptionRoleEvent {
+  readonly callId: string;
+  readonly leaderId: string;
+  readonly reason: 'higher-capability' | 'tie-initiator-wins' | 'only-one-capable';
+}
+
+// ===== CALL TRANSCRIPTION SEGMENT EVENTS =====
+
+/**
+ * Event: call:transcription-segment (Client → Server)
+ * Real-time transcription segment from a call participant
+ */
+export interface CallTranscriptionSegmentEvent {
+  readonly callId: string;
+  readonly segment: {
+    readonly text: string;
+    readonly speakerId: string;
+    readonly startMs: number;
+    readonly endMs: number;
+    readonly isFinal: boolean;
+    readonly confidence: number;
+    readonly language: string;
+  };
+}
+
+/**
+ * Event: call:translated-segment (Server → Client)
+ * Translated transcription segment broadcast to call participants
+ */
+export interface CallTranslatedSegmentEvent {
+  readonly callId: string;
+  readonly segment: {
+    readonly text: string;
+    readonly translatedText: string;
+    readonly speakerId: string;
+    readonly startMs: number;
+    readonly endMs: number;
+    readonly isFinal: boolean;
+    readonly sourceLanguage: string;
+    readonly targetLanguage: string;
+    readonly confidence: number;
+  };
+}
+
 // ===== FRONTEND STATE (pour Zustand store) =====
 
 /**
@@ -624,6 +699,10 @@ export const CALL_EVENTS = {
   // Transcription & Translation (Phase 2/3)
   TRANSCRIPTION: 'call:transcription',
   TRANSLATION: 'call:translation',
+  TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
+  TRANSLATED_SEGMENT: 'call:translated-segment',
+  TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
+  TRANSCRIPTION_ROLE: 'call:transcription-role',
 } as const;
 
 export type CallEventName = typeof CALL_EVENTS[keyof typeof CALL_EVENTS];
