@@ -8,6 +8,7 @@
 'use client';
 
 import { logger } from '@/utils/logger';
+import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 
 // Default ICE servers for STUN
 const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
@@ -29,8 +30,6 @@ const DEFAULT_MEDIA_CONSTRAINTS: MediaStreamConstraints = {
     facingMode: 'user', // Use front camera by default on mobile
   },
 };
-
-import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 
 export interface WebRTCServiceConfig {
   iceServers?: RTCIceServer[];
