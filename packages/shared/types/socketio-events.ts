@@ -16,7 +16,15 @@ import type {
   CallParticipantLeftEvent,
   CallEndedEvent,
   CallMediaToggleEvent,
-  CallError
+  CallError,
+  CallHeartbeatEvent,
+  CallQualityReportEvent,
+  CallReconnectingEvent,
+  CallReconnectedEvent,
+  CallMissedEvent,
+  CallQualityAlertEvent,
+  CallInitiateAck,
+  CallJoinAck,
 } from './video-call.js';
 
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
@@ -89,6 +97,8 @@ export const SERVER_EVENTS = {
   CALL_SIGNAL: 'call:signal',
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
   CALL_ERROR: 'call:error',
+  CALL_MISSED: 'call:missed',
+  CALL_QUALITY_ALERT: 'call:quality-alert',
   READ_STATUS_UPDATED: 'read-status:updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
@@ -180,6 +190,10 @@ export const CLIENT_EVENTS = {
   CALL_TOGGLE_AUDIO: 'call:toggle-audio',
   CALL_TOGGLE_VIDEO: 'call:toggle-video',
   CALL_END: 'call:end',
+  CALL_HEARTBEAT: 'call:heartbeat',
+  CALL_QUALITY_REPORT: 'call:quality-report',
+  CALL_RECONNECTING: 'call:reconnecting',
+  CALL_RECONNECTED: 'call:reconnected',
 
   // --- Location sharing ---
   LOCATION_SHARE: 'location:share',
@@ -647,6 +661,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent) => void;
   [SERVER_EVENTS.CALL_MEDIA_TOGGLED]: (data: CallMediaToggleEvent) => void;
   [SERVER_EVENTS.CALL_ERROR]: (data: CallError) => void;
+  [SERVER_EVENTS.CALL_MISSED]: (data: CallMissedEvent) => void;
+  [SERVER_EVENTS.CALL_QUALITY_ALERT]: (data: CallQualityAlertEvent) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
@@ -825,13 +841,17 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.REACTION_ADD]: (data: ReactionAddData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
   [CLIENT_EVENTS.REACTION_REMOVE]: (data: ReactionRemoveData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
   [CLIENT_EVENTS.REACTION_REQUEST_SYNC]: (messageId: string, callback?: (response: SocketIOResponse<ReactionSyncEventData>) => void) => void;
-  [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent) => void;
-  [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent) => void;
+  [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack: (response: CallInitiateAck) => void) => void;
+  [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack: (response: CallJoinAck) => void) => void;
   [CLIENT_EVENTS.CALL_LEAVE]: (data: { callId: string }) => void;
-  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent) => void;
-  [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: { callId: string; enabled: boolean }) => void;
-  [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: { callId: string; enabled: boolean }) => void;
-  [CLIENT_EVENTS.CALL_END]: (data: { callId: string }) => void;
+  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: { callId: string; enabled: boolean }, ack: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: { callId: string; enabled: boolean }, ack: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_END]: (data: { callId: string; reason?: string }, ack: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_HEARTBEAT]: (data: CallHeartbeatEvent) => void;
+  [CLIENT_EVENTS.CALL_QUALITY_REPORT]: (data: CallQualityReportEvent) => void;
+  [CLIENT_EVENTS.CALL_RECONNECTING]: (data: CallReconnectingEvent) => void;
+  [CLIENT_EVENTS.CALL_RECONNECTED]: (data: CallReconnectedEvent) => void;
 
   // Location sharing
   [CLIENT_EVENTS.LOCATION_SHARE]: (data: LocationShareData, callback?: (response: SocketIOResponse<LocationSharedEventData>) => void) => void;

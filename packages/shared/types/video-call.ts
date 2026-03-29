@@ -14,9 +14,32 @@
 export type CallMode = 'p2p' | 'sfu';
 
 /**
- * Statut du call
+ * Statut du call — synced with Prisma CallStatus enum
+ * @see schema.prisma CallStatus
  */
-export type CallStatus = 'initiated' | 'ringing' | 'active' | 'ended';
+export type CallStatus =
+  | 'initiated'
+  | 'ringing'
+  | 'connecting'
+  | 'active'
+  | 'reconnecting'
+  | 'ended'
+  | 'missed'
+  | 'rejected'
+  | 'failed';
+
+/**
+ * Raison de fin d'appel — synced with Prisma CallEndReason enum
+ * @see schema.prisma CallEndReason
+ */
+export type CallEndReason =
+  | 'completed'
+  | 'missed'
+  | 'rejected'
+  | 'failed'
+  | 'connectionLost'
+  | 'heartbeatTimeout'
+  | 'garbageCollected';
 
 /**
  * Rôle du participant
@@ -45,6 +68,8 @@ export interface CallSession {
   readonly endedAt?: Date;
   readonly duration?: number;             // Secondes
   readonly participants: CallParticipant[];
+  readonly endReason?: CallEndReason;
+  readonly transcriptionEnabled?: boolean;
   readonly metadata?: CallMetadata;
 }
 
@@ -228,10 +253,15 @@ interface WebRTCSignalBase {
 }
 
 /**
- * Signal WebRTC pour Offer/Answer (contient SDP)
+ * Types de signal SDP
+ */
+export type WebRTCSignalType = 'offer' | 'answer' | 'ice-restart';
+
+/**
+ * Signal WebRTC pour Offer/Answer/ICE-Restart (contient SDP)
  */
 export interface WebRTCOfferAnswerSignal extends WebRTCSignalBase {
-  readonly type: 'offer' | 'answer';
+  readonly type: WebRTCSignalType;
   readonly sdp: string;                   // Session Description Protocol
 }
 
@@ -402,6 +432,7 @@ export interface CallEndedEvent {
   readonly callId: string;
   readonly duration: number;
   readonly endedBy: string;             // userId ou participantId
+  readonly reason: CallEndReason;
 }
 
 /**
@@ -438,6 +469,88 @@ export interface CallTranscriptionEvent {
 export interface CallTranslationEvent {
   readonly callId: string;
   readonly translation: Translation;
+}
+
+// ===== NEW CALL EVENTS (Phase 1 Spec) =====
+
+/**
+ * Event: call:heartbeat (Client → Server, fire-and-forget)
+ */
+export interface CallHeartbeatEvent {
+  readonly callId: string;
+}
+
+/**
+ * Event: call:quality-report (Client → Server, fire-and-forget)
+ */
+export interface CallQualityReportEvent {
+  readonly callId: string;
+  readonly stats: ConnectionQualityStats;
+}
+
+/**
+ * Event: call:reconnecting (Client → Server, fire-and-forget)
+ */
+export interface CallReconnectingEvent {
+  readonly callId: string;
+  readonly participantId: string;
+  readonly attempt: number;
+}
+
+/**
+ * Event: call:reconnected (Client → Server, fire-and-forget)
+ */
+export interface CallReconnectedEvent {
+  readonly callId: string;
+  readonly participantId: string;
+}
+
+/**
+ * Event: call:missed (Server → Client)
+ */
+export interface CallMissedEvent {
+  readonly callId: string;
+  readonly conversationId: string;
+  readonly callerId: string;
+  readonly callerName: string;
+}
+
+/**
+ * Event: call:quality-alert (Server → Client)
+ */
+export interface CallQualityAlertEvent {
+  readonly callId: string;
+  readonly participantId: string;
+  readonly metric: 'rtt' | 'packetLoss' | 'bitrate' | 'jitter';
+  readonly value: number;
+  readonly threshold: number;
+}
+
+/**
+ * ACK pour call:initiate
+ */
+export interface CallInitiateAck {
+  readonly success: boolean;
+  readonly data?: { callId: string; mode: CallMode };
+  readonly error?: { code: string; message: string };
+}
+
+/**
+ * ACK pour call:join
+ */
+export interface CallJoinAck {
+  readonly success: boolean;
+  readonly data?: { callSession: CallSession; iceServers: RTCIceServer[] };
+  readonly error?: { code: string; message: string };
+}
+
+/**
+ * Configuration ICE server (STUN/TURN)
+ */
+export interface RTCIceServerConfig {
+  readonly urls: string[];
+  readonly username?: string;
+  readonly credential?: string;
 }
 
 // ===== FRONTEND STATE (pour Zustand store) =====
@@ -480,7 +593,7 @@ export interface CallState {
  * Noms des événements Socket.IO pour les appels
  */
 export const CALL_EVENTS = {
-  // Client → Server
+  // Client → Server (with ACK)
   INITIATE: 'call:initiate',
   JOIN: 'call:join',
   LEAVE: 'call:leave',
@@ -488,6 +601,13 @@ export const CALL_EVENTS = {
   TOGGLE_AUDIO: 'call:toggle-audio',
   TOGGLE_VIDEO: 'call:toggle-video',
   TOGGLE_SCREEN_SHARE: 'call:toggle-screen-share',
+  END: 'call:end',
+
+  // Client → Server (fire-and-forget)
+  HEARTBEAT: 'call:heartbeat',
+  QUALITY_REPORT: 'call:quality-report',
+  RECONNECTING: 'call:reconnecting',
+  RECONNECTED: 'call:reconnected',
 
   // Server → Client
   INITIATED: 'call:initiated',
@@ -498,6 +618,8 @@ export const CALL_EVENTS = {
   MEDIA_TOGGLED: 'call:media-toggled',
   ENDED: 'call:ended',
   ERROR: 'call:error',
+  MISSED: 'call:missed',
+  QUALITY_ALERT: 'call:quality-alert',
 
   // Transcription & Translation (Phase 2/3)
   TRANSCRIPTION: 'call:transcription',
@@ -558,6 +680,7 @@ export const CALL_ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_SIGNAL: 'INVALID_SIGNAL',
   SIGNAL_SENDER_MISMATCH: 'SIGNAL_SENDER_MISMATCH',
+  SIGNAL_TOO_LARGE: 'SIGNAL_TOO_LARGE',
   TARGET_NOT_FOUND: 'TARGET_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
 } as const;
@@ -570,7 +693,7 @@ export type CallErrorCode = typeof CALL_ERROR_CODES[keyof typeof CALL_ERROR_CODE
  * Vérifie si un CallSession est actif
  */
 export function isActiveCall(call: CallSession): boolean {
-  return call.status === 'active' || call.status === 'ringing';
+  return call.status === 'active' || call.status === 'ringing' || call.status === 'connecting' || call.status === 'reconnecting';
 }
 
 /**

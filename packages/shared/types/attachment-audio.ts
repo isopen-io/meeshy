@@ -18,6 +18,9 @@ export interface TranscriptionSegment {
   voiceSimilarityScore?: number;  // Score de similarité vocale avec l'utilisateur (0-1)
   confidence?: number;
   language?: string;    // Langue détectée pour ce segment (ISO 639-1)
+  isFinal?: boolean;    // true = segment finalisé, false = partiel (streaming)
+  translatedText?: string;       // Texte traduit via NLLB
+  translatedLanguage?: string;   // Langue cible de la traduction (ISO 639-1)
 }
 
 /**

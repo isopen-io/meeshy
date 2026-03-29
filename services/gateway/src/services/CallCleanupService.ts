@@ -1,46 +1,49 @@
 /**
- * CallCleanupService - Automatic cleanup of zombie calls
+ * CallCleanupService - Garbage collection for zombie/orphaned calls
  *
- * Handles:
- * - Closing calls that have been active for more than 5 hours
- * - Running cleanup job periodically (every 30 minutes)
- * - Logging cleanup statistics
+ * Spec Section 2.6: Server cron every 60s with tiered cleanup:
+ * - initiated/ringing > 60s → MISSED
+ * - connecting > 30s → FAILED
+ * - active/reconnecting > 2h → ENDED (garbageCollected)
+ * - active with stale heartbeat > 60s → ENDED (heartbeatTimeout)
  */
 
-import { PrismaClient, CallStatus } from '@meeshy/shared/prisma/client';
+import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
+import type { CallService } from './CallService';
 
 export class CallCleanupService {
   private cleanupInterval: NodeJS.Timeout | null = null;
-  private readonly CLEANUP_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+  private readonly CLEANUP_INTERVAL_MS = 60 * 1000;
 
-  // URGENT FIX: Different timeouts for different call statuses
-  private readonly MAX_INITIATED_DURATION_MS = 30 * 1000; // 30 seconds for 'initiated' calls (unanswered)
-  private readonly MAX_ACTIVE_DURATION_MS = 5 * 60 * 60 * 1000; // 5 hours for 'active' calls
+  private readonly MAX_INITIATED_RINGING_MS = 60 * 1000;
+  private readonly MAX_CONNECTING_MS = 30 * 1000;
+  private readonly MAX_ACTIVE_MS = 2 * 60 * 60 * 1000;
+  private readonly HEARTBEAT_TIMEOUT_MS = 60 * 1000;
 
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private callService?: CallService
+  ) {}
 
-  /**
-   * Start the automatic cleanup job
-   */
   start(): void {
     if (this.cleanupInterval) {
       logger.warn('[CallCleanupService] Cleanup job already running');
       return;
     }
 
-    logger.info('[CallCleanupService] Starting automatic call cleanup job', {
-      intervalMinutes: this.CLEANUP_INTERVAL_MS / 60000,
-      maxInitiatedDurationSeconds: this.MAX_INITIATED_DURATION_MS / 1000,
-      maxActiveDurationHours: this.MAX_ACTIVE_DURATION_MS / 3600000
+    logger.info('[CallCleanupService] Starting GC', {
+      intervalMs: this.CLEANUP_INTERVAL_MS,
+      maxInitiatedMs: this.MAX_INITIATED_RINGING_MS,
+      maxConnectingMs: this.MAX_CONNECTING_MS,
+      maxActiveMs: this.MAX_ACTIVE_MS,
+      heartbeatTimeoutMs: this.HEARTBEAT_TIMEOUT_MS
     });
 
-    // Run cleanup immediately on start
     this.runCleanup().catch((error) => {
       logger.error('[CallCleanupService] Initial cleanup failed', { error });
     });
 
-    // Schedule periodic cleanup
     this.cleanupInterval = setInterval(() => {
       this.runCleanup().catch((error) => {
         logger.error('[CallCleanupService] Scheduled cleanup failed', { error });
@@ -48,154 +51,137 @@ export class CallCleanupService {
     }, this.CLEANUP_INTERVAL_MS);
   }
 
-  /**
-   * Stop the automatic cleanup job
-   */
   stop(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
-      logger.info('[CallCleanupService] Stopped automatic call cleanup job');
+      logger.info('[CallCleanupService] Stopped GC');
     }
   }
 
-  /**
-   * Run cleanup of zombie calls
-   * URGENT FIX: Different timeouts for 'initiated' (2min) vs 'active' (5h) calls
-   */
   async runCleanup(): Promise<{ cleaned: number; errors: number }> {
-    logger.info('[CallCleanupService] Running zombie call cleanup');
+    const now = new Date();
+    let cleaned = 0;
+    let errors = 0;
 
-    try {
-      const now = new Date();
-      const initiatedCutoff = new Date(now.getTime() - this.MAX_INITIATED_DURATION_MS);
-      const activeCutoff = new Date(now.getTime() - this.MAX_ACTIVE_DURATION_MS);
-
-      // Find 'initiated' calls older than 2 minutes (unanswered calls)
-      const zombieInitiatedCalls = await this.prisma.callSession.findMany({
-        where: {
-          status: CallStatus.initiated,
-          startedAt: {
-            lt: initiatedCutoff
-          }
-        },
-        include: {
-          participants: {
-            where: {
-              leftAt: null
-            }
-          }
-        }
-      });
-
-      // Find 'active' or 'ringing' calls older than 5 hours (stuck calls)
-      const zombieActiveCalls = await this.prisma.callSession.findMany({
-        where: {
-          status: {
-            in: [CallStatus.active, CallStatus.ringing]
-          },
-          startedAt: {
-            lt: activeCutoff
-          }
-        },
-        include: {
-          participants: {
-            where: {
-              leftAt: null
-            }
-          }
-        }
-      });
-
-      // Combine both lists
-      const zombieCalls = [...zombieInitiatedCalls, ...zombieActiveCalls];
-
-      if (zombieCalls.length === 0) {
-        logger.info('[CallCleanupService] No zombie calls found');
-        return { cleaned: 0, errors: 0 };
+    // 1. initiated/ringing > 60s → MISSED
+    const initiatedCutoff = new Date(now.getTime() - this.MAX_INITIATED_RINGING_MS);
+    const staleInitiated = await this.prisma.callSession.findMany({
+      where: {
+        status: { in: [CallStatus.initiated, CallStatus.ringing] },
+        startedAt: { lt: initiatedCutoff }
       }
+    });
 
-      logger.warn('[CallCleanupService] Found zombie calls', {
-        count: zombieCalls.length,
-        initiatedCount: zombieInitiatedCalls.length,
-        activeCount: zombieActiveCalls.length,
-        callIds: zombieCalls.map(c => c.id),
-        oldestCallStarted: zombieCalls.reduce((oldest, call) =>
-          call.startedAt < oldest ? call.startedAt : oldest,
-          zombieCalls[0].startedAt
-        )
-      });
-
-      let cleaned = 0;
-      let errors = 0;
-
-      // Close each zombie call
-      for (const call of zombieCalls) {
-        try {
-          const duration = Math.floor((now.getTime() - call.startedAt.getTime()) / 1000);
-
-          await this.prisma.$transaction(async (tx) => {
-            // Mark all active participants as left
-            await tx.callParticipant.updateMany({
-              where: {
-                callSessionId: call.id,
-                leftAt: null
-              },
-              data: {
-                leftAt: now
-              }
-            });
-
-            // End the call
-            await tx.callSession.update({
-              where: { id: call.id },
-              data: {
-                status: CallStatus.ended,
-                endedAt: now,
-                duration
-              }
-            });
-          });
-
-          logger.info('[CallCleanupService] Closed zombie call', {
-            callId: call.id,
-            conversationId: call.conversationId,
-            status: call.status,
-            startedAt: call.startedAt,
-            durationSeconds: duration,
-            durationHuman: call.status === 'initiated'
-              ? `${Math.floor(duration / 60)} minutes`
-              : `${(duration / 3600).toFixed(2)} hours`,
-            activeParticipants: call.participants.length,
-            reason: call.status === 'initiated' ? 'Unanswered call (>30s)' : 'Stuck active call (>5h)'
-          });
-
-          cleaned++;
-        } catch (error) {
-          logger.error('[CallCleanupService] Failed to close zombie call', {
-            callId: call.id,
-            error
-          });
-          errors++;
-        }
+    for (const call of staleInitiated) {
+      try {
+        await this.forceEndCall(call.id, now, call.startedAt, CallStatus.missed, CallEndReason.missed);
+        logger.warn('[CallCleanupService] Force MISSED', { callId: call.id, status: call.status });
+        cleaned++;
+      } catch (error) {
+        logger.error('[CallCleanupService] Failed to force MISSED', { callId: call.id, error });
+        errors++;
       }
-
-      logger.info('[CallCleanupService] Cleanup completed', {
-        cleaned,
-        errors,
-        total: zombieCalls.length
-      });
-
-      return { cleaned, errors };
-    } catch (error) {
-      logger.error('[CallCleanupService] Cleanup failed', { error });
-      throw error;
     }
+
+    // 2. connecting > 30s → FAILED
+    const connectingCutoff = new Date(now.getTime() - this.MAX_CONNECTING_MS);
+    const staleConnecting = await this.prisma.callSession.findMany({
+      where: {
+        status: CallStatus.connecting,
+        startedAt: { lt: connectingCutoff }
+      }
+    });
+
+    for (const call of staleConnecting) {
+      try {
+        await this.forceEndCall(call.id, now, call.startedAt, CallStatus.failed, CallEndReason.failed);
+        logger.warn('[CallCleanupService] Force FAILED', { callId: call.id });
+        cleaned++;
+      } catch (error) {
+        logger.error('[CallCleanupService] Failed to force FAILED', { callId: call.id, error });
+        errors++;
+      }
+    }
+
+    // 3. active/reconnecting > 2h → ENDED (garbageCollected)
+    const activeCutoff = new Date(now.getTime() - this.MAX_ACTIVE_MS);
+    const staleActive = await this.prisma.callSession.findMany({
+      where: {
+        status: { in: [CallStatus.active, CallStatus.reconnecting] },
+        startedAt: { lt: activeCutoff }
+      }
+    });
+
+    for (const call of staleActive) {
+      try {
+        await this.forceEndCall(call.id, now, call.startedAt, CallStatus.ended, CallEndReason.garbageCollected);
+        logger.warn('[CallCleanupService] Force GC ENDED', { callId: call.id, status: call.status });
+        cleaned++;
+      } catch (error) {
+        logger.error('[CallCleanupService] Failed to force GC', { callId: call.id, error });
+        errors++;
+      }
+    }
+
+    // 4. Heartbeat timeout check (active calls with no heartbeat > 60s)
+    if (this.callService) {
+      const activeCalls = await this.prisma.callSession.findMany({
+        where: {
+          status: { in: [CallStatus.active, CallStatus.reconnecting] }
+        },
+        include: { participants: { where: { leftAt: null } } }
+      });
+
+      for (const call of activeCalls) {
+        for (const participant of call.participants) {
+          const staleParticipants = this.callService.getStaleHeartbeats(call.id, this.HEARTBEAT_TIMEOUT_MS);
+          if (staleParticipants.length > 0 && staleParticipants.length >= call.participants.length) {
+            try {
+              await this.forceEndCall(call.id, now, call.startedAt, CallStatus.ended, CallEndReason.heartbeatTimeout);
+              logger.warn('[CallCleanupService] Heartbeat timeout', { callId: call.id, staleParticipants });
+              cleaned++;
+            } catch (error) {
+              logger.error('[CallCleanupService] Heartbeat cleanup failed', { callId: call.id, error });
+              errors++;
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    if (cleaned > 0 || errors > 0) {
+      logger.info('[CallCleanupService] GC completed', { cleaned, errors });
+    }
+
+    return { cleaned, errors };
   }
 
-  /**
-   * Manual cleanup - can be called via API or CLI
-   */
+  private async forceEndCall(
+    callId: string,
+    now: Date,
+    startedAt: Date,
+    status: CallStatus,
+    endReason: CallEndReason
+  ): Promise<void> {
+    const duration = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.callParticipant.updateMany({
+        where: { callSessionId: callId, leftAt: null },
+        data: { leftAt: now }
+      });
+
+      await tx.callSession.update({
+        where: { id: callId },
+        data: { status, endedAt: now, duration, endReason }
+      });
+    });
+
+    this.callService?.clearHeartbeats(callId);
+  }
+
   async manualCleanup(): Promise<{ cleaned: number; errors: number }> {
     logger.info('[CallCleanupService] Running manual cleanup');
     return this.runCleanup();

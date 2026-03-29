@@ -136,8 +136,8 @@ export const socketLeaveCallSchema = z.object({
 export const socketSignalSchema = z.object({
   callId: objectIdSchema,
   signal: z.object({
-    type: z.enum(['offer', 'answer', 'ice-candidate'], {
-      errorMap: () => ({ message: 'Signal type must be offer, answer, or ice-candidate' })
+    type: z.enum(['offer', 'answer', 'ice-candidate', 'ice-restart'], {
+      errorMap: () => ({ message: 'Signal type must be offer, answer, ice-candidate, or ice-restart' })
     }),
     from: z.string().min(1, 'from field is required'),
     to: z.string().min(1, 'to field is required'),
@@ -149,8 +149,7 @@ export const socketSignalSchema = z.object({
     sdpMid: z.string().optional()
   }).refine(
     (data) => {
-      // Offer/answer must have sdp, ice-candidate must have candidate
-      if (data.type === 'offer' || data.type === 'answer') {
+      if (data.type === 'offer' || data.type === 'answer' || data.type === 'ice-restart') {
         return typeof data.sdp === 'string' && data.sdp.length > 0;
       }
       if (data.type === 'ice-candidate') {
@@ -159,7 +158,7 @@ export const socketSignalSchema = z.object({
       return true;
     },
     {
-      message: 'Invalid signal structure: offer/answer requires sdp, ice-candidate requires candidate'
+      message: 'Invalid signal structure: offer/answer/ice-restart requires sdp, ice-candidate requires candidate'
     }
   )
 });
@@ -172,6 +171,56 @@ export const socketMediaToggleSchema = z.object({
   enabled: z.boolean(),
   mediaType: z.enum(['audio', 'video']).optional(),
   participantId: z.string().optional()
+});
+
+/**
+ * Socket.IO Event: call:end
+ */
+export const socketEndCallSchema = z.object({
+  callId: objectIdSchema,
+  reason: z.string().max(50).optional()
+});
+
+/**
+ * Socket.IO Event: call:heartbeat (fire-and-forget)
+ */
+export const socketHeartbeatSchema = z.object({
+  callId: objectIdSchema
+});
+
+/**
+ * Socket.IO Event: call:quality-report (fire-and-forget)
+ */
+export const socketQualityReportSchema = z.object({
+  callId: objectIdSchema,
+  stats: z.object({
+    level: z.enum(['excellent', 'good', 'fair', 'poor']).optional(),
+    packetLoss: z.number().min(0).max(100),
+    rtt: z.number().min(0),
+    bitrate: z.object({
+      audio: z.number().min(0),
+      video: z.number().min(0)
+    }).optional(),
+    jitter: z.number().min(0).optional(),
+    timestamp: z.string().or(z.date()).optional()
+  })
+});
+
+/**
+ * Socket.IO Event: call:reconnecting (fire-and-forget)
+ */
+export const socketReconnectingSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1),
+  attempt: z.number().int().min(1).max(10)
+});
+
+/**
+ * Socket.IO Event: call:reconnected (fire-and-forget)
+ */
+export const socketReconnectedSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1)
 });
 
 /**
@@ -188,3 +237,8 @@ export type SocketJoinCallInput = z.infer<typeof socketJoinCallSchema>;
 export type SocketLeaveCallInput = z.infer<typeof socketLeaveCallSchema>;
 export type SocketSignalInput = z.infer<typeof socketSignalSchema>;
 export type SocketMediaToggleInput = z.infer<typeof socketMediaToggleSchema>;
+export type SocketEndCallInput = z.infer<typeof socketEndCallSchema>;
+export type SocketHeartbeatInput = z.infer<typeof socketHeartbeatSchema>;
+export type SocketQualityReportInput = z.infer<typeof socketQualityReportSchema>;
+export type SocketReconnectingInput = z.infer<typeof socketReconnectingSchema>;
+export type SocketReconnectedInput = z.infer<typeof socketReconnectedSchema>;
