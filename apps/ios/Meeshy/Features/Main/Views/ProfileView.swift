@@ -36,6 +36,7 @@ struct ProfileView: View {
     @State private var bannerItem: PhotosPickerItem?
     @State private var bannerImageForEditor: UIImage?
     @State private var isUploadingBanner = false
+    @State private var scrollOffset: CGFloat = 0
 
     private let accentColor = "A855F7"
 
@@ -126,55 +127,54 @@ struct ProfileView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
+        CollapsibleHeader(
+            title: "Profil",
+            scrollOffset: scrollOffset,
+            onBack: {
                 if isEditing {
                     isEditing = false
                     loadUserData()
                 } else {
-                    dismiss()
+                    router.pop()
                 }
-            } label: {
-                Image(systemName: isEditing ? "xmark" : "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-
-            Spacer()
-
-            Text("Profil")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-
-            Spacer()
-
-            if isSaving || isUploading {
-                ProgressView()
-                    .tint(Color(hex: accentColor))
-            } else {
-                Button {
-                    HapticFeedback.light()
-                    if isEditing {
-                        saveProfile()
-                    } else {
-                        isEditing = true
+            },
+            titleColor: theme.textPrimary,
+            backArrowColor: Color(hex: accentColor),
+            backgroundColor: theme.backgroundPrimary,
+            trailing: {
+                if isSaving || isUploading {
+                    ProgressView()
+                        .tint(Color(hex: accentColor))
+                } else {
+                    Button {
+                        HapticFeedback.light()
+                        if isEditing {
+                            saveProfile()
+                        } else {
+                            isEditing = true
+                        }
+                    } label: {
+                        Text(isEditing ? "Enregistrer" : "Modifier")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(hex: accentColor))
                     }
-                } label: {
-                    Text(isEditing ? "Enregistrer" : "Modifier")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color(hex: accentColor))
                 }
             }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        )
     }
 
     // MARK: - Scroll Content
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ScrollOffsetPreferenceKey.self,
+                    value: geo.frame(in: .named("scroll")).minY
+                )
+            }
+            .frame(height: 0)
+
             VStack(spacing: 24) {
                 bannerAndAvatarSection
                 identitySection
@@ -188,6 +188,8 @@ struct ProfileView: View {
             .padding(.horizontal, 16)
             .padding(.top, 0)
         }
+        .coordinateSpace(name: "scroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
     }
 
     // MARK: - Banner & Avatar Section
