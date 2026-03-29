@@ -444,11 +444,11 @@ function ensureMinimumReactions(
     }
   }
 
-  // 2. LURKERS: silent users react quickly (3-15s delay, just scrolling and reacting)
+  // 2. LURKERS: the MAIN reactors — they read and react heavily (3-15s delay)
   const silentUsers = state.controlledUsers.filter((u) => !usersWhoSpeak.has(u.userId));
-  for (const user of silentUsers) {
+  for (const user of shuffleArray(silentUsers)) {
     if (totalReactions >= maxReactions) break;
-    if (Math.random() > 0.5) continue; // 50% chance to react as lurker
+    if (Math.random() > 0.85) continue; // 85% chance to react as lurker — they're the most active reactors
 
     const userEmojis = getUserReactionEmojis(user);
     const candidateMessages = reactableMessages.filter(
@@ -456,9 +456,10 @@ function ensureMinimumReactions(
     );
     if (candidateMessages.length === 0) continue;
 
-    const lurkReactionCount = 1 + Math.floor(Math.random() * 2); // 1-2
+    // Lurkers react to 2-4 messages (they're just reading and reacting, that's their thing)
+    const lurkReactionCount = 2 + Math.floor(Math.random() * 3); // 2-4
     for (let i = 0; i < lurkReactionCount && i < candidateMessages.length && totalReactions < maxReactions; i++) {
-      const targetMsg = candidateMessages[Math.floor(Math.random() * candidateMessages.length)];
+      const targetMsg = candidateMessages[candidateMessages.length - 1 - i]; // most recent first
       const emoji = userEmojis[Math.floor(Math.random() * userEmojis.length)];
 
       // Lurkers: 3-15s delay (quick scroll + tap reaction)
@@ -477,6 +478,58 @@ function ensureMinimumReactions(
   return result;
 }
 
+
+
+// Standalone lurker reactions — called even when no message interventions happen
+function generateLurkerReactions(
+  state: ConversationState,
+  maxReactions: number,
+): InterventionDirective[] {
+  if (maxReactions <= 0) return [];
+
+  const controlledUserIds = new Set(state.controlledUsers.map((u) => u.userId));
+  const controlledUserMap = new Map(state.controlledUsers.map((u) => [u.userId, u]));
+  const reactableMessages = state.messages
+    .filter((m) => !controlledUserIds.has(m.senderId))
+    .slice(-15);
+
+  if (reactableMessages.length === 0) return [];
+
+  const result: InterventionDirective[] = [];
+  const alreadyReactedTo = new Set<string>();
+  let totalReactions = 0;
+
+  // Pick 1-3 random lurkers to react
+  const lurkers = shuffleArray([...state.controlledUsers]);
+  const lurkerCount = 1 + Math.floor(Math.random() * Math.min(3, lurkers.length));
+
+  for (let li = 0; li < lurkerCount && totalReactions < maxReactions; li++) {
+    const user = lurkers[li];
+    const userEmojis = getUserReactionEmojis(user);
+    const candidates = reactableMessages.filter(
+      (m) => !alreadyReactedTo.has(`${user.userId}:${m.id}`) && m.senderId !== user.userId,
+    );
+    if (candidates.length === 0) continue;
+
+    const reactionCount = 2 + Math.floor(Math.random() * 3); // 2-4
+    for (let i = 0; i < reactionCount && i < candidates.length && totalReactions < maxReactions; i++) {
+      const targetMsg = candidates[candidates.length - 1 - i];
+      const emoji = userEmojis[Math.floor(Math.random() * userEmojis.length)];
+
+      result.push({
+        type: 'reaction',
+        asUserId: user.userId,
+        targetMessageId: targetMsg.id,
+        emoji,
+        delaySeconds: Math.round((3 + Math.random() * 12) * (0.8 + Math.random() * 0.4)),
+      });
+      alreadyReactedTo.add(`${user.userId}:${targetMsg.id}`);
+      totalReactions++;
+    }
+  }
+
+  return result;
+}
 export function createStrategistNode(llm: LlmProvider) {
   return async function strategist(state: ConversationState) {
     if (state.controlledUsers.length === 0) {
@@ -486,21 +539,38 @@ export function createStrategistNode(llm: LlmProvider) {
     }
 
     if (state.activityScore > 0.7) {
+      // Even in active conversations, lurkers can still react
+      const lurkerReactions = reactionsEnabled
+        ? generateLurkerReactions(state, maxReactions)
+        : [];
       return {
-        interventionPlan: { shouldIntervene: false, reason: 'Conversation already active enough', interventions: [] } satisfies InterventionPlan,
+        interventionPlan: {
+          shouldIntervene: lurkerReactions.length > 0,
+          reason: 'Conversation active — lurker reactions only',
+          interventions: lurkerReactions,
+        } satisfies InterventionPlan,
       };
     }
 
+    const maxReactions = state.maxReactionsPerCycle;
+    const reactionsEnabled = state.reactionsEnabled;
+
     if (state.budgetRemaining <= 0) {
+      // Budget exhausted for messages, but lurkers can still react
+      const lurkerReactions = reactionsEnabled
+        ? generateLurkerReactions(state, maxReactions)
+        : [];
       return {
-        interventionPlan: { shouldIntervene: false, reason: 'Daily budget exhausted', interventions: [] } satisfies InterventionPlan,
+        interventionPlan: {
+          shouldIntervene: lurkerReactions.length > 0,
+          reason: 'Budget exhausted — lurker reactions only',
+          interventions: lurkerReactions,
+        } satisfies InterventionPlan,
       };
     }
 
     const minResponses = state.minResponsesPerCycle;
     const maxResponses = state.maxResponsesPerCycle;
-    const maxReactions = state.maxReactionsPerCycle;
-    const reactionsEnabled = state.reactionsEnabled;
 
     const prompt = buildStrategistPrompt(state, minResponses, maxResponses, maxReactions, reactionsEnabled);
 
@@ -520,11 +590,15 @@ export function createStrategistNode(llm: LlmProvider) {
       const parsed = parseJsonLlm<{ shouldIntervene: boolean; reason?: string; interventions?: unknown[] }>(response.content);
 
       if (!parsed.shouldIntervene) {
+        // No messages needed, but lurkers can still react
+        const lurkerReactions = reactionsEnabled
+          ? generateLurkerReactions(state, maxReactions)
+          : [];
         return {
           interventionPlan: {
-            shouldIntervene: false,
-            reason: parsed.reason ?? 'LLM decided no intervention needed',
-            interventions: [],
+            shouldIntervene: lurkerReactions.length > 0,
+            reason: parsed.reason ?? 'No messages — lurker reactions only',
+            interventions: lurkerReactions,
           } satisfies InterventionPlan,
         };
       }
