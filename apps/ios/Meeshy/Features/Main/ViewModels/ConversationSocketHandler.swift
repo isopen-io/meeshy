@@ -95,6 +95,8 @@ final class ConversationSocketHandler {
     }
 
     private func startTypingEmission() {
+        guard UserPreferencesManager.shared.privacy.showTypingIndicator else { return }
+
         typingTimer?.invalidate()
 
         if !isEmittingTyping {

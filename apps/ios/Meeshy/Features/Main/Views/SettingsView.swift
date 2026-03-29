@@ -27,6 +27,7 @@ struct SettingsView: View {
     @State private var showAffiliate = false
     @State private var showVoiceProfileWizard = false
     @State private var showVoiceProfileManage = false
+    @State private var showMediaDownload = false
 
     private let accentColor = "08D9D6"
 
@@ -69,6 +70,7 @@ struct SettingsView: View {
         .sheet(isPresented: $showLicenses) { LicensesView() }
         .sheet(isPresented: $showSupport) { SupportView() }
         .sheet(isPresented: $showDataStorage) { DataStorageView() }
+        .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
         .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
         .task { await prefs.fetchFromBackend() }
     }
@@ -321,6 +323,19 @@ struct SettingsView: View {
             }
             .accessibilityLabel("Stockage")
             .accessibilityHint("Ouvre les parametres de stockage")
+
+            Button {
+                HapticFeedback.light()
+                showMediaDownload = true
+            } label: {
+                settingsRow(icon: "arrow.down.circle.fill", title: "Telechargement auto", color: "F39C12") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Telechargement automatique")
+            .accessibilityHint("Ouvre les parametres de telechargement automatique des medias")
 
             Button {
                 HapticFeedback.light()

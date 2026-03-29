@@ -446,6 +446,7 @@ class ConversationListViewModel: ObservableObject {
 
         conversations[index].unreadCount = 0
 
+        guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
         do {
             try await conversationService.markRead(conversationId: conversationId)
         } catch {
