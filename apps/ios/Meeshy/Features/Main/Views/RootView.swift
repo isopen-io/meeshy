@@ -713,7 +713,7 @@ struct RootView: View {
 
             // Calculate menu position
             let menuX = pos.isLeft ? buttonX : buttonX
-            let menuStartY = expandDown ? buttonY + halfButton + 16 : buttonY - halfButton - 16
+            let menuStartY = expandDown ? buttonY + halfButton + menuSpacing + menuItemSize / 2 : buttonY - halfButton - menuSpacing - menuItemSize / 2
 
             // Menu items
             let menuItems: [(icon: String, color: String, action: () -> Void)] = [
