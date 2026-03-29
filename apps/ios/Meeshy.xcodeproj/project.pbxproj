@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		MEFF00000000002F01 /* MessageEffectModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = MEFF00000000001F01 /* MessageEffectModifiers.swift */; };
 		009B4248B90F6AC8EE19E3B7 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22D7D8C0B82CB88F1D3D5CA2 /* AppDelegate.swift */; };
 		PS3900000000002F39 /* ParticipantService.swift in Sources */ = {isa = PBXBuildFile; fileRef = PS3900000000001F39 /* ParticipantService.swift */; };
 		00CDA82D2AC8F3D9847F02C4 /* StatsTimelineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA306483025A83773D87DED /* StatsTimelineChart.swift */; };
@@ -387,6 +388,7 @@
 		FRRL001A001A001A001A0001 /* FriendRequestListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendRequestListView.swift; sourceTree = "<group>"; };
 		RPTU001A001A001A001A0001 /* ReportUserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportUserView.swift; sourceTree = "<group>"; };
 		CC4000000000001F40 /* ContactCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactCardView.swift; sourceTree = "<group>"; };
+		MEFF00000000001F01 /* MessageEffectModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageEffectModifiers.swift; sourceTree = "<group>"; };
 		CC44DD55EE66FF7788990011 /* AudioPostComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPostComposerView.swift; sourceTree = "<group>"; };
 		CDL6002A002A002A002A0002 /* CommunityLinkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityLinkDetailView.swift; sourceTree = "<group>"; };
 		CHPW001A001A001A001A0001 /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
@@ -551,6 +553,7 @@
 				A356FD5DE5874BCEFB9139C4 /* SecurityVerificationView.swift */,
 				LANG001A001A001A001A0001 /* LanguagePickerSheet.swift */,
 				CC4000000000001F40 /* ContactCardView.swift */,
+				MEFF00000000001F01 /* MessageEffectModifiers.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -1215,6 +1218,7 @@
 				CC2300000000002F23 /* ConversationLockSheet.swift in Sources */,
 				CC2400000000002F24 /* ConversationLockManager.swift in Sources */,
 				CC4000000000002F40 /* ContactCardView.swift in Sources */,
+				MEFF00000000002F01 /* MessageEffectModifiers.swift in Sources */,
 				EDIT002A002A002A002A0002 /* EditProfileView.swift in Sources */,
 				FRRL002A002A002A002A0002 /* FriendRequestListView.swift in Sources */,
 				RPTU002A002A002A002A0002 /* ReportUserView.swift in Sources */,

@@ -334,6 +334,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var readByAllAt: Date?
     public var deliveredCount: Int = 0
     public var readCount: Int = 0
+    public var effects: MessageEffects = .none
 
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending   // optimistic, not confirmed
@@ -365,7 +366,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
-                deliveredCount: Int = 0, readCount: Int = 0) {
+                deliveredCount: Int = 0, readCount: Int = 0,
+                effects: MessageEffects = .none) {
         self.id = id; self.conversationId = conversationId; self.senderId = senderId
         self.content = content
         self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
@@ -382,6 +384,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
+        self.effects = effects
     }
 
     private enum CodingKeys: String, CodingKey {

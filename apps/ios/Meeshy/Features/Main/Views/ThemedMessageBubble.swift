@@ -63,6 +63,7 @@ struct ThemedMessageBubble: View {
     @State private var ephemeralSecondsRemaining: TimeInterval = 0
     @State private var isEphemeralExpired: Bool = false
     @State private var ephemeralTimerCancellable: AnyCancellable?
+    @State private var hasPlayedAppearance = false
 
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
     let gridSpacing: CGFloat = 2 // internal for cross-file extension access
@@ -242,6 +243,8 @@ struct ThemedMessageBubble: View {
             EmptyView()
         } else {
             messageContent
+                .messageEffects(message.effects, hasPlayedAppearance: hasPlayedAppearance)
+                .onAppear { hasPlayedAppearance = true }
                 .opacity(isEphemeralExpired ? 0 : 1)
                 .scaleEffect(isEphemeralExpired ? 0.8 : 1)
                 .onAppear { startEphemeralTimerIfNeeded() }
