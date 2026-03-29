@@ -89,6 +89,10 @@ export function runDeterministicChecks(
       return { ok: false, reason: `AI identity revealed: matched ${pattern}` };
     }
   }
+  // Check for AI-sounding patterns (lists, bold markdown, enthusiastic openings)
+  if (hasAiSlopPatterns(content)) {
+    return { ok: false, reason: `AI slop pattern detected — regenerate with more human tone` };
+  }
   const wordCount = countWords(content);
   if (wordCount < minWords) {
     return { ok: false, reason: `too short: ${wordCount} words < min ${minWords}` };
@@ -254,4 +258,21 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolea
 
     return { pendingActions: [...validatedMessages, ...reactions], agentHistory: newHistory };
   };
+}
+
+// AI-sounding patterns that make messages feel robotic
+export const AI_SLOP_PATTERNS = [
+  /^(c'est (vraiment |veritablement )?(passionnant|enrichissant|captivant|fascinant))/i,
+  /il est (indeniable|incontestable|indiscutable) que/i,
+  /voici quelques (pistes|solutions|points|idees) [aà] considerer/i,
+  /l'avenir (est|s'annonce) (prometteur|radieux|brillant)/i,
+  /ensemble[, ]nous (pouvons|pourrons|devons)/i,
+  /^\d+\.\s+\*\*/m,  // numbered list with bold markdown: "1. **Title**"
+  /\*\*[^*]+\*\*/,    // any bold markdown
+  /^- \*\*/m,         // bullet list with bold
+  /(🌍|🏗️|🌱|🚜|💪|✨){2,}/,  // emoji clusters (2+ consecutive)
+];
+
+export function hasAiSlopPatterns(content: string): boolean {
+  return AI_SLOP_PATTERNS.some((p) => p.test(content));
 }

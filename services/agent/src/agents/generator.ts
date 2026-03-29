@@ -4,25 +4,13 @@ import type { LlmProvider, LlmTool } from '../llm/types';
 function detectConversationLanguage(state: ConversationState): string {
   const recentMessages = state.messages.slice(-20);
   if (recentMessages.length === 0) return 'fr';
-
-  const languages = recentMessages
-    .map((m) => m.originalLanguage)
-    .filter((lang): lang is string => !!lang);
-
+  const languages = recentMessages.map((m) => m.originalLanguage).filter((lang): lang is string => !!lang);
   if (languages.length === 0) return 'fr';
-
   const freq = new Map<string, number>();
-  for (const lang of languages) {
-    freq.set(lang, (freq.get(lang) ?? 0) + 1);
-  }
+  for (const lang of languages) { freq.set(lang, (freq.get(lang) ?? 0) + 1); }
   let dominant = 'fr';
   let maxCount = 0;
-  for (const [lang, count] of freq) {
-    if (count > maxCount) {
-      dominant = lang;
-      maxCount = count;
-    }
-  }
+  for (const [lang, count] of freq) { if (count > maxCount) { dominant = lang; maxCount = count; } }
   return dominant;
 }
 
@@ -41,23 +29,18 @@ function buildGeneratorPrompt(
   agentInstructions: string,
   minWords: number,
   maxWords: number,
+  isNewTopic: boolean = false,
+  replyToSenderName: string | undefined = undefined,
 ): string {
   const mentionsText = mentionUsernames.length > 0
-    ? `\nMENTIONS: Inclus naturellement ces @mentions dans ta reponse: ${mentionUsernames.map((u) => `@${u}`).join(', ')}`
+    ? `\nMENTIONS: Inclus naturellement ces @mentions: ${mentionUsernames.map((u) => `@${u}`).join(', ')}`
     : '';
-
-  const instructionsText = agentInstructions
-    ? `\nINSTRUCTIONS: ${agentInstructions}`
-    : '';
-
+  const instructionsText = agentInstructions ? `\nINSTRUCTIONS: ${agentInstructions}` : '';
   const useCatchphrases = profile.catchphrases.length > 0 && Math.random() < 0.7;
   const catchphrasesText = useCatchphrases
-    ? `\n- EXPRESSIONS TYPIQUES (glisse naturellement l'une d'elles dans ta reponse): "${profile.catchphrases.join('", "')}"`
-    : '';
-
+    ? `\n- EXPRESSIONS TYPIQUES: "${profile.catchphrases.join('", "')}"` : '';
   const emojisText = profile.commonEmojis.length > 0
-    ? `\n- EMOJIS SPECIFIQUES a utiliser: ${profile.commonEmojis.join(' ')}`
-    : '';
+    ? `\n- EMOJIS: ${profile.commonEmojis.join(' ')}` : '';
 
   const toneGuide = profile.tone === 'familier' || profile.tone === 'enthousiaste'
     ? 'Ecris de maniere decontractee, avec des abreviations et du langage familier.'
@@ -67,53 +50,73 @@ function buildGeneratorPrompt(
         ? 'Pose des questions, montre de la curiosite, explore les idees.'
         : 'Garde un ton naturel et equilibre.';
 
-  const lengthGuide = profile.typicalLength === 'court'
-    ? 'Ecris des reponses COURTES et DIRECTES (1-3 phrases max). Pas de blabla.'
-    : profile.typicalLength === 'long'
-      ? 'Developpe tes idees en detail, avec des exemples et des nuances.'
-      : 'Ecris des reponses de longueur moyenne, ni trop courtes ni trop longues.';
-
   const emojiGuide = profile.emojiUsage === 'abondant'
-    ? 'Utilise BEAUCOUP d\'emojis dans ton message (3-5 minimum).'
+    ? 'Maximum 1-2 emojis, naturellement places.'
     : profile.emojiUsage === 'occasionnel'
-      ? 'Insere 1-2 emojis de maniere naturelle.'
-      : 'N\'utilise PAS d\'emojis du tout.';
+      ? 'Maximum 1 emoji, seulement si ca colle.'
+      : "Pas d'emojis.";
 
-  return `Tu incarnes ${displayName} dans une conversation de groupe. Tu n'es PAS un assistant, tu es un HUMAIN avec une personnalite propre.
+  // === MODE CHAT (default) vs MODE ELABORE (rare — new topic only) ===
+  const modeGuide = isNewTopic
+    ? `MODE ELABORE — Tu OUVRES un nouveau sujet ou c'est ta PREMIERE intervention sur ce theme.
+Tu peux developper (3-6 phrases). Donne ton avis, une experience, une observation concrete.
+Meme en mode elabore, reste CONVERSATIONNEL. Pas de dissertation. Pas de structure formelle.`
+    : `MODE CHAT — Tu REAGIS dans un fil existant. C'est du CHAT, pas un article.
+MAXIMUM 1-3 phrases. Court, direct, percutant.
+CITE le prenom ou @pseudo de la personne a qui tu reponds.
+Exemples de TON ATTENDU:
+- "Franchement @Paul t'as raison, sans electricite stable rien ne bouge"
+- "En vrai le vrai souci c'est la maintenance, on construit mais on entretient pas"
+- "Moi je pense qu'il faut deja regler les routes avant de parler d'industrie"
+- "Pas d'accord, le probleme c'est pas l'argent c'est la gestion"
+- "C'est exactement ce que je disais! @Marie tu vois?"`;
 
-CONTEXTE DE LA CONVERSATION:
-- Titre: ${conversationTitle || 'Sans titre'}
-- Description: ${conversationDescription || 'Aucune'}${instructionsText}
+  const replyContext = replyToSenderName
+    ? `\nTu REPONDS a ${replyToSenderName}. CITE son prenom dans ta reponse.` : '';
 
-PERSONNALITE DE ${displayName.toUpperCase()} (A RESPECTER STRICTEMENT):
-- Description: ${profile.personaSummary || 'Personnalite naturelle'}
+  return `Tu incarnes ${displayName} dans un groupe de chat. Tu es un HUMAIN, pas un assistant.
+
+CONVERSATION: ${conversationTitle || 'Sans titre'}${conversationDescription ? ' — ' + conversationDescription : ''}${instructionsText}
+
+QUI TU ES (${displayName.toUpperCase()}):
+- ${profile.personaSummary || 'Personnalite naturelle'}
 - Style: ${toneGuide}
-- Longueur: ${lengthGuide}
-- Emojis: ${emojiGuide}
-- Registre de langue: ${profile.vocabularyLevel} (${profile.vocabularyLevel === 'familier' ? 'utilise du slang, des abreviations, "mdr", "ptdr", "tkt"' : profile.vocabularyLevel === 'soutenu' ? 'utilise un vocabulaire riche et des tournures elegantes' : 'registre standard, naturel'})
-- Sujets maitrises: ${profile.topicsOfExpertise.join(', ') || 'generaux'}${catchphrasesText}${emojisText}
+- ${emojiGuide}
+- Registre: ${profile.vocabularyLevel}${catchphrasesText}${emojisText}
 
-SUJETS A EVITER: ${profile.topicsOfExpertise.length === 0 ? 'aucun' : ''}${(profile as any).topicsAvoided?.join(', ') || 'aucun'}
-EMOJIS HABITUELS: ${profile.commonEmojis?.join(' ') || 'aucun'}
+${modeGuide}${replyContext}
 
-SUJET A ABORDER: ${topic}${mentionsText}
+SUJET: ${topic}${mentionsText}
+
+=== INTERDIT — PATTERNS IA DETECTABLES ===
+- PAS de listes numerotees (1. 2. 3.) ni de listes a puces (-)
+- PAS de **gras** markdown ni de formatage
+- PAS d'ouvertures enthousiastes ("C'est passionnant!", "Il est enrichissant de voir...", "C'est vraiment un sujet captivant")
+- PAS de conclusions motivationnelles ("Ensemble nous pouvons...", "L'avenir est prometteur...")
+- PAS de formules creuses ("Voici quelques pistes a considerer", "Il est indeniable que...", "Il existe plusieurs solutions")
+- PAS de clusters d'emojis (MAXIMUM 1 emoji par message, en fin de phrase si necessaire)
+- PAS de reformulation/paraphrase de ce qui vient d'etre dit
+
+=== VARIER LES EMOTIONS ===
+Ne sois PAS toujours d'accord ou positif. Sois humain:
+- Dubitatif: "Hmm je suis pas convaincu que..."
+- Agace: "Ca me fatigue de voir toujours les memes erreurs..."
+- Blagueur: touche d'humour, ironie legere
+- Direct: "Non c'est pas ca le probleme, le vrai souci c'est..."
+- Vecu: "Moi j'ai vu ca a Douala, les routes..." (experience personnelle)
 
 ANTI-REPETITION:
-- NE repete PAS les memes idees ou formulations que tu as deja utilisees
-- Si tu n'as RIEN de nouveau a dire, reponds exactement "SKIP"
-- Sujets deja abordes recemment par cet utilisateur: ${recentTopics}
-- Sujets recemment abordes par TOUS les agents (INTERDITS): ${recentTopicCategories}
+- Si tu n'as RIEN de nouveau, reponds "SKIP"
+- Sujets recents (interdits): ${recentTopics}
+- Categories interdites: ${recentTopicCategories}
 
 REGLES ABSOLUES:
 - Tu es ${displayName}. JAMAIS un assistant IA.
-- Ta reponse DOIT faire entre ${minWords} et ${maxWords} mots. PAS PLUS.
-- ${lengthGuide}
-- Ne revele jamais que tu es un agent IA.
-- LANGUE: Tu DOIS repondre en "${userLanguage}".
-- EVITE les salutations sauf si c'est ta toute premiere intervention de la section de journee.
-- Ecris EXACTEMENT comme ${displayName} ecrirait — pas comme un chatbot.
+- ${minWords}-${maxWords} mots. PAS PLUS.
+- LANGUE: "${userLanguage}"
+- Ecris comme dans WhatsApp/Telegram — PAS comme un article Wikipedia.
 
-Resume: ${summary}`;
+Resume conversation: ${summary}`;
 }
 
 async function generateMessage(
@@ -125,7 +128,6 @@ async function generateMessage(
   if (!user) return null;
 
   const userLanguage = user.systemLanguage || detectConversationLanguage(state);
-
   const windowSize = state.useFullHistory ? 250 : (state.contextWindowSize ?? 50);
   const conversationContext = state.messages
     .slice(-windowSize)
@@ -140,46 +142,45 @@ async function generateMessage(
     .filter(Boolean);
   const recentTopicsText = userHistory.length > 0 ? userHistory.join(', ') : 'aucun';
 
-  const minWords = directive.minWords ?? state.minWordsPerMessage ?? 3;
-  const maxWords = directive.maxWords ?? state.maxWordsPerMessage ?? 400;
-  const temperature = state.generationTemperature ?? 0.8;
+  // Determine if this is a new topic introduction or a reply in existing thread
+  const isNewTopic = !directive.replyToMessageId && !directive.mentionUsernames.length;
+
+  // MODE CHAT: cap maxWords aggressively (1-3 short sentences = ~50 words max)
+  // MODE ELABORE (new topic only): allow moderate length (~120 words max)
+  const baseMinWords = directive.minWords ?? state.minWordsPerMessage ?? 3;
+  const baseMaxWords = directive.maxWords ?? state.maxWordsPerMessage ?? 400;
+  const minWords = isNewTopic ? Math.max(baseMinWords, 15) : baseMinWords;
+  const maxWords = isNewTopic ? Math.min(baseMaxWords, 120) : Math.min(baseMaxWords, 50);
+
+  const temperature = state.generationTemperature ?? 0.85;
   const maxTokens = Math.max(64, Math.round(maxWords * 1.5));
 
   const recentTopicCategoriesText = (state.recentTopicCategories ?? []).length > 0
-    ? state.recentTopicCategories.join(', ')
-    : 'aucun';
+    ? state.recentTopicCategories.join(', ') : 'aucun';
+
+  // Find the sender name of the message being replied to (for contextual citation)
+  const replyToSenderName = directive.replyToMessageId
+    ? state.messages.find((m) => m.id === directive.replyToMessageId)?.senderName
+    : undefined;
 
   const systemPrompt = buildGeneratorPrompt(
-    user.displayName,
-    profile,
-    directive.topic,
-    conversationContext,
-    state.summary,
-    directive.mentionUsernames,
-    userLanguage,
-    recentTopicsText,
-    recentTopicCategoriesText,
-    state.conversationTitle,
-    state.conversationDescription,
-    state.agentInstructions,
-    minWords,
-    maxWords,
+    user.displayName, profile, directive.topic, conversationContext, state.summary,
+    directive.mentionUsernames, userLanguage, recentTopicsText, recentTopicCategoriesText,
+    state.conversationTitle, state.conversationDescription, state.agentInstructions,
+    minWords, maxWords, isNewTopic, replyToSenderName,
   );
 
   const useWebSearch = Boolean(directive.needsWebSearch && state.webSearchEnabled);
   const tools: LlmTool[] | undefined = useWebSearch
-    ? [{ type: 'web_search_preview', search_context_size: 'medium' }]
-    : undefined;
+    ? [{ type: 'web_search_preview', search_context_size: 'medium' }] : undefined;
 
   try {
     const response = await llm.chat({
       systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: `Conversation recente:\n${conversationContext}\n\nReponds en tant que ${user.displayName} sur le sujet: ${directive.topic}`,
-        },
-      ],
+      messages: [{
+        role: 'user',
+        content: `Conversation recente:\n${conversationContext}\n\nReponds en tant que ${user.displayName} sur le sujet: ${directive.topic}`,
+      }],
       temperature,
       maxTokens: useWebSearch ? Math.max(maxTokens, 512) : maxTokens,
       tools,
