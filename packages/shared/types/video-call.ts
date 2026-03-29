@@ -124,9 +124,9 @@ export interface ConnectionQuality {
  * État des contrôles média
  */
 export interface CallControls {
-  audioEnabled: boolean;
-  videoEnabled: boolean;
-  screenShareEnabled: boolean;
+  readonly audioEnabled: boolean;
+  readonly videoEnabled: boolean;
+  readonly screenShareEnabled: boolean;
 }
 
 // ===== AUDIO EFFECTS =====
@@ -379,9 +379,9 @@ export interface CallInitiatedEvent {
   readonly conversationId: string;
   readonly mode: CallMode;
   readonly initiator: {
-    userId: string;
-    username: string;
-    avatar?: string;
+    readonly userId: string;
+    readonly username: string;
+    readonly avatar?: string;
   };
   readonly participants: CallParticipant[];
 }

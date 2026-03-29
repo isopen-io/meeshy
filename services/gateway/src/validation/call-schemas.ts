@@ -202,7 +202,7 @@ export const socketQualityReportSchema = z.object({
       video: z.number().min(0)
     }).optional(),
     jitter: z.number().min(0).optional(),
-    timestamp: z.string().or(z.date()).optional()
+    timestamp: z.string().datetime().or(z.date()).optional()
   })
 });
 
