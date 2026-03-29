@@ -126,8 +126,8 @@ export class MongoPersistence {
       },
     });
     return participants
-      .filter((p) => p.user != null)
-      .map((p) => p.user!);
+      .filter((p: any) => p.user != null)
+      .map((p: any) => p.user);
   }
 
   async getPotentialControlledUsers(
@@ -168,8 +168,8 @@ export class MongoPersistence {
     });
 
     return participants
-      .filter((p) => p.user != null)
-      .map((p) => p.user!);
+      .filter((p: any) => p.user != null)
+      .map((p: any) => p.user);
   }
 
   async getLeastActiveParticipants(
@@ -200,8 +200,8 @@ export class MongoPersistence {
     });
 
     return participants
-      .filter((p) => p.user != null)
-      .map((p) => p.user!);
+      .filter((p: any) => p.user != null)
+      .map((p: any) => p.user);
   }
 
   async getGlobalProfile(userId: string) {
