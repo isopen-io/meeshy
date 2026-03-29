@@ -553,19 +553,20 @@ struct ConversationListView: View {
 
     private var mainContentZStack: some View {
         ZStack(alignment: .bottom) {
-                // Main scroll content with gesture detection
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        // Scroll offset detector
-                        GeometryReader { geo in
-                            Color.clear.preference(
-                                key: ScrollOffsetPreferenceKey.self,
-                                value: geo.frame(in: .named("scroll")).minY
-                            )
-                        }
-                        .frame(height: 0)
+            // Main scroll content with header overlay
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    // Scroll offset detector
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geo.frame(in: .named("scroll")).minY
+                        )
+                    }
+                    .frame(height: 0)
 
-                    Color.clear.frame(height: CollapsibleHeader<EmptyView>.expandedHeight)
+                    // Top spacer — content starts below the expanded header
+                    Color.clear.frame(height: 100)
 
                     // Story carousel
                     StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
@@ -652,8 +653,7 @@ struct ConversationListView: View {
                     }
                 }
             }
-            // Header overlay
-            VStack(spacing: 0) {
+            .overlay(alignment: .top) {
                 CollapsibleHeader(
                     title: "Conversations",
                     scrollOffset: headerScrollOffset,
@@ -672,7 +672,6 @@ struct ConversationListView: View {
                         .accessibilityLabel("Nouvelle conversation")
                     }
                 )
-                Spacer()
             }
 
             // Bottom overlay: Search bar (always) + Communities & Filters (when loupe tapped)
