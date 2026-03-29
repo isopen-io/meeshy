@@ -2,6 +2,7 @@ import type { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
 import type { ToneProfile, ControlledUser } from '../graph/state';
 import { toneProfileToGlobalFields } from './profile-merger';
 
+
 export class MongoPersistence {
   constructor(private prisma: PrismaClient) {}
 
@@ -125,8 +126,8 @@ export class MongoPersistence {
       },
     });
     return participants
-      .filter((p: Record<string, unknown>): p is Record<string, unknown> & { user: NonNullable<Record<string, unknown>> } => p.user != null)
-      .map((p: { user: Record<string, unknown> }) => p.user);
+      .filter((p) => p.user != null)
+      .map((p) => p.user!);
   }
 
   async getPotentialControlledUsers(
@@ -167,8 +168,8 @@ export class MongoPersistence {
     });
 
     return participants
-      .filter((p: Record<string, unknown>): p is Record<string, unknown> & { user: NonNullable<Record<string, unknown>> } => p.user != null)
-      .map((p: { user: Record<string, unknown> }) => p.user);
+      .filter((p) => p.user != null)
+      .map((p) => p.user!);
   }
 
   async getLeastActiveParticipants(
@@ -199,8 +200,8 @@ export class MongoPersistence {
     });
 
     return participants
-      .filter((p: Record<string, unknown>): p is Record<string, unknown> & { user: NonNullable<Record<string, unknown>> } => p.user != null)
-      .map((p: { user: Record<string, unknown> }) => p.user);
+      .filter((p) => p.user != null)
+      .map((p) => p.user!);
   }
 
   async getGlobalProfile(userId: string) {

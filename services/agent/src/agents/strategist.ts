@@ -538,6 +538,9 @@ export function createStrategistNode(llm: LlmProvider) {
       };
     }
 
+    const maxReactions = state.maxReactionsPerCycle;
+    const reactionsEnabled = state.reactionsEnabled;
+
     if (state.activityScore > 0.7) {
       // Even in active conversations, lurkers can still react
       const lurkerReactions = reactionsEnabled
@@ -551,9 +554,6 @@ export function createStrategistNode(llm: LlmProvider) {
         } satisfies InterventionPlan,
       };
     }
-
-    const maxReactions = state.maxReactionsPerCycle;
-    const reactionsEnabled = state.reactionsEnabled;
 
     if (state.budgetRemaining <= 0) {
       // Budget exhausted for messages, but lurkers can still react

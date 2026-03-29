@@ -231,7 +231,7 @@ export class ConversationScanner {
           userId: u.id,
           displayName: u.displayName ?? u.username ?? u.id,
           username: u.username ?? u.id,
-          systemLanguage: u.systemLanguage,
+          systemLanguage: u.systemLanguage ?? "fr",
           source: 'auto_rule' as const,
           role: {
             userId: u.id,
@@ -282,7 +282,7 @@ export class ConversationScanner {
           userId: u.id,
           displayName: u.displayName ?? u.username ?? u.id,
           username: u.username ?? u.id,
-          systemLanguage: u.systemLanguage,
+          systemLanguage: u.systemLanguage ?? "fr",
           source: 'auto_rule' as const,
           role: {
             userId: u.id,
