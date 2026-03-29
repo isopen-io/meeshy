@@ -102,6 +102,8 @@ final class VideoFilterPipeline: VideoFilterPipelineProviding {
 final class VideoFilterCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
     private let target: RTCVideoCapturerDelegate
     private let pipeline: VideoFilterPipeline
+    let darkFrameDetector = DarkFrameDetector()
+    private var frameCount = 0
 
     init(target: RTCVideoCapturerDelegate, pipeline: VideoFilterPipeline) {
         self.target = target
@@ -110,17 +112,21 @@ final class VideoFilterCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
     }
 
     func capturer(_ capturer: RTCVideoCapturer, didCapture frame: RTCVideoFrame) {
-        guard pipeline.config.isEnabled else {
-            target.capturer(capturer, didCapture: frame)
-            return
-        }
-
         guard let pixelBuffer = (frame.buffer as? RTCCVPixelBuffer)?.pixelBuffer else {
             target.capturer(capturer, didCapture: frame)
             return
         }
 
-        _ = pipeline.process(pixelBuffer)
+        // Dark frame detection every 10th frame (~3fps at 30fps) for efficiency
+        frameCount += 1
+        if frameCount % 10 == 0 {
+            darkFrameDetector.analyzeFrame(pixelBuffer)
+        }
+
+        // Apply video filters if enabled
+        if pipeline.config.isEnabled {
+            _ = pipeline.process(pixelBuffer)
+        }
 
         target.capturer(capturer, didCapture: frame)
     }

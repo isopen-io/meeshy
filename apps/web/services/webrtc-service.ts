@@ -86,6 +86,141 @@ export class WebRTCService {
   }
 
   /**
+   * Add RED (Redundant Encoding) for audio packet loss recovery.
+   * Wraps Opus in RED at ~20% bandwidth cost for ~50% packet loss resilience.
+   */
+  private addAudioRedundancy(sdp: string): string {
+    const opusMatch = sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/);
+    if (!opusMatch) return sdp;
+    const opusPT = opusMatch[1];
+    const redPT = '63';
+
+    if (sdp.includes('red/48000')) return sdp;
+
+    const lines = sdp.split('\r\n');
+    const result: string[] = [];
+
+    for (const line of lines) {
+      if (line.startsWith('m=audio ')) {
+        const parts = line.split(' ');
+        if (parts.length >= 4 && !parts.includes(redPT)) {
+          const [m, port, proto, ...payloads] = parts;
+          result.push([m, port, proto, redPT, ...payloads].join(' '));
+          continue;
+        }
+      }
+
+      result.push(line);
+
+      if (line === `a=rtpmap:${opusPT} opus/48000/2`) {
+        result.push(`a=rtpmap:${redPT} red/48000/2`);
+        result.push(`a=fmtp:${redPT} ${opusPT}/${opusPT}`);
+      }
+    }
+
+    return result.join('\r\n');
+  }
+
+  /**
+   * Add Transport-CC extension for Google Congestion Control bandwidth estimation.
+   */
+  private addTransportCC(sdp: string): string {
+    const transportCCURI = 'http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01';
+    if (sdp.includes(transportCCURI)) return sdp;
+
+    const usedIDs = new Set<number>();
+    const extmapRegex = /a=extmap:(\d+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = extmapRegex.exec(sdp)) !== null) {
+      usedIDs.add(parseInt(m[1], 10));
+    }
+
+    let extID = 5;
+    while (usedIDs.has(extID)) extID++;
+    const extmapLine = `a=extmap:${extID} ${transportCCURI}`;
+
+    const lines = sdp.split('\r\n');
+    const result: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      result.push(lines[i]);
+      if (lines[i].startsWith('m=audio ') || lines[i].startsWith('m=video ')) {
+        let insertIdx = result.length;
+        while (i + 1 < lines.length && !lines[i + 1].startsWith('m=')) {
+          i++;
+          result.push(lines[i]);
+          if (lines[i].startsWith('a=extmap:')) {
+            insertIdx = result.length;
+          }
+        }
+        result.splice(insertIdx, 0, extmapLine);
+      }
+    }
+
+    return result.join('\r\n');
+  }
+
+  /**
+   * Add bitrate hints to video fmtp lines for better quality control.
+   */
+  private addVideoBitrateHints(sdp: string): string {
+    const lines = sdp.split('\r\n');
+    let inVideoSection = false;
+
+    return lines.map((line) => {
+      if (line.startsWith('m=video ')) { inVideoSection = true; return line; }
+      if (line.startsWith('m=')) { inVideoSection = false; return line; }
+      if (inVideoSection && line.startsWith('a=fmtp:') && !line.includes('x-google-max-bitrate')) {
+        return `${line};x-google-max-bitrate=2500;x-google-min-bitrate=100`;
+      }
+      return line;
+    }).join('\r\n');
+  }
+
+  /**
+   * Enable 3-layer simulcast (h/m/l) for the primary video m= section.
+   * Prep for SFU Phase 2 -- adds SDP structure for 720p/360p/180p layers.
+   */
+  enableSimulcast(sdp: string): string {
+    const lines = sdp.split('\r\n');
+    let firstVideoIdx = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith('m=video ')) { firstVideoIdx = i; break; }
+    }
+    if (firstVideoIdx === -1) return sdp;
+
+    let endOfVideoSection = lines.length;
+    for (let i = firstVideoIdx + 1; i < lines.length; i++) {
+      if (lines[i].startsWith('m=')) { endOfVideoSection = i; break; }
+    }
+
+    const videoSection = lines.slice(firstVideoIdx, endOfVideoSection);
+    if (videoSection.some((l) => l.startsWith('a=simulcast:'))) return sdp;
+
+    const simulcastLines = [
+      'a=rid:h send',
+      'a=rid:m send',
+      'a=rid:l send',
+      'a=simulcast:send h;m;l',
+    ];
+
+    lines.splice(endOfVideoSection, 0, ...simulcastLines);
+    return lines.join('\r\n');
+  }
+
+  /**
+   * Apply all SDP munging: Opus params, RED, Transport-CC, video bitrate hints.
+   */
+  private mungeSdp(sdp: string): string {
+    let munged = this.mungeOpusSdp(sdp);
+    munged = this.addAudioRedundancy(munged);
+    munged = this.addTransportCC(munged);
+    munged = this.addVideoBitrateHints(munged);
+    return munged;
+  }
+
+  /**
    * Initialize peer connection with ICE servers
    */
   createPeerConnection(participantId: string): RTCPeerConnection {
@@ -297,7 +432,7 @@ export class WebRTCService {
       });
 
       if (offer.sdp) {
-        offer.sdp = this.mungeOpusSdp(offer.sdp);
+        offer.sdp = this.mungeSdp(offer.sdp);
       }
 
       await this.peerConnection.setLocalDescription(offer);
@@ -333,7 +468,7 @@ export class WebRTCService {
       const answer = await this.peerConnection.createAnswer();
 
       if (answer.sdp) {
-        answer.sdp = this.mungeOpusSdp(answer.sdp);
+        answer.sdp = this.mungeSdp(answer.sdp);
       }
 
       // Set local description (answer)
@@ -473,7 +608,7 @@ export class WebRTCService {
       const offer = await this.peerConnection.createOffer({ iceRestart: true });
 
       if (offer.sdp) {
-        offer.sdp = this.mungeOpusSdp(offer.sdp);
+        offer.sdp = this.mungeSdp(offer.sdp);
       }
 
       // Set as local description

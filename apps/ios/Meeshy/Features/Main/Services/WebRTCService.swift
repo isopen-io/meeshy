@@ -27,6 +27,7 @@ final class WebRTCService: @unchecked Sendable {
     private(set) var currentBitrate: Int = QualityThresholds.defaultBitrate
     private var qualityMonitorTimer: Timer?
     private var lastStats: CallStats?
+    private var comfortNoiseEnabled = true
 
     init(client: (any WebRTCClientProviding)? = nil) {
         self.client = client ?? P2PWebRTCClient()
@@ -126,6 +127,13 @@ final class WebRTCService: @unchecked Sendable {
                 Logger.webrtc.error("Failed to switch camera: \(error.localizedDescription)")
             }
         }
+    }
+
+    // MARK: - Comfort Noise
+
+    func handleRemoteAudioMuted(_ muted: Bool) {
+        guard comfortNoiseEnabled else { return }
+        Logger.webrtc.info("Remote audio \(muted ? "muted" : "unmuted") — CNG active via Opus")
     }
 
     // MARK: - Quality Monitoring

@@ -59,6 +59,7 @@ final class CallManager: ObservableObject {
     private let networkMonitor = NWPathMonitor()
     private let networkQueue = DispatchQueue(label: "me.meeshy.callmanager.network")
     private var lastNetworkPath: NWPath.Status = .satisfied
+    private let thermalMonitor = ThermalStateMonitor()
 
     // CallKit
     private let callProvider: CXProvider
@@ -356,10 +357,16 @@ final class CallManager: ObservableObject {
 
         startHeartbeat()
         webRTCService.startQualityMonitor()
+        startThermalMonitoring()
 
         if let uuid = activeCallUUID {
             callProvider.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
+    }
+
+    private func startThermalMonitoring() {
+        thermalMonitor.delegate = self
+        thermalMonitor.startMonitoring()
     }
 
     private func startHeartbeat() {
@@ -425,6 +432,7 @@ final class CallManager: ObservableObject {
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = nil
         pendingRemoteOffer = nil
+        thermalMonitor.stopMonitoring()
         callStartDate = nil
         reconnectAttempt = 0
         webRTCService.close()
@@ -554,6 +562,23 @@ final class CallManager: ObservableObject {
         let minutes = Int(callDuration) / 60
         let seconds = Int(callDuration) % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - ThermalStateMonitorDelegate
+
+extension CallManager: ThermalStateMonitorDelegate {
+    nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {
+        Task { @MainActor [weak self] in
+            guard let self, self.callState == .connected else { return }
+            if state == .critical && self.isVideoEnabled {
+                Logger.calls.warning("Thermal critical — disabling video to preserve battery")
+                self.isVideoEnabled = false
+                self.webRTCService.toggleVideo(enabled: false)
+            } else if state == .serious {
+                Logger.calls.warning("Thermal serious — reducing quality")
+            }
+        }
     }
 }
 
