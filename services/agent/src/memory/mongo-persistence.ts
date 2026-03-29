@@ -178,8 +178,7 @@ export class MongoPersistence {
       },
     });
     return participants
-      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
-      .map((p) => p.user);
+      .flatMap((p) => (p.user ? [p.user] : []));
   }
 
   async getPotentialControlledUsers(
@@ -220,8 +219,7 @@ export class MongoPersistence {
     });
 
     return participants
-      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
-      .map((p) => p.user);
+      .flatMap((p) => (p.user ? [p.user] : []));
   }
 
   async getLeastActiveParticipants(
@@ -252,8 +250,7 @@ export class MongoPersistence {
     });
 
     return participants
-      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
-      .map((p) => p.user);
+      .flatMap((p) => (p.user ? [p.user] : []));
   }
 
   async getGlobalProfile(userId: string) {

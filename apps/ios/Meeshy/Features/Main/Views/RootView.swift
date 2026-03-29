@@ -91,8 +91,8 @@ struct RootView: View {
                     case .profile:
                         ProfileView()
                             .navigationBarHidden(true)
-                    case .contacts:
-                        ContactsHubView()
+                    case .contacts(let initialTab):
+                        ContactsHubView(initialTab: initialTab)
                             .navigationBarHidden(true)
                     case .communityList:
                         CommunityListView(
