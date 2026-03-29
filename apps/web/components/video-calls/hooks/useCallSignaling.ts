@@ -16,6 +16,10 @@ import type {
   CallParticipantLeftEvent,
   CallEndedEvent,
   CallMediaToggleEvent,
+  CallInitiateEvent,
+  CallInitiateAck,
+  CallJoinAck,
+  CallSession,
 } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
@@ -29,6 +33,16 @@ export interface UseCallSignalingOptions {
   onMediaToggle?: (event: CallMediaToggleEvent) => void;
   onSignal?: (signal: WebRTCSignal) => void;
   onError?: (error: Error) => void;
+}
+
+interface InitiateCallResult {
+  callId: string;
+  mode: 'p2p' | 'sfu';
+}
+
+interface JoinCallResult {
+  callSession: CallSession;
+  iceServers: RTCIceServer[];
 }
 
 export function useCallSignaling(options: UseCallSignalingOptions) {
@@ -99,21 +113,97 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
   }, [callId, userId]);
 
   /**
-   * Join call
+   * Initiate a new call with ACK callback
+   * Waits for server to respond with {callId, mode} before proceeding
    */
-  const joinCall = useCallback((settings?: { audioEnabled?: boolean; videoEnabled?: boolean }) => {
+  const initiateCall = useCallback(async (data: CallInitiateEvent): Promise<InitiateCallResult> => {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) {
-      logger.error('[useCallSignaling]', 'Socket not available');
-      return;
+      const err = new Error('Socket not available');
+      handlersRef.current.onError?.(err);
+      throw err;
     }
 
-    socket.emit(CLIENT_EVENTS.CALL_JOIN, {
-      callId,
-      settings: settings || { audioEnabled: true, videoEnabled: true },
+    return new Promise<InitiateCallResult>((resolve, reject) => {
+      socket.emit(CLIENT_EVENTS.CALL_INITIATE, data, (ack: CallInitiateAck) => {
+        if (ack.success && ack.data) {
+          logger.info('[useCallSignaling]', 'Call initiated (ACK)', {
+            callId: ack.data.callId,
+            mode: ack.data.mode,
+          });
+          resolve(ack.data);
+        } else {
+          const err = new Error(ack.error?.message || 'Failed to initiate call');
+          logger.error('[useCallSignaling]', 'Call initiate failed', { error: ack.error });
+          handlersRef.current.onError?.(err);
+          reject(err);
+        }
+      });
     });
+  }, []);
 
-    logger.info('[useCallSignaling]', 'Join call emitted', { callId });
+  /**
+   * Join call with ACK callback
+   * Waits for server to respond with {callSession, iceServers} before configuring WebRTC
+   */
+  const joinCall = useCallback(async (settings?: { audioEnabled?: boolean; videoEnabled?: boolean }): Promise<JoinCallResult> => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket) {
+      const err = new Error('Socket not available');
+      handlersRef.current.onError?.(err);
+      throw err;
+    }
+
+    return new Promise<JoinCallResult>((resolve, reject) => {
+      socket.emit(CLIENT_EVENTS.CALL_JOIN, {
+        callId,
+        settings: settings || { audioEnabled: true, videoEnabled: true },
+      }, (ack: CallJoinAck) => {
+        if (ack.success && ack.data) {
+          logger.info('[useCallSignaling]', 'Call joined (ACK)', {
+            callId,
+            iceServersCount: ack.data.iceServers.length,
+          });
+          resolve(ack.data);
+        } else {
+          const err = new Error(ack.error?.message || 'Failed to join call');
+          logger.error('[useCallSignaling]', 'Call join failed', { error: ack.error });
+          handlersRef.current.onError?.(err);
+          reject(err);
+        }
+      });
+    });
+  }, [callId]);
+
+  /**
+   * Wait for a participant to join before creating SDP offer
+   * Returns the participant-joined event, or rejects on timeout
+   */
+  const waitForParticipantJoined = useCallback((timeoutMs = 30_000): Promise<CallParticipantJoinedEvent> => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket) {
+      return Promise.reject(new Error('Socket not available'));
+    }
+
+    return new Promise<CallParticipantJoinedEvent>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handler);
+        reject(new Error('Timed out waiting for participant to join'));
+      }, timeoutMs);
+
+      const handler = (event: CallParticipantJoinedEvent) => {
+        if (event.callId !== callId) return;
+        clearTimeout(timeout);
+        socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handler);
+        logger.info('[useCallSignaling]', 'Participant joined (awaited)', {
+          callId,
+          participantId: event.participant.id,
+        });
+        resolve(event);
+      };
+
+      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handler);
+    });
   }, [callId]);
 
   /**
@@ -223,7 +313,9 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
 
   return {
     sendSignal,
+    initiateCall,
     joinCall,
+    waitForParticipantJoined,
     leaveCall,
     toggleAudio,
     toggleVideo,

@@ -8,14 +8,24 @@
 'use client';
 
 import { create } from 'zustand';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   CallSession,
   CallParticipant,
   CallControls,
   CallState,
+  CallEndReason,
+  ConnectionQualityLevel,
 } from '@meeshy/shared/types/video-call';
 
 interface CallStoreState extends CallState {
+  // Extended state
+  callEndReason: CallEndReason | null;
+  reconnectAttempt: number;
+  connectionQuality: ConnectionQualityLevel | null;
+  isReconnecting: boolean;
+
   // Actions: Call management
   setCurrentCall: (call: CallSession | null) => void;
   updateCallStatus: (status: CallSession['status']) => void;
@@ -45,9 +55,26 @@ interface CallStoreState extends CallState {
   setInCall: (isInCall: boolean) => void;
   setError: (error: string | null) => void;
 
+  // Actions: Heartbeat
+  startHeartbeat: (callId: string) => void;
+  stopHeartbeat: () => void;
+
+  // Actions: Reconnection
+  setReconnecting: (attempt: number) => void;
+
+  // Actions: Connection quality
+  setConnectionQuality: (quality: ConnectionQualityLevel) => void;
+
+  // Actions: End reason
+  setCallEndReason: (reason: CallEndReason) => void;
+
   // Actions: Cleanup
   reset: () => void;
 }
+
+const HEARTBEAT_INTERVAL_MS = 15_000;
+
+let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
 const initialState: CallState = {
   // Current call
@@ -84,6 +111,12 @@ const initialState: CallState = {
 
 export const useCallStore = create<CallStoreState>((set, get) => ({
   ...initialState,
+
+  // Extended state defaults
+  callEndReason: null,
+  reconnectAttempt: 0,
+  connectionQuality: null,
+  isReconnecting: false,
 
   // ===== CALL MANAGEMENT =====
 
@@ -301,10 +334,60 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   setError: (error) => set({ error }),
 
+  // ===== HEARTBEAT =====
+
+  startHeartbeat: (callId) => {
+    // Clear any existing heartbeat
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+    }
+
+    heartbeatInterval = setInterval(() => {
+      const socket = meeshySocketIOService.getSocket();
+      if (socket?.connected) {
+        socket.emit(CLIENT_EVENTS.CALL_HEARTBEAT, { callId });
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+  },
+
+  stopHeartbeat: () => {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+  },
+
+  // ===== RECONNECTION =====
+
+  setReconnecting: (attempt) => {
+    set({
+      isReconnecting: attempt > 0,
+      reconnectAttempt: attempt,
+    });
+  },
+
+  // ===== CONNECTION QUALITY =====
+
+  setConnectionQuality: (quality) => {
+    set({ connectionQuality: quality });
+  },
+
+  // ===== END REASON =====
+
+  setCallEndReason: (reason) => {
+    set({ callEndReason: reason });
+  },
+
   // ===== CLEANUP =====
 
   reset: () => {
     const state = get();
+
+    // Stop heartbeat
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
 
     // Stop local stream
     if (state.localStream) {
@@ -327,6 +410,10 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       remoteStreams: new Map(),
       peerConnections: new Map(),
       translations: new Map(),
+      callEndReason: null,
+      reconnectAttempt: 0,
+      connectionQuality: null,
+      isReconnecting: false,
     });
   },
 }));

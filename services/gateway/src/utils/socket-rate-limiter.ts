@@ -52,6 +52,11 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 50,
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:call:media'
+  },
+  CALL_TRANSCRIPTION_SEGMENT: {
+    maxRequests: 60,
+    windowMs: 10000, // 10 seconds (real-time transcription bursts)
+    keyPrefix: 'socket:call:transcription'
   }
 };
 

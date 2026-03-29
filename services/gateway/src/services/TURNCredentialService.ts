@@ -34,8 +34,8 @@ export class TURNCredentialService {
     const turnServersEnv = process.env.TURN_SERVERS || '';
     this.turnServers = this.parseTURNServers(turnServersEnv);
 
-    // Credential TTL in seconds (default: 24 hours)
-    this.credentialTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '86400', 10);
+    // Credential TTL in seconds (default: 1 hour for security)
+    this.credentialTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '3600', 10);
 
     // STUN servers (public Google STUN servers)
     this.stunServers = [

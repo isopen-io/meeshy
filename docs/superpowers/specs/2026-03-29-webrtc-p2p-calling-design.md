@@ -1028,3 +1028,323 @@ canImport(WebRTC) guard. Throws WebRTCError.notSupported.
 | SIGNAL_SENDER_MISMATCH | Spoofed signal | Silently drop |
 | SIGNAL_TOO_LARGE | Signal > 64KB | Reject, log warning |
 | TARGET_NOT_FOUND | Signal to ghost | Silently drop |
+
+---
+
+## 13. Web (Next.js) Implementation
+
+### 13.1 Scope
+
+The existing web codebase has partial WebRTC implementation:
+- `apps/web/services/webrtc-service.ts` (~400 lines)
+- `apps/web/stores/call-store.ts` (~320 lines, Zustand)
+- `apps/web/components/video-calls/` (UI components)
+- `apps/web/hooks/use-webrtc-p2p.ts`, `use-call-quality.ts`
+
+The web implementation MUST mirror the iOS spec for consistency.
+
+### 13.2 WebRTC Service Updates
+
+- Add Opus SDP munging (same parameters as iOS Section 4.4)
+- Add adaptive bitrate with same QualityThresholds as iOS
+- Add ICE restart support on connection failure
+- Add ACK callback handling for call:initiate, call:join, call:signal, call:end
+- Wait for call:participant-joined before creating SDP offer
+
+### 13.3 Call Store Updates (Zustand)
+
+- Sync CallStatus type (9 values)
+- Add CallEndReason tracking
+- Add heartbeat timer (15s interval)
+- Add reconnection state (3 attempts)
+- Add quality monitoring state
+
+### 13.4 Browser Compatibility
+
+| Feature | Chrome 120+ | Safari 17+ | Firefox 120+ |
+|---------|------------|-----------|-------------|
+| VP8/H.264 | ✅ | ✅ | ✅ |
+| Opus | ✅ | ✅ | ✅ |
+| Insertable Streams | ✅ | ✅ (18+) | ❌ |
+| Screen Sharing | ✅ | ✅ | ✅ |
+
+Safari-specific: HTTPS required, getUserMedia constraints must use exact instead of ideal for resolution.
+
+---
+
+## 14. Video Processing Pipeline
+
+### 14.1 Allowed Filters
+
+**Basic filters** (always available):
+- Color temperature (warm/cool white balance)
+- Brightness, contrast, saturation, exposure
+- Color grading via LUT (Look-Up Table)
+
+**Simple face filters** (opt-in):
+- Face detection: Vision framework (iOS), MediaPipe (web)
+- 2D overlay on face landmarks (glasses, hats, masks)
+- Face smoothing / beauty mode (gaussian blur on face region)
+- Background blur (portrait mode)
+
+**NOT allowed**: Heavy AR effects, 3D face mesh deformation, Snapchat-style lenses.
+
+### 14.2 iOS Implementation
+
+```swift
+// CIFilter chain on RTCCameraVideoCapturer output
+class VideoFilterPipeline {
+    private let context = CIContext(options: [.useSoftwareRenderer: false])
+
+    func process(_ pixelBuffer: CVPixelBuffer) -> CVPixelBuffer {
+        var image = CIImage(cvPixelBuffer: pixelBuffer)
+        image = image.applyingFilter("CITemperatureAndTint", parameters: [
+            "inputNeutral": CIVector(x: CGFloat(temperature), y: 0),
+            "inputTargetNeutral": CIVector(x: 6500, y: 0)
+        ])
+        image = image.applyingFilter("CIColorControls", parameters: [
+            "inputBrightness": brightness,
+            "inputContrast": contrast,
+            "inputSaturation": saturation
+        ])
+        context.render(image, to: pixelBuffer)
+        return pixelBuffer
+    }
+}
+```
+
+Performance budget: <2ms per frame at 30fps 720p on iPhone 12+.
+
+### 14.3 Web Implementation
+
+WebGL shader pipeline on `<canvas>` element:
+1. Video frame → WebGL texture
+2. Apply color temperature/brightness/contrast fragment shader
+3. Output → `canvas.captureStream()` → WebRTC track
+
+### 14.4 Face Detection (Phase 2)
+
+iOS: `VNDetectFaceRectanglesRequest` → face bounding box → apply CIFilter region mask.
+Web: MediaPipe Face Detection → canvas overlay compositing.
+
+---
+
+## 15. Audio Effects Pipeline
+
+### 15.1 Existing Effects (Reuse from Recording)
+
+| Effect | Parameters | Web Status | iOS Status |
+|--------|-----------|-----------|-----------|
+| VoiceCoder | pitch, harmonization, strength, retuneSpeed, scale, key | ✅ Implemented | ❌ New |
+| BabyVoice | pitch, formant, breathiness | ✅ Implemented | ❌ New |
+| DemonVoice | pitch, distortion, reverb | ✅ Implemented | ❌ New |
+| BackSound | soundFile, volume, loopMode | ✅ Implemented | ❌ New |
+
+### 15.2 Dual-Stream Architecture
+
+During a call, audio effects create TWO streams:
+1. **Processed stream** → sent to remote participant (they hear the effect)
+2. **Clean stream** → fed to Speech framework for transcription (no effect artifacts)
+
+```
+Microphone → [AudioNode split]
+              ├─ Clean → Speech Framework (transcription)
+              └─ Effects chain → WebRTC send track (remote hears effect)
+```
+
+### 15.3 Web: Reuse `useAudioEffects()` hook
+
+Apply existing `BiquadFilterNode` + `GainNode` + `PitchShiftProcessor` chain to the live `MediaStreamTrack` instead of the `MediaRecorder` input.
+
+### 15.4 iOS: New `CallAudioEffectsService`
+
+Use `AVAudioEngine` pipeline:
+- `AVAudioEngine` → `AVAudioUnitEQ` (for basic effects)
+- Custom `AVAudioUnit` for pitch shifting
+- Output node splits to WebRTC track + Speech recognition
+
+Performance budget: <5ms latency for audio effects.
+
+---
+
+## 16. Real-Time Transcription & Translation
+
+### 16.1 Architecture
+
+```
+Local mic → Speech Framework → text segments ─→ Socket.IO → Translator
+                                                              ├─ NLLB translation
+                                                              └─ translated segment → remote client
+Remote audio → Speech Framework → text segments (local display)
+```
+
+### 16.2 On-Device Transcription (Primary)
+
+**iOS 16-18**: `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`
+**iOS 26+**: `SpeechAnalyzer` with `DictationTranscriber` (better accuracy, long-form support)
+
+Configuration:
+```swift
+let recognizer = SFSpeechRecognizer(locale: Locale(identifier: lang))
+let request = SFSpeechAudioBufferRecognitionRequest()
+request.shouldReportPartialResults = true
+request.requiresOnDeviceRecognition = true
+request.addsPunctuation = true
+```
+
+### 16.3 Dual-Stream Diarization
+
+P2P calls have naturally separated audio streams — no ML diarization needed:
+- Local audio → transcription with `speakerId = self.userId`
+- Remote audio → transcription with `speakerId = remote.userId`
+- Merge chronologically by `startTime`
+
+### 16.4 Server-Assisted Translation
+
+New Socket.IO events:
+```typescript
+CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT: 'call:transcription-segment'
+SERVER_EVENTS.CALL_TRANSLATED_SEGMENT: 'call:translated-segment'
+```
+
+Flow:
+1. Client sends final transcription segment to server
+2. Server runs NLLB translation to remote user's `preferredContentLanguages`
+3. Server pushes translated segment to remote client
+4. Remote UI displays translated text (Prisme Linguistique applies)
+
+### 16.5 Edge Cases
+
+| Edge Case | Handling |
+|-----------|---------|
+| Background noise | VAD (Silero) filters non-speech; Speech framework handles naturally |
+| Echo from speaker | Hardware AEC (CallKit .voiceChat) prevents; clean stream for transcription |
+| Cross-talk | Dual-stream separation; each stream transcribed independently |
+| Code-switching | Whisper large-v3 handles multilingual; Speech framework may struggle |
+| Connection drop mid-sentence | Mark last segment as `isFinal: false`, merge on reconnect |
+| Low bandwidth audio (16kbps) | Server-side Whisper for better accuracy on degraded audio |
+| Opus compression artifacts | Whisper trained on compressed audio; minimal accuracy loss |
+
+### 16.6 Latency Target
+
+Speech → capture → encode → decode → transcribe → translate → display: **< 2 seconds**.
+
+Breakdown:
+- On-device transcription: ~300ms (partial result)
+- Socket.IO round trip: ~100ms
+- NLLB translation: ~200-500ms (single sentence)
+- UI render: ~16ms
+
+### 16.7 Privacy Modes
+
+- **On-device only** (default): Transcription stays on device, no server involvement
+- **Server-assisted**: Audio chunks sent to Whisper for higher accuracy (opt-in)
+- **Translation mode**: Transcription sent to server for NLLB translation (requires consent from both parties)
+
+---
+
+## 17. Multi-Device Handling
+
+### 17.1 Simultaneous Ringing
+
+Both iOS and Web devices ring simultaneously on incoming call.
+
+### 17.2 First-Join Wins
+
+First device to `call:join` wins. Server sends `call:already-answered` to other devices of the same user.
+
+### 17.3 Active Call Indicator
+
+Non-active devices show "In call on another device" indicator via user presence socket.
+
+---
+
+## 18. Network Quality Indicators
+
+### 18.1 Quality Bar
+
+| Level | RTT | Packet Loss | Icon | Color |
+|-------|-----|-------------|------|-------|
+| Excellent | < 100ms | < 1% | Full bars | Green |
+| Good | < 200ms | < 3% | 3 bars | Green |
+| Fair | < 300ms | < 5% | 2 bars | Yellow |
+| Poor | > 300ms | > 5% | 1 bar | Red |
+
+### 18.2 Toast Notifications
+
+- "Mauvaise connexion" on transition to Poor
+- "Connexion rétablie" on transition from Poor to Good+
+- "Vidéo désactivée automatiquement" on severe degradation (>10% packet loss)
+
+---
+
+## 19. Bluetooth & Audio Routing
+
+### 19.1 Audio Route Handling
+
+CallKit manages primary routing. Additional handling for:
+- `AVAudioSession.routeChangeNotification` for AirPods connect/disconnect
+- Speaker button cycles: earpiece → speaker → bluetooth (if available)
+- UI indicator shows current audio output device name
+
+---
+
+## 20. Accessibility
+
+### 20.1 Requirements
+
+- VoiceOver announcements for all call state transitions
+- Haptic feedback: heavy impact on connect, notification on disconnect
+- Dynamic Type support in call UI (minimum 44pt touch targets)
+- Reduce Motion: replace spring animations with cross-dissolve
+- High Contrast: ensure call controls meet WCAG AA contrast ratios
+
+---
+
+## 21. Low Power Mode
+
+### 21.1 Adaptations
+
+When `ProcessInfo.processInfo.isLowPowerModeEnabled`:
+- Reduce video to 15fps, 480p
+- Reduce quality monitor frequency to 10s (from 3s)
+- Disable video filters
+- Audio quality unchanged (Opus FEC still active)
+
+---
+
+## 22. Implementation Status & Review Notes
+
+### 22.1 Changes Implemented (This PR)
+
+**Shared Types (packages/shared/)**:
+- ✅ CallStatus enum: 9 values (added connecting, reconnecting, failed)
+- ✅ CallEndReason enum: 7 values (new)
+- ✅ WebRTCSignalType: added ice-restart
+- ✅ ACK callback types for call events
+- ✅ 6 new Socket.IO events (4 client, 2 server)
+- ✅ TranscriptionSegment: isFinal, translatedText, translatedLanguage
+- ✅ Prisma schema: endReason, transcriptionEnabled fields
+
+**Gateway (services/gateway/)**:
+- ✅ CallService: heartbeat tracking, state machine transitions, any-participant end
+- ✅ CallEventsHandler: ACK callbacks, targeted signal emit, 4 new handlers
+- ✅ CallCleanupService: 60s GC interval, proper timeouts
+- ✅ Validation schemas: ice-restart, heartbeat, quality-report, reconnecting
+- ✅ TURN TTL: 1h default
+
+**iOS (apps/ios/)**:
+- ✅ WebRTCTypes: ice-restart, QualityThresholds, CallEndReason, CallDisplayMode
+- ✅ P2PWebRTCClient: audio constraints, SDP munging, stream IDs
+- ✅ WebRTCService: adaptive bitrate, quality monitor, ICE restart
+- ✅ CallManager: heartbeat, reconnection, display mode
+
+### 22.2 Remaining for Phase 2
+
+- VoIP Push (PushKit) for background/killed app calls
+- SFU mode for 3+ participant group calls
+- Screen sharing
+- Call history/logs view
+- E2E encryption verification UI
+- Video filters full implementation
+- Audio effects during live calls
