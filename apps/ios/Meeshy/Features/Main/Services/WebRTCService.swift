@@ -16,6 +16,9 @@ protocol WebRTCServiceDelegate: AnyObject {
 final class WebRTCService: @unchecked Sendable {
     weak var delegate: WebRTCServiceDelegate?
 
+    let videoFilterPipeline = VideoFilterPipeline()
+    var videoFilters: VideoFilterPipeline { videoFilterPipeline }
+
     private let client: any WebRTCClientProviding
     private var iceCandidateBuffer: [IceCandidate] = []
     private var hasRemoteDescription = false

@@ -32,6 +32,7 @@ final class CallManager: ObservableObject {
     // MARK: - Published State
 
     @Published private(set) var callState: CallState = .idle
+    @Published private(set) var transcriptionService = CallTranscriptionService()
     @Published private(set) var remoteUserId: String?
     @Published private(set) var remoteUsername: String?
     @Published var isVideoEnabled: Bool = false
@@ -277,6 +278,25 @@ final class CallManager: ObservableObject {
         HapticFeedback.light()
     }
 
+    func toggleTranscription() {
+        if transcriptionService.isTranscribing {
+            transcriptionService.stopTranscribing()
+        } else {
+            let localLang = "fr"
+            let remoteLang = "fr"
+            let localUserId = AuthManager.shared.currentUser?.id ?? ""
+            let remoteUserId = remoteUserId ?? ""
+            transcriptionService.startTranscribing(
+                localLanguage: localLang,
+                remoteLanguage: remoteLang,
+                localUserId: localUserId,
+                remoteUserId: remoteUserId
+            )
+        }
+    }
+
+    var videoFilters: VideoFilterPipeline { webRTCService.videoFilters }
+
     // MARK: - Remote Events
 
     func handleRemoteAnswer(callId: String, sdp: SessionDescription) {
@@ -363,6 +383,9 @@ final class CallManager: ObservableObject {
         durationTimer?.invalidate()
         durationTimer = nil
         stopHeartbeat()
+        if transcriptionService.isTranscribing {
+            transcriptionService.stopTranscribing()
+        }
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = nil
         pendingRemoteOffer = nil

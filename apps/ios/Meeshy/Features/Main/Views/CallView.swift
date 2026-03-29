@@ -8,8 +8,12 @@ import os
 struct CallView: View {
     @ObservedObject var callManager = CallManager.shared
     @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var transcriptionService = CallTranscriptionService()
     @State private var pulseScale: CGFloat = 1.0
     @State private var showControls = true
+    @State private var showTranscript = false
+    @State private var localPreviewOffset: CGSize = .zero
+    @State private var localPreviewPosition: CGPoint = CGPoint(x: UIScreen.main.bounds.width - 70, y: 100)
 
     var body: some View {
         ZStack {
@@ -139,23 +143,40 @@ struct CallView: View {
     // MARK: - Connected
 
     private var connectedView: some View {
-        VStack(spacing: 0) {
-            Spacer()
+        ZStack {
+            VStack(spacing: 0) {
+                Spacer()
 
-            if callManager.isVideoEnabled {
-                // Video call layout
-                videoCallLayout
-            } else {
-                // Audio call layout
-                audioCallLayout
+                if callManager.isVideoEnabled {
+                    videoCallLayout
+                } else {
+                    audioCallLayout
+                }
+
+                Spacer()
+
+                controlBar
+                    .padding(.bottom, 60)
             }
 
-            Spacer()
+            // Transcript overlay
+            transcriptOverlay
 
-            // Control bar
-            controlBar
-                .padding(.bottom, 60)
+            // Draggable local preview (video only)
+            if callManager.isVideoEnabled {
+                draggableLocalPreview
+            }
         }
+        .gesture(
+            DragGesture(minimumDistance: 50)
+                .onEnded { value in
+                    if value.translation.height > 100 && callManager.isVideoEnabled {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            callManager.displayMode = .pip
+                        }
+                    }
+                }
+        )
     }
 
     private var audioCallLayout: some View {
@@ -192,37 +213,26 @@ struct CallView: View {
     }
 
     private var videoCallLayout: some View {
-        ZStack {
-            // Remote video placeholder (full screen)
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.black.opacity(0.4))
-                .overlay(
-                    VStack(spacing: 12) {
-                        Image(systemName: "video.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(.white.opacity(0.3))
-                        Text("Video en attente...")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white.opacity(0.4))
-                    }
-                )
-                .frame(maxWidth: .infinity, maxHeight: 400)
-                .padding(.horizontal, 20)
-
-            // Local video PiP (corner)
-            VStack {
-                HStack {
-                    Spacer()
-                    localVideoPiP
+        // Remote video placeholder (full screen)
+        RoundedRectangle(cornerRadius: 20)
+            .fill(Color.black.opacity(0.4))
+            .overlay(
+                VStack(spacing: 12) {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(.white.opacity(0.3))
+                    Text("Video en attente...")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
                 }
-                Spacer()
-            }
-            .padding(.top, 20)
-            .padding(.trailing, 30)
-        }
+            )
+            .frame(maxWidth: .infinity, maxHeight: 400)
+            .padding(.horizontal, 20)
     }
 
-    private var localVideoPiP: some View {
+    // MARK: - Draggable Local Preview
+
+    private var draggableLocalPreview: some View {
         RoundedRectangle(cornerRadius: 12)
             .fill(Color.black.opacity(0.6))
             .frame(width: 100, height: 140)
@@ -241,6 +251,53 @@ struct CallView: View {
                     .stroke(Color.white.opacity(0.2), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+            .position(localPreviewPosition)
+            .offset(localPreviewOffset)
+            .gesture(
+                DragGesture()
+                    .onChanged { localPreviewOffset = $0.translation }
+                    .onEnded { value in
+                        let finalX = localPreviewPosition.x + value.translation.width
+                        let finalY = localPreviewPosition.y + value.translation.height
+                        let screenW = UIScreen.main.bounds.width
+                        let screenH = UIScreen.main.bounds.height
+                        let snappedX: CGFloat = finalX < screenW / 2 ? 70 : screenW - 70
+                        let snappedY: CGFloat = max(80, min(finalY, screenH - 180))
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            localPreviewPosition = CGPoint(x: snappedX, y: snappedY)
+                            localPreviewOffset = .zero
+                        }
+                    }
+            )
+            .onTapGesture { callManager.switchCamera() }
+    }
+
+    // MARK: - Transcript Overlay
+
+    private var transcriptOverlay: some View {
+        let localUserId = AuthManager.shared.currentUser?.id ?? ""
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(transcriptionService.displayedSegments) { segment in
+                HStack(alignment: .top, spacing: 8) {
+                    Circle()
+                        .fill(segment.speakerId == localUserId ? Color.blue : Color.green)
+                        .frame(width: 8, height: 8)
+                        .padding(.top, 6)
+                    Text(segment.text)
+                        .font(.system(size: 14, weight: segment.isFinal ? .regular : .light))
+                        .foregroundColor(.white)
+                        .opacity(segment.isFinal ? 1.0 : 0.7)
+                }
+            }
+        }
+        .padding(12)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 100)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .opacity(showTranscript ? 1 : 0)
+        .animation(.easeInOut(duration: 0.2), value: showTranscript)
     }
 
     // MARK: - Ended
@@ -294,6 +351,17 @@ struct CallView: View {
                 label: "HP"
             ) {
                 callManager.toggleSpeaker()
+            }
+
+            // Transcript toggle
+            callControlButton(
+                icon: showTranscript ? "captions.bubble.fill" : "captions.bubble",
+                color: showTranscript ? "A855F7" : "FFFFFF",
+                bgColor: showTranscript ? "A855F7" : "FFFFFF",
+                isActive: showTranscript,
+                label: "Texte"
+            ) {
+                showTranscript.toggle()
             }
 
             if callManager.isVideoEnabled {
