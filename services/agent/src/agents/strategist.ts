@@ -397,12 +397,31 @@ function ensureMinimumReactions(
   const messageInterventions = interventions.filter((i) => i.type === 'message');
   const usersWhoSpeak = new Set(messageInterventions.map((i) => i.asUserId));
 
-  // 1. Users who SEND messages MUST also react to 2-3 recent messages (natural behavior)
+  // Count how many messages each user sent in the last 20h (fatigue factor)
+  const twentyHoursAgo = Date.now() - 20 * 60 * 60 * 1000;
+  const recentAgentHistory = (state.agentHistory ?? []).filter((h) => h.timestamp > twentyHoursAgo);
+
+  // 1. SPEAKERS: react BEFORE their message (10-60s delay, simulates reading)
   for (const userId of usersWhoSpeak) {
     const user = controlledUserMap.get(userId);
     if (!user || totalReactions >= maxReactions) break;
 
-    const reactionCount = 2 + Math.floor(Math.random() * 2); // 2-3 reactions per speaking user
+    // Count messages sent by this user in last 20h — more messages = fewer reactions
+    const recentMessageCount = recentAgentHistory.filter((h) => h.userId === userId).length;
+
+    // First response of the day/topic: 3-4 reactions. Subsequent: 1-2, decreasing with fatigue
+    const isFirstResponse = recentMessageCount === 0;
+    let reactionCount: number;
+    if (isFirstResponse) {
+      reactionCount = 3 + Math.floor(Math.random() * 2); // 3-4
+    } else if (recentMessageCount <= 3) {
+      reactionCount = 1 + Math.floor(Math.random() * 2); // 1-2
+    } else if (recentMessageCount <= 6) {
+      reactionCount = Math.random() < 0.7 ? 1 : 0; // mostly 1, sometimes 0
+    } else {
+      reactionCount = Math.random() < 0.3 ? 1 : 0; // rarely react when fatigued
+    }
+
     const userEmojis = getUserReactionEmojis(user);
     const candidateMessages = reactableMessages.filter(
       (m) => !alreadyReactedTo.has(`${userId}:${m.id}`) && m.senderId !== userId,
@@ -412,19 +431,20 @@ function ensureMinimumReactions(
       const targetMsg = candidateMessages[candidateMessages.length - 1 - i];
       const emoji = userEmojis[Math.floor(Math.random() * userEmojis.length)];
 
+      // Speakers: 10-60s delay (reading before typing)
       result.push({
         type: 'reaction',
         asUserId: userId,
         targetMessageId: targetMsg.id,
         emoji,
-        delaySeconds: Math.round((3 + Math.random() * 15) * (0.8 + Math.random() * 0.4)),
+        delaySeconds: Math.round((10 + Math.random() * 50) * (0.8 + Math.random() * 0.4)),
       });
       alreadyReactedTo.add(`${userId}:${targetMsg.id}`);
       totalReactions++;
     }
   }
 
-  // 2. Lurker reactions: other controlled users who DON'T speak can still react (~50% chance each)
+  // 2. LURKERS: silent users react quickly (3-15s delay, just scrolling and reacting)
   const silentUsers = state.controlledUsers.filter((u) => !usersWhoSpeak.has(u.userId));
   for (const user of silentUsers) {
     if (totalReactions >= maxReactions) break;
@@ -436,18 +456,18 @@ function ensureMinimumReactions(
     );
     if (candidateMessages.length === 0) continue;
 
-    // Lurkers react to 1-2 messages
-    const lurkReactionCount = 1 + Math.floor(Math.random() * 2);
+    const lurkReactionCount = 1 + Math.floor(Math.random() * 2); // 1-2
     for (let i = 0; i < lurkReactionCount && i < candidateMessages.length && totalReactions < maxReactions; i++) {
       const targetMsg = candidateMessages[Math.floor(Math.random() * candidateMessages.length)];
       const emoji = userEmojis[Math.floor(Math.random() * userEmojis.length)];
 
+      // Lurkers: 3-15s delay (quick scroll + tap reaction)
       result.push({
         type: 'reaction',
         asUserId: user.userId,
         targetMessageId: targetMsg.id,
         emoji,
-        delaySeconds: Math.round((10 + Math.random() * 60) * (0.8 + Math.random() * 0.4)),
+        delaySeconds: Math.round((3 + Math.random() * 12) * (0.8 + Math.random() * 0.4)),
       });
       alreadyReactedTo.add(`${user.userId}:${targetMsg.id}`);
       totalReactions++;

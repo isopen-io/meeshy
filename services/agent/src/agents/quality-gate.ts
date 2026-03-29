@@ -89,11 +89,11 @@ export function runDeterministicChecks(
       return { ok: false, reason: `AI identity revealed: matched ${pattern}` };
     }
   }
-  // Check for AI-sounding patterns (lists, bold markdown, enthusiastic openings)
-  if (hasAiSlopPatterns(content)) {
+  const wordCount = countWords(content);
+  // AI slop patterns only matter for long messages (>100 words) — short chat is fine
+  if (wordCount > 100 && hasAiSlopPatterns(content)) {
     return { ok: false, reason: `AI slop pattern detected — regenerate with more human tone` };
   }
-  const wordCount = countWords(content);
   if (wordCount < minWords) {
     return { ok: false, reason: `too short: ${wordCount} words < min ${minWords}` };
   }
