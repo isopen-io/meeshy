@@ -553,26 +553,6 @@ struct ConversationListView: View {
 
     private var mainContentZStack: some View {
         ZStack(alignment: .bottom) {
-            VStack(spacing: 0) {
-                CollapsibleHeader(
-                    title: "Conversations",
-                    scrollOffset: headerScrollOffset,
-                    showBackButton: false,
-                    titleColor: theme.textPrimary,
-                    backArrowColor: MeeshyColors.indigo500,
-                    backgroundColor: theme.backgroundPrimary,
-                    trailing: {
-                        Button {
-                            onNewConversation?()
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundColor(MeeshyColors.indigo500)
-                        }
-                        .accessibilityLabel("Nouvelle conversation")
-                    }
-                )
-
                 // Main scroll content with gesture detection
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
@@ -584,6 +564,8 @@ struct ConversationListView: View {
                             )
                         }
                         .frame(height: 0)
+
+                    Color.clear.frame(height: CollapsibleHeader<EmptyView>.expandedHeight)
 
                     // Story carousel
                     StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
@@ -670,7 +652,28 @@ struct ConversationListView: View {
                     }
                 }
             }
-            } // VStack (CollapsibleHeader + ScrollView)
+            // Header overlay
+            VStack(spacing: 0) {
+                CollapsibleHeader(
+                    title: "Conversations",
+                    scrollOffset: headerScrollOffset,
+                    showBackButton: false,
+                    titleColor: theme.textPrimary,
+                    backArrowColor: MeeshyColors.indigo500,
+                    backgroundColor: theme.backgroundPrimary,
+                    trailing: {
+                        Button {
+                            onNewConversation?()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundColor(MeeshyColors.indigo500)
+                        }
+                        .accessibilityLabel("Nouvelle conversation")
+                    }
+                )
+                Spacer()
+            }
 
             // Bottom overlay: Search bar (always) + Communities & Filters (when loupe tapped)
             VStack(spacing: 0) {

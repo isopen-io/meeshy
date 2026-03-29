@@ -48,9 +48,11 @@ struct ProfileView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
+            scrollContent
+
             VStack(spacing: 0) {
                 header
-                scrollContent
+                Spacer()
             }
 
             if let errorMessage {
@@ -174,6 +176,8 @@ struct ProfileView: View {
                 )
             }
             .frame(height: 0)
+
+            Color.clear.frame(height: CollapsibleHeader<EmptyView>.expandedHeight)
 
             VStack(spacing: 24) {
                 bannerAndAvatarSection

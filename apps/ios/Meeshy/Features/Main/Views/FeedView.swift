@@ -67,6 +67,8 @@ struct FeedView: View {
                     .offset(x: orb.offset.x, y: orb.offset.y)
             }
 
+            feedScrollView
+
             VStack(spacing: 0) {
                 CollapsibleHeader(
                     title: "Feeds",
@@ -76,8 +78,7 @@ struct FeedView: View {
                     backArrowColor: MeeshyColors.indigo500,
                     backgroundColor: theme.backgroundPrimary
                 )
-
-                feedScrollView
+                Spacer()
             }
 
             // Full-screen composer overlay
@@ -313,6 +314,8 @@ struct FeedView: View {
                     }
                     .frame(height: 0)
                     .id("feed-top")
+
+                    Color.clear.frame(height: CollapsibleHeader<EmptyView>.expandedHeight)
 
                     // Composer placeholder
                     composerPlaceholder

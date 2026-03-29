@@ -20,10 +20,7 @@ final class DiscoverViewModel: ObservableObject {
 
     private let friendService: FriendServiceProviding
     private let userService: UserServiceProviding
-
-    var friendIds: Set<String> = []
-    var sentPendingIds: Set<String> = []
-    var receivedPendingIds: Set<String> = []
+    private let cache = FriendshipCache.shared
 
     init(
         friendService: FriendServiceProviding = FriendService.shared,
@@ -51,26 +48,45 @@ final class DiscoverViewModel: ObservableObject {
     }
 
     func connectionStatus(for userId: String) -> ContactConnectionStatus {
-        if friendIds.contains(userId) { return .connected }
-        if sentPendingIds.contains(userId) { return .pendingSent }
-        if receivedPendingIds.contains(userId) { return .pendingReceived }
-        return .none
+        switch cache.status(for: userId) {
+        case .friend: return .connected
+        case .pendingSent: return .pendingSent
+        case .pendingReceived: return .pendingReceived
+        case .none: return .none
+        }
     }
 
     // MARK: - Send Friend Request
 
     func sendRequest(to userId: String) async {
-        sentPendingIds.insert(userId)
+        HapticFeedback.success()
+        do {
+            let request = try await friendService.sendFriendRequest(receiverId: userId, message: nil)
+            cache.didSendRequest(to: userId, requestId: request.id)
+            objectWillChange.send()
+            ToastManager.shared.showSuccess("Demande envoyee")
+        } catch {
+            HapticFeedback.error()
+            ToastManager.shared.showError("Impossible d'envoyer")
+        }
+    }
+
+    // MARK: - Accept Received Request
+
+    func acceptReceivedRequest(from userId: String) async {
+        let status = cache.status(for: userId)
+        guard case .pendingReceived(let requestId) = status else { return }
+        cache.didAcceptRequest(from: userId)
         objectWillChange.send()
         HapticFeedback.success()
         do {
-            _ = try await friendService.sendFriendRequest(receiverId: userId, message: nil)
-            ToastManager.shared.showSuccess("Demande envoyee")
+            _ = try await friendService.respond(requestId: requestId, accepted: true)
+            ToastManager.shared.showSuccess("Connexion acceptee")
         } catch {
-            sentPendingIds.remove(userId)
+            cache.rollbackAccept(senderId: userId, requestId: requestId)
             objectWillChange.send()
             HapticFeedback.error()
-            ToastManager.shared.showError("Impossible d'envoyer")
+            ToastManager.shared.showError("Impossible d'accepter")
         }
     }
 

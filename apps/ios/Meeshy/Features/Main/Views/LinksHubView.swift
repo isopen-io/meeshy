@@ -21,17 +21,7 @@ struct LinksHubView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                CollapsibleHeader(
-                    title: "Mes liens",
-                    scrollOffset: scrollOffset,
-                    onBack: { router.pop() },
-                    titleColor: theme.textPrimary,
-                    backArrowColor: Color(hex: "F8B500"),
-                    backgroundColor: theme.backgroundPrimary
-                )
-
-                ScrollView(showsIndicators: false) {
+            ScrollView(showsIndicators: false) {
                     GeometryReader { geo in
                         Color.clear.preference(
                             key: ScrollOffsetPreferenceKey.self,
@@ -39,6 +29,8 @@ struct LinksHubView: View {
                         )
                     }
                     .frame(height: 0)
+
+                    Color.clear.frame(height: CollapsibleHeader<EmptyView>.expandedHeight)
 
                     VStack(spacing: 20) {
                         headerBanner
@@ -52,6 +44,17 @@ struct LinksHubView: View {
                 }
                 .coordinateSpace(name: "scroll")
                 .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
+
+            VStack(spacing: 0) {
+                CollapsibleHeader(
+                    title: "Mes liens",
+                    scrollOffset: scrollOffset,
+                    onBack: { router.pop() },
+                    titleColor: theme.textPrimary,
+                    backArrowColor: Color(hex: "F8B500"),
+                    backgroundColor: theme.backgroundPrimary
+                )
+                Spacer()
             }
         }
         .navigationBarHidden(true)

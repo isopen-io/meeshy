@@ -33,7 +33,6 @@ struct ContactsHubView: View {
         }
         .background(theme.backgroundPrimary.ignoresSafeArea())
         .navigationBarHidden(true)
-        .onAppear { syncStatusData() }
     }
 
     // MARK: - Tab Bar
@@ -92,8 +91,8 @@ struct ContactsHubView: View {
 
     private func badgeCount(for tab: ContactsTab) -> Int {
         switch tab {
-        case .contacts: return contactsListVM.friends.count
-        case .requests: return requestsVM.receivedRequests.count
+        case .contacts: return FriendshipCache.shared.friendCount
+        case .requests: return FriendshipCache.shared.pendingReceivedCount
         case .discover, .blocked: return 0
         }
     }
@@ -118,11 +117,4 @@ struct ContactsHubView: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
     }
 
-    // MARK: - Data Sync
-
-    private func syncStatusData() {
-        discoverVM.friendIds = Set(contactsListVM.friends.map(\.id))
-        discoverVM.sentPendingIds = Set(requestsVM.sentRequests.map { $0.receiverId })
-        discoverVM.receivedPendingIds = Set(requestsVM.receivedRequests.map { $0.senderId })
-    }
 }

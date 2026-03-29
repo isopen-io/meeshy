@@ -53,6 +53,7 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public let onLeftTap: () -> Void
     public let onRightTap: () -> Void
     public var onLeftLongPress: (() -> Void)? = nil
+    public var onRightLongPress: (() -> Void)? = nil
     public var isSearchBarVisible: Bool = true
 
     private let buttonSize: CGFloat = 52
@@ -67,6 +68,7 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         onLeftTap: @escaping () -> Void,
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
+        onRightLongPress: (() -> Void)? = nil,
         isSearchBarVisible: Bool = true,
         @ViewBuilder leftContent: () -> LeftContent,
         @ViewBuilder rightContent: () -> RightContent
@@ -76,6 +78,7 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         self.onLeftTap = onLeftTap
         self.onRightTap = onRightTap
         self.onLeftLongPress = onLeftLongPress
+        self.onRightLongPress = onRightLongPress
         self.isSearchBarVisible = isSearchBarVisible
         self.leftContent = leftContent()
         self.rightContent = rightContent()
@@ -131,7 +134,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                     topSafeZone: topSafeZone,
                     bottomSafeZone: currentBottomSafeZone,
                     snapToEdges: true,
-                    onTap: onRightTap
+                    onTap: onRightTap,
+                    onLongPress: onRightLongPress
                 ) {
                     rightContent
                 }
@@ -298,6 +302,7 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
     public let onLeftTap: () -> Void
     public let onRightTap: () -> Void
     public var onLeftLongPress: (() -> Void)? = nil
+    public var onRightLongPress: (() -> Void)? = nil
     public var isSearchBarVisible: Bool = true
 
     private let buttonSize: CGFloat = 52
@@ -312,6 +317,7 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
         onLeftTap: @escaping () -> Void,
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
+        onRightLongPress: (() -> Void)? = nil,
         isSearchBarVisible: Bool = true,
         @ViewBuilder leftContent: () -> LeftContent,
         @ViewBuilder rightContent: () -> RightContent
@@ -321,6 +327,7 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
         self.onLeftTap = onLeftTap
         self.onRightTap = onRightTap
         self.onLeftLongPress = onLeftLongPress
+        self.onRightLongPress = onRightLongPress
         self.isSearchBarVisible = isSearchBarVisible
         self.leftContent = leftContent()
         self.rightContent = rightContent()

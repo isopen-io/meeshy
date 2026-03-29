@@ -6,6 +6,8 @@ import MessageUI
 struct DiscoverTab: View {
     @ObservedObject var viewModel: DiscoverViewModel
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
+    @EnvironmentObject private var router: Router
 
     @State private var showSMSComposer = false
 
@@ -230,8 +232,18 @@ struct DiscoverTab: View {
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: user.avatar,
-                presenceState: user.isOnline == true ? .online : .offline
+                moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
+                presenceState: user.isOnline == true ? .online : .offline,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
+            .onTapGesture {
+                router.deepLinkProfileUser = ProfileSheetUser(
+                    userId: user.id,
+                    username: user.username,
+                    displayName: user.displayName,
+                    avatarURL: user.avatar
+                )
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
@@ -241,6 +253,14 @@ struct DiscoverTab: View {
                 Text("@\(user.username)")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(theme.textMuted)
+            }
+            .onTapGesture {
+                router.deepLinkProfileUser = ProfileSheetUser(
+                    userId: user.id,
+                    username: user.username,
+                    displayName: user.displayName,
+                    avatarURL: user.avatar
+                )
             }
 
             Spacer()
@@ -273,9 +293,7 @@ struct DiscoverTab: View {
 
         case .pendingReceived:
             Button {
-                Task {
-                    // Accept handled via RequestsViewModel
-                }
+                Task { await viewModel.acceptReceivedRequest(from: userId) }
             } label: {
                 Text("Accepter")
                     .font(.system(size: 12, weight: .semibold))

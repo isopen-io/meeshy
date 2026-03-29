@@ -36,9 +36,11 @@ struct SettingsView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
+            scrollContent
+
             VStack(spacing: 0) {
                 header
-                scrollContent
+                Spacer()
             }
         }
         .sheet(isPresented: $showStats) { UserStatsView() }
@@ -100,6 +102,8 @@ struct SettingsView: View {
                 )
             }
             .frame(height: 0)
+
+            Color.clear.frame(height: CollapsibleHeader<EmptyView>.expandedHeight)
 
             VStack(spacing: 20) {
                 profileCard

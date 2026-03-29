@@ -448,7 +448,12 @@ do_clean() {
     if [ "${1:-}" = "--deep" ]; then
         # Global DerivedData + Xcode caches (slow)
         rm -rf ~/Library/Developer/Xcode/DerivedData
-        rm -rf ~/Library/Caches/org.swift.swiftpm
+        # SPM cache: clear manifests/artifacts but KEEP repositories (clones like GRDB are expensive)
+        local spm_cache=~/Library/Caches/org.swift.swiftpm
+        if [ -d "$spm_cache" ]; then
+            find "$spm_cache" -maxdepth 1 -mindepth 1 ! -name "repositories" -exec rm -rf {} +
+            ok "SPM cache cleared (repositories preserved)"
+        fi
         rm -rf ~/Library/Caches/com.apple.dt.Xcode
         ok "Deep clean done (global caches cleared)"
     else

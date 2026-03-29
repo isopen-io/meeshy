@@ -632,6 +632,10 @@ struct RootView: View {
                     }
                 }
             },
+            onLeftLongPress: nil,
+            onRightLongPress: {
+                router.push(.settings)
+            },
             isSearchBarVisible: !isScrollingDown,
             leftContent: {
                 // Feed button content
@@ -717,12 +721,10 @@ struct RootView: View {
 
             // Menu items
             let menuItems: [(icon: String, color: String, action: () -> Void)] = [
-                ("gearshape.fill", "45B7D1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) }),
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
                 ("bell.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
                 ("person.2.fill", "6366F1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts()) }),
-                ("person.3.fill", "2ECC71", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
-                ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.profile) })
+                ("person.3.fill", "2ECC71", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) })
             ]
 
             ForEach(Array(menuItems.enumerated()), id: \.offset) { index, item in
@@ -794,8 +796,7 @@ private struct ProfileFetchingSheet: View {
                 }
             } catch {}
             isLoading = false
-            await checkPendingRequest()
-            await checkReceivedRequest()
+            resolveConnectionStatus()
         }
     }
 
@@ -834,37 +835,35 @@ private struct ProfileFetchingSheet: View {
         )
     }
 
-    private func checkPendingRequest() async {
+    private func resolveConnectionStatus() {
         guard !targetUserId.isEmpty else { return }
-        do {
-            let sent = try await FriendService.shared.sentRequests()
-            if let pending = sent.data.first(where: { $0.receiverId == targetUserId && $0.status == "pending" }) {
-                pendingRequestId = pending.id
-                connectionStatus = .pendingSent(requestId: pending.id)
-            }
-        } catch {}
-    }
-
-    private func checkReceivedRequest() async {
-        guard !targetUserId.isEmpty, connectionStatus == .none else { return }
-        do {
-            let received = try await FriendService.shared.receivedRequests()
-            if let pending = received.data.first(where: { $0.senderId == targetUserId && $0.status == "pending" }) {
-                pendingRequestId = pending.id
-                connectionStatus = .pendingReceived(requestId: pending.id)
-            }
-        } catch {}
+        let status = FriendshipCache.shared.status(for: targetUserId)
+        switch status {
+        case .friend:
+            connectionStatus = .connected
+        case .pendingSent(let requestId):
+            pendingRequestId = requestId
+            connectionStatus = .pendingSent(requestId: requestId)
+        case .pendingReceived(let requestId):
+            pendingRequestId = requestId
+            connectionStatus = .pendingReceived(requestId: requestId)
+        case .none:
+            connectionStatus = .none
+        }
     }
 
     private func acceptRequest() async {
         guard let requestId = pendingRequestId else { return }
+        FriendshipCache.shared.didAcceptRequest(from: targetUserId)
+        connectionStatus = .connected
+        pendingRequestId = nil
+        HapticFeedback.success()
         do {
             let _ = try await FriendService.shared.respond(requestId: requestId, accepted: true)
-            connectionStatus = .connected
-            pendingRequestId = nil
-            HapticFeedback.success()
             ToastManager.shared.showSuccess("Connexion acceptee")
         } catch {
+            FriendshipCache.shared.rollbackAccept(senderId: targetUserId, requestId: requestId)
+            resolveConnectionStatus()
             HapticFeedback.error()
             ToastManager.shared.showError("Impossible d'accepter")
         }
@@ -872,13 +871,16 @@ private struct ProfileFetchingSheet: View {
 
     private func declineRequest() async {
         guard let requestId = pendingRequestId else { return }
+        FriendshipCache.shared.didRejectRequest(from: targetUserId)
+        connectionStatus = .none
+        pendingRequestId = nil
+        HapticFeedback.medium()
         do {
             let _ = try await FriendService.shared.respond(requestId: requestId, accepted: false)
-            connectionStatus = .none
-            pendingRequestId = nil
-            HapticFeedback.medium()
             ToastManager.shared.showSuccess("Demande refusee")
         } catch {
+            FriendshipCache.shared.rollbackReject(senderId: targetUserId, requestId: requestId)
+            resolveConnectionStatus()
             HapticFeedback.error()
             ToastManager.shared.showError("Impossible de refuser")
         }
@@ -888,6 +890,7 @@ private struct ProfileFetchingSheet: View {
         guard !targetUserId.isEmpty else { return }
         do {
             let request = try await FriendService.shared.sendFriendRequest(receiverId: targetUserId)
+            FriendshipCache.shared.didSendRequest(to: targetUserId, requestId: request.id)
             pendingRequestId = request.id
             connectionStatus = .pendingSent(requestId: request.id)
             HapticFeedback.success()
@@ -900,13 +903,16 @@ private struct ProfileFetchingSheet: View {
 
     private func cancelRequest() async {
         guard let requestId = pendingRequestId else { return }
+        FriendshipCache.shared.didCancelRequest(to: targetUserId)
+        pendingRequestId = nil
+        connectionStatus = .none
+        HapticFeedback.medium()
         do {
             try await FriendService.shared.deleteRequest(requestId: requestId)
-            pendingRequestId = nil
-            connectionStatus = .none
-            HapticFeedback.medium()
             ToastManager.shared.showSuccess("Demande annulee")
         } catch {
+            FriendshipCache.shared.didSendRequest(to: targetUserId, requestId: requestId)
+            resolveConnectionStatus()
             ToastManager.shared.showError("Impossible d'annuler")
         }
     }
