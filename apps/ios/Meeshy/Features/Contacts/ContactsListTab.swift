@@ -145,8 +145,8 @@ struct ContactsListTab: View {
                     context: .userListItem,
                     accentColor: color,
                     avatarURL: user.avatar,
-                    presenceState: isOnline ? .online : .offline,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
+                    presenceState: isOnline ? .online : .offline,
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 

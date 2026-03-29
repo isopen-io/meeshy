@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-enum ConnectionStatus: Equatable {
+enum ContactConnectionStatus: Equatable {
     case connected
     case pendingSent
     case pendingReceived
@@ -50,7 +50,7 @@ final class DiscoverViewModel: ObservableObject {
         isSearching = false
     }
 
-    func connectionStatus(for userId: String) -> ConnectionStatus {
+    func connectionStatus(for userId: String) -> ContactConnectionStatus {
         if friendIds.contains(userId) { return .connected }
         if sentPendingIds.contains(userId) { return .pendingSent }
         if receivedPendingIds.contains(userId) { return .pendingReceived }

@@ -223,6 +223,16 @@
 		D5A1B2C3E4F506A7B8C9D0E4 /* DraftStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */; };
 		AUPL0001000100010001001 /* AudioPlayerManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUPL0001000100010001002 /* AudioPlayerManagerTests.swift */; };
 		AURC0001000100010001001 /* AudioRecorderManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AURC0001000100010001002 /* AudioRecorderManagerTests.swift */; };
+		447EB12B85279B3E448C2456 /* BlockedTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */; };
+		D90603ED4F5C335BE9FA78D9 /* BlockedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F573D0F41F068B1CDCAB79C6 /* BlockedViewModel.swift */; };
+		44C6640DF69BEB3FF362DE4A /* ContactsHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B77619804147529F134986 /* ContactsHubView.swift */; };
+		F7273BAD84FB8B7281518D59 /* ContactsListTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E4ECF08EDFD91908B42081 /* ContactsListTab.swift */; };
+		3171CBE21C1C4D6409B2DE3D /* ContactsListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00553F0559287EB62084EAD /* ContactsListViewModel.swift */; };
+		55E92C6A456D714A38A06932 /* ContactsShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A915642772CC82D9344C6 /* ContactsShared.swift */; };
+		62AC34E0F88842F228DAE2EC /* DiscoverTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E712AFED49A3F55252FDA69 /* DiscoverTab.swift */; };
+		738E225E02495FB6C1A4D074 /* DiscoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66A6D610352D04764BA347D /* DiscoverViewModel.swift */; };
+		561B8D85E8499F1CEFEE5AF3 /* RequestsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24D2E778341AEEA32569BF20 /* RequestsTab.swift */; };
+		B19F8FBBC6C564834DAC55E7 /* RequestsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65259648A7CB9FA1618B613E /* RequestsViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -491,6 +501,16 @@
 		D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStoreTests.swift; sourceTree = "<group>"; };
 		AUPL0001000100010001002 /* AudioPlayerManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerManagerTests.swift; sourceTree = "<group>"; };
 		AURC0001000100010001002 /* AudioRecorderManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorderManagerTests.swift; sourceTree = "<group>"; };
+		4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedTab.swift; sourceTree = "<group>"; };
+		F573D0F41F068B1CDCAB79C6 /* BlockedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedViewModel.swift; sourceTree = "<group>"; };
+		F7B77619804147529F134986 /* ContactsHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsHubView.swift; sourceTree = "<group>"; };
+		73E4ECF08EDFD91908B42081 /* ContactsListTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListTab.swift; sourceTree = "<group>"; };
+		B00553F0559287EB62084EAD /* ContactsListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListViewModel.swift; sourceTree = "<group>"; };
+		674A915642772CC82D9344C6 /* ContactsShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsShared.swift; sourceTree = "<group>"; };
+		1E712AFED49A3F55252FDA69 /* DiscoverTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverTab.swift; sourceTree = "<group>"; };
+		B66A6D610352D04764BA347D /* DiscoverViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewModel.swift; sourceTree = "<group>"; };
+		24D2E778341AEEA32569BF20 /* RequestsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsTab.swift; sourceTree = "<group>"; };
+		65259648A7CB9FA1618B613E /* RequestsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -846,6 +866,7 @@
 			children = (
 				3D60ECC1939C8732A23D9270 /* Main */,
 				B221DC6C45B2A0662AEA790D /* Auth */,
+				CTCT000G000G000G000G0001 /* Contacts */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -975,6 +996,23 @@
 				AURC0001000100010001002 /* AudioRecorderManagerTests.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		CTCT000G000G000G000G0001 /* Contacts */ = {
+			isa = PBXGroup;
+			children = (
+				4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */,
+				F573D0F41F068B1CDCAB79C6 /* BlockedViewModel.swift */,
+				F7B77619804147529F134986 /* ContactsHubView.swift */,
+				73E4ECF08EDFD91908B42081 /* ContactsListTab.swift */,
+				B00553F0559287EB62084EAD /* ContactsListViewModel.swift */,
+				674A915642772CC82D9344C6 /* ContactsShared.swift */,
+				1E712AFED49A3F55252FDA69 /* DiscoverTab.swift */,
+				B66A6D610352D04764BA347D /* DiscoverViewModel.swift */,
+				24D2E778341AEEA32569BF20 /* RequestsTab.swift */,
+				65259648A7CB9FA1618B613E /* RequestsViewModel.swift */,
+			);
+			path = Contacts;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1309,6 +1347,16 @@
 				EDD817AE0118AEBF9FE37640 /* E2EEService.swift in Sources */,
 				42662443FBC51E2F08ABE46F /* UserProfileViewModel.swift in Sources */,
 				D5A1B2C3E4F506A7B8C9D0E2 /* DraftStore.swift in Sources */,
+				447EB12B85279B3E448C2456 /* BlockedTab.swift in Sources */,
+				D90603ED4F5C335BE9FA78D9 /* BlockedViewModel.swift in Sources */,
+				44C6640DF69BEB3FF362DE4A /* ContactsHubView.swift in Sources */,
+				F7273BAD84FB8B7281518D59 /* ContactsListTab.swift in Sources */,
+				3171CBE21C1C4D6409B2DE3D /* ContactsListViewModel.swift in Sources */,
+				55E92C6A456D714A38A06932 /* ContactsShared.swift in Sources */,
+				62AC34E0F88842F228DAE2EC /* DiscoverTab.swift in Sources */,
+				738E225E02495FB6C1A4D074 /* DiscoverViewModel.swift in Sources */,
+				561B8D85E8499F1CEFEE5AF3 /* RequestsTab.swift in Sources */,
+				B19F8FBBC6C564834DAC55E7 /* RequestsViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

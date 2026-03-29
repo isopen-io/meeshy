@@ -13,6 +13,9 @@
     "· %@ uniques" : {
 
     },
+    "(%@)" : {
+
+    },
     "@%@" : {
 
     },
@@ -150,6 +153,16 @@
     },
     "%@/500" : {
 
+    },
+    "%@%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@"
+          }
+        }
+      }
     },
     "%@%%" : {
 
@@ -854,6 +867,9 @@
     "Aucun résultat" : {
 
     },
+    "Aucun utilisateur bloque" : {
+
+    },
     "Aucun utilisateur trouve" : {
 
     },
@@ -1221,6 +1237,9 @@
       }
     },
     "Conformement au RGPD, vous pouvez exporter toutes vos donnees personnelles." : {
+
+    },
+    "Connecte" : {
 
     },
     "connection.offline" : {
@@ -1817,6 +1836,9 @@
     "Debloquer" : {
 
     },
+    "Debloquer %@ ?" : {
+
+    },
     "Déconnexion" : {
       "localizations" : {
         "en" : {
@@ -1997,7 +2019,6 @@
 
     },
     "En ligne" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2155,6 +2176,9 @@
 
     },
     "Images, audio et videos mis en cache" : {
+
+    },
+    "Importer mes contacts" : {
 
     },
     "Impossible de charger ce profil." : {
@@ -2730,6 +2754,7 @@
       }
     },
     "Profil" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2820,6 +2845,7 @@
 
     },
     "Réglages" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3639,6 +3665,9 @@
 
     },
     "Vous ne recevrez plus de messages de cette conversation." : {
+
+    },
+    "Vu %@" : {
 
     },
     "Vu et effacé" : {

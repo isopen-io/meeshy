@@ -253,7 +253,7 @@ struct DiscoverTab: View {
     }
 
     @ViewBuilder
-    private func connectionActionButton(for userId: String, status: ConnectionStatus) -> some View {
+    private func connectionActionButton(for userId: String, status: ContactConnectionStatus) -> some View {
         switch status {
         case .connected:
             Text("Connecte")
