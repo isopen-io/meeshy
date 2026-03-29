@@ -11,6 +11,8 @@ public struct CommunityListView: View {
     public var onCreateCommunity: (() -> Void)?
     public var onDismiss: (() -> Void)?
 
+    @State private var scrollOffset: CGFloat = 0
+
     public init(
         onSelectCommunity: ((MeeshyCommunity) -> Void)? = nil,
         onCreateCommunity: (() -> Void)? = nil,
@@ -50,44 +52,34 @@ public struct CommunityListView: View {
     // MARK: - Navigation Header
 
     private var navigationHeader: some View {
-        HStack {
-            Button {
+        CollapsibleHeader(
+            title: "Communautes",
+            scrollOffset: scrollOffset,
+            onBack: {
                 if let onDismiss {
                     onDismiss()
                 } else {
                     dismiss()
                 }
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Circle())
-            }
-
-            Spacer()
-
-            Text("Communautes")
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-
-            Spacer()
-
-            Button { onCreateCommunity?() } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            },
+            titleColor: theme.textPrimary,
+            backArrowColor: MeeshyColors.indigo500,
+            backgroundColor: theme.backgroundPrimary,
+            trailing: {
+                Button { onCreateCommunity?() } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
+                }
+                .accessibilityLabel("Creer une communaute")
             }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        )
     }
 
     // MARK: - Search Bar
@@ -169,6 +161,14 @@ public struct CommunityListView: View {
 
     private var communityGrid: some View {
         ScrollView {
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ScrollOffsetPreferenceKey.self,
+                    value: geo.frame(in: .named("scroll")).minY
+                )
+            }
+            .frame(height: 0)
+
             LazyVGrid(
                 columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)],
                 spacing: 14
@@ -194,6 +194,8 @@ public struct CommunityListView: View {
             .padding(.top, 4)
             .padding(.bottom, 20)
         }
+        .coordinateSpace(name: "scroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
     }
 }
 
