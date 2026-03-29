@@ -1,9 +1,16 @@
 # WebRTC P2P Calling — Phase 1 Specification
 
 **Date**: 2026-03-29
-**Status**: Draft
-**Scope**: P2P 1:1 Audio + Video calls, end-to-end, iOS + Gateway
+**Status**: Draft (Reviewed 2026-03-29)
+**Scope**: P2P 1:1 Audio + Video calls, end-to-end, iOS + Web + Gateway
 **Goal**: Production-grade calling competitive with FaceTime and Teams — zero latency perception, zero dropped calls, zero ghost states.
+
+### Implementation Status Legend
+
+Sections added or modified during the review are tagged with:
+- ✅ **Exists** — verified implemented in codebase
+- 🔧 **To Implement** — spec describes the target design, code does not exist yet
+- 📐 **Design Only** — architectural proposal, no code counterpart, may need architectural decisions
 
 ---
 
@@ -552,7 +559,9 @@ enum QualityThresholds {
 
 Monitor every 3s, report every 10s via call:quality-report.
 
-### 4.8 Resolution/FPS Degradation Ladder
+### 4.8 Resolution/FPS Degradation Ladder 🔧
+
+> **Status**: To implement — `P2PWebRTCClient.swift` has fixed 720p/30fps selection. No runtime adaptation exists. Initial bandwidth estimate (64kbps audio, 500kbps video) not in `WebRTCTypes.swift`.
 
 Adaptive bitrate (Section 4.7) adjusts bitrate but NOT resolution/FPS. For severe degradation, the video capture parameters must also adapt:
 
@@ -742,7 +751,9 @@ CallKit owns the audio session. Remove manual setActive calls from WebRTCService
 - **PiP during multitasking**: System PiP (State B) stays active during Split View/Slide Over. User can interact with other apps while in PiP.
 - **Stage Manager (iPadOS 16+)**: Call window can be resized. Minimum window size: 400x300pt. Below that, auto-switch to PiP.
 
-### 7.5 Haptic Feedback
+### 7.5 Haptic Feedback 🔧
+
+> **Status**: To implement — `CallManager.swift` only has basic haptics on initiation/answer. Missing: connect, disconnect, reconnecting, quality transitions.
 
 | Event | Haptic | Pattern |
 |-------|--------|---------|
@@ -1024,7 +1035,9 @@ Client batches 200ms. Server rate limit 100/10s.
 ### 11.14 SDK Not Available
 canImport(WebRTC) guard. Throws WebRTCError.notSupported.
 
-### 11.15 Call Waiting (Second Incoming Call During Active Call)
+### 11.15 Call Waiting (Second Incoming Call During Active Call) 🔧
+
+> **Status**: To implement — current code silently rejects. `CXProviderConfiguration.maximumCallGroups = 1` must be increased to 2. No banner UI exists.
 
 **Current behavior**: Silently reject with a log warning. **New behavior**:
 
@@ -1037,7 +1050,9 @@ canImport(WebRTC) guard. Throws WebRTCError.notSupported.
 4. **CallKit handles this natively**: CXProvider supports multiple calls. Use `CXSetHeldCallAction` if holding is desired (Phase 2 — for now, only end-and-switch).
 5. **Server-side**: No change needed. Server allows multiple CallSessions for the same user (one active, one ringing).
 
-### 11.16 Crash Recovery on App Restart
+### 11.16 Crash Recovery on App Restart 🔧
+
+> **Status**: To implement — existing endpoint is conversation-scoped (`/api/conversations/:id/active-call`). A new user-scoped `GET /api/v1/calls/active` endpoint must be created. No app-launch recovery code exists.
 
 If the app is killed during a call (crash, force-quit, OOM), on next launch:
 
@@ -1075,7 +1090,9 @@ When `NWPathMonitor` detects a network change (WiFi → Cellular or vice versa):
 5. **Cellular → WiFi**: Expect lower latency, higher bandwidth. Allow quality monitor to scale up to 720p/30fps
 6. **IP address change**: New ICE candidates are gathered automatically via `continualGatheringPolicy: .gatherContinually`
 
-### 11.19 Screen Recording Detection
+### 11.19 Screen Recording Detection 🔧
+
+> **Status**: To implement — `UIScreen.isCaptured` not used anywhere in iOS codebase.
 
 During video calls, monitor for screen recording:
 
@@ -1230,7 +1247,9 @@ File: `apps/web/stores/call-store.ts` (420 lines)
 - **TODO**: Add video filter state (track current VideoFilterConfig)
 - **TODO**: Add per-participant connection quality (currently only call-wide)
 
-### 13.4 Call Lifecycle Completion
+### 13.4 Call Lifecycle Completion 🔧
+
+> **Status**: To implement — only `startCall()` exists. `answerCall()`, `rejectCall()`, `endCall()`, `toggleAudio()`, `toggleVideo()` must be added.
 
 File: `apps/web/hooks/conversations/use-video-call.ts` (147 lines — **INCOMPLETE**)
 
@@ -1256,7 +1275,9 @@ function toggleVideo(callId: string, enabled: boolean): Promise<void>
   // emit call:toggle-video, toggle local video track + capturer
 ```
 
-### 13.5 TURN Server Integration (CRITICAL)
+### 13.5 TURN Server Integration (CRITICAL) 🔧
+
+> **Status**: To implement — `createPeerConnection()` does NOT accept server-provided iceServers. Blocking for Phase 1 launch (~10-15% user failure rate without TURN).
 
 File: `apps/web/services/webrtc-service.ts`
 
@@ -1277,7 +1298,9 @@ const pc = new RTCPeerConnection(config);
 
 Without TURN, calls will fail behind restrictive NATs/corporate firewalls (estimated 10-15% of users).
 
-### 13.6 Quality Report Emission
+### 13.6 Quality Report Emission 🔧
+
+> **Status**: To implement — stats collected locally but never emitted to server.
 
 File: `apps/web/hooks/use-call-quality.ts` (222 lines)
 
@@ -1298,7 +1321,9 @@ useEffect(() => {
 }, [callId, stats]);
 ```
 
-### 13.7 Audio Effects → WebRTC Stream Integration
+### 13.7 Audio Effects → WebRTC Stream Integration 🔧
+
+> **Status**: To implement — hook outputs processed stream but it's not connected to WebRTC.
 
 File: `apps/web/utils/audio-effects.ts` + `apps/web/hooks/use-audio-effects.ts`
 
@@ -1421,7 +1446,7 @@ Source of truth: `packages/shared/types/video-call.ts` (AudioEffectType, VoiceCo
 Web implementation: `apps/web/utils/audio-effects.ts` (652 lines, 4 AudioEffectProcessor classes)
 Web hook: `apps/web/hooks/use-audio-effects.ts` (470 lines, Tone.js pipeline management)
 
-### 15.1.1 Effect Mutual Exclusivity Rules
+### 15.1.1 Effect Mutual Exclusivity Rules 🔧
 
 Voice effects (VoiceCoder, BabyVoice, DemonVoice) are **mutually exclusive** — only one can be active at a time. Enabling VoiceCoder automatically disables BabyVoice/DemonVoice and vice versa.
 
@@ -1432,7 +1457,9 @@ When BackSound is active during a call:
 - Auto-duck BackSound volume by -12dB when voice activity is detected (WebRTC VAD or Silero VAD)
 - Resume full volume after 500ms of silence
 
-### 15.2 Dual-Stream Architecture
+### 15.2 Dual-Stream Architecture 📐
+
+> **Status**: Design only — neither iOS nor Web implements the dual-stream split yet. `useAudioEffects` outputs one processed stream. Clean path for transcription must be added.
 
 During a call, audio effects create TWO streams:
 1. **Processed stream** → sent to remote participant (they hear the effect)
@@ -1454,7 +1481,9 @@ Microphone (raw PCM)
 
 **CRITICAL**: When audio effects are enabled, the processed stream MUST bypass WebRTC's built-in `noiseSuppression` constraint. Otherwise, the noise suppression algorithm will attempt to remove the effect artifacts (distortion, pitch-shifted harmonics, etc.) treating them as noise. The clean stream retains full noise suppression for transcription quality.
 
-### 15.3 Web: Reuse `useAudioEffects()` Hook
+### 15.3 Web: Reuse `useAudioEffects()` Hook 🔧
+
+> **Status**: Hook exists and outputs a processed `MediaStream`. Missing: dual-stream split (clean path), `replaceTrack()` integration with WebRTC, dynamic `noiseSuppression` toggling, mutual exclusivity enforcement.
 
 The existing `useAudioEffects()` hook (`apps/web/hooks/use-audio-effects.ts`) manages the Tone.js audio pipeline. For live calling:
 
@@ -1476,7 +1505,9 @@ if (sender && processedStream) {
 
 **Existing mono→stereo upmix** (iOS Safari fix) in `useAudioEffects` applies automatically.
 
-### 15.4 iOS: New `CallAudioEffectsService`
+### 15.4 iOS: New `CallAudioEffectsService` 📐
+
+> **Status**: Design only — no AVAudioEngine code exists in the iOS codebase. Files `CallAudioEffectsService.swift` and `MeeshyAudioDeviceModule.swift` must be created from scratch.
 
 **IMPORTANT**: No `AVAudioEngine` code exists in the iOS codebase today. This is a full new implementation.
 
@@ -1631,7 +1662,9 @@ request.requiresOnDeviceRecognition = true
 request.addsPunctuation = true
 ```
 
-#### 16.2.1 SFSpeechRecognizer 1-Minute Limit Rotation (CRITICAL)
+#### 16.2.1 SFSpeechRecognizer 1-Minute Limit Rotation (CRITICAL) 🔧
+
+> **Status**: To implement — `CallTranscriptionService.swift` does NOT handle this. Calls >60s will lose transcription.
 
 Apple's `SFSpeechRecognizer` limits continuous recognition to ~1 minute per request. After that, the recognition task fires `isFinal=true` and stops accepting audio. **The current `CallTranscriptionService` does NOT handle this.**
 
@@ -1708,7 +1741,9 @@ SERVER_EVENTS.CALL_TRANSLATED_SEGMENT: 'call:translated-segment'
 SERVER_EVENTS.CALL_TRANSLATION_REQUESTED: 'call:translation-requested'
 ```
 
-#### 16.4.1 Translation Consent Flow
+#### 16.4.1 Translation Consent Flow 📐
+
+> **Status**: Design only — events `call:translation-request`, `call:translation-response`, `call:translation-requested` do NOT exist in `socketio-events.ts` yet. Must be added.
 
 Translation sends transcription text to the server (NLLB). This requires **explicit consent from both parties**:
 
@@ -1742,7 +1777,9 @@ Either party can disable translation at any time by tapping the translation butt
 5. Gateway pushes `call:translated-segment` to remote client
 6. Remote UI displays translated text (**Prisme Linguistique applies**: show in user's `systemLanguage`, fall back to `regionalLanguage`, then original)
 
-#### 16.4.3 Whisper Chunking for Server-Assisted Mode
+#### 16.4.3 Whisper Chunking for Server-Assisted Mode 📐
+
+> **Status**: Design only — `call:audio-chunk` and `call:transcription-result` events do not exist. Translator service uses ZMQ batch processing; this proposes Socket.IO binary for lower latency (architectural decision needed).
 
 The current translator uses batch Whisper processing (not streaming). For server-assisted transcription during calls:
 
@@ -1807,7 +1844,9 @@ Breakdown:
 - **Server-assisted**: Audio chunks sent to Whisper for higher accuracy (opt-in, single-party consent)
 - **Translation mode**: Transcription sent to server for NLLB translation (requires consent from both parties — see 16.4.1)
 
-### 16.8 Prisme Linguistique for Transcription Overlay
+### 16.8 Prisme Linguistique for Transcription Overlay 🔧
+
+> **Status**: To implement — iOS `TranscriptionSegment` struct in `CallTranscriptionService.swift` lacks `translatedText: String?` and `translatedLanguage: String?` fields. Must be added to match TypeScript type.
 
 The transcription overlay MUST respect the Prisme Linguistique principles:
 
@@ -1937,9 +1976,11 @@ When `ProcessInfo.processInfo.isLowPowerModeEnabled`:
 
 ---
 
-## 23. Post-Call Experience
+## 23. Post-Call Experience 🔧
 
-### 23.1 Missed Call Push Notification
+### 23.1 Missed Call Push Notification 🔧
+
+> **Status**: To implement — no push notification sent on MISSED state currently.
 
 When the server marks a call as MISSED (Section 2.2 — 30s ringing timeout), send a **regular push notification** (not VoIP push) to the callee:
 
@@ -1962,7 +2003,9 @@ When the server marks a call as MISSED (Section 2.2 — 30s ringing timeout), se
 - **Phase 1**: Regular APNs push (foreground Socket.IO handles live calls)
 - **Phase 2**: VoIP Push (PushKit) for background/killed app incoming calls
 
-### 23.2 Post-Call Quality Feedback
+### 23.2 Post-Call Quality Feedback 📐
+
+> **Status**: Design only — `CallSession` Prisma schema missing `feedback Json?` field. `CallQualityFeedbackEvent` type not defined. `call:quality-feedback` event not in `socketio-events.ts`.
 
 After calls lasting >30 seconds, show an optional quality feedback prompt (3s delay after call ends):
 
@@ -1994,9 +2037,11 @@ Store in `CallSession.feedback` (new JSON field in Prisma schema).
 
 ---
 
-## 24. Monitoring & Analytics
+## 24. Monitoring & Analytics 📐
 
-### 24.1 Call Metrics Collection
+### 24.1 Call Metrics Collection 📐
+
+> **Status**: Design only — `CallAnalytics` type not defined. Metrics not collected or stored.
 
 Every call should persist structured analytics in `CallSession.metadata`:
 
@@ -2023,7 +2068,9 @@ interface CallAnalytics {
 
 Collected from `call:quality-report` events and stored at call end.
 
-### 24.2 TURN Server Health Monitoring
+### 24.2 TURN Server Health Monitoring 📐
+
+> **Status**: Design only — coturn not in any docker-compose file. TURN infrastructure not deployed yet.
 
 coturn has no built-in health check endpoint. Monitor via:
 
