@@ -82,6 +82,7 @@ struct ConversationListView: View {
     // Performance optimized scroll variables
     @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
     @State private var selectedProfileUser: ProfileSheetUser? = nil
+    @State private var headerScrollOffset: CGFloat = 0
     
     // UI states
     @State var blockTargetConversation: Conversation? = nil
@@ -109,11 +110,12 @@ struct ConversationListView: View {
 
 
     // Alternative init without binding for backward compatibility
-    init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((String, Bool) -> Void)? = nil) {
+    init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((String, Bool) -> Void)? = nil, onNewConversation: (() -> Void)? = nil) {
         self._isScrollingDown = isScrollingDown ?? .constant(false)
         self._feedIsVisible = feedIsVisible ?? .constant(false)
         self.onSelect = onSelect
         self.onStoryViewRequest = onStoryViewRequest
+        self.onNewConversation = onNewConversation
     }
 
     // The filtered and grouped conversations are now calculated on a background queue 
@@ -551,19 +553,37 @@ struct ConversationListView: View {
 
     private var mainContentZStack: some View {
         ZStack(alignment: .bottom) {
-            // Main scroll content with gesture detection
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    // Top spacer (also serves as scroll offset detector via background)
-                    Color.clear.frame(height: 70)
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear.preference(
-                                    key: ScrollOffsetPreferenceKey.self,
-                                    value: geo.frame(in: .named("scroll")).minY
-                                )
-                            }
-                        )
+            VStack(spacing: 0) {
+                CollapsibleHeader(
+                    title: "Conversations",
+                    scrollOffset: headerScrollOffset,
+                    showBackButton: false,
+                    titleColor: theme.textPrimary,
+                    backArrowColor: MeeshyColors.indigo500,
+                    backgroundColor: theme.backgroundPrimary,
+                    trailing: {
+                        Button {
+                            onNewConversation?()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundColor(MeeshyColors.indigo500)
+                        }
+                        .accessibilityLabel("Nouvelle conversation")
+                    }
+                )
+
+                // Main scroll content with gesture detection
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        // Scroll offset detector
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: geo.frame(in: .named("scroll")).minY
+                            )
+                        }
+                        .frame(height: 0)
 
                     // Story carousel
                     StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
@@ -629,6 +649,7 @@ struct ConversationListView: View {
             }
             .coordinateSpace(name: "scroll")
             .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                headerScrollOffset = offset
                 guard !isSearching, !showSearchOverlay else { return }
                 let scrollingDown = offset < -30
                 if scrollingDown != isScrollingDown {
@@ -649,6 +670,7 @@ struct ConversationListView: View {
                     }
                 }
             }
+            } // VStack (CollapsibleHeader + ScrollView)
 
             // Bottom overlay: Search bar (always) + Communities & Filters (when loupe tapped)
             VStack(spacing: 0) {
