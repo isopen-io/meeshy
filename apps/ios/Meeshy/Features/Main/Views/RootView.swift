@@ -36,9 +36,6 @@ struct RootView: View {
     // Share sheet state (triggered by deep link)
     @State private var showSharePicker = false
 
-    // Notification sheet
-    @State private var showNotifications = false
-
     // New conversation sheet
     @State private var showNewConversation = false
 
@@ -152,10 +149,18 @@ struct RootView: View {
                         CommunityInviteView(communityId: communityId)
                     case .notifications:
                         NotificationListView(
-                            onNotificationTap: { _ in },
+                            onNotificationTap: { notification in
+                                router.pop()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    handleNotificationTap(notification)
+                                }
+                            },
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
+                        .onDisappear {
+                            Task { await notificationManager.refreshUnreadCount() }
+                        }
                     case .userStats:
                         UserStatsView()
                             .navigationBarHidden(true)
@@ -401,21 +406,6 @@ struct RootView: View {
                     handleJoinSuccess(joinResponse)
                 }
             }
-        }
-        .sheet(isPresented: $showNotifications, onDismiss: {
-            Task { await notificationManager.refreshUnreadCount() }
-        }) {
-            NotificationListView(
-                onNotificationTap: { notification in
-                    showNotifications = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        handleNotificationTap(notification)
-                    }
-                },
-                onDismiss: { showNotifications = false }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showNewConversation) {
             NewConversationView()
@@ -729,7 +719,7 @@ struct RootView: View {
             let menuItems: [(icon: String, color: String, action: () -> Void)] = [
                 ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.profile) }),
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
-                ("bell.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; showNotifications = true }),
+                ("bell.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
                 ("person.2.fill", "6366F1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts()) }),
                 ("gearshape.fill", "45B7D1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
             ]

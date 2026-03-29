@@ -19,6 +19,7 @@ struct FeedView: View {
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
     @State private var showAudioComposer = false
+    @State private var headerScrollOffset: CGFloat = 0
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
@@ -67,6 +68,15 @@ struct FeedView: View {
             }
 
             VStack(spacing: 0) {
+                CollapsibleHeader(
+                    title: "Feeds",
+                    scrollOffset: headerScrollOffset,
+                    showBackButton: false,
+                    titleColor: theme.textPrimary,
+                    backArrowColor: MeeshyColors.indigo500,
+                    backgroundColor: theme.backgroundPrimary
+                )
+
                 feedScrollView
             }
 
@@ -294,9 +304,15 @@ struct FeedView: View {
         ScrollViewReader { scrollProxy in
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 16) {
-                    // Top spacer for floating buttons (also serves as scroll anchor)
-                    Spacer().frame(height: 100)
-                        .id("feed-top")
+                    // Scroll offset detector
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geo.frame(in: .named("feedScroll")).minY
+                        )
+                    }
+                    .frame(height: 0)
+                    .id("feed-top")
 
                     // Composer placeholder
                     composerPlaceholder
@@ -352,6 +368,10 @@ struct FeedView: View {
                 }
                 .padding(.top, 12)
                 .padding(.bottom, 100)
+            }
+            .coordinateSpace(name: "feedScroll")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                headerScrollOffset = offset
             }
             .refreshable {
                 await viewModel.refresh()
