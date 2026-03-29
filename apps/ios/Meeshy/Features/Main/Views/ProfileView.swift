@@ -466,7 +466,7 @@ struct ProfileView: View {
 
             Button {
                 HapticFeedback.light()
-                router.push(.friendRequests)
+                router.push(.contacts(.requests))
             } label: {
                 HStack(spacing: 12) {
                     fieldIcon("person.2.fill")
