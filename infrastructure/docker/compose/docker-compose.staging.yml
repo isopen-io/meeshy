@@ -212,6 +212,7 @@ services:
       - ZMQ_TRANSLATOR_HOST=translator-staging
       - ZMQ_TRANSLATOR_PUSH_PORT=5555
       - ZMQ_TRANSLATOR_SUB_PORT=5558
+      - AGENT_HOST=agent-staging
       - NODE_ENV=production
       - DOMAIN=staging.${DOMAIN:-meeshy.me}
       - CORS_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me}
