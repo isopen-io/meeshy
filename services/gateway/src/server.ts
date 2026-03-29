@@ -69,7 +69,7 @@ import messageReadStatusRoutes from './routes/message-read-status';
 import mentionRoutes from './routes/mentions';
 import { notificationRoutes } from './routes/notifications';
 import { friendRequestRoutes } from './routes/friends';
-import { invitationRoutes } from './routes/invitations';
+import { invitationRoutes as publicInvitationRoutes } from './routes/invitations';
 import { attachmentRoutes } from './routes/attachments';
 import reactionRoutes from './routes/reactions';
 import callRoutes from './routes/calls';
@@ -1009,7 +1009,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     await this.server.register(friendRequestRoutes, { prefix: API_PREFIX });
 
     // Register invitation routes with /api prefix
-    await this.server.register(invitationRoutes, { prefix: API_PREFIX });
+    await this.server.register(publicInvitationRoutes, { prefix: API_PREFIX });
 
     // Register call routes with /api prefix (Phase 1A: P2P Video Calls MVP)
     await this.server.register(callRoutes, { prefix: API_PREFIX });

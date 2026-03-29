@@ -254,7 +254,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   fastify.get('/configs', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
     schema: {
-      description: 'List all agent conversation configs with pagination.',
+      description: 'List all conversations with agent activity (configs, roles, or analytics) with pagination.',
       tags: ['admin-agent'],
       summary: 'List agent configs',
       security: securityBearerAuth,
@@ -275,64 +275,120 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
       const skip = (pageNum - 1) * limitNum;
 
-      const where = search
-        ? { conversation: { title: { contains: search, mode: 'insensitive' as const } } }
-        : {};
-
-      const [configs, total] = await Promise.all([
-        fastify.prisma.agentConfig.findMany({
-          where,
-          skip,
-          take: limitNum,
-          orderBy: { updatedAt: 'desc' },
-          include: {
-            conversation: {
-              select: { id: true, title: true, type: true },
-            },
-          },
-        }),
-        fastify.prisma.agentConfig.count({ where }),
+      // Collect ALL conversationIds with any agent activity
+      const [configConvIds, roleConvIds, analyticConvIds] = await Promise.all([
+        fastify.prisma.agentConfig.findMany({ select: { conversationId: true } }),
+        fastify.prisma.agentUserRole.findMany({ select: { conversationId: true }, distinct: ['conversationId'] }),
+        fastify.prisma.agentAnalytic.findMany({ select: { conversationId: true } }),
       ]);
 
-      const conversationIds = configs.map((c) => c.conversationId);
+      const allConvIds = [...new Set([
+        ...configConvIds.map((c) => c.conversationId),
+        ...roleConvIds.map((r) => r.conversationId),
+        ...analyticConvIds.map((a) => a.conversationId),
+      ])];
 
-      const allRoles = conversationIds.length > 0
-        ? await fastify.prisma.agentUserRole.findMany({
-            where: { conversationId: { in: conversationIds } },
-            select: { conversationId: true, userId: true },
-          })
-        : [];
+      if (allConvIds.length === 0) {
+        return reply.send({ success: true, data: [], pagination: { total: 0, page: pageNum, limit: limitNum, hasMore: false } });
+      }
 
-      type AnalyticSelect = { conversationId: string; messagesSent: number; totalWordsSent: number; avgConfidence: number; lastResponseAt: Date | null };
-      const allAnalytics: AnalyticSelect[] = conversationIds.length > 0
-        ? await fastify.prisma.agentAnalytic.findMany({
-            where: { conversationId: { in: conversationIds } },
-            select: {
-              conversationId: true,
-              messagesSent: true,
-              totalWordsSent: true,
-              avgConfidence: true,
-              lastResponseAt: true,
-            },
-          })
-        : [];
+      // Fetch conversations (with optional search filter)
+      const conversationWhere = {
+        id: { in: allConvIds },
+        ...(search ? { title: { contains: search, mode: 'insensitive' as const } } : {}),
+      };
+      const [conversations, total] = await Promise.all([
+        fastify.prisma.conversation.findMany({
+          where: conversationWhere,
+          select: { id: true, title: true, type: true },
+          orderBy: { lastMessageAt: 'desc' },
+          skip,
+          take: limitNum,
+        }),
+        fastify.prisma.conversation.count({ where: conversationWhere }),
+      ]);
 
+      const pageConvIds = conversations.map((c) => c.id);
+      const convMap = new Map(conversations.map((c) => [c.id, c]));
+
+      // Fetch configs, roles, analytics for this page
+      const [configs, allRoles, allAnalytics] = await Promise.all([
+        fastify.prisma.agentConfig.findMany({
+          where: { conversationId: { in: pageConvIds } },
+        }),
+        fastify.prisma.agentUserRole.findMany({
+          where: { conversationId: { in: pageConvIds } },
+          select: { conversationId: true, userId: true },
+        }),
+        fastify.prisma.agentAnalytic.findMany({
+          where: { conversationId: { in: pageConvIds } },
+          select: { conversationId: true, messagesSent: true, totalWordsSent: true, avgConfidence: true, lastResponseAt: true },
+        }),
+      ]);
+
+      const configByConvId = new Map(configs.map((c) => [c.conversationId, c]));
       const rolesByConvId = new Map<string, string[]>();
       for (const role of allRoles) {
         const arr = rolesByConvId.get(role.conversationId) ?? [];
         arr.push(role.userId);
         rolesByConvId.set(role.conversationId, arr);
       }
-
       const analyticsByConvId = new Map(allAnalytics.map((a) => [a.conversationId, a]));
 
-      const enrichedConfigs = configs.map((c) => {
-        const analytics = analyticsByConvId.get(c.conversationId);
-        const roleUserIds = rolesByConvId.get(c.conversationId) ?? [];
-        const manualIds = (c.manualUserIds ?? []) as string[];
+      const enrichedConfigs = pageConvIds.map((convId) => {
+        const config = configByConvId.get(convId);
+        const analytics = analyticsByConvId.get(convId);
+        const roleUserIds = rolesByConvId.get(convId) ?? [];
+        const manualIds = ((config?.manualUserIds ?? []) as string[]);
         const mergedUserIds = [...new Set([...roleUserIds, ...manualIds])];
+
         return {
-          ...c,
+          id: config?.id ?? convId,
+          conversationId: convId,
+          conversation: convMap.get(convId) ?? null,
+          enabled: config?.enabled ?? false,
+          configuredBy: config?.configuredBy ?? null,
+          agentType: config?.agentType ?? 'personal',
+          autoPickupEnabled: config?.autoPickupEnabled ?? true,
+          inactivityThresholdHours: config?.inactivityThresholdHours ?? 72,
+          maxControlledUsers: config?.maxControlledUsers ?? 5,
+          manualUserIds: manualIds,
+          excludedRoles: config?.excludedRoles ?? [],
+          excludedUserIds: (config?.excludedUserIds ?? []) as string[],
+          triggerOnTimeout: config?.triggerOnTimeout ?? true,
+          timeoutSeconds: config?.timeoutSeconds ?? 300,
+          triggerOnUserMessage: config?.triggerOnUserMessage ?? false,
+          triggerFromUserIds: (config?.triggerFromUserIds ?? []) as string[],
+          triggerOnReplyTo: config?.triggerOnReplyTo ?? true,
+          contextWindowSize: config?.contextWindowSize ?? 50,
+          useFullHistory: config?.useFullHistory ?? false,
+          scanIntervalMinutes: config?.scanIntervalMinutes ?? 3,
+          minResponsesPerCycle: config?.minResponsesPerCycle ?? 2,
+          maxResponsesPerCycle: config?.maxResponsesPerCycle ?? 12,
+          reactionsEnabled: config?.reactionsEnabled ?? true,
+          maxReactionsPerCycle: config?.maxReactionsPerCycle ?? 8,
+          agentInstructions: config?.agentInstructions ?? null,
+          webSearchEnabled: config?.webSearchEnabled ?? false,
+          minWordsPerMessage: config?.minWordsPerMessage ?? 3,
+          maxWordsPerMessage: config?.maxWordsPerMessage ?? 400,
+          minHistoricalMessages: config?.minHistoricalMessages ?? 0,
+          generationTemperature: config?.generationTemperature ?? 0.8,
+          qualityGateEnabled: config?.qualityGateEnabled ?? true,
+          qualityGateMinScore: config?.qualityGateMinScore ?? 0.5,
+          weekdayMaxMessages: config?.weekdayMaxMessages ?? 10,
+          weekendMaxMessages: config?.weekendMaxMessages ?? 25,
+          weekdayMaxUsers: config?.weekdayMaxUsers ?? 4,
+          weekendMaxUsers: config?.weekendMaxUsers ?? 6,
+          burstEnabled: config?.burstEnabled ?? true,
+          burstSize: config?.burstSize ?? 4,
+          burstIntervalMinutes: config?.burstIntervalMinutes ?? 5,
+          quietIntervalMinutes: config?.quietIntervalMinutes ?? 90,
+          inactivityDaysThreshold: config?.inactivityDaysThreshold ?? 3,
+          prioritizeTaggedUsers: config?.prioritizeTaggedUsers ?? true,
+          prioritizeRepliedUsers: config?.prioritizeRepliedUsers ?? true,
+          reactionBoostFactor: config?.reactionBoostFactor ?? 1.5,
+          createdAt: config?.createdAt ?? null,
+          updatedAt: config?.updatedAt ?? null,
           controlledUserIds: mergedUserIds,
           analytics: analytics
             ? {
