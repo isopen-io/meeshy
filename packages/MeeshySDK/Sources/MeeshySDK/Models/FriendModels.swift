@@ -10,6 +10,7 @@ public struct FriendRequest: Decodable, Identifiable {
     public let status: String
     public let sender: FriendRequestUser?
     public let receiver: FriendRequestUser?
+    public let respondedAt: Date?
     public let createdAt: Date
     public let updatedAt: Date?
 }
@@ -49,6 +50,21 @@ public struct RespondFriendRequest: Encodable {
     public init(accepted: Bool) {
         self.status = accepted ? "accepted" : "rejected"
     }
+}
+
+// MARK: - Email Invitation
+
+public struct EmailInvitationRequest: Encodable {
+    public let email: String
+
+    public init(email: String) {
+        self.email = email
+    }
+}
+
+public struct EmailInvitationResponse: Decodable {
+    public let email: String
+    public let sentAt: Date?
 }
 
 // MARK: - String Helper

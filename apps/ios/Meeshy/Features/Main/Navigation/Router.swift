@@ -7,7 +7,7 @@ enum Route: Hashable {
     case conversation(Conversation)
     case settings
     case profile
-    case newConversation
+    case contacts(ContactsTab = .contacts)
     case communityList
     case communityDetail(String)
     case communityCreate
@@ -28,15 +28,34 @@ enum Route: Hashable {
     case editProfile
 }
 
+extension Route {
+    var isHub: Bool {
+        switch self {
+        case .profile, .settings, .communityList, .contacts, .links:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
 @MainActor
 final class Router: ObservableObject {
-    @Published var path = NavigationPath()
+    @Published var path: [Route] = []
     @Published var deepLinkProfileUser: ProfileSheetUser?
     @Published var pendingShareContent: SharedContentType? = nil
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "router")
 
-    var isInConversation: Bool { !path.isEmpty }
+    var currentRoute: Route? { path.last }
+
+    var isHubRoute: Bool {
+        currentRoute?.isHub ?? true
+    }
+
+    var isDeepRoute: Bool {
+        !path.isEmpty && !isHubRoute
+    }
 
     func push(_ route: Route) {
         path.append(route)
@@ -48,13 +67,13 @@ final class Router: ObservableObject {
     }
 
     func popToRoot() {
-        path = NavigationPath()
+        path.removeAll()
     }
 
     func navigateToConversation(_ conversation: Conversation) {
         popToRoot()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            self.path.append(Route.conversation(conversation))
+            self.push(.conversation(conversation))
         }
     }
 
@@ -95,7 +114,7 @@ final class Router: ObservableObject {
                 }
 
             case .external:
-                break // handled by DeepLinkRouter.open before calling this closure
+                break
             }
         }
     }

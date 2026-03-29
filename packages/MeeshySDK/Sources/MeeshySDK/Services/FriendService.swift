@@ -1,6 +1,17 @@
 import Foundation
 
-public final class FriendService: @unchecked Sendable {
+// MARK: - Protocol
+
+public protocol FriendServiceProviding: Sendable {
+    func sendFriendRequest(receiverId: String, message: String?) async throws -> FriendRequest
+    func receivedRequests(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]>
+    func sentRequests(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]>
+    func respond(requestId: String, accepted: Bool) async throws -> FriendRequest
+    func deleteRequest(requestId: String) async throws
+    func sendEmailInvitation(email: String) async throws
+}
+
+public final class FriendService: FriendServiceProviding, @unchecked Sendable {
     public static let shared = FriendService()
     private init() {}
     private var api: APIClient { APIClient.shared }
@@ -53,6 +64,16 @@ public final class FriendService: @unchecked Sendable {
     public func deleteRequest(requestId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
             endpoint: "/friend-requests/\(requestId)"
+        )
+    }
+
+    // MARK: - Email Invitation
+
+    public func sendEmailInvitation(email: String) async throws {
+        let body = EmailInvitationRequest(email: email)
+        let _: APIResponse<EmailInvitationResponse> = try await api.post(
+            endpoint: "/invitations/email",
+            body: body
         )
     }
 }

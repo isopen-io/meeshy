@@ -10,6 +10,14 @@ export class MongoPersistence {
     return this.prisma.agentConfig.findUnique({ where: { conversationId } });
   }
 
+  async ensureAgentConfig(conversationId: string) {
+    return this.prisma.agentConfig.upsert({
+      where: { conversationId },
+      create: { conversationId, enabled: true },
+      update: {},
+    });
+  }
+
   async upsertUserRole(conversationId: string, profile: ToneProfile) {
     return this.prisma.agentUserRole.upsert({
       where: { userId_conversationId: { userId: profile.userId, conversationId } },
@@ -69,23 +77,34 @@ export class MongoPersistence {
   }
 
   async getControlledUsers(conversationId: string): Promise<ControlledUser[]> {
-    const roles = await this.prisma.agentUserRole.findMany({ where: { conversationId } });
-    if (roles.length === 0) return [];
+    const [roles, config] = await Promise.all([
+      this.prisma.agentUserRole.findMany({ where: { conversationId } }),
+      this.prisma.agentConfig.findUnique({
+        where: { conversationId },
+        select: { manualUserIds: true },
+      }),
+    ]);
 
-    const userIds = roles.map((r: { userId: string }) => r.userId);
+    const manualUserIds = new Set((config?.manualUserIds ?? []) as string[]);
+    const roleUserIds = new Set(roles.map((r: { userId: string }) => r.userId));
+    const missingManualIds = [...manualUserIds].filter((id) => !roleUserIds.has(id));
+
+    const allUserIds = [...roleUserIds, ...missingManualIds];
+    if (allUserIds.length === 0) return [];
+
     const users = await this.prisma.user.findMany({
-      where: { id: { in: userIds } },
+      where: { id: { in: allUserIds } },
       select: { id: true, displayName: true, username: true, systemLanguage: true },
     });
     type UserInfo = { displayName: string; username: string; systemLanguage: string | null };
     const userMap: Map<string, UserInfo> = new Map(users.map((u: { id: string; displayName: string | null; username: string | null; systemLanguage: string | null }) => [u.id, { displayName: u.displayName ?? u.username ?? u.id, username: u.username ?? u.id, systemLanguage: u.systemLanguage }]));
 
-    return roles.map((r: Record<string, any>) => ({
+    const results: ControlledUser[] = roles.map((r: Record<string, any>) => ({
       userId: r.userId as string,
       displayName: userMap.get(r.userId as string)?.displayName ?? r.userId,
       username: userMap.get(r.userId as string)?.username ?? r.userId,
       systemLanguage: userMap.get(r.userId as string)?.systemLanguage ?? 'fr',
-      source: 'manual' as const,
+      source: manualUserIds.has(r.userId as string) ? 'manual' as const : 'auto_rule' as const,
       role: {
         userId: r.userId as string,
         displayName: userMap.get(r.userId as string)?.displayName ?? r.userId,
@@ -109,6 +128,39 @@ export class MongoPersistence {
         locked: r.locked,
       },
     }));
+
+    for (const uid of missingManualIds) {
+      results.push({
+        userId: uid,
+        displayName: userMap.get(uid)?.displayName ?? uid,
+        username: userMap.get(uid)?.username ?? uid,
+        systemLanguage: userMap.get(uid)?.systemLanguage ?? 'fr',
+        source: 'manual',
+        role: {
+          userId: uid,
+          displayName: userMap.get(uid)?.displayName ?? uid,
+          origin: 'archetype',
+          personaSummary: '',
+          tone: 'neutre',
+          vocabularyLevel: 'courant',
+          typicalLength: 'moyen',
+          emojiUsage: 'occasionnel',
+          topicsOfExpertise: [],
+          topicsAvoided: [],
+          relationshipMap: {},
+          catchphrases: [],
+          responseTriggers: [],
+          silenceTriggers: [],
+          commonEmojis: [],
+          reactionPatterns: [],
+          messagesAnalyzed: 0,
+          confidence: 0.1,
+          locked: false,
+        },
+      });
+    }
+
+    return results;
   }
 
   async getInactiveUsers(conversationId: string, thresholdHours: number, excludedRoles: string[], excludedUserIds: string[]) {
@@ -126,8 +178,7 @@ export class MongoPersistence {
       },
     });
     return participants
-      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
-      .map((p) => p.user);
+      .flatMap((p) => (p.user ? [p.user] : []));
   }
 
   async getPotentialControlledUsers(
@@ -168,8 +219,7 @@ export class MongoPersistence {
     });
 
     return participants
-      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
-      .map((p) => p.user);
+      .flatMap((p) => (p.user ? [p.user] : []));
   }
 
   async getLeastActiveParticipants(
@@ -200,8 +250,7 @@ export class MongoPersistence {
     });
 
     return participants
-      .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user != null)
-      .map((p) => p.user);
+      .flatMap((p) => (p.user ? [p.user] : []));
   }
 
   async getGlobalProfile(userId: string) {

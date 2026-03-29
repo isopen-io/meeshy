@@ -11,6 +11,8 @@ struct WidgetPreviewView: View {
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
 
+    var onNewConversation: (() -> Void)?
+
     @State private var animatedUnreadCount: Int = 0
     @State private var showCards = false
     @StateObject private var affiliateVM = AffiliateViewModel()
@@ -287,7 +289,7 @@ struct WidgetPreviewView: View {
                 ) {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        router.push(.newConversation)
+                        onNewConversation?()
                     }
                 }
 
