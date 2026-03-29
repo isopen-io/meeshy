@@ -122,6 +122,7 @@ class ConversationViewModel: ObservableObject {
     @Published var searchResults: [SearchResultItem] = []
     @Published var isSearching = false
     @Published var searchHasMore = false
+    @Published var currentSearchQuery: String?
     var searchNextCursor: String?
 
     /// True when the user jumped to a search result and messages are loaded around that point
@@ -1078,11 +1079,13 @@ class ConversationViewModel: ObservableObject {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2 else {
             searchResults = []
+            currentSearchQuery = nil
             isSearching = false
             return
         }
 
         isSearching = true
+        currentSearchQuery = trimmed
         searchNextCursor = nil
 
         do {
@@ -1257,6 +1260,7 @@ class ConversationViewModel: ObservableObject {
         savedHasOlder = true
         isInJumpedState = false
         hasNewerMessages = false
+        currentSearchQuery = nil
     }
 
     // MARK: - Extract Text Translations from REST Responses
@@ -1439,5 +1443,7 @@ class ConversationViewModel: ObservableObject {
 extension ConversationViewModel: ConversationSocketDelegate {
     func handleParticipantRoleUpdated(participantId: String, newRole: String) {
         Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
+        _topActiveMembers = nil
+        objectWillChange.send()
     }
 }

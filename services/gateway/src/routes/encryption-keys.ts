@@ -13,6 +13,8 @@
 import { FastifyInstance } from 'fastify';
 import { getEncryptionService } from '../services/EncryptionService';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
+import { validateParams, validateBody } from '../validation/helpers.js';
+import { ConversationIdParamSchema, KeyExchangeBodySchema, PublishKeysBodySchema } from '../validation/encryption-schemas.js';
 
 /**
  * Request/Response Types
@@ -68,6 +70,7 @@ export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
     '/api/conversations/:conversationId/keys/exchange',
     {
       preValidation: [authMiddleware],
+      preHandler: [validateParams(ConversationIdParamSchema), validateBody(KeyExchangeBodySchema)],
     },
     async (request, reply) => {
       try {
@@ -228,6 +231,7 @@ export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
     '/api/conversations/:conversationId/keys/bundle',
     {
       preValidation: [authMiddleware],
+      preHandler: [validateParams(ConversationIdParamSchema)],
     },
     async (request, reply) => {
       try {
@@ -375,6 +379,7 @@ export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
     '/api/conversations/:conversationId/keys/publish',
     {
       preValidation: [authMiddleware],
+      preHandler: [validateParams(ConversationIdParamSchema), validateBody(PublishKeysBodySchema)],
     },
     async (request, reply) => {
       try {

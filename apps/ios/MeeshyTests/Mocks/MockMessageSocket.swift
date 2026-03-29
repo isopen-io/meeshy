@@ -38,6 +38,10 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
     let didReconnect = PassthroughSubject<Void, Never>()
     let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
+    let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
+    let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
+    let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
+    let conversationOnlineStats = PassthroughSubject<ConversationOnlineStatsEvent, Never>()
     let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
     let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
     let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
@@ -50,6 +54,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
     let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
+    let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+    let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
 
     // MARK: - Call Tracking
 

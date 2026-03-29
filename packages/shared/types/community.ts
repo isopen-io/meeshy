@@ -143,7 +143,8 @@ export interface Community {
   readonly members?: CommunityMember[];
   readonly _count?: {
     readonly members: number;
-    readonly conversations: number;
+    readonly Conversation?: number;
+    readonly conversations?: number;
   };
 }
 

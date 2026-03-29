@@ -8,6 +8,8 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
+import { validateSocketEvent } from '../../middleware/validation.js';
+import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
 
 export interface ConversationHandlerDependencies {
   prisma: PrismaClient;
@@ -31,8 +33,15 @@ export class ConversationHandler {
    */
   async handleConversationJoin(socket: Socket, data: { conversationId: string }): Promise<void> {
     try {
+      const schemaValidation = validateSocketEvent(SocketConversationJoinSchema, data);
+      if (schemaValidation.success === false) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const normalizedId = await normalizeConversationId(
-        data.conversationId,
+        validated.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
@@ -47,7 +56,7 @@ export class ConversationHandler {
         });
 
         // Envoyer les stats de conversation
-        await this.sendConversationStatsToSocket(socket, data.conversationId).catch(() => {});
+        await this.sendConversationStatsToSocket(socket, validated.conversationId).catch(() => {});
       }
     } catch (error) {
       console.error('[CONVERSATION_JOIN] Erreur:', error);
@@ -59,8 +68,15 @@ export class ConversationHandler {
    */
   async handleConversationLeave(socket: Socket, data: { conversationId: string }): Promise<void> {
     try {
+      const schemaValidation = validateSocketEvent(SocketConversationLeaveSchema, data);
+      if (schemaValidation.success === false) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const normalizedId = await normalizeConversationId(
-        data.conversationId,
+        validated.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 

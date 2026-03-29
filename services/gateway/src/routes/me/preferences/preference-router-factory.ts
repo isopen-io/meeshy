@@ -8,6 +8,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodSchema } from 'zod';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 type PreferenceCategory =
   | 'privacy'
@@ -35,9 +36,22 @@ export function createPreferenceRouter<T>(
     // Instancier le service de validation de consentement
     const consentService = new ConsentValidationService(fastify.prisma);
 
-    // Helper pour détecter les objets vides ou null
     const isEmpty = (obj: any): boolean => {
       return !obj || (typeof obj === 'object' && Object.keys(obj).length === 0);
+    };
+
+    const emitPreferencesUpdated = (userId: string) => {
+      try {
+        const manager = (fastify as any).socketIOHandler?.getManager?.();
+        if (manager?.io) {
+          manager.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.USER_PREFERENCES_UPDATED, {
+            userId,
+            category,
+          });
+        }
+      } catch {
+        // Socket.IO emission is best-effort
+      }
     };
     // GET /me/preferences/{category}
     fastify.get(
@@ -161,7 +175,6 @@ export function createPreferenceRouter<T>(
             });
           }
 
-          // Upsert avec remplacement complet
           const updated = await fastify.prisma.userPreferences.upsert({
             where: { userId },
             create: {
@@ -173,6 +186,8 @@ export function createPreferenceRouter<T>(
             },
             select: { [category]: true }
           });
+
+          emitPreferencesUpdated(userId);
 
           return reply.send({
             success: true,
@@ -273,7 +288,6 @@ export function createPreferenceRouter<T>(
             });
           }
 
-          // Upsert avec merge
           const updated = await fastify.prisma.userPreferences.upsert({
             where: { userId },
             create: {
@@ -285,6 +299,8 @@ export function createPreferenceRouter<T>(
             },
             select: { [category]: true }
           });
+
+          emitPreferencesUpdated(userId);
 
           return reply.send({
             success: true,

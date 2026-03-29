@@ -454,7 +454,12 @@ struct ConversationView: View {
                 if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
                     composerState.selectedLanguage = String(kbd.prefix(2))
                 }
+                let draft = DraftStore.shared.load(for: viewModel.conversationId)
+                if !draft.isEmpty && messageText.isEmpty { messageText = draft }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { overlayState.longPressEnabled = true }
+            }
+            .onChange(of: messageText) { _, newValue in
+                DraftStore.shared.save(newValue, for: viewModel.conversationId)
             }
             .onChange(of: scrollState.isNearBottom) { _, _ in
                 if composerState.showTextEmojiPicker {

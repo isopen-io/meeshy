@@ -5,7 +5,6 @@
 
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { apiService } from '../api.service';
-import { cacheService } from './cache.service';
 import type {
   ParticipantsFilters,
   AllParticipantsResponse,
@@ -56,22 +55,12 @@ export class ParticipantsService {
         params.cursor = filters.cursor;
       }
 
-      const cacheKey = `${conversationId}-${JSON.stringify(params)}`;
-      const cached = cacheService.getParticipantsFromCache(cacheKey);
-      if (cached) {
-        return cached;
-      }
-
       const response = await apiService.get<PaginatedParticipantsResponse>(
         `/conversations/${conversationId}/participants`,
         params
       );
 
-      const participants = response.data?.data ?? [];
-
-      cacheService.setParticipantsCache(cacheKey, participants);
-
-      return participants;
+      return response.data?.data ?? [];
     } catch (error) {
       console.error('[ParticipantsService] Erreur lors de la récupération des participants:', error);
       return [];
@@ -179,8 +168,6 @@ export class ParticipantsService {
   async addParticipant(conversationId: string, userId: string): Promise<void> {
     await apiService.post(`/conversations/${conversationId}/participants`, { userId });
 
-    // Invalider le cache des participants
-    cacheService.invalidateParticipantsCache();
   }
 
   /**
@@ -189,8 +176,6 @@ export class ParticipantsService {
   async removeParticipant(conversationId: string, userId: string): Promise<void> {
     await apiService.delete(`/conversations/${conversationId}/participants/${userId}`);
 
-    // Invalider le cache des participants
-    cacheService.invalidateParticipantsCache();
   }
 
   /**
@@ -203,8 +188,6 @@ export class ParticipantsService {
   ): Promise<void> {
     await apiService.patch(`/conversations/${conversationId}/participants/${userId}/role`, { role: role.toLowerCase() });
 
-    // Invalider le cache des participants
-    cacheService.invalidateParticipantsCache();
   }
 }
 

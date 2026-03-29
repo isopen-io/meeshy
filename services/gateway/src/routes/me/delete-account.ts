@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { EmailService } from '../../services/EmailService';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { validateBody, validateQuery } from '../../validation/helpers.js';
+import { DeleteAccountBodySchema, TokenQuerySchema } from '../../validation/delete-account-schemas.js';
 
 const logger = enhancedLogger.child({ module: 'DeleteAccount' });
 
@@ -30,17 +32,11 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
     '/delete-account',
     {
       preValidation: [(fastify as any).authenticate],
+      preHandler: [validateBody(DeleteAccountBodySchema)],
       schema: {
         description: 'Initiate account deletion with email confirmation',
         tags: ['me', 'account'],
         summary: 'Request account deletion',
-        body: {
-          type: 'object',
-          required: ['confirmationPhrase'],
-          properties: {
-            confirmationPhrase: { type: 'string' }
-          }
-        },
         response: {
           200: {
             type: 'object',
@@ -193,14 +189,10 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/delete-account/confirm',
     {
+      preHandler: [validateQuery(TokenQuerySchema)],
       schema: {
         description: 'Confirm account deletion via email link',
         tags: ['me', 'account'],
-        querystring: {
-          type: 'object',
-          required: ['token'],
-          properties: { token: { type: 'string' } }
-        }
       }
     },
     async (request, reply) => {
@@ -253,14 +245,10 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/delete-account/cancel',
     {
+      preHandler: [validateQuery(TokenQuerySchema)],
       schema: {
         description: 'Cancel account deletion via email link',
         tags: ['me', 'account'],
-        querystring: {
-          type: 'object',
-          required: ['token'],
-          properties: { token: { type: 'string' } }
-        }
       }
     },
     async (request, reply) => {
@@ -318,14 +306,10 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/delete-account/delete-now',
     {
+      preHandler: [validateQuery(TokenQuerySchema)],
       schema: {
         description: 'Immediately delete account after grace period (via email link)',
         tags: ['me', 'account'],
-        querystring: {
-          type: 'object',
-          required: ['token'],
-          properties: { token: { type: 'string' } }
-        }
       }
     },
     async (request, reply) => {

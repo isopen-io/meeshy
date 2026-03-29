@@ -12,7 +12,7 @@ import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessagingService } from '../../services/MessagingService';
 import { StatusService } from '../../services/StatusService';
-import { NotificationService } from '../../services/NotificationService';
+import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { validateMessageLength } from '../../config/message-limits';
 import {
@@ -22,14 +22,21 @@ import {
   normalizeConversationId,
   type SocketUser
 } from '../utils/socket-helpers';
+import { resolveParticipant } from '../utils/participant-resolver.js';
 import type {
-  SocketIOResponse,
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types/messaging';
+import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import type { Message } from '@meeshy/shared/types/index';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
+import { AttachmentService } from '../../services/attachments/AttachmentService';
+import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
+import { validateSocketEvent } from '../../middleware/validation.js';
+import { SocketMessageSendSchema, SocketMessageSendWithAttachmentsSchema } from '../../validation/socket-event-schemas.js';
 
 
 export interface MessageHandlerDependencies {
@@ -42,6 +49,9 @@ export interface MessageHandlerDependencies {
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
   stats: { messages_processed: number; errors: number };
+  agentClient?: ZmqAgentClient | null;
+  attachmentService: AttachmentService;
+  readStatusService: MessageReadStatusService;
 }
 
 export class MessageHandler {
@@ -54,6 +64,10 @@ export class MessageHandler {
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
   private stats: { messages_processed: number; errors: number };
+  private agentClient: ZmqAgentClient | null;
+  private attachmentService: AttachmentService;
+  private readStatusService: MessageReadStatusService;
+  private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: MessageHandlerDependencies) {
     this.io = deps.io;
@@ -65,6 +79,9 @@ export class MessageHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.stats = deps.stats;
+    this.agentClient = deps.agentClient ?? null;
+    this.attachmentService = deps.attachmentService;
+    this.readStatusService = deps.readStatusService;
   }
 
   /**
@@ -85,6 +102,13 @@ export class MessageHandler {
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
     try {
+      const schemaValidation = validateSocketEvent(SocketMessageSendSchema, data);
+      if (schemaValidation.success === false) {
+        this._sendError(callback, schemaValidation.error, socket);
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const userContext = this._getUserContext(socket);
       if (!userContext) {
         this._sendError(callback, 'User not authenticated', socket);
@@ -93,18 +117,29 @@ export class MessageHandler {
 
       const { participantId, userId, isAnonymous } = userContext;
 
-      // Validation longueur du message
-      const validation = validateMessageLength(data.content);
+      const rateLimitAllowed = await this.rateLimiter.checkLimit(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
+      if (!rateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
+        const errorResponse: SocketIOResponse<{ messageId: string }> = {
+          success: false,
+          error: 'Rate limit exceeded'
+        };
+        if (callback) callback(errorResponse);
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
+
+      const validation = validateMessageLength(validated.content);
       if (!validation.isValid && !data.encryptedPayload) {
         this._sendError(callback, validation.error || 'Message invalide', socket);
         return;
       }
 
-      // Vérifier si l'expéditeur est bloqué par un membre de la conversation (DM uniquement)
-      // For registered users, check via userId; for anonymous, skip block check
       if (!isAnonymous && userId) {
         const conversation = await this.prisma.conversation.findUnique({
-          where: { id: data.conversationId },
+          where: { id: validated.conversationId },
           select: {
             type: true,
             participants: {
@@ -133,23 +168,21 @@ export class MessageHandler {
       // Mettre à jour l'activité
       this.statusService.updateLastSeen(userId || participantId, isAnonymous);
 
-      // Resolve participantId for this conversation
-      const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, data.conversationId, isAnonymous);
+      const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, validated.conversationId, isAnonymous);
       if (!resolvedParticipantId) {
         this._sendError(callback, 'Not a participant in this conversation', socket);
         return;
       }
 
-      // Créer la requête de message
       const messageRequest: MessageRequest = {
-        conversationId: data.conversationId,
-        content: data.content,
-        originalLanguage: data.originalLanguage,
-        messageType: data.messageType || 'text',
-        replyToId: data.replyToId,
+        conversationId: validated.conversationId,
+        content: validated.content,
+        originalLanguage: validated.originalLanguage,
+        messageType: validated.messageType || 'text',
+        replyToId: validated.replyToId,
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
-        encryptedPayload: data.encryptedPayload,
+        encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
         isAnonymous,
         metadata: {
           source: 'websocket',
@@ -172,6 +205,26 @@ export class MessageHandler {
       if (response.success && response.data) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
         await this.broadcastNewMessage(message, message.conversationId, socket);
+
+        this._notifyAgent({
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          senderDisplayName: (message as unknown as Record<string, unknown>).sender
+            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.displayName as string | undefined
+              ?? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
+            : undefined,
+          senderUsername: (message as unknown as Record<string, unknown>).sender
+            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
+            : undefined,
+          content: message.content,
+          originalLanguage: message.originalLanguage,
+          replyToId: message.replyToId,
+          mentionedUserIds: await this._resolveMentionUserIds(
+            ((message as never)['validatedMentions'] as string[]) ?? []
+          ),
+          createdAt: message.createdAt,
+        });
       }
 
       this.stats.messages_processed++;
@@ -191,7 +244,7 @@ export class MessageHandler {
       conversationId: string;
       content: string;
       originalLanguage?: string;
-      attachmentIds: string[];
+      attachmentIds: readonly string[];
       replyToId?: string;
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
@@ -199,6 +252,13 @@ export class MessageHandler {
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
     try {
+      const schemaValidation = validateSocketEvent(SocketMessageSendWithAttachmentsSchema, data);
+      if (schemaValidation.success === false) {
+        this._sendError(callback, schemaValidation.error, socket);
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const userContext = this._getUserContext(socket);
       if (!userContext) {
         this._sendError(callback, 'User not authenticated', socket);
@@ -207,27 +267,37 @@ export class MessageHandler {
 
       const { participantId, userId, isAnonymous } = userContext;
 
-      // Validation
-      if (data.content && data.content.trim()) {
-        const validation = validateMessageLength(data.content);
+      const rateLimitAllowed = await this.rateLimiter.checkLimit(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
+      if (!rateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
+        const errorResponse: SocketIOResponse<{ messageId: string }> = {
+          success: false,
+          error: 'Rate limit exceeded'
+        };
+        if (callback) callback(errorResponse);
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
+
+      if (validated.content && validated.content.trim()) {
+        const validation = validateMessageLength(validated.content);
         if (!validation.isValid) {
           this._sendError(callback, validation.error || 'Message invalide', socket);
           return;
         }
       }
 
-      // Resolve participantId for this conversation
-      const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, data.conversationId, isAnonymous);
+      const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, validated.conversationId, isAnonymous);
       if (!resolvedParticipantId) {
         this._sendError(callback, 'Not a participant in this conversation', socket);
         return;
       }
 
-      // Vérifier les attachments
-      const { AttachmentService } = await import('../../services/AttachmentService');
-      const attachmentService = new AttachmentService(this.prisma);
+      const attachmentService = this.attachmentService;
 
-      for (const attachmentId of data.attachmentIds) {
+      for (const attachmentId of validated.attachmentIds) {
         const attachment = await attachmentService.getAttachment(attachmentId);
         if (!attachment || attachment.uploadedBy !== (userId || participantId)) {
           this._sendError(callback, `Attachment ${attachmentId} invalid`, socket);
@@ -236,16 +306,16 @@ export class MessageHandler {
       }
 
       const messageRequest: MessageRequest = {
-        conversationId: data.conversationId,
-        content: data.content,
-        originalLanguage: data.originalLanguage,
+        conversationId: validated.conversationId,
+        content: validated.content,
+        originalLanguage: validated.originalLanguage,
         messageType: 'text',
-        replyToId: data.replyToId,
+        replyToId: validated.replyToId,
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
-        attachmentIds: data.attachmentIds,
+        attachmentIds: validated.attachmentIds,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
@@ -261,6 +331,26 @@ export class MessageHandler {
       if (response.success && response.data) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
         await this.broadcastNewMessage(message, message.conversationId, socket);
+
+        this._notifyAgent({
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          senderDisplayName: (message as unknown as Record<string, unknown>).sender
+            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.displayName as string | undefined
+              ?? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
+            : undefined,
+          senderUsername: (message as unknown as Record<string, unknown>).sender
+            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
+            : undefined,
+          content: message.content,
+          originalLanguage: message.originalLanguage,
+          replyToId: message.replyToId,
+          mentionedUserIds: await this._resolveMentionUserIds(
+            ((message as never)['validatedMentions'] as string[]) ?? []
+          ),
+          createdAt: message.createdAt,
+        });
       }
 
       this._sendResponse(callback, response);
@@ -377,16 +467,14 @@ export class MessageHandler {
 
     if (!userId) return null;
 
-    const participant = await this.prisma.participant.findFirst({
-      where: {
-        conversationId,
-        userId,
-        isActive: true
-      },
-      select: { id: true }
+    const result = await resolveParticipant({
+      prisma: this.prisma,
+      userIdOrToken: userId,
+      conversationId,
+      connectedUsers: this.connectedUsers,
     });
 
-    return participant?.id || null;
+    return result?.participantId ?? null;
   }
 
   /**
@@ -395,7 +483,7 @@ export class MessageHandler {
    * Still needed for attachment and forward paths where relations are added post-create
    */
   private async _fetchMessageForBroadcast(messageId: string): Promise<Message | null> {
-    return this.prisma.message.findUnique({
+    const msg = await this.prisma.message.findUnique({
       where: { id: messageId },
       include: {
         sender: {
@@ -444,7 +532,9 @@ export class MessageHandler {
           }
         }
       }
-    }) as Promise<Message | null>;
+    });
+    if (!msg) return null;
+    return { ...msg, timestamp: msg.createdAt, translations: [] } as unknown as Message;
   }
 
   /**
@@ -453,19 +543,15 @@ export class MessageHandler {
   private async _getMessageTranslations(messageId: string): Promise<unknown[]> {
     const msg = await this.prisma.message.findUnique({
       where: { id: messageId },
-      include: {
-        translations: {
-          select: {
-            id: true,
-            targetLanguage: true,
-            translatedContent: true,
-            translationModel: true,
-            confidenceScore: true
-          }
-        }
-      }
+      select: { translations: true }
     });
-    return msg?.translations || [];
+    const translations = msg?.translations;
+    if (!translations || typeof translations !== 'object') return [];
+    if (Array.isArray(translations)) return translations;
+    return Object.entries(translations as Record<string, unknown>).map(([lang, data]) => ({
+      targetLanguage: lang,
+      ...(typeof data === 'object' && data !== null ? data : {})
+    }));
   }
 
   /**
@@ -545,8 +631,7 @@ export class MessageHandler {
         select: { id: true, userId: true }
       });
 
-      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
-      const readStatusService = new MessageReadStatusService(this.prisma);
+      const readStatusService = this.readStatusService;
 
       await Promise.all(participants.map(async (participant) => {
         // Use userId for registered users (for their personal room), participantId for anonymous
@@ -563,9 +648,47 @@ export class MessageHandler {
   }
 
 
-  /**
-   * Envoie une réponse d'erreur
-   */
+  private async _resolveMentionUserIds(usernames: string[]): Promise<string[]> {
+    if (usernames.length === 0) return [];
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { username: { in: usernames.map((u) => u.toLowerCase()) } },
+        select: { id: true },
+      });
+      return users.map((u) => u.id);
+    } catch {
+      return [];
+    }
+  }
+
+  private _notifyAgent(message: {
+    id: string;
+    conversationId: string;
+    senderId: string | null;
+    senderDisplayName?: string;
+    senderUsername?: string;
+    content: string | null;
+    originalLanguage: string | null;
+    replyToId?: string | null;
+    mentionedUserIds?: string[];
+    createdAt: Date;
+  }): void {
+    if (!this.agentClient || !message.senderId || !message.content) return;
+    this.agentClient.sendEvent({
+      type: 'agent:new-message',
+      conversationId: message.conversationId,
+      messageId: message.id,
+      senderId: message.senderId,
+      senderDisplayName: message.senderDisplayName,
+      senderUsername: message.senderUsername,
+      content: message.content,
+      originalLanguage: message.originalLanguage ?? 'fr',
+      replyToId: message.replyToId ?? undefined,
+      mentionedUserIds: message.mentionedUserIds ?? [],
+      timestamp: message.createdAt.getTime(),
+    }).catch(() => {});
+  }
+
   private _sendError(
     callback: ((response: SocketIOResponse<{ messageId: string }>) => void) | undefined,
     error: string,

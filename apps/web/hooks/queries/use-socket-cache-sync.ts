@@ -185,7 +185,13 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               ...old,
               pages: old.pages.map((page) => ({
                 ...page,
-                messages: page.messages.filter((m) => m.id !== messageId),
+                messages: page.messages
+                  .filter((m) => m.id !== messageId)
+                  .map((m) =>
+                    m.replyToId === messageId
+                      ? { ...m, replyToId: undefined, replyTo: undefined }
+                      : m
+                  ),
               })),
             };
           }
@@ -262,6 +268,12 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               : conv
           )
       );
+    };
+
+    const handleParticipantRoleUpdated = (data: { conversationId: string; userId: string; newRole: string }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
     };
 
     // W6: Handler for transcription results — updates attachment transcription in cache
@@ -359,10 +371,15 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeUnread = meeshySocketIOService.onUnreadUpdated(handleUnreadUpdated);
     const unsubscribeTranscription = meeshySocketIOService.onTranscription(handleTranscription);
     const unsubscribeAudioTranslation = meeshySocketIOService.onAudioTranslation(handleAudioTranslation);
+    const unsubscribePreferences = meeshySocketIOService.onPreferencesUpdated((data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.preferences.category(data.category),
+      });
+    });
     const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
+    const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
 
-    // Cleanup on unmount
     return () => {
       unsubscribeMessage?.();
       unsubscribeEdit?.();
@@ -371,8 +388,10 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeUnread?.();
       unsubscribeTranscription?.();
       unsubscribeAudioTranslation?.();
+      unsubscribePreferences?.();
       unsubscribeJoined?.();
       unsubscribeLeft?.();
+      unsubscribeParticipantRole?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

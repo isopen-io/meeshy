@@ -1,6 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { MentionService } from '../services/MentionService.js';
+import { validateParams, validateQuery } from '../validation/helpers.js';
+import { SuggestionsQuerySchema, MessageIdParamSchema, MyMentionsQuerySchema } from '../validation/mentions-schemas.js';
 import type {
   MentionSuggestionsRequest,
   MentionSuggestionsResponse,
@@ -41,7 +43,8 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Querystring: SuggestionsQuery;
   }>('/mentions/suggestions', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateQuery(SuggestionsQuerySchema)]
   }, async (request, reply) => {
     try {
       const { conversationId, query } = request.query;
@@ -108,7 +111,8 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: MessageParams;
   }>('/mentions/messages/:messageId', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(MessageIdParamSchema)]
   }, async (request, reply) => {
     try {
       const { messageId } = request.params;
@@ -181,7 +185,8 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Querystring: UserMentionsQuery;
   }>('/mentions/me', {
-    preValidation: [requiredAuth]
+    preValidation: [requiredAuth],
+    preHandler: [validateQuery(MyMentionsQuerySchema)]
   }, async (request, reply) => {
     try {
       const { limit } = request.query;

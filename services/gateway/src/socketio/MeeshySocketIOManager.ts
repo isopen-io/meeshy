@@ -5,7 +5,6 @@
 
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
-import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
@@ -14,8 +13,16 @@ import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
 import { SocialEventsHandler } from './handlers/SocialEventsHandler';
+import { LocationHandler } from './handlers/LocationHandler';
+import { AuthHandler } from './handlers/AuthHandler';
+import { MessageHandler } from './handlers/MessageHandler';
+import { StatusHandler } from './handlers/StatusHandler';
+import { ReactionHandler } from './handlers/ReactionHandler';
+import { ConversationHandler } from './handlers/ConversationHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
+import { ReactionService } from '../services/ReactionService.js';
+import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -23,29 +30,20 @@ import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
-import { validateMessageLength } from '../config/message-limits';
-import jwt from 'jsonwebtoken';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
-  SocketIOMessage,
-  SocketIOUser,
   SocketIOResponse,
-  TypingEvent,
   TranslationEvent,
-  UserStatusEvent,
-  TranslatedAudioData,
-  TranscriptionReadyEventData
+  MessageType,
 } from '@meeshy/shared/types/socketio-events';
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
-import type { MessageRequest, MessageResponse } from '@meeshy/shared/types/messaging';
 import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService } from '../services/MentionService';
-import { hashSessionToken } from '../utils/session-token';
-import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
+import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -83,10 +81,17 @@ export class MeeshySocketIOManager {
   private callService: CallService;
   private notificationService: NotificationService;
   private socialEventsHandler: SocialEventsHandler;
+  private locationHandler: LocationHandler;
   private privacyPreferencesService: PrivacyPreferencesService;
   private agentClient: ZmqAgentClient | null = null;
   private mentionService: MentionService;
-  private rateLimiter = getSocketRateLimiter();
+  private deliveryQueue: RedisDeliveryQueue | null = null;
+
+  private authHandler!: AuthHandler;
+  private messageHandler!: MessageHandler;
+  private statusHandler!: StatusHandler;
+  private reactionHandler!: ReactionHandler;
+  private conversationHandler!: ConversationHandler;
 
   // Mapping des utilisateurs connectés
   private connectedUsers: Map<string, SocketUser> = new Map();
@@ -162,12 +167,91 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
     });
 
+    // Initialiser le LocationHandler pour les événements de partage de localisation
+    this.locationHandler = new LocationHandler({
+      io: this.io as any,
+      prisma: this.prisma,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      normalizeConversationId: (id: string) => this.normalizeConversationId(id),
+    });
+
     // Initialiser le PostAudioService singleton (dépend de socialEventsHandler)
     PostAudioService.init(this.prisma, this.socialEventsHandler);
 
     // Initialiser le StoryTextObjectTranslationService singleton
     StoryTextObjectTranslationService.init(this.prisma, this.io as any);
 
+    this.authHandler = new AuthHandler({
+      prisma: this.prisma,
+      statusService: this.statusService,
+      maintenanceService: this.maintenanceService,
+      callService: this.callService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      userSockets: this.userSockets,
+    });
+
+    const reactionService = new ReactionService(prisma);
+    const readStatusService = new MessageReadStatusService(prisma);
+
+    this.messageHandler = new MessageHandler({
+      io: this.io,
+      prisma: this.prisma,
+      messagingService: this.messagingService,
+      translationService: this.translationService,
+      statusService: this.statusService,
+      notificationService: this.notificationService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      stats: this.stats,
+      agentClient: this.agentClient,
+      attachmentService: new AttachmentService(prisma),
+      readStatusService,
+    });
+
+    this.statusHandler = new StatusHandler({
+      prisma: this.prisma,
+      statusService: this.statusService,
+      privacyPreferencesService: this.privacyPreferencesService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+    });
+
+    this.reactionHandler = new ReactionHandler({
+      io: this.io,
+      prisma: this.prisma,
+      notificationService: this.notificationService,
+      reactionService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+    });
+
+    this.conversationHandler = new ConversationHandler({
+      prisma: this.prisma,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+    });
+  }
+
+  setDeliveryQueue(queue: RedisDeliveryQueue): void {
+    this.deliveryQueue = queue;
+  }
+
+  private async _drainPendingMessages(socket: any, userId: string): Promise<void> {
+    if (!this.deliveryQueue) return;
+    try {
+      const pending = await this.deliveryQueue.drain(userId);
+      if (pending.length === 0) return;
+
+      logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
+      for (const entry of pending) {
+        socket.emit(SERVER_EVENTS.MESSAGE_NEW, entry.payload);
+      }
+      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length });
+    } catch (error) {
+      logger.warn('Failed to drain pending messages', { userId, error });
+    }
   }
 
   /**
@@ -285,393 +369,33 @@ export class MeeshySocketIOManager {
     this.io.on('connection', (socket) => {
       this.stats.total_connections++;
       this.stats.active_connections++;
-      
-      // Authentification automatique via le token envoyé dans socket.auth
-      this._handleTokenAuthentication(socket);
-      
-      // Authentification manuelle (fallback)
-      socket.on(CLIENT_EVENTS.AUTHENTICATE, async (data: { userId?: string; sessionToken?: string; language?: string }) => {
-        await this._handleAuthentication(socket, data);
+
+      this.authHandler.handleTokenAuthentication(socket);
+
+      socket.on(CLIENT_EVENTS.AUTHENTICATE, async (data) => {
+        try { await this.authHandler.handleManualAuthentication(socket, data); } catch (error) { logger.error('[AUTHENTICATE] Error:', error); }
       });
-      
-      // Réception d'un nouveau message (avec ACK) - PHASE 3.1: MessagingService Integration
-      socket.on(CLIENT_EVENTS.MESSAGE_SEND, async (data: {
-        conversationId: string;
-        content: string;
-        originalLanguage?: string;
-        messageType?: string;
-        replyToId?: string;
-        clientMessageId?: string;
-      }, callback?: (response: SocketIOResponse<{ messageId: string; clientMessageId?: string; message?: any }>) => void) => {
-        try {
 
-          const userIdOrToken = this.socketToUser.get(socket.id);
-
-          if (!userIdOrToken) {
-            logger.error(`❌ [MESSAGE_SEND] Socket ${socket.id} non authentifié`);
-            logger.error(`  └─ Sockets connectés:`, Array.from(this.socketToUser.keys()).slice(0, 5));
-
-            const errorResponse: SocketIOResponse<{ messageId: string }> = {
-              success: false,
-              error: 'User not authenticated'
-            };
-
-            if (callback) callback(errorResponse);
-            socket.emit(SERVER_EVENTS.ERROR, { message: 'User not authenticated' });
-            return;
-          }
-
-          // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
-          const userResult = this._getConnectedUser(userIdOrToken);
-          const user = userResult?.user;
-          const userId = userResult?.realUserId || userIdOrToken;
-
-          // Rate limiting: 20 messages/min par utilisateur (P3-39)
-          const rateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
-          if (!rateLimitAllowed) {
-            const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
-            const errorResponse: SocketIOResponse<{ messageId: string }> = {
-              success: false,
-              error: 'Rate limit exceeded'
-            };
-            if (callback) callback(errorResponse);
-            socket.emit(SERVER_EVENTS.ERROR, {
-              message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
-            });
-            return;
-          }
-
-          // Validation de la longueur du message
-          const validation = validateMessageLength(data.content);
-          if (!validation.isValid) {
-            const errorResponse: SocketIOResponse<{ messageId: string }> = {
-              success: false,
-              error: validation.error || 'Message invalide'
-            };
-
-            if (callback) callback(errorResponse);
-            socket.emit(SERVER_EVENTS.ERROR, { message: validation.error || 'Message invalide' });
-            logger.warn(`⚠️ [WEBSOCKET] Message rejeté pour ${userId}: ${validation.error}`);
-            return;
-          }
-
-          // Déterminer si l'utilisateur est anonyme
-          const isAnonymous = user?.isAnonymous || false;
-
-          // Envoi de message = activité détectable
-          // → Mettre à jour lastActiveAt (throttled à 5s)
-          if (this.statusService) {
-            this.statusService.updateLastSeen(userId, isAnonymous);
-          }
-
-          // Pour les utilisateurs anonymes, utiliser le displayName mis en cache lors de l'auth socket (P3-42)
-          let anonymousDisplayName: string | undefined;
-          if (isAnonymous) {
-            anonymousDisplayName = user?.displayName || 'Anonymous User';
-          }
-
-          // Mapper les données vers le format MessageRequest
-          const messageRequest: MessageRequest = {
-            conversationId: data.conversationId,
-            content: data.content,
-            originalLanguage: data.originalLanguage,
-            messageType: data.messageType || 'text',
-            replyToId: data.replyToId,
-            isAnonymous: isAnonymous,
-            anonymousDisplayName: anonymousDisplayName,
-            metadata: {
-              source: 'websocket',
-              socketId: socket.id,
-              clientTimestamp: Date.now()
-            }
-          };
-
-
-          // PHASE 3.1.1: Extraction des tokens d'authentification pour détection robuste
-          const jwtToken = this.extractJWTToken(socket);
-          const sessionToken = this.extractSessionToken(socket);
-
-
-          // PHASE 3.1: Utilisation du MessagingService unifié (Participant model)
-          // Resolve participant ID: anonymous users already have participantId, registered users need lookup
-          let resolvedParticipantId = userId;
-          if (!isAnonymous) {
-            const participant = await this.prisma.participant.findFirst({
-              where: { userId, conversationId: data.conversationId, isActive: true },
-              select: { id: true }
-            });
-            if (participant) {
-              resolvedParticipantId = participant.id;
-            }
-          }
-
-          const response: MessageResponse = await this.messagingService.handleMessage(
-            messageRequest,
-            resolvedParticipantId
-          );
-
-          // Réponse via callback - typage strict SocketIOResponse
-          // Include clientMessageId in ack so sender can replace optimistic message
-          if (callback) {
-            if (response.success && response.data) {
-              const ackData: { messageId: string; clientMessageId?: string } = {
-                messageId: response.data.id,
-              };
-              if (data.clientMessageId) {
-                ackData.clientMessageId = data.clientMessageId;
-              }
-              callback({ success: true, data: ackData });
-            } else {
-              callback({
-                success: false,
-                error: response.error || 'Failed to send message',
-              });
-            }
-          }
-
-          // Broadcast temps réel vers tous les clients de la conversation (y compris l'auteur)
-          if (response.success && response.data) {
-              const message = response.data as any;
-              // FIX: Utiliser message.conversationId (déjà normalisé en base) au lieu de data.conversationId (peut être un identifier)
-              await this._broadcastNewMessage(message, message.conversationId, socket);
-
-              // Notifier le service agent (fire-and-forget)
-              this._notifyAgent({
-                id: message.id,
-                conversationId: message.conversationId,
-                senderId: message.senderId,
-                senderDisplayName: (message.sender as any)?.displayName ?? (message.sender as any)?.username,
-                senderUsername: (message.sender as any)?.username,
-                content: message.content,
-                originalLanguage: message.originalLanguage,
-                replyToId: message.replyToId,
-                mentionedUserIds: await this._resolveMentionUserIds(message.validatedMentions ?? []),
-                createdAt: message.createdAt,
-              });
-          }
-
-          this.stats.messages_processed++;
-          
-        } catch (error: any) {
-          logger.error('[WEBSOCKET] Erreur envoi message', error);
-          this.stats.errors++;
-
-          if (callback) {
-            const errorResponse: SocketIOResponse<{ messageId: string }> = {
-              success: false,
-              error: 'Failed to send message'
-            };
-            callback(errorResponse);
-          }
-        }
+      socket.on(CLIENT_EVENTS.MESSAGE_SEND, async (data, callback) => {
+        try { await this.messageHandler.handleMessageSend(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND] Error:', error); }
       });
-      
-      // Envoi de message avec attachments
-      socket.on(CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS, async (data: {
-        conversationId: string;
-        content: string;
-        originalLanguage?: string;
-        attachmentIds: string[];
-        replyToId?: string;
-        clientMessageId?: string;
-      }, callback?: (response: SocketIOResponse<{ messageId: string; clientMessageId?: string }>) => void) => {
-        try {
-          const userIdOrToken = this.socketToUser.get(socket.id);
-          if (!userIdOrToken) {
-            const errorResponse: SocketIOResponse<{ messageId: string }> = {
-              success: false,
-              error: 'User not authenticated'
-            };
 
-            if (callback) callback(errorResponse);
-            socket.emit(SERVER_EVENTS.ERROR, { message: 'User not authenticated' });
-            return;
-          }
-
-          // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
-          const userResult = this._getConnectedUser(userIdOrToken);
-          const user = userResult?.user;
-          const userId = userResult?.realUserId || userIdOrToken;
-
-          // Validation de la longueur du message (si du contenu texte est présent)
-          if (data.content && data.content.trim()) {
-            const validation = validateMessageLength(data.content);
-            if (!validation.isValid) {
-              const errorResponse: SocketIOResponse<{ messageId: string }> = {
-                success: false,
-                error: validation.error || 'Message invalide'
-              };
-
-              if (callback) callback(errorResponse);
-              socket.emit(SERVER_EVENTS.ERROR, { message: validation.error || 'Message invalide' });
-              logger.warn(`⚠️ [WEBSOCKET] Message avec attachments rejeté pour ${userId}: ${validation.error}`);
-              return;
-            }
-          }
-
-          // Vérifier que les attachments existent et appartiennent à l'utilisateur
-          const attachmentService = new (await import('../services/attachments')).AttachmentService(this.prisma);
-
-          for (const attachmentId of data.attachmentIds) {
-            const attachment = await attachmentService.getAttachment(attachmentId);
-            if (!attachment) {
-              const errorResponse: SocketIOResponse<{ messageId: string }> = {
-                success: false,
-                error: `Attachment ${attachmentId} not found`
-              };
-              if (callback) callback(errorResponse);
-              return;
-            }
-
-            // Vérifier que l'attachment appartient à l'utilisateur
-            if (attachment.uploadedBy !== userId) {
-              const errorResponse: SocketIOResponse<{ messageId: string }> = {
-                success: false,
-                error: `Attachment ${attachmentId} does not belong to user`
-              };
-              if (callback) callback(errorResponse);
-              return;
-            }
-          }
-
-          // Déterminer si l'utilisateur est anonyme
-          const isAnonymous = user?.isAnonymous || false;
-
-          let anonymousDisplayName: string | undefined;
-          if (isAnonymous) {
-            try {
-              const userSessionToken = user?.sessionToken;
-              if (!userSessionToken) {
-                logger.error('SessionToken manquant pour utilisateur anonyme', userId);
-                anonymousDisplayName = 'Anonymous User';
-              } else {
-                const anonymousParticipant = await this.prisma.participant.findFirst({
-                  where: { id: userId, type: 'anonymous' },
-                  select: { displayName: true, nickname: true }
-                });
-              
-                if (anonymousParticipant) {
-                  anonymousDisplayName = anonymousParticipant.nickname || anonymousParticipant.displayName || 'Anonymous User';
-                } else {
-                  anonymousDisplayName = 'Anonymous User';
-                }
-              }
-            } catch (error) {
-              logger.error('Erreur lors de la récupération du nom anonyme', error);
-              anonymousDisplayName = 'Anonymous User';
-            }
-          }
-
-          // Créer le message via MessagingService
-          const messageRequest: MessageRequest = {
-            conversationId: data.conversationId,
-            content: data.content,
-            originalLanguage: data.originalLanguage,
-            messageType: 'text', // Peut être déduit des attachments
-            replyToId: data.replyToId,
-            isAnonymous: isAnonymous,
-            anonymousDisplayName: anonymousDisplayName,
-            // Aligner avec GatewayMessage: attachments are passed as IDs for linking
-            attachmentIds: data.attachmentIds,
-            metadata: {
-              source: 'websocket',
-              socketId: socket.id,
-              clientTimestamp: Date.now()
-            }
-          } as any;
-
-
-          // Resolve participant ID for registered users
-          let resolvedParticipantId = userId;
-          if (!isAnonymous) {
-            const participant = await this.prisma.participant.findFirst({
-              where: { userId, conversationId: data.conversationId, isActive: true },
-              select: { id: true }
-            });
-            if (participant) {
-              resolvedParticipantId = participant.id;
-            }
-          }
-
-          const response: MessageResponse = await this.messagingService.handleMessage(
-            messageRequest,
-            resolvedParticipantId
-          );
-
-          // Réponse via callback — include clientMessageId for sender-side dedup
-          if (callback) {
-            if (response.success && response.data) {
-              const ackData: { messageId: string; clientMessageId?: string } = {
-                messageId: response.data.id,
-              };
-              if (data.clientMessageId) {
-                ackData.clientMessageId = data.clientMessageId;
-              }
-              callback({ success: true, data: ackData });
-            } else {
-              callback({
-                success: false,
-                error: response.error || 'Failed to send message',
-              });
-            }
-          }
-
-          // Broadcast temps réel vers tous les clients de la conversation (y compris l'auteur)
-          if (response.success && response.data) {
-              const message = response.data as any;
-              // FIX: Utiliser message.conversationId (déjà normalisé en base) au lieu de data.conversationId (peut être un identifier)
-              await this._broadcastNewMessage(message, message.conversationId, socket);
-          }
-        } catch (error: any) {
-          logger.error('❌ [WEBSOCKET] Erreur envoi message avec attachments', error);
-          
-          if (callback) {
-            const errorResponse: SocketIOResponse<{ messageId: string }> = {
-              success: false,
-              error: 'Failed to send message with attachments'
-            };
-            callback(errorResponse);
-          }
-        }
+      socket.on(CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS, async (data, callback) => {
+        try { await this.messageHandler.handleMessageSendWithAttachments(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND_WITH_ATTACHMENTS] Error:', error); }
       });
-      
-      // Demande de traduction spécifique
+
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
-        await this._handleTranslationRequest(socket, data);
+        try { await this._handleTranslationRequest(socket, data); } catch (error) { logger.error('[REQUEST_TRANSLATION] Error:', error); }
       });
 
-      // Gestion des rooms conversation: join
-      socket.on(CLIENT_EVENTS.CONVERSATION_JOIN, async (data: { conversationId: string }) => {
-        const normalizedId = await this.normalizeConversationId(data.conversationId);
-        const room = ROOMS.conversation(normalizedId);
-        socket.join(room);
-        const userId = this.socketToUser.get(socket.id);
-        if (userId) {
-          socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
-            conversationId: normalizedId,
-            userId
-          });
-          // Pré-charger/rafraîchir les stats - utiliser l'ID original pour Prisma
-          this._sendConversationStatsToSocket(socket, data.conversationId).catch(() => {});
-        }
+      socket.on(CLIENT_EVENTS.CONVERSATION_JOIN, async (data) => {
+        try { await this.conversationHandler.handleConversationJoin(socket, data); } catch (error) { logger.error('[CONVERSATION_JOIN] Error:', error); }
       });
 
-      // Gestion des rooms conversation: leave
-      socket.on(CLIENT_EVENTS.CONVERSATION_LEAVE, async (data: { conversationId: string }) => {
-        const normalizedId = await this.normalizeConversationId(data.conversationId);
-        const room = ROOMS.conversation(normalizedId);
-        socket.leave(room);
-        const userId = this.socketToUser.get(socket.id);
-        if (userId) {
-          socket.emit(SERVER_EVENTS.CONVERSATION_LEFT, { 
-            conversationId: normalizedId,
-            userId 
-          });
-        }
+      socket.on(CLIENT_EVENTS.CONVERSATION_LEAVE, async (data) => {
+        try { await this.conversationHandler.handleConversationLeave(socket, data); } catch (error) { logger.error('[CONVERSATION_LEAVE] Error:', error); }
       });
 
-      // Setup video/audio call events (Phase 1A: P2P MVP)
-      // CVE-004: Pass getUserInfo to provide isAnonymous flag
       this.callEventsHandler.setupCallEvents(
         socket,
         this.io,
@@ -685,7 +409,6 @@ export class MeeshySocketIOManager {
         }
       );
 
-      // ===== ÉVÉNEMENTS FEED SOCIAL =====
       socket.on(CLIENT_EVENTS.FEED_SUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
         const userId = this.socketToUser.get(socket.id);
         if (userId) {
@@ -706,570 +429,53 @@ export class MeeshySocketIOManager {
         }
       });
 
-      // Déconnexion
-      socket.on('disconnect', () => {
-        this._handleDisconnection(socket);
-      });
-      
-      // Événements de frappe
-      socket.on(CLIENT_EVENTS.TYPING_START, (data: { conversationId: string }) => {
-        this._handleTypingStart(socket, data);
-      });
-      
-      socket.on(CLIENT_EVENTS.TYPING_STOP, (data: { conversationId: string }) => {
-        this._handleTypingStop(socket, data);
+      socket.on(CLIENT_EVENTS.TYPING_START, (data) => {
+        this.statusHandler.handleTypingStart(socket, data).catch((error) => logger.error('[TYPING_START] Error:', error));
       });
 
-      // Heartbeat pour présence
+      socket.on(CLIENT_EVENTS.TYPING_STOP, (data) => {
+        this.statusHandler.handleTypingStop(socket, data).catch((error) => logger.error('[TYPING_STOP] Error:', error));
+      });
+
       socket.on(CLIENT_EVENTS.HEARTBEAT, () => {
-        this._handleHeartbeat(socket);
+        this.authHandler.handleHeartbeat(socket).catch((error) => logger.error('[HEARTBEAT] Error:', error));
       });
 
-      // ===== ÉVÉNEMENTS DE RÉACTIONS =====
-      
-      // Ajouter une réaction
-      socket.on(CLIENT_EVENTS.REACTION_ADD, async (data: {
-        messageId: string;
-        emoji: string;
-      }, callback?: (response: SocketIOResponse<any>) => void) => {
-        await this._handleReactionAdd(socket, data, callback);
+      socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
+        try { await this.reactionHandler.handleReactionAdd(socket, data, callback); } catch (error) { logger.error('[REACTION_ADD] Error:', error); }
       });
 
-      // Retirer une réaction
-      socket.on(CLIENT_EVENTS.REACTION_REMOVE, async (data: {
-        messageId: string;
-        emoji: string;
-      }, callback?: (response: SocketIOResponse<any>) => void) => {
-        await this._handleReactionRemove(socket, data, callback);
+      socket.on(CLIENT_EVENTS.REACTION_REMOVE, async (data, callback) => {
+        try { await this.reactionHandler.handleReactionRemove(socket, data, callback); } catch (error) { logger.error('[REACTION_REMOVE] Error:', error); }
       });
 
-      // Demander la synchronisation des réactions d'un message
-      socket.on(CLIENT_EVENTS.REACTION_REQUEST_SYNC, async (messageId: string, callback?: (response: SocketIOResponse<any>) => void) => {
-        await this._handleReactionSync(socket, messageId, callback);
+      socket.on(CLIENT_EVENTS.REACTION_REQUEST_SYNC, async (messageId, callback) => {
+        try { await this.reactionHandler.handleReactionSync(socket, messageId, callback); } catch (error) { logger.error('[REACTION_SYNC] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.LOCATION_SHARE, async (data, callback) => {
+        try { await this.locationHandler.handleLocationShare(socket, data, callback); } catch (error) { logger.error('[LOCATION_SHARE] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.LOCATION_LIVE_START, async (data, callback) => {
+        try { await this.locationHandler.handleLiveLocationStart(socket, data, callback); } catch (error) { logger.error('[LOCATION_LIVE_START] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.LOCATION_LIVE_UPDATE, async (data) => {
+        try { await this.locationHandler.handleLiveLocationUpdate(socket, data); } catch (error) { logger.error('[LOCATION_LIVE_UPDATE] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.LOCATION_LIVE_STOP, async (data) => {
+        try { await this.locationHandler.handleLiveLocationStop(socket, data); } catch (error) { logger.error('[LOCATION_LIVE_STOP] Error:', error); }
+      });
+
+      socket.on('disconnect', () => {
+        this.authHandler.handleDisconnection(socket).catch((error) => logger.error('[DISCONNECT] Error:', error));
+        this.stats.active_connections--;
       });
     });
   }
 
-  private async _handleTokenAuthentication(socket: any): Promise<void> {
-    
-    try {
-      // Debug complet de socket.handshake
-
-      // Récupérer les tokens depuis différentes sources avec types précis
-      const authToken = socket.handshake?.headers?.authorization?.replace('Bearer ', '') || 
-                       socket.handshake?.auth?.authToken ||
-                       socket.handshake?.auth?.token; // Support pour socket.handshake.auth.token
-      const sessionToken = socket.handshake?.headers?.['x-session-token'] as string || 
-                          socket.handshake?.auth?.sessionToken;
-      
-      // Récupérer les types de tokens pour validation précise
-      const tokenType = socket.handshake?.auth?.tokenType;
-      const sessionType = socket.handshake?.auth?.sessionType;
-      
-
-      // Tentative d'authentification avec Bearer token (utilisateur authentifié)
-      if (authToken && (!tokenType || tokenType === 'jwt')) {
-        try {
-          const jwtSecret = process.env.JWT_SECRET || 'default-secret';
-          const decoded = jwt.verify(authToken, jwtSecret) as any;
-          
-
-          // Récupérer l'utilisateur depuis la base de données
-          const dbUser = await this.prisma.user.findUnique({
-            where: { id: decoded.userId },
-            select: { 
-              id: true, 
-              username: true,
-              systemLanguage: true,
-              isActive: true
-            }
-          });
-
-          if (dbUser && dbUser.isActive) {
-            
-            // Créer l'utilisateur Socket.IO
-            const user: SocketUser = {
-              id: dbUser.id,
-              socketId: socket.id,
-              isAnonymous: false,
-              language: dbUser.systemLanguage
-            };
-
-            // Multi-socket: ne PAS déconnecter l'ancien socket (multi-onglet supporté)
-            // Mettre à jour connectedUsers avec le dernier socketId pour le routing principal
-            this.connectedUsers.set(user.id, user);
-            this.socketToUser.set(socket.id, user.id);
-            this._addUserSocket(user.id, socket.id);
-
-            // IMPORTANT: Rejoindre la room personnelle pour les notifications + feed social
-            try {
-              if (user.id && typeof user.id === 'string') {
-                socket.join(user.id);
-                socket.join(ROOMS.user(user.id));
-                socket.join(ROOMS.feed(user.id));
-                logger.info(`[Socket.IO] User ${user.id} joined personal room + user_ room + feed room`);
-              } else {
-                logger.error(`[Socket.IO] Invalid userId for socket.join: ${JSON.stringify(user.id)}`);
-              }
-            } catch (error) {
-              logger.error(`[Socket.IO] Failed to join personal room for user ${user.id}:`, error);
-            }
-
-            // Retirer le guard de disconnect (reconnexion)
-            this.statusService.markConnected(user.id, false);
-
-            // Mettre à jour l'état en ligne dans la base de données et broadcaster
-            await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
-
-            // Rejoindre les conversations de l'utilisateur
-            await this._joinUserConversations(socket, user.id, false);
-
-            // Rejoindre la room globale si elle existe (conversation "meeshy")
-            try {
-              socket.join('conversation:any');
-            } catch {}
-
-            // CORRECTION CRITIQUE: Émettre l'événement AUTHENTICATED IMMÉDIATEMENT
-            // Inclure la version de l'application pour permettre au client de détecter une mise à jour (WhatsApp pattern)
-            const authResponse = { 
-              success: true, 
-              user: { id: user.id, language: user.language, isAnonymous: false },
-              version: process.env.APP_VERSION || '1.1.0'
-            };
-            
-            socket.emit(SERVER_EVENTS.AUTHENTICATED, authResponse);
-            
-            
-            return; // Authentification réussie
-          } else {
-          }
-        } catch (jwtError: any) {
-        }
-      }
-
-      // Tentative d'authentification avec session token (participant anonyme)
-      // Unified Participant model: lookup by sessionTokenHash
-      if (sessionToken && (!sessionType || sessionType === 'anonymous')) {
-        const tokenHash = hashSessionToken(sessionToken);
-
-        const participant = await this.prisma.participant.findFirst({
-          where: {
-            sessionTokenHash: tokenHash,
-            type: 'anonymous',
-            isActive: true
-          },
-          select: {
-            id: true,
-            displayName: true,
-            language: true,
-            conversationId: true,
-            anonymousSession: true
-          }
-        });
-
-        if (participant) {
-
-            // Créer l'utilisateur Socket.IO anonyme
-            const user: SocketUser = {
-              id: participant.id,
-              socketId: socket.id,
-              isAnonymous: true,
-              language: participant.language,
-              participantId: participant.id,
-              displayName: participant.displayName,
-              sessionToken
-            };
-
-            // Multi-socket: ne PAS déconnecter l'ancien socket (multi-onglet supporté)
-            this.connectedUsers.set(user.id, user);
-            this.socketToUser.set(socket.id, participant.id);
-            this._addUserSocket(user.id, socket.id);
-
-            // IMPORTANT: Rejoindre la room personnelle pour les notifications
-            try {
-              if (user.id && typeof user.id === 'string') {
-                socket.join(user.id);
-                logger.info(`[Socket.IO] Anonymous user ${user.id} joined personal room for notifications`);
-              } else {
-                logger.error(`[Socket.IO] Invalid userId for socket.join (anonymous): ${JSON.stringify(user.id)}`);
-              }
-            } catch (error) {
-              logger.error(`[Socket.IO] Failed to join personal room for anonymous user ${user.id}:`, error);
-            }
-
-            // Update online status via participant
-            await this.maintenanceService.updateAnonymousOnlineStatus(user.id, true, true);
-
-            // Rejoindre la conversation spécifique du participant anonyme
-            try {
-              const conversationRoom = ROOMS.conversation(participant.conversationId);
-              socket.join(conversationRoom);
-            } catch {}
-
-            // CORRECTION CRITIQUE: Émettre l'événement AUTHENTICATED IMMÉDIATEMENT
-            const authResponse = {
-              success: true,
-              user: { id: user.id, language: user.language, isAnonymous: true },
-              version: process.env.APP_VERSION || '1.1.0'
-            };
-
-            socket.emit(SERVER_EVENTS.AUTHENTICATED, authResponse);
-
-
-            return; // Authentification anonyme réussie
-        } else {
-        }
-      }
-
-      // Aucune authentification valide trouvée
-      
-      // CORRECTION CRITIQUE: Émettre l'événement AUTHENTICATED avec échec
-      const failureResponse = { 
-        success: false,
-        error: 'Authentification requise. Veuillez fournir un Bearer token ou un x-session-token valide.'
-      };
-      
-      socket.emit(SERVER_EVENTS.AUTHENTICATED, failureResponse);
-      socket.emit(SERVER_EVENTS.ERROR, { 
-        message: failureResponse.error
-      });
-
-    } catch (error: any) {
-      
-      // CORRECTION CRITIQUE: Émettre l'événement AUTHENTICATED avec erreur
-      socket.emit(SERVER_EVENTS.AUTHENTICATED, { 
-        success: false,
-        error: 'Erreur d\'authentification'
-      });
-      
-      socket.emit(SERVER_EVENTS.ERROR, { message: 'Erreur d\'authentification' });
-    }
-  }
-
-  private async _handleAuthentication(socket: any, data: { userId?: string; sessionToken?: string; language?: string }) {
-    try {
-      let user: SocketUser | null = null;
-      
-      if (data.sessionToken) {
-        // Tentative d'authentification avec Bearer token (utilisateur authentifié)
-        try {
-          const jwtSecret = process.env.JWT_SECRET || 'default-secret';
-          const decoded = jwt.verify(data.sessionToken, jwtSecret) as any;
-          
-          
-          // Récupérer l'utilisateur depuis la base de données
-          const dbUser = await this.prisma.user.findUnique({
-            where: { id: decoded.userId },
-            select: { 
-              id: true, 
-              username: true,
-              systemLanguage: true,
-              isActive: true
-            }
-          });
-
-          if (dbUser && dbUser.isActive) {
-            user = {
-              id: dbUser.id,
-              socketId: socket.id,
-              isAnonymous: false,
-              language: data.language || dbUser.systemLanguage
-            };
-          } else {
-          }
-        } catch (jwtError) {
-          
-          // Si ce n'est pas un JWT valide, essayer comme sessionToken anonyme
-          // Unified Participant model: lookup by sessionTokenHash
-          const tokenHash = hashSessionToken(data.sessionToken);
-          const anonymousParticipant = await this.prisma.participant.findFirst({
-            where: {
-              sessionTokenHash: tokenHash,
-              type: 'anonymous',
-              isActive: true
-            },
-            select: {
-              id: true,
-              displayName: true,
-              language: true,
-              conversationId: true
-            }
-          });
-
-          if (anonymousParticipant) {
-              user = {
-                id: anonymousParticipant.id,
-                socketId: socket.id,
-                isAnonymous: true,
-                language: data.language || anonymousParticipant.language || 'fr',
-                participantId: anonymousParticipant.id,
-                displayName: anonymousParticipant.displayName,
-                sessionToken: data.sessionToken
-              };
-          } else {
-          }
-        }
-      } else if (data.userId) {
-        // Utilisateur authentifié (fallback)
-        const dbUser = await this.prisma.user.findUnique({
-          where: { id: data.userId },
-          select: { id: true, systemLanguage: true }
-        });
-        
-        if (dbUser) {
-          user = {
-            id: dbUser.id,
-            socketId: socket.id,
-            isAnonymous: false,
-            language: data.language || dbUser.systemLanguage
-          };
-        }
-      }
-      
-      if (user) {
-        // Multi-socket: ne PAS déconnecter l'ancien socket (multi-onglet supporté)
-        this.connectedUsers.set(user.id, user);
-        this.socketToUser.set(socket.id, user.id);
-        
-        // Retirer le guard de disconnect (reconnexion)
-        this.statusService.markConnected(user.id, user.isAnonymous);
-
-        // CORRECTION: Mettre à jour l'état en ligne selon le type d'utilisateur et broadcaster
-        if (user.isAnonymous) {
-          await this.maintenanceService.updateAnonymousOnlineStatus(user.id, true, true);
-        } else {
-          await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
-        }
-
-        // Rejoindre les conversations de l'utilisateur
-        await this._joinUserConversations(socket, user.id, user.isAnonymous);
-
-        // Rejoindre la room globale "meeshy"
-        try {
-          socket.join('conversation:any');
-        } catch {}
-        
-        socket.emit(SERVER_EVENTS.AUTHENTICATED, {
-          success: true,
-          user: { id: user.id, language: user.language },
-          version: process.env.APP_VERSION || '1.1.0'
-        });
-        
-      } else {
-        socket.emit(SERVER_EVENTS.AUTHENTICATED, { success: false, error: 'Authentication failed' });
-      }
-      
-    } catch (error) {
-      logger.error(`❌ Erreur authentification: ${error}`);
-      socket.emit(SERVER_EVENTS.AUTHENTICATED, { success: false, error: 'Authentication error' });
-    }
-  }
-
-  private async _joinUserConversations(socket: any, userId: string, isAnonymous: boolean) {
-    try {
-
-      let conversations: { conversationId: string }[] = [];
-
-      if (isAnonymous) {
-        // For anonymous: userId is actually participantId
-        conversations = await this.prisma.participant.findMany({
-          where: { id: userId, isActive: true },
-          select: { conversationId: true }
-        });
-      } else {
-        // For registered users: find all participant rows by userId
-        conversations = await this.prisma.participant.findMany({
-          where: { userId: userId, isActive: true },
-          select: { conversationId: true }
-        });
-      }
-
-      // Rejoindre les rooms Socket.IO
-      for (const conv of conversations) {
-        socket.join(ROOMS.conversation(conv.conversationId));
-      }
-
-
-    } catch (error) {
-      logger.error(`❌ [JOIN_CONVERSATIONS] Erreur jointure conversations pour ${userId}:`, error);
-    }
-  }
-
-  private async _handleNewMessage(socket: any, data: {
-    conversationId: string;
-    content: string;
-    originalLanguage?: string;
-    messageType?: string;
-    replyToId?: string;
-  }): Promise<{ messageId: string }> {
-    try {
-      const userIdOrToken = this.socketToUser.get(socket.id);
-      if (!userIdOrToken) {
-        socket.emit(SERVER_EVENTS.ERROR, { message: 'User not authenticated' });
-        throw new Error('User not authenticated');
-      }
-
-      // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
-      const userResult = this._getConnectedUser(userIdOrToken);
-      const connectedUser = userResult?.user;
-      const userId = userResult?.realUserId || userIdOrToken;
-
-      // Préparer les données du message
-      const messageData: MessageData = {
-        conversationId: data.conversationId,
-        content: data.content,
-        // Utiliser ordre de priorité: payload -> langue socket utilisateur -> 'fr'
-        originalLanguage: data.originalLanguage || connectedUser?.language || 'fr',
-        messageType: data.messageType || 'text',
-        replyToId: data.replyToId
-      };
-
-      // Resolve userId → Participant.id for senderId
-      const senderParticipant = await this.prisma.participant.findFirst({
-        where: { userId, conversationId: data.conversationId, isActive: true },
-        select: { id: true }
-      });
-      messageData.senderId = senderParticipant?.id || userId;
-
-      // 1. SAUVEGARDER LE MESSAGE ET LIBÉRER LE CLIENT
-      const result = await this.translationService.handleNewMessage(messageData);
-      this.stats.messages_processed++;
-      
-      // 2. (Optionnel) Notifier l'état de sauvegarde — laissé pour compat rétro
-      socket.emit(SERVER_EVENTS.MESSAGE_SENT, {
-        messageId: result.messageId,
-        status: result.status,
-        timestamp: new Date().toISOString()
-      });
-      
-      // 3. RÉCUPÉRER LE MESSAGE SAUVEGARDÉ ET LE DIFFUSER À TOUS (Y COMPRIS L'AUTEUR)
-      const saved = await this.prisma.message.findUnique({
-        where: { id: result.messageId },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              displayName: true,
-              avatar: true,
-              type: true,
-              nickname: true,
-              userId: true,
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  firstName: true,
-                  lastName: true,
-                  avatar: true
-                }
-              }
-            }
-          },
-          attachments: {
-            select: {
-              id: true,
-              messageId: true,
-              fileName: true,
-              originalName: true,
-              mimeType: true,
-              fileSize: true,
-              fileUrl: true,
-              thumbnailUrl: true,
-              width: true,
-              height: true,
-              duration: true,
-              bitrate: true,
-              sampleRate: true,
-              codec: true,
-              channels: true,
-              fps: true,
-              videoCodec: true,
-              pageCount: true,
-              lineCount: true,
-              metadata: true,
-              uploadedBy: true,
-              isAnonymous: true,
-              createdAt: true
-            }
-          }
-        }
-      });
-
-      // 3.b Calculer/mettre à jour les statistiques de conversation (cache 1h) et les inclure en meta
-      const updatedStats = await conversationStatsService.updateOnNewMessage(
-        this.prisma,
-        data.conversationId,
-        (saved?.originalLanguage || messageData.originalLanguage || 'fr'),
-        () => this.getConnectedUsers()
-      );
-
-      const participant = saved?.sender;
-      const participantUser = participant?.user;
-      const messagePayload = {
-        id: saved?.id || result.messageId,
-        conversationId: data.conversationId,
-        senderId: saved?.senderId || messageData.senderId,
-        content: saved?.content || data.content,
-        originalLanguage: saved?.originalLanguage || messageData.originalLanguage || 'fr',
-        messageType: saved?.messageType || data.messageType || 'text',
-        isEdited: Boolean(saved?.isEdited),
-        deletedAt: saved?.deletedAt || undefined,
-        isBlurred: Boolean(saved?.isBlurred),
-        isViewOnce: Boolean(saved?.isViewOnce),
-        expiresAt: saved?.expiresAt || undefined,
-        createdAt: saved?.createdAt || new Date(),
-        updatedAt: saved?.updatedAt || new Date(),
-        sender: participant
-          ? {
-              id: participant.id,
-              username: participantUser?.username || participant.displayName || participant.nickname || 'Unknown',
-              displayName: participant.displayName || participantUser?.displayName || participant.nickname || 'Unknown',
-              avatar: participantUser?.avatar || participant.avatar,
-              firstName: participantUser?.firstName || '',
-              lastName: participantUser?.lastName || '',
-              type: participant.type,
-              userId: participant.userId,
-              email: '',
-              isOnline: false,
-              lastActiveAt: new Date(),
-              systemLanguage: 'fr',
-              regionalLanguage: 'fr',
-              autoTranslateEnabled: true,
-              isActive: true,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            }
-          : undefined,
-        attachments: (saved as any)?.attachments || [],
-        meta: {
-          conversationStats: updatedStats
-        }
-      } as any;
-
-      this.io.to(ROOMS.conversation(data.conversationId)).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
-      // S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore)
-      socket.emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
-      
-      
-      // 4. ENVOYER LES NOTIFICATIONS DE MESSAGE
-      const senderId = saved?.senderId;
-      if (senderId) {
-        // Envoyer les notifications en asynchrone pour ne pas bloquer
-        // Note: Les notifications sont gérées directement dans routes/notifications.ts
-      }
-      
-      // 5. LES TRADUCTIONS SERONT TRAITÉES EN ASYNCHRONE PAR LE TRANSLATION SERVICE
-      // ET LES RÉSULTATS SERONT ENVOYÉS VIA LES ÉVÉNEMENTS 'translationReady'
-      
-      return { messageId: result.messageId };
-    } catch (error) {
-      logger.error(`❌ Erreur traitement message: ${error}`);
-      this.stats.errors++;
-      socket.emit(SERVER_EVENTS.ERROR, { message: 'Failed to send message' });
-      throw error;
-    }
-  }
 
   private async _handleTranslationRequest(socket: any, data: { messageId: string; targetLanguage: string }) {
     try {
@@ -1284,15 +490,15 @@ export class MeeshySocketIOManager {
       const translation = await this.translationService.getTranslation(data.messageId, data.targetLanguage);
       
       if (translation) {
-        socket.emit(SERVER_EVENTS.TRANSLATION_RECEIVED, {
+        socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, {
           messageId: data.messageId,
           translatedText: translation.translatedText,
           targetLanguage: data.targetLanguage,
           confidenceScore: translation.confidenceScore
         });
-        
+
         this.stats.translations_sent++;
-        
+
       } else {
         // No cached translation — trigger on-demand translation via ZMQ
         try {
@@ -1302,10 +508,8 @@ export class MeeshySocketIOManager {
           });
 
           if (!message || !message.content) {
-            socket.emit(SERVER_EVENTS.TRANSLATION_ERROR, {
-              messageId: data.messageId,
-              targetLanguage: data.targetLanguage,
-              error: 'Message not found or empty'
+            socket.emit(SERVER_EVENTS.ERROR, {
+              message: 'Message not found or empty'
             });
             return;
           }
@@ -1323,10 +527,8 @@ export class MeeshySocketIOManager {
           logger.info(`🔄 On-demand translation requested for message ${data.messageId} -> ${data.targetLanguage}`);
         } catch (translationError) {
           logger.error(`❌ On-demand translation failed: ${translationError}`);
-          socket.emit(SERVER_EVENTS.TRANSLATION_ERROR, {
-            messageId: data.messageId,
-            targetLanguage: data.targetLanguage,
-            error: 'Translation request failed'
+          socket.emit(SERVER_EVENTS.ERROR, {
+            message: 'Translation request failed'
           });
         }
       }
@@ -1727,100 +929,6 @@ export class MeeshySocketIOManager {
   }
 
   /**
-   * Récupère un utilisateur connecté par son ID ou sessionToken
-   * Pour les utilisateurs anonymes, socketToUser stocke le sessionToken
-   * mais connectedUsers utilise user.id comme clé
-   */
-  private _getConnectedUser(userIdOrToken: string): { user: SocketUser; realUserId: string } | null {
-    // Essayer d'abord la recherche directe par ID
-    const directUser = this.connectedUsers.get(userIdOrToken);
-    if (directUser) {
-      return { user: directUser, realUserId: userIdOrToken };
-    }
-
-    // Si non trouvé, chercher par sessionToken (cas des utilisateurs anonymes)
-    for (const [realUserId, user] of this.connectedUsers) {
-      if (user.sessionToken === userIdOrToken) {
-        return { user, realUserId };
-      }
-    }
-
-    return null;
-  }
-
-  private async _handleDisconnection(socket: any) {
-    const userIdOrToken = this.socketToUser.get(socket.id);
-
-    if (userIdOrToken) {
-      // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
-      const result = this._getConnectedUser(userIdOrToken);
-      const user = result?.user;
-      const userId = result?.realUserId || userIdOrToken;
-      const isAnonymous = user?.isAnonymous || false;
-
-      // Nettoyer cette socket des mappings
-      this._removeUserSocket(userId, socket.id);
-      this.socketToUser.delete(socket.id);
-
-      // Vérifier si l'utilisateur a encore des sockets actives
-      const remainingSockets = this.userSockets.get(userId);
-      const hasRemainingSockets = remainingSockets && remainingSockets.size > 0;
-
-      if (hasRemainingSockets) {
-        // L'utilisateur a encore des sockets actives (multi-onglet) — ne pas marquer offline
-        // Mettre à jour connectedUsers avec un des sockets restants
-        const nextSocketId = remainingSockets.values().next().value;
-        const currentUser = this.connectedUsers.get(userId);
-        if (currentUser && nextSocketId) {
-          this.connectedUsers.set(userId, { ...currentUser, socketId: nextSocketId });
-        }
-      } else {
-        // Plus aucune socket — marquer offline
-        this.statusService.markDisconnected(userId, isAnonymous);
-
-        // Automatically leave any active video/audio calls
-        try {
-          const activeParticipations = await this.prisma.callParticipant.findMany({
-            where: {
-              leftAt: null,
-              participant: isAnonymous
-                ? { id: userId }
-                : { userId }
-            },
-            include: {
-              callSession: true
-            }
-          });
-
-          for (const participation of activeParticipations) {
-            try {
-              await this.callService.leaveCall({
-                callId: participation.callSessionId,
-                userId,
-                participantId: participation.participantId
-              });
-            } catch (error) {
-              logger.error(`❌ Error auto-leaving call ${participation.callSessionId}:`, error);
-            }
-          }
-        } catch (error) {
-          logger.error(`❌ Error checking/leaving active calls for user ${userId}:`, error);
-        }
-
-        this.connectedUsers.delete(userId);
-
-        if (isAnonymous) {
-          await this.maintenanceService.updateAnonymousOnlineStatus(userId, false, true);
-        } else {
-          await this.maintenanceService.updateUserOnlineStatus(userId, false, true);
-        }
-      }
-    }
-
-    this.stats.active_connections--;
-  }
-
-  /**
    * CORRECTION: Broadcaster le changement de statut d'un utilisateur à tous les clients
    * PRIVACY: Respecte les préférences showOnlineStatus et showLastSeen
    */
@@ -1906,242 +1014,6 @@ export class MeeshySocketIOManager {
     }
   }
 
-  private async _handleHeartbeat(socket: any) {
-    const userIdOrToken = this.socketToUser.get(socket.id);
-    if (!userIdOrToken) return;
-
-    try {
-      const result = this._getConnectedUser(userIdOrToken);
-      if (!result) return;
-      const { user: connectedUser, realUserId: userId } = result;
-
-      this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);
-
-      if (!connectedUser.isAnonymous) {
-        await this.prisma.user.update({
-          where: { id: userId },
-          data: { lastActiveAt: new Date() }
-        });
-      }
-    } catch {
-      // Silent - heartbeat failure is not critical
-    }
-  }
-
-  private async _handleTypingStart(socket: any, data: { conversationId: string }) {
-    const userIdOrToken = this.socketToUser.get(socket.id);
-    if (!userIdOrToken) {
-      logger.warn('⚠️ [TYPING] Typing start sans userId pour socket', socket.id);
-      return;
-    }
-
-    try {
-      // Normaliser l'ID de conversation
-      const normalizedId = await this.normalizeConversationId(data.conversationId);
-
-      // Récupérer l'utilisateur depuis connectedUsers (gère le cas sessionToken pour anonymes)
-      const result = this._getConnectedUser(userIdOrToken);
-      if (!result) {
-        logger.warn(`⚠️ Utilisateur non connecté userId=${userIdOrToken}`);
-        return;
-      }
-      const { user: connectedUser, realUserId: userId } = result;
-
-      // Typing = activité détectable
-      // → Mettre à jour lastActiveAt (throttled à 5s)
-      if (this.statusService) {
-        this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);
-      }
-
-      // PRIVACY: Vérifier si l'utilisateur a activé showTypingIndicator
-      const shouldShowTyping = await this.privacyPreferencesService.shouldShowTypingIndicator(
-        userId,
-        connectedUser.isAnonymous
-      );
-      if (!shouldShowTyping) {
-        // L'utilisateur a désactivé l'indicateur de frappe, ne pas broadcaster
-        return;
-      }
-
-      let displayName: string;
-
-      // FIXED: Gérer les utilisateurs anonymes
-      if (connectedUser.isAnonymous) {
-        // Récupérer depuis Participant
-        const dbParticipant = await this.prisma.participant.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            displayName: true,
-            nickname: true
-          }
-        });
-
-        if (!dbParticipant) {
-          logger.warn(`⚠️ Participant anonyme non trouvé userId=${userId}`);
-          return;
-        }
-
-        // Construire le nom d'affichage pour anonyme
-        displayName = dbParticipant.nickname || dbParticipant.displayName;
-      } else {
-        // Récupérer depuis User
-        const dbUser = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            displayName: true
-          }
-        });
-
-        if (!dbUser) {
-          logger.warn(`⚠️ Utilisateur non trouvé userId=${userId}`);
-          return;
-        }
-
-        // Construire le nom d'affichage
-        displayName = dbUser.displayName ||
-                     `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() ||
-                     dbUser.username;
-      }
-
-      const typingEvent: TypingEvent = {
-        userId: userId,
-        username: displayName,
-        conversationId: normalizedId,
-        isTyping: true
-      };
-
-      const room = ROOMS.conversation(normalizedId);
-
-
-      // Émettre vers tous les autres utilisateurs de la conversation (sauf l'émetteur)
-      socket.to(room).emit(SERVER_EVENTS.TYPING_START, typingEvent);
-
-    } catch (error) {
-      logger.error('❌ [TYPING] Erreur handleTypingStart', error);
-    }
-  }
-
-  private async _handleTypingStop(socket: any, data: { conversationId: string }) {
-    const userIdOrToken = this.socketToUser.get(socket.id);
-    if (!userIdOrToken) {
-      logger.warn('⚠️ [TYPING] Typing stop sans userId pour socket', socket.id);
-      return;
-    }
-
-    try {
-      // Normaliser l'ID de conversation
-      const normalizedId = await this.normalizeConversationId(data.conversationId);
-
-      // Récupérer l'utilisateur depuis connectedUsers (gère le cas sessionToken pour anonymes)
-      const result = this._getConnectedUser(userIdOrToken);
-      if (!result) {
-        logger.warn(`⚠️ Utilisateur non connecté userId=${userIdOrToken}`);
-        return;
-      }
-      const { user: connectedUser, realUserId: userId } = result;
-
-      // PRIVACY: Vérifier si l'utilisateur a activé showTypingIndicator
-      // Note: On vérifie aussi pour typing:stop pour cohérence
-      const shouldShowTyping = await this.privacyPreferencesService.shouldShowTypingIndicator(
-        userId,
-        connectedUser.isAnonymous
-      );
-      if (!shouldShowTyping) {
-        // L'utilisateur a désactivé l'indicateur de frappe, ne pas broadcaster
-        return;
-      }
-
-      let displayName: string;
-
-      // FIXED: Gérer les utilisateurs anonymes
-      if (connectedUser.isAnonymous) {
-        // Récupérer depuis Participant
-        const dbParticipant = await this.prisma.participant.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            displayName: true,
-            nickname: true
-          }
-        });
-
-        if (!dbParticipant) {
-          logger.warn(`⚠️ Participant anonyme non trouvé userId=${userId}`);
-          return;
-        }
-
-        // Construire le nom d'affichage pour anonyme
-        displayName = dbParticipant.nickname || dbParticipant.displayName;
-      } else {
-        // Récupérer depuis User
-        const dbUser = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            displayName: true
-          }
-        });
-
-        if (!dbUser) {
-          logger.warn(`⚠️ Utilisateur non trouvé userId=${userId}`);
-          return;
-        }
-
-        // Construire le nom d'affichage
-        displayName = dbUser.displayName ||
-                     `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() ||
-                     dbUser.username;
-      }
-
-      const typingEvent: TypingEvent = {
-        userId: userId,
-        username: displayName,
-        conversationId: normalizedId,
-        isTyping: false
-      };
-
-      const room = ROOMS.conversation(normalizedId);
-
-
-      // Émettre vers tous les autres utilisateurs de la conversation (sauf l'émetteur)
-      socket.to(room).emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
-
-    } catch (error) {
-      logger.error('❌ [TYPING] Erreur handleTypingStop', error);
-    }
-  }
-
-  // ✅ FIX BUG #3: Polling périodique SUPPRIMÉ
-  // Le système utilise maintenant uniquement les événements (connect/disconnect/activity)
-  // L'envoi périodique des stats toutes les 10s était du polling déguisé
-  // Les stats sont maintenant envoyées UNIQUEMENT lors d'événements:
-  // - Connexion/Déconnexion → broadcast USER_STATUS
-  // - Activité (typing, message) → update lastActiveAt
-  // - Maintenance (toutes les 15s) → détecte les inactifs > 30min
-
-  // MÉTHODE SUPPRIMÉE: _ensureOnlineStatsTicker
-  // private onlineStatsInterval: NodeJS.Timeout | null = null;
-  // private _ensureOnlineStatsTicker(): void { ... }
-
-
-  private async _sendConversationStatsToSocket(socket: any, conversationId: string): Promise<void> {
-    // ✅ FIX BUG #3: Appel au ticker supprimé
-    // Les stats sont envoyées uniquement à la demande, pas périodiquement
-    const stats = await conversationStatsService.getOrCompute(
-      this.prisma,
-      conversationId,
-      () => this.getConnectedUsers()
-    );
-    socket.emit(SERVER_EVENTS.CONVERSATION_STATS, { conversationId, stats } as any);
-  }
 
   /**
    * PHASE 3.1: Broadcast d'un nouveau message via MessagingService
@@ -2220,7 +1092,7 @@ export class MeeshySocketIOManager {
         content: message.content,
         originalLanguage: message.originalLanguage || 'fr',
         originalContent: (message as any).originalContent || message.content,
-        messageType: message.messageType || 'text',
+        messageType: (message.messageType || 'text') as MessageType,
         isEdited: Boolean(message.isEdited),
         deletedAt: message.deletedAt || undefined,
         isBlurred: Boolean((message as any).isBlurred),
@@ -2257,7 +1129,7 @@ export class MeeshySocketIOManager {
           senderId: (message as any).replyTo.senderId || undefined,
           content: (message as any).replyTo.content,
           originalLanguage: (message as any).replyTo.originalLanguage || 'fr',
-          messageType: (message as any).replyTo.messageType || 'text',
+          messageType: ((message as any).replyTo.messageType || 'text') as MessageType,
           createdAt: (message as any).replyTo.createdAt || new Date(),
           sender: (message as any).replyTo.sender ? {
             id: (message as any).replyTo.sender.id,
@@ -2307,6 +1179,25 @@ export class MeeshySocketIOManager {
       } else {
       }
 
+      // 2b. Emit mention:created to each mentioned user's personal room
+      const mentions = (message as any).validatedMentions as Array<{ participantId?: string; userId?: string; username?: string }> | undefined;
+      if (mentions && mentions.length > 0) {
+        for (const mention of mentions) {
+          const targetUserId = mention.userId;
+          if (targetUserId && targetUserId !== message.senderId) {
+            this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
+              messageId: message.id,
+              conversationId: normalizedId,
+              senderId: message.senderId,
+              mentionedUserId: targetUserId,
+              mentionedParticipantId: mention.participantId,
+              content: (message as any).content,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
       const roomClients = this.io.sockets.adapter.rooms.get(room);
 
       // 3. Mettre à jour le unreadCount pour tous les participants (sauf l'expéditeur)
@@ -2328,6 +1219,8 @@ export class MeeshySocketIOManager {
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
 
+          const connectedUserIds = new Set(this.getConnectedUsers());
+
           for (const participant of participants) {
             const roomTarget = participant.userId || participant.id;
             const unreadCount = await readStatusService.getUnreadCount(roomTarget, normalizedId);
@@ -2337,6 +1230,16 @@ export class MeeshySocketIOManager {
               conversationId: normalizedId,
               unreadCount
             });
+
+            // Queue message for offline participants
+            if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
+              this.deliveryQueue.enqueue(roomTarget, {
+                messageId: message.id,
+                conversationId: normalizedId,
+                payload: messagePayload as Record<string, unknown>,
+                enqueuedAt: new Date().toISOString(),
+              }).catch(err => logger.warn('Failed to enqueue message for offline user', { userId: roomTarget, error: err }));
+            }
           }
         }
       } catch (unreadError) {
@@ -2365,24 +1268,6 @@ export class MeeshySocketIOManager {
     await this._broadcastNewMessage(messageWithTimestamp, conversationId);
   }
 
-  /**
-   * PHASE 3.1.1: Extraction du JWT Token depuis le socket
-   */
-  private extractJWTToken(socket: any): string | undefined {
-    return socket.handshake?.headers?.authorization?.replace('Bearer ', '') ||
-           socket.handshake?.auth?.authToken ||
-           socket.handshake?.auth?.token ||
-           socket.auth?.token;
-  }
-
-  /**
-   * PHASE 3.1.1: Extraction du Session Token depuis le socket  
-   */
-  private extractSessionToken(socket: any): string | undefined {
-    return socket.handshake?.headers?.['x-session-token'] || 
-           socket.handshake?.auth?.sessionToken || 
-           socket.auth?.sessionToken;
-  }
 
   // Méthodes publiques pour les statistiques et la gestion
   getStats() {
@@ -2415,349 +1300,6 @@ export class MeeshySocketIOManager {
     return false;
   }
 
-  // ===== HANDLERS DE RÉACTIONS =====
-
-  /**
-   * Gère l'ajout d'une réaction à un message
-   */
-  private async _handleReactionAdd(
-    socket: any,
-    data: { messageId: string; emoji: string },
-    callback?: (response: SocketIOResponse<any>) => void
-  ): Promise<void> {
-    try {
-
-      const userIdOrToken = this.socketToUser.get(socket.id);
-
-      if (!userIdOrToken) {
-        logger.error('❌ [_handleReactionAdd] No userId found for socket', socket.id);
-
-        const errorResponse: SocketIOResponse<any> = {
-          success: false,
-          error: 'User not authenticated'
-        };
-        if (callback) callback(errorResponse);
-        return;
-      }
-
-      // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
-      const userResult = this._getConnectedUser(userIdOrToken);
-      const user = userResult?.user;
-      const userId = userResult?.realUserId || userIdOrToken;
-      const isAnonymous = user?.isAnonymous || false;
-
-      // Résoudre le participantId : pour les anonymes, il est sur le SocketUser ;
-      // pour les registered, il faut le chercher en DB via le message → conversationId
-      let participantId = user?.participantId;
-      if (!participantId && !isAnonymous) {
-        const msg = await this.prisma.message.findUnique({
-          where: { id: data.messageId },
-          select: { conversationId: true }
-        });
-        if (msg) {
-          const participant = await this.prisma.participant.findFirst({
-            where: { userId, conversationId: msg.conversationId, isActive: true },
-            select: { id: true }
-          });
-          participantId = participant?.id;
-        }
-      }
-
-      if (!participantId) {
-        const errorResponse: SocketIOResponse<any> = {
-          success: false,
-          error: 'Could not resolve participant'
-        };
-        if (callback) callback(errorResponse);
-        return;
-      }
-
-      // Importer le ReactionService
-      const { ReactionService } = await import('../services/ReactionService.js');
-      const reactionService = new ReactionService(this.prisma);
-
-      // Ajouter la réaction (Participant model: participantId only)
-      const reaction = await reactionService.addReaction({
-        messageId: data.messageId,
-        emoji: data.emoji,
-        participantId
-      });
-
-      if (!reaction) {
-        const errorResponse: SocketIOResponse<any> = {
-          success: false,
-          error: 'Failed to add reaction'
-        };
-        if (callback) callback(errorResponse);
-        return;
-      }
-
-      // Récupérer le message pour le conversationId et le broadcast
-      const message = await this.prisma.message.findUnique({
-        where: { id: data.messageId },
-        select: {
-          conversationId: true,
-          content: true,
-          senderId: true,
-          conversation: {
-            select: {
-              title: true
-            }
-          }
-        }
-      });
-
-      // Créer l'événement de mise à jour
-      const updateEvent = await reactionService.createUpdateEvent(
-        data.messageId,
-        data.emoji,
-        'add',
-        participantId,
-        message?.conversationId ?? data.messageId
-      );
-
-      // Envoyer la réponse au client
-      const successResponse: SocketIOResponse<any> = {
-        success: true,
-        data: reaction
-      };
-      if (callback) callback(successResponse);
-
-      if (message) {
-        const normalizedConversationId = await this.normalizeConversationId(message.conversationId);
-
-        this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
-
-        // Résoudre senderId (Participant.id) → User.id pour la notification
-        if (!isAnonymous && message.senderId) {
-          const [authorParticipant, reactorParticipant] = await Promise.all([
-            this.prisma.participant.findUnique({
-              where: { id: message.senderId },
-              select: { userId: true }
-            }),
-            this.prisma.participant.findUnique({
-              where: { id: participantId },
-              select: { userId: true }
-            })
-          ]);
-
-          const authorUserId = authorParticipant?.userId;
-          const reactorUserId = reactorParticipant?.userId;
-
-          if (authorUserId && reactorUserId && authorUserId !== reactorUserId) {
-            this.notificationService.createReactionNotification({
-              messageAuthorId: authorUserId,
-              reactorUserId,
-              messageId: data.messageId,
-              conversationId: message.conversationId,
-              reactionEmoji: data.emoji,
-            }).catch((notifError) => {
-              logger.error('❌ [REACTION_ADDED] Erreur lors de la création de la notification', notifError);
-            });
-          }
-        }
-
-      } else {
-        logger.error(`❌ [REACTION_ADDED] Message ${data.messageId} non trouvé, impossible de broadcaster`);
-      }
-    } catch (error: any) {
-      logger.error('❌ Erreur lors de l\'ajout de réaction:', error);
-      const errorResponse: SocketIOResponse<any> = {
-        success: false,
-        error: error.message || 'Failed to add reaction'
-      };
-      if (callback) callback(errorResponse);
-    }
-  }
-
-  /**
-   * Gère la suppression d'une réaction d'un message
-   */
-  private async _handleReactionRemove(
-    socket: any,
-    data: { messageId: string; emoji: string },
-    callback?: (response: SocketIOResponse<any>) => void
-  ): Promise<void> {
-    try {
-      const userIdOrToken = this.socketToUser.get(socket.id);
-      if (!userIdOrToken) {
-        const errorResponse: SocketIOResponse<any> = {
-          success: false,
-          error: 'User not authenticated'
-        };
-        if (callback) callback(errorResponse);
-        return;
-      }
-
-      // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
-      const userResult = this._getConnectedUser(userIdOrToken);
-      const user = userResult?.user;
-      const userId = userResult?.realUserId || userIdOrToken;
-      const isAnonymous = user?.isAnonymous || false;
-
-      // Résoudre le participantId pour les registered users
-      let participantId = user?.participantId;
-      if (!participantId && !isAnonymous) {
-        const msg = await this.prisma.message.findUnique({
-          where: { id: data.messageId },
-          select: { conversationId: true }
-        });
-        if (msg) {
-          const participant = await this.prisma.participant.findFirst({
-            where: { userId, conversationId: msg.conversationId, isActive: true },
-            select: { id: true }
-          });
-          participantId = participant?.id;
-        }
-      }
-
-      if (!participantId) {
-        const errorResponse: SocketIOResponse<any> = {
-          success: false,
-          error: 'Could not resolve participant'
-        };
-        if (callback) callback(errorResponse);
-        return;
-      }
-
-      // Importer le ReactionService
-      const { ReactionService } = await import('../services/ReactionService.js');
-      const reactionService = new ReactionService(this.prisma);
-
-      // Supprimer la réaction (Participant model: participantId only)
-      const removed = await reactionService.removeReaction({
-        messageId: data.messageId,
-        emoji: data.emoji,
-        participantId
-      });
-
-      if (!removed) {
-        const errorResponse: SocketIOResponse<any> = {
-          success: false,
-          error: 'Reaction not found'
-        };
-        if (callback) callback(errorResponse);
-        return;
-      }
-
-      // Récupérer le message pour le conversationId et le broadcast
-      const message = await this.prisma.message.findUnique({
-        where: { id: data.messageId },
-        select: { conversationId: true }
-      });
-
-      // Créer l'événement de mise à jour
-      const updateEvent = await reactionService.createUpdateEvent(
-        data.messageId,
-        data.emoji,
-        'remove',
-        participantId,
-        message?.conversationId ?? data.messageId
-      );
-
-      // Envoyer la réponse au client
-      const successResponse: SocketIOResponse<any> = {
-        success: true,
-        data: { message: 'Reaction removed successfully' }
-      };
-      if (callback) callback(successResponse);
-
-      if (message) {
-        const normalizedConversationId = await this.normalizeConversationId(message.conversationId);
-        this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, updateEvent);
-      }
-
-    } catch (error: any) {
-      logger.error('❌ Erreur lors de la suppression de réaction', error);
-      const errorResponse: SocketIOResponse<any> = {
-        success: false,
-        error: error.message || 'Failed to remove reaction'
-      };
-      if (callback) callback(errorResponse);
-    }
-  }
-
-  /**
-   * Gère la synchronisation des réactions d'un message
-   */
-  private async _handleReactionSync(
-    socket: any,
-    messageId: string,
-    callback?: (response: SocketIOResponse<any>) => void
-  ): Promise<void> {
-    try {
-
-      const userIdOrToken = this.socketToUser.get(socket.id);
-      if (!userIdOrToken) {
-        logger.error(`❌ [REACTION_SYNC] Utilisateur non authentifié pour socket ${socket.id}`);
-        const errorResponse: SocketIOResponse<any> = {
-          success: false,
-          error: 'User not authenticated'
-        };
-        if (callback) callback(errorResponse);
-        return;
-      }
-
-      // Récupérer l'utilisateur (gère le cas sessionToken pour anonymes)
-      const userResult = this._getConnectedUser(userIdOrToken);
-      const user = userResult?.user;
-      const userId = userResult?.realUserId || userIdOrToken;
-      const isAnonymous = user?.isAnonymous || false;
-
-      // Résoudre le participantId pour les registered users
-      let participantId = user?.participantId;
-      if (!participantId && !isAnonymous) {
-        const msg = await this.prisma.message.findUnique({
-          where: { id: messageId },
-          select: { conversationId: true }
-        });
-        if (msg) {
-          const participant = await this.prisma.participant.findFirst({
-            where: { userId, conversationId: msg.conversationId, isActive: true },
-            select: { id: true }
-          });
-          participantId = participant?.id;
-        }
-      }
-
-      if (!participantId) {
-        const errorResponse: SocketIOResponse<any> = {
-          success: false,
-          error: 'Could not resolve participant'
-        };
-        if (callback) callback(errorResponse);
-        return;
-      }
-
-      // Importer le ReactionService
-      const { ReactionService } = await import('../services/ReactionService.js');
-      const reactionService = new ReactionService(this.prisma);
-
-      // Récupérer les réactions avec agrégation (Participant model)
-      const reactionSync = await reactionService.getMessageReactions({
-        messageId,
-        currentParticipantId: participantId
-      });
-
-
-      // Envoyer la réponse au client
-      const successResponse: SocketIOResponse<any> = {
-        success: true,
-        data: reactionSync
-      };
-      if (callback) callback(successResponse);
-
-    } catch (error: any) {
-      logger.error('❌ Erreur lors de la synchronisation des réactions', error);
-      const errorResponse: SocketIOResponse<any> = {
-        success: false,
-        error: error.message || 'Failed to sync reactions'
-      };
-      if (callback) callback(errorResponse);
-    }
-  }
-
-  // ===== FIN HANDLERS DE RÉACTIONS =====
 
   /**
    * Déconnecte un utilisateur spécifique
@@ -2811,30 +1353,6 @@ export class MeeshySocketIOManager {
   }
 
 
-  /**
-   * Ajoute un socket au mapping utilisateur -> sockets
-   */
-  private _addUserSocket(userId: string, socketId: string): void {
-    if (!this.userSockets.has(userId)) {
-      this.userSockets.set(userId, new Set());
-    }
-    this.userSockets.get(userId)!.add(socketId);
-  }
-
-  /**
-   * Supprime un socket du mapping utilisateur -> sockets
-   */
-  private _removeUserSocket(userId: string, socketId: string): void {
-    const userSocketsSet = this.userSockets.get(userId);
-    if (userSocketsSet) {
-      userSocketsSet.delete(socketId);
-
-      // Si l'utilisateur n'a plus de sockets, supprimer l'entrée
-      if (userSocketsSet.size === 0) {
-        this.userSockets.delete(userId);
-      }
-    }
-  }
 
   async healthCheck(): Promise<boolean> {
     try {

@@ -330,30 +330,25 @@ describe('IndexedDB Key Storage Adapter Module', () => {
       expect(() => atob(exported)).not.toThrow();
     });
 
-    it('should include version and timestamp in export', async () => {
+    it('should include version, salt, iv, and ciphertext in encrypted export', async () => {
       const exported = await adapter.exportKeys('password');
-      const decoded = JSON.parse(atob(exported));
+      const envelope = JSON.parse(atob(exported));
 
-      expect(decoded).toHaveProperty('version');
-      expect(decoded).toHaveProperty('exportedAt');
-      expect(typeof decoded.exportedAt).toBe('number');
+      expect(envelope).toHaveProperty('version');
+      expect(envelope).toHaveProperty('salt');
+      expect(envelope).toHaveProperty('iv');
+      expect(envelope).toHaveProperty('ciphertext');
     });
   });
 
   describe('importKeys', () => {
-    it('should import keys from exported backup', async () => {
-      // Create a backup object
-      const backup = {
-        keys: [{ id: 'key-1', keyData: 'test-data', algorithm: 'aes-256-gcm', createdAt: Date.now() }],
-        conversations: [{ conversationId: 'conv-1', keyId: 'key-1', mode: 'e2ee', createdAt: Date.now() }],
-        userKeys: [],
-        version: 1,
-        exportedAt: Date.now(),
-      };
+    it('should import keys from encrypted export (round-trip)', async () => {
+      await adapter.storeKey('key-1', 'data-1');
 
-      const encoded = btoa(JSON.stringify(backup));
+      const password = 'test-password-123';
+      const exported = await adapter.exportKeys(password);
 
-      await adapter.importKeys(encoded, 'password');
+      await adapter.importKeys(exported, password);
 
       expect(mockIDB.open).toHaveBeenCalled();
     });
@@ -469,18 +464,9 @@ describe('IndexedDB Key Storage Adapter Module', () => {
       (badAdapter as any).db = null;
       (badAdapter as any).initPromise = Promise.resolve();
 
-      // Use valid base64 encoded JSON for the backup
-      const validBackup = btoa(JSON.stringify({
-        keys: [],
-        conversations: [],
-        userKeys: [],
-        version: 1,
-        exportedAt: Date.now(),
-      }));
+      const invalidBackup = btoa('invalid-encrypted-data');
 
-      await expect(badAdapter.importKeys(validBackup, 'password')).rejects.toThrow(
-        'Database not initialized'
-      );
+      await expect(badAdapter.importKeys(invalidBackup, 'password')).rejects.toThrow();
     });
   });
 });

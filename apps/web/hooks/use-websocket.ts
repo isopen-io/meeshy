@@ -27,6 +27,8 @@ export interface UseWebSocketOptions {
   onTranslation?: (data: TranslationEvent) => void;
   onTyping?: (event: TypingEvent) => void;
   onUserStatus?: (event: UserStatusEvent) => void;
+  onReactionAdded?: (data: { messageId: string; emoji: string; participantId?: string; conversationId?: string }) => void;
+  onReactionRemoved?: (data: { messageId: string; emoji: string; participantId?: string; conversationId?: string }) => void;
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
@@ -35,9 +37,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     onNewMessage, 
     onMessageEdited,
     onMessageDeleted,
-    onTranslation, 
-    onTyping, 
-    onUserStatus 
+    onTranslation,
+    onTyping,
+    onUserStatus,
+    onReactionAdded,
+    onReactionRemoved,
   } = options;
   
   const [isConnected, setIsConnected] = useState(false);
@@ -94,11 +98,21 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       const unsub = webSocketService.onUserStatus(onUserStatus);
       unsubscribers.push(unsub);
     }
-    
+
+    if (onReactionAdded) {
+      const unsub = webSocketService.onReactionAdded(onReactionAdded);
+      unsubscribers.push(unsub);
+    }
+
+    if (onReactionRemoved) {
+      const unsub = webSocketService.onReactionRemoved(onReactionRemoved);
+      unsubscribers.push(unsub);
+    }
+
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onTyping, onUserStatus]);
+  }, [onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onTyping, onUserStatus, onReactionAdded, onReactionRemoved]);
 
   // ÉTAPE 3: Surveiller l'état de connexion
   useEffect(() => {
@@ -166,12 +180,22 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     return webSocketService.getDiagnostics();
   }, []);
 
+  const addReaction = useCallback(async (messageId: string, emoji: string): Promise<boolean> => {
+    return await webSocketService.addReaction(messageId, emoji);
+  }, []);
+
+  const removeReaction = useCallback(async (messageId: string, emoji: string): Promise<boolean> => {
+    return await webSocketService.removeReaction(messageId, emoji);
+  }, []);
+
   return {
     isConnected,
     sendMessage,
     sendMessageWithAttachments,
     editMessage,
     deleteMessage,
+    addReaction,
+    removeReaction,
     startTyping,
     stopTyping,
     reconnect,

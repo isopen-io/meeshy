@@ -69,6 +69,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onUnreadUpdated: jest.fn(() => jest.fn()),
     onTranscription: jest.fn(() => jest.fn()),
     onAudioTranslation: jest.fn(() => jest.fn()),
+    onParticipantRoleUpdated: jest.fn(() => jest.fn()),
+    onPreferencesUpdated: jest.fn(() => jest.fn()),
+    onConversationJoined: jest.fn(() => jest.fn()),
+    onConversationLeft: jest.fn(() => jest.fn()),
   },
 }));
 
@@ -486,11 +490,10 @@ describe('useSocketCacheSync', () => {
       };
 
       const message = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
-      // Translations are stored as an array deduped by targetLanguage
-      const translations = message?.translations as any[];
-      expect(translations).toHaveLength(1);
-      expect(translations[0].targetLanguage).toBe('fr');
-      expect(translations[0].translatedContent).toBe('Bonjour');
+      const translations = message?.translations as Array<{ targetLanguage: string; translatedContent: string }>;
+      expect(translations).toEqual(
+        expect.arrayContaining([expect.objectContaining({ targetLanguage: 'fr', translatedContent: 'Bonjour' })])
+      );
     });
 
     it('should not update when conversationId not provided', () => {

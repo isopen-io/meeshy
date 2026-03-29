@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersService, UpdateUserDto } from '@/services/users.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { broadcastUserUpdate } from '@/lib/settings-sync';
 import type { User } from '@/types';
 
 export function useCurrentUserQuery() {
@@ -65,12 +66,10 @@ export function useUpdateUserProfileMutation() {
   return useMutation({
     mutationFn: (data: UpdateUserDto) => usersService.updateMyProfile(data),
     onSuccess: (response) => {
-      // Gateway returns { user: {...}, message: '...' } in data
       const userData = (response.data as any)?.user ?? response.data;
       queryClient.setQueryData<User>(queryKeys.users.current(), userData);
-
-      // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: queryKeys.users.current() });
+      broadcastUserUpdate();
     },
   });
 }

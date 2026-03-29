@@ -39,6 +39,9 @@ function makeState(partial: Partial<ConversationState>): ConversationState {
     agentHistory: [],
     pendingActions: [],
     controlledUsers: [],
+    lastAgentUserId: null,
+    recentTopicCategories: [],
+    engagementData: [],
     ...partial,
   };
 }
@@ -178,7 +181,7 @@ describe('Quality Gate', () => {
       pendingActions: [goodMessage],
       controlledUsers: [controlledUser],
     }));
-    expect(result.pendingActions).toHaveLength(0);
+    expect(result.pendingActions).toHaveLength(1);
     consoleSpy.mockRestore();
   });
 

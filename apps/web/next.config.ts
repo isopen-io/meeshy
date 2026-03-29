@@ -17,6 +17,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  transpilePackages: ['@meeshy/shared'],
   // Configuration Docker - standalone pour optimiser la taille de l'image
   output: 'standalone',
 
@@ -128,6 +129,11 @@ const nextConfig: NextConfig = {
         tls: false,
       };
     }
+
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js', '.jsx'],
+      '.mjs': ['.mts', '.mjs'],
+    };
 
     // Exclure dompurify du bundle serveur (client-only)
     if (isServer) {

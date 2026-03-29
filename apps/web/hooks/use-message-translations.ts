@@ -1,6 +1,27 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import type { BubbleTranslation, User, Message, TranslationModel } from '@meeshy/shared/types';
 import { resolveUserPreferredLanguage as resolveUserPreferredLanguageUtil } from '@/utils/user-language-preferences';
+import { LRUCache } from '@/lib/lru-cache';
+
+type RawTranslation = {
+  targetLanguage?: string;
+  language?: string;
+  translatedContent?: string;
+  content?: string;
+  translationModel?: string;
+  model?: string;
+  confidenceScore?: number;
+  confidence?: number;
+  cached?: boolean;
+  fromCache?: boolean;
+  createdAt?: string | Date;
+};
+
+type RawMessage = Message & {
+  translations?: ReadonlyArray<RawTranslation>;
+  originalContent?: string;
+  location?: string;
+};
 
 interface BubbleStreamMessage extends Omit<Message, 'translations'> {
   location?: string;
@@ -16,7 +37,7 @@ interface UseMessageTranslationsProps {
 }
 
 interface UseMessageTranslationsReturn {
-  processMessageWithTranslations: (message: Message) => BubbleStreamMessage;
+  processMessageWithTranslations: (message: RawMessage) => BubbleStreamMessage;
   getPreferredLanguageContent: (message: BubbleStreamMessage) => {
     content: string;
     isTranslated: boolean;
@@ -35,7 +56,8 @@ interface UseMessageTranslationsReturn {
 export function useMessageTranslations({ 
   currentUser 
 }: UseMessageTranslationsProps): UseMessageTranslationsReturn {
-  
+  const processedCacheRef = useRef(new LRUCache<string, BubbleStreamMessage>(500));
+
   /**
    * Résout la langue préférée de l'utilisateur selon la logique Meeshy.
    * Délègue à resolveUserPreferredLanguage() depuis utils/user-language-preferences — source de vérité unique.
@@ -72,13 +94,17 @@ export function useMessageTranslations({
   /**
    * Traite un message brut et le convertit en BubbleStreamMessage avec traductions
    */
-  const processMessageWithTranslations = useCallback((message: Message): BubbleStreamMessage => {
+  const processMessageWithTranslations = useCallback((message: RawMessage): BubbleStreamMessage => {
+    const cacheKey = `${message.id}:${(message.translations || []).length}:${message.updatedAt}`;
+    const cached = processedCacheRef.current.get(cacheKey);
+    if (cached) return cached;
+
     // Convertir les traductions backend vers le format BubbleTranslation
-    // CORRECTION: Déduplication des traductions par langue pour éviter les doublons
+    // Déduplication des traductions par langue pour éviter les doublons
     const translationsMap = new Map<string, BubbleTranslation>();
     
     const validTranslations = (message.translations || [])
-      .filter((t: any) => {
+      .filter((t: RawTranslation) => {
         // Support des deux formats possibles: targetLanguage/translatedContent OU language/content
         const hasValidStructure = t && (
           (t.targetLanguage && t.translatedContent) || 
@@ -98,7 +124,7 @@ export function useMessageTranslations({
         return true;
       });
     
-    validTranslations.forEach((t: any) => {
+    validTranslations.forEach((t: RawTranslation) => {
         // Support des deux formats de propriétés
         const language = t.targetLanguage || t.language;
         const content = t.translatedContent || t.content;
@@ -155,8 +181,8 @@ export function useMessageTranslations({
 
     const result: BubbleStreamMessage = {
       ...message,
-      content: displayContent, // Contenu d'affichage (peut être traduit)
-      originalContent: message.originalContent || message.content, // CORRECTION: Préserver le contenu original de l'auteur
+      content: displayContent,
+      originalContent: message.originalContent || message.content,
       originalLanguage,
       isTranslated,
       translatedFrom,
@@ -164,6 +190,7 @@ export function useMessageTranslations({
       translations
     };
 
+    processedCacheRef.current.set(cacheKey, result);
     return result;
   }, [resolveUserPreferredLanguage]);
 

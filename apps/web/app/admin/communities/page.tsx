@@ -31,25 +31,16 @@ import { toast } from 'sonner';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
 
-interface Community {
-  id: string;
-  identifier?: string;
-  name: string;
-  description?: string;
-  avatar?: string;
-  isPrivate: boolean;
-  createdAt: string;
-  creator: {
-    id: string;
-    username: string;
-    displayName?: string;
-    avatar?: string;
+import type { Community as BaseCommunity } from '@meeshy/shared/types';
+
+type Community = BaseCommunity & {
+  readonly creator?: {
+    readonly id: string;
+    readonly username: string;
+    readonly displayName?: string;
+    readonly avatar?: string;
   };
-  _count: {
-    members: number;
-    Conversation: number;
-  };
-}
+};
 
 export default function AdminCommunitiesPage() {
   const router = useRouter();
@@ -144,7 +135,7 @@ export default function AdminCommunitiesPage() {
   // Calcul des statistiques
   const publicCommunities = communities.filter(c => !c.isPrivate).length;
   const privateCommunities = communities.filter(c => c.isPrivate).length;
-  const totalMembers = communities.reduce((sum, c) => sum + c._count.members, 0);
+  const totalMembers = communities.reduce((sum, c) => sum + (c._count?.members ?? 0), 0);
   const avgMembersPerCommunity = communities.length > 0
     ? Math.round(totalMembers / communities.length)
     : 0;
@@ -407,16 +398,16 @@ export default function AdminCommunitiesPage() {
                             <div className="flex items-center space-x-1">
                               <Users className="h-4 w-4 text-green-600" />
                               <span className="font-medium text-green-600 dark:text-green-400">
-                                {community._count.members}
+                                {community._count?.members ?? 0}
                               </span>
-                              <span>membre{community._count.members > 1 ? 's' : ''}</span>
+                              <span>membre{(community._count?.members ?? 0) > 1 ? 's' : ''}</span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <MessageSquare className="h-4 w-4 text-blue-600" />
                               <span className="font-medium text-blue-600 dark:text-blue-400">
-                                {community._count.Conversation}
+                                {community._count?.Conversation ?? community._count?.conversations ?? 0}
                               </span>
-                              <span>conversation{community._count.Conversation > 1 ? 's' : ''}</span>
+                              <span>conversation{(community._count?.Conversation ?? community._count?.conversations ?? 0) > 1 ? 's' : ''}</span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <User className="h-4 w-4" />

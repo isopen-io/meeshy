@@ -7,16 +7,33 @@ public struct TwoFactorStatus: Codable, Sendable {
     public let enabledAt: String?
     public let hasBackupCodes: Bool?
     public let backupCodesCount: Int?
+
+    public init(enabled: Bool, enabledAt: String? = nil, hasBackupCodes: Bool? = nil, backupCodesCount: Int? = nil) {
+        self.enabled = enabled
+        self.enabledAt = enabledAt
+        self.hasBackupCodes = hasBackupCodes
+        self.backupCodesCount = backupCodesCount
+    }
 }
 
 public struct TwoFactorSetup: Codable, Sendable {
     public let secret: String
     public let qrCodeDataUrl: String
     public let otpauthUrl: String
+
+    public init(secret: String, qrCodeDataUrl: String, otpauthUrl: String) {
+        self.secret = secret
+        self.qrCodeDataUrl = qrCodeDataUrl
+        self.otpauthUrl = otpauthUrl
+    }
 }
 
 public struct TwoFactorBackupCodes: Codable, Sendable {
     public let backupCodes: [String]
+
+    public init(backupCodes: [String]) {
+        self.backupCodes = backupCodes
+    }
 }
 
 private struct TwoFactorCodeRequest: Encodable {

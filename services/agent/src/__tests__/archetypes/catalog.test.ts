@@ -2,11 +2,11 @@ import { getArchetype, listArchetypes } from '../../archetypes/catalog';
 import { enrichArchetypeWithProfile } from '../../archetypes/enrichment';
 
 describe('Archetypes Catalog', () => {
-  it('returns all 5 archetypes', () => {
+  it('returns all 7 archetypes', () => {
     const archetypes = listArchetypes();
-    expect(archetypes).toHaveLength(5);
+    expect(archetypes).toHaveLength(7);
     expect(archetypes.map((a) => a.id)).toEqual(
-      expect.arrayContaining(['curious', 'enthusiast', 'skeptic', 'pragmatic', 'social']),
+      expect.arrayContaining(['curious', 'enthusiast', 'skeptic', 'pragmatic', 'social', 'expert', 'moderator']),
     );
   });
 

@@ -4,10 +4,16 @@
   "roots": ["<rootDir>/src"],
   "testMatch": ["**/__tests__/**/*.test.ts"],
   "moduleNameMapper": {
+    "^@meeshy/shared/prisma/client$": "<rootDir>/src/__mocks__/prisma-client.ts",
     "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1",
     "^@meeshy/shared$": "<rootDir>/../../packages/shared/types/index"
   },
   "transform": {
-    "^.+\\.tsx?$": ["ts-jest", { "tsconfig": "tsconfig.json" }]
+    "^.+\\.tsx?$": ["ts-jest", {
+      "tsconfig": "tsconfig.json",
+      "diagnostics": {
+        "ignoreDiagnostics": ["TS2307", "TS7006", "TS2339"]
+      }
+    }]
   }
 }

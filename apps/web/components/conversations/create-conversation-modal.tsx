@@ -22,7 +22,7 @@ import type { ConversationType } from '@meeshy/shared/types';
 
 // Hooks personnalisés
 import { useUserSelection, useUserSearch } from '@/hooks/use-user-search';
-import { useCommunitySearch } from '@/hooks/use-community-search';
+import { useCommunitiesQuery } from '@/hooks/queries';
 import { useIdentifierValidation } from '@/hooks/use-identifier-validation';
 import { useConversationCreation } from '@/hooks/use-conversation-creation';
 
@@ -66,7 +66,10 @@ export function CreateConversationModal({
   // Hooks personnalisés pour la logique métier
   const { selectedUsers, toggleUserSelection, clearSelection } = useUserSelection();
   const { availableUsers, isLoading, searchUsers } = useUserSearch(currentUser.id, selectedUsers);
-  const { communities, isLoadingCommunities, loadCommunities } = useCommunitySearch();
+  const { data: communities = [], isLoading: isLoadingCommunities } = useCommunitiesQuery({
+    search: communitySearchQuery.length >= 2 ? communitySearchQuery : undefined,
+    enabled: isOpen,
+  });
   const {
     identifierAvailable,
     isCheckingIdentifier,
@@ -85,24 +88,7 @@ export function CreateConversationModal({
     }
   }, [isOpen, searchQuery, searchUsers]);
 
-  // Chargement des communautés
-  useEffect(() => {
-    if (isOpen) {
-      loadCommunities();
-    }
-  }, [isOpen, loadCommunities]);
-
-  // Recherche de communautés avec debounce
-  useEffect(() => {
-    if (communitySearchQuery.length >= 2) {
-      const timer = setTimeout(() => {
-        loadCommunities(communitySearchQuery);
-      }, 300);
-      return () => clearTimeout(timer);
-    } else if (communitySearchQuery.length === 0) {
-      loadCommunities();
-    }
-  }, [communitySearchQuery, loadCommunities]);
+  // Community loading is handled by useCommunitiesQuery above (React Query)
 
   // Auto-génération du titre basé sur les utilisateurs sélectionnés
   useEffect(() => {

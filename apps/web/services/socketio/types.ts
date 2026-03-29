@@ -40,9 +40,9 @@ export type AudioTranslationsCompletedListener = (data: AudioTranslationsComplet
 export type TranscriptionListener = (data: TranscriptionReadyEventData) => void;
 export type TypingListener = (event: TypingEvent) => void;
 export type UserStatusListener = (event: UserStatusEvent) => void;
-export type ConversationStatsListener = (data: { conversationId: string; stats: any }) => void;
-export type OnlineStatsListener = (data: { conversationId: string; onlineUsers: any[]; updatedAt: Date }) => void;
-export type ReactionListener = (data: any) => void;
+export type ConversationStatsListener = (data: { conversationId: string; stats: Record<string, unknown> }) => void;
+export type OnlineStatsListener = (data: { conversationId: string; onlineUsers: readonly { userId: string; displayName?: string }[]; updatedAt: Date }) => void;
+export type ReactionListener = (data: { messageId: string; userId: string; emoji: string; conversationId: string }) => void;
 export type ConversationJoinedListener = (data: { conversationId: string; userId: string }) => void;
 export type ReadStatusListener = (data: { conversationId: string; participantId: string; type: 'read' | 'received'; updatedAt: Date; summary: { totalMembers: number; deliveredCount: number; readCount: number } }) => void;
 
@@ -112,7 +112,7 @@ export type GetMessageByIdCallback = (messageId: string) => Message | undefined;
 export interface TranslationCacheEntry {
   messageId: string;
   targetLanguage: string;
-  translation: any;
+  translation: { translatedContent: string; targetLanguage: string; model?: string };
 }
 
 /**
@@ -128,8 +128,8 @@ export interface TypingUserState {
  * Service event emitter
  */
 export interface ServiceEventEmitter {
-  on(event: string, listener: (...args: any[]) => void): UnsubscribeFn;
-  emit(event: string, ...args: any[]): void;
+  on(event: string, listener: (...args: unknown[]) => void): UnsubscribeFn;
+  emit(event: string, ...args: unknown[]): void;
   removeAllListeners(): void;
 }
 

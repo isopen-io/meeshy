@@ -5,6 +5,7 @@ import Foundation
 public protocol PostServiceProviding: Sendable {
     func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, mobileTranscription: MobileTranscriptionPayload?) async throws -> APIPost
+    func update(postId: String, content: String?, visibility: String?, moodEmoji: String?) async throws -> APIPost
     func delete(postId: String) async throws
     func like(postId: String) async throws
     func unlike(postId: String) async throws
@@ -18,6 +19,11 @@ public protocol PostServiceProviding: Sendable {
     func requestTranslation(postId: String, targetLanguage: String) async throws
     func pinPost(postId: String) async throws
     func unpinPost(postId: String) async throws
+    func viewPost(postId: String, duration: Int?) async throws
+    func getPostViews(postId: String, limit: Int, offset: Int) async throws -> PostViewersResponse
+    func getUserPosts(userId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    func getCommentReplies(postId: String, commentId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
+    func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
 }
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {
@@ -134,5 +140,59 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         case .post:
             return try await create(content: content, type: "POST", visibility: visibility)
         }
+    }
+
+    // MARK: - Update Post
+
+    public func update(postId: String, content: String? = nil, visibility: String? = nil, moodEmoji: String? = nil) async throws -> APIPost {
+        let body = UpdatePostRequest(content: content, visibility: visibility, moodEmoji: moodEmoji)
+        let response: APIResponse<APIPost> = try await api.put(endpoint: "/posts/\(postId)", body: body)
+        return response.data
+    }
+
+    // MARK: - View Tracking
+
+    public func viewPost(postId: String, duration: Int? = nil) async throws {
+        if let duration {
+            let body = ["duration": duration]
+            let bodyData = try JSONSerialization.data(withJSONObject: body)
+            let _: APIResponse<[String: Bool]> = try await api.request(
+                endpoint: "/posts/\(postId)/view",
+                method: "POST",
+                body: bodyData
+            )
+        } else {
+            let _: APIResponse<[String: Bool]> = try await api.request(
+                endpoint: "/posts/\(postId)/view",
+                method: "POST"
+            )
+        }
+    }
+
+    public func getPostViews(postId: String, limit: Int = 50, offset: Int = 0) async throws -> PostViewersResponse {
+        let response: APIResponse<PostViewersResponse> = try await api.request(
+            endpoint: "/posts/\(postId)/views",
+            queryItems: [
+                URLQueryItem(name: "limit", value: "\(limit)"),
+                URLQueryItem(name: "offset", value: "\(offset)")
+            ]
+        )
+        return response.data
+    }
+
+    // MARK: - Feed Variants
+
+    public func getUserPosts(userId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
+        try await api.paginatedRequest(endpoint: "/posts/user/\(userId)", cursor: cursor, limit: limit)
+    }
+
+    public func getCommunityPosts(communityId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
+        try await api.paginatedRequest(endpoint: "/posts/community/\(communityId)", cursor: cursor, limit: limit)
+    }
+
+    // MARK: - Comment Replies
+
+    public func getCommentReplies(postId: String, commentId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPostComment]> {
+        try await api.paginatedRequest(endpoint: "/posts/\(postId)/comments/\(commentId)/replies", cursor: cursor, limit: limit)
     }
 }

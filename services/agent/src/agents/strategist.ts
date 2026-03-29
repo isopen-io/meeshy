@@ -16,24 +16,48 @@ CONTEXTE DE LA CONVERSATION:
 - Description: {conversationDescription}
 {agentInstructions}
 
+SUJET ACTUEL DE LA CONVERSATION:
+{currentTopic}
+
+DONNEES D'ENGAGEMENT (interventions les plus appreciees):
+{engagementData}
+
+===== STRATEGIE D'INTERVENTION (PRIORITES) =====
+
+REGLE FONDAMENTALE — REAGIR D'ABORD, CREER ENSUITE:
+1. PRIORITE 1 — REPONDRE: Si des messages recents de VRAIS utilisateurs n'ont pas recu de reponse, reponds-y. Utilise replyToMessageId OBLIGATOIREMENT.
+2. PRIORITE 2 — REAGIR: Mets des reactions (emojis) sur des messages interessants non encore reagis par les agents.
+3. PRIORITE 3 — RELANCER: SEULEMENT si la conversation est morte depuis 30+ min sans message, tu peux lancer un NOUVEAU sujet.
+   - Ce nouveau sujet doit etre LIE au sujet actuel de la conversation ou aux interets des participants.
+   - NE lance JAMAIS un sujet hors-contexte (ex: parler d'agriculture dans un debat sur la tech).
+
+CHAQUE intervention "message" DOIT:
+- Avoir un replyToMessageId (sauf si la conversation est morte depuis 30+ min)
+- Etre pertinente par rapport au sujet EN COURS dans la conversation
+- Apporter une valeur ajoutee (opinion, question, experience, information)
+- NE PAS repeter ou paraphraser ce qui a deja ete dit
+
 DECIDE:
 1. La conversation a-t-elle besoin d'activite ? (oui/non + raison)
 2. Si oui, combien d'interventions ? (entre {minResponses} et {maxResponses})
 3. Pour chaque intervention, specifie :
    - type: "message" ou "reaction"
-   - Si message: asUserId, topic (sujet a aborder), replyToMessageId optionnel, mentionUsernames (liste @username)
+   - Si message: asUserId, topic (sujet a aborder), replyToMessageId (OBLIGATOIRE sauf conversation morte), mentionUsernames (liste @username)
    - Si reaction: asUserId, targetMessageId, emoji
    - delaySeconds: delai relatif pour echelonner (messages: 30-180s, reactions: 5-30s)
 4. Les interventions doivent etre NATURELLES et VARIEES
 5. Ne fais PAS intervenir le meme utilisateur plus de 2 fois
 6. Les reactions doivent utiliser des emojis courants et pertinents au message cible
-7. Choisis les utilisateurs dont le profil colle au sujet de conversation
+7. Choisis les utilisateurs dont le profil et les sujets d'expertise correspondent au debat EN COURS
 8. Pour chaque intervention "message", indique "needsWebSearch": true/false
    - true si le sujet requiert des informations actuelles ou factuelles
    - false pour conversation sociale, opinions, sujets generaux
 
 HISTORIQUE DES INTERVENTIONS RECENTES (NE PAS REPETER):
 {agentHistory}
+
+SUJETS RECEMMENT ABORDES PAR LES AGENTS (INTERDITS - trouver un angle COMPLETEMENT different):
+{recentTopicCategories}
 
 REGLES ANTI-REPETITION:
 - Ne propose JAMAIS un sujet, une idee ou une information deja aborde dans les messages recents ou l'historique des interventions.
@@ -42,6 +66,7 @@ REGLES ANTI-REPETITION:
 - Si aucun sujet frais ou angle d'approche nouveau n'est disponible, retourne shouldIntervene: false.
 - Favorise les reactions aux messages recents plutot que de nouveaux messages s'il n'y a rien de nouveau a apporter au debat.
 - Maximum 1 intervention par utilisateur si la conversation est peu active.
+- Les sujets listes dans "SUJETS RECEMMENT ABORDES" sont STRICTEMENT INTERDITS. Choisis un sujet dans un DOMAINE COMPLETEMENT DIFFERENT.
 
 BUDGET QUOTIDIEN:
 - Il reste {budgetRemaining} messages autorise(s) aujourd'hui pour cette conversation
@@ -56,6 +81,7 @@ ROTATION UTILISATEURS:
 - Si un message recent est une reponse a un message d'un utilisateur inactif: il DOIT reagir
 - INTERDIT de faire intervenir {todayActiveUserNames} s'il reste des utilisateurs qui n'ont PAS encore parle
 - VARIE les utilisateurs: ne choisis PAS toujours le meme. Chaque cycle DOIT utiliser un utilisateur DIFFERENT du precedent
+- DERNIER UTILISATEUR AGENT: {lastAgentUserId}. Il est INTERDIT de le reutiliser s'il existe d'autres utilisateurs disponibles
 
 UTILISATEURS AYANT DEJA PARLE AUJOURD'HUI: {todayActiveUserNames}
 
@@ -74,11 +100,13 @@ IMPORTANT:
 - Analyse semantique pure. Fonctionne en TOUTES langues.
 - Ne reponds PAS si l'activite est deja suffisante (score > 0.7)
 - Varie les types d'interventions (mix messages + reactions)
+- REPONDRE aux vrais utilisateurs > REAGIR > LANCER un nouveau sujet
 
 REPONSE JSON STRICTE (aucun texte autour):
 {
   "shouldIntervene": boolean,
   "reason": "string",
+  "currentConversationTopic": "string",
   "interventions": [
     {
       "type": "message",
@@ -150,29 +178,59 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     ? `INSTRUCTIONS SPECIFIQUES: ${state.agentInstructions}`
     : '';
 
+  const recentTopicsText = (state.recentTopicCategories ?? []).length > 0
+    ? state.recentTopicCategories.join(', ')
+    : 'Aucun sujet recent.';
+
+  const lastUserName = (() => {
+    if (!state.lastAgentUserId) return 'aucun';
+    const user = state.controlledUsers.find((u) => u.userId === state.lastAgentUserId);
+    return user ? `${user.displayName} (${user.userId})` : state.lastAgentUserId;
+  })();
+
+  // Extract current conversation topic from last 10 messages
+  const currentTopicMessages = recentMessages.slice(-10).map((m) => m.content).join(' ');
+  const currentTopicText = currentTopicMessages.length > 0
+    ? `Analyse les 10 derniers messages pour detecter le sujet actuel. Contenu: "${currentTopicMessages.slice(0, 500)}"`
+    : 'Aucun message recent — conversation potentiellement morte.';
+
+  // Format engagement data if available
+  const engagementText = (state.engagementData ?? []).length > 0
+    ? state.engagementData.map((e) => {
+        const user = state.controlledUsers.find((u) => u.userId === e.userId);
+        return `- ${user?.displayName ?? e.userId}: ${e.repliesReceived} reponses, ${e.reactionsReceived} reactions recues`;
+      }).join('\n')
+    : 'Pas encore de donnees d\'engagement.';
+
+  // Replace safe (config/numeric) placeholders FIRST, then user-content placeholders LAST
+  // to prevent template injection from user messages containing {placeholder} strings.
   return STRATEGIST_SYSTEM_PROMPT
-    .replace('{messages}', messagesText)
-    .replace('{inactiveUsers}', inactiveUsersText)
     .replace('{activityScore}', String(state.activityScore))
-    .replace('{participants}', participantsText)
-    .replace('{conversationTitle}', state.conversationTitle || 'Sans titre')
-    .replace('{conversationDescription}', state.conversationDescription || 'Aucune')
-    .replace('{agentInstructions}', instructionsText)
     .replace('{minResponses}', String(minResponses))
     .replace('{maxResponses}', String(maxResponses + effectiveMaxReactions))
-    .replace('{agentHistory}', historyText + bannedTopicsText)
     .replace(/\{budgetRemaining\}/g, String(state.budgetRemaining))
     .replace('{todayUsersActive}', String(state.todayUsersActive))
     .replace('{maxUsersToday}', String(state.maxUsersToday))
     .replace('{reactionBoostFactor}', String(state.reactionBoostFactor))
     .replace(/\{burstSize\}/g, String(state.burstSize))
+    .replace(/\{lastAgentUserId\}/g, lastUserName)
     .replace(/\{todayActiveUserNames\}/g, (() => {
       const activeSet = new Set(state.todayActiveUserIds ?? []);
       const activeNames = state.controlledUsers
         .filter((u) => activeSet.has(u.userId))
         .map((u) => u.displayName);
       return activeNames.length > 0 ? activeNames.join(', ') : 'aucun';
-    })());
+    })())
+    .replace('{conversationTitle}', state.conversationTitle || 'Sans titre')
+    .replace('{conversationDescription}', state.conversationDescription || 'Aucune')
+    .replace('{agentInstructions}', instructionsText)
+    .replace('{agentHistory}', historyText + bannedTopicsText)
+    .replace('{recentTopicCategories}', recentTopicsText)
+    .replace('{engagementData}', engagementText)
+    .replace('{inactiveUsers}', inactiveUsersText)
+    .replace('{participants}', participantsText)
+    .replace('{currentTopic}', currentTopicText)
+    .replace('{messages}', messagesText);
 }
 
 const TYPICAL_LENGTH_RANGES: Record<string, { min: number; max: number }> = {
@@ -427,8 +485,23 @@ export function createStrategistNode(llm: LlmProvider) {
         };
       }
 
-      const controlledUserIds = new Set(state.controlledUsers.map((u) => u.userId));
       const messageIds = new Set(state.messages.map((m) => m.id));
+
+      // CODE-LEVEL USER ROTATION: If the LLM picked the same user as last cycle
+      // and there are other available users, rewrite interventions to use different users (sequential cycling).
+      if (state.lastAgentUserId && state.controlledUsers.length > 1 && parsed.interventions) {
+        const otherUsers = shuffleArray(state.controlledUsers.filter((u) => u.userId !== state.lastAgentUserId));
+        if (otherUsers.length > 0) {
+          const messageInterventions = (parsed.interventions as Array<Record<string, unknown>>).filter(
+            (i) => i.type === 'message' && i.asUserId === state.lastAgentUserId,
+          );
+          for (let idx = 0; idx < messageInterventions.length; idx++) {
+            const replacement = otherUsers[idx % otherUsers.length];
+            console.log(`[Strategist] Rotating user: ${state.lastAgentUserId} → ${replacement.userId} (${replacement.displayName})`);
+            messageInterventions[idx].asUserId = replacement.userId;
+          }
+        }
+      }
 
       const dynamicMax = state.activityScore < 0.3
         ? maxResponses

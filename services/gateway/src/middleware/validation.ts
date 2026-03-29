@@ -74,10 +74,14 @@ export function createValidationMiddleware(schema: z.ZodType<any>) {
  * @param data - Event data to validate
  * @returns Validation result with parsed data or error
  */
+export type SocketValidationResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: string; details?: any[] };
+
 export function validateSocketEvent<T>(
   schema: z.ZodType<T>,
   data: unknown
-): { success: true; data: T } | { success: false; error: string; details?: any[] } {
+): SocketValidationResult<T> {
   try {
     const parsed = schema.parse(data);
     return { success: true, data: parsed };

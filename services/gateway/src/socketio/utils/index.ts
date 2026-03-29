@@ -16,3 +16,9 @@ export {
   type SocketUser,
   type ConnectedUserResult
 } from './socket-helpers';
+
+export {
+  resolveParticipant,
+  resolveParticipantFromMessage,
+  type ParticipantResolution
+} from './participant-resolver';

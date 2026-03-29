@@ -4,7 +4,6 @@
  */
 
 import { apiService } from '../api.service';
-import { cacheService } from './cache.service';
 import { transformersService } from './transformers.service';
 import type {
   Message,
@@ -109,9 +108,6 @@ export class MessagesService {
     if (!response.data?.data) {
       throw new Error('Erreur lors de l\'envoi du message');
     }
-
-    // Invalider le cache des messages
-    cacheService.invalidateMessagesCache(conversationId);
 
     return response.data.data;
   }

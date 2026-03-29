@@ -91,6 +91,7 @@ import { MultiLevelJobMappingCache } from './services/MultiLevelJobMappingCache'
 import { getCacheStore } from './services/CacheStore';
 import { BackgroundJobsManager } from './jobs';
 import { EmailService } from './services/EmailService';
+import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
 import { AuthenticationError, ValidationError, TranslationError } from './errors/custom-errors';
@@ -266,6 +267,7 @@ class MeeshyServer {
   private backgroundJobs: BackgroundJobsManager;
   private jobMappingCache: MultiLevelJobMappingCache;
   private tusCleanup: TusCleanupService;
+  private deliveryQueue: RedisDeliveryQueue;
   private agentClient: ZmqAgentClient | null = null;
 
   constructor() {
@@ -363,9 +365,12 @@ class MeeshyServer {
     // Initialiser le service de nettoyage automatique des appels
     this.callCleanupService = new CallCleanupService(this.prisma);
 
+    // Initialiser la delivery queue Redis
+    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore());
+
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();
-    this.backgroundJobs = new BackgroundJobsManager(this.prisma, emailService);
+    this.backgroundJobs = new BackgroundJobsManager(this.prisma, emailService, this.deliveryQueue);
 
     // Initialiser le service de nettoyage des uploads tus incomplets
     this.tusCleanup = new TusCleanupService();
@@ -737,6 +742,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // Expose NotificationService from SocketIOManager for use in routes
       const manager = this.socketIOHandler.getManager();
       if (manager) {
+        manager.setDeliveryQueue(this.deliveryQueue);
+        logger.info('[GWY] ✅ RedisDeliveryQueue injected into SocketIOManager');
+
         const notificationService = manager.getNotificationService();
         this.server.decorate('notificationService', notificationService);
         logger.info('[GWY] ✅ NotificationService exposed for routes');
@@ -1187,10 +1195,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         if (manager) {
           manager.setAgentClient(this.agentClient);
           this.agentClient.onResponse(async (response) => {
-            await manager.handleAgentResponse(response);
+            await manager.handleAgentResponse(response as Parameters<typeof manager.handleAgentResponse>[0]);
           });
           this.agentClient.onReaction(async (reaction) => {
-            await manager.handleAgentReaction(reaction);
+            await manager.handleAgentReaction(reaction as Parameters<typeof manager.handleAgentReaction>[0]);
           });
           this.agentClient.startListening().catch((err) => {
             logger.error('[GWY] Agent ZMQ listener error:', err);

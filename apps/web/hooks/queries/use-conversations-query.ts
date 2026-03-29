@@ -20,7 +20,7 @@ export function useConversationsQuery(options: UseConversationsQueryOptions = {}
 
   return useQuery({
     queryKey: queryKeys.conversations.list(filters),
-    queryFn: () => conversationsService.getConversations({ limit, offset, skipCache: true }),
+    queryFn: () => conversationsService.getConversations({ limit, offset }),
     // staleTime: Infinity (défini globalement dans QueryClient)
     enabled,
     select: (data) => data.conversations,
@@ -32,7 +32,7 @@ export function useConversationsWithPagination(options: UseConversationsQueryOpt
 
   return useQuery({
     queryKey: queryKeys.conversations.list(filters),
-    queryFn: () => conversationsService.getConversations({ limit, offset, skipCache: true }),
+    queryFn: () => conversationsService.getConversations({ limit, offset }),
     // staleTime: Infinity (défini globalement dans QueryClient)
     enabled,
   });
@@ -62,7 +62,6 @@ export function useInfiniteConversationsQuery(options: UseInfiniteConversationsO
       conversationsService.getConversations({
         limit,
         offset: pageParam,
-        skipCache: pageParam > 0, // Cache uniquement la première page
       }),
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {

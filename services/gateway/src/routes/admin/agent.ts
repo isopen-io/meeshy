@@ -4,13 +4,14 @@ import { listArchetypes, getArchetype } from '@meeshy/shared/agent/archetypes';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { logError } from '../../utils/logger';
 import { getCacheStore } from '../../services/CacheStore';
+import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../../utils/response';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 
 const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
 const validateObjectId = (id: string, name: string, reply: FastifyReply): boolean => {
   if (!OBJECT_ID_REGEX.test(id)) {
-    reply.status(400).send({ success: false, message: `${name} invalide` });
+    sendBadRequest(reply, `${name} invalide`);
     return false;
   }
   return true;
@@ -19,10 +20,12 @@ const validateObjectId = (id: string, name: string, reply: FastifyReply): boolea
 const requireAgentAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({ success: false, message: 'Authentification requise' });
+    sendError(reply, 401, 'Authentification requise');
+    return;
   }
   if (!['BIGBOSS', 'ADMIN'].includes(authContext.registeredUser.role)) {
-    return reply.status(403).send({ success: false, message: 'Permission insuffisante' });
+    sendError(reply, 403, 'Permission insuffisante');
+    return;
   }
 };
 

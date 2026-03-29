@@ -57,8 +57,57 @@ export {
   useInvalidateOnReconnect,
 } from './use-socket-cache-sync';
 
+// Conversation preferences
+export {
+  useConversationPreferencesQuery,
+  useCategoriesQuery,
+  usePreferencesMap,
+  useTogglePinMutation,
+  useToggleMuteMutation,
+  useToggleArchiveMutation,
+  useSetReactionMutation,
+} from './use-conversation-preferences-query';
+
 // Reactions
 export { useReactionsQuery } from './use-reactions-query';
 
 // Notifications manager (drop-in replacement)
 export { useNotificationsManagerRQ } from './use-notifications-manager-rq';
+
+// User preferences (typed wrappers around usePreferences)
+export {
+  useNotificationPrefs,
+  usePrivacyPrefs,
+  useAudioPrefs,
+  useVideoPrefs,
+  useMessagePrefs,
+  useDocumentPrefs,
+  useApplicationPrefs,
+} from './use-preferences-queries';
+
+// Community queries
+export {
+  useCommunitiesQuery,
+  useCommunityQuery,
+  useCommunitySearchQuery,
+  useCommunityConversationsQuery,
+  useCommunityMembersQuery,
+  useCheckIdentifierQuery,
+  useCreateCommunityMutation,
+  useUpdateCommunityMutation,
+  useDeleteCommunityMutation,
+  useJoinCommunityMutation,
+  useLeaveCommunityMutation,
+  useAddMemberMutation,
+  useRemoveMemberMutation,
+  useUpdateMemberRoleMutation,
+} from './use-communities-query';
+
+// Community preferences queries
+export {
+  useCommunityPreferencesQuery,
+  useCommunityPreferencesListQuery,
+  useUpdateCommunityPreferencesMutation,
+  useDeleteCommunityPreferencesMutation,
+  useReorderCommunitiesMutation,
+} from './use-community-preferences-query';

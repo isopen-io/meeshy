@@ -244,6 +244,9 @@ struct ConversationListView: View {
                     onSelect(conversation)
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Ouvre la conversation")
             .onDrag {
                 draggingConversation = conversation
                 HapticFeedback.medium()

@@ -32,7 +32,6 @@ export interface ParticipantsFilters {
 export interface GetConversationsOptions {
   limit?: number;
   offset?: number;
-  skipCache?: boolean;
   type?: ConversationType;
   withUserId?: string;
   before?: string;
@@ -92,6 +91,10 @@ export interface ConversationParticipantResponse {
   canSendMessages: boolean;
   canSendFiles: boolean;
   canSendImages: boolean;
+  canSendVideos: boolean;
+  canSendAudios: boolean;
+  canSendLocations: boolean;
+  canSendLinks: boolean;
   createdAt: string;
   updatedAt: string;
   permissions: {

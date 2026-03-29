@@ -7,18 +7,22 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CleanupExpiredTokens } from './cleanup-expired-tokens';
 import { UnlockAccountsJob } from './unlock-accounts';
 import { NotificationDigestJob } from './notification-digest';
+import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
 import { EmailService } from '../services/EmailService';
+import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 
 export class BackgroundJobsManager {
   private cleanupTokensJob: CleanupExpiredTokens;
   private unlockAccountsJob: UnlockAccountsJob;
   private notificationDigestJob: NotificationDigestJob;
+  private deliveryQueueCleanupJob: DeliveryQueueCleanupJob;
   private isRunning: boolean = false;
 
-  constructor(private prisma: PrismaClient, emailService: EmailService) {
+  constructor(private prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
     this.cleanupTokensJob = new CleanupExpiredTokens(prisma);
     this.unlockAccountsJob = new UnlockAccountsJob(prisma);
     this.notificationDigestJob = new NotificationDigestJob(prisma, emailService);
+    this.deliveryQueueCleanupJob = new DeliveryQueueCleanupJob(deliveryQueue ?? new RedisDeliveryQueue({ getNativeClient: () => null } as any));
   }
 
   /**
@@ -35,6 +39,7 @@ export class BackgroundJobsManager {
     this.cleanupTokensJob.start();
     this.unlockAccountsJob.start();
     this.notificationDigestJob.start();
+    this.deliveryQueueCleanupJob.start();
 
     this.isRunning = true;
     console.log('[BackgroundJobs] ✅ All background jobs started successfully');
@@ -54,6 +59,7 @@ export class BackgroundJobsManager {
     this.cleanupTokensJob.stop();
     this.unlockAccountsJob.stop();
     this.notificationDigestJob.stop();
+    this.deliveryQueueCleanupJob.stop();
 
     this.isRunning = false;
     console.log('[BackgroundJobs] ✅ All background jobs stopped successfully');
@@ -68,6 +74,7 @@ export class BackgroundJobsManager {
     await this.cleanupTokensJob.runNow();
     await this.unlockAccountsJob.runNow();
     await this.notificationDigestJob.runNow();
+    await this.deliveryQueueCleanupJob.runNow();
 
     console.log('[BackgroundJobs] ✅ All jobs completed');
   }
@@ -80,6 +87,7 @@ export class BackgroundJobsManager {
       cleanupTokens: this.cleanupTokensJob,
       unlockAccounts: this.unlockAccountsJob,
       notificationDigest: this.notificationDigestJob,
+      deliveryQueueCleanup: this.deliveryQueueCleanupJob,
     };
   }
 
