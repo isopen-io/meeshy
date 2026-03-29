@@ -21,6 +21,10 @@ final class WebRTCService: @unchecked Sendable {
     private var hasRemoteDescription = false
     private(set) var connectionState: PeerConnectionState = .new
 
+    private(set) var currentBitrate: Int = QualityThresholds.defaultBitrate
+    private var qualityMonitorTimer: Timer?
+    private var lastStats: CallStats?
+
     init(client: (any WebRTCClientProviding)? = nil) {
         self.client = client ?? P2PWebRTCClient()
         self.client.delegate = self
@@ -121,36 +125,65 @@ final class WebRTCService: @unchecked Sendable {
         }
     }
 
-    // MARK: - Audio Session
+    // MARK: - Quality Monitoring
 
-    func configureAudioSession(speaker: Bool) {
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: speaker ? [.defaultToSpeaker] : [])
-            try session.setActive(true)
-            Logger.webrtc.info("Audio session configured - speaker: \(speaker)")
-        } catch {
-            Logger.webrtc.error("Audio session configuration failed: \(error.localizedDescription)")
+    func startQualityMonitor() {
+        stopQualityMonitor()
+        qualityMonitorTimer = Timer.scheduledTimer(
+            withTimeInterval: QualityThresholds.statsIntervalSeconds,
+            repeats: true
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { [weak self] in
+                guard let self else { return }
+                guard let stats = await self.client.getStats() else { return }
+                self.lastStats = stats
+                self.adjustBitrate(basedOn: stats)
+            }
         }
+        Logger.webrtc.info("Quality monitor started (interval: \(QualityThresholds.statsIntervalSeconds)s)")
     }
 
-    func deactivateAudioSession() {
-        do {
-            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            Logger.webrtc.info("Audio session deactivated")
-        } catch {
-            Logger.webrtc.error("Audio session deactivation failed: \(error.localizedDescription)")
+    func stopQualityMonitor() {
+        qualityMonitorTimer?.invalidate()
+        qualityMonitorTimer = nil
+    }
+
+    private func adjustBitrate(basedOn stats: CallStats) {
+        let rtt = stats.roundTripTimeMs
+        let loss = Double(stats.packetsLost)
+
+        let newBitrate: Int
+        if rtt <= QualityThresholds.excellentRTT && loss <= QualityThresholds.excellentPacketLoss {
+            newBitrate = QualityThresholds.maxBitrate
+        } else if rtt <= QualityThresholds.goodRTT && loss <= QualityThresholds.goodPacketLoss {
+            newBitrate = QualityThresholds.defaultBitrate
+        } else {
+            newBitrate = QualityThresholds.minBitrate
         }
+
+        guard newBitrate != currentBitrate else { return }
+        currentBitrate = newBitrate
+        Logger.webrtc.info("Adaptive bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(loss))")
+    }
+
+    // MARK: - ICE Restart
+
+    func performICERestart() async -> SessionDescription? {
+        Logger.webrtc.info("Performing ICE restart")
+        hasRemoteDescription = false
+        iceCandidateBuffer.removeAll()
+        return await createOffer()
     }
 
     // MARK: - Cleanup
 
     func close() {
+        stopQualityMonitor()
         client.disconnect()
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false
         connectionState = .closed
-        deactivateAudioSession()
         Logger.webrtc.info("WebRTC connection closed")
     }
 

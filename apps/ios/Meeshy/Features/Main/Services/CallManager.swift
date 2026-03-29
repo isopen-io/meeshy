@@ -12,6 +12,7 @@ enum CallState: Equatable {
     case ringing(isOutgoing: Bool)
     case connecting
     case connected
+    case reconnecting(attempt: Int)
     case ended(reason: CallEndReason)
 
     var isActive: Bool {
@@ -20,14 +21,6 @@ enum CallState: Equatable {
         default: return true
         }
     }
-}
-
-enum CallEndReason: Equatable {
-    case local
-    case remote
-    case rejected
-    case missed
-    case failed(String)
 }
 
 // MARK: - Call Manager
@@ -47,12 +40,16 @@ final class CallManager: ObservableObject {
     @Published private(set) var callDuration: TimeInterval = 0
     @Published private(set) var currentCallId: String?
     @Published private(set) var connectionQuality: PeerConnectionState = .new
+    @Published var displayMode: CallDisplayMode = .fullScreen
 
     // MARK: - Internal
 
     private let webRTCService: WebRTCService
     private var durationTimer: Timer?
+    private var heartbeatTimer: Timer?
     private var callStartDate: Date?
+    private var reconnectAttempt = 0
+    private var participantJoinedCancellable: AnyCancellable?
     private var cancellables = Set<AnyCancellable>()
 
     // CallKit
@@ -102,7 +99,6 @@ final class CallManager: ObservableObject {
         callState = .ringing(isOutgoing: true)
 
         webRTCService.configure(isVideo: isVideo)
-        webRTCService.configureAudioSession(speaker: isSpeaker)
 
         let uuid = UUID()
         activeCallUUID = uuid
@@ -121,14 +117,10 @@ final class CallManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             await webRTCService.startLocalMedia(isVideo: isVideo)
-            guard let offer = await webRTCService.createOffer() else {
-                endCallInternal(reason: .failed("Impossible de creer l'offre"))
-                return
-            }
-            emitCallOffer(callId: callId, toUserId: userId, isVideo: isVideo, sdp: offer)
-            Logger.calls.info("Outgoing call started: \(callId) to \(username)")
+            Logger.calls.info("Outgoing call initiated: \(callId) to \(username), waiting for participant joined")
         }
 
+        listenForParticipantJoined(callId: callId, toUserId: userId, isVideo: isVideo)
         HapticFeedback.medium()
     }
 
@@ -191,8 +183,6 @@ final class CallManager: ObservableObject {
                 if let error { Logger.calls.error("CallKit answer failed: \(error.localizedDescription)") }
             }
         }
-
-        webRTCService.configureAudioSession(speaker: isSpeaker)
 
         Task { [weak self] in
             guard let self, let callId = currentCallId, let userId = remoteUserId else { return }
@@ -323,6 +313,7 @@ final class CallManager: ObservableObject {
         callState = .connected
         callStartDate = Date()
         callDuration = 0
+        reconnectAttempt = 0
         durationTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, let start = self.callStartDate else { return }
@@ -330,22 +321,53 @@ final class CallManager: ObservableObject {
             }
         }
 
+        startHeartbeat()
+        webRTCService.startQualityMonitor()
+
         if let uuid = activeCallUUID {
             callProvider.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
     }
 
+    private func startHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = Timer.scheduledTimer(
+            withTimeInterval: QualityThresholds.heartbeatIntervalSeconds,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, let callId = self.currentCallId else { return }
+                MessageSocketManager.shared.emitCallSignal(
+                    callId: callId,
+                    type: "heartbeat",
+                    payload: [:]
+                )
+                Logger.calls.debug("Heartbeat sent for call: \(callId)")
+            }
+        }
+        Logger.calls.info("Heartbeat timer started (\(QualityThresholds.heartbeatIntervalSeconds)s interval)")
+    }
+
+    private func stopHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+    }
+
     private func endCallInternal(reason: CallEndReason) {
         durationTimer?.invalidate()
         durationTimer = nil
+        stopHeartbeat()
+        participantJoinedCancellable?.cancel()
+        participantJoinedCancellable = nil
         callStartDate = nil
+        reconnectAttempt = 0
         webRTCService.close()
         callState = .ended(reason: reason)
         connectionQuality = .new
         activeCallUUID = nil
 
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(3))
             guard let self else { return }
             if case .ended = self.callState {
                 self.callState = .idle
@@ -408,6 +430,30 @@ final class CallManager: ObservableObject {
                 self?.handleRemoteEnd(callId: event.callId)
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Participant Joined (Outgoing Call)
+
+    private func listenForParticipantJoined(callId: String, toUserId: String, isVideo: Bool) {
+        participantJoinedCancellable?.cancel()
+        participantJoinedCancellable = MessageSocketManager.shared.callParticipantJoined
+            .receive(on: DispatchQueue.main)
+            .filter { $0.callId == callId }
+            .first()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Logger.calls.info("Participant joined call \(callId), creating offer")
+                self.callState = .connecting
+                Task { [weak self] in
+                    guard let self else { return }
+                    guard let offer = await self.webRTCService.createOffer() else {
+                        self.endCallInternal(reason: .failed("Failed to create offer"))
+                        return
+                    }
+                    self.emitCallOffer(callId: callId, toUserId: toUserId, isVideo: isVideo, sdp: offer)
+                    Logger.calls.info("SDP offer sent for call: \(callId)")
+                }
+            }
     }
 
     // MARK: - Socket Emit Helpers
@@ -486,9 +532,39 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCServiceDidDisconnect(_ service: WebRTCService) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if case .connected = self.callState {
-                Logger.calls.warning("WebRTC disconnected during active call")
+            switch self.callState {
+            case .connected, .reconnecting:
+                self.attemptReconnection()
+            default:
+                Logger.calls.info("WebRTC disconnected in state: \(String(describing: self.callState))")
             }
+        }
+    }
+
+    @MainActor
+    private func attemptReconnection() {
+        reconnectAttempt += 1
+        guard reconnectAttempt <= QualityThresholds.maxReconnectAttempts else {
+            Logger.calls.error("Max reconnect attempts (\(QualityThresholds.maxReconnectAttempts)) reached — ending call")
+            if let uuid = activeCallUUID {
+                callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
+            }
+            endCallInternal(reason: .connectionLost)
+            return
+        }
+
+        callState = .reconnecting(attempt: reconnectAttempt)
+        Logger.calls.warning("Attempting ICE restart (\(self.reconnectAttempt)/\(QualityThresholds.maxReconnectAttempts))")
+
+        Task { [weak self] in
+            guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
+            guard let offer = await self.webRTCService.performICERestart() else {
+                Logger.calls.error("ICE restart failed to produce offer")
+                self.attemptReconnection()
+                return
+            }
+            self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
+            Logger.calls.info("ICE restart offer sent for call: \(callId)")
         }
     }
 }

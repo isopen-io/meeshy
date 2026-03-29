@@ -71,14 +71,18 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
         guard peerConnection != nil else { throw WebRTCError.noPeerConnection }
 
         let audioConstraints = RTCMediaConstraints(
-            mandatoryConstraints: nil,
+            mandatoryConstraints: [
+                "echoCancellation": "true",
+                "noiseSuppression": "true",
+                "autoGainControl": "true"
+            ],
             optionalConstraints: nil
         )
         let audioSource = factory.audioSource(with: audioConstraints)
         let audioTrack = factory.audioTrack(with: audioSource, trackId: "audio0")
         audioTrack.isEnabled = true
         localAudioTrack = audioTrack
-        peerConnection?.add(audioTrack, streamIds: ["stream0"])
+        peerConnection?.add(audioTrack, streamIds: ["meeshy-stream-0"])
 
         guard type == .audioVideo else {
             Logger.webrtc.info("Local audio track started")
@@ -89,7 +93,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
         let videoTrack = factory.videoTrack(with: videoSource, trackId: "video0")
         videoTrack.isEnabled = true
         localVideoTrack_ = videoTrack
-        peerConnection?.add(videoTrack, streamIds: ["stream0"])
+        peerConnection?.add(videoTrack, streamIds: ["meeshy-stream-0"])
 
         let capturer = RTCCameraVideoCapturer(delegate: videoSource)
         videoCapturer = capturer
@@ -135,9 +139,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
             }
         }
 
-        try await setLocalDescription(sdp, on: pc)
-        Logger.webrtc.info("SDP offer created and set as local description")
-        return SessionDescription(type: .offer, sdp: sdp.sdp)
+        let mungedSDP = Self.mungeOpusSDP(sdp.sdp)
+        let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
+        try await setLocalDescription(mungedDescription, on: pc)
+        Logger.webrtc.info("SDP offer created and set as local description (Opus munged)")
+        return SessionDescription(type: .offer, sdp: mungedSDP)
     }
 
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription {
@@ -168,9 +174,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
             }
         }
 
-        try await setLocalDescription(sdp, on: pc)
-        Logger.webrtc.info("SDP answer created and set as local description")
-        return SessionDescription(type: .answer, sdp: sdp.sdp)
+        let mungedSDP = Self.mungeOpusSDP(sdp.sdp)
+        let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
+        try await setLocalDescription(mungedDescription, on: pc)
+        Logger.webrtc.info("SDP answer created and set as local description (Opus munged)")
+        return SessionDescription(type: .answer, sdp: mungedSDP)
     }
 
     func setRemoteAnswer(_ answer: SessionDescription) async throws {
@@ -281,6 +289,53 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
                 let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
                 return d.width <= 1280 && d.height <= 720
             }) ?? RTCCameraVideoCapturer.supportedFormats(for: device).last
+    }
+
+    static func mungeOpusSDP(_ sdp: String) -> String {
+        let opusParams = [
+            "maxaveragebitrate=128000",
+            "stereo=1",
+            "useinbandfec=1",
+            "usedtx=0",
+            "maxplaybackrate=48000"
+        ]
+        let paramString = opusParams.joined(separator: ";")
+
+        var lines = sdp.components(separatedBy: "\r\n")
+        var opusPayloadType: String?
+
+        for line in lines where line.hasPrefix("a=rtpmap:") && line.contains("opus/48000") {
+            let parts = line.dropFirst("a=rtpmap:".count).split(separator: " ", maxSplits: 1)
+            if let pt = parts.first {
+                opusPayloadType = String(pt)
+            }
+        }
+
+        guard let payloadType = opusPayloadType else { return sdp }
+
+        let fmtpPrefix = "a=fmtp:\(payloadType) "
+        var found = false
+        lines = lines.map { line in
+            guard line.hasPrefix(fmtpPrefix) else { return line }
+            found = true
+            let existing = line.dropFirst(fmtpPrefix.count)
+            var params = existing.split(separator: ";").map(String.init)
+            let newKeys = Set(opusParams.map { $0.split(separator: "=", maxSplits: 1).first.map(String.init) ?? "" })
+            params.removeAll { param in
+                let key = param.split(separator: "=", maxSplits: 1).first.map(String.init) ?? ""
+                return newKeys.contains(key)
+            }
+            params.append(contentsOf: opusParams)
+            return fmtpPrefix + params.joined(separator: ";")
+        }
+
+        if !found {
+            if let rtpmapIndex = lines.firstIndex(where: { $0.hasPrefix("a=rtpmap:\(payloadType) ") }) {
+                lines.insert(fmtpPrefix + paramString, at: rtpmapIndex + 1)
+            }
+        }
+
+        return lines.joined(separator: "\r\n")
     }
 
     private func targetFrameRate(for format: AVCaptureDevice.Format) -> Int {
