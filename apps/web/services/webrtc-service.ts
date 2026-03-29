@@ -30,26 +30,60 @@ const DEFAULT_MEDIA_CONSTRAINTS: MediaStreamConstraints = {
   },
 };
 
+import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
+
 export interface WebRTCServiceConfig {
   iceServers?: RTCIceServer[];
   onIceCandidate?: (candidate: RTCIceCandidate) => void;
   onTrack?: (event: RTCTrackEvent) => void;
   onConnectionStateChange?: (state: RTCPeerConnectionState) => void;
   onIceConnectionStateChange?: (state: RTCIceConnectionState) => void;
+  onConnectionQualityChange?: (quality: ConnectionQualityLevel) => void;
   onError?: (error: Error) => void;
 }
+
+const QUALITY_MONITOR_INTERVAL_MS = 3_000;
 
 export class WebRTCService {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private config: WebRTCServiceConfig;
   private participantId: string | null = null;
+  private qualityMonitorInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: WebRTCServiceConfig = {}) {
     this.config = {
       iceServers: DEFAULT_ICE_SERVERS,
       ...config,
     };
+  }
+
+  /**
+   * Munge SDP to set Opus codec parameters for high-quality audio
+   * (maxaveragebitrate=128000, stereo=1, useinbandfec=1, usedtx=0, maxplaybackrate=48000)
+   */
+  private mungeOpusSdp(sdp: string): string {
+    return sdp.replace(
+      /a=fmtp:(\d+) (.+)/g,
+      (_match, payloadType, existingParams) => {
+        const opusParams = new Map<string, string>();
+        existingParams.split(';').forEach((param: string) => {
+          const [key, value] = param.trim().split('=');
+          if (key && value) opusParams.set(key, value);
+        });
+
+        opusParams.set('maxaveragebitrate', '128000');
+        opusParams.set('stereo', '1');
+        opusParams.set('useinbandfec', '1');
+        opusParams.set('usedtx', '0');
+        opusParams.set('maxplaybackrate', '48000');
+
+        const params = Array.from(opusParams.entries())
+          .map(([k, v]) => `${k}=${v}`)
+          .join(';');
+        return `a=fmtp:${payloadType} ${params}`;
+      }
+    );
   }
 
   /**
@@ -263,6 +297,10 @@ export class WebRTCService {
         offerToReceiveVideo: true,
       });
 
+      if (offer.sdp) {
+        offer.sdp = this.mungeOpusSdp(offer.sdp);
+      }
+
       await this.peerConnection.setLocalDescription(offer);
 
       logger.info('[WebRTCService] Offer created and set as local description', {
@@ -294,6 +332,10 @@ export class WebRTCService {
 
       // Create answer
       const answer = await this.peerConnection.createAnswer();
+
+      if (answer.sdp) {
+        answer.sdp = this.mungeOpusSdp(answer.sdp);
+      }
 
       // Set local description (answer)
       await this.peerConnection.setLocalDescription(answer);
@@ -431,6 +473,10 @@ export class WebRTCService {
       // Create new offer with iceRestart option
       const offer = await this.peerConnection.createOffer({ iceRestart: true });
 
+      if (offer.sdp) {
+        offer.sdp = this.mungeOpusSdp(offer.sdp);
+      }
+
       // Set as local description
       await this.peerConnection.setLocalDescription(offer);
 
@@ -481,12 +527,103 @@ export class WebRTCService {
   }
 
   /**
+   * Start quality monitor that reads WebRTC stats every 3s
+   * and reports connection quality level via callback
+   */
+  startQualityMonitor(): void {
+    this.stopQualityMonitor();
+
+    if (!this.peerConnection) {
+      logger.warn('[WebRTCService] Cannot start quality monitor: no peer connection');
+      return;
+    }
+
+    logger.info('[WebRTCService] Starting quality monitor', {
+      participantId: this.participantId,
+    });
+
+    let previousBytesReceived = 0;
+    let previousTimestamp = 0;
+
+    this.qualityMonitorInterval = setInterval(async () => {
+      if (!this.peerConnection) {
+        this.stopQualityMonitor();
+        return;
+      }
+
+      try {
+        const stats = await this.peerConnection.getStats();
+        let packetLoss = 0;
+        let rtt = 0;
+        let currentBytesReceived = 0;
+        let currentTimestamp = 0;
+
+        stats.forEach((report) => {
+          if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+            const totalPackets = (report.packetsReceived ?? 0) + (report.packetsLost ?? 0);
+            packetLoss = totalPackets > 0 ? ((report.packetsLost ?? 0) / totalPackets) * 100 : 0;
+            currentBytesReceived = report.bytesReceived ?? 0;
+            currentTimestamp = report.timestamp;
+          }
+          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+            rtt = report.currentRoundTripTime ? report.currentRoundTripTime * 1000 : 0;
+          }
+        });
+
+        const bitrateKbps = previousTimestamp > 0 && currentTimestamp > previousTimestamp
+          ? ((currentBytesReceived - previousBytesReceived) * 8) / (currentTimestamp - previousTimestamp)
+          : 0;
+
+        previousBytesReceived = currentBytesReceived;
+        previousTimestamp = currentTimestamp;
+
+        const quality = this.computeQualityLevel(packetLoss, rtt, bitrateKbps);
+        this.config.onConnectionQualityChange?.(quality);
+
+        logger.debug('[WebRTCService] Quality stats', {
+          participantId: this.participantId,
+          packetLoss: packetLoss.toFixed(1),
+          rtt: rtt.toFixed(0),
+          bitrateKbps: bitrateKbps.toFixed(0),
+          quality,
+        });
+      } catch (error) {
+        logger.warn('[WebRTCService] Failed to get stats', { error });
+      }
+    }, QUALITY_MONITOR_INTERVAL_MS);
+  }
+
+  /**
+   * Stop quality monitor
+   */
+  stopQualityMonitor(): void {
+    if (this.qualityMonitorInterval) {
+      clearInterval(this.qualityMonitorInterval);
+      this.qualityMonitorInterval = null;
+    }
+  }
+
+  private computeQualityLevel(
+    packetLoss: number,
+    rtt: number,
+    _bitrateKbps: number
+  ): ConnectionQualityLevel {
+    if (packetLoss < 1 && rtt < 100) return 'excellent';
+    if (packetLoss < 3 && rtt < 200) return 'good';
+    if (packetLoss < 8 && rtt < 400) return 'fair';
+    return 'poor';
+  }
+
+  /**
    * Close connection and cleanup
    */
   close(): void {
     logger.debug('[WebRTCService] Closing connection', {
       participantId: this.participantId,
     });
+
+    // Stop quality monitor
+    this.stopQualityMonitor();
 
     // Stop all local tracks
     if (this.localStream) {
