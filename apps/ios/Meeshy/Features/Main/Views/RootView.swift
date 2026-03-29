@@ -668,7 +668,7 @@ struct RootView: View {
                             )
                         )
 
-                    Image(systemName: showMenu ? "person.3.fill" : "gearshape.fill")
+                    Image(systemName: showMenu ? "bubble.left.and.bubble.right.fill" : "gearshape.fill")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
 
