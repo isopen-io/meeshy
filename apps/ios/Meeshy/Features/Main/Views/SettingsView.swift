@@ -102,6 +102,7 @@ struct SettingsView: View {
             .frame(height: 0)
 
             VStack(spacing: 20) {
+                profileCard
                 accountSection
                 appearanceSection
                 voiceProfileSection
@@ -124,21 +125,45 @@ struct SettingsView: View {
 
     // MARK: - Account Section
 
+    private var profileCard: some View {
+        Button {
+            HapticFeedback.light()
+            router.push(.profile)
+        } label: {
+            HStack(spacing: 14) {
+                MeeshyAvatar(
+                    name: authManager.currentUser?.displayName ?? "?",
+                    context: .conversationList,
+                    avatarURL: authManager.currentUser?.avatar,
+                    presenceState: .online
+                )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(authManager.currentUser?.displayName ?? "Mon profil")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                    Text("@\(authManager.currentUser?.username ?? "")")
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.textSecondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(theme.inputBackground)
+            )
+        }
+        .accessibilityLabel("Mon profil")
+    }
+
     private var accountSection: some View {
         settingsSection(title: "Compte", icon: "person.circle.fill", color: "9B59B6") {
-            Button {
-                HapticFeedback.light()
-                router.push(.profile)
-            } label: {
-                settingsRow(icon: "person.fill", title: "Profil", color: "9B59B6") {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
-                }
-            }
-            .accessibilityLabel("Profil")
-            .accessibilityHint("Ouvre les reglages du profil")
-
             Button {
                 HapticFeedback.light()
                 showPrivacySettings = true
