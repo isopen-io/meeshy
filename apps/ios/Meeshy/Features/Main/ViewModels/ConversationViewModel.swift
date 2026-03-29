@@ -313,6 +313,9 @@ class ConversationViewModel: ObservableObject {
     private let reactionService: ReactionServiceProviding
     private let reportService: ReportServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
+    private let mentionService: MentionServiceProviding
+    private var mentionDebounceTask: Task<Void, Never>?
+    private static let mentionDebounceMs: UInt64 = 300_000_000
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
     private var currentUsername: String? { authManager.currentUser?.username }
@@ -382,9 +385,51 @@ class ConversationViewModel: ObservableObject {
         }
 
         mentionSuggestions = filtered
+
+        mentionDebounceTask?.cancel()
+        let convId = conversationId
+        let service = mentionService
+        mentionDebounceTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: Self.mentionDebounceMs)
+            } catch { return }
+            guard !Task.isCancelled else { return }
+            do {
+                let apiSuggestions = try await service.suggestions(conversationId: convId, query: query)
+                guard !Task.isCancelled else { return }
+                let merged = self?.mergeAPISuggestions(apiSuggestions, localCandidates: filtered) ?? []
+                guard self?.activeMentionQuery == query else { return }
+                self?.mentionSuggestions = merged
+            } catch {
+                // API failure is non-fatal — local suggestions remain visible
+            }
+        }
+    }
+
+    private func mergeAPISuggestions(_ apiResults: [MentionSuggestion], localCandidates: [MentionCandidate]) -> [MentionCandidate] {
+        var seen = Set<String>()
+        var merged: [MentionCandidate] = []
+        for s in apiResults {
+            let candidate = MentionCandidate(
+                id: s.id,
+                username: s.username,
+                displayName: s.displayName ?? s.username,
+                avatarURL: s.avatar
+            )
+            if seen.insert(s.id).inserted {
+                merged.append(candidate)
+            }
+        }
+        for c in localCandidates where !seen.contains(c.id) {
+            seen.insert(c.id)
+            merged.append(c)
+        }
+        return merged
     }
 
     func clearMentionSuggestions() {
+        mentionDebounceTask?.cancel()
+        mentionDebounceTask = nil
         mentionSuggestions = []
         activeMentionQuery = nil
     }
@@ -451,7 +496,8 @@ class ConversationViewModel: ObservableObject {
         conversationService: ConversationServiceProviding = ConversationService.shared,
         reactionService: ReactionServiceProviding = ReactionService.shared,
         reportService: ReportServiceProviding = ReportService.shared,
-        syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared
+        syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
+        mentionService: MentionServiceProviding = MentionService.shared
     ) {
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
@@ -464,6 +510,7 @@ class ConversationViewModel: ObservableObject {
         self.reactionService = reactionService
         self.reportService = reportService
         self.syncEngine = syncEngine
+        self.mentionService = mentionService
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: authManager.currentUser?.id ?? ""

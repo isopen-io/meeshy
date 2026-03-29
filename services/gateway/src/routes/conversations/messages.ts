@@ -1640,6 +1640,178 @@ export function registerMessagesRoutes(
     }
   });
 
+
+  // ============================================================================
+  // LIST PINNED MESSAGES
+  // ============================================================================
+
+  fastify.get<{
+    Params: { id: string };
+    Querystring: { limit?: string; offset?: string };
+  }>('/conversations/:id/pinned-messages', {
+    schema: {
+      description: 'List all pinned messages in a conversation',
+      tags: ['conversations', 'messages'],
+      summary: 'List pinned messages',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'string', description: 'Max number of pinned messages to return', default: '50' },
+          offset: { type: 'string', description: 'Offset for pagination', default: '0' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'array', items: messageSchema }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+      const { id } = request.params;
+      const limit = Math.min(parseInt(request.query.limit || '50', 10), 100);
+      const offset = parseInt(request.query.offset || '0', 10);
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return sendNotFound(reply, 'Conversation not found');
+      }
+
+      const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!hasAccess) {
+        return sendForbidden(reply, 'Access denied');
+      }
+
+      const pinnedMessages = await prisma.message.findMany({
+        where: {
+          conversationId,
+          pinnedAt: { not: null },
+          deletedAt: null
+        },
+        orderBy: { pinnedAt: 'desc' },
+        skip: offset,
+        take: limit,
+        select: {
+          id: true,
+          conversationId: true,
+          senderId: true,
+          content: true,
+          originalLanguage: true,
+          messageType: true,
+          editedAt: true,
+          deletedAt: true,
+          replyToId: true,
+          forwardedFromId: true,
+          forwardedFromConversationId: true,
+          pinnedAt: true,
+          pinnedBy: true,
+          isViewOnce: true,
+          isBlurred: true,
+          expiresAt: true,
+          effectFlags: true,
+          translations: true,
+          createdAt: true,
+          updatedAt: true,
+          sender: {
+            select: {
+              id: true,
+              userId: true,
+              displayName: true,
+              avatar: true,
+              type: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true
+                }
+              }
+            }
+          },
+          attachments: true,
+          _count: { select: { reactions: true, replies: true } }
+        }
+      });
+
+      const total = await prisma.message.count({
+        where: {
+          conversationId,
+          pinnedAt: { not: null },
+          deletedAt: null
+        }
+      });
+
+      const formattedMessages = pinnedMessages.map((message: any) => {
+        const sender = message.sender;
+        return {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          content: message.content,
+          originalLanguage: message.originalLanguage,
+          messageType: message.messageType,
+          isEdited: !!message.editedAt,
+          editedAt: message.editedAt,
+          deletedAt: message.deletedAt,
+          replyToId: message.replyToId,
+          forwardedFromId: message.forwardedFromId,
+          forwardedFromConversationId: message.forwardedFromConversationId,
+          pinnedAt: message.pinnedAt,
+          pinnedBy: message.pinnedBy,
+          isViewOnce: message.isViewOnce,
+          isBlurred: message.isBlurred,
+          expiresAt: message.expiresAt,
+          effectFlags: message.effectFlags,
+          translations: message.translations,
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt,
+          sender: sender ? {
+            id: sender.id,
+            userId: sender.userId,
+            displayName: sender.displayName ?? sender.user?.displayName ?? null,
+            avatar: sender.avatar ?? sender.user?.avatar ?? null,
+            type: sender.type,
+            username: sender.user?.username ?? null,
+            firstName: sender.user?.firstName ?? null,
+            lastName: sender.user?.lastName ?? null,
+            isOnline: sender.user?.isOnline ?? false
+          } : null,
+          attachments: message.attachments || [],
+          reactionCount: message._count?.reactions ?? 0,
+          replyCount: message._count?.replies ?? 0
+        };
+      });
+
+      return sendSuccess(reply, formattedMessages, {
+        pagination: { total, offset, limit, hasMore: offset + formattedMessages.length < total }
+      });
+    } catch (error) {
+      logger.error('Error listing pinned messages', error);
+      sendInternalError(reply, 'Error listing pinned messages');
+    }
+  });
+
   // ============================================================================
   // CONSUME VIEW-ONCE MESSAGE
   // ============================================================================

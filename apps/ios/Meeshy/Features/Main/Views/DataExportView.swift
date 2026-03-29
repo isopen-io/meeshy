@@ -12,8 +12,16 @@ struct DataExportView: View {
     @State private var includeContacts = true
     @State private var isExporting = false
     @State private var exportComplete = false
+    @State private var exportError: String?
+    @State private var exportedData: Data?
+    @State private var showShareSheet = false
 
     private let accentColor = "3498DB"
+    private let exportService: DataExportServiceProviding
+
+    init(exportService: DataExportServiceProviding = DataExportService.shared) {
+        self.exportService = exportService
+    }
 
     enum ExportFormat: String, CaseIterable, Identifiable {
         case json = "JSON"
@@ -27,6 +35,13 @@ struct DataExportView: View {
             case .csv: return "tablecells"
             }
         }
+
+        var apiValue: String {
+            switch self {
+            case .json: return "json"
+            case .csv: return "csv"
+            }
+        }
     }
 
     var body: some View {
@@ -36,6 +51,11 @@ struct DataExportView: View {
             VStack(spacing: 0) {
                 header
                 scrollContent
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let data = exportedData {
+                ShareSheet(activityItems: [data])
             }
         }
     }
@@ -82,6 +102,9 @@ struct DataExportView: View {
                 infoCard
                 formatSection
                 optionsSection
+                if let error = exportError {
+                    errorBanner(message: error)
+                }
                 exportButton
                 Spacer().frame(height: 40)
             }
@@ -201,15 +224,27 @@ struct DataExportView: View {
         .padding(.vertical, 10)
     }
 
+    private func errorBanner(message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 14))
+                .foregroundColor(Color(hex: "FF6B6B"))
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundColor(Color(hex: "FF6B6B"))
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(hex: "FF6B6B").opacity(0.1))
+        )
+    }
+
     private var exportButton: some View {
         Button {
             HapticFeedback.medium()
-            isExporting = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                isExporting = false
-                exportComplete = true
-                HapticFeedback.success()
-            }
+            performExport()
         } label: {
             HStack(spacing: 8) {
                 if isExporting {
@@ -251,4 +286,63 @@ struct DataExportView: View {
         }
         .padding(.leading, 4)
     }
+
+    // MARK: - Export Logic
+
+    private func performExport() {
+        isExporting = true
+        exportError = nil
+        exportComplete = false
+
+        var types: [String] = ["profile"]
+        if includeMessages { types.append("messages") }
+        if includeContacts { types.append("contacts") }
+
+        let format = selectedFormats.contains(.csv) ? "csv" : "json"
+        let service = exportService
+
+        Task {
+            do {
+                let result = try await service.requestExport(format: format, types: types)
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                encoder.dateEncodingStrategy = .iso8601
+                let jsonData = try encoder.encode(ExportWrapper(data: result))
+
+                await MainActor.run {
+                    exportedData = jsonData
+                    isExporting = false
+                    exportComplete = true
+                    HapticFeedback.success()
+                    showShareSheet = true
+                }
+            } catch {
+                await MainActor.run {
+                    isExporting = false
+                    exportError = error.localizedDescription
+                    HapticFeedback.error()
+                }
+            }
+        }
+    }
 }
+
+// MARK: - Encodable wrapper for sharing
+
+private struct ExportWrapper: Encodable {
+    let data: DataExportData
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(data.exportDate, forKey: .exportDate)
+        try container.encode(data.format, forKey: .format)
+        try container.encode(data.requestedTypes, forKey: .requestedTypes)
+        try container.encodeIfPresent(data.messagesCount, forKey: .messagesCount)
+        try container.encodeIfPresent(data.contactsCount, forKey: .contactsCount)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case exportDate, format, requestedTypes, messagesCount, contactsCount
+    }
+}
+

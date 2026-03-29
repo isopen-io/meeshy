@@ -110,6 +110,10 @@ export const SERVER_EVENTS = {
    */
   TRANSCRIPTION_READY: 'audio:transcription-ready',
 
+  // --- Message pinning ---
+  MESSAGE_PINNED: 'message:pinned',
+  MESSAGE_UNPINNED: 'message:unpinned',
+
   // --- Delivery queue ---
   PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
 
@@ -586,6 +590,24 @@ export interface UserPreferencesUpdatedEventData {
   readonly category: string;
 }
 
+/**
+ * Données pour l'événement d'épinglage d'un message
+ */
+export interface MessagePinnedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly pinnedBy: string;
+  readonly pinnedAt: string;
+}
+
+/**
+ * Données pour l'événement de désépinglage d'un message
+ */
+export interface MessageUnpinnedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+}
+
 export interface MentionCreatedEventData {
   readonly messageId: string;
   readonly conversationId: string;
@@ -635,6 +657,10 @@ export interface ServerToClientEvents {
 
   // Mentions
   [SERVER_EVENTS.MENTION_CREATED]: (data: MentionCreatedEventData) => void;
+
+  // Message pinning
+  [SERVER_EVENTS.MESSAGE_PINNED]: (data: MessagePinnedEventData) => void;
+  [SERVER_EVENTS.MESSAGE_UNPINNED]: (data: MessageUnpinnedEventData) => void;
 
   // Location sharing
   [SERVER_EVENTS.LOCATION_SHARED]: (data: LocationSharedEventData) => void;

@@ -58,6 +58,9 @@
     "%@ commentaires" : {
 
     },
+    "%@ effet(s) actif(s)" : {
+
+    },
     "%@ locuteurs detectes" : {
 
     },
@@ -1878,6 +1881,9 @@
     "Discussion" : {
 
     },
+    "Duree ephemere" : {
+
+    },
     "Echantillons vocaux" : {
 
     },
@@ -1885,6 +1891,9 @@
 
     },
     "Écrire" : {
+
+    },
+    "Effets du message" : {
 
     },
     "Email" : {

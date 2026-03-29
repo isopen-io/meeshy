@@ -12,12 +12,14 @@
 import { FastifyInstance } from 'fastify';
 import { userPreferencesRoutes } from './preferences';
 import { deleteAccountRoutes } from './delete-account';
+import { dataExportRoutes } from './export';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 
 export default async function meRoutes(fastify: FastifyInstance) {
   // Register preferences routes under /me/preferences
   await fastify.register(userPreferencesRoutes, { prefix: '/preferences' });
   await fastify.register(deleteAccountRoutes);
+  await fastify.register(dataExportRoutes);
 
   // Future routes can be added here:
   // await fastify.register(profileRoutes);
