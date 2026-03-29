@@ -553,10 +553,10 @@ struct ConversationListView: View {
 
     private var mainContentZStack: some View {
         ZStack(alignment: .bottom) {
-            // Main scroll content with header overlay
+            // Layer 1: Full-screen scroll content
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // Scroll offset detector
+                    // Scroll offset detector (MUST be first child)
                     GeometryReader { geo in
                         Color.clear.preference(
                             key: ScrollOffsetPreferenceKey.self,
@@ -565,7 +565,7 @@ struct ConversationListView: View {
                     }
                     .frame(height: 0)
 
-                    // Top spacer — content starts below the expanded header
+                    // Header spacer — pushes content below the expanded header (100pt)
                     Color.clear.frame(height: 100)
 
                     // Story carousel
@@ -653,28 +653,8 @@ struct ConversationListView: View {
                     }
                 }
             }
-            .overlay(alignment: .top) {
-                CollapsibleHeader(
-                    title: "Conversations",
-                    scrollOffset: headerScrollOffset,
-                    showBackButton: false,
-                    titleColor: theme.textPrimary,
-                    backArrowColor: MeeshyColors.indigo500,
-                    backgroundColor: theme.backgroundPrimary,
-                    trailing: {
-                        Button {
-                            onNewConversation?()
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundColor(MeeshyColors.indigo500)
-                        }
-                        .accessibilityLabel("Nouvelle conversation")
-                    }
-                )
-            }
 
-            // Bottom overlay: Search bar (always) + Communities & Filters (when loupe tapped)
+            // Layer 2: Bottom overlay — Search bar + Communities & Filters
             VStack(spacing: 0) {
                 Spacer()
 
@@ -700,6 +680,27 @@ struct ConversationListView: View {
             .opacity(isScrollingDown ? 0 : 1)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isScrollingDown)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
+        }
+        // Layer 3: Collapsible header overlay — pinned to top, respects safe area
+        .overlay(alignment: .top) {
+            CollapsibleHeader(
+                title: "Conversations",
+                scrollOffset: headerScrollOffset,
+                showBackButton: false,
+                titleColor: theme.textPrimary,
+                backArrowColor: MeeshyColors.indigo500,
+                backgroundColor: theme.backgroundPrimary,
+                trailing: {
+                    Button {
+                        onNewConversation?()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundColor(MeeshyColors.indigo500)
+                    }
+                    .accessibilityLabel("Nouvelle conversation")
+                }
+            )
         }
     }
 

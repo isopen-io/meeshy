@@ -359,7 +359,8 @@ app_path() {
 
 # ─── Build Guard (wait or kill existing builds) ─────────────────────────────
 is_build_running() {
-    pgrep -f "xcodebuild.*$SCHEME.*build" >/dev/null 2>&1
+    # Match only meeshy.sh builds (uses -derivedDataPath), not Xcode GUI builds
+    pgrep -f "xcodebuild.*-derivedDataPath.*$DERIVED_DATA" >/dev/null 2>&1
 }
 
 kill_all_builds() {
