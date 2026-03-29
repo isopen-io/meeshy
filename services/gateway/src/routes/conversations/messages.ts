@@ -42,6 +42,7 @@ const SendMessageBodySchema = z.object({
   attachmentIds: z.array(z.string()).optional(),
   isBlurred: z.boolean().optional(),
   expiresAt: z.string().optional(),
+  effectFlags: z.number().int().optional(),
   mentionedUserIds: z.array(z.string()).optional(),
 });
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
@@ -388,6 +389,7 @@ export function registerMessagesRoutes(
         maxViewOnceCount: true,
         viewOnceCount: true,
         isBlurred: true,
+        effectFlags: true,
         expiresAt: true,
 
         // ===== ÉPINGLAGE =====
@@ -581,6 +583,7 @@ export function registerMessagesRoutes(
                 isViewOnce: true,
                 viewOnceCount: true,
                 isBlurred: true,
+                effectFlags: true,
                 viewedCount: true,
                 downloadedCount: true,
                 consumedCount: true,
@@ -759,6 +762,7 @@ export function registerMessagesRoutes(
           maxViewOnceCount: message.maxViewOnceCount,
           viewOnceCount: message.viewOnceCount,
           isBlurred: message.isBlurred,
+          effectFlags: message.effectFlags,
           expiresAt: message.expiresAt,
 
           // Épinglage
@@ -1137,6 +1141,7 @@ export function registerMessagesRoutes(
           attachmentIds: { type: 'array', items: { type: 'string' }, description: 'IDs des attachments pré-uploadés' },
           isBlurred: { type: 'boolean' },
           expiresAt: { type: 'string', format: 'date-time' },
+          effectFlags: { type: 'integer', description: 'Bitfield for message effects' },
           mentionedUserIds: { type: 'array', items: { type: 'string' } }
         }
       },
@@ -1191,6 +1196,12 @@ export function registerMessagesRoutes(
         mentionedUserIds
       } = bodyResult.data as SendMessageBody;
 
+      // Compute effectFlags from legacy fields if not provided
+      const { MESSAGE_EFFECT_FLAGS } = await import('@meeshy/shared/types/message-effect-flags');
+      let effectFlags = (bodyResult.data as any).effectFlags ?? 0;
+      if (isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
+      if (expiresAt && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+
       const userId = authRequest.authContext.userId;
       let participantId: string;
       if (authRequest.authContext.isAnonymous) {
@@ -1230,6 +1241,7 @@ export function registerMessagesRoutes(
         attachmentIds,
         isBlurred,
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+        effectFlags,
         encryptedPayload: isEncrypted ? {
           ciphertext: encryptedContent!,
           mode: encryptionMode as any,

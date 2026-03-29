@@ -105,6 +105,12 @@ class ConversationViewModel: ObservableObject {
     /// When true, next message will be sent with blur (recipient must tap to reveal)
     @Published var isBlurEnabled: Bool = false
 
+    /// Pending message effects selected via the effects picker
+    @Published var pendingEffects: MessageEffects = .none
+
+    /// When true, the effects picker sheet is presented
+    @Published var showEffectsPicker: Bool = false
+
     // MARK: - Mention Autocomplete State
 
     struct MentionCandidate: Identifiable, Equatable {
@@ -749,7 +755,7 @@ class ConversationViewModel: ObservableObject {
             forwardedFromConversationId: forwardedFromConversationId,
             expiresAt: resolvedExpiresAt,
             effects: {
-                var e: MessageEffects = .none
+                var e = pendingEffects
                 if resolvedIsViewOnce { e.flags.insert(.viewOnce) }
                 if resolvedBlur == true { e.flags.insert(.blurred) }
                 if resolvedExpiresAt != nil { e.flags.insert(.ephemeral) }
@@ -799,6 +805,7 @@ class ConversationViewModel: ObservableObject {
                 isViewOnce: resolvedIsViewOnce ? true : nil,
                 maxViewOnceCount: resolvedMaxViewOnceCount,
                 isBlurred: resolvedBlur,
+                effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : nil,
                 isEncrypted: isEncrypted ? true : nil,
                 encryptionMode: encryptionMode
             )
@@ -817,7 +824,7 @@ class ConversationViewModel: ObservableObject {
                     replyToId: replyToId,
                     expiresAt: resolvedExpiresAt,
                     effects: {
-                        var e: MessageEffects = .none
+                        var e = pendingEffects
                         if resolvedIsViewOnce { e.flags.insert(.viewOnce) }
                         if resolvedBlur == true { e.flags.insert(.blurred) }
                         if resolvedExpiresAt != nil { e.flags.insert(.ephemeral) }
@@ -841,6 +848,10 @@ class ConversationViewModel: ObservableObject {
             // Clear blur after successful send
             if isBlurEnabled {
                 isBlurEnabled = false
+            }
+            // Clear pending effects after successful send
+            if pendingEffects.hasAnyEffect {
+                pendingEffects = .none
             }
             isSending = false
             return true

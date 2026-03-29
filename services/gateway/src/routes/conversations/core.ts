@@ -281,6 +281,7 @@ export function registerCoreRoutes(
               messageType: true,
               isBlurred: true,
               isViewOnce: true,
+              effectFlags: true,
               expiresAt: true,
               sender: {
                 select: {

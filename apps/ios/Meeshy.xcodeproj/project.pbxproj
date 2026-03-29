@@ -130,6 +130,7 @@
 		D489552E7EE1E53C58CE9A5C /* MeeshyWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = F712AE637B0876483E53AA3C /* MeeshyWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */; };
 		DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */; };
+		EF01020304050607080900AC /* EffectsPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF01020304050607080900AB /* EffectsPickerView.swift */; };
 		DD22EE33FF44AA55BB6600AC /* ComposerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */; };
 		DD22EE33FF44AA55BB6600AD /* UniversalComposerBar+Recording.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */; };
 		DD22EE33FF44AA55BB6600AE /* UniversalComposerBar+Attachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */; };
@@ -375,6 +376,7 @@
 		CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerModels.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UniversalComposerBar+Recording.swift"; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UniversalComposerBar+Attachments.swift"; sourceTree = "<group>"; };
+		EF01020304050607080900AB /* EffectsPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsPickerView.swift; sourceTree = "<group>"; };
 		CC1700000000001F17 /* MessageOverlayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageOverlayMenu.swift; sourceTree = "<group>"; };
 		CC1800000000001F18 /* MessageInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageInfoSheet.swift; sourceTree = "<group>"; };
 		CC1900000000001F19 /* ForwardPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPickerSheet.swift; sourceTree = "<group>"; };
@@ -546,6 +548,7 @@
 				CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */,
 				CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */,
 				CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */,
+				EF01020304050607080900AB /* EffectsPickerView.swift */,
 				CC2300000000001F23 /* ConversationLockSheet.swift */,
 				PP2600000000001F26 /* AddParticipantSheet.swift */,
 				OF3000000000001F30 /* OfflineBanner.swift */,
@@ -1188,6 +1191,7 @@
 				AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */,
 				DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */,
 				DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */,
+				EF01020304050607080900AC /* EffectsPickerView.swift in Sources */,
 				DD22EE33FF44AA55BB6600AC /* ComposerModels.swift in Sources */,
 				DD22EE33FF44AA55BB6600AD /* UniversalComposerBar+Recording.swift in Sources */,
 				DD22EE33FF44AA55BB6600AE /* UniversalComposerBar+Attachments.swift in Sources */,

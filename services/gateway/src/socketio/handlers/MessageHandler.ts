@@ -577,6 +577,7 @@ export class MessageHandler {
       messageType: message.messageType || 'text',
       isBlurred: Boolean((message as never)['isBlurred']),
       isViewOnce: Boolean((message as never)['isViewOnce']),
+      effectFlags: (message as never)['effectFlags'] ?? 0,
       expiresAt: (message as never)['expiresAt'] || undefined,
       isEdited: Boolean((message as never)['isEdited']),
       deletedAt: (message as never)['deletedAt'] || undefined,

@@ -108,6 +108,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           viewOnceCount: true,
           isBlurred: true,
           pinnedAt: true,
+          effectFlags: true,
           pinnedBy: true,
           validatedMentions: true,
           createdAt: true,

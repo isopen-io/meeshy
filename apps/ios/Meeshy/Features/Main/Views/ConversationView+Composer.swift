@@ -13,7 +13,7 @@ extension ConversationView {
         UniversalComposerBar(
             style: .light,
             mode: .message,
-            accentColor: viewModel.ephemeralDuration != nil ? "FF6B6B" : viewModel.isBlurEnabled ? "A855F7" : accentColor,
+            accentColor: viewModel.ephemeralDuration != nil ? "FF6B6B" : viewModel.isBlurEnabled ? "A855F7" : viewModel.pendingEffects.hasAnyEffect ? "6366F1" : accentColor,
             secondaryColor: secondaryColor,
             selectedLanguage: composerState.selectedLanguage,
             onLanguageChange: { composerState.selectedLanguage = $0 },
@@ -63,10 +63,17 @@ extension ConversationView {
             ephemeralDuration: $viewModel.ephemeralDuration,
             hideEphemeral: composerState.editingMessageId != nil,
             isBlurEnabled: $viewModel.isBlurEnabled,
-            hideBlur: composerState.editingMessageId != nil
+            hideBlur: composerState.editingMessageId != nil,
+            pendingEffects: $viewModel.pendingEffects,
+            onRequestEffectsPicker: { viewModel.showEffectsPicker = true },
+            hideEffects: composerState.editingMessageId != nil
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralDuration != nil)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.pendingEffects.hasAnyEffect)
+        .sheet(isPresented: $viewModel.showEffectsPicker) {
+            EffectsPickerView(effects: $viewModel.pendingEffects, accentColor: accentColor)
+        }
         .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)

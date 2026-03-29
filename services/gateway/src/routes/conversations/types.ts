@@ -39,6 +39,7 @@ export interface SendMessageBody {
   // Ephemeral/blurred message fields
   isBlurred?: boolean;
   expiresAt?: string;
+  effectFlags?: number;
   mentionedUserIds?: string[];
 }
 

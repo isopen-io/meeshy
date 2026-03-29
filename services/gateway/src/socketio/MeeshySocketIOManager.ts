@@ -1097,6 +1097,7 @@ export class MeeshySocketIOManager {
         deletedAt: message.deletedAt || undefined,
         isBlurred: Boolean((message as any).isBlurred),
         isViewOnce: Boolean((message as any).isViewOnce),
+        effectFlags: (message as any).effectFlags ?? 0,
         expiresAt: (message as any).expiresAt || undefined,
         createdAt: message.createdAt || new Date(),
         updatedAt: message.updatedAt || new Date(),

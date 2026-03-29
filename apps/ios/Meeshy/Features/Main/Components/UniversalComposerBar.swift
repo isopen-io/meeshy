@@ -129,6 +129,17 @@ struct UniversalComposerBar: View {
     /// When true, the blur toggle is hidden (e.g. in edit mode)
     var hideBlur: Bool = false
 
+    // MARK: - Effects picker
+
+    /// Binding to pending effects. Parent owns the state.
+    var pendingEffects: Binding<MessageEffects> = .constant(.none)
+
+    /// Called when user taps effects button — parent should show EffectsPickerView
+    var onRequestEffectsPicker: (() -> Void)? = nil
+
+    /// When true, the effects button is hidden (e.g. in edit mode)
+    var hideEffects: Bool = false
+
     // MARK: - External attachment injection
 
     /// Parent can set this to add attachments from outside (e.g. photo picker result)
@@ -558,6 +569,11 @@ struct UniversalComposerBar: View {
                 blurToggleButton
             }
 
+            // Effects picker toggle
+            if !hideEffects {
+                effectsToggleButton
+            }
+
             // Sentiment indicator
             Button {
                 onAnyInteraction?()
@@ -980,6 +996,52 @@ struct UniversalComposerBar: View {
         .accessibilityLabel(isActive
                             ? "Mode flou actif"
                             : "Activer le mode flou")
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
+    }
+}
+
+// MARK: - Effects Toggle Button (extension)
+extension UniversalComposerBar {
+
+    var effectsToggleButton: some View {
+        let isActive = pendingEffects.wrappedValue.hasAnyEffect
+        let effectCount = pendingEffects.wrappedValue.flags.rawValue.nonzeroBitCount
+
+        return Button {
+            onAnyInteraction?()
+            HapticFeedback.light()
+            onRequestEffectsPicker?()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isActive ? Color(hex: accentColor) : mutedColor)
+
+                if isActive {
+                    Text("\(effectCount)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Color(hex: accentColor))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(isActive
+                          ? Color(hex: accentColor).opacity(0.15)
+                          : Color.clear)
+                    .overlay(
+                        Capsule()
+                            .stroke(isActive
+                                    ? Color(hex: accentColor).opacity(0.3)
+                                    : Color.clear,
+                                    lineWidth: 0.5)
+                    )
+            )
+        }
+        .accessibilityLabel(isActive
+                            ? "\(effectCount) effet(s) actif(s)"
+                            : "Ajouter des effets au message")
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 }

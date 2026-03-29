@@ -14,6 +14,7 @@ import { NotificationService } from '../notifications/NotificationService';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -301,6 +302,7 @@ export class MessageProcessor {
     encryptionMetadata?: Prisma.InputJsonValue;
     attachmentIds?: string[];
     isBlurred?: boolean;
+    effectFlags?: number;
     expiresAt?: Date;
   }): Promise<Message> {
     // ÉTAPE 1: Traiter les liens AVANT de sauvegarder le message
@@ -330,6 +332,11 @@ export class MessageProcessor {
       );
     }
 
+    // Compute effectFlags: use provided value or derive from legacy fields
+    let effectFlags = data.effectFlags ?? 0;
+    if (data.isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
+    if (data.expiresAt && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption
     const message = await this.prisma.message.create({
       data: {
@@ -348,6 +355,7 @@ export class MessageProcessor {
         encryptionMetadata: encryptionContext.encryptionMetadata,
         isBlurred: data.isBlurred || false,
         expiresAt: data.expiresAt || null,
+        effectFlags,
         deletedAt: null
       },
       include: {
