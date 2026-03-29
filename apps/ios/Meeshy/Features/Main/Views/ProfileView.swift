@@ -5,6 +5,7 @@ import MeeshyUI
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var router: Router
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var authManager = AuthManager.shared
 
@@ -24,6 +25,7 @@ struct ProfileView: View {
     @State private var showSystemLanguagePicker = false
     @State private var showRegionalLanguagePicker = false
     @State private var showCustomLanguagePicker = false
+    @State private var pendingRequestCount: Int = 0
 
     // Avatar
     @State private var avatarItem: PhotosPickerItem?
@@ -75,6 +77,9 @@ struct ProfileView: View {
         .onAppear { loadUserData() }
         .task {
             stats = try? await StatsService.shared.fetchStats()
+            if let response = try? await FriendService.shared.receivedRequests(limit: 1) {
+                pendingRequestCount = response.pagination?.total ?? response.data.count
+            }
         }
         .onChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }
@@ -176,6 +181,7 @@ struct ProfileView: View {
                 contactSection
                 languagesSection
                 statsSection
+                friendRequestsSection
                 memberSinceSection
                 Spacer().frame(height: 40)
             }
@@ -445,6 +451,45 @@ struct ProfileView: View {
                     statCard(value: "\(stats?.totalConversations ?? 0)", label: "Conversations", color: "4ECDC4")
                     statCard(value: "\(stats?.friendRequestsReceived ?? 0)", label: "Amis", color: "9B59B6")
                 }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Friend Requests Section
+
+    private var friendRequestsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(icon: "person.badge.plus.fill", title: "DEMANDES", color: "E91E63")
+
+            Button {
+                HapticFeedback.light()
+                router.push(.friendRequests)
+            } label: {
+                HStack(spacing: 12) {
+                    fieldIcon("person.2.fill")
+
+                    Text("Demandes d'amis")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+
+                    Spacer()
+
+                    if pendingRequestCount > 0 {
+                        Text("\(pendingRequestCount)")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .frame(minWidth: 22, minHeight: 22)
+                            .background(Circle().fill(Color(hex: "E91E63")))
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(sectionBackground)
             }
             .buttonStyle(.plain)
         }

@@ -793,6 +793,7 @@ private struct ProfileFetchingSheet: View {
             } catch {}
             isLoading = false
             await checkPendingRequest()
+            await checkReceivedRequest()
         }
     }
 
@@ -818,6 +819,12 @@ private struct ProfileFetchingSheet: View {
             onResendRequest: {
                 Task { await resendRequest() }
             },
+            onAcceptRequest: {
+                Task { await acceptRequest() }
+            },
+            onDeclineRequest: {
+                Task { await declineRequest() }
+            },
             onDismiss: { dismiss() },
             currentUserId: AuthManager.shared.currentUser?.id ?? "",
             moodEmoji: statusViewModel.statusForUser(userId: targetUserId)?.moodEmoji,
@@ -834,6 +841,45 @@ private struct ProfileFetchingSheet: View {
                 connectionStatus = .pendingSent(requestId: pending.id)
             }
         } catch {}
+    }
+
+    private func checkReceivedRequest() async {
+        guard !targetUserId.isEmpty, connectionStatus == .none else { return }
+        do {
+            let received = try await FriendService.shared.receivedRequests()
+            if let pending = received.data.first(where: { $0.senderId == targetUserId && $0.status == "pending" }) {
+                pendingRequestId = pending.id
+                connectionStatus = .pendingReceived(requestId: pending.id)
+            }
+        } catch {}
+    }
+
+    private func acceptRequest() async {
+        guard let requestId = pendingRequestId else { return }
+        do {
+            let _ = try await FriendService.shared.respond(requestId: requestId, accepted: true)
+            connectionStatus = .connected
+            pendingRequestId = nil
+            HapticFeedback.success()
+            ToastManager.shared.showSuccess("Connexion acceptee")
+        } catch {
+            HapticFeedback.error()
+            ToastManager.shared.showError("Impossible d'accepter")
+        }
+    }
+
+    private func declineRequest() async {
+        guard let requestId = pendingRequestId else { return }
+        do {
+            let _ = try await FriendService.shared.respond(requestId: requestId, accepted: false)
+            connectionStatus = .none
+            pendingRequestId = nil
+            HapticFeedback.medium()
+            ToastManager.shared.showSuccess("Demande refusee")
+        } catch {
+            HapticFeedback.error()
+            ToastManager.shared.showError("Impossible de refuser")
+        }
     }
 
     private func sendConnectionRequest() async {

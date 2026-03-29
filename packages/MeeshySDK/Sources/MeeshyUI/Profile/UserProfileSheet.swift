@@ -28,6 +28,8 @@ public struct UserProfileSheet: View {
     public var onConnectionRequest: (() -> Void)?
     public var onCancelRequest: (() -> Void)?
     public var onResendRequest: (() -> Void)?
+    public var onAcceptRequest: (() -> Void)?
+    public var onDeclineRequest: (() -> Void)?
     public var onDismiss: (() -> Void)?
     public var onLoadStats: (() async -> Void)?
     public var currentUserId: String = ""
@@ -65,6 +67,8 @@ public struct UserProfileSheet: View {
         onConnectionRequest: (() -> Void)? = nil,
         onCancelRequest: (() -> Void)? = nil,
         onResendRequest: (() -> Void)? = nil,
+        onAcceptRequest: (() -> Void)? = nil,
+        onDeclineRequest: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
         onLoadStats: (() async -> Void)? = nil,
         currentUserId: String = "",
@@ -88,6 +92,8 @@ public struct UserProfileSheet: View {
         self.onConnectionRequest = onConnectionRequest
         self.onCancelRequest = onCancelRequest
         self.onResendRequest = onResendRequest
+        self.onAcceptRequest = onAcceptRequest
+        self.onDeclineRequest = onDeclineRequest
         self.onDismiss = onDismiss
         self.onLoadStats = onLoadStats
         self.currentUserId = currentUserId
@@ -497,7 +503,22 @@ public struct UserProfileSheet: View {
                     )
                 }
             case .pendingReceived:
-                EmptyView()
+                if let onAcceptRequest {
+                    profileActionButton(
+                        icon: "checkmark.circle.fill",
+                        label: "Accepter la connexion",
+                        color: MeeshyColors.success,
+                        action: onAcceptRequest
+                    )
+                }
+                if let onDeclineRequest {
+                    profileActionButton(
+                        icon: "xmark.circle.fill",
+                        label: "Refuser la connexion",
+                        color: theme.textMuted,
+                        action: onDeclineRequest
+                    )
+                }
             case .connected:
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
@@ -593,7 +614,30 @@ public struct UserProfileSheet: View {
                 }
 
                 ForEach(Array(effectiveConversations.enumerated()), id: \.element.id) { index, conv in
-                    Button {
+                    HStack(spacing: 12) {
+                        MeeshyAvatar(
+                            name: conv.name,
+                            context: .conversationList,
+                            accentColor: conv.accentColor,
+                            avatarURL: conv.avatar ?? conv.participantAvatarURL
+                        )
+
+                        Text(conv.name)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(theme.textMuted)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard !isInteractionDisabled else { return }
                         HapticFeedback.light()
                         if let onNavigateToConversation {
                             onNavigateToConversation(conv)
@@ -606,33 +650,9 @@ public struct UserProfileSheet: View {
                                 )
                             }
                         }
-                    } label: {
-                        HStack(spacing: 12) {
-                            MeeshyAvatar(
-                                name: conv.name,
-                                context: .conversationList,
-                                accentColor: conv.accentColor,
-                                avatarURL: conv.avatar ?? conv.participantAvatarURL
-                            )
-
-                            Text(conv.name)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
-                                .lineLimit(1)
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
                     }
                     .staggeredAppear(index: index)
                     .opacity(isInteractionDisabled ? 0.35 : 1)
-                    .allowsHitTesting(!isInteractionDisabled)
 
                     if index < effectiveConversations.count - 1 {
                         Divider()
