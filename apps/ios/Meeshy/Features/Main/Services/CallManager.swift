@@ -50,6 +50,7 @@ final class CallManager: ObservableObject {
     private var callStartDate: Date?
     private var reconnectAttempt = 0
     private var participantJoinedCancellable: AnyCancellable?
+    private var pendingRemoteOffer: SessionDescription?
     private var cancellables = Set<AnyCancellable>()
 
     // CallKit
@@ -159,10 +160,12 @@ final class CallManager: ObservableObject {
             }
         }
 
+        pendingRemoteOffer = sdp
+
         Task { [weak self] in
             guard let self else { return }
-            await webRTCService.startLocalMedia(isVideo: isVideo)
             await webRTCService.setRemoteDescription(sdp)
+            await webRTCService.startLocalMedia(isVideo: isVideo)
         }
 
         Logger.calls.info("Incoming call from \(fromUsername): \(callId)")
@@ -186,13 +189,17 @@ final class CallManager: ObservableObject {
 
         Task { [weak self] in
             guard let self, let callId = currentCallId, let userId = remoteUserId else { return }
-            let offer = SessionDescription(type: .offer, sdp: "")
-            guard let answer = await webRTCService.createAnswer(from: offer) else {
-                endCallInternal(reason: .failed("Pas d'offre distante"))
+            guard let remoteOffer = pendingRemoteOffer else {
+                Logger.calls.error("No remote offer available for answer")
+                endCallInternal(reason: .failed("No remote offer received"))
+                return
+            }
+            guard let answer = await webRTCService.createAnswer(from: remoteOffer) else {
+                endCallInternal(reason: .failed("Failed to create SDP answer"))
                 return
             }
             emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
-            transitionToConnected()
+            pendingRemoteOffer = nil
             Logger.calls.info("Call answered: \(callId)")
         }
 
@@ -358,6 +365,7 @@ final class CallManager: ObservableObject {
         stopHeartbeat()
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = nil
+        pendingRemoteOffer = nil
         callStartDate = nil
         reconnectAttempt = 0
         webRTCService.close()

@@ -1024,6 +1024,12 @@ export class CallEventsHandler {
         io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, endedEvent);
         io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
 
+        // Cleanup: remove all sockets from call room
+        const socketsInCallRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
+        for (const s of socketsInCallRoom) {
+          s.leave(ROOMS.call(data.callId));
+        }
+
         ack?.({ success: true });
 
         logger.info('Call ended by user', {
