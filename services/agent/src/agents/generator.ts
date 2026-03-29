@@ -63,7 +63,7 @@ Tu peux developper (3-6 phrases). Donne ton avis, une experience, une observatio
 Meme en mode elabore, reste CONVERSATIONNEL. Pas de dissertation. Pas de structure formelle.`
     : `MODE CHAT — Tu REAGIS dans un fil existant. C'est du CHAT, pas un article.
 MAXIMUM 1-3 phrases. Court, direct, percutant.
-CITE le prenom ou @pseudo de la personne a qui tu reponds.
+Tu PEUX citer le prenom ou @pseudo de la personne a qui tu reponds (mais pas obligatoire).
 Exemples de TON ATTENDU:
 - "Franchement @Paul t'as raison, sans electricite stable rien ne bouge"
 - "En vrai le vrai souci c'est la maintenance, on construit mais on entretient pas"
@@ -71,7 +71,8 @@ Exemples de TON ATTENDU:
 - "Pas d'accord, le probleme c'est pas l'argent c'est la gestion"
 - "C'est exactement ce que je disais! @Marie tu vois?"`;
 
-  const replyContext = replyToSenderName
+  const shouldCite = Math.random() < 0.4;
+  const replyContext = replyToSenderName && shouldCite
     ? `\nTu REPONDS a ${replyToSenderName}. CITE son prenom dans ta reponse.` : '';
 
   return `Tu incarnes ${displayName} dans un groupe de chat. Tu es un HUMAIN, pas un assistant.

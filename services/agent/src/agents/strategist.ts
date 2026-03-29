@@ -377,9 +377,6 @@ function ensureMinimumReactions(
 ): InterventionDirective[] {
   if (maxReactions <= 0) return interventions;
 
-  const messageInterventions = interventions.filter((i) => i.type === 'message');
-  if (messageInterventions.length === 0) return interventions;
-
   const controlledUserIds = new Set(state.controlledUsers.map((u) => u.userId));
   const controlledUserMap = new Map(state.controlledUsers.map((u) => [u.userId, u]));
   const reactableMessages = state.messages
@@ -397,18 +394,15 @@ function ensureMinimumReactions(
   const result = [...interventions];
   let totalReactions = interventions.filter((i) => i.type === 'reaction').length;
 
+  const messageInterventions = interventions.filter((i) => i.type === 'message');
   const usersWhoSpeak = new Set(messageInterventions.map((i) => i.asUserId));
 
+  // 1. Users who SEND messages MUST also react to 2-3 recent messages (natural behavior)
   for (const userId of usersWhoSpeak) {
     const user = controlledUserMap.get(userId);
     if (!user || totalReactions >= maxReactions) break;
 
-    const userExistingReactions = interventions.filter(
-      (i) => i.type === 'reaction' && i.asUserId === userId,
-    ).length;
-    if (userExistingReactions >= 1) continue;
-
-    const reactionCount = 1 + Math.floor(Math.random() * 3);
+    const reactionCount = 2 + Math.floor(Math.random() * 2); // 2-3 reactions per speaking user
     const userEmojis = getUserReactionEmojis(user);
     const candidateMessages = reactableMessages.filter(
       (m) => !alreadyReactedTo.has(`${userId}:${m.id}`) && m.senderId !== userId,
@@ -423,9 +417,39 @@ function ensureMinimumReactions(
         asUserId: userId,
         targetMessageId: targetMsg.id,
         emoji,
-        delaySeconds: Math.round((3 + Math.random() * 20) * (0.8 + Math.random() * 0.4)),
+        delaySeconds: Math.round((3 + Math.random() * 15) * (0.8 + Math.random() * 0.4)),
       });
       alreadyReactedTo.add(`${userId}:${targetMsg.id}`);
+      totalReactions++;
+    }
+  }
+
+  // 2. Lurker reactions: other controlled users who DON'T speak can still react (~50% chance each)
+  const silentUsers = state.controlledUsers.filter((u) => !usersWhoSpeak.has(u.userId));
+  for (const user of silentUsers) {
+    if (totalReactions >= maxReactions) break;
+    if (Math.random() > 0.5) continue; // 50% chance to react as lurker
+
+    const userEmojis = getUserReactionEmojis(user);
+    const candidateMessages = reactableMessages.filter(
+      (m) => !alreadyReactedTo.has(`${user.userId}:${m.id}`) && m.senderId !== user.userId,
+    );
+    if (candidateMessages.length === 0) continue;
+
+    // Lurkers react to 1-2 messages
+    const lurkReactionCount = 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < lurkReactionCount && i < candidateMessages.length && totalReactions < maxReactions; i++) {
+      const targetMsg = candidateMessages[Math.floor(Math.random() * candidateMessages.length)];
+      const emoji = userEmojis[Math.floor(Math.random() * userEmojis.length)];
+
+      result.push({
+        type: 'reaction',
+        asUserId: user.userId,
+        targetMessageId: targetMsg.id,
+        emoji,
+        delaySeconds: Math.round((10 + Math.random() * 60) * (0.8 + Math.random() * 0.4)),
+      });
+      alreadyReactedTo.add(`${user.userId}:${targetMsg.id}`);
       totalReactions++;
     }
   }
