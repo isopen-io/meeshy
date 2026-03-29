@@ -137,6 +137,14 @@ export interface FriendAcceptedEmailData {
   language?: string;
 }
 
+export interface InvitationEmailData {
+  to: string;
+  senderName: string;
+  senderAvatar?: string | null;
+  downloadUrl: string;
+  language?: string;
+}
+
 export interface AccountDeletionConfirmEmailData {
   to: string;
   name: string;
@@ -896,6 +904,18 @@ export class EmailService {
     const text = `${t.friendAccepted.title}\n\n${t.common.greeting} ${data.recipientName},\n\n${intro}\n\n${t.friendAccepted.buttonText}: ${data.conversationUrl}\n\n${t.friendAccepted.footer}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject: t.friendAccepted.subject, html, text, trackingType: 'friend_accepted', trackingLang: data.language });
+  }
+
+  async sendInvitationEmail(data: InvitationEmailData): Promise<EmailResult> {
+    const t = this.getTranslations(data.language);
+    const avatarHtml = data.senderAvatar
+      ? `<img src="${data.senderAvatar}" alt="${this.escapeHtml(data.senderName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
+      : '';
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>💬 ${this.escapeHtml(data.senderName)} vous invite sur Meeshy !</h1></div><div class="content"><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px"><strong>${this.escapeHtml(data.senderName)}</strong> vous invite a rejoindre Meeshy, la plateforme de messagerie multilingue.</p><p style="font-size:14px;color:#666">Communiquez sans barrieres linguistiques avec la traduction automatique en temps reel.</p></div><div style="text-align:center"><a href="${data.downloadUrl}" class="button">Telecharger Meeshy</a></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${data.senderName} vous invite sur Meeshy !\n\nRejoignez la plateforme de messagerie multilingue.\n\nTelecharger : ${data.downloadUrl}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
+
+    return this.sendEmail({ to: data.to, subject: `${data.senderName} vous invite sur Meeshy`, html, text, trackingType: 'invitation', trackingLang: data.language });
   }
 
   async sendMagicLinkEmail(data: MagicLinkEmailData): Promise<EmailResult> {
