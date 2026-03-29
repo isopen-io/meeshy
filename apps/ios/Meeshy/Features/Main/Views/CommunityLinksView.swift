@@ -158,9 +158,24 @@ class CommunityLinksViewModel: ObservableObject {
 
     var stats: CommunityLinkStats { CommunityLinkService.shared.stats(links: links) }
 
+    private static var cachedLinks: [CommunityLink] = []
+    private static var cacheDate: Date?
+
     func load() async {
-        isLoading = true
-        defer { isLoading = false }
+        if !Self.cachedLinks.isEmpty, let cacheDate = Self.cacheDate {
+            links = Self.cachedLinks
+            let isStale = Date().timeIntervalSince(cacheDate) > 300
+            if isStale { await refreshFromAPI() }
+            return
+        }
+        isLoading = links.isEmpty
+        await refreshFromAPI()
+    }
+
+    private func refreshFromAPI() async {
         links = (try? await CommunityLinkService.shared.listCommunityLinks()) ?? []
+        Self.cachedLinks = links
+        Self.cacheDate = Date()
+        isLoading = false
     }
 }

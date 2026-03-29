@@ -221,16 +221,35 @@ class ShareLinksViewModel: ObservableObject {
     @Published var stats: MyShareLinkStats? = nil
     @Published var isLoading = false
 
+    private static var cachedLinks: [MyShareLink] = []
+    private static var cachedStats: MyShareLinkStats?
+    private static var cacheDate: Date?
+
     func load() async {
-        isLoading = true
-        defer { isLoading = false }
+        if !Self.cachedLinks.isEmpty, let cacheDate = Self.cacheDate {
+            links = Self.cachedLinks
+            stats = Self.cachedStats
+            let isStale = Date().timeIntervalSince(cacheDate) > 300
+            if isStale { await refreshFromAPI() }
+            return
+        }
+        isLoading = links.isEmpty
+        await refreshFromAPI()
+    }
+
+    private func refreshFromAPI() async {
         async let l = ShareLinkService.shared.listMyLinks()
         async let s = ShareLinkService.shared.fetchMyStats()
         links = (try? await l) ?? []
         stats = try? await s
+        Self.cachedLinks = links
+        Self.cachedStats = stats
+        Self.cacheDate = Date()
+        isLoading = false
     }
 
     func loadStats() async {
         stats = try? await ShareLinkService.shared.fetchMyStats()
+        Self.cachedStats = stats
     }
 }

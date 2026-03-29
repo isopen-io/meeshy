@@ -258,20 +258,39 @@ final class AffiliateViewModel: ObservableObject {
     @Published var tokens: [AffiliateToken] = []
     @Published var isLoading = false
 
+    private static var cachedTokens: [AffiliateToken] = []
+    private static var cacheDate: Date?
+
     func load() async {
-        isLoading = true
+        if !Self.cachedTokens.isEmpty, let cacheDate = Self.cacheDate {
+            tokens = Self.cachedTokens
+            let isStale = Date().timeIntervalSince(cacheDate) > 300
+            if isStale { await refreshFromAPI() }
+            return
+        }
+        isLoading = tokens.isEmpty
+        await refreshFromAPI()
+    }
+
+    private func refreshFromAPI() async {
         do {
             tokens = try await AffiliateService.shared.listTokens()
+            Self.cachedTokens = tokens
+            Self.cacheDate = Date()
         } catch {}
         isLoading = false
     }
 
     func deleteToken(_ token: AffiliateToken) async {
+        let snapshot = tokens
+        tokens.removeAll { $0.id == token.id }
+        Self.cachedTokens = tokens
+        HapticFeedback.success()
         do {
             try await AffiliateService.shared.deleteToken(id: token.id)
-            tokens.removeAll { $0.id == token.id }
-            HapticFeedback.success()
         } catch {
+            tokens = snapshot
+            Self.cachedTokens = snapshot
             HapticFeedback.error()
         }
     }
