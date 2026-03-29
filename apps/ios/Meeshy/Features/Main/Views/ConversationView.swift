@@ -728,7 +728,7 @@ struct ConversationView: View {
     private var messageScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                     if viewModel.hasOlderMessages {
                         if viewModel.isLoadingOlder {
                             HStack(spacing: 8) {
@@ -763,17 +763,21 @@ struct ConversationView: View {
                         encryptionDisclaimer
                     }
 
-                    ForEach(viewModel.messages) { msg in
-                        let index = viewModel.messageIndex(for: msg.id) ?? 0
-                        let previousDate: Date? = index > 0 ? viewModel.messages[index - 1].createdAt : nil
-                        if shouldShowDateSection(currentDate: msg.createdAt, previousDate: previousDate) { dateSectionView(for: msg.createdAt) }
-                        if msg.id == viewModel.firstUnreadMessageId { unreadSeparator }
-                        messageRow(index: index, msg: msg)
-                            .onAppear {
-                                if index < 5 && viewModel.hasOlderMessages && !viewModel.isLoadingOlder && !viewModel.isProgrammaticScroll {
-                                    Task { await viewModel.loadOlderMessages() }
-                                }
+                    ForEach(viewModel.messagesByDate) { group in
+                        Section {
+                            ForEach(group.messages) { msg in
+                                let index = viewModel.messageIndex(for: msg.id) ?? 0
+                                if msg.id == viewModel.firstUnreadMessageId { unreadSeparator }
+                                messageRow(index: index, msg: msg)
+                                    .onAppear {
+                                        if index < 5 && viewModel.hasOlderMessages && !viewModel.isLoadingOlder && !viewModel.isProgrammaticScroll {
+                                            Task { await viewModel.loadOlderMessages() }
+                                        }
+                                    }
                             }
+                        } header: {
+                            dateSectionView(for: group.date)
+                        }
                     }
 
                     if !viewModel.typingUsernames.isEmpty {

@@ -148,11 +148,30 @@ public actor CacheCoordinator {
     }
 
     public func evictUnderMemoryPressure() async {
+        await conversations.flushDirtyKeys()
+        await messages.flushDirtyKeys()
+        await participants.flushDirtyKeys()
+        await profiles.flushDirtyKeys()
+        await feed.flushDirtyKeys()
+        await stories.flushDirtyKeys()
+
+        await conversations.evictL1()
+        await messages.evictL1()
+        await participants.evictL1()
+        await profiles.evictL1()
+        await feed.evictL1()
+        await stories.evictL1()
+
         await images.evictExpired()
         await audio.evictExpired()
         await video.evictExpired()
         await thumbnails.evictExpired()
-        logger.info("Memory pressure — evicted expired media")
+
+        translationCache.removeAll()
+        transcriptionCache.removeAll()
+        audioTranslationCache.removeAll()
+
+        logger.info("Memory pressure — flushed dirty keys, evicted L1 caches and expired media")
     }
 
     // MARK: - Translation Cache Persistence

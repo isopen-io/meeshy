@@ -153,6 +153,27 @@ class ConversationViewModel: ObservableObject {
         messageIdIndex[id] != nil
     }
 
+    // MARK: - Date-Grouped Messages
+
+    struct DateGroup: Identifiable {
+        let id: String
+        let date: Date
+        let messages: [Message]
+    }
+
+    var messagesByDate: [DateGroup] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: messages) { msg -> DateComponents in
+            calendar.dateComponents([.year, .month, .day], from: msg.createdAt)
+        }
+        return grouped.map { (comps, msgs) in
+            let dateKey = "\(comps.year ?? 0)-\(comps.month ?? 0)-\(comps.day ?? 0)"
+            let representativeDate = msgs.first?.createdAt ?? Date()
+            return DateGroup(id: dateKey, date: representativeDate, messages: msgs)
+        }
+        .sorted { $0.date < $1.date }
+    }
+
     // MARK: - Conversation-Wide Media
 
     struct MediaSenderInfo {
@@ -539,7 +560,7 @@ class ConversationViewModel: ObservableObject {
             let existingIds = Set(existing.map(\.id))
             let newOnly = freshMessages.filter { !existingIds.contains($0.id) }
             if !newOnly.isEmpty {
-                messages = existing + newOnly
+                messages = (existing + newOnly).sorted { $0.createdAt < $1.createdAt }
             }
             await CacheCoordinator.shared.messages.save(messages, for: conversationId)
         } catch {
@@ -561,7 +582,7 @@ class ConversationViewModel: ObservableObject {
                     let cached = await CacheCoordinator.shared.messages.load(for: targetId)
                     switch cached {
                     case .fresh(let data, _), .stale(let data, _):
-                        self.messages = data
+                        self.messages = data.sorted { $0.createdAt < $1.createdAt }
                     case .expired, .empty:
                         break
                     }

@@ -196,6 +196,20 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         }
     }
 
+    // MARK: - Retry Helper
+
+    private static let maxRetryAttempts = 3
+    private static let retryableStatusCodes: Set<Int> = [429, 503]
+
+    private func retryDelay(statusCode: Int, attempt: Int, response: HTTPURLResponse) -> TimeInterval? {
+        guard Self.retryableStatusCodes.contains(statusCode), attempt < Self.maxRetryAttempts else { return nil }
+        if let retryAfter = response.value(forHTTPHeaderField: "Retry-After"),
+           let seconds = Double(retryAfter) {
+            return min(seconds, 30)
+        }
+        return Double(1 << attempt)
+    }
+
     // MARK: - Generic Request
 
     public func request<T: Decodable>(
@@ -237,51 +251,74 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         }
 
         do {
-            let networkStart = CFAbsoluteTimeGetCurrent()
-            let (data, response) = try await session.data(for: urlRequest)
-            let networkMs = (CFAbsoluteTimeGetCurrent() - networkStart) * 1000
+            var lastHTTPResponse: HTTPURLResponse?
+            var lastStatusCode = 0
 
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw MeeshyError.server(statusCode: 0, message: "Aucune donnee recue")
-            }
-
-            let statusCode = httpResponse.statusCode
-
-            let decodeStart = CFAbsoluteTimeGetCurrent()
-
-            guard (200...299).contains(statusCode) else {
-                let errBody = try? decoder.decode(ErrorBody.self, from: data)
-                let errorMsg = errBody?.message ?? errBody?.error
-
-                if statusCode == 401 {
-                    Task { @MainActor in
-                        AuthManager.shared.handleUnauthorized()
+            for attempt in 0..<(Self.maxRetryAttempts + 1) {
+                if attempt > 0 {
+                    guard let previousResponse = lastHTTPResponse,
+                          let delay = retryDelay(statusCode: lastStatusCode, attempt: attempt, response: previousResponse) else {
+                        break
                     }
-                    throw MeeshyError.auth(.sessionExpired)
+                    logger.warning("Retryable status \(lastStatusCode) on \(method) \(endpoint), retry \(attempt)/\(Self.maxRetryAttempts) after \(String(format: "%.1f", delay))s")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    guard !Task.isCancelled else { throw CancellationError() }
                 }
 
-                if statusCode == 403 {
-                    throw MeeshyError.auth(.accountLocked)
+                let networkStart = CFAbsoluteTimeGetCurrent()
+                let (data, response) = try await session.data(for: urlRequest)
+                let networkMs = (CFAbsoluteTimeGetCurrent() - networkStart) * 1000
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw MeeshyError.server(statusCode: 0, message: "Aucune donnee recue")
                 }
 
-                if statusCode == 429 {
-                    throw MeeshyError.server(statusCode: 429, message: "Trop de requetes")
+                let statusCode = httpResponse.statusCode
+                lastHTTPResponse = httpResponse
+                lastStatusCode = statusCode
+
+                if Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
+                    continue
                 }
 
-                if statusCode >= 500 {
-                    throw MeeshyError.server(statusCode: statusCode, message: errorMsg ?? "Erreur serveur")
+                let decodeStart = CFAbsoluteTimeGetCurrent()
+
+                guard (200...299).contains(statusCode) else {
+                    let errBody = try? decoder.decode(ErrorBody.self, from: data)
+                    let errorMsg = errBody?.message ?? errBody?.error
+
+                    if statusCode == 401 {
+                        Task { @MainActor in
+                            AuthManager.shared.handleUnauthorized()
+                        }
+                        throw MeeshyError.auth(.sessionExpired)
+                    }
+
+                    if statusCode == 403 {
+                        throw MeeshyError.auth(.accountLocked)
+                    }
+
+                    if statusCode == 429 {
+                        throw MeeshyError.server(statusCode: 429, message: "Trop de requetes")
+                    }
+
+                    if statusCode >= 500 {
+                        throw MeeshyError.server(statusCode: statusCode, message: errorMsg ?? "Erreur serveur")
+                    }
+
+                    throw MeeshyError.server(statusCode: statusCode, message: errorMsg ?? "Erreur inconnue")
                 }
 
-                throw MeeshyError.server(statusCode: statusCode, message: errorMsg ?? "Erreur inconnue")
+                let result = try decoder.decode(T.self, from: data)
+                let decodeMs = (CFAbsoluteTimeGetCurrent() - decodeStart) * 1000
+                let totalMs = networkMs + decodeMs
+                if totalMs > 1000 {
+                    logger.warning("Slow request: \(method) \(endpoint) → \(statusCode) network=\(Int(networkMs))ms decode=\(Int(decodeMs))ms total=\(Int(totalMs))ms size=\(data.count)B")
+                }
+                return result
             }
 
-            let result = try decoder.decode(T.self, from: data)
-            let decodeMs = (CFAbsoluteTimeGetCurrent() - decodeStart) * 1000
-            let totalMs = networkMs + decodeMs
-            if totalMs > 1000 {
-                logger.warning("Slow request: \(method) \(endpoint) → \(statusCode) network=\(Int(networkMs))ms decode=\(Int(decodeMs))ms total=\(Int(totalMs))ms size=\(data.count)B")
-            }
-            return result
+            throw MeeshyError.server(statusCode: lastStatusCode, message: "Requete echouee apres \(Self.maxRetryAttempts) tentatives (status \(lastStatusCode))")
         } catch let error as MeeshyError {
             throw error
         } catch let error as DecodingError {

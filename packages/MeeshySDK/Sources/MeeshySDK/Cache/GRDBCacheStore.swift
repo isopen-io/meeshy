@@ -170,6 +170,11 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         }
     }
 
+    public func evictL1() {
+        memoryCache.removeAll()
+        accessOrder.removeAll()
+    }
+
     public func loadedKeys() -> [Key] {
         Array(memoryCache.keys)
     }

@@ -102,6 +102,7 @@ struct MeeshyApp: App {
                 }
                 .task {
                     MeeshyConfig.shared.restoreEnvironment()
+                    await CacheCoordinator.shared.start()
                     await OfflineQueue.shared.setRetrySend { @Sendable item in
                         do {
                             let request = SendMessageRequest(

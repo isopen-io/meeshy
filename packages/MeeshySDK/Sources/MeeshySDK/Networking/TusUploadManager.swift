@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 public enum UploadFileStatus: String, Sendable {
     case queued, uploading, complete, error, paused
@@ -111,7 +112,9 @@ public actor TusUploadManager {
             activeCount += 1
             Task {
                 do {
-                    let result = try await performTusUpload(fileURL: fileURL, mimeType: mimeType, token: token, uploadContext: uploadContext)
+                    let result = try await withBackgroundTask(named: "tus-upload-\(fileURL.lastPathComponent)") {
+                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, token: token, uploadContext: uploadContext)
+                    }
                     activeCount -= 1
                     continuation.resume(returning: result)
                     processQueue()
@@ -121,6 +124,22 @@ public actor TusUploadManager {
                     processQueue()
                 }
             }
+        }
+    }
+
+    private func withBackgroundTask<T: Sendable>(named name: String, operation: @Sendable () async throws -> T) async throws -> T {
+        let taskId = await UIApplication.shared.beginBackgroundTask(withName: name)
+        do {
+            let result = try await operation()
+            if taskId != .invalid {
+                await UIApplication.shared.endBackgroundTask(taskId)
+            }
+            return result
+        } catch {
+            if taskId != .invalid {
+                await UIApplication.shared.endBackgroundTask(taskId)
+            }
+            throw error
         }
     }
 
