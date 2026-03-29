@@ -1068,6 +1068,9 @@
     "Choisir un lieu" : {
 
     },
+    "Choisissez les types de medias a telecharger automatiquement selon votre connexion." : {
+
+    },
     "Clonage vocal actif" : {
 
     },
@@ -3295,6 +3298,12 @@
       }
     },
     "Tapez **SUPPRIMER MON COMPTE** pour confirmer" : {
+
+    },
+    "Telechargement auto" : {
+
+    },
+    "Telechargement automatique" : {
 
     },
     "Telephone" : {
