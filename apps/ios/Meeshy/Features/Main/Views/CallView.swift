@@ -34,6 +34,8 @@ struct CallView: View {
                 connectedView
             case .ended(let reason):
                 endedView(reason: reason)
+            case .reconnecting:
+                connectingView
             case .idle:
                 EmptyView()
             }

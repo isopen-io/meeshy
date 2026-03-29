@@ -2,6 +2,8 @@ import Speech
 import Combine
 import os
 
+private let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+
 // MARK: - Transcription Segment
 
 struct TranscriptionSegment: Identifiable, Equatable {
@@ -52,6 +54,7 @@ enum TranscriptionError: LocalizedError {
 
 // MARK: - Protocol
 
+@MainActor
 protocol CallTranscriptionServiceProviding {
     var segments: [TranscriptionSegment] { get }
     var isTranscribing: Bool { get }
@@ -165,7 +168,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     func startTranscribing(localLanguage: String, remoteLanguage: String, localUserId: String, remoteUserId: String) {
         guard !isTranscribing else {
-            Logger.calls.warning("startTranscribing called while already transcribing")
+            callsLogger.warning("startTranscribing called while already transcribing")
             return
         }
 
@@ -184,13 +187,13 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             remoteStream = remote
             isTranscribing = true
 
-            Logger.calls.info("Call transcription started — local: \(localLanguage), remote: \(remoteLanguage)")
+            callsLogger.info("Call transcription started — local: \(localLanguage), remote: \(remoteLanguage)")
         } catch let error as TranscriptionError {
             lastError = error
-            Logger.calls.error("Failed to start transcription: \(error.localizedDescription)")
+            callsLogger.error("Failed to start transcription: \(error.localizedDescription)")
         } catch {
             lastError = .recognitionFailed(underlying: error)
-            Logger.calls.error("Unexpected transcription error: \(error.localizedDescription)")
+            callsLogger.error("Unexpected transcription error: \(error.localizedDescription)")
         }
     }
 
@@ -205,7 +208,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         isTranscribing = false
         lastError = nil
 
-        Logger.calls.info("Call transcription stopped")
+        callsLogger.info("Call transcription stopped")
     }
 
     // MARK: - Audio Buffer Input
@@ -259,7 +262,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         if let error {
             guard isTranscribing else { return }
             lastError = .recognitionFailed(underlying: error)
-            Logger.calls.error("Recognition error for speaker \(speakerId): \(error.localizedDescription)")
+            callsLogger.error("Recognition error for speaker \(speakerId): \(error.localizedDescription)")
             return
         }
 
@@ -349,31 +352,31 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     ) {
         if localCapability == .none && remoteCapability == .none {
             role = .undecided
-            Logger.calls.info("Neither peer can transcribe")
+            callsLogger.info("Neither peer can transcribe")
             return
         }
 
         if remoteCapability == .none {
             role = .leader
-            Logger.calls.info("Local is only capable peer → leader")
+            callsLogger.info("Local is only capable peer → leader")
             return
         }
 
         if localCapability == .none {
             role = .follower
-            Logger.calls.info("Remote is only capable peer → follower")
+            callsLogger.info("Remote is only capable peer → follower")
             return
         }
 
         if localCapability > remoteCapability {
             role = .leader
-            Logger.calls.info("Local has higher capability → leader")
+            callsLogger.info("Local has higher capability → leader")
         } else if remoteCapability > localCapability {
             role = .follower
-            Logger.calls.info("Remote has higher capability → follower")
+            callsLogger.info("Remote has higher capability → follower")
         } else {
             role = isInitiator ? .leader : .follower
-            Logger.calls.info("Tie broken by initiator role → \(isInitiator ? "leader" : "follower")")
+            callsLogger.info("Tie broken by initiator role → \(isInitiator ? "leader" : "follower")")
         }
     }
 

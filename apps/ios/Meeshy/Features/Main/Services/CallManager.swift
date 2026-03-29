@@ -574,7 +574,7 @@ extension CallManager: ThermalStateMonitorDelegate {
             if state == .critical && self.isVideoEnabled {
                 Logger.calls.warning("Thermal critical — disabling video to preserve battery")
                 self.isVideoEnabled = false
-                self.webRTCService.toggleVideo(enabled: false)
+                self.webRTCService.enableVideo(false)
             } else if state == .serious {
                 Logger.calls.warning("Thermal serious — reducing quality")
             }
