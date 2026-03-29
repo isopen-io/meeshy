@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import CallKit
 import Combine
+import Network
 import MeeshySDK
 import os
 
@@ -12,6 +13,7 @@ enum CallState: Equatable {
     case ringing(isOutgoing: Bool)
     case connecting
     case connected
+    case reconnecting(attempt: Int)
     case ended(reason: CallEndReason)
 
     var isActive: Bool {
@@ -20,14 +22,6 @@ enum CallState: Equatable {
         default: return true
         }
     }
-}
-
-enum CallEndReason: Equatable {
-    case local
-    case remote
-    case rejected
-    case missed
-    case failed(String)
 }
 
 // MARK: - Call Manager
@@ -39,6 +33,7 @@ final class CallManager: ObservableObject {
     // MARK: - Published State
 
     @Published private(set) var callState: CallState = .idle
+    @Published private(set) var transcriptionService = CallTranscriptionService()
     @Published private(set) var remoteUserId: String?
     @Published private(set) var remoteUsername: String?
     @Published var isVideoEnabled: Bool = false
@@ -47,13 +42,24 @@ final class CallManager: ObservableObject {
     @Published private(set) var callDuration: TimeInterval = 0
     @Published private(set) var currentCallId: String?
     @Published private(set) var connectionQuality: PeerConnectionState = .new
+    @Published var displayMode: CallDisplayMode = .fullScreen
 
     // MARK: - Internal
 
     private let webRTCService: WebRTCService
     private var durationTimer: Timer?
+    private var heartbeatTimer: Timer?
     private var callStartDate: Date?
+    private var reconnectAttempt = 0
+    private var participantJoinedCancellable: AnyCancellable?
+    private var pendingRemoteOffer: SessionDescription?
     private var cancellables = Set<AnyCancellable>()
+
+    // Network monitoring
+    private let networkMonitor = NWPathMonitor()
+    private let networkQueue = DispatchQueue(label: "me.meeshy.callmanager.network")
+    private var lastNetworkPath: NWPath.Status = .satisfied
+    private let thermalMonitor = ThermalStateMonitor()
 
     // CallKit
     private let callProvider: CXProvider
@@ -79,6 +85,7 @@ final class CallManager: ObservableObject {
         self.webRTCService.delegate = self
 
         setupSocketListeners()
+        startNetworkMonitoring()
         Logger.calls.info("CallManager initialized")
     }
 
@@ -102,7 +109,6 @@ final class CallManager: ObservableObject {
         callState = .ringing(isOutgoing: true)
 
         webRTCService.configure(isVideo: isVideo)
-        webRTCService.configureAudioSession(speaker: isSpeaker)
 
         let uuid = UUID()
         activeCallUUID = uuid
@@ -121,14 +127,10 @@ final class CallManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             await webRTCService.startLocalMedia(isVideo: isVideo)
-            guard let offer = await webRTCService.createOffer() else {
-                endCallInternal(reason: .failed("Impossible de creer l'offre"))
-                return
-            }
-            emitCallOffer(callId: callId, toUserId: userId, isVideo: isVideo, sdp: offer)
-            Logger.calls.info("Outgoing call started: \(callId) to \(username)")
+            Logger.calls.info("Outgoing call initiated: \(callId) to \(username), waiting for participant joined")
         }
 
+        listenForParticipantJoined(callId: callId, toUserId: userId, isVideo: isVideo)
         HapticFeedback.medium()
     }
 
@@ -167,10 +169,12 @@ final class CallManager: ObservableObject {
             }
         }
 
+        pendingRemoteOffer = sdp
+
         Task { [weak self] in
             guard let self else { return }
-            await webRTCService.startLocalMedia(isVideo: isVideo)
             await webRTCService.setRemoteDescription(sdp)
+            await webRTCService.startLocalMedia(isVideo: isVideo)
         }
 
         Logger.calls.info("Incoming call from \(fromUsername): \(callId)")
@@ -192,17 +196,19 @@ final class CallManager: ObservableObject {
             }
         }
 
-        webRTCService.configureAudioSession(speaker: isSpeaker)
-
         Task { [weak self] in
             guard let self, let callId = currentCallId, let userId = remoteUserId else { return }
-            let offer = SessionDescription(type: .offer, sdp: "")
-            guard let answer = await webRTCService.createAnswer(from: offer) else {
-                endCallInternal(reason: .failed("Pas d'offre distante"))
+            guard let remoteOffer = pendingRemoteOffer else {
+                Logger.calls.error("No remote offer available for answer")
+                endCallInternal(reason: .failed("No remote offer received"))
+                return
+            }
+            guard let answer = await webRTCService.createAnswer(from: remoteOffer) else {
+                endCallInternal(reason: .failed("Failed to create SDP answer"))
                 return
             }
             emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
-            transitionToConnected()
+            pendingRemoteOffer = nil
             Logger.calls.info("Call answered: \(callId)")
         }
 
@@ -266,7 +272,6 @@ final class CallManager: ObservableObject {
 
     func toggleSpeaker() {
         isSpeaker.toggle()
-        webRTCService.configureAudioSession(speaker: isSpeaker)
         HapticFeedback.light()
     }
 
@@ -280,6 +285,25 @@ final class CallManager: ObservableObject {
         webRTCService.switchCamera()
         HapticFeedback.light()
     }
+
+    func toggleTranscription() {
+        if transcriptionService.isTranscribing {
+            transcriptionService.stopTranscribing()
+        } else {
+            let localLang = "fr"
+            let remoteLang = "fr"
+            let localUserId = AuthManager.shared.currentUser?.id ?? ""
+            let remoteUserId = remoteUserId ?? ""
+            transcriptionService.startTranscribing(
+                localLanguage: localLang,
+                remoteLanguage: remoteLang,
+                localUserId: localUserId,
+                remoteUserId: remoteUserId
+            )
+        }
+    }
+
+    var videoFilters: VideoFilterPipeline { webRTCService.videoFilters }
 
     // MARK: - Remote Events
 
@@ -323,6 +347,7 @@ final class CallManager: ObservableObject {
         callState = .connected
         callStartDate = Date()
         callDuration = 0
+        reconnectAttempt = 0
         durationTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, let start = self.callStartDate else { return }
@@ -330,22 +355,93 @@ final class CallManager: ObservableObject {
             }
         }
 
+        startHeartbeat()
+        webRTCService.startQualityMonitor()
+        startThermalMonitoring()
+
         if let uuid = activeCallUUID {
             callProvider.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
     }
 
+    private func startThermalMonitoring() {
+        thermalMonitor.delegate = self
+        thermalMonitor.startMonitoring()
+    }
+
+    private func startHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = Timer.scheduledTimer(
+            withTimeInterval: QualityThresholds.heartbeatIntervalSeconds,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, let callId = self.currentCallId else { return }
+                MessageSocketManager.shared.emitCallSignal(
+                    callId: callId,
+                    type: "heartbeat",
+                    payload: [:]
+                )
+                Logger.calls.debug("Heartbeat sent for call: \(callId)")
+            }
+        }
+        Logger.calls.info("Heartbeat timer started (\(QualityThresholds.heartbeatIntervalSeconds)s interval)")
+    }
+
+    private func stopHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+    }
+
+    // MARK: - Network Monitoring
+
+    private func startNetworkMonitoring() {
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let wasUnsatisfied = self.lastNetworkPath != .satisfied
+                let isNowSatisfied = path.status == .satisfied
+                self.lastNetworkPath = path.status
+
+                let isInActiveCall: Bool
+                switch self.callState {
+                case .connected, .reconnecting: isInActiveCall = true
+                default: isInActiveCall = false
+                }
+                guard isInActiveCall else { return }
+
+                if path.status != .satisfied {
+                    Logger.calls.warning("Network lost during call — starting reconnection")
+                    self.attemptReconnection()
+                } else if wasUnsatisfied && isNowSatisfied {
+                    Logger.calls.info("Network recovered during call — performing ICE restart")
+                    self.attemptReconnection()
+                }
+            }
+        }
+        networkMonitor.start(queue: networkQueue)
+    }
+
     private func endCallInternal(reason: CallEndReason) {
         durationTimer?.invalidate()
         durationTimer = nil
+        stopHeartbeat()
+        if transcriptionService.isTranscribing {
+            transcriptionService.stopTranscribing()
+        }
+        participantJoinedCancellable?.cancel()
+        participantJoinedCancellable = nil
+        pendingRemoteOffer = nil
+        thermalMonitor.stopMonitoring()
         callStartDate = nil
+        reconnectAttempt = 0
         webRTCService.close()
         callState = .ended(reason: reason)
         connectionQuality = .new
         activeCallUUID = nil
 
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(3))
             guard let self else { return }
             if case .ended = self.callState {
                 self.callState = .idle
@@ -410,6 +506,30 @@ final class CallManager: ObservableObject {
             .store(in: &cancellables)
     }
 
+    // MARK: - Participant Joined (Outgoing Call)
+
+    private func listenForParticipantJoined(callId: String, toUserId: String, isVideo: Bool) {
+        participantJoinedCancellable?.cancel()
+        participantJoinedCancellable = MessageSocketManager.shared.callParticipantJoined
+            .receive(on: DispatchQueue.main)
+            .filter { $0.callId == callId }
+            .first()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Logger.calls.info("Participant joined call \(callId), creating offer")
+                self.callState = .connecting
+                Task { [weak self] in
+                    guard let self else { return }
+                    guard let offer = await self.webRTCService.createOffer() else {
+                        self.endCallInternal(reason: .failed("Failed to create offer"))
+                        return
+                    }
+                    self.emitCallOffer(callId: callId, toUserId: toUserId, isVideo: isVideo, sdp: offer)
+                    Logger.calls.info("SDP offer sent for call: \(callId)")
+                }
+            }
+    }
+
     // MARK: - Socket Emit Helpers
 
     private nonisolated func emitCallOffer(callId: String, toUserId: String, isVideo: Bool, sdp: SessionDescription) {
@@ -445,6 +565,23 @@ final class CallManager: ObservableObject {
     }
 }
 
+// MARK: - ThermalStateMonitorDelegate
+
+extension CallManager: ThermalStateMonitorDelegate {
+    nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {
+        Task { @MainActor [weak self] in
+            guard let self, self.callState == .connected else { return }
+            if state == .critical && self.isVideoEnabled {
+                Logger.calls.warning("Thermal critical — disabling video to preserve battery")
+                self.isVideoEnabled = false
+                self.webRTCService.toggleVideo(enabled: false)
+            } else if state == .serious {
+                Logger.calls.warning("Thermal serious — reducing quality")
+            }
+        }
+    }
+}
+
 // MARK: - WebRTCServiceDelegate
 
 extension CallManager: WebRTCServiceDelegate {
@@ -477,8 +614,14 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCServiceDidConnect(_ service: WebRTCService) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if case .connecting = self.callState {
+            switch self.callState {
+            case .connecting:
                 self.transitionToConnected()
+            case .reconnecting:
+                Logger.calls.info("Reconnection successful")
+                self.transitionToConnected()
+            default:
+                break
             }
         }
     }
@@ -486,9 +629,39 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCServiceDidDisconnect(_ service: WebRTCService) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if case .connected = self.callState {
-                Logger.calls.warning("WebRTC disconnected during active call")
+            switch self.callState {
+            case .connected, .reconnecting:
+                self.attemptReconnection()
+            default:
+                Logger.calls.info("WebRTC disconnected in state: \(String(describing: self.callState))")
             }
+        }
+    }
+
+    @MainActor
+    private func attemptReconnection() {
+        reconnectAttempt += 1
+        guard reconnectAttempt <= QualityThresholds.maxReconnectAttempts else {
+            Logger.calls.error("Max reconnect attempts (\(QualityThresholds.maxReconnectAttempts)) reached — ending call")
+            if let uuid = activeCallUUID {
+                callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
+            }
+            endCallInternal(reason: .connectionLost)
+            return
+        }
+
+        callState = .reconnecting(attempt: reconnectAttempt)
+        Logger.calls.warning("Attempting ICE restart (\(self.reconnectAttempt)/\(QualityThresholds.maxReconnectAttempts))")
+
+        Task { [weak self] in
+            guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
+            guard let offer = await self.webRTCService.performICERestart() else {
+                Logger.calls.error("ICE restart failed to produce offer")
+                self.attemptReconnection()
+                return
+            }
+            self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
+            Logger.calls.info("ICE restart offer sent for call: \(callId)")
         }
     }
 }

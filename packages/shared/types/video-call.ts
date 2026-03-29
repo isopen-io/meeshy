@@ -14,9 +14,32 @@
 export type CallMode = 'p2p' | 'sfu';
 
 /**
- * Statut du call
+ * Statut du call — synced with Prisma CallStatus enum
+ * @see schema.prisma CallStatus
  */
-export type CallStatus = 'initiated' | 'ringing' | 'active' | 'ended';
+export type CallStatus =
+  | 'initiated'
+  | 'ringing'
+  | 'connecting'
+  | 'active'
+  | 'reconnecting'
+  | 'ended'
+  | 'missed'
+  | 'rejected'
+  | 'failed';
+
+/**
+ * Raison de fin d'appel — synced with Prisma CallEndReason enum
+ * @see schema.prisma CallEndReason
+ */
+export type CallEndReason =
+  | 'completed'
+  | 'missed'
+  | 'rejected'
+  | 'failed'
+  | 'connectionLost'
+  | 'heartbeatTimeout'
+  | 'garbageCollected';
 
 /**
  * Rôle du participant
@@ -45,6 +68,8 @@ export interface CallSession {
   readonly endedAt?: Date;
   readonly duration?: number;             // Secondes
   readonly participants: CallParticipant[];
+  readonly endReason?: CallEndReason;
+  readonly transcriptionEnabled?: boolean;
   readonly metadata?: CallMetadata;
 }
 
@@ -99,9 +124,9 @@ export interface ConnectionQuality {
  * État des contrôles média
  */
 export interface CallControls {
-  audioEnabled: boolean;
-  videoEnabled: boolean;
-  screenShareEnabled: boolean;
+  readonly audioEnabled: boolean;
+  readonly videoEnabled: boolean;
+  readonly screenShareEnabled: boolean;
 }
 
 // ===== AUDIO EFFECTS =====
@@ -228,10 +253,15 @@ interface WebRTCSignalBase {
 }
 
 /**
- * Signal WebRTC pour Offer/Answer (contient SDP)
+ * Types de signal SDP
+ */
+export type WebRTCSignalType = 'offer' | 'answer' | 'ice-restart';
+
+/**
+ * Signal WebRTC pour Offer/Answer/ICE-Restart (contient SDP)
  */
 export interface WebRTCOfferAnswerSignal extends WebRTCSignalBase {
-  readonly type: 'offer' | 'answer';
+  readonly type: WebRTCSignalType;
   readonly sdp: string;                   // Session Description Protocol
 }
 
@@ -349,9 +379,9 @@ export interface CallInitiatedEvent {
   readonly conversationId: string;
   readonly mode: CallMode;
   readonly initiator: {
-    userId: string;
-    username: string;
-    avatar?: string;
+    readonly userId: string;
+    readonly username: string;
+    readonly avatar?: string;
   };
   readonly participants: CallParticipant[];
 }
@@ -402,6 +432,7 @@ export interface CallEndedEvent {
   readonly callId: string;
   readonly duration: number;
   readonly endedBy: string;             // userId ou participantId
+  readonly reason: CallEndReason;
 }
 
 /**
@@ -438,6 +469,163 @@ export interface CallTranscriptionEvent {
 export interface CallTranslationEvent {
   readonly callId: string;
   readonly translation: Translation;
+}
+
+// ===== NEW CALL EVENTS (Phase 1 Spec) =====
+
+/**
+ * Event: call:heartbeat (Client → Server, fire-and-forget)
+ */
+export interface CallHeartbeatEvent {
+  readonly callId: string;
+}
+
+/**
+ * Event: call:quality-report (Client → Server, fire-and-forget)
+ */
+export interface CallQualityReportEvent {
+  readonly callId: string;
+  readonly stats: ConnectionQualityStats;
+}
+
+/**
+ * Event: call:reconnecting (Client → Server, fire-and-forget)
+ */
+export interface CallReconnectingEvent {
+  readonly callId: string;
+  readonly participantId: string;
+  readonly attempt: number;
+}
+
+/**
+ * Event: call:reconnected (Client → Server, fire-and-forget)
+ */
+export interface CallReconnectedEvent {
+  readonly callId: string;
+  readonly participantId: string;
+}
+
+/**
+ * Event: call:missed (Server → Client)
+ */
+export interface CallMissedEvent {
+  readonly callId: string;
+  readonly conversationId: string;
+  readonly callerId: string;
+  readonly callerName: string;
+}
+
+/**
+ * Event: call:quality-alert (Server → Client)
+ */
+export interface CallQualityAlertEvent {
+  readonly callId: string;
+  readonly participantId: string;
+  readonly metric: 'rtt' | 'packetLoss' | 'bitrate' | 'jitter';
+  readonly value: number;
+  readonly threshold: number;
+}
+
+/**
+ * ACK pour call:initiate
+ */
+export interface CallInitiateAck {
+  readonly success: boolean;
+  readonly data?: { callId: string; mode: CallMode };
+  readonly error?: { code: string; message: string };
+}
+
+/**
+ * ACK pour call:join
+ */
+export interface CallJoinAck {
+  readonly success: boolean;
+  readonly data?: { callSession: CallSession; iceServers: RTCIceServer[] };
+  readonly error?: { code: string; message: string };
+}
+
+/**
+ * Configuration ICE server (STUN/TURN)
+ */
+export interface RTCIceServerConfig {
+  readonly urls: string[];
+  readonly username?: string;
+  readonly credential?: string;
+}
+
+// ===== CALL TRANSCRIPTION CAPABILITY NEGOTIATION =====
+
+/**
+ * Transcription capability level — higher is better.
+ * During call setup, each peer declares its capability.
+ * The most capable peer becomes the transcription leader.
+ */
+export type TranscriptionCapabilityLevel =
+  | 'none'           // Device cannot transcribe (no Speech framework, old device)
+  | 'basic'          // On-device, limited languages, older model
+  | 'standard'       // On-device, SFSpeechRecognizer, good accuracy
+  | 'advanced';      // On-device, SpeechAnalyzer (iOS 26+) or WhisperKit, best accuracy
+
+/**
+ * Event: call:transcription-capability (Client → Client via Server relay)
+ * Each peer declares its transcription capability at call start.
+ * Server relays to the other peer. Peers negotiate: best capability wins.
+ */
+export interface CallTranscriptionCapabilityEvent {
+  readonly callId: string;
+  readonly participantId: string;
+  readonly capability: TranscriptionCapabilityLevel;
+  readonly supportedLanguages: readonly string[];
+  readonly onDeviceOnly: boolean;
+}
+
+/**
+ * Event: call:transcription-role (Client → Client via Server relay)
+ * After capability exchange, the leader announces its role.
+ * Leader transcribes BOTH streams and shares segments to peer.
+ */
+export interface CallTranscriptionRoleEvent {
+  readonly callId: string;
+  readonly leaderId: string;
+  readonly reason: 'higher-capability' | 'tie-initiator-wins' | 'only-one-capable';
+}
+
+// ===== CALL TRANSCRIPTION SEGMENT EVENTS =====
+
+/**
+ * Event: call:transcription-segment (Client → Server)
+ * Real-time transcription segment from a call participant
+ */
+export interface CallTranscriptionSegmentEvent {
+  readonly callId: string;
+  readonly segment: {
+    readonly text: string;
+    readonly speakerId: string;
+    readonly startMs: number;
+    readonly endMs: number;
+    readonly isFinal: boolean;
+    readonly confidence: number;
+    readonly language: string;
+  };
+}
+
+/**
+ * Event: call:translated-segment (Server → Client)
+ * Translated transcription segment broadcast to call participants
+ */
+export interface CallTranslatedSegmentEvent {
+  readonly callId: string;
+  readonly segment: {
+    readonly text: string;
+    readonly translatedText: string;
+    readonly speakerId: string;
+    readonly startMs: number;
+    readonly endMs: number;
+    readonly isFinal: boolean;
+    readonly sourceLanguage: string;
+    readonly targetLanguage: string;
+    readonly confidence: number;
+  };
 }
 
 // ===== FRONTEND STATE (pour Zustand store) =====
@@ -480,7 +668,7 @@ export interface CallState {
  * Noms des événements Socket.IO pour les appels
  */
 export const CALL_EVENTS = {
-  // Client → Server
+  // Client → Server (with ACK)
   INITIATE: 'call:initiate',
   JOIN: 'call:join',
   LEAVE: 'call:leave',
@@ -488,6 +676,13 @@ export const CALL_EVENTS = {
   TOGGLE_AUDIO: 'call:toggle-audio',
   TOGGLE_VIDEO: 'call:toggle-video',
   TOGGLE_SCREEN_SHARE: 'call:toggle-screen-share',
+  END: 'call:end',
+
+  // Client → Server (fire-and-forget)
+  HEARTBEAT: 'call:heartbeat',
+  QUALITY_REPORT: 'call:quality-report',
+  RECONNECTING: 'call:reconnecting',
+  RECONNECTED: 'call:reconnected',
 
   // Server → Client
   INITIATED: 'call:initiated',
@@ -498,10 +693,16 @@ export const CALL_EVENTS = {
   MEDIA_TOGGLED: 'call:media-toggled',
   ENDED: 'call:ended',
   ERROR: 'call:error',
+  MISSED: 'call:missed',
+  QUALITY_ALERT: 'call:quality-alert',
 
   // Transcription & Translation (Phase 2/3)
   TRANSCRIPTION: 'call:transcription',
   TRANSLATION: 'call:translation',
+  TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
+  TRANSLATED_SEGMENT: 'call:translated-segment',
+  TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
+  TRANSCRIPTION_ROLE: 'call:transcription-role',
 } as const;
 
 export type CallEventName = typeof CALL_EVENTS[keyof typeof CALL_EVENTS];
@@ -558,6 +759,7 @@ export const CALL_ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_SIGNAL: 'INVALID_SIGNAL',
   SIGNAL_SENDER_MISMATCH: 'SIGNAL_SENDER_MISMATCH',
+  SIGNAL_TOO_LARGE: 'SIGNAL_TOO_LARGE',
   TARGET_NOT_FOUND: 'TARGET_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
 } as const;
@@ -570,7 +772,7 @@ export type CallErrorCode = typeof CALL_ERROR_CODES[keyof typeof CALL_ERROR_CODE
  * Vérifie si un CallSession est actif
  */
 export function isActiveCall(call: CallSession): boolean {
-  return call.status === 'active' || call.status === 'ringing';
+  return call.status === 'active' || call.status === 'ringing' || call.status === 'connecting' || call.status === 'reconnecting';
 }
 
 /**

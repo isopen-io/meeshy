@@ -13,9 +13,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
     private var localAudioTrack: RTCAudioTrack?
     private var localVideoTrack_: RTCVideoTrack?
     private var videoCapturer: RTCCameraVideoCapturer?
+    private var videoFilterDelegate: VideoFilterCapturerDelegate?
     private var remoteVideoTrack_: RTCVideoTrack?
     private var remoteAudioTrack_: RTCAudioTrack?
     private var usingFrontCamera = true
+    private(set) var videoFilterPipeline = VideoFilterPipeline()
 
     var isConnected: Bool {
         peerConnection?.connectionState == .connected
@@ -71,14 +73,18 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
         guard peerConnection != nil else { throw WebRTCError.noPeerConnection }
 
         let audioConstraints = RTCMediaConstraints(
-            mandatoryConstraints: nil,
+            mandatoryConstraints: [
+                "echoCancellation": "true",
+                "noiseSuppression": "true",
+                "autoGainControl": "true"
+            ],
             optionalConstraints: nil
         )
         let audioSource = factory.audioSource(with: audioConstraints)
         let audioTrack = factory.audioTrack(with: audioSource, trackId: "audio0")
         audioTrack.isEnabled = true
         localAudioTrack = audioTrack
-        peerConnection?.add(audioTrack, streamIds: ["stream0"])
+        peerConnection?.add(audioTrack, streamIds: ["meeshy-stream-0"])
 
         guard type == .audioVideo else {
             Logger.webrtc.info("Local audio track started")
@@ -89,9 +95,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
         let videoTrack = factory.videoTrack(with: videoSource, trackId: "video0")
         videoTrack.isEnabled = true
         localVideoTrack_ = videoTrack
-        peerConnection?.add(videoTrack, streamIds: ["stream0"])
+        peerConnection?.add(videoTrack, streamIds: ["meeshy-stream-0"])
 
-        let capturer = RTCCameraVideoCapturer(delegate: videoSource)
+        let filterDelegate = VideoFilterCapturerDelegate(target: videoSource, pipeline: videoFilterPipeline)
+        videoFilterDelegate = filterDelegate
+        let capturer = RTCCameraVideoCapturer(delegate: filterDelegate)
         videoCapturer = capturer
 
         guard let frontCamera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.position == .front }) else {
@@ -135,9 +143,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
             }
         }
 
-        try await setLocalDescription(sdp, on: pc)
-        Logger.webrtc.info("SDP offer created and set as local description")
-        return SessionDescription(type: .offer, sdp: sdp.sdp)
+        var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
+        mungedSDP = Self.addAudioRedundancy(mungedSDP)
+        mungedSDP = Self.addTransportCC(mungedSDP)
+        mungedSDP = Self.addVideoBitrateHints(mungedSDP)
+        let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
+        try await setLocalDescription(mungedDescription, on: pc)
+        Logger.webrtc.info("SDP offer created and set as local description (Opus munged)")
+        return SessionDescription(type: .offer, sdp: mungedSDP)
     }
 
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription {
@@ -168,9 +181,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
             }
         }
 
-        try await setLocalDescription(sdp, on: pc)
-        Logger.webrtc.info("SDP answer created and set as local description")
-        return SessionDescription(type: .answer, sdp: sdp.sdp)
+        var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
+        mungedSDP = Self.addAudioRedundancy(mungedSDP)
+        mungedSDP = Self.addTransportCC(mungedSDP)
+        mungedSDP = Self.addVideoBitrateHints(mungedSDP)
+        let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
+        try await setLocalDescription(mungedDescription, on: pc)
+        Logger.webrtc.info("SDP answer created and set as local description (Opus munged)")
+        return SessionDescription(type: .answer, sdp: mungedSDP)
     }
 
     func setRemoteAnswer(_ answer: SessionDescription) async throws {
@@ -281,6 +299,169 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
                 let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
                 return d.width <= 1280 && d.height <= 720
             }) ?? RTCCameraVideoCapturer.supportedFormats(for: device).last
+    }
+
+    static func mungeOpusSDP(_ sdp: String) -> String {
+        let opusParams = [
+            "maxaveragebitrate=128000",
+            "stereo=1",
+            "useinbandfec=1",
+            "usedtx=0",
+            "maxplaybackrate=48000"
+        ]
+        let paramString = opusParams.joined(separator: ";")
+
+        var lines = sdp.components(separatedBy: "\r\n")
+        var opusPayloadType: String?
+
+        for line in lines where line.hasPrefix("a=rtpmap:") && line.contains("opus/48000") {
+            let parts = line.dropFirst("a=rtpmap:".count).split(separator: " ", maxSplits: 1)
+            if let pt = parts.first {
+                opusPayloadType = String(pt)
+            }
+        }
+
+        guard let payloadType = opusPayloadType else { return sdp }
+
+        let fmtpPrefix = "a=fmtp:\(payloadType) "
+        var found = false
+        lines = lines.map { line in
+            guard line.hasPrefix(fmtpPrefix) else { return line }
+            found = true
+            let existing = line.dropFirst(fmtpPrefix.count)
+            var params = existing.split(separator: ";").map(String.init)
+            let newKeys = Set(opusParams.map { $0.split(separator: "=", maxSplits: 1).first.map(String.init) ?? "" })
+            params.removeAll { param in
+                let key = param.split(separator: "=", maxSplits: 1).first.map(String.init) ?? ""
+                return newKeys.contains(key)
+            }
+            params.append(contentsOf: opusParams)
+            return fmtpPrefix + params.joined(separator: ";")
+        }
+
+        if !found {
+            if let rtpmapIndex = lines.firstIndex(where: { $0.hasPrefix("a=rtpmap:\(payloadType) ") }) {
+                lines.insert(fmtpPrefix + paramString, at: rtpmapIndex + 1)
+            }
+        }
+
+        return lines.joined(separator: "\r\n")
+    }
+
+    static func addAudioRedundancy(_ sdp: String) -> String {
+        var lines = sdp.components(separatedBy: "\r\n")
+
+        var opusPayloadType: String?
+        for line in lines where line.hasPrefix("a=rtpmap:") && line.contains("opus/48000") {
+            let parts = line.dropFirst("a=rtpmap:".count).split(separator: " ", maxSplits: 1)
+            if let pt = parts.first { opusPayloadType = String(pt) }
+        }
+        guard let opusPT = opusPayloadType else { return sdp }
+
+        let redPT = "63"
+        let redRtpmap = "a=rtpmap:\(redPT) red/48000/2"
+        guard !lines.contains(where: { $0.contains("red/48000") }) else { return sdp }
+
+        let redFmtp = "a=fmtp:\(redPT) \(opusPT)/\(opusPT)"
+
+        for i in 0..<lines.count {
+            guard lines[i].hasPrefix("m=audio ") else { continue }
+            let parts = lines[i].split(separator: " ")
+            guard parts.count >= 4 else { continue }
+            let prefix = parts[0..<3].joined(separator: " ")
+            let payloads = parts[3...].map(String.init)
+            guard !payloads.contains(redPT) else { break }
+            lines[i] = prefix + " " + redPT + " " + payloads.joined(separator: " ")
+
+            if let rtpmapIdx = lines[(i+1)...].firstIndex(where: { $0.hasPrefix("a=rtpmap:\(opusPT) ") }) {
+                lines.insert(redFmtp, at: rtpmapIdx)
+                lines.insert(redRtpmap, at: rtpmapIdx)
+            }
+            break
+        }
+
+        return lines.joined(separator: "\r\n")
+    }
+
+    static func addTransportCC(_ sdp: String) -> String {
+        let transportCCURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+        guard !sdp.contains(transportCCURI) else { return sdp }
+
+        var lines = sdp.components(separatedBy: "\r\n")
+        var usedExtmapIDs = Set<Int>()
+        for line in lines where line.hasPrefix("a=extmap:") {
+            let idStr = line.dropFirst("a=extmap:".count).split(separator: " ", maxSplits: 1).first ?? ""
+            let cleanID = idStr.split(separator: "/").first ?? idStr
+            if let id = Int(cleanID) { usedExtmapIDs.insert(id) }
+        }
+
+        var extID = 5
+        while usedExtmapIDs.contains(extID) { extID += 1 }
+        let extmapLine = "a=extmap:\(extID) \(transportCCURI)"
+
+        for i in 0..<lines.count where lines[i].hasPrefix("m=audio ") || lines[i].hasPrefix("m=video ") {
+            var insertIdx = i + 1
+            while insertIdx < lines.count && !lines[insertIdx].hasPrefix("m=") {
+                if lines[insertIdx].hasPrefix("a=extmap:") {
+                    insertIdx += 1
+                    continue
+                }
+                if lines[insertIdx].hasPrefix("a=") && !lines[insertIdx].hasPrefix("a=extmap:") { break }
+                insertIdx += 1
+            }
+            lines.insert(extmapLine, at: insertIdx)
+        }
+
+        return lines.joined(separator: "\r\n")
+    }
+
+    static func addVideoBitrateHints(_ sdp: String) -> String {
+        var lines = sdp.components(separatedBy: "\r\n")
+        var inVideoSection = false
+
+        for i in 0..<lines.count {
+            if lines[i].hasPrefix("m=video ") {
+                inVideoSection = true
+                continue
+            }
+            if lines[i].hasPrefix("m=") { inVideoSection = false }
+            guard inVideoSection && lines[i].hasPrefix("a=fmtp:") else { continue }
+            guard !lines[i].contains("x-google-max-bitrate") else { continue }
+            lines[i] += ";x-google-max-bitrate=2500;x-google-min-bitrate=100"
+        }
+
+        return lines.joined(separator: "\r\n")
+    }
+
+    static func enableSimulcast(_ sdp: String) -> String {
+        var lines = sdp.components(separatedBy: "\r\n")
+        var firstVideoMLine: Int?
+
+        for i in 0..<lines.count where lines[i].hasPrefix("m=video ") {
+            firstVideoMLine = i
+            break
+        }
+        guard let videoIdx = firstVideoMLine else { return sdp }
+
+        var endOfVideoSection = lines.count
+        for i in (videoIdx + 1)..<lines.count where lines[i].hasPrefix("m=") {
+            endOfVideoSection = i
+            break
+        }
+
+        guard !lines[videoIdx..<endOfVideoSection].contains(where: { $0.hasPrefix("a=simulcast:") }) else {
+            return sdp
+        }
+
+        let simulcastLines = [
+            "a=rid:h send",
+            "a=rid:m send",
+            "a=rid:l send",
+            "a=simulcast:send h;m;l"
+        ]
+        lines.insert(contentsOf: simulcastLines, at: endOfVideoSection)
+
+        return lines.joined(separator: "\r\n")
     }
 
     private func targetFrameRate(for format: AVCaptureDevice.Format) -> Int {

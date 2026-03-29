@@ -1531,6 +1531,12 @@ model CallSession {
   /// Transcriptions (Phase 2A/2B)
   transcriptions Transcription[]
 
+  /// Reason the call ended (null while active)
+  endReason CallEndReason?
+
+  /// Whether transcription was enabled during this call
+  transcriptionEnabled Boolean @default(false)
+
   /// Call metadata
   metadata Json? // { maxParticipants, recordingEnabled, etc. }
 
@@ -1642,10 +1648,23 @@ enum CallMode {
 enum CallStatus {
   initiated // Call created, waiting for participants
   ringing // Ringing on remote participants
+  connecting // WebRTC negotiation in progress
   active // Call is active with participants
+  reconnecting // ICE restart in progress
   ended // Call has ended
   missed // Call was not answered
   rejected // Call was rejected by recipient
+  failed // ICE/network failure during setup
+}
+
+enum CallEndReason {
+  completed // Normal hangup by either party
+  missed // Ringing timeout (30s)
+  rejected // Callee declined
+  failed // ICE/network failure
+  connectionLost // Reconnection failed after 3 attempts
+  heartbeatTimeout // No heartbeat for 60s
+  garbageCollected // Server GC cleanup
 }
 
 enum ParticipantRole {

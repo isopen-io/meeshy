@@ -10,10 +10,25 @@
  * Unified Participant model: all calls use participantId
  */
 
-import { PrismaClient, CallMode, CallStatus, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
+import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 import { TURNCredentialService } from './TURNCredentialService';
+
+const TERMINAL_STATUSES: CallStatus[] = [
+  CallStatus.ended,
+  CallStatus.missed,
+  CallStatus.rejected,
+  CallStatus.failed
+];
+
+const ACTIVE_STATUSES: CallStatus[] = [
+  CallStatus.initiated,
+  CallStatus.ringing,
+  CallStatus.connecting,
+  CallStatus.active,
+  CallStatus.reconnecting
+];
 
 // Type for CallSession with populated participants
 type CallSessionWithParticipants = Prisma.CallSessionGetPayload<{
@@ -117,9 +132,93 @@ interface LeaveCallData {
 
 export class CallService {
   private turnCredentialService: TURNCredentialService;
+  private heartbeats: Map<string, Map<string, number>> = new Map();
 
   constructor(private prisma: PrismaClient) {
     this.turnCredentialService = new TURNCredentialService();
+  }
+
+  /**
+   * Record a heartbeat from a participant
+   */
+  recordHeartbeat(callId: string, participantId: string): void {
+    if (!this.heartbeats.has(callId)) {
+      this.heartbeats.set(callId, new Map());
+    }
+    this.heartbeats.get(callId)!.set(participantId, Date.now());
+  }
+
+  /**
+   * Get last heartbeat timestamp for a participant
+   */
+  getLastHeartbeat(callId: string, participantId: string): number | undefined {
+    return this.heartbeats.get(callId)?.get(participantId);
+  }
+
+  /**
+   * Clear heartbeat tracking for a call
+   */
+  clearHeartbeats(callId: string): void {
+    this.heartbeats.delete(callId);
+  }
+
+  /**
+   * Get all participants with stale heartbeats (> maxAge ms ago)
+   */
+  getStaleHeartbeats(callId: string, maxAgeMs: number): string[] {
+    const callHeartbeats = this.heartbeats.get(callId);
+    if (!callHeartbeats) return [];
+
+    const now = Date.now();
+    const stale: string[] = [];
+    for (const [participantId, lastBeat] of callHeartbeats) {
+      if (now - lastBeat > maxAgeMs) {
+        stale.push(participantId);
+      }
+    }
+    return stale;
+  }
+
+  /**
+   * Update call status with validation (state machine transition)
+   */
+  async updateCallStatus(callId: string, newStatus: CallStatus, endReason?: CallEndReason): Promise<CallSessionWithParticipants> {
+    const call = await this.prisma.callSession.findUnique({
+      where: { id: callId }
+    });
+
+    if (!call) {
+      throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
+    }
+
+    if (TERMINAL_STATUSES.includes(call.status)) {
+      logger.warn('Call already in terminal state', { callId, currentStatus: call.status, requestedStatus: newStatus });
+      return this.getCallSession(callId);
+    }
+
+    const updateData: Prisma.CallSessionUpdateInput = { status: newStatus };
+
+    if (TERMINAL_STATUSES.includes(newStatus)) {
+      const now = new Date();
+      updateData.endedAt = now;
+      updateData.duration = Math.floor((now.getTime() - call.startedAt.getTime()) / 1000);
+      if (endReason) {
+        updateData.endReason = endReason;
+      }
+    }
+
+    if (newStatus === CallStatus.active && !call.answeredAt) {
+      updateData.answeredAt = new Date();
+    }
+
+    await this.prisma.callSession.update({
+      where: { id: callId },
+      data: updateData
+    });
+
+    logger.info('Call status updated', { callId, from: call.status, to: newStatus, endReason });
+
+    return this.getCallSession(callId);
   }
 
   /**
@@ -178,7 +277,7 @@ export class CallService {
     const activeCall = await this.prisma.callSession.findFirst({
       where: {
         conversationId,
-        status: { in: ['initiated', 'ringing', 'active'] }
+        status: { in: ACTIVE_STATUSES }
       },
       include: {
         participants: true
@@ -206,14 +305,13 @@ export class CallService {
             status: CallStatus.ended,
             endedAt: now,
             duration,
-            metadata: {
-              ...(activeCall.metadata as Record<string, unknown>),
-              endReason: 'zombie_cleanup'
-            }
+            endReason: CallEndReason.garbageCollected
           }
         });
 
-        logger.info('✅ Zombie call cleaned up', { zombieCallId: activeCall.id });
+        this.clearHeartbeats(activeCall.id);
+
+        logger.info('Zombie call cleaned up', { zombieCallId: activeCall.id });
       } else {
         // Real active call with participants
         logger.error('❌ Call already active', { conversationId, callId: activeCall.id });
@@ -353,12 +451,12 @@ export class CallService {
         }
       });
 
-      // Update call status to 'active' if it was 'initiated'
-      if (call.status === CallStatus.initiated) {
+      // Transition: initiated/ringing → connecting (WebRTC negotiation starts)
+      if (call.status === CallStatus.initiated || call.status === CallStatus.ringing) {
         await tx.callSession.update({
           where: { id: callId },
           data: {
-            status: CallStatus.active,
+            status: CallStatus.connecting,
             answeredAt: new Date()
           }
         });
@@ -508,8 +606,8 @@ export class CallService {
    * @param participantId - Participant ID of the user ending the call
    * @param isAnonymous - Whether the user is anonymous (anonymous users CANNOT end calls)
    */
-  async endCall(callId: string, endedBy: string, participantId: string, isAnonymous?: boolean): Promise<CallSessionWithParticipants> {
-    logger.info('📞 Ending call', { callId, endedBy, isAnonymous });
+  async endCall(callId: string, endedBy: string, participantId: string, isAnonymous?: boolean, reason?: string): Promise<CallSessionWithParticipants> {
+    logger.info('Ending call', { callId, endedBy, isAnonymous, reason });
 
     // CVE-004: Anonymous users cannot end calls for everyone
     if (isAnonymous) {
@@ -542,23 +640,17 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not in this call`);
     }
 
-    // Only initiator can end the call (in P2P mode)
-    // In future SFU mode, add moderator role check
-    if (userParticipant.role !== ParticipantRole.initiator) {
-      logger.warn('⚠️ Non-initiator attempted to end call', {
-        callId,
-        userId: endedBy,
-        role: userParticipant.role
-      });
-      throw new Error(`${CALL_ERROR_CODES.PERMISSION_DENIED}: Only the call initiator can end the call`);
-    }
+    // P2P: ANY active participant can end the call (spec C4 fix)
+    // SFU (Phase 2): only initiator/moderator can end for everyone
 
     const endedAt = new Date();
-    const duration = Math.floor((endedAt.getTime() - call.startedAt.getTime()) / 1000);
+    const duration = call.answeredAt
+      ? Math.floor((endedAt.getTime() - call.answeredAt.getTime()) / 1000)
+      : 0;
 
-    // End call in transaction
+    const endReason = this.resolveEndReason(reason);
+
     await this.prisma.$transaction(async (tx) => {
-      // Update all active participants
       await tx.callParticipant.updateMany({
         where: {
           callSessionId: callId,
@@ -567,13 +659,13 @@ export class CallService {
         data: { leftAt: endedAt }
       });
 
-      // Update call status
       await tx.callSession.update({
         where: { id: callId },
         data: {
           status: CallStatus.ended,
           endedAt,
           duration,
+          endReason,
           metadata: {
             ...(call.metadata as Record<string, unknown>),
             endedBy
@@ -582,7 +674,9 @@ export class CallService {
       });
     });
 
-    logger.info('✅ Call ended successfully', { callId, duration, endedBy });
+    this.clearHeartbeats(callId);
+
+    logger.info('Call ended successfully', { callId, duration, endedBy, endReason });
 
     return this.getCallSession(callId);
   }
@@ -594,7 +688,7 @@ export class CallService {
     const call = await this.prisma.callSession.findFirst({
       where: {
         conversationId,
-        status: { in: [CallStatus.initiated, CallStatus.ringing, CallStatus.active] }
+        status: { in: ACTIVE_STATUSES }
       },
       include: callSessionInclude
     });
@@ -681,14 +775,13 @@ export class CallService {
         status: CallStatus.missed,
         endedAt: now,
         duration,
-        metadata: {
-          ...(callSession.metadata as Record<string, unknown>),
-          endReason: 'missed'
-        }
+        endReason: CallEndReason.missed
       }
     });
 
-    logger.info('✅ Call marked as missed', { callId, duration });
+    this.clearHeartbeats(callId);
+
+    logger.info('Call marked as missed', { callId, duration });
 
     return this.getCallSession(callId);
   }
@@ -722,14 +815,13 @@ export class CallService {
         status: CallStatus.rejected,
         endedAt: now,
         duration,
-        metadata: {
-          ...(callSession.metadata as Record<string, unknown>),
-          endReason: 'rejected'
-        }
+        endReason: CallEndReason.rejected
       }
     });
 
-    logger.info('✅ Call marked as rejected', { callId, duration });
+    this.clearHeartbeats(callId);
+
+    logger.info('Call marked as rejected', { callId, duration });
 
     return this.getCallSession(callId);
   }
@@ -776,5 +868,20 @@ export class CallService {
     );
 
     return unrespondedUserIds;
+  }
+
+  /**
+   * Resolve a string reason to a Prisma CallEndReason enum
+   */
+  private resolveEndReason(reason?: string): CallEndReason {
+    switch (reason) {
+      case 'missed': return CallEndReason.missed;
+      case 'rejected': return CallEndReason.rejected;
+      case 'failed': return CallEndReason.failed;
+      case 'connectionLost': return CallEndReason.connectionLost;
+      case 'heartbeatTimeout': return CallEndReason.heartbeatTimeout;
+      case 'garbageCollected': return CallEndReason.garbageCollected;
+      default: return CallEndReason.completed;
+    }
   }
 }

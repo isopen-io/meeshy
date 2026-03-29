@@ -38,6 +38,12 @@ export interface TranscriptionSegment {
   readonly confidence?: number;
   /** Langue détectée pour ce segment (ISO 639-1) */
   readonly language?: string;
+  /** true = segment finalisé, false = partiel (streaming transcription) */
+  readonly isFinal?: boolean;
+  /** Texte traduit via NLLB pour la langue préférée de l'utilisateur */
+  readonly translatedText?: string;
+  /** Langue cible de la traduction (ISO 639-1) */
+  readonly translatedLanguage?: string;
 }
 
 /**

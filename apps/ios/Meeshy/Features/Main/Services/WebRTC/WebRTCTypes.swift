@@ -6,6 +6,7 @@ enum SDPType: String, Codable, Sendable {
     case offer
     case answer
     case prAnswer = "pranswer"
+    case iceRestart = "ice-restart"
 }
 
 struct SessionDescription: Codable, Sendable {
@@ -87,6 +88,44 @@ protocol WebRTCClientDelegate: AnyObject {
     func webRTCClient(_ client: any WebRTCClientProviding, didChangeConnectionState state: PeerConnectionState)
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: Any)
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: Any)
+}
+
+// MARK: - Call End Reason
+
+enum CallEndReason: Equatable {
+    case local
+    case remote
+    case rejected
+    case missed
+    case failed(String)
+    case connectionLost
+}
+
+// MARK: - Call Display Mode
+
+enum CallDisplayMode: Sendable {
+    case fullScreen
+    case pip
+}
+
+// MARK: - Quality Thresholds
+
+enum QualityThresholds {
+    static let excellentRTT: Double = 100
+    static let goodRTT: Double = 250
+    static let poorRTT: Double = 500
+
+    static let excellentPacketLoss: Double = 0.01
+    static let goodPacketLoss: Double = 0.05
+    static let poorPacketLoss: Double = 0.10
+
+    static let maxBitrate: Int = 128_000
+    static let minBitrate: Int = 24_000
+    static let defaultBitrate: Int = 64_000
+
+    static let statsIntervalSeconds: TimeInterval = 3.0
+    static let heartbeatIntervalSeconds: TimeInterval = 15.0
+    static let maxReconnectAttempts: Int = 3
 }
 
 // MARK: - Errors
