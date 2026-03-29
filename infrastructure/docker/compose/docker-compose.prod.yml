@@ -255,6 +255,7 @@ services:
       - ZMQ_TRANSLATOR_HOST=translator
       - ZMQ_TRANSLATOR_PUSH_PORT=5555
       - ZMQ_TRANSLATOR_SUB_PORT=5558
+      - AGENT_HOST=agent
       - NODE_ENV=production
       - DOMAIN=${DOMAIN:-meeshy.me}
       - CORS_ORIGINS=https://${DOMAIN:-meeshy.me},https://www.${DOMAIN:-meeshy.me},https://api.${DOMAIN:-meeshy.me},https://gate.${DOMAIN:-meeshy.me}

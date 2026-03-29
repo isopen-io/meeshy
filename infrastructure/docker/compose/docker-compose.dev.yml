@@ -213,6 +213,7 @@ services:
       ZMQ_TRANSLATOR_HOST: translator
       ZMQ_TRANSLATOR_PUSH_PORT: "5555"
       ZMQ_TRANSLATOR_SUB_PORT: "5558"
+      AGENT_HOST: agent
       NODE_ENV: development
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3100}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3100}
