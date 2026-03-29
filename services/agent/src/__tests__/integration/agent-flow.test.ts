@@ -236,7 +236,11 @@ describe('Agent Flow E2E', () => {
       maxReactionsPerCycle: 8,
     });
 
-    expect(result.interventionPlan?.shouldIntervene).toBe(false);
-    expect(result.pendingActions).toEqual([]);
+    // With high activity, no MESSAGE interventions should be generated
+    // but lurker REACTIONS are still allowed (they're passive engagement)
+    const messageActions = (result.interventionPlan?.interventions ?? []).filter(
+      (i: { type: string }) => i.type === 'message',
+    );
+    expect(messageActions).toEqual([]);
   });
 });
