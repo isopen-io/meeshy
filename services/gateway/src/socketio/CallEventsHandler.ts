@@ -22,7 +22,12 @@ import {
   socketJoinCallSchema,
   socketLeaveCallSchema,
   socketSignalSchema,
-  socketMediaToggleSchema
+  socketMediaToggleSchema,
+  socketEndCallSchema,
+  socketHeartbeatSchema,
+  socketQualityReportSchema,
+  socketReconnectingSchema,
+  socketReconnectedSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import type {
@@ -34,7 +39,14 @@ import type {
   CallSignalEvent,
   CallEndedEvent,
   CallMediaToggleEvent,
-  CallError
+  CallError,
+  CallHeartbeatEvent,
+  CallQualityReportEvent,
+  CallReconnectingEvent,
+  CallReconnectedEvent,
+  CallInitiateAck,
+  CallJoinAck,
+  CallEndReason,
 } from '@meeshy/shared/types/video-call';
 
 // ICE servers configuration (STUN/TURN)
@@ -79,6 +91,26 @@ export class CallEventsHandler {
   }
 
   /**
+   * Resolve target userId to their socket IDs within a call room
+   */
+  private async resolveTargetSockets(
+    io: any,
+    callId: string,
+    targetUserId: string,
+    getUserId: (socketId: string) => string | undefined
+  ): Promise<string[]> {
+    const socketsInRoom = await io.in(ROOMS.call(callId)).fetchSockets();
+    const targetSocketIds: string[] = [];
+    for (const s of socketsInRoom) {
+      const socketUserId = getUserId(s.id);
+      if (socketUserId === targetUserId) {
+        targetSocketIds.push(s.id);
+      }
+    }
+    return targetSocketIds;
+  }
+
+  /**
    * Initialiser le service de notifications
    */
   setNotificationService(notificationService: NotificationService): void {
@@ -101,7 +133,7 @@ export class CallEventsHandler {
      * CVE-002: Added rate limiting (5 req/min)
      * CVE-006: Added input validation
      */
-    socket.on(CALL_EVENTS.INITIATE, async (data: CallInitiateEvent) => {
+    socket.on(CALL_EVENTS.INITIATE, async (data: CallInitiateEvent, ack?: (response: CallInitiateAck) => void) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
@@ -194,12 +226,10 @@ export class CallEventsHandler {
           }))
         };
 
-        // Emit to initiator (confirmation) - direct socket emit
-        logger.info('📤 Sending call:initiated to initiator (direct)', {
-          callId: callSession.id,
-          initiatorSocketId: socket.id,
-          initiatorUserId: userId
-        });
+        // ACK to initiator with callId and mode
+        ack?.({ success: true, data: { callId: callSession.id, mode: callSession.mode } });
+
+        // Also emit call:initiated to initiator socket
         socket.emit(CALL_EVENTS.INITIATED, initiatedEvent);
 
         // Get all conversation participants and send to their sockets directly
@@ -248,7 +278,7 @@ export class CallEventsHandler {
           roomName
         });
       } catch (error: any) {
-        logger.error('❌ Socket: Error initiating call', error);
+        logger.error('Error initiating call', error);
 
         const errorMessage = error.message || 'Failed to initiate call';
         const errorCode = errorMessage.split(':')[0];
@@ -256,10 +286,8 @@ export class CallEventsHandler {
           ? errorMessage.split(':').slice(1).join(':').trim()
           : errorMessage;
 
-        socket.emit(CALL_EVENTS.ERROR, {
-          code: errorCode,
-          message
-        } as CallError);
+        ack?.({ success: false, error: { code: errorCode, message } });
+        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
       }
     });
 
@@ -268,7 +296,7 @@ export class CallEventsHandler {
      * CVE-002: Added rate limiting (20 req/min)
      * CVE-006: Added input validation
      */
-    socket.on(CALL_EVENTS.JOIN, async (data: CallJoinEvent) => {
+    socket.on(CALL_EVENTS.JOIN, async (data: CallJoinEvent, ack?: (response: CallJoinAck) => void) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
@@ -359,12 +387,8 @@ export class CallEventsHandler {
           mode: callSession.mode
         };
 
-        // CVE-005: Send dynamic ICE servers (with time-limited TURN credentials) to joining participant
-        socket.emit(CALL_EVENTS.JOIN, {
-          success: true,
-          callSession,
-          iceServers // Dynamic credentials from TURNCredentialService
-        });
+        // ACK with call session and ICE servers (with time-limited TURN credentials)
+        ack?.({ success: true, data: { callSession: callSession as any, iceServers } });
 
         // Broadcast to all OTHER call participants (exclude the participant who just joined)
         // They already received their confirmation via call:join
@@ -494,22 +518,14 @@ export class CallEventsHandler {
           const endedEvent: CallEndedEvent = {
             callId: callSession.id,
             duration: callSession.duration || 0,
-            endedBy: userId
+            endedBy: userId,
+            reason: (callSession.endReason || 'completed') as CallEndReason
           };
 
-          // Broadcast to call room (for active participants)
-          io.to(ROOMS.call(data.callId)).emit(
-            CALL_EVENTS.ENDED,
-            endedEvent
-          );
+          io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, endedEvent);
+          io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
 
-          // Also broadcast to conversation room (for users who declined/weren't in call yet)
-          io.to(ROOMS.conversation(callSession.conversationId)).emit(
-            CALL_EVENTS.ENDED,
-            endedEvent
-          );
-
-          logger.info('✅ Socket: Call ended - last participant left', {
+          logger.info('Call ended - last participant left', {
             callId: data.callId,
             duration: callSession.duration
           });
@@ -607,12 +623,12 @@ export class CallEventsHandler {
               // Leave the room
               socket.leave(ROOMS.call(call.id));
 
-              // If call ended, broadcast ended event
               if (callSession.status === 'ended') {
                 const endedEvent: CallEndedEvent = {
                   callId: callSession.id,
                   duration: callSession.duration || 0,
-                  endedBy: userId
+                  endedBy: userId,
+                  reason: (callSession.endReason || 'completed') as CallEndReason
                 };
 
                 io.to(ROOMS.call(call.id)).emit(CALL_EVENTS.ENDED, endedEvent);
@@ -644,7 +660,7 @@ export class CallEventsHandler {
      * CVE-002: Added rate limiting (100 req/10s)
      * CVE-006: Added input validation
      */
-    socket.on(CALL_EVENTS.SIGNAL, async (data: CallSignalEvent) => {
+    socket.on(CALL_EVENTS.SIGNAL, async (data: CallSignalEvent, ack?: (response: { success: boolean }) => void) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
@@ -739,15 +755,41 @@ export class CallEventsHandler {
           return;
         }
 
-        // CVE-001: Forward signal only to target participant (not broadcast to entire room)
-        // This prevents signal injection to unintended recipients
-        socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SIGNAL, data);
+        // TARGETED EMIT: Forward signal ONLY to the target participant's sockets
+        // Resolves target userId to their socketIds within the call room
+        const targetUserId = (targetParticipant as any).participant?.userId || targetParticipant.participantId;
+        const targetSocketIds = await this.resolveTargetSockets(io, data.callId, targetUserId, getUserId);
 
-        logger.info('✅ Socket: Signal forwarded', {
+        if (targetSocketIds.length === 0) {
+          logger.warn('Target participant has no active sockets', {
+            callId: data.callId,
+            targetUserId
+          });
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
+            message: 'Target participant has no active connection'
+          });
+          ack?.({ success: false });
+          return;
+        }
+
+        for (const targetSocketId of targetSocketIds) {
+          io.to(targetSocketId).emit(CALL_EVENTS.SIGNAL, data);
+        }
+
+        // Transition to active on first successful signal exchange
+        if (data.signal.type === 'answer') {
+          await this.callService.updateCallStatus(data.callId, 'active' as any).catch(() => {});
+        }
+
+        ack?.({ success: true });
+
+        logger.info('Signal forwarded (targeted)', {
           callId: data.callId,
           from: data.signal.from,
-          to: data.signal.to,
-          type: data.signal.type
+          to: targetUserId,
+          type: data.signal.type,
+          targetSockets: targetSocketIds.length
         });
       } catch (error: any) {
         logger.error('❌ Socket: Error forwarding signal', error);
@@ -920,10 +962,10 @@ export class CallEventsHandler {
     });
 
     /**
-     * call:end - Force end a call (privileged operation)
-     * CVE-004: Only initiators can end calls, anonymous users are blocked
+     * call:end - End a call (ANY active participant can end in P2P)
+     * CVE-004: Anonymous users still blocked
      */
-    socket.on('call:end', async (data: { callId: string }) => {
+    socket.on(CALL_EVENTS.END, async (data: { callId: string; reason?: string }, ack?: (response: { success: boolean }) => void) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
@@ -931,69 +973,173 @@ export class CallEventsHandler {
             code: 'NOT_AUTHENTICATED',
             message: 'User not authenticated'
           } as CallError);
+          ack?.({ success: false });
           return;
         }
 
-        // CVE-004: Get user info to check if anonymous
+        // Rate limiting
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_LEAVE, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) { ack?.({ success: false }); return; }
+
+        // Validate
+        const validation = validateSocketEvent(socketEndCallSchema, data);
+        if (!validation.success) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: (validation as any).error
+          } as any);
+          ack?.({ success: false });
+          return;
+        }
+
         const userInfo = getUserInfo?.(socket.id);
         const isAnonymous = userInfo?.isAnonymous || false;
 
-        logger.info('📞 Socket: call:end', {
-          socketId: socket.id,
-          userId,
-          callId: data.callId,
-          isAnonymous
-        });
-
-        // Resolve participantId from userId + callId
         const endParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (!endParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation'
           } as CallError);
+          ack?.({ success: false });
           return;
         }
 
-        // CVE-004: End call via service (with anonymous check)
         const callSession = await this.callService.endCall(
-          data.callId,
-          userId,
-          endParticipantId,
-          isAnonymous
+          data.callId, userId, endParticipantId, isAnonymous, data.reason
         );
 
-        // Broadcast call ended event to all participants
+        const endReason = (callSession.endReason || 'completed') as CallEndReason;
+
         const endedEvent: CallEndedEvent = {
           callId: callSession.id,
           duration: callSession.duration || 0,
-          endedBy: userId
+          endedBy: userId,
+          reason: endReason
         };
 
-        // Broadcast to conversation room
-        io.to(ROOMS.conversation(callSession.conversationId)).emit(
-          CALL_EVENTS.ENDED,
-          endedEvent
-        );
+        // Broadcast to both call room and conversation room
+        io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, endedEvent);
+        io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
 
-        logger.info('✅ Socket: Call ended by user', {
+        ack?.({ success: true });
+
+        logger.info('Call ended by user', {
           callId: data.callId,
           endedBy: userId,
-          duration: callSession.duration
+          duration: callSession.duration,
+          reason: endReason
         });
       } catch (error: any) {
-        logger.error('❌ Socket: Error ending call', error);
-
+        logger.error('Error ending call', error);
         const errorMessage = error.message || 'Failed to end call';
         const errorCode = errorMessage.split(':')[0];
         const message = errorMessage.includes(':')
           ? errorMessage.split(':').slice(1).join(':').trim()
           : errorMessage;
+        ack?.({ success: false });
+        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
+      }
+    });
 
-        socket.emit(CALL_EVENTS.ERROR, {
-          code: errorCode,
-          message
-        } as CallError);
+    /**
+     * call:heartbeat - Fire-and-forget heartbeat to prevent zombie calls
+     */
+    socket.on(CALL_EVENTS.HEARTBEAT, async (data: CallHeartbeatEvent) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+
+        const validation = validateSocketEvent(socketHeartbeatSchema, data);
+        if (!validation.success) return;
+
+        const participantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (participantId) {
+          this.callService.recordHeartbeat(data.callId, participantId);
+        }
+      } catch (error) {
+        logger.error('Error recording heartbeat', { error });
+      }
+    });
+
+    /**
+     * call:quality-report - Fire-and-forget quality stats
+     */
+    socket.on(CALL_EVENTS.QUALITY_REPORT, async (data: CallQualityReportEvent) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+
+        const validation = validateSocketEvent(socketQualityReportSchema, data);
+        if (!validation.success) return;
+
+        // Check quality thresholds and emit alerts if needed
+        const { stats } = data;
+        if (stats.rtt > 300 || stats.packetLoss > 5) {
+          const participantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+          if (participantId) {
+            const metric = stats.rtt > 300 ? 'rtt' : 'packetLoss';
+            const value = metric === 'rtt' ? stats.rtt : stats.packetLoss;
+            const threshold = metric === 'rtt' ? 300 : 5;
+
+            io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.QUALITY_ALERT, {
+              callId: data.callId,
+              participantId,
+              metric,
+              value,
+              threshold
+            });
+          }
+        }
+      } catch (error) {
+        logger.error('Error processing quality report', { error });
+      }
+    });
+
+    /**
+     * call:reconnecting - Client notifies server of ICE restart attempt
+     */
+    socket.on(CALL_EVENTS.RECONNECTING, async (data: CallReconnectingEvent) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+
+        const validation = validateSocketEvent(socketReconnectingSchema, data);
+        if (!validation.success) return;
+
+        await this.callService.updateCallStatus(data.callId, 'reconnecting' as any).catch(() => {});
+
+        logger.info('Call reconnecting', {
+          callId: data.callId,
+          participantId: data.participantId,
+          attempt: data.attempt
+        });
+      } catch (error) {
+        logger.error('Error handling reconnecting', { error });
+      }
+    });
+
+    /**
+     * call:reconnected - Client notifies server of successful reconnection
+     */
+    socket.on(CALL_EVENTS.RECONNECTED, async (data: CallReconnectedEvent) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+
+        const validation = validateSocketEvent(socketReconnectedSchema, data);
+        if (!validation.success) return;
+
+        await this.callService.updateCallStatus(data.callId, 'active' as any).catch(() => {});
+
+        logger.info('Call reconnected', {
+          callId: data.callId,
+          participantId: data.participantId
+        });
+      } catch (error) {
+        logger.error('Error handling reconnected', { error });
       }
     });
 
