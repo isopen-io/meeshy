@@ -37,15 +37,23 @@ final class UserProfileViewModel: ObservableObject {
 
     func loadFullProfile() async {
         guard let userId = profileUser.userId, !isCurrentUser else { return }
-        isLoading = true
-        defer { isLoading = false }
 
         let cached = await CacheCoordinator.shared.profiles.load(for: userId)
-        if let cachedUser = cached.value?.first {
-            fullUser = cachedUser
+        switch cached {
+        case .fresh(let data, _):
+            fullUser = data.first
             return
+        case .stale(let data, _):
+            fullUser = data.first
+            await refreshProfile(userId: userId)
+        case .expired, .empty:
+            isLoading = fullUser == nil
+            await refreshProfile(userId: userId)
         }
+    }
 
+    private func refreshProfile(userId: String) async {
+        defer { isLoading = false }
         do {
             let user = try await UserService.shared.getProfile(idOrUsername: userId)
             await CacheCoordinator.shared.profiles.save([user], for: userId)
@@ -57,13 +65,28 @@ final class UserProfileViewModel: ObservableObject {
 
     func loadUserStats() async {
         guard let userId = profileUser.userId else { return }
-        isLoadingStats = true
         statsError = nil
-        defer { isLoadingStats = false }
 
+        let cached = await CacheCoordinator.shared.stats.load(for: userId)
+        switch cached {
+        case .fresh(let data, _):
+            userStats = data.first
+            return
+        case .stale(let data, _):
+            userStats = data.first
+            await refreshStats(userId: userId)
+        case .expired, .empty:
+            isLoadingStats = userStats == nil
+            await refreshStats(userId: userId)
+        }
+    }
+
+    private func refreshStats(userId: String) async {
+        defer { isLoadingStats = false }
         do {
             let stats = try await UserService.shared.getUserStats(userId: userId)
             userStats = stats
+            await CacheCoordinator.shared.stats.save([stats], for: userId)
         } catch {
             statsError = "Impossible de charger les statistiques"
         }

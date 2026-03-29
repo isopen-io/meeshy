@@ -779,14 +779,36 @@ private struct ProfileFetchingSheet: View {
         }
         .presentationDetents([.medium, .large])
         .task {
+            let identifier = user.userId ?? user.username
+            let cached = await CacheCoordinator.shared.profiles.load(for: identifier)
+            switch cached {
+            case .fresh(let data, _):
+                if let profile = data.first {
+                    if profile.isActive == false {
+                        fetchError = "Ce compte a ete desactive."
+                    } else {
+                        fullUser = profile
+                    }
+                    isLoading = false
+                    resolveConnectionStatus()
+                    return
+                }
+            case .stale(let data, _):
+                if let profile = data.first, profile.isActive != false {
+                    fullUser = profile
+                }
+            case .expired, .empty:
+                break
+            }
+
             do {
-                let identifier = user.userId ?? user.username
                 let fetched = try await UserService.shared.getProfile(idOrUsername: identifier)
                 if fetched.isActive == false {
                     fetchError = "Ce compte a ete desactive."
-                    return
+                } else {
+                    fullUser = fetched
+                    await CacheCoordinator.shared.profiles.save([fetched], for: identifier)
                 }
-                fullUser = fetched
             } catch let error as APIError {
                 switch error {
                 case .serverError(404, _):
