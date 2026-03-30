@@ -3,7 +3,23 @@ import { DailyBudgetManager } from '../../scheduler/daily-budget';
 function makeRedisStore() {
   const store = new Map<string, string>();
   const sets = new Map<string, Set<string>>();
-  return {
+
+  const incrFn = jest.fn(async (key: string) => {
+    const current = parseInt(store.get(key) ?? '0', 10);
+    const next = current + 1;
+    store.set(key, String(next));
+    return next;
+  });
+  const expireFn = jest.fn(async (_key?: string, _ttl?: number) => 1);
+  const saddFn = jest.fn(async (key: string, member: string) => {
+    const s = sets.get(key) ?? new Set<string>();
+    const isNew = !s.has(member);
+    s.add(member);
+    sets.set(key, s);
+    return isNew ? 1 : 0;
+  });
+
+  const redis = {
     store,
     sets,
     get: jest.fn(async (key: string) => store.get(key) ?? null),
@@ -11,24 +27,31 @@ function makeRedisStore() {
       store.set(key, value);
       return 'OK';
     }),
-    incr: jest.fn(async (key: string) => {
-      const current = parseInt(store.get(key) ?? '0', 10);
-      const next = current + 1;
-      store.set(key, String(next));
-      return next;
-    }),
-    expire: jest.fn(async () => 1),
-    sadd: jest.fn(async (key: string, member: string) => {
-      const s = sets.get(key) ?? new Set<string>();
-      const isNew = !s.has(member);
-      s.add(member);
-      sets.set(key, s);
-      return isNew ? 1 : 0;
-    }),
+    incr: incrFn,
+    expire: expireFn,
+    sadd: saddFn,
     scard: jest.fn(async (key: string) => {
       return sets.get(key)?.size ?? 0;
     }),
+    pipeline: jest.fn(() => {
+      const commands: Array<() => Promise<unknown>> = [];
+      const pipe = {
+        incr: (key: string) => { commands.push(() => incrFn(key)); return pipe; },
+        expire: (key: string, ttl: number) => { commands.push(() => expireFn(key, ttl)); return pipe; },
+        sadd: (key: string, member: string) => { commands.push(() => saddFn(key, member)); return pipe; },
+        exec: async () => {
+          const results = [];
+          for (const cmd of commands) {
+            results.push([null, await cmd()]);
+          }
+          return results;
+        },
+      };
+      return pipe;
+    }),
   };
+
+  return redis;
 }
 
 describe('DailyBudgetManager', () => {

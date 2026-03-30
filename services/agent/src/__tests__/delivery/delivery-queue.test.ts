@@ -1,4 +1,4 @@
-import { DeliveryQueue } from '../../delivery/delivery-queue';
+import { DeliveryQueue, type SerializedDeliveryItem } from '../../delivery/delivery-queue';
 import type { PendingMessage, PendingReaction } from '../../graph/state';
 
 function makePublisher() {
@@ -245,5 +245,152 @@ describe('DeliveryQueue — conversation-wide gap proportional to word count', (
     queue.enqueue('conv-1', [makeReaction({ asUserId: 'bot-bob', delaySeconds: 5 })]);
 
     expect(queue.pendingCount).toBe(2);
+  });
+});
+
+describe('DeliveryQueue — getAll and getByConversation', () => {
+  it('getAll returns all items sorted by scheduledAt', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ delaySeconds: 60 })]);
+    queue.enqueue('conv-2', [makeMessage({ delaySeconds: 30 })]);
+
+    const items = queue.getAll();
+    expect(items).toHaveLength(2);
+    expect(items[0].scheduledAt).toBeLessThanOrEqual(items[1].scheduledAt);
+  });
+
+  it('getAll returns items with id and remainingMs', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ delaySeconds: 60 })]);
+
+    const items = queue.getAll();
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBeDefined();
+    expect(typeof items[0].id).toBe('string');
+    expect(items[0].remainingMs).toBeGreaterThanOrEqual(0);
+    expect(items[0].conversationId).toBe('conv-1');
+    expect(items[0].action.type).toBe('message');
+  });
+
+  it('getAll returns empty array when queue is empty', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    expect(queue.getAll()).toEqual([]);
+  });
+
+  it('getByConversation filters to the right conversation', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ delaySeconds: 60 })]);
+    queue.enqueue('conv-2', [makeMessage({ delaySeconds: 30 })]);
+    queue.enqueue('conv-1', [makeReaction({ delaySeconds: 10 })]);
+
+    const items = queue.getByConversation('conv-1');
+    expect(items).toHaveLength(2);
+    expect(items.every((i: SerializedDeliveryItem) => i.conversationId === 'conv-1')).toBe(true);
+  });
+
+  it('getByConversation returns empty for unknown conversation', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ delaySeconds: 60 })]);
+    expect(queue.getByConversation('unknown')).toEqual([]);
+  });
+
+  it('serialized items do not contain timer property', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ delaySeconds: 60 })]);
+
+    const items = queue.getAll();
+    expect(items[0]).not.toHaveProperty('timer');
+  });
+});
+
+describe('DeliveryQueue — deleteById', () => {
+  it('deletes an item by id and prevents delivery', async () => {
+    const publisher = makePublisher();
+    const queue = new DeliveryQueue(publisher, makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ delaySeconds: 60 })]);
+
+    const items = queue.getAll();
+    expect(items).toHaveLength(1);
+
+    const deleted = queue.deleteById(items[0].id);
+    expect(deleted).toBe(true);
+    expect(queue.pendingCount).toBe(0);
+
+    await flushTimers();
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
+
+  it('returns false for unknown id', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ delaySeconds: 60 })]);
+
+    expect(queue.deleteById('nonexistent-id')).toBe(false);
+    expect(queue.pendingCount).toBe(1);
+  });
+
+  it('can delete a reaction item', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeReaction({ delaySeconds: 60 })]);
+
+    const items = queue.getAll();
+    expect(queue.deleteById(items[0].id)).toBe(true);
+    expect(queue.pendingCount).toBe(0);
+  });
+});
+
+describe('DeliveryQueue — editMessageById', () => {
+  it('edits message content and preserves scheduledAt', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ content: 'Original', delaySeconds: 60 })]);
+
+    const items = queue.getAll();
+    const original = items[0];
+
+    const updated = queue.editMessageById(original.id, 'Modified content');
+    expect(updated).not.toBeNull();
+    expect(updated!.action.type).toBe('message');
+    expect((updated!.action as PendingMessage).content).toBe('Modified content');
+    expect(updated!.scheduledAt).toBe(original.scheduledAt);
+    expect(updated!.id).toBe(original.id);
+  });
+
+  it('delivers the edited content', async () => {
+    const publisher = makePublisher();
+    const queue = new DeliveryQueue(publisher, makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ content: 'Original', delaySeconds: 5 })]);
+
+    const items = queue.getAll();
+    queue.editMessageById(items[0].id, 'Edited message');
+
+    await flushTimers();
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+    expect(publisher.publish.mock.calls[0][0].content).toBe('Edited message');
+  });
+
+  it('returns null for unknown id', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ delaySeconds: 60 })]);
+
+    expect(queue.editMessageById('nonexistent', 'New content')).toBeNull();
+  });
+
+  it('returns null when trying to edit a reaction', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeReaction({ delaySeconds: 60 })]);
+
+    const items = queue.getAll();
+    expect(queue.editMessageById(items[0].id, 'New content')).toBeNull();
+  });
+
+  it('preserves queue count after edit', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ delaySeconds: 60 })]);
+
+    const items = queue.getAll();
+    queue.editMessageById(items[0].id, 'Updated');
+
+    expect(queue.pendingCount).toBe(1);
+    expect(queue.getAll()[0].action.type).toBe('message');
+    expect((queue.getAll()[0].action as PendingMessage).content).toBe('Updated');
   });
 });

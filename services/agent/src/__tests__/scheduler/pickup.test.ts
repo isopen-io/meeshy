@@ -119,8 +119,8 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
 
     await scanner.scanConversation('conv-1');
 
-    // With 1 existing controlled user (< 3), reduced threshold (24h) applies
-    expect(persistence.getPotentialControlledUsers).toHaveBeenCalledWith('conv-1', 2, 24, [], []);
+    // With 1 existing controlled user (< 3 max), threshold from config (30h) applies
+    expect(persistence.getPotentialControlledUsers).toHaveBeenCalledWith('conv-1', 2, 30, [], []);
     const invokeArgs = graph.invoke.mock.calls[0][0];
     expect(invokeArgs.controlledUsers).toHaveLength(2); // 1 manual + 1 potential
     expect(invokeArgs.controlledUsers.find((u: any) => u.source === 'auto_rule')).toBeDefined();
