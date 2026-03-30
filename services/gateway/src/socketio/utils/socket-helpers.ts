@@ -41,7 +41,7 @@ export interface ConnectedUserResult {
  * Extrait le token JWT du socket (depuis handshake ou auth)
  */
 export function extractJWTToken(socket: Socket): string | undefined {
-  const authHeader = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
+  const authHeader = socket.handshake.auth?.token || socket.handshake.auth?.authToken || socket.handshake.headers?.authorization;
   if (!authHeader) return undefined;
 
   if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {

@@ -45,7 +45,14 @@ export class AuthHandler {
       const sessionToken = extractSessionToken(socket);
 
       if (!token && !sessionToken) {
-        console.warn(`[AUTH] ⚠️  Socket ${socket.id} sans token (ni JWT ni session)`);
+        console.warn(`[AUTH] ⚠️  Socket ${socket.id} sans token — déconnexion dans 10s si non authentifié`);
+        const authTimeout = setTimeout(() => {
+          if (!this.socketToUser.has(socket.id)) {
+            console.warn(`[AUTH] ⏰ Socket ${socket.id} toujours non authentifié après 10s — déconnexion`);
+            socket.disconnect(true);
+          }
+        }, 10_000);
+        socket.on('disconnect', () => clearTimeout(authTimeout));
         return;
       }
 
