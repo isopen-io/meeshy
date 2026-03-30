@@ -442,7 +442,8 @@ interface RTCIceServerConfig {
 
 ### 4.1 SDK Integration
 
-**Package**: webrtc-sdk/Specs from https://github.com/webrtc-sdk/Specs
+**Package**: stasel/WebRTC from https://github.com/stasel/WebRTC (M141, branch-heads/7390)
+**Rationale**: SPM natif, memes types que Google WebRTC (pas de prefix LK), M141 = derniere version, communaute active
 **Import**: import WebRTC
 **Minimum iOS**: 16.0
 **Swift compatibility**: 6.0 - 6.2
@@ -1163,7 +1164,7 @@ When the user has Spotify/Apple Music playing and starts a Meeshy call:
 | packages/shared/types/attachment-audio.ts | Add isFinal, translatedText, translatedLanguage to TranscriptionSegment |
 | packages/shared/types/attachment-transcription.ts | Same additions (keep in sync) |
 | packages/MeeshySDK/Sources/MeeshySDK/Models/TranscriptionModels.swift | Add fields, CodingKeys, custom decoder |
-| apps/ios/Meeshy.xcodeproj/project.pbxproj | SPM webrtc-sdk/Specs, background modes |
+| apps/ios/Meeshy.xcodeproj/project.pbxproj | SPM stasel/WebRTC M141, background modes |
 | apps/ios/Meeshy/Info.plist | Background modes (voip, audio), PiP entitlement |
 | apps/ios/MeeshyApp.swift | RTCInitializeSSL at launch, RTCCleanupSSL at terminate |
 | apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift | Full rewrite with real SDK. Remove SSL init/deinit |
@@ -1356,7 +1357,7 @@ Safari-specific: HTTPS required, getUserMedia constraints must use exact instead
 
 ### 14.1 Allowed Filters
 
-**Colorimetry filters only** (always available):
+**Colorimetry filters** (always available):
 - Color temperature (warm/cool white balance via CITemperatureAndTint)
 - Tint (green-to-magenta correction)
 - Brightness (-1.0 to 1.0)
@@ -1364,7 +1365,20 @@ Safari-specific: HTTPS required, getUserMedia constraints must use exact instead
 - Saturation (0.0 to 2.0)
 - Exposure (EV stops)
 
-**NOT allowed**: Face detection, face filters, beauty mode, background blur, AR effects, 3D mesh, Snapchat-style lenses, LUT color grading. Only colorimetry adjustments are in scope.
+**Scene filters** (always available):
+- **Background blur (portrait mode)** — Separates subject from background using person segmentation, applies gaussian blur to background only. Standard on Teams/WhatsApp/FaceTime.
+- **Low-light boost** — Automatic exposure/brightness compensation when ambient light is insufficient. Combines exposure increase + noise reduction + slight saturation boost.
+
+**Beauty filters** (opt-in, toggle in settings):
+- **Skin smoothing** — Subtle gaussian blur (radius 3-5px) applied only to detected face region. Preserves eyes, eyebrows, lips (sharp edges). Intensity slider 0-100% (default 40%).
+- **Auto white balance** — Corrects skin tone under colored lighting (fluorescent, tungsten). Uses face detection to sample skin region and adjust temperature/tint.
+
+**Face filters** (opt-in, fun mode):
+- **Face detection** — Vision framework `VNDetectFaceRectanglesRequest` (iOS), MediaPipe Face Detection (web). Foundation for all face-based filters.
+- **2D face overlay** — Lightweight 2D sprites (lunettes, chapeaux, masques) positioned on face landmarks via `VNDetectFaceLandmarksRequest`. Rendered as CIImage overlay composited on top of video frame.
+- **Face smoothing / beauty mode** — Gaussian blur on face region with landmark-aware edge preservation (sharp eyes, lips, eyebrows).
+
+**NOT allowed**: Heavy AR effects, 3D face mesh deformation, Snapchat-style real-time face morphing lenses, skeletal body tracking. These require dedicated AR frameworks (ARKit/ARCore) and significantly impact battery/performance.
 
 ### 14.1.1 Filter Presets
 
@@ -1387,38 +1401,224 @@ Presets are starting points — user can customize after selecting.
 - Offer button to switch camera (front ↔ back)
 - If dark persists 10s after switch, suggest "Verifier l'eclairage"
 
-### 14.2 iOS Implementation
+### 14.2 iOS Implementation 🔧
+
+#### 14.2.1 Colorimetry Filters ✅
 
 ```swift
-// CIFilter chain on RTCCameraVideoCapturer output
-class VideoFilterPipeline {
-    private let context = CIContext(options: [.useSoftwareRenderer: false])
-
-    func process(_ pixelBuffer: CVPixelBuffer) -> CVPixelBuffer {
-        var image = CIImage(cvPixelBuffer: pixelBuffer)
-        image = image.applyingFilter("CITemperatureAndTint", parameters: [
-            "inputNeutral": CIVector(x: CGFloat(temperature), y: 0),
-            "inputTargetNeutral": CIVector(x: 6500, y: 0)
-        ])
-        image = image.applyingFilter("CIColorControls", parameters: [
-            "inputBrightness": brightness,
-            "inputContrast": contrast,
-            "inputSaturation": saturation
-        ])
-        context.render(image, to: pixelBuffer)
-        return pixelBuffer
-    }
+// CIFilter chain on RTCCameraVideoCapturer output (already implemented in VideoFilterPipeline.swift)
+func process(_ pixelBuffer: CVPixelBuffer) -> CVPixelBuffer {
+    var image = CIImage(cvPixelBuffer: pixelBuffer)
+    image = applyTemperatureAndTint(to: image)   // CITemperatureAndTint
+    image = applyColorControls(to: image)         // CIColorControls (brightness, contrast, saturation)
+    image = applyExposure(to: image)              // CIExposureAdjust
+    context.render(image, to: pixelBuffer)
+    return pixelBuffer
 }
 ```
 
-Performance budget: <2ms per frame at 30fps 720p on iPhone 12+.
+#### 14.2.2 Background Blur (Portrait Mode) 🔧
 
-### 14.3 Web Implementation
+> **Status**: To implement — infrastructure ready (CIFilter pipeline exists), segmentation mask needed.
 
+```swift
+// Person segmentation via Vision framework (iOS 15+)
+import Vision
+
+private lazy var segmentationRequest: VNGeneratePersonSegmentationRequest = {
+    let request = VNGeneratePersonSegmentationRequest()
+    request.qualityLevel = .balanced  // .fast (1ms) / .balanced (5ms) / .accurate (20ms)
+    request.outputPixelFormat = kCVPixelFormatType_OneComponent8
+    return request
+}()
+
+func applyBackgroundBlur(to image: CIImage, pixelBuffer: CVPixelBuffer) -> CIImage {
+    // 1. Run person segmentation
+    let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+    try? handler.perform([segmentationRequest])
+
+    guard let mask = segmentationRequest.results?.first?.pixelBuffer else {
+        return image  // No person detected — return original
+    }
+
+    // 2. Create mask CIImage (person = white, background = black)
+    let maskImage = CIImage(cvPixelBuffer: mask)
+        .transformed(by: CGAffineTransform(
+            scaleX: image.extent.width / maskImage.extent.width,
+            y: image.extent.height / maskImage.extent.height
+        ))
+
+    // 3. Blur the full image
+    let blurredImage = image.applyingGaussianBlur(sigma: config.backgroundBlurRadius)
+        .cropped(to: image.extent)
+
+    // 4. Composite: person (sharp) over background (blurred) using mask
+    return blurredImage.applyingFilter("CIBlendWithMask", parameters: [
+        "inputBackgroundImage": blurredImage,
+        "inputMaskImage": maskImage
+    ]).composited(over: image)
+    // Correction: use person as foreground (sharp) over blurred background
+}
+```
+
+**Performance**: `VNGeneratePersonSegmentationRequest` with `.balanced` quality = ~5ms on iPhone 12+. Total pipeline with blur: ~8ms per frame. Within 30fps budget (33ms).
+
+**Config**:
+```swift
+struct VideoFilterConfig {
+    // ... existing colorimetry fields ...
+    var backgroundBlurEnabled: Bool = false
+    var backgroundBlurRadius: Double = 10.0  // 0 (off) to 25 (maximum blur)
+}
+```
+
+#### 14.2.3 Skin Smoothing (Beauty Mode) 🔧
+
+> **Status**: To implement — uses face detection + masked gaussian blur.
+
+```swift
+func applySkinSmoothing(to image: CIImage, pixelBuffer: CVPixelBuffer) -> CIImage {
+    // 1. Detect face rectangles via Vision
+    let faceRequest = VNDetectFaceRectanglesRequest()
+    let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+    try? handler.perform([faceRequest])
+
+    guard let face = faceRequest.results?.first else {
+        return image  // No face detected
+    }
+
+    // 2. Convert normalized face rect to image coordinates
+    let faceRect = VNImageRectForNormalizedRect(
+        face.boundingBox,
+        Int(image.extent.width),
+        Int(image.extent.height)
+    )
+
+    // 3. Create face region mask (ellipse for natural shape)
+    let maskGenerator = CIFilter.radialGradient()
+    let centerX = faceRect.midX
+    let centerY = faceRect.midY
+    let radius = max(faceRect.width, faceRect.height) * 0.6
+
+    // 4. Apply subtle gaussian blur to face region only
+    let smoothed = image.applyingFilter("CIGaussianBlur", parameters: [
+        "inputRadius": config.skinSmoothingIntensity * 5.0  // 0-5px based on 0-100% slider
+    ]).cropped(to: image.extent)
+
+    // 5. Blend: smoothed face region + sharp everything else
+    // Use CIMaskedVariableBlur for edge-preserving smoothing
+    return image.applyingFilter("CIMaskedVariableBlur", parameters: [
+        "inputRadius": config.skinSmoothingIntensity * 3.0
+        // Mask auto-generated from face detection
+    ])
+}
+```
+
+**Performance**: `VNDetectFaceRectanglesRequest` = ~2ms on iPhone 12+. Gaussian blur = ~1ms. Total: ~3ms additional.
+
+**Config**:
+```swift
+struct VideoFilterConfig {
+    // ... existing fields ...
+    var skinSmoothingEnabled: Bool = false
+    var skinSmoothingIntensity: Float = 0.4  // 0.0 (off) to 1.0 (maximum), default 40%
+}
+```
+
+#### 14.2.4 Low-Light Boost 🔧
+
+> **Status**: To implement — automatic, no user toggle needed.
+
+```swift
+func applyLowLightBoost(to image: CIImage, pixelBuffer: CVPixelBuffer) -> CIImage {
+    // 1. Measure average brightness from dark frame detector (already sampled every 10th frame)
+    guard let avgBrightness = darkFrameDetector.lastAverageBrightness else { return image }
+
+    // 2. If brightness is low (<0.3 normalized), boost
+    if avgBrightness < 0.3 {
+        let boostFactor = (0.3 - avgBrightness) / 0.3  // 0.0 to 1.0 severity
+
+        var boosted = image
+        // Increase exposure proportionally
+        boosted = boosted.applyingFilter("CIExposureAdjust", parameters: [
+            "inputEV": boostFactor * 1.5  // Up to +1.5 EV
+        ])
+        // Reduce noise introduced by boost
+        boosted = boosted.applyingFilter("CINoiseReduction", parameters: [
+            "inputNoiseLevel": boostFactor * 0.02,
+            "inputSharpness": 0.4
+        ])
+        // Slight saturation boost to compensate for washed-out look
+        boosted = boosted.applyingFilter("CIColorControls", parameters: [
+            "inputSaturation": 1.0 + boostFactor * 0.2
+        ])
+        return boosted
+    }
+    return image
+}
+```
+
+**Performance**: ~1ms (reuses existing CIFilter pipeline). Triggered automatically based on `darkFrameDetector.lastAverageBrightness`.
+
+#### 14.2.5 Filter Pipeline Order
+
+Filters are applied in this order (performance-optimized):
+```
+pixelBuffer
+  → Low-light boost (if needed, automatic)
+  → Colorimetry (temperature, tint, brightness, contrast, saturation, exposure)
+  → Background blur (if enabled)
+  → Skin smoothing (if enabled)
+  → render to pixelBuffer
+```
+
+Background blur and skin smoothing are the most expensive (~8ms and ~3ms). If both enabled and frame budget is exceeded (>25ms), auto-disable skin smoothing first.
+
+### 14.3 Web Implementation 🔧
+
+#### 14.3.1 Colorimetry (WebGL)
 WebGL shader pipeline on `<canvas>` element:
 1. Video frame → WebGL texture
-2. Apply color temperature/brightness/contrast fragment shader
+2. Apply color temperature/brightness/contrast/saturation/exposure fragment shader
 3. Output → `canvas.captureStream()` → WebRTC track
+
+#### 14.3.2 Background Blur (Web)
+
+```typescript
+// Option A: MediaPipe Selfie Segmentation (recommended)
+import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
+
+const segmentation = new SelfieSegmentation({ locateFile: (file) => `.../${file}` });
+segmentation.setOptions({ modelSelection: 1 });  // 1 = landscape model (faster)
+segmentation.onResults((results) => {
+  // results.segmentationMask: person mask (white = person, black = bg)
+  // Apply CanvasRenderingContext2D compositing:
+  // 1. Draw blurred full frame to canvas
+  // 2. Use segmentation mask as clip path
+  // 3. Draw sharp person over blurred background
+});
+
+// Option B: CSS backdrop-filter on <video> element (simpler but less control)
+// Not recommended — doesn't work with captureStream()
+```
+
+**Performance**: MediaPipe Selfie Segmentation = ~10ms per frame on desktop, ~20ms on mobile. Use `requestAnimationFrame` and skip frames if behind budget.
+
+#### 14.3.3 Skin Smoothing (Web)
+
+```typescript
+// Apply gaussian blur to face region detected by MediaPipe Face Detection
+// Use OffscreenCanvas for non-blocking processing
+// Alternatively: WebGL fragment shader with face-region mask
+```
+
+#### 14.3.4 Low-Light Boost (Web)
+
+```typescript
+// Analyze average pixel brightness from canvas ImageData
+// If dark: increase exposure via WebGL shader (multiply RGB by boost factor)
+// Apply noise reduction via bilateral filter shader
+```
 
 ### 14.4 Performance & Memory
 

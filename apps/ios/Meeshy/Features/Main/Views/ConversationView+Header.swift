@@ -52,6 +52,7 @@ extension ConversationView {
                 // Audio call
                 Button {
                     CallManager.shared.startCall(
+                        conversationId: conversationId,
                         userId: userId,
                         username: conversation?.name ?? "Inconnu",
                         isVideo: false
@@ -73,6 +74,7 @@ extension ConversationView {
                 // Video call
                 Button {
                     CallManager.shared.startCall(
+                        conversationId: conversationId,
                         userId: userId,
                         username: conversation?.name ?? "Inconnu",
                         isVideo: true
