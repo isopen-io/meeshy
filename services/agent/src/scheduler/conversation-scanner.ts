@@ -155,9 +155,17 @@ export class ConversationScanner {
       return;
     }
 
-    const heartbeat = setInterval(() => {
-      this.redis.expire(lockKey, lockTtl).catch(() => {});
-    }, Math.round(lockTtl * 0.4) * 1000);
+    const heartbeat = setInterval(async () => {
+      try {
+        const renewed = await this.redis.expire(lockKey, lockTtl);
+        if (renewed === 0) {
+          console.error('[Scanner] Lock lost during scan — another scanner may start');
+          this.scanning = false;
+        }
+      } catch (err) {
+        console.error('[Scanner] Heartbeat renewal failed:', err);
+      }
+    }, Math.round(lockTtl * 0.3) * 1000);
 
     try {
       this.scanning = true;

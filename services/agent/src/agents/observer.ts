@@ -44,6 +44,8 @@ const CONFIDENCE_DECAY = 0.005;
 export function createObserverNode(llm: LlmProvider) {
   return async function observe(state: ConversationState) {
     if (state.messages.length === 0) return {
+      summary: state.summary,
+      toneProfiles: state.toneProfiles,
       _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true },
     };
 

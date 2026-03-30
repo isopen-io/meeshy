@@ -105,8 +105,16 @@ export function runDeterministicChecks(
   const normalizedNew = content.toLowerCase().trim().replace(/[^\w\s]/g, '');
   for (const m of contextMessages.slice(-20)) {
     const normalizedOld = m.content.toLowerCase().trim().replace(/[^\w\s]/g, '');
-    if (normalizedNew === normalizedOld || (normalizedNew.length > 20 && normalizedOld.includes(normalizedNew))) {
-      return { ok: false, reason: 'content too similar to recent conversation context (repetition check)' };
+    if (normalizedNew === normalizedOld) {
+      return { ok: false, reason: 'exact duplicate of recent message' };
+    }
+    if (normalizedNew.length > 30 && normalizedOld.length > 30) {
+      const newWords = new Set(normalizedNew.split(/\s+/));
+      const oldWords = new Set(normalizedOld.split(/\s+/));
+      const overlap = [...newWords].filter((w) => oldWords.has(w)).length;
+      if (overlap / Math.max(newWords.size, oldWords.size) > 0.75) {
+        return { ok: false, reason: 'content too similar to recent conversation context (word overlap check)' };
+      }
     }
   }
 

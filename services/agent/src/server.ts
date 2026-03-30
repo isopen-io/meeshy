@@ -39,8 +39,8 @@ server.get('/debug/zmq-status', async () => ({
   timestamp: Date.now(),
 }));
 
-server.register(configRoutes);
-server.register(rolesRoutes);
+server.register((instance) => configRoutes(instance, prisma));
+server.register((instance) => rolesRoutes(instance, prisma));
 
 async function start() {
   const apiKey = env.LLM_PROVIDER === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY;

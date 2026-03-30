@@ -1,10 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { listArchetypes, getArchetype } from '../archetypes/catalog';
 
-const prisma = new PrismaClient();
-
-export async function rolesRoutes(fastify: FastifyInstance) {
+export async function rolesRoutes(fastify: FastifyInstance, prisma: PrismaClient) {
   fastify.get('/api/agent/archetypes', async () => {
     return { success: true, data: listArchetypes() };
   });
