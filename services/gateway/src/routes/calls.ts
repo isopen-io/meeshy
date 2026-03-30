@@ -1028,7 +1028,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     try {
-      const authRequest = request as UnifiedAuthRequest;
+      const authRequest = request as unknown as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
@@ -1064,7 +1064,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
                 select: {
                   id: true,
                   userId: true,
-                  user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+                  user: { select: { id: true, username: true, displayName: true, avatar: true } },
                 },
               },
             },
