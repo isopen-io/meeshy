@@ -353,11 +353,11 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
                     code: -1,
                     userInfo: [NSLocalizedDescriptionKey: "Recognition rotation failed 3 times consecutively"]
                 ))
-                Logger.calls.error("Recognition rotation failed 3 times for speaker \(speakerId) — fallback needed")
+                callsLogger.error("Recognition rotation failed 3 times for speaker \(speakerId) — fallback needed")
             }
         }
 
-        Logger.calls.info("Rotated recognition request for speaker \(speakerId) (rotation #\(stream.rotationCount)), boundary: \(boundaryText.prefix(50))")
+        callsLogger.info("Rotated recognition request for speaker \(speakerId) (rotation #\(stream.rotationCount)), boundary: \(boundaryText.prefix(50))")
     }
 
     private func replaceSegments(for speakerId: String, with newSegments: [TranscriptionSegment], isFinal: Bool) {
