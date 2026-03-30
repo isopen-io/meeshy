@@ -5,6 +5,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { logError } from '../../utils/logger';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../../utils/response';
+import { AgentHttpClient, AgentUnavailableError } from '../../services/AgentHttpClient';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 
 const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
@@ -1500,6 +1501,134 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     } catch (error) {
       logError(fastify.log, 'Error upserting global agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+    }
+  });
+
+  // ── Delivery Queue Proxy (Agent HTTP) ─────────────────────────────────────
+
+  const agentHost = process.env.AGENT_HOST;
+  const agentHttpPort = process.env.AGENT_HTTP_PORT || '3200';
+  const agentClient = agentHost ? new AgentHttpClient(`http://${agentHost}:${agentHttpPort}`) : null;
+
+  const ensureAgentClient = (reply: FastifyReply): AgentHttpClient | null => {
+    if (!agentClient) {
+      sendError(reply, 503, 'Agent service not configured');
+      return null;
+    }
+    return agentClient;
+  };
+
+  // GET /delivery-queue
+  fastify.get('/delivery-queue', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'List pending items in the agent delivery queue.',
+      tags: ['admin-agent'],
+      summary: 'List delivery queue',
+      security: securityBearerAuth,
+      querystring: {
+        type: 'object',
+        properties: {
+          conversationId: { type: 'string' },
+        },
+      },
+      response: { 200: successDataResponse, ...stdErrors },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const client = ensureAgentClient(reply);
+    if (!client) return;
+
+    try {
+      const { conversationId } = request.query as { conversationId?: string };
+      const data = await client.getQueue(conversationId);
+      return sendSuccess(reply, data);
+    } catch (error) {
+      if (error instanceof AgentUnavailableError) {
+        return sendError(reply, 502, 'Agent service unavailable');
+      }
+      logError(fastify.log, 'Error fetching delivery queue:', error);
+      return sendInternalError(reply, 'Erreur serveur');
+    }
+  });
+
+  // DELETE /delivery-queue/:id
+  fastify.delete('/delivery-queue/:id', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Delete a pending item from the delivery queue.',
+      tags: ['admin-agent'],
+      summary: 'Delete delivery queue item',
+      security: securityBearerAuth,
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const client = ensureAgentClient(reply);
+    if (!client) return;
+
+    try {
+      const { id } = request.params as { id: string };
+      const data = await client.deleteQueueItem(id);
+      return sendSuccess(reply, data);
+    } catch (error) {
+      if (error instanceof AgentUnavailableError) {
+        return sendError(reply, 502, 'Agent service unavailable');
+      }
+      const statusCode = (error as Error & { statusCode?: number }).statusCode;
+      if (statusCode === 404) {
+        return sendNotFound(reply, 'Item not found or already delivered');
+      }
+      logError(fastify.log, 'Error deleting delivery queue item:', error);
+      return sendInternalError(reply, 'Erreur serveur');
+    }
+  });
+
+  // PATCH /delivery-queue/:id
+  fastify.patch('/delivery-queue/:id', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Edit the content of a pending message in the delivery queue.',
+      tags: ['admin-agent'],
+      summary: 'Edit delivery queue item',
+      security: securityBearerAuth,
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+      body: {
+        type: 'object',
+        required: ['content'],
+        properties: { content: { type: 'string', minLength: 1, maxLength: 5000 } },
+      },
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const client = ensureAgentClient(reply);
+    if (!client) return;
+
+    try {
+      const { id } = request.params as { id: string };
+      const { content } = request.body as { content: string };
+      const data = await client.editQueueItem(id, content);
+      return sendSuccess(reply, data);
+    } catch (error) {
+      if (error instanceof AgentUnavailableError) {
+        return sendError(reply, 502, 'Agent service unavailable');
+      }
+      const statusCode = (error as Error & { statusCode?: number }).statusCode;
+      if (statusCode === 404) {
+        return sendNotFound(reply, 'Item not found or already delivered');
+      }
+      if (statusCode === 400) {
+        return sendBadRequest(reply, 'Cannot edit reaction content');
+      }
+      logError(fastify.log, 'Error editing delivery queue item:', error);
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 }
