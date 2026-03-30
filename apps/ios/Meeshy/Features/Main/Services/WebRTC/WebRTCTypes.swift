@@ -81,6 +81,10 @@ protocol WebRTCClientProviding: AnyObject {
     func createDataChannel(label: String) -> Bool
     func sendDataChannelMessage(_ data: Data)
     func disconnect()
+
+    var audioEffectsService: CallAudioEffectsServiceProviding? { get }
+    func setAudioEffect(_ effect: AudioEffectConfig?) throws
+    func updateAudioEffectParams(_ config: AudioEffectConfig) throws
 }
 
 // MARK: - DataChannel Transcription Message
