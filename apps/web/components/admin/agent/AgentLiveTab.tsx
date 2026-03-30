@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Zap,
   Eye,
+  ListOrdered,
 } from 'lucide-react';
 import {
   agentAdminService,
@@ -32,6 +33,9 @@ import dynamic from 'next/dynamic';
 
 const AgentScheduleTimeline = dynamic(() => import('./AgentScheduleTimeline'), {
   loading: () => <div className="h-24 animate-pulse bg-slate-200 dark:bg-slate-700 rounded" />,
+});
+const DeliveryQueuePanel = dynamic(() => import('./DeliveryQueuePanel'), {
+  loading: () => <div className="h-20 animate-pulse bg-slate-200 dark:bg-slate-700 rounded" />,
 });
 import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
@@ -526,6 +530,19 @@ export function AgentLiveTab() {
                   </CardHeader>
                   <CardContent className="pt-0">
                     <AgentScheduleTimeline conversationId={selectedId!} compact />
+                  </CardContent>
+                </Card>
+
+                {/* Delivery Queue */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <ListOrdered className="h-4 w-4 text-indigo-500" />
+                      File d&apos;attente
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <DeliveryQueuePanel conversationId={selectedId!} />
                   </CardContent>
                 </Card>
 

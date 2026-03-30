@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { PendingAction, PendingMessage, PendingReaction } from '../graph/state';
 import type { AgentResponse, AgentReaction } from '../zmq/types';
 import type { ZmqAgentPublisher } from '../zmq/zmq-publisher';
@@ -5,10 +6,19 @@ import type { MongoPersistence } from '../memory/mongo-persistence';
 import type { RedisStateManager } from '../memory/redis-state';
 
 export type DeliveryItem = {
+  id: string;
   action: PendingAction;
   conversationId: string;
   scheduledAt: number;
   timer: ReturnType<typeof setTimeout>;
+};
+
+export type SerializedDeliveryItem = {
+  id: string;
+  conversationId: string;
+  scheduledAt: number;
+  remainingMs: number;
+  action: PendingAction;
 };
 
 function randomCooldownSeconds(): number {
@@ -91,10 +101,11 @@ export class DeliveryQueue {
     }
 
     const effectiveDelay = Math.max(0, scheduledAt - now);
+    const id = randomUUID();
     const timer = setTimeout(async () => {
       await this.deliver(conversationId, action);
     }, effectiveDelay);
-    this.queue.push({ action, conversationId, scheduledAt, timer });
+    this.queue.push({ id, action, conversationId, scheduledAt, timer });
   }
 
   private getLatestMessageScheduledAt(conversationId: string): number {
@@ -181,6 +192,57 @@ export class DeliveryQueue {
 
     await this.publisher.publishReaction(reaction);
     console.log(`[DeliveryQueue] Delivered reaction: conv=${conversationId} user=${action.asUserId} emoji=${action.emoji}`);
+  }
+
+  private serialize(item: DeliveryItem): SerializedDeliveryItem {
+    return {
+      id: item.id,
+      conversationId: item.conversationId,
+      scheduledAt: item.scheduledAt,
+      remainingMs: Math.max(0, item.scheduledAt - Date.now()),
+      action: item.action,
+    };
+  }
+
+  getAll(): SerializedDeliveryItem[] {
+    return [...this.queue]
+      .sort((a, b) => a.scheduledAt - b.scheduledAt)
+      .map((item) => this.serialize(item));
+  }
+
+  getByConversation(conversationId: string): SerializedDeliveryItem[] {
+    return this.queue
+      .filter((item) => item.conversationId === conversationId)
+      .sort((a, b) => a.scheduledAt - b.scheduledAt)
+      .map((item) => this.serialize(item));
+  }
+
+  deleteById(id: string): boolean {
+    const index = this.queue.findIndex((item) => item.id === id);
+    if (index === -1) return false;
+    const [removed] = this.queue.splice(index, 1);
+    clearTimeout(removed.timer);
+    console.log(`[DeliveryQueue] Deleted item ${id} for conv=${removed.conversationId}`);
+    return true;
+  }
+
+  editMessageById(id: string, newContent: string): SerializedDeliveryItem | null {
+    const item = this.queue.find((i) => i.id === id);
+    if (!item) return null;
+    if (item.action.type !== 'message') return null;
+
+    (item.action as PendingMessage).content = newContent;
+    clearTimeout(item.timer);
+
+    const remaining = Math.max(0, item.scheduledAt - Date.now());
+    const capturedConvId = item.conversationId;
+    const capturedAction = item.action;
+    item.timer = setTimeout(async () => {
+      await this.deliver(capturedConvId, capturedAction);
+    }, remaining);
+
+    console.log(`[DeliveryQueue] Edited message ${id} for conv=${item.conversationId}`);
+    return this.serialize(item);
   }
 
   clearAll(): void {

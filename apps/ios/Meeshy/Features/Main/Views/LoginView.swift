@@ -167,6 +167,15 @@ struct LoginView: View {
         VStack(spacing: MeeshySpacing.md) {
             ForEach(authManager.savedAccounts) { account in
                 savedAccountRow(account)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                authManager.removeSavedAccount(userId: account.id)
+                            }
+                        } label: {
+                            Label("Supprimer ce compte", systemImage: "trash")
+                        }
+                    }
             }
 
             errorRow
@@ -193,7 +202,7 @@ struct LoginView: View {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 selectedAccount = account
                 username = account.username
-                accountPassword = ""
+                accountPassword = Self.isSimulator ? "pD5p1ir9uxLUf2X2FpNE" : ""
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 focusedField = .accountPassword
