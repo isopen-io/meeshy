@@ -146,10 +146,14 @@ final class CallManager: ObservableObject {
 
     // MARK: - Incoming Call
 
+    @Published var showCallWaitingBanner = false
+
     func handleIncomingOffer(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, sdp: SessionDescription) {
         guard callState == .idle else {
-            Logger.calls.info("Incoming call while busy — storing as pending")
+            Logger.calls.info("Incoming call while busy — showing call waiting banner")
             pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
+            showCallWaitingBanner = true
+            HapticFeedback.medium()
             return
         }
 
@@ -314,6 +318,36 @@ final class CallManager: ObservableObject {
     }
 
     var videoFilters: VideoFilterPipeline { webRTCService.videoFilters }
+
+    // MARK: - Call Waiting (§11.15)
+
+    func rejectPendingCall() {
+        guard let pending = pendingIncomingCall else { return }
+        MessageSocketManager.shared.emitCallEnd(callId: pending.callId)
+        pendingIncomingCall = nil
+        showCallWaitingBanner = false
+        Logger.calls.info("Rejected pending call: \(pending.callId)")
+    }
+
+    func endCurrentAndAnswerPending() {
+        guard let pending = pendingIncomingCall else { return }
+        showCallWaitingBanner = false
+
+        endCall()
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(0.5))
+            guard let self else { return }
+            self.handleIncomingOffer(
+                callId: pending.callId,
+                fromUserId: pending.fromUserId,
+                fromUsername: pending.fromUsername,
+                isVideo: pending.isVideo,
+                sdp: SessionDescription(type: .offer, sdp: "")
+            )
+            self.pendingIncomingCall = nil
+        }
+    }
 
     // MARK: - Remote Events
 
@@ -751,6 +785,26 @@ extension CallManager: WebRTCServiceDelegate {
             default:
                 Logger.calls.info("WebRTC disconnected in state: \(String(describing: self.callState))")
             }
+        }
+    }
+
+    nonisolated func webRTCService(_ service: WebRTCService, didReceiveTranscriptionData data: Data) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard let message = try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: data) else { return }
+            let segment = TranscriptionSegment(
+                id: UUID(),
+                text: message.text,
+                speakerId: message.speakerId,
+                startTime: message.startTime,
+                endTime: message.startTime + 1.0,
+                isFinal: message.isFinal,
+                confidence: 1.0,
+                language: message.language,
+                translatedText: message.translatedText,
+                translatedLanguage: message.translatedLanguage
+            )
+            self.transcriptionService.receiveRemoteSegment(segment)
         }
     }
 

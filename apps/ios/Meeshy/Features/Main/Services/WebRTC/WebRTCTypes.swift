@@ -78,7 +78,22 @@ protocol WebRTCClientProviding: AnyObject {
     func toggleVideo(_ enabled: Bool)
     func switchCamera() async throws
     func getStats() async -> CallStats?
+    func createDataChannel(label: String) -> Bool
+    func sendDataChannelMessage(_ data: Data)
     func disconnect()
+}
+
+// MARK: - DataChannel Transcription Message
+
+struct DataChannelTranscriptionMessage: Codable, Sendable {
+    let type: String  // "transcription-segment"
+    let text: String
+    let speakerId: String
+    let startTime: Double
+    let isFinal: Bool
+    let language: String
+    let translatedText: String?
+    let translatedLanguage: String?
 }
 
 // MARK: - WebRTC Client Delegate
@@ -88,6 +103,7 @@ protocol WebRTCClientDelegate: AnyObject {
     func webRTCClient(_ client: any WebRTCClientProviding, didChangeConnectionState state: PeerConnectionState)
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: Any)
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: Any)
+    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveDataChannelMessage data: Data)
 }
 
 // MARK: - Call End Reason

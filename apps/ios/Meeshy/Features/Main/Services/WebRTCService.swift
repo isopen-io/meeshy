@@ -10,6 +10,7 @@ protocol WebRTCServiceDelegate: AnyObject {
     func webRTCServiceDidConnect(_ service: WebRTCService)
     func webRTCServiceDidDisconnect(_ service: WebRTCService)
     func webRTCService(_ service: WebRTCService, didChangeQualityLevel level: VideoQualityLevel, from previous: VideoQualityLevel)
+    func webRTCService(_ service: WebRTCService, didReceiveTranscriptionData data: Data)
 }
 
 // MARK: - WebRTC Service
@@ -204,6 +205,17 @@ final class WebRTCService: @unchecked Sendable {
         }
     }
 
+    // MARK: - DataChannel Transcription (H7)
+
+    func createTranscriptionChannel() -> Bool {
+        client.createDataChannel(label: "transcription")
+    }
+
+    func sendTranscription(_ message: DataChannelTranscriptionMessage) {
+        guard let data = try? JSONEncoder().encode(message) else { return }
+        client.sendDataChannelMessage(data)
+    }
+
     // MARK: - ICE Restart
 
     func performICERestart() async -> SessionDescription? {
@@ -270,6 +282,10 @@ extension WebRTCService: WebRTCClientDelegate {
 
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: Any) {
         Logger.webrtc.info("Remote audio track received")
+    }
+
+    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveDataChannelMessage data: Data) {
+        delegate?.webRTCService(self, didReceiveTranscriptionData: data)
     }
 }
 
