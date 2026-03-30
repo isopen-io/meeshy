@@ -59,6 +59,8 @@ final class CallManager: ObservableObject {
 
     // Screen capture monitoring
     private var screenCaptureObserver: NSObjectProtocol?
+    private var backgroundObserver: NSObjectProtocol?
+    private var foregroundObserver: NSObjectProtocol?
 
     // Network monitoring
     private let networkMonitor = NWPathMonitor()
@@ -369,6 +371,7 @@ final class CallManager: ObservableObject {
         startHeartbeat()
         webRTCService.startQualityMonitor()
         startThermalMonitoring()
+        startBackgroundMonitoring()
 
         if let uuid = activeCallUUID {
             callProvider.reportOutgoingCall(with: uuid, connectedAt: Date())
@@ -444,6 +447,60 @@ final class CallManager: ObservableObject {
         }
     }
 
+    // MARK: - Background/Foreground Monitoring (H1)
+
+    private func startBackgroundMonitoring() {
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, let callId = self.currentCallId else { return }
+                MessageSocketManager.shared.emitCallSignal(
+                    callId: callId,
+                    type: "backgrounded",
+                    payload: [:]
+                )
+                Logger.calls.info("Call backgrounded — notified server for extended heartbeat timeout")
+            }
+        }
+
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, let callId = self.currentCallId else { return }
+                MessageSocketManager.shared.emitCallSignal(
+                    callId: callId,
+                    type: "foregrounded",
+                    payload: [:]
+                )
+                Logger.calls.info("Call foregrounded — resumed normal heartbeat timeout")
+            }
+        }
+    }
+
+    private func stopBackgroundMonitoring() {
+        if let observer = backgroundObserver {
+            NotificationCenter.default.removeObserver(observer)
+            backgroundObserver = nil
+        }
+        if let observer = foregroundObserver {
+            NotificationCenter.default.removeObserver(observer)
+            foregroundObserver = nil
+        }
+    }
+
+    // MARK: - Metered Connection Check (M4)
+
+    func isOnMeteredConnection() -> Bool {
+        let path = networkMonitor.currentPath
+        return path.isExpensive
+    }
+
     // MARK: - Network Monitoring
 
     private func startNetworkMonitoring() {
@@ -478,6 +535,7 @@ final class CallManager: ObservableObject {
         durationTimer = nil
         stopHeartbeat()
         stopScreenCaptureMonitoring()
+        stopBackgroundMonitoring()
         if transcriptionService.isTranscribing {
             transcriptionService.stopTranscribing()
         }
@@ -623,12 +681,18 @@ extension CallManager: ThermalStateMonitorDelegate {
     nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {
         Task { @MainActor [weak self] in
             guard let self, self.callState == .connected else { return }
-            if state == .critical && self.isVideoEnabled {
-                Logger.calls.warning("Thermal critical — disabling video to preserve battery")
-                self.isVideoEnabled = false
-                self.webRTCService.enableVideo(false)
+            if state == .critical {
+                self.webRTCService.videoFilterPipeline.reset()
+                Logger.calls.warning("Thermal critical — disabled all video filters")
+                if self.isVideoEnabled {
+                    self.isVideoEnabled = false
+                    self.webRTCService.enableVideo(false)
+                    Logger.calls.warning("Thermal critical — disabled video")
+                }
             } else if state == .serious {
-                Logger.calls.warning("Thermal serious — reducing quality")
+                self.webRTCService.videoFilterPipeline.config.backgroundBlurEnabled = false
+                self.webRTCService.videoFilterPipeline.config.skinSmoothingEnabled = false
+                Logger.calls.warning("Thermal serious — disabled advanced filters")
             }
         }
     }
@@ -686,6 +750,23 @@ extension CallManager: WebRTCServiceDelegate {
                 self.attemptReconnection()
             default:
                 Logger.calls.info("WebRTC disconnected in state: \(String(describing: self.callState))")
+            }
+        }
+    }
+
+    nonisolated func webRTCService(_ service: WebRTCService, didChangeQualityLevel level: VideoQualityLevel, from previous: VideoQualityLevel) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard UIAccessibility.isReduceMotionEnabled == false else { return }
+            switch level {
+            case .poor, .critical:
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            case .excellent, .good:
+                if previous <= .fair {
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
+            case .fair:
+                break
             }
         }
     }

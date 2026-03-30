@@ -64,7 +64,7 @@ export class WebRTCService {
 
   /**
    * Munge SDP to set Opus codec parameters for high-quality audio
-   * (maxaveragebitrate=128000, stereo=1, useinbandfec=1, usedtx=0, maxplaybackrate=48000)
+   * (maxaveragebitrate=128000, stereo=1, useinbandfec=1, usedtx=1, maxplaybackrate=48000)
    */
   private mungeOpusSdp(sdp: string): string {
     return sdp.replace(
@@ -79,7 +79,7 @@ export class WebRTCService {
         opusParams.set('maxaveragebitrate', '128000');
         opusParams.set('stereo', '1');
         opusParams.set('useinbandfec', '1');
-        opusParams.set('usedtx', '0');
+        opusParams.set('usedtx', '1');
         opusParams.set('maxplaybackrate', '48000');
 
         const params = Array.from(opusParams.entries())

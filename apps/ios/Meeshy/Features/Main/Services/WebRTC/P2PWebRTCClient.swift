@@ -306,7 +306,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
             "maxaveragebitrate=128000",
             "stereo=1",
             "useinbandfec=1",
-            "usedtx=0",
+            "usedtx=1",
             "maxplaybackrate=48000"
         ]
         let paramString = opusParams.joined(separator: ";")

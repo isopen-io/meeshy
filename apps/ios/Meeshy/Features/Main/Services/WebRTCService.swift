@@ -9,6 +9,7 @@ protocol WebRTCServiceDelegate: AnyObject {
     func webRTCService(_ service: WebRTCService, didChangeConnectionState state: PeerConnectionState)
     func webRTCServiceDidConnect(_ service: WebRTCService)
     func webRTCServiceDidDisconnect(_ service: WebRTCService)
+    func webRTCService(_ service: WebRTCService, didChangeQualityLevel level: VideoQualityLevel, from previous: VideoQualityLevel)
 }
 
 // MARK: - WebRTC Service
@@ -25,9 +26,11 @@ final class WebRTCService: @unchecked Sendable {
     private(set) var connectionState: PeerConnectionState = .new
 
     private(set) var currentBitrate: Int = QualityThresholds.defaultBitrate
+    private(set) var currentQualityLevel: VideoQualityLevel = .excellent
     private var qualityMonitorTimer: Timer?
     private var lastStats: CallStats?
     private var comfortNoiseEnabled = true
+    private var qualityLevelDebounceDate: Date?
 
     init(client: (any WebRTCClientProviding)? = nil) {
         self.client = client ?? P2PWebRTCClient()
@@ -164,6 +167,8 @@ final class WebRTCService: @unchecked Sendable {
         let rtt = stats.roundTripTimeMs
         let loss = Double(stats.packetsLost)
 
+        let newLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: loss)
+
         let newBitrate: Int
         if rtt <= QualityThresholds.excellentRTT && loss <= QualityThresholds.excellentPacketLoss {
             newBitrate = QualityThresholds.maxBitrate
@@ -173,9 +178,30 @@ final class WebRTCService: @unchecked Sendable {
             newBitrate = QualityThresholds.minBitrate
         }
 
-        guard newBitrate != currentBitrate else { return }
-        currentBitrate = newBitrate
-        Logger.webrtc.info("Adaptive bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(loss))")
+        if newBitrate != currentBitrate {
+            currentBitrate = newBitrate
+            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(loss))")
+        }
+
+        guard newLevel != currentQualityLevel else { return }
+
+        let now = Date()
+        if let debounce = qualityLevelDebounceDate, now.timeIntervalSince(debounce) < 5.0 {
+            return
+        }
+        qualityLevelDebounceDate = now
+
+        let previousLevel = currentQualityLevel
+        currentQualityLevel = newLevel
+        Logger.webrtc.info("Quality level changed: \(previousLevel.rawValue) → \(newLevel.rawValue)")
+        delegate?.webRTCService(self, didChangeQualityLevel: newLevel, from: previousLevel)
+
+        if newLevel == .critical {
+            client.toggleVideo(false)
+            Logger.webrtc.warning("Critical quality — auto-disabled video")
+        } else if previousLevel == .critical && newLevel >= .poor {
+            Logger.webrtc.info("Quality recovered from critical — video can be re-enabled manually")
+        }
     }
 
     // MARK: - ICE Restart

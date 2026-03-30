@@ -126,6 +126,72 @@ enum QualityThresholds {
     static let statsIntervalSeconds: TimeInterval = 3.0
     static let heartbeatIntervalSeconds: TimeInterval = 15.0
     static let maxReconnectAttempts: Int = 3
+
+    static let initialVideoBitrate: Int = 500_000
+    static let minVideoBitrate: Int = 100_000
+    static let maxVideoBitrate: Int = 2_500_000
+}
+
+// MARK: - Video Quality Level (§4.8)
+
+enum VideoQualityLevel: String, Comparable, Sendable {
+    case excellent
+    case good
+    case fair
+    case poor
+    case critical
+
+    private var rank: Int {
+        switch self {
+        case .excellent: 4
+        case .good: 3
+        case .fair: 2
+        case .poor: 1
+        case .critical: 0
+        }
+    }
+
+    static func < (lhs: VideoQualityLevel, rhs: VideoQualityLevel) -> Bool {
+        lhs.rank < rhs.rank
+    }
+
+    var targetResolutionHeight: Int {
+        switch self {
+        case .excellent: 720
+        case .good: 720
+        case .fair: 480
+        case .poor: 360
+        case .critical: 0
+        }
+    }
+
+    var targetFPS: Int {
+        switch self {
+        case .excellent: 30
+        case .good: 24
+        case .fair: 20
+        case .poor: 15
+        case .critical: 0
+        }
+    }
+
+    var targetVideoBitrate: Int {
+        switch self {
+        case .excellent: 2_500_000
+        case .good: 1_500_000
+        case .fair: 800_000
+        case .poor: 400_000
+        case .critical: 0
+        }
+    }
+
+    static func from(rtt: Double, packetLoss: Double) -> VideoQualityLevel {
+        if rtt > 500 || packetLoss > 0.10 { return .critical }
+        if rtt > 300 || packetLoss > 0.05 { return .poor }
+        if rtt > 200 || packetLoss > 0.03 { return .fair }
+        if rtt > 100 || packetLoss > 0.01 { return .good }
+        return .excellent
+    }
 }
 
 // MARK: - Errors
