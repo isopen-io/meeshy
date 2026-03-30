@@ -27,7 +27,7 @@ export class TURNCredentialService {
 
   constructor() {
     // Load TURN secret from environment (CRITICAL: must be set in production)
-    this.turnSecret = process.env.TURN_SECRET || 'default-turn-secret-CHANGE-IN-PRODUCTION';
+    this.turnSecret = process.env.TURN_SECRET || 'meeshy-turn-secret-CHANGE-IN-PRODUCTION';
 
     // Parse TURN servers from environment
     // Format: TURN_SERVERS=turn1.example.com:3478,turn2.example.com:3478
@@ -45,14 +45,14 @@ export class TURNCredentialService {
     ];
 
     // Warn if using default secret in production
-    if (this.turnSecret === 'default-turn-secret-CHANGE-IN-PRODUCTION' && process.env.NODE_ENV === 'production') {
+    if (this.turnSecret === 'meeshy-turn-secret-CHANGE-IN-PRODUCTION' && process.env.NODE_ENV === 'production') {
       logger.warn('⚠️ [SECURITY] Using default TURN secret in production! Set TURN_SECRET environment variable.');
     }
 
     logger.info('🔐 TURNCredentialService initialized', {
       turnServersCount: this.turnServers.length,
       credentialTTL: this.credentialTTL,
-      hasCustomSecret: this.turnSecret !== 'default-turn-secret-CHANGE-IN-PRODUCTION'
+      hasCustomSecret: this.turnSecret !== 'meeshy-turn-secret-CHANGE-IN-PRODUCTION'
     });
   }
 
@@ -143,7 +143,7 @@ export class TURNCredentialService {
    * Used for health checks and monitoring
    */
   isConfigured(): boolean {
-    return this.turnServers.length > 0 && this.turnSecret !== 'default-turn-secret-CHANGE-IN-PRODUCTION';
+    return this.turnServers.length > 0 && this.turnSecret !== 'meeshy-turn-secret-CHANGE-IN-PRODUCTION';
   }
 
   /**
@@ -161,7 +161,7 @@ export class TURNCredentialService {
       turnServersCount: this.turnServers.length,
       stunServersCount: this.stunServers.length,
       credentialTTL: this.credentialTTL,
-      hasCustomSecret: this.turnSecret !== 'default-turn-secret-CHANGE-IN-PRODUCTION'
+      hasCustomSecret: this.turnSecret !== 'meeshy-turn-secret-CHANGE-IN-PRODUCTION'
     };
   }
 }

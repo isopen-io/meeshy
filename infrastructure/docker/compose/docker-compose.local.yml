@@ -320,6 +320,10 @@ services:
       ATABETH_FIRST_NAME: ${ATABETH_FIRST_NAME:-Atabeth}
       ATABETH_LAST_NAME: ${ATABETH_LAST_NAME:-User}
       ATABETH_ROLE: ${ATABETH_ROLE:-user}
+      # TURN server credentials (WebRTC calls)
+      TURN_SECRET: ${TURN_SECRET:-meeshy-turn-secret-CHANGE-IN-PRODUCTION}
+      TURN_SERVERS: ${TURN_SERVERS:-}
+      TURN_CREDENTIAL_TTL: ${TURN_CREDENTIAL_TTL:-3600}
     ports:
       - "3000:3000"
     depends_on:
@@ -442,6 +446,23 @@ services:
       - "traefik.http.routers.frontend-ip.tls=true"
       - "traefik.http.routers.frontend-ip.service=frontend"
       - "traefik.http.routers.frontend-ip.priority=1"
+
+  # ===========================================================================
+  # COTURN - TURN/STUN Server for WebRTC
+  # ===========================================================================
+  coturn:
+    image: coturn/coturn:4.6
+    container_name: meeshy-local-coturn
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ../config/turnserver.conf:/etc/turnserver.conf:ro
+    healthcheck:
+      test: ["CMD", "turnutils_stunclient", "-p", "3478", "localhost"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 # =============================================================================
 # NETWORKS
