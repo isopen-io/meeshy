@@ -19,6 +19,7 @@ public protocol AuthManaging: AnyObject {
     func logout()
     func checkExistingSession() async
     func handleUnauthorized()
+    func removeSavedAccount(userId: String)
 }
 
 // MARK: - Implementation
@@ -202,6 +203,22 @@ public final class AuthManager: ObservableObject, AuthManaging {
         APIClient.shared.authToken = nil
     }
 
+    // MARK: - Remove Saved Account
+
+    public func removeSavedAccount(userId: String) {
+        keychain.delete(forKey: tokenKey(for: userId))
+        keychain.delete(forKey: userKey(for: userId))
+        UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
+        removeFromSavedAccounts(userId: userId)
+
+        if activeUserId == userId {
+            activeUserId = nil
+            currentUser = nil
+            isAuthenticated = false
+            APIClient.shared.authToken = nil
+        }
+    }
+
     // MARK: - Check Existing Session
 
     public func checkExistingSession() async {
@@ -325,7 +342,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: tokenKey(for: userId))
         keychain.delete(forKey: userKey(for: userId))
         UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
-        removeFromSavedAccounts(userId: userId)
+        // Keep saved account visible — user can re-authenticate without typing username.
+        // Only explicit logout() removes from savedAccounts.
         activeUserId = nil
         currentUser = nil
         isAuthenticated = false
