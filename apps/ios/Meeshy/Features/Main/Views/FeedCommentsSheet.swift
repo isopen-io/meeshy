@@ -314,7 +314,9 @@ struct CommentRowView: View {
     let onReply: () -> Void
     var onLikeComment: (() -> Void)? = nil
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
+    // évite que chaque changement de thème force un re-render de toutes les lignes.
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var isLiked = false
     @State private var selectedProfileUser: ProfileSheetUser?

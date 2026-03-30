@@ -54,7 +54,6 @@ struct ConversationListView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var theme = ThemeManager.shared
-    @ObservedObject var socketManager = MessageSocketManager.shared
     @ObservedObject var lockManager = ConversationLockManager.shared
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la liste. La présence est rafraîchie lors des refreshs naturels.
@@ -581,9 +580,8 @@ struct ConversationListView: View {
                         showStatusComposer = true
                     })
 
-                    // Connection status banner
+                    // Connection status banner (banner manages its own socket observation)
                     ConnectionBanner()
-                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: socketManager.isConnected)
                         .padding(.top, 4)
 
                     // Sectioned conversation list (skeleton -> content -> empty)

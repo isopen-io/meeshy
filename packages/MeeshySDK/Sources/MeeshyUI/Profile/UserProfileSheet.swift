@@ -107,11 +107,12 @@ public struct UserProfileSheet: View {
 
     private var displayUser: ProfileSheetUser {
         // Priorité : fullUser fourni > internalFullUser chargé > user de base
+        // Preserve la couleur d'accent originale (provenant du contexte — post, commentaire, conversation)
         if let full = fullUser {
-            return ProfileSheetUser.from(user: full)
+            return ProfileSheetUser.from(user: full, accentColor: user.accentColor)
         }
         if let loaded = internalFullUser {
-            return ProfileSheetUser.from(user: loaded)
+            return ProfileSheetUser.from(user: loaded, accentColor: user.accentColor)
         }
         return user
     }

@@ -14,7 +14,9 @@ struct ConversationInfoSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
-    @ObservedObject private var presenceManager = PresenceManager.shared
+    // Lecture directe sans @ObservedObject — évite que chaque event presence force
+    // un re-render complet de la fiche conversation.
+    private var presenceManager: PresenceManager { PresenceManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     @State private var participants: [PaginatedParticipant] = []

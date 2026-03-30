@@ -23,14 +23,21 @@ struct FeedPostCard: View {
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
 
-    @EnvironmentObject private var statusViewModel: StatusViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    // Mood data passed from parent to avoid @EnvironmentObject in leaf view
+    var authorMoodEmoji: String? = nil
+    var onAuthorMoodTap: ((CGPoint) -> Void)? = nil
+    var moodLookup: ((String) -> (emoji: String?, tapHandler: ((CGPoint) -> Void)?))? = nil
+
+    // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
+    // évite que chaque changement de thème force un re-render de toutes les cards.
+    private var theme: ThemeManager { ThemeManager.shared }
     @State private var showCommentsSheet = false
     @State private var showTranslationSheet = false
     @State private var showRepostOptions = false
     @State private var selectedProfileUser: ProfileSheetUser?
 
     private var accentColor: String { post.authorColor }
+    private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -116,10 +123,11 @@ struct FeedPostCard: View {
             )
         }
         .sheet(item: $selectedProfileUser) { user in
+            let mood = moodLookup?(user.userId ?? "")
             UserProfileSheet(
                 user: user,
-                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                moodEmoji: mood?.emoji,
+                onMoodTap: mood?.tapHandler
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -136,9 +144,9 @@ struct FeedPostCard: View {
                 context: .postAuthor,
                 accentColor: accentColor,
                 avatarURL: post.authorAvatarURL,
-                moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
+                moodEmoji: authorMoodEmoji,
                 onViewProfile: { selectedProfileUser = .from(feedPost: post) },
-                onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
+                onMoodTap: onAuthorMoodTap,
                 contextMenuItems: [
                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
                         selectedProfileUser = .from(feedPost: post)
@@ -419,9 +427,6 @@ struct FeedPostCard: View {
                     .padding(.horizontal, 16)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    // Top 3 comments sorted by likes
-                    let topComments = post.comments.sorted { $0.likes > $1.likes }.prefix(3)
-
                     ForEach(Array(topComments.enumerated()), id: \.element.id) { index, comment in
                         topCommentRow(comment: comment, isLast: index == topComments.count - 1)
                     }
@@ -473,14 +478,15 @@ struct FeedPostCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 10) {
                 // Avatar
+                let commentMood = moodLookup?(comment.authorId)
                 MeeshyAvatar(
                     name: comment.author,
                     context: .postComment,
                     accentColor: comment.authorColor,
                     avatarURL: comment.authorAvatarURL,
-                    moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
+                    moodEmoji: commentMood?.emoji,
                     onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
-                    onMoodTap: statusViewModel.moodTapHandler(for: comment.authorId),
+                    onMoodTap: commentMood?.tapHandler,
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
                             selectedProfileUser = .from(feedComment: comment)
@@ -552,5 +558,18 @@ struct FeedPostCard: View {
         if seconds < 3600 { return "\(seconds / 60)m" }
         if seconds < 86400 { return "\(seconds / 3600)h" }
         return "\(seconds / 86400)j"
+    }
+}
+
+// MARK: - Equatable (enables .equatable() in ForEach to prevent unnecessary re-renders)
+extension FeedPostCard: Equatable {
+    static func == (lhs: FeedPostCard, rhs: FeedPostCard) -> Bool {
+        lhs.post.id == rhs.post.id
+            && lhs.post.likes == rhs.post.likes
+            && lhs.post.isLiked == rhs.post.isLiked
+            && lhs.post.commentCount == rhs.post.commentCount
+            && lhs.post.translatedContent == rhs.post.translatedContent
+            && lhs.isCommentsExpanded == rhs.isCommentsExpanded
+            && lhs.authorMoodEmoji == rhs.authorMoodEmoji
     }
 }
