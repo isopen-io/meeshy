@@ -27,8 +27,8 @@ struct ThemedConversationRow: View {
     private var accentColor: String { conversation.accentColor }
 
     // Pre-parsed accent Color — avoids 19× hex parsing per render
-    private var accent: Color { accent }
-    private var accentSecondary: Color { accentSecondary }
+    private var accent: Color { Color(hex: accentColor) }
+    private var accentSecondary: Color { Color(hex: conversation.colorPalette.secondary) }
 
     private var textPrimary: Color { isDark ? Color(hex: "F5F5F0") : Color(hex: "1C1917") }
     private var textSecondary: Color { isDark ? Color(hex: "F5F5F0").opacity(0.7) : Color(hex: "1C1917").opacity(0.6) }
@@ -345,7 +345,7 @@ struct ThemedConversationRow: View {
             HStack(spacing: 3) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
-                        .fill(accent)
+                        .fill(Color(hex: accentColor))
                         .frame(width: 5, height: 5)
                         .scaleEffect(isAnimating ? 1.0 : 0.5)
                         .opacity(isAnimating ? 1.0 : 0.4)

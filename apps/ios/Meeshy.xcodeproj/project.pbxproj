@@ -206,7 +206,14 @@
 		NTIF002A002A002A002A0002 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */; };
 		OB2900000000002F29 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OB2900000000001F29 /* OnboardingView.swift */; };
 		OF3000000000002F30 /* OfflineBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = OF3000000000001F30 /* OfflineBanner.swift */; };
+		AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFX000100010001000100F0 /* AudioEffectTypes.swift */; };
+		CAES000100010001000100B0 /* CallAudioEffectsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAES000100010001000100F0 /* CallAudioEffectsService.swift */; };
+		CAET000100010001000100B0 /* CallAudioEffectsServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAET000100010001000100F0 /* CallAudioEffectsServiceTests.swift */; };
+		MAPM000100010001000100B0 /* MeeshyAudioProcessingModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAPM000100010001000100F0 /* MeeshyAudioProcessingModule.swift */; };
+		MAPT000100010001000100B0 /* MeeshyAudioProcessingModuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAPT000100010001000100F0 /* MeeshyAudioProcessingModuleTests.swift */; };
+		MCAE000100010001000100B0 /* MockCallAudioEffectsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCAE000100010001000100F0 /* MockCallAudioEffectsService.swift */; };
 		P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = P2PWRTC000000001F01 /* P2PWebRTCClient.swift */; };
+		WSTB000100010001000100B0 /* WebRTCStubs.swift in Sources */ = {isa = PBXBuildFile; fileRef = WSTB000100010001000100F0 /* WebRTCStubs.swift */; };
 		PP2500000000002F25 /* ParticipantsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PP2500000000001F25 /* ParticipantsView.swift */; };
 		PP2600000000002F26 /* AddParticipantSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = PP2600000000001F26 /* AddParticipantSheet.swift */; };
 		PPOL002A002A002A002A0002 /* PrivacyPolicyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PPOL001A001A001A001A0001 /* PrivacyPolicyView.swift */; };
@@ -489,7 +496,14 @@
 		NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		OB2900000000001F29 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		OF3000000000001F30 /* OfflineBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineBanner.swift; sourceTree = "<group>"; };
+		AEFX000100010001000100F0 /* AudioEffectTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectTypes.swift; sourceTree = "<group>"; };
+		CAES000100010001000100F0 /* CallAudioEffectsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioEffectsService.swift; sourceTree = "<group>"; };
+		CAET000100010001000100F0 /* CallAudioEffectsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioEffectsServiceTests.swift; sourceTree = "<group>"; };
+		MAPM000100010001000100F0 /* MeeshyAudioProcessingModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAudioProcessingModule.swift; sourceTree = "<group>"; };
+		MAPT000100010001000100F0 /* MeeshyAudioProcessingModuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAudioProcessingModuleTests.swift; sourceTree = "<group>"; };
+		MCAE000100010001000100F0 /* MockCallAudioEffectsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockCallAudioEffectsService.swift; sourceTree = "<group>"; };
 		P2PWRTC000000001F01 /* P2PWebRTCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2PWebRTCClient.swift; sourceTree = "<group>"; };
+		WSTB000100010001000100F0 /* WebRTCStubs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCStubs.swift; sourceTree = "<group>"; };
 		PP2500000000001F25 /* ParticipantsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticipantsView.swift; sourceTree = "<group>"; };
 		PP2600000000001F26 /* AddParticipantSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddParticipantSheet.swift; sourceTree = "<group>"; };
 		PPOL001A001A001A001A0001 /* PrivacyPolicyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPolicyView.swift; sourceTree = "<group>"; };
@@ -647,6 +661,7 @@
 			isa = PBXGroup;
 			children = (
 				437B1D92F1A225C5E1B044C2 /* Meeshy */,
+				WSTB000100010001000100F0 /* WebRTCStubs.swift */,
 				F121C0AAA9428DB850C5DC59 /* Products */,
 				A5D9030481B84BD57234817A /* Frameworks */,
 				245C54709501F298A6CFBE07 /* MeeshyWidgets */,
@@ -969,6 +984,7 @@
 				MOCK000A000A000A000A000 /* MockUserService.swift */,
 				MOCK000B000B000B000B000 /* MockBlockService.swift */,
 				TFA0MK01B001B001B001B001 /* MockTwoFactorService.swift */,
+				MCAE000100010001000100F0 /* MockCallAudioEffectsService.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -1020,6 +1036,8 @@
 				D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */,
 				AUPL0001000100010001002 /* AudioPlayerManagerTests.swift */,
 				AURC0001000100010001002 /* AudioRecorderManagerTests.swift */,
+				CAET000100010001000100F0 /* CallAudioEffectsServiceTests.swift */,
+				MAPT000100010001000100F0 /* MeeshyAudioProcessingModuleTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1027,6 +1045,9 @@
 		WEBRTCGRP00000001 /* WebRTC */ = {
 			isa = PBXGroup;
 			children = (
+				AEFX000100010001000100F0 /* AudioEffectTypes.swift */,
+				CAES000100010001000100F0 /* CallAudioEffectsService.swift */,
+				MAPM000100010001000100F0 /* MeeshyAudioProcessingModule.swift */,
 				WRTYPES000000001F01 /* WebRTCTypes.swift */,
 				P2PWRTC000000001F01 /* P2PWebRTCClient.swift */,
 			);
@@ -1336,6 +1357,10 @@
 				WR3700000000002F37 /* WebRTCService.swift in Sources */,
 				WRTYPES000000002F01 /* WebRTCTypes.swift in Sources */,
 				P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */,
+				AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */,
+				CAES000100010001000100B0 /* CallAudioEffectsService.swift in Sources */,
+				MAPM000100010001000100B0 /* MeeshyAudioProcessingModule.swift in Sources */,
+				WSTB000100010001000100B0 /* WebRTCStubs.swift in Sources */,
 				CV3800000000002F38 /* CallView.swift in Sources */,
 				IC3900000000002F39 /* IncomingCallView.swift in Sources */,
 				2A62EA2A80A8037FCA288EE2 /* OnboardingAnimations.swift in Sources */,
@@ -1427,6 +1452,9 @@
 				D5A1B2C3E4F506A7B8C9D0E4 /* DraftStoreTests.swift in Sources */,
 				AUPL0001000100010001001 /* AudioPlayerManagerTests.swift in Sources */,
 				AURC0001000100010001001 /* AudioRecorderManagerTests.swift in Sources */,
+				MCAE000100010001000100B0 /* MockCallAudioEffectsService.swift in Sources */,
+				CAET000100010001000100B0 /* CallAudioEffectsServiceTests.swift in Sources */,
+				MAPT000100010001000100B0 /* MeeshyAudioProcessingModuleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
