@@ -82,8 +82,10 @@ public struct ConversationStatsEvent: Decodable, Sendable {
     }
 
     public struct OnlineUser: Decodable, Sendable {
-        public let userId: String
-        public let displayName: String?
+        public let id: String
+        public let username: String?
+        public let firstName: String?
+        public let lastName: String?
     }
 }
 

@@ -10,6 +10,7 @@ class PostDetailViewModel: ObservableObject {
     @Published var isLoadingComments = false
     @Published var hasMoreComments = true
     @Published var error: String?
+    @Published var replyingTo: FeedComment? = nil
 
     private var commentCursor: String?
     private let socialSocket = SocialSocketManager.shared
@@ -52,6 +53,29 @@ class PostDetailViewModel: ObservableObject {
 
     func loadComments(_ postId: String) async {
         guard !isLoadingComments else { return }
+
+        let cacheKey = "post-\(postId)"
+        let cacheResult = await CacheCoordinator.shared.comments.load(for: cacheKey)
+
+        switch cacheResult {
+        case .fresh(let cached, _):
+            if comments.isEmpty { comments = cached }
+            return
+        case .stale(let cached, _):
+            if comments.isEmpty { comments = cached }
+            await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
+        case .expired, .empty:
+            isLoadingComments = comments.isEmpty
+            await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
+        }
+    }
+
+    func loadMoreComments(_ postId: String) async {
+        guard !isLoadingComments, hasMoreComments, commentCursor != nil else { return }
+        await fetchCommentsFromNetwork(postId, cacheKey: "post-\(postId)")
+    }
+
+    private func fetchCommentsFromNetwork(_ postId: String, cacheKey: String) async {
         isLoadingComments = true
         defer { isLoadingComments = false }
         do {
@@ -74,8 +98,11 @@ class PostDetailViewModel: ObservableObject {
             comments.append(contentsOf: unique)
             commentCursor = response.pagination?.nextCursor
             hasMoreComments = response.pagination?.hasMore ?? false
+            await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
         } catch {
-            ToastManager.shared.showError("Erreur lors du chargement des commentaires")
+            if comments.isEmpty {
+                ToastManager.shared.showError("Erreur lors du chargement des commentaires")
+            }
         }
     }
 
@@ -118,9 +145,33 @@ class PostDetailViewModel: ObservableObject {
             )
             comments.insert(comment, at: 0)
             self.post?.commentCount += 1
+            await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
         } catch {
             ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
         }
+    }
+
+    func sendReply(_ content: String) async {
+        guard let post, let parent = replyingTo else { return }
+        do {
+            let apiComment = try await PostService.shared.addComment(postId: post.id, content: content, parentId: parent.id)
+            let comment = FeedComment(
+                id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                authorAvatarURL: apiComment.author.avatar,
+                content: apiComment.content, timestamp: apiComment.createdAt,
+                likes: 0, replies: 0
+            )
+            comments.insert(comment, at: 0)
+            self.post?.commentCount += 1
+            replyingTo = nil
+            await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+        } catch {
+            ToastManager.shared.showError("Erreur lors de l'envoi de la reponse")
+        }
+    }
+
+    func clearReply() {
+        replyingTo = nil
     }
 
     func subscribeToSocket(_ postId: String) {

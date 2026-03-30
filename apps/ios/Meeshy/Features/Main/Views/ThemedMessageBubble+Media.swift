@@ -167,25 +167,20 @@ extension ThemedMessageBubble {
     @ViewBuilder
     private func gridImageView(_ attachment: MessageAttachment) -> some View {
         let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-        let thumbUrl = attachment.thumbnailUrl
+        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
         let urlStr = fullUrl ?? thumbUrl ?? ""
-        if !urlStr.isEmpty {
-            CachedAsyncImage(url: urlStr) {
-                if let thumbUrl, fullUrl != nil, thumbUrl != fullUrl {
-                    CachedAsyncImage(url: thumbUrl) {
-                        Color(hex: attachment.thumbnailColor).shimmer()
-                    }
-                    .aspectRatio(contentMode: .fill)
-                } else {
+        Group {
+            if !urlStr.isEmpty {
+                CachedAsyncImage(url: urlStr) {
                     Color(hex: attachment.thumbnailColor).shimmer()
                 }
+                .aspectRatio(contentMode: .fill)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                .clipped()
+            } else {
+                Color(hex: attachment.thumbnailColor)
+                    .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
             }
-            .aspectRatio(contentMode: .fill)
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-            .clipped()
-        } else {
-            Color(hex: attachment.thumbnailColor)
-                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
         }
     }
 

@@ -149,6 +149,7 @@ struct ThemedActionButton: View {
 struct ThemedFeedOverlay: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var viewModel = FeedViewModel()
+    @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @State private var composerText = ""
@@ -158,6 +159,7 @@ struct ThemedFeedOverlay: View {
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
     @State private var pendingAttachmentType: String?
+    @State private var quoteOriginalPost: FeedPost?
 
     var body: some View {
         ZStack {
@@ -193,15 +195,41 @@ struct ThemedFeedOverlay: View {
                         showStatusComposer = true
                     })
 
-                    // Composer (padding is included in the component)
-                    ThemedFeedComposer(
-                        text: $composerText,
-                        isFocused: _isComposerFocused,
-                        onOpenComposerWithAttachment: { type in
-                            pendingAttachmentType = type
-                            showFullComposer = true
+                    // Composer placeholder — tap to open full composer
+                    Button {
+                        showFullComposer = true
+                        HapticFeedback.light()
+                    } label: {
+                        HStack(spacing: 12) {
+                            MeeshyAvatar(
+                                name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
+                                context: .feedComposer,
+                                accentColor: "FF6B6B",
+                                secondaryColor: "4ECDC4"
+                            )
+
+                            Text("Partager quelque chose...")
+                                .font(.system(size: 14))
+                                .foregroundColor(theme.textMuted)
+
+                            Spacer()
+
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 16))
+                                .foregroundColor(MeeshyColors.indigo400)
                         }
-                    )
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(theme.inputBackground)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(theme.inputBorder, lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
 
                     // Feed posts with infinite scroll
                     ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
@@ -212,6 +240,9 @@ struct ThemedFeedOverlay: View {
                             },
                             onRepost: { postId in
                                 Task { await viewModel.repostPost(postId) }
+                            },
+                            onQuote: { postId in
+                                quoteOriginalPost = viewModel.posts.first(where: { $0.id == postId })
                             },
                             onShare: { postId in
                                 Task { await viewModel.sharePost(postId) }
@@ -224,6 +255,12 @@ struct ThemedFeedOverlay: View {
                             },
                             onLikeComment: { postId, commentId in
                                 Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
+                            },
+                            onTapPost: { post in
+                                router.push(.postDetail(post.id, post))
+                            },
+                            onTapRepost: { repostId in
+                                router.push(.postDetail(repostId))
                             },
                             onDelete: post.authorId == AuthManager.shared.currentUser?.id ? { postId in
                                 Task { await viewModel.deletePost(postId) }
@@ -264,8 +301,12 @@ struct ThemedFeedOverlay: View {
             if viewModel.posts.isEmpty {
                 await viewModel.loadFeed()
             }
+            viewModel.subscribeToSocketEvents()
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
+        }
+        .onDisappear {
+            viewModel.unsubscribeFromSocketEvents()
         }
         .fullScreenCover(isPresented: $showStoryViewer) {
             if let userId = selectedStoryUserId,
@@ -291,6 +332,17 @@ struct ThemedFeedOverlay: View {
                     showFullComposer = false
                     pendingAttachmentType = nil
                     composerText = ""
+                }
+            )
+        }
+        .fullScreenCover(item: $quoteOriginalPost) { quoted in
+            FeedComposerSheet(
+                viewModel: viewModel,
+                initialText: "",
+                pendingAttachmentType: nil,
+                quotePost: quoted,
+                onDismiss: {
+                    quoteOriginalPost = nil
                 }
             )
         }
@@ -502,7 +554,6 @@ struct ThemedFeedComposer: View {
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
-                isCurrentUser: true,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
             )

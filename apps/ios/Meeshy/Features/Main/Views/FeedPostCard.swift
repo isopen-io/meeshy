@@ -17,7 +17,7 @@ struct FeedPostCard: View {
     var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
     var onLikeComment: ((String, String) -> Void)? = nil // (postId, commentId)
     var onSelectLanguage: ((String, String) -> Void)? = nil // (postId, language)
-    var onTapPost: ((String) -> Void)? = nil
+    var onTapPost: ((FeedPost) -> Void)? = nil
     var onTapRepost: ((String) -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
     var onReport: ((String) -> Void)? = nil
@@ -35,61 +35,144 @@ struct FeedPostCard: View {
     @State private var showTranslationSheet = false
     @State private var showRepostOptions = false
     @State private var selectedProfileUser: ProfileSheetUser?
+    @State private var secondaryLangCode: String? = nil
+    @State private var activeDisplayLangCode: String? = nil
+    @State var fullscreenMediaId: String? = nil
+    @State var showFullscreenGallery = false
 
-    private var accentColor: String { post.authorColor }
+    var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
+
+    // MARK: - Prisme Linguistique
+
+    private var currentDisplayLangCode: String {
+        activeDisplayLangCode ?? post.translations?.keys.first(where: { lang in
+            AuthManager.shared.currentUser?.preferredContentLanguages.contains(where: { $0.caseInsensitiveCompare(lang) == .orderedSame }) ?? false
+        })?.lowercased() ?? post.originalLanguage?.lowercased() ?? "fr"
+    }
+
+    private var effectiveContent: String {
+        let code = currentDisplayLangCode
+        if code == post.originalLanguage?.lowercased() { return post.content }
+        if let translation = post.translations?[code] ?? post.translations?.first(where: { $0.key.lowercased() == code })?.value {
+            return translation.text
+        }
+        return post.displayContent
+    }
+
+    private var secondaryContent: String? {
+        guard let code = secondaryLangCode else { return nil }
+        if code == post.originalLanguage?.lowercased() { return post.content }
+        return post.translations?.first(where: { $0.key.lowercased() == code })?.value.text
+    }
+
+    private func buildAvailableFlags() -> [String] {
+        guard let origLang = post.originalLanguage?.lowercased() else { return [] }
+        let activeLang = currentDisplayLangCode
+        let user = AuthManager.shared.currentUser
+        var all: [String] = [origLang]
+        var seen: Set<String> = [origLang]
+
+        let langs = user?.preferredContentLanguages ?? []
+        for lang in langs {
+            let l = lang.lowercased()
+            if !seen.contains(l), post.translations?.keys.contains(where: { $0.lowercased() == l }) == true {
+                all.append(l); seen.insert(l)
+            }
+        }
+        return all.filter { $0 != activeLang }
+    }
+
+    private func handleFlagTap(_ code: String) {
+        let isOriginal = code == post.originalLanguage?.lowercased()
+        let hasContent = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == code }) == true
+
+        if !hasContent {
+            onSelectLanguage?(post.id, code)
+            HapticFeedback.light()
+            return
+        }
+
+        if isOriginal {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                activeDisplayLangCode = code
+                secondaryLangCode = nil
+            }
+        } else {
+            let isShowing = secondaryLangCode == code
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                secondaryLangCode = isShowing ? nil : code
+            }
+        }
+        HapticFeedback.light()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main content
             VStack(alignment: .leading, spacing: 12) {
-                // Author header
-                authorHeader
+                // Tappable content area (author, text, media, repost)
+                VStack(alignment: .leading, spacing: 12) {
+                    // Author header
+                    authorHeader
 
-                // Post content (Prisme Linguistique: displays translated content when available)
-                Text(post.displayContent)
-                    .font(.system(size: 15))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(nil)
-                    .onLongPressGesture {
-                        if let translations = post.translations, !translations.isEmpty {
-                            HapticFeedback.light()
-                            showTranslationSheet = true
+                    // Post content (Prisme Linguistique)
+                    Text(effectiveContent)
+                        .font(.system(size: 15))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(nil)
+
+                    // Inline secondary translation panel
+                    if let content = secondaryContent, let code = secondaryLangCode {
+                        let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
+                        let display = LanguageDisplay.from(code: code)
+
+                        VStack(spacing: 0) {
+                            HStack(spacing: 6) {
+                                Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
+                                Circle().fill(langColor).frame(width: 4, height: 4)
+                                Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                if let display {
+                                    HStack(spacing: 4) {
+                                        Text(display.flag).font(.system(size: 11))
+                                        Text(display.name)
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundColor(langColor)
+                                    }
+                                }
+                                Text(content)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(theme.textPrimary.opacity(0.8))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(langColor.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                    .accessibilityHint("Maintenir pour voir les traductions")
 
-                // Translation indicator
-                if post.isTranslated {
-                    HStack(spacing: 4) {
-                        Image(systemName: "translate")
-                            .font(.system(size: 11))
-                            .accessibilityHidden(true)
-                        Text("Traduit depuis \(Locale.current.localizedString(forLanguageCode: post.originalLanguage ?? "?") ?? post.originalLanguage ?? "?")")
-                            .font(.system(size: 11))
-                    }
-                    .foregroundColor(theme.textMuted)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Traduit depuis \(Locale.current.localizedString(forLanguageCode: post.originalLanguage ?? "?") ?? post.originalLanguage ?? "?")")
-                    .accessibilityHint("Affiche les options de traduction")
-                    .accessibilityAddTraits(.isButton)
-                    .onTapGesture {
-                        HapticFeedback.light()
-                        showTranslationSheet = true
+                    // Media preview
+                    if post.hasMedia {
+                        mediaPreview
                     }
                 }
-
-                // Media preview
-                if post.hasMedia {
-                    mediaPreview
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onTapPost?(post)
                 }
 
-                // Reposted content
+                // Reposted content (outside parent tap target so its own Button works)
                 if let repost = post.repost {
                     repostView(repost)
                 }
 
-                // Actions bar
+                // Actions bar (not inside the tap target)
                 actionsBar
             }
             .padding(16)
@@ -108,9 +191,6 @@ struct FeedPostCard: View {
                 )
         )
         .padding(.horizontal, 16)
-        .onTapGesture {
-            onTapPost?(post.id)
-        }
         .sheet(isPresented: $showCommentsSheet) {
             CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment, onLikeComment: onLikeComment)
         }
@@ -118,7 +198,17 @@ struct FeedPostCard: View {
             PostTranslationSheet(
                 post: post,
                 onSelectLanguage: { language in
-                    onSelectLanguage?(post.id, language)
+                    let langLower = language.lowercased()
+                    let isOriginal = langLower == post.originalLanguage?.lowercased()
+                    let hasTranslation = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == langLower }) == true
+                    if hasTranslation {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            activeDisplayLangCode = langLower
+                            secondaryLangCode = nil
+                        }
+                    } else {
+                        onSelectLanguage?(post.id, language)
+                    }
                 }
             )
         }
@@ -131,6 +221,16 @@ struct FeedPostCard: View {
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $showFullscreenGallery) {
+            let attachments = post.media
+                .filter { $0.type == .image || $0.type == .video }
+                .map { $0.toMessageAttachment() }
+            ConversationMediaGalleryView(
+                allAttachments: attachments,
+                startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
+                accentColor: accentColor
+            )
         }
         .withStatusBubble()
     }
@@ -174,9 +274,45 @@ struct FeedPostCard: View {
                     }
                 }
 
-                Text(timeAgo(from: post.timestamp))
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.accentText(accentColor))
+                HStack(spacing: 4) {
+                    Text(timeAgo(from: post.timestamp))
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.accentText(accentColor))
+
+                    let flags = buildAvailableFlags()
+                    if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                        Text("·")
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.textMuted)
+
+                        ForEach(flags, id: \.self) { code in
+                            let display = LanguageDisplay.from(code: code)
+                            let isActive = code == secondaryLangCode
+                            VStack(spacing: 1) {
+                                Text(display?.flag ?? code.uppercased())
+                                    .font(.system(size: isActive ? 12 : 10))
+                                    .scaleEffect(isActive ? 1.05 : 1.0)
+                                if isActive {
+                                    RoundedRectangle(cornerRadius: 1)
+                                        .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
+                                        .frame(width: 10, height: 1.5)
+                                }
+                            }
+                            .animation(.easeInOut(duration: 0.2), value: isActive)
+                            .onTapGesture { handleFlagTap(code) }
+                        }
+
+                        if post.translations != nil, !post.translations!.isEmpty {
+                            Image(systemName: "translate")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(MeeshyColors.indigo400)
+                                .onTapGesture {
+                                    HapticFeedback.light()
+                                    showTranslationSheet = true
+                                }
+                        }
+                    }
+                }
             }
 
             Spacer()
@@ -285,7 +421,9 @@ struct FeedPostCard: View {
                     .accessibilityLabel("\(repost.likes) j'aime")
                 }
             }
-            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
@@ -329,16 +467,17 @@ struct FeedPostCard: View {
                                 .animation(.easeOut(duration: 0.4), value: likeAnimating)
                         }
 
-                        Image(systemName: post.isLiked ? "heart.fill" : "heart")
+                        let heartColor: Color = post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textSecondary)
+                        Image(systemName: post.isLiked || post.likes > 0 ? "heart.fill" : "heart")
                             .font(.system(size: 18))
-                            .foregroundColor(post.isLiked ? MeeshyColors.error : theme.textSecondary)
+                            .foregroundColor(heartColor)
                             .scaleEffect(likeAnimating ? 1.3 : (post.isLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
                     }
 
                     Text("\(post.likes)")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(post.isLiked ? MeeshyColors.error : theme.textSecondary)
+                        .foregroundColor(post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textSecondary))
                         .contentTransition(.numericText())
                 }
             }
@@ -495,10 +634,30 @@ struct FeedPostCard: View {
                 )
 
                 VStack(alignment: .leading, spacing: 4) {
-                    // Author name
-                    Text(comment.author)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(theme.accentText(comment.authorColor))
+                    // Author name + language flags
+                    HStack(spacing: 4) {
+                        Text(comment.author)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.accentText(comment.authorColor))
+
+                        if let origLang = comment.originalLanguage, comment.translatedContent != nil {
+                            Text("·").font(.system(size: 10)).foregroundColor(theme.textMuted)
+
+                            let origDisplay = LanguageDisplay.from(code: origLang)
+                            Text(origDisplay?.flag ?? "?")
+                                .font(.system(size: 9))
+
+                            let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                            let targetLang = userLangs.first?.lowercased() ?? "fr"
+                            let targetDisplay = LanguageDisplay.from(code: targetLang)
+                            Text(targetDisplay?.flag ?? "?")
+                                .font(.system(size: 9))
+
+                            Image(systemName: "translate")
+                                .font(.system(size: 8, weight: .medium))
+                                .foregroundColor(MeeshyColors.indigo400)
+                        }
+                    }
 
                     // Content (Prisme Linguistique)
                     Text(comment.displayContent)
@@ -563,7 +722,7 @@ struct FeedPostCard: View {
 
 // MARK: - Equatable (enables .equatable() in ForEach to prevent unnecessary re-renders)
 extension FeedPostCard: Equatable {
-    static func == (lhs: FeedPostCard, rhs: FeedPostCard) -> Bool {
+    nonisolated static func == (lhs: FeedPostCard, rhs: FeedPostCard) -> Bool {
         lhs.post.id == rhs.post.id
             && lhs.post.likes == rhs.post.likes
             && lhs.post.isLiked == rhs.post.isLiked

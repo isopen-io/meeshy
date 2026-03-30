@@ -38,6 +38,7 @@ struct FeedView: View {
     @StateObject var audioRecorder = AudioRecorderManager()
     @State private var pendingAttachmentType: String?
     @State var showEmojiPicker = false
+    @State private var quoteTargetPost: FeedPost?
 
     var composerHasContent: Bool {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
@@ -268,6 +269,9 @@ struct FeedView: View {
             onRepost: { postId in
                 Task { await viewModel.repostPost(postId) }
             },
+            onQuote: { postId in
+                quoteTargetPost = viewModel.posts.first(where: { $0.id == postId })
+            },
             onShare: { postId in
                 Task { await viewModel.sharePost(postId) }
             },
@@ -283,8 +287,8 @@ struct FeedView: View {
             onSelectLanguage: { postId, language in
                 viewModel.setTranslationOverride(postId: postId, language: language)
             },
-            onTapPost: { postId in
-                router.push(.postDetail(postId))
+            onTapPost: { post in
+                router.push(.postDetail(post.id, post))
             },
             onTapRepost: { repostId in
                 router.push(.postDetail(repostId))
@@ -677,6 +681,17 @@ struct FeedView: View {
         }
         .onChange(of: selectedPhotoItems) { _, items in
             handleFeedPhotoSelection(items)
+        }
+        .fullScreenCover(item: $quoteTargetPost) { quoted in
+            FeedComposerSheet(
+                viewModel: viewModel,
+                initialText: "",
+                pendingAttachmentType: nil,
+                quotePost: quoted,
+                onDismiss: {
+                    quoteTargetPost = nil
+                }
+            )
         }
     }
 }

@@ -12,6 +12,7 @@ public actor CacheCoordinator {
     public let participants: GRDBCacheStore<String, PaginatedParticipant>
     public let profiles: GRDBCacheStore<String, MeeshyUser>
     public let feed: GRDBCacheStore<String, FeedPost>
+    public let comments: GRDBCacheStore<String, FeedComment>
     public let stories: GRDBCacheStore<String, StoryGroup>
     public let stats: GRDBCacheStore<String, UserStats>
     public let notifications: GRDBCacheStore<String, APINotification>
@@ -63,6 +64,7 @@ public actor CacheCoordinator {
         self.participants = GRDBCacheStore(policy: .participants, db: db, namespace: "part")
         self.profiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "prof")
         self.feed = GRDBCacheStore(policy: .feedPosts, db: db, namespace: "feed")
+        self.comments = GRDBCacheStore(policy: .comments, db: db, namespace: "comments")
         self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories")
         self.stats = GRDBCacheStore(policy: .userStats, db: db, namespace: "stats")
         self.notifications = GRDBCacheStore(policy: .notifications, db: db, namespace: "notif")

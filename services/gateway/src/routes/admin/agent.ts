@@ -1304,7 +1304,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
             senderId: true,
             originalLanguage: true,
             replyToId: true,
-            sender: { select: { id: true, username: true, displayName: true, avatar: true } },
+            sender: { select: { id: true, displayName: true, avatar: true, user: { select: { username: true } } } },
           },
           orderBy: { createdAt: 'desc' },
           skip,

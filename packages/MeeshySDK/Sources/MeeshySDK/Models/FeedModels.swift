@@ -23,6 +23,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     public let id: String
     public let type: FeedMediaType
     public let url: String?
+    public let thumbnailUrl: String?
     public let thumbnailColor: String
     public var width: Int?
     public var height: Int?
@@ -35,12 +36,14 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     public var longitude: Double?
     public var transcription: MessageTranscription?
 
-    public init(id: String = UUID().uuidString, type: FeedMediaType, url: String? = nil, thumbnailColor: String = "4ECDC4",
+    public init(id: String = UUID().uuidString, type: FeedMediaType, url: String? = nil,
+                thumbnailUrl: String? = nil,
+                thumbnailColor: String = "4ECDC4",
                 width: Int? = nil, height: Int? = nil, duration: Int? = nil,
                 fileName: String? = nil, fileSize: String? = nil, pageCount: Int? = nil,
                 locationName: String? = nil, latitude: Double? = nil, longitude: Double? = nil,
                 transcription: MessageTranscription? = nil) {
-        self.id = id; self.type = type; self.url = url; self.thumbnailColor = thumbnailColor
+        self.id = id; self.type = type; self.url = url; self.thumbnailUrl = thumbnailUrl; self.thumbnailColor = thumbnailColor
         self.width = width; self.height = height; self.duration = duration
         self.fileName = fileName; self.fileSize = fileSize; self.pageCount = pageCount
         self.locationName = locationName; self.latitude = latitude; self.longitude = longitude
@@ -74,6 +77,38 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     public var durationFormatted: String? {
         guard let d = duration else { return nil }
         return String(format: "%d:%02d", d / 60, d % 60)
+    }
+}
+
+extension FeedMedia {
+    /// Bridge to MeeshyMessageAttachment for reuse of media player components
+    public func toMessageAttachment() -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(
+            id: id,
+            fileName: fileName ?? "",
+            originalName: fileName ?? "",
+            mimeType: mimeTypeFromFeedType,
+            fileSize: 0,
+            fileUrl: url ?? "",
+            width: width,
+            height: height,
+            thumbnailPath: nil,
+            thumbnailUrl: thumbnailUrl,
+            duration: duration.map { $0 * 1000 },
+            latitude: latitude,
+            longitude: longitude,
+            thumbnailColor: thumbnailColor
+        )
+    }
+
+    private var mimeTypeFromFeedType: String {
+        switch type {
+        case .image: return "image/jpeg"
+        case .video: return "video/mp4"
+        case .audio: return "audio/mpeg"
+        case .document: return "application/pdf"
+        case .location: return "application/x-location"
+        }
     }
 }
 
@@ -156,6 +191,8 @@ public struct FeedComment: Identifiable, Sendable {
         self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
     }
 }
+
+extension FeedComment: CacheIdentifiable {}
 
 extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
@@ -295,3 +332,11 @@ extension FeedPost: Codable {
 }
 
 extension FeedPost: CacheIdentifiable {}
+
+extension FeedPost: Equatable {
+    public static func == (lhs: FeedPost, rhs: FeedPost) -> Bool { lhs.id == rhs.id }
+}
+
+extension FeedPost: Hashable {
+    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}

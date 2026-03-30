@@ -1,12 +1,34 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct PostTranslationSheet: View {
     let post: FeedPost
     var onSelectLanguage: ((String) -> Void)?
+    var onRequestTranslation: ((String, String) -> Void)? // (postId, targetLanguage)
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var requestingLanguages: Set<String> = []
+    @State private var requestedLanguages: Set<String> = []
+
+    private var availableTranslations: [String: PostTranslation] {
+        post.translations ?? [:]
+    }
+
+    private var missingLanguages: [String] {
+        let user = AuthManager.shared.currentUser
+        let existing = Set(availableTranslations.keys.map { $0.lowercased() })
+        let origLang = post.originalLanguage?.lowercased() ?? ""
+        var missing: [String] = []
+        for lang in user?.preferredContentLanguages ?? [] {
+            let l = lang.lowercased()
+            if l != origLang && !existing.contains(l) && !missing.contains(l) {
+                missing.append(l)
+            }
+        }
+        return missing
+    }
 
     var body: some View {
         NavigationStack {
@@ -16,8 +38,11 @@ struct PostTranslationSheet: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
                         originalSection
-                        if let translations = post.translations, !translations.isEmpty {
-                            translationsSection(translations)
+                        if !availableTranslations.isEmpty {
+                            translationsSection
+                        }
+                        if !missingLanguages.isEmpty {
+                            requestTranslationSection
                         }
                     }
                     .padding(16)
@@ -39,62 +64,78 @@ struct PostTranslationSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 
     // MARK: - Original Content Section
 
     private var originalSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Text(languageFlag(post.originalLanguage ?? "?"))
-                Text("Original (\(Locale.current.localizedString(forLanguageCode: post.originalLanguage ?? "?") ?? post.originalLanguage ?? "?"))")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-            }
+        Button {
+            HapticFeedback.light()
+            onSelectLanguage?(post.originalLanguage ?? "")
+            dismiss()
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    let display = LanguageDisplay.from(code: post.originalLanguage)
+                    Text(display?.flag ?? languageFlag(post.originalLanguage ?? "?"))
+                    Text("Original (\(display?.name ?? post.originalLanguage ?? "?"))")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
 
-            Text(post.content)
-                .font(.system(size: 15))
-                .foregroundColor(theme.textSecondary)
-                .lineLimit(6)
+                    Spacer()
+
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(MeeshyColors.success)
+                }
+
+                Text(post.content)
+                    .font(.system(size: 15))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(4)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(theme.inputBorder, lineWidth: 1)
+                    )
+            )
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(theme.inputBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(theme.inputBorder, lineWidth: 1)
-                )
-        )
+        .buttonStyle(PlainButtonStyle())
     }
 
     // MARK: - Available Translations
 
-    private func translationsSection(_ translations: [String: PostTranslation]) -> some View {
+    private var translationsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Traductions disponibles")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            ForEach(Array(translations.keys.sorted()), id: \.self) { lang in
+            ForEach(Array(availableTranslations.keys.sorted()), id: \.self) { lang in
                 Button {
                     HapticFeedback.light()
                     onSelectLanguage?(lang)
                     dismiss()
                 } label: {
                     HStack(spacing: 10) {
-                        Text(languageFlag(lang))
+                        let display = LanguageDisplay.from(code: lang)
+                        Text(display?.flag ?? languageFlag(lang))
                             .font(.system(size: 20))
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(Locale.current.localizedString(forLanguageCode: lang) ?? lang)
+                            Text(display?.name ?? Locale.current.localizedString(forLanguageCode: lang) ?? lang)
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(theme.textPrimary)
 
-                            if let text = translations[lang]?.text {
+                            if let text = availableTranslations[lang]?.text {
                                 Text(text)
                                     .font(.system(size: 12))
                                     .foregroundColor(theme.textMuted)
@@ -104,7 +145,7 @@ struct PostTranslationSheet: View {
 
                         Spacer()
 
-                        if let confidence = translations[lang]?.confidenceScore {
+                        if let confidence = availableTranslations[lang]?.confidenceScore {
                             Text("\(Int(confidence * 100))%")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(theme.textMuted)
@@ -129,15 +170,82 @@ struct PostTranslationSheet: View {
         }
     }
 
+    // MARK: - Request New Translations
+
+    private var requestTranslationSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Autres langues")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+
+            ForEach(missingLanguages, id: \.self) { lang in
+                HStack(spacing: 10) {
+                    let display = LanguageDisplay.from(code: lang)
+                    Text(display?.flag ?? languageFlag(lang))
+                        .font(.system(size: 20))
+
+                    Text(display?.name ?? Locale.current.localizedString(forLanguageCode: lang) ?? lang)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+
+                    Spacer()
+
+                    if requestedLanguages.contains(lang) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .bold))
+                            Text("Demandee")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(MeeshyColors.success)
+                    } else if requestingLanguages.contains(lang) {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    } else {
+                        Button {
+                            HapticFeedback.light()
+                            requestingLanguages.insert(lang)
+                            Task {
+                                do {
+                                    try await PostService.shared.requestTranslation(postId: post.id, targetLanguage: lang)
+                                    requestingLanguages.remove(lang)
+                                    requestedLanguages.insert(lang)
+                                    onRequestTranslation?(post.id, lang)
+                                } catch {
+                                    requestingLanguages.remove(lang)
+                                    ToastManager.shared.showError("Erreur de traduction")
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "translate")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("Traduire")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule().fill(MeeshyColors.brandGradient)
+                            )
+                        }
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(theme.inputBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(theme.inputBorder.opacity(0.5), lineWidth: 1)
+                        )
+                )
+            }
+        }
+    }
+
     private func languageFlag(_ code: String) -> String {
-        let flags: [String: String] = [
-            "fr": "\u{1F1EB}\u{1F1F7}", "en": "\u{1F1EC}\u{1F1E7}",
-            "es": "\u{1F1EA}\u{1F1F8}", "ar": "\u{1F1F8}\u{1F1E6}",
-            "pt": "\u{1F1E7}\u{1F1F7}", "de": "\u{1F1E9}\u{1F1EA}",
-            "zh": "\u{1F1E8}\u{1F1F3}", "ja": "\u{1F1EF}\u{1F1F5}",
-            "ko": "\u{1F1F0}\u{1F1F7}", "it": "\u{1F1EE}\u{1F1F9}",
-            "ru": "\u{1F1F7}\u{1F1FA}", "tr": "\u{1F1F9}\u{1F1F7}"
-        ]
-        return flags[code] ?? "\u{1F310}"
+        LanguageDisplay.from(code: code)?.flag ?? "\u{1F310}"
     }
 }

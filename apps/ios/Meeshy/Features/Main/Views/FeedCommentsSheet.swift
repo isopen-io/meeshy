@@ -14,11 +14,17 @@ struct CommentsSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject private var statusViewModel: StatusViewModel
+    @EnvironmentObject private var storyViewModel: StoryViewModel
     @State private var commentText = ""
     @State private var replyingTo: FeedComment? = nil
     @FocusState private var isComposerFocused: Bool
     @State private var commentBounce: Bool = false
     @State private var selectedProfileUser: ProfileSheetUser?
+    @State private var liveComments: [FeedComment]?
+    @State private var liveCommentCount: Int?
+
+    private var comments: [FeedComment] { liveComments ?? post.comments }
+    private var commentCount: Int { liveCommentCount ?? post.commentCount }
 
     var body: some View {
         NavigationStack {
@@ -30,12 +36,8 @@ struct CommentsSheetView: View {
                     // Comments list
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
-                            // Post preview at top
-                            postPreview
-                                .padding(.bottom, 16)
-
                             // Comments
-                            ForEach(post.comments) { comment in
+                            ForEach(comments) { comment in
                                 CommentRowView(
                                     comment: comment,
                                     accentColor: accentColor,
@@ -45,7 +47,10 @@ struct CommentsSheetView: View {
                                     },
                                     onLikeComment: {
                                         onLikeComment?(post.id, comment.id)
-                                    }
+                                    },
+                                    moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
+                                    storyState: storyViewModel.storyGroupForUser(userId: comment.authorId).map { $0.hasUnviewed ? .unread : .read } ?? .none,
+                                    presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline
                                 )
                             }
                         }
@@ -60,7 +65,7 @@ struct CommentsSheetView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("\(post.comments.count) commentaires")
+                    Text("\(commentCount) commentaires")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
@@ -80,6 +85,25 @@ struct CommentsSheetView: View {
         }
         .presentationDetents([.large, .medium])
         .presentationDragIndicator(.visible)
+        .onReceive(
+            SocialSocketManager.shared.commentAdded
+                .receive(on: DispatchQueue.main)
+                .filter { [postId = post.id] in $0.postId == postId }
+        ) { data in
+            let feedComment = FeedComment(
+                id: data.comment.id, author: data.comment.author.name,
+                authorId: data.comment.author.id,
+                authorAvatarURL: data.comment.author.avatar,
+                content: data.comment.content, timestamp: data.comment.createdAt,
+                likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0
+            )
+            var current = liveComments ?? post.comments
+            if !current.contains(where: { $0.id == feedComment.id }) {
+                current.insert(feedComment, at: 0)
+            }
+            liveComments = current
+            liveCommentCount = data.commentCount
+        }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -141,7 +165,7 @@ struct CommentsSheetView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "bubble.right.fill")
                         .font(.system(size: 12))
-                    Text("\(post.comments.count)")
+                    Text("\(commentCount)")
                         .font(.system(size: 12, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
@@ -164,34 +188,46 @@ struct CommentsSheetView: View {
             // Reply indicator
             if let replyingTo = replyingTo {
                 HStack(spacing: 8) {
-                    Rectangle()
+                    RoundedRectangle(cornerRadius: 2)
                         .fill(Color(hex: replyingTo.authorColor))
-                        .frame(width: 3)
+                        .frame(width: 3, height: 36)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Réponse à \(replyingTo.author)")
+                        Text(replyingTo.author)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: replyingTo.authorColor))
 
                         Text(replyingTo.displayContent)
                             .font(.system(size: 12))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundColor(theme.textSecondary)
                             .lineLimit(1)
                     }
 
                     Spacer()
 
                     Button {
-                        self.replyingTo = nil
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            self.replyingTo = nil
+                        }
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundColor(theme.textMuted)
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(theme.backgroundSecondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(theme.surfaceGradient(tint: accentColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal, 8)
             }
 
             // Composer
@@ -255,11 +291,29 @@ struct CommentsSheetView: View {
                     Button {
                         let text = commentText
                         let parentId = replyingTo?.id
-                        onSendComment?(post.id, text, parentId)
                         commentText = ""
                         replyingTo = nil
                         isComposerFocused = false
                         HapticFeedback.success()
+                        Task {
+                            do {
+                                let apiComment = try await PostService.shared.addComment(postId: post.id, content: text, parentId: parentId)
+                                let feedComment = FeedComment(
+                                    id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                                    authorAvatarURL: apiComment.author.avatar,
+                                    content: apiComment.content, timestamp: apiComment.createdAt,
+                                    likes: 0, replies: 0
+                                )
+                                var current = liveComments ?? post.comments
+                                if !current.contains(where: { $0.id == feedComment.id }) {
+                                    current.insert(feedComment, at: 0)
+                                }
+                                liveComments = current
+                                liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
+                            } catch {
+                                ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
+                            }
+                        }
                     } label: {
                         Circle()
                             .fill(
@@ -313,13 +367,24 @@ struct CommentRowView: View {
     let accentColor: String
     let onReply: () -> Void
     var onLikeComment: (() -> Void)? = nil
+    var moodEmoji: String? = nil
+    var storyState: StoryRingState = .none
+    var presenceState: PresenceState = .offline
 
-    // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
-    // évite que chaque changement de thème force un re-render de toutes les lignes.
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var isLiked = false
     @State private var selectedProfileUser: ProfileSheetUser?
+    @State private var showOriginal = false
+
+    private var hasTranslation: Bool {
+        comment.translatedContent != nil && comment.originalLanguage != nil
+    }
+
+    private var effectiveCommentContent: String {
+        if showOriginal { return comment.content }
+        return comment.displayContent
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -328,9 +393,11 @@ struct CommentRowView: View {
                 name: comment.author,
                 context: .postComment,
                 accentColor: comment.authorColor,
-                moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
+                avatarURL: comment.authorAvatarURL,
+                storyState: storyState,
+                moodEmoji: moodEmoji,
+                presenceState: presenceState,
                 onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
-                onMoodTap: statusViewModel.moodTapHandler(for: comment.authorId),
                 contextMenuItems: [
                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
                         selectedProfileUser = .from(feedComment: comment)
@@ -339,8 +406,8 @@ struct CommentRowView: View {
             )
 
             VStack(alignment: .leading, spacing: 6) {
-                // Author and time
-                HStack(spacing: 6) {
+                // Author, flags, and time
+                HStack(spacing: 4) {
                     Text(comment.author)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(Color(hex: comment.authorColor))
@@ -349,19 +416,72 @@ struct CommentRowView: View {
                             selectedProfileUser = .from(feedComment: comment)
                         }
 
-                    Text("·")
-                        .foregroundColor(theme.textMuted)
+                    if hasTranslation {
+                        Text("·").font(.system(size: 12)).foregroundColor(theme.textMuted)
+
+                        // Original language flag
+                        let origDisplay = LanguageDisplay.from(code: comment.originalLanguage)
+                        let isOrigActive = showOriginal
+                        VStack(spacing: 1) {
+                            Text(origDisplay?.flag ?? "?")
+                                .font(.system(size: isOrigActive ? 12 : 10))
+                                .scaleEffect(isOrigActive ? 1.05 : 1.0)
+                            if isOrigActive {
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(Color(hex: origDisplay?.color ?? LanguageDisplay.defaultColor))
+                                    .frame(width: 10, height: 1.5)
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.2), value: showOriginal)
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showOriginal = true
+                            }
+                            HapticFeedback.light()
+                        }
+
+                        // Translated language flag
+                        let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                        let targetLang = userLangs.first?.lowercased() ?? "fr"
+                        let targetDisplay = LanguageDisplay.from(code: targetLang)
+                        let isTransActive = !showOriginal
+                        VStack(spacing: 1) {
+                            Text(targetDisplay?.flag ?? "?")
+                                .font(.system(size: isTransActive ? 12 : 10))
+                                .scaleEffect(isTransActive ? 1.05 : 1.0)
+                            if isTransActive {
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(Color(hex: targetDisplay?.color ?? LanguageDisplay.defaultColor))
+                                    .frame(width: 10, height: 1.5)
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.2), value: showOriginal)
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showOriginal = false
+                            }
+                            HapticFeedback.light()
+                        }
+
+                        // Translate icon
+                        Image(systemName: "translate")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(MeeshyColors.indigo400)
+                    }
+
+                    Text("·").font(.system(size: 12)).foregroundColor(theme.textMuted)
 
                     Text(timeAgo(from: comment.timestamp))
                         .font(.system(size: 12))
                         .foregroundColor(theme.textMuted)
                 }
 
-                // Content (Prisme Linguistique)
-                Text(comment.displayContent)
+                // Content (Prisme Linguistique — direct replacement)
+                Text(effectiveCommentContent)
                     .font(.system(size: 15))
                     .foregroundColor(theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .animation(.easeInOut(duration: 0.2), value: showOriginal)
 
                 // Actions
                 HStack(spacing: 20) {
@@ -373,14 +493,16 @@ struct CommentRowView: View {
                         onLikeComment?()
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: isLiked ? "heart.fill" : "heart")
+                            let totalLikes = comment.likes + (isLiked ? 1 : 0)
+                            let heartColor: Color = isLiked ? MeeshyColors.error : (totalLikes > 0 ? Color(hex: accentColor) : theme.textMuted)
+                            Image(systemName: isLiked || totalLikes > 0 ? "heart.fill" : "heart")
                                 .font(.system(size: 14))
-                                .foregroundColor(isLiked ? MeeshyColors.error : theme.textMuted)
+                                .foregroundColor(heartColor)
                                 .scaleEffect(isLiked ? 1.1 : 1.0)
 
-                            Text("\(comment.likes + (isLiked ? 1 : 0))")
+                            Text("\(totalLikes)")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(isLiked ? MeeshyColors.error : theme.textMuted)
+                                .foregroundColor(heartColor)
                         }
                     }
 

@@ -19,7 +19,11 @@ extension FeedPostCard {
             // Two images side by side - equal width
             HStack(spacing: spacing) {
                 galleryImageView(mediaList[0])
+                    .contentShape(Rectangle())
+                    .onTapGesture { openFullscreen(mediaList[0]) }
                 galleryImageView(mediaList[1])
+                    .contentShape(Rectangle())
+                    .onTapGesture { openFullscreen(mediaList[1]) }
             }
             .frame(height: 180)
             .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -28,10 +32,16 @@ extension FeedPostCard {
             HStack(spacing: spacing) {
                 galleryImageView(mediaList[0])
                     .aspectRatio(0.75, contentMode: .fill)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openFullscreen(mediaList[0]) }
 
                 VStack(spacing: spacing) {
                     galleryImageView(mediaList[1])
+                        .contentShape(Rectangle())
+                        .onTapGesture { openFullscreen(mediaList[1]) }
                     galleryImageView(mediaList[2])
+                        .contentShape(Rectangle())
+                        .onTapGesture { openFullscreen(mediaList[2]) }
                 }
             }
             .frame(height: 220)
@@ -41,11 +51,19 @@ extension FeedPostCard {
             VStack(spacing: spacing) {
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[0])
+                        .contentShape(Rectangle())
+                        .onTapGesture { openFullscreen(mediaList[0]) }
                     galleryImageView(mediaList[1])
+                        .contentShape(Rectangle())
+                        .onTapGesture { openFullscreen(mediaList[1]) }
                 }
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[2])
+                        .contentShape(Rectangle())
+                        .onTapGesture { openFullscreen(mediaList[2]) }
                     galleryImageView(mediaList[3])
+                        .contentShape(Rectangle())
+                        .onTapGesture { openFullscreen(mediaList[3]) }
                 }
             }
             .frame(height: 220)
@@ -55,11 +73,19 @@ extension FeedPostCard {
             VStack(spacing: spacing) {
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[0])
+                        .contentShape(Rectangle())
+                        .onTapGesture { openFullscreen(mediaList[0]) }
                     galleryImageView(mediaList[1])
+                        .contentShape(Rectangle())
+                        .onTapGesture { openFullscreen(mediaList[1]) }
                 }
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[2])
+                        .contentShape(Rectangle())
+                        .onTapGesture { openFullscreen(mediaList[2]) }
                     galleryImageView(mediaList[3])
+                        .contentShape(Rectangle())
+                        .onTapGesture { openFullscreen(mediaList[3]) }
                     ZStack {
                         galleryImageView(mediaList[4])
                         if count > 5 {
@@ -69,6 +95,8 @@ extension FeedPostCard {
                                 .foregroundColor(.white)
                         }
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture { openFullscreen(mediaList[4]) }
                 }
             }
             .frame(height: 240)
@@ -79,42 +107,70 @@ extension FeedPostCard {
     // Gallery-specific image view (no individual rounding)
     func galleryImageView(_ media: FeedMedia) -> some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: media.thumbnailColor), Color(hex: media.thumbnailColor).opacity(0.6)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            let thumbUrl = media.thumbnailUrl ?? media.url ?? ""
+            if !thumbUrl.isEmpty && (media.type == .image || media.type == .video) {
+                CachedAsyncImage(url: thumbUrl) {
+                    Color(hex: media.thumbnailColor).shimmer()
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                .clipped()
+            } else {
+                LinearGradient(
+                    colors: [Color(hex: media.thumbnailColor), Color(hex: media.thumbnailColor).opacity(0.6)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
 
-            // Type-specific overlay
-            switch media.type {
-            case .image:
-                Image(systemName: "photo.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(.white.opacity(0.4))
-            case .video:
+            // Video overlay
+            if media.type == .video {
                 VStack(spacing: 6) {
                     ZStack {
                         Circle()
-                            .fill(Color.white.opacity(0.3))
-                            .frame(width: 44, height: 44)
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 36, height: 36)
+                        Circle()
+                            .fill(Color.white.opacity(0.85))
+                            .frame(width: 30, height: 30)
                         Image(systemName: "play.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(.white)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.black.opacity(0.7))
+                            .offset(x: 1)
                     }
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.black.opacity(0.5)))
+                            .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
-            default:
-                EmptyView()
+            } else if media.type == .audio {
+                VStack(spacing: 4) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white)
+                    if let duration = media.durationFormatted {
+                        Text(duration)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.black.opacity(0.6)))
+                    }
+                }
             }
         }
         .clipped()
+    }
+
+    func openFullscreen(_ media: FeedMedia) {
+        guard media.type == .image || media.type == .video else { return }
+        fullscreenMediaId = media.id
+        showFullscreenGallery = true
+        HapticFeedback.light()
     }
 
     // Check if media should be compact (audio, document, location)
@@ -144,134 +200,35 @@ extension FeedPostCard {
     }
 
     func imageMediaView(_ media: FeedMedia) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: media.thumbnailColor), Color(hex: media.thumbnailColor).opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            Image(systemName: "photo.fill")
-                .font(.system(size: 32))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity, minHeight: 160)
+        let attachment = media.toMessageAttachment()
+        return ImageViewerView(
+            attachment: attachment,
+            context: .feedPost,
+            accentColor: accentColor
+        )
+        .frame(maxWidth: .infinity, minHeight: 160, maxHeight: 280)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     func videoMediaView(_ media: FeedMedia) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: media.thumbnailColor), Color(hex: media.thumbnailColor).opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.3))
-                        .frame(width: 56, height: 56)
-
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.white)
-                }
-
-                if let duration = media.durationFormatted {
-                    Text(duration)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.black.opacity(0.5)))
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 180)
+        let attachment = media.toMessageAttachment()
+        return InlineVideoPlayerView(
+            attachment: attachment,
+            accentColor: accentColor
+        )
+        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 280)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     func audioMediaView(_ media: FeedMedia) -> some View {
-        let theme = ThemeManager.shared
-        return VStack(alignment: .leading, spacing: 0) {
-            // Player row: play button + waveform
-            HStack(spacing: 14) {
-                // Play button
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: media.thumbnailColor))
-                        .frame(width: 48, height: 48)
-
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.white)
-                }
-
-                // Waveform placeholder
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 2) {
-                        let waveHeights: [CGFloat] = [12, 18, 8, 22, 14, 20, 10, 24, 16, 12, 20, 8, 18, 14, 10, 22, 12, 16, 8, 20, 14, 24, 10, 18, 12]
-                        ForEach(0..<25, id: \.self) { i in
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(Color(hex: media.thumbnailColor).opacity(0.6))
-                                .frame(width: 3, height: waveHeights[i % waveHeights.count])
-                        }
-                    }
-
-                    if let duration = media.durationFormatted {
-                        Text(duration)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-                }
-
-                Spacer()
-            }
-
-            // Transcription display if available
-            if let transcription = media.transcription, !transcription.text.isEmpty {
-                let displaySegments = TranscriptionDisplaySegment.buildFrom(transcription)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    if displaySegments.count > 1 {
-                        // Multi-speaker with colored speaker indicators
-                        ForEach(displaySegments) { seg in
-                            HStack(alignment: .top, spacing: 8) {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(Color(hex: seg.speakerColor))
-                                    .frame(width: 3)
-                                Text(seg.text)
-                                    .font(.caption)
-                                    .foregroundStyle(.primary.opacity(0.85))
-                            }
-                        }
-                    } else {
-                        // Single speaker — plain text
-                        Text(transcription.text)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(4)
-                    }
-                }
-                .padding(.top, 8)
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1)
-                )
+        let attachment = media.toMessageAttachment()
+        return AudioPlayerView(
+            attachment: attachment,
+            context: .feedPost,
+            accentColor: media.thumbnailColor,
+            transcription: media.transcription
         )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     func documentMediaView(_ media: FeedMedia) -> some View {

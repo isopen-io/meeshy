@@ -7,47 +7,147 @@ struct PostDetailView: View {
     var initialPost: FeedPost?
 
     @StateObject private var viewModel = PostDetailViewModel()
-    @EnvironmentObject private var theme: ThemeManager
+    @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @State private var commentText = ""
+    @EnvironmentObject private var storyViewModel: StoryViewModel
+    @EnvironmentObject private var router: Router
     @State private var showTranslationSheet = false
     @State private var selectedProfileUser: ProfileSheetUser?
-    @FocusState private var isCommentFocused: Bool
+    @State private var likeScale: CGFloat = 1.0
+    @State private var secondaryLangCode: String? = nil
+    @State private var activeDisplayLangCode: String? = nil
+    @State private var fullscreenMediaId: String? = nil
+    @State private var showFullscreenGallery = false
 
     private var displayPost: FeedPost? { viewModel.post ?? initialPost }
 
+    private var accentColor: String {
+        displayPost?.authorColor ?? "6366F1"
+    }
+
+    // MARK: - Prisme Linguistique
+
+    private var currentDisplayLangCode: String {
+        guard let post = displayPost else { return "fr" }
+        return activeDisplayLangCode ?? post.translations?.keys.first(where: { lang in
+            AuthManager.shared.currentUser?.preferredContentLanguages.contains(where: { $0.caseInsensitiveCompare(lang) == .orderedSame }) ?? false
+        })?.lowercased() ?? post.originalLanguage?.lowercased() ?? "fr"
+    }
+
+    private var effectiveContent: String {
+        guard let post = displayPost else { return "" }
+        let code = currentDisplayLangCode
+        if code == post.originalLanguage?.lowercased() { return post.content }
+        if let translation = post.translations?[code] ?? post.translations?.first(where: { $0.key.lowercased() == code })?.value {
+            return translation.text
+        }
+        return post.displayContent
+    }
+
+    private var secondaryContent: String? {
+        guard let post = displayPost, let code = secondaryLangCode else { return nil }
+        if code == post.originalLanguage?.lowercased() { return post.content }
+        return post.translations?.first(where: { $0.key.lowercased() == code })?.value.text
+    }
+
+    private func buildAvailableFlags() -> [String] {
+        guard let post = displayPost, let origLang = post.originalLanguage?.lowercased() else { return [] }
+        let activeLang = currentDisplayLangCode
+        let user = AuthManager.shared.currentUser
+        var all: [String] = [origLang]
+        var seen: Set<String> = [origLang]
+        for lang in user?.preferredContentLanguages ?? [] {
+            let l = lang.lowercased()
+            if !seen.contains(l), post.translations?.keys.contains(where: { $0.lowercased() == l }) == true {
+                all.append(l); seen.insert(l)
+            }
+        }
+        return all.filter { $0 != activeLang }
+    }
+
+    private func handleFlagTap(_ code: String) {
+        guard let post = displayPost else { return }
+        let isOriginal = code == post.originalLanguage?.lowercased()
+        let hasContent = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == code }) == true
+        if !hasContent { HapticFeedback.light(); return }
+        if isOriginal {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                activeDisplayLangCode = code; secondaryLangCode = nil
+            }
+        } else {
+            let isShowing = secondaryLangCode == code
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                secondaryLangCode = isShowing ? nil : code
+            }
+        }
+        HapticFeedback.light()
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 0) {
-                    if let post = displayPost {
-                        postHeader(post)
-                        postContent(post)
+            navBar
 
-                        if post.hasMedia {
-                            mediaPreview(post)
-                        }
-
-                        postActions(post)
+            if let post = displayPost {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: 0) {
+                        // Post content
+                        postFixedSection(post)
 
                         Rectangle()
                             .fill(theme.inputBorder.opacity(0.5))
                             .frame(height: 1)
                             .padding(.horizontal, 16)
 
-                        commentsSection
-                    } else if viewModel.isLoading {
-                        ProgressView()
-                            .padding(.top, 40)
+                        commentsHeader
+
+                        // Comments
+                        ForEach(viewModel.comments) { comment in
+                            CommentRowView(
+                                comment: comment,
+                                accentColor: accentColor,
+                                onReply: {
+                                    viewModel.replyingTo = comment
+                                },
+                                onLikeComment: {
+                                    Task {
+                                        try? await PostService.shared.likeComment(postId: postId, commentId: comment.id)
+                                    }
+                                },
+                                moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
+                                storyState: storyViewModel.storyGroupForUser(userId: comment.authorId).map { $0.hasUnviewed ? .unread : .read } ?? .none,
+                                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline
+                            )
+                            .padding(.horizontal, 16)
+                        }
+
+                        if viewModel.isLoadingComments {
+                            ProgressView()
+                                .padding()
+                        }
+
+                        if viewModel.hasMoreComments && !viewModel.isLoadingComments {
+                            Button {
+                                Task { await viewModel.loadMoreComments(postId) }
+                            } label: {
+                                Text("Charger plus")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(MeeshyColors.indigo500)
+                            }
+                            .padding()
+                        }
                     }
+                    .padding(.bottom, 80)
                 }
+            } else if viewModel.isLoading {
+                Spacer()
+                ProgressView()
+                Spacer()
             }
 
-            commentComposer
+            composer
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
-        .navigationTitle("Post")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarHidden(true)
         .task {
             if viewModel.post == nil {
                 await viewModel.loadPost(postId)
@@ -60,9 +160,15 @@ struct PostDetailView: View {
                 PostTranslationSheet(
                     post: post,
                     onSelectLanguage: { language in
-                        guard let translations = viewModel.post?.translations,
-                              let translation = translations[language] else { return }
-                        viewModel.post?.translatedContent = translation.text
+                        let langLower = language.lowercased()
+                        let isOriginal = langLower == post.originalLanguage?.lowercased()
+                        let hasTranslation = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == langLower }) == true
+                        if hasTranslation {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                activeDisplayLangCode = langLower
+                                secondaryLangCode = nil
+                            }
+                        }
                     }
                 )
             }
@@ -76,257 +182,613 @@ struct PostDetailView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .fullScreenCover(isPresented: $showFullscreenGallery) {
+            if let post = displayPost {
+                let attachments = post.media
+                    .filter { $0.type == .image || $0.type == .video }
+                    .map { $0.toMessageAttachment() }
+                ConversationMediaGalleryView(
+                    allAttachments: attachments,
+                    startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
+                    accentColor: accentColor
+                )
+            }
+        }
     }
 
-    // MARK: - Post Header
+    // MARK: - Nav Bar (minimal: < and ...)
 
-    @ViewBuilder
-    private func postHeader(_ post: FeedPost) -> some View {
-        HStack(spacing: 12) {
-            MeeshyAvatar(
-                name: post.author,
-                context: .postAuthor,
-                accentColor: post.authorColor,
-                avatarURL: post.authorAvatarURL,
-                moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
-                onViewProfile: { selectedProfileUser = .from(feedPost: post) },
-                onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
-                contextMenuItems: [
-                    AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                        selectedProfileUser = .from(feedPost: post)
-                    }
-                ]
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(post.author)
-                    .font(.system(size: 15, weight: .bold))
+    private var navBar: some View {
+        HStack {
+            Button {
+                HapticFeedback.light()
+                router.pop()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-
-                Text(post.timestamp, style: .relative)
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.textMuted)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(theme.inputBackground))
             }
 
             Spacer()
 
-            Button {
-                HapticFeedback.light()
+            Menu {
+                Button {
+                    HapticFeedback.light()
+                } label: {
+                    Label("Copier le lien", systemImage: "link")
+                }
+                Button(role: .destructive) {
+                    HapticFeedback.light()
+                } label: {
+                    Label("Signaler", systemImage: "exclamationmark.triangle")
+                }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 16))
-                    .foregroundColor(theme.textMuted)
-                    .padding(8)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Post Content
-
-    @ViewBuilder
-    private func postContent(_ post: FeedPost) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(post.displayContent)
-                .font(.system(size: 16))
-                .foregroundColor(theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if post.isTranslated {
-                HStack(spacing: 4) {
-                    Image(systemName: "translate")
-                        .font(.system(size: 11))
-                    Text("Traduit depuis \(Locale.current.localizedString(forLanguageCode: post.originalLanguage ?? "?") ?? post.originalLanguage ?? "?")")
-                        .font(.system(size: 11))
-                }
-                .foregroundColor(theme.textMuted)
-                .onTapGesture {
-                    HapticFeedback.light()
-                    showTranslationSheet = true
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.bottom, 12)
-    }
-
-    // MARK: - Media (placeholder — full gallery will reuse FeedPostCard media components)
-
-    @ViewBuilder
-    private func mediaPreview(_ post: FeedPost) -> some View {
-        if let firstMedia = post.media.first, let urlString = firstMedia.url {
-            AsyncImage(url: URL(string: urlString)) { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-            } placeholder: {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(theme.inputBackground)
-                    .overlay(ProgressView())
-            }
-            .frame(maxWidth: .infinity, maxHeight: 400)
-            .clipShape(RoundedRectangle(cornerRadius: 0))
-            .padding(.bottom, 12)
-
-            if post.media.count > 1 {
-                Text("+\(post.media.count - 1) media")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-            }
-        }
-    }
-
-    // MARK: - Actions
-
-    @ViewBuilder
-    private func postActions(_ post: FeedPost) -> some View {
-        HStack(spacing: 0) {
-            Button {
-                Task { await viewModel.likePost() }
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: post.isLiked ? "heart.fill" : "heart")
-                        .font(.system(size: 18))
-                        .foregroundColor(post.isLiked ? MeeshyColors.error : theme.textSecondary)
-                    Text("\(post.likes)")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(post.isLiked ? MeeshyColors.error : theme.textSecondary)
-                }
-            }
-
-            Spacer()
-
-            HStack(spacing: 6) {
-                Image(systemName: "bubble.right")
-                    .font(.system(size: 17))
-                if post.commentCount > 0 {
-                    Text("\(post.commentCount)")
-                        .font(.system(size: 13, weight: .medium))
-                }
-            }
-            .foregroundColor(theme.textSecondary)
-
-            Spacer()
-
-            Button {
-                Task { await viewModel.bookmarkPost() }
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "bookmark")
-                    .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
-            }
-
-            Spacer()
-
-            Button {
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
-            }
-        }
-        .padding(16)
-    }
-
-    // MARK: - Comments
-
-    @ViewBuilder
-    private var commentsSection: some View {
-        ForEach(viewModel.comments) { comment in
-            CommentRowView(
-                comment: comment,
-                accentColor: displayPost?.authorColor ?? "6366F1",
-                onReply: {
-                    isCommentFocused = true
-                },
-                onLikeComment: {
-                    Task {
-                        try? await PostService.shared.likeComment(postId: postId, commentId: comment.id)
-                    }
-                }
-            )
-            .padding(.horizontal, 16)
-        }
-
-        if viewModel.isLoadingComments {
-            ProgressView()
-                .padding()
-        }
-
-        if viewModel.hasMoreComments && !viewModel.isLoadingComments {
-            Button {
-                Task { await viewModel.loadComments(postId) }
-            } label: {
-                Text("Charger plus de commentaires")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
-            }
-            .padding()
-        }
-    }
-
-    // MARK: - Comment Composer
-
-    private var commentComposer: some View {
-        HStack(spacing: 12) {
-            TextField("Ajouter un commentaire...", text: $commentText)
-                .focused($isCommentFocused)
-                .font(.system(size: 15))
-                .foregroundColor(theme.textPrimary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(theme.inputBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(
-                                    isCommentFocused ? MeeshyColors.indigo500.opacity(0.5) : theme.inputBorder,
-                                    lineWidth: 1
-                                )
-                        )
-                )
-
-            if !commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Button {
-                    let text = commentText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    commentText = ""
-                    isCommentFocused = false
-                    HapticFeedback.success()
-                    Task { await viewModel.sendComment(text) }
-                } label: {
-                    Circle()
-                        .fill(MeeshyColors.brandGradient)
-                        .frame(width: 36, height: 36)
-                        .overlay(
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
-                                .rotationEffect(.degrees(45))
-                                .offset(x: -1)
-                        )
-                }
-                .transition(.scale.combined(with: .opacity))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(theme.inputBackground))
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    Rectangle()
-                        .fill(theme.backgroundPrimary.opacity(0.8))
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Post Fixed Section (not scrollable)
+
+    @ViewBuilder
+    private func postFixedSection(_ post: FeedPost) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Author header
+            HStack(spacing: 12) {
+                MeeshyAvatar(
+                    name: post.author,
+                    context: .postAuthor,
+                    accentColor: post.authorColor,
+                    avatarURL: post.authorAvatarURL,
+                    moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
+                    onViewProfile: { selectedProfileUser = .from(feedPost: post) },
+                    onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
+                    contextMenuItems: [
+                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                            selectedProfileUser = .from(feedPost: post)
+                        }
+                    ]
                 )
-                .shadow(color: Color.black.opacity(0.1), radius: 10, y: -5)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(post.author)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(theme.textPrimary)
+                        .onTapGesture {
+                            selectedProfileUser = .from(feedPost: post)
+                        }
+
+                    HStack(spacing: 4) {
+                        Text(post.timestamp, style: .relative)
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.textMuted)
+
+                        let flags = buildAvailableFlags()
+                        if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                            Text("·").font(.system(size: 12)).foregroundColor(theme.textMuted)
+
+                            ForEach(flags, id: \.self) { code in
+                                let display = LanguageDisplay.from(code: code)
+                                let isActive = code == secondaryLangCode
+                                VStack(spacing: 1) {
+                                    Text(display?.flag ?? "?")
+                                        .font(.system(size: isActive ? 12 : 10))
+                                        .scaleEffect(isActive ? 1.05 : 1.0)
+                                    if isActive {
+                                        RoundedRectangle(cornerRadius: 1)
+                                            .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
+                                            .frame(width: 10, height: 1.5)
+                                    }
+                                }
+                                .animation(.easeInOut(duration: 0.2), value: isActive)
+                                .onTapGesture { handleFlagTap(code) }
+                            }
+
+                            if post.translations != nil, !post.translations!.isEmpty {
+                                Image(systemName: "translate")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(MeeshyColors.indigo400)
+                                    .onTapGesture {
+                                        HapticFeedback.light()
+                                        showTranslationSheet = true
+                                    }
+                            }
+                        }
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+
+            // Content
+            Text(effectiveContent)
+                .font(.system(size: 16))
+                .foregroundColor(theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .padding(.horizontal, 16)
+
+            // Inline secondary translation panel
+            if let content = secondaryContent, let code = secondaryLangCode {
+                let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
+                let display = LanguageDisplay.from(code: code)
+                VStack(spacing: 0) {
+                    HStack(spacing: 6) {
+                        Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
+                        Circle().fill(langColor).frame(width: 4, height: 4)
+                        Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let display {
+                            HStack(spacing: 4) {
+                                Text(display.flag).font(.system(size: 11))
+                                Text(display.name)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(langColor)
+                            }
+                        }
+                        Text(content)
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textPrimary.opacity(0.8))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(langColor.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            // Media
+            if post.hasMedia {
+                detailMediaSection(post.media)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
+
+            // Repost embed
+            if let repost = post.repost {
+                Button {
+                    HapticFeedback.light()
+                    router.push(.postDetail(repost.id))
+                } label: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            MeeshyAvatar(
+                                name: repost.author,
+                                context: .postComment,
+                                accentColor: repost.authorColor,
+                                avatarURL: repost.authorAvatarURL
+                            )
+                            Text(repost.author)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(theme.accentText(repost.authorColor))
+                            Text("·").foregroundColor(theme.textMuted)
+                            Text(repost.timestamp, style: .relative)
+                                .font(.system(size: 10))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        Text(repost.content)
+                            .font(.system(size: 13))
+                            .foregroundColor(theme.textSecondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(theme.surfaceGradient(tint: repost.authorColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(theme.border(tint: repost.authorColor, intensity: 0.2), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+
+            // Actions bar
+            HStack(spacing: 0) {
+                Button {
+                    Task { await viewModel.likePost() }
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                        likeScale = 1.3
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            likeScale = 1.0
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        let heartColor: Color = post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textSecondary)
+                        Image(systemName: post.isLiked || post.likes > 0 ? "heart.fill" : "heart")
+                            .font(.system(size: 18))
+                            .foregroundColor(heartColor)
+                            .scaleEffect(likeScale)
+                        Text("\(post.likes)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textMuted))
+                    }
+                }
+
+                Spacer()
+
+                HStack(spacing: 5) {
+                    Image(systemName: "bubble.right")
+                        .font(.system(size: 17))
+                        .foregroundColor(Color(hex: accentColor))
+                    Text("\(post.commentCount)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+
+                Spacer()
+
+                Button {
+                    Task { await viewModel.bookmarkPost() }
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: "bookmark")
+                        .font(.system(size: 17))
+                        .foregroundColor(theme.textSecondary)
+                }
+
+                Spacer()
+
+                Button {
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 17))
+                        .foregroundColor(theme.textSecondary)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+        }
+    }
+
+    // MARK: - Media Views
+
+    @ViewBuilder
+    private func detailMediaSection(_ mediaList: [FeedMedia]) -> some View {
+        let visualMedia = mediaList.filter { $0.type == .image || $0.type == .video }
+        let audioMedia = mediaList.filter { $0.type == .audio }
+        let docMedia = mediaList.filter { $0.type == .document }
+        let locMedia = mediaList.filter { $0.type == .location }
+
+        VStack(spacing: 8) {
+            // Single media
+            if mediaList.count == 1, let media = mediaList.first {
+                detailSingleMedia(media)
+            } else {
+                // Visual grid
+                if !visualMedia.isEmpty {
+                    detailVisualGrid(visualMedia)
+                }
+                // Audio players
+                ForEach(audioMedia) { media in
+                    detailSingleMedia(media)
+                }
+                // Documents
+                ForEach(docMedia) { media in
+                    detailSingleMedia(media)
+                }
+                // Locations
+                ForEach(locMedia) { media in
+                    detailSingleMedia(media)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func detailSingleMedia(_ media: FeedMedia) -> some View {
+        switch media.type {
+        case .image:
+            let urlStr = media.url ?? media.thumbnailUrl ?? ""
+            Group {
+                if !urlStr.isEmpty {
+                    CachedAsyncImage(url: urlStr) {
+                        Color(hex: media.thumbnailColor).shimmer()
+                    }
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: 300)
+                } else {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(hex: media.thumbnailColor))
+                        .frame(height: 200)
+                        .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .onTapGesture { openMediaFullscreen(media) }
+
+        case .video:
+            InlineVideoPlayerView(
+                attachment: media.toMessageAttachment(),
+                accentColor: accentColor,
+                onExpandFullscreen: { openMediaFullscreen(media) }
+            )
+            .frame(maxWidth: .infinity, maxHeight: 300)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+        case .audio:
+            AudioPlayerView(
+                attachment: media.toMessageAttachment(),
+                context: .feedPost,
+                accentColor: media.thumbnailColor,
+                transcription: media.transcription
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+        case .document:
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: media.thumbnailColor).opacity(0.2))
+                        .frame(width: 48, height: 56)
+                    Image(systemName: "doc.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(Color(hex: media.thumbnailColor))
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(media.fileName ?? "Document")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        if let size = media.fileSize {
+                            Text(size).font(.system(size: 12)).foregroundColor(theme.textMuted)
+                        }
+                        if let pages = media.pageCount {
+                            Text("\u{2022}").foregroundColor(theme.textMuted)
+                            Text("\(pages) pages").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                        }
+                    }
+                }
+                Spacer()
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(Color(hex: media.thumbnailColor))
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
+            )
+
+        case .location:
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: media.thumbnailColor).opacity(0.2))
+                        .frame(width: 64, height: 64)
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(Color(hex: media.thumbnailColor))
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(media.locationName ?? "Location")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                    if let lat = media.latitude, let lon = media.longitude {
+                        Text(String(format: "%.4f, %.4f", lat, lon))
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.textMuted)
+                    }
+                }
+                Spacer()
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func detailVisualGrid(_ visualMedia: [FeedMedia]) -> some View {
+        let spacing: CGFloat = 3
+        let count = visualMedia.count
+
+        if count == 2 {
+            HStack(spacing: spacing) {
+                detailGridCell(visualMedia[0])
+                detailGridCell(visualMedia[1])
+            }
+            .frame(height: 200)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        } else if count == 3 {
+            HStack(spacing: spacing) {
+                detailGridCell(visualMedia[0])
+                    .aspectRatio(0.75, contentMode: .fill)
+                VStack(spacing: spacing) {
+                    detailGridCell(visualMedia[1])
+                    detailGridCell(visualMedia[2])
+                }
+            }
+            .frame(height: 240)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        } else {
+            VStack(spacing: spacing) {
+                HStack(spacing: spacing) {
+                    detailGridCell(visualMedia[0])
+                    if count > 1 { detailGridCell(visualMedia[1]) }
+                }
+                if count > 2 {
+                    HStack(spacing: spacing) {
+                        detailGridCell(visualMedia[2])
+                        if count > 3 {
+                            ZStack {
+                                detailGridCell(visualMedia[3])
+                                if count > 4 {
+                                    Color.black.opacity(0.5)
+                                    Text("+\(count - 4)")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture { openMediaFullscreen(visualMedia[3]) }
+                        }
+                    }
+                }
+            }
+            .frame(height: 240)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+    }
+
+    private func detailGridCell(_ media: FeedMedia) -> some View {
+        let thumbUrl = media.thumbnailUrl ?? media.url ?? ""
+        return ZStack {
+            if !thumbUrl.isEmpty {
+                CachedAsyncImage(url: thumbUrl) {
+                    Color(hex: media.thumbnailColor).shimmer()
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                .clipped()
+            } else {
+                Color(hex: media.thumbnailColor)
+            }
+
+            if media.type == .video {
+                ZStack {
+                    Circle().fill(.ultraThinMaterial).frame(width: 36, height: 36)
+                    Circle().fill(Color(hex: accentColor).opacity(0.85)).frame(width: 30, height: 30)
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .offset(x: 1)
+                }
+                .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { openMediaFullscreen(media) }
+    }
+
+    private func openMediaFullscreen(_ media: FeedMedia) {
+        guard media.type == .image || media.type == .video else { return }
+        fullscreenMediaId = media.id
+        showFullscreenGallery = true
+        HapticFeedback.light()
+    }
+
+    // MARK: - Comments Header
+
+    private var commentsHeader: some View {
+        HStack(spacing: 8) {
+            Text("Commentaires")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+
+            if let post = displayPost, post.commentCount > 0 {
+                Text("\(post.commentCount)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color(hex: accentColor)))
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Composer
+
+    private var replyBannerView: AnyView? {
+        guard let reply = viewModel.replyingTo else { return nil }
+        return AnyView(
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(hex: reply.authorColor))
+                    .frame(width: 3, height: 36)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(reply.author)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(hex: reply.authorColor))
+
+                    Text(reply.displayContent)
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        viewModel.clearReply()
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(theme.textMuted)
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.surfaceGradient(tint: accentColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
+                    )
+            )
         )
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: commentText.isEmpty)
+    }
+
+    private var composer: some View {
+        UniversalComposerBar(
+            style: .light,
+            placeholder: "Ajouter un commentaire...",
+            accentColor: accentColor,
+            showVoice: false,
+            showLocation: false,
+            showAttachment: false,
+            showEmoji: true,
+            onSend: { text in
+                Task {
+                    if viewModel.replyingTo != nil {
+                        await viewModel.sendReply(text)
+                    } else {
+                        await viewModel.sendComment(text)
+                    }
+                }
+            },
+            replyBanner: replyBannerView
+        )
     }
 }

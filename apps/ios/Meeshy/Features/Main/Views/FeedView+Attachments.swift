@@ -503,6 +503,7 @@ struct FeedComposerSheet: View {
     @ObservedObject var viewModel: FeedViewModel
     let initialText: String
     let pendingAttachmentType: String?
+    var quotePost: FeedPost? = nil
     let onDismiss: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -613,6 +614,42 @@ struct FeedComposerSheet: View {
                         .frame(minHeight: 120)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
+                }
+
+                // Quoted post preview
+                if let quoted = quotePost {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            MeeshyAvatar(
+                                name: quoted.author,
+                                context: .postComment,
+                                accentColor: quoted.authorColor,
+                                avatarURL: quoted.authorAvatarURL
+                            )
+                            Text(quoted.author)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(theme.accentText(quoted.authorColor))
+                            Text("·").foregroundColor(theme.textMuted)
+                            Text(quoted.timestamp, style: .relative)
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        Text(quoted.displayContent)
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textSecondary)
+                            .lineLimit(4)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(theme.surfaceGradient(tint: quoted.authorColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(theme.border(tint: quoted.authorColor, intensity: 0.2), lineWidth: 1)
+                            )
+                    )
+                    .padding(.horizontal, 16)
                 }
 
                 // Pending attachments
@@ -973,6 +1010,14 @@ struct FeedComposerSheet: View {
     private func publishPost() {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
+
+        // Quote mode: repost with content instead of createPost
+        if let quotePost {
+            onDismiss()
+            HapticFeedback.success()
+            Task { await viewModel.repostPost(quotePost.id, content: text, isQuote: true) }
+            return
+        }
 
         let attachments = pendingAttachments
         let mediaFiles = pendingMediaFiles

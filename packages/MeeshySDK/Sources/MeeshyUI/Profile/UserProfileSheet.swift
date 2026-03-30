@@ -12,29 +12,24 @@ public enum ConnectionStatus: Equatable, Sendable {
 
 public struct UserProfileSheet: View {
     public let user: ProfileSheetUser
-    public let conversations: [MeeshyConversation]
-    public var isCurrentUser: Bool = false
-    public var isBlocked: Bool = false
-    public var isBlockedByTarget: Bool = false
-    public var isLoading: Bool = false
-    public var fullUser: MeeshyUser?
-    public var userStats: UserStats?
-    public var isLoadingStats: Bool = false
-    public var connectionStatus: ConnectionStatus = .none
+    public var onDismiss: (() -> Void)?
     public var onNavigateToConversation: ((MeeshyConversation) -> Void)?
     public var onSendMessage: (() -> Void)?
-    public var onBlock: (() -> Void)?
-    public var onUnblock: (() -> Void)?
-    public var onConnectionRequest: (() -> Void)?
-    public var onCancelRequest: (() -> Void)?
-    public var onResendRequest: (() -> Void)?
-    public var onAcceptRequest: (() -> Void)?
-    public var onDeclineRequest: (() -> Void)?
-    public var onDismiss: (() -> Void)?
-    public var onLoadStats: (() async -> Void)?
-    public var currentUserId: String = ""
     public var moodEmoji: String? = nil
     public var onMoodTap: ((CGPoint) -> Void)? = nil
+
+    @State private var isBlocked: Bool = false
+    @State private var isBlockedByTarget: Bool = false
+    @State private var connectionStatus: ConnectionStatus = .none
+    @State private var pendingRequestId: String?
+
+    private var currentUserId: String {
+        AuthManager.shared.currentUser?.id ?? ""
+    }
+
+    private var isCurrentUser: Bool {
+        user.userId == currentUserId
+    }
 
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -51,52 +46,16 @@ public struct UserProfileSheet: View {
 
     public init(
         user: ProfileSheetUser,
-        conversations: [MeeshyConversation] = [],
-        isCurrentUser: Bool = false,
-        isBlocked: Bool = false,
-        isBlockedByTarget: Bool = false,
-        isLoading: Bool = false,
-        fullUser: MeeshyUser? = nil,
-        userStats: UserStats? = nil,
-        isLoadingStats: Bool = false,
-        connectionStatus: ConnectionStatus = .none,
+        onDismiss: (() -> Void)? = nil,
         onNavigateToConversation: ((MeeshyConversation) -> Void)? = nil,
         onSendMessage: (() -> Void)? = nil,
-        onBlock: (() -> Void)? = nil,
-        onUnblock: (() -> Void)? = nil,
-        onConnectionRequest: (() -> Void)? = nil,
-        onCancelRequest: (() -> Void)? = nil,
-        onResendRequest: (() -> Void)? = nil,
-        onAcceptRequest: (() -> Void)? = nil,
-        onDeclineRequest: (() -> Void)? = nil,
-        onDismiss: (() -> Void)? = nil,
-        onLoadStats: (() async -> Void)? = nil,
-        currentUserId: String = "",
         moodEmoji: String? = nil,
         onMoodTap: ((CGPoint) -> Void)? = nil
     ) {
         self.user = user
-        self.conversations = conversations
-        self.isCurrentUser = isCurrentUser
-        self.isBlocked = isBlocked
-        self.isBlockedByTarget = isBlockedByTarget
-        self.isLoading = isLoading
-        self.fullUser = fullUser
-        self.userStats = userStats
-        self.isLoadingStats = isLoadingStats
-        self.connectionStatus = connectionStatus
+        self.onDismiss = onDismiss
         self.onNavigateToConversation = onNavigateToConversation
         self.onSendMessage = onSendMessage
-        self.onBlock = onBlock
-        self.onUnblock = onUnblock
-        self.onConnectionRequest = onConnectionRequest
-        self.onCancelRequest = onCancelRequest
-        self.onResendRequest = onResendRequest
-        self.onAcceptRequest = onAcceptRequest
-        self.onDeclineRequest = onDeclineRequest
-        self.onDismiss = onDismiss
-        self.onLoadStats = onLoadStats
-        self.currentUserId = currentUserId
         self.moodEmoji = moodEmoji
         self.onMoodTap = onMoodTap
     }
@@ -106,11 +65,6 @@ public struct UserProfileSheet: View {
     }
 
     private var displayUser: ProfileSheetUser {
-        // Priorité : fullUser fourni > internalFullUser chargé > user de base
-        // Preserve la couleur d'accent originale (provenant du contexte — post, commentaire, conversation)
-        if let full = fullUser {
-            return ProfileSheetUser.from(user: full, accentColor: user.accentColor)
-        }
         if let loaded = internalFullUser {
             return ProfileSheetUser.from(user: loaded, accentColor: user.accentColor)
         }
@@ -118,34 +72,32 @@ public struct UserProfileSheet: View {
     }
 
     private var effectiveIsLoading: Bool {
-        isLoading || internalIsLoading
+        internalIsLoading
     }
 
     private var effectiveUserStats: UserStats? {
-        userStats ?? internalUserStats
+        internalUserStats
     }
 
     private var effectiveIsLoadingStats: Bool {
-        isLoadingStats || internalIsLoadingStats
+        internalIsLoadingStats
     }
 
     private var effectiveConversations: [MeeshyConversation] {
-        conversations.isEmpty ? internalConversations : conversations
+        internalConversations
     }
 
     public var body: some View {
         ZStack {
+            if isBlockedByTarget {
+                Color.clear.onAppear { onDismiss?(); dismiss() }
+            } else {
             VStack(spacing: 0) {
                 bannerSection
                 identitySection
                     .padding(.top, -40)
 
-                if isBlockedByTarget {
-                    blockedByTargetCard
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                    Spacer()
-                } else if isBlocked {
+                if isBlocked {
                     blockedByMeCard
                         .padding(.horizontal, 20)
                         .padding(.top, 16)
@@ -171,6 +123,10 @@ public struct UserProfileSheet: View {
                     }
                 }
             }
+            } // else (not blocked by target)
+        }
+        .task {
+            await resolveInitialState()
         }
     }
 
@@ -376,53 +332,190 @@ public struct UserProfileSheet: View {
     // MARK: - Auto-loading
 
     private func loadDataIfNeeded() async {
-        // Si fullUser déjà fourni, ne rien faire
-        guard fullUser == nil, let userId = user.userId else { return }
+        guard let userId = user.userId else { return }
 
-        // Charger le profil complet
-        internalIsLoading = true
-        do {
-            let result = await CacheCoordinator.shared.profiles.load(for: userId)
-            if let user = result.value?.first {
-                internalFullUser = user
-            } else {
-                let fetchedUser = try await UserService.shared.getProfile(idOrUsername: userId)
-                internalFullUser = fetchedUser
-            }
-        } catch {
-            // Silent fail - utilisera les données de base
+        let cacheResult = await CacheCoordinator.shared.profiles.load(for: userId)
+
+        switch cacheResult {
+        case .fresh(let cached, _):
+            if let profile = cached.first { internalFullUser = profile }
+            return
+        case .stale(let cached, _):
+            if let profile = cached.first { internalFullUser = profile }
+            await fetchAndCacheProfile(userId)
+        case .expired, .empty:
+            internalIsLoading = internalFullUser == nil
+            await fetchAndCacheProfile(userId)
         }
-        internalIsLoading = false
+    }
+
+    private func fetchAndCacheProfile(_ userId: String) async {
+        defer { internalIsLoading = false }
+        do {
+            let fetchedUser = try await UserService.shared.getProfile(idOrUsername: userId)
+            internalFullUser = fetchedUser
+            await CacheCoordinator.shared.profiles.save([fetchedUser], for: userId)
+        } catch let error as APIError {
+            if case .serverError(403, _) = error {
+                isBlockedByTarget = true
+            }
+        } catch {}
     }
 
     private func loadStatsIfNeeded() async {
-        // Si userStats déjà fourni ou onLoadStats fourni, ne rien faire
-        guard userStats == nil, onLoadStats == nil, let userId = user.userId else { return }
-
-        // Charger les stats
+        guard let userId = user.userId else { return }
         internalIsLoadingStats = true
         do {
             let fetchedStats = try await UserService.shared.getUserStats(userId: userId)
             internalUserStats = fetchedStats
-        } catch {
-            // Silent fail
-        }
+        } catch {}
         internalIsLoadingStats = false
     }
 
     private func loadConversationsIfNeeded() async {
-        // Si conversations déjà fournies, ne rien faire
-        guard conversations.isEmpty, let userId = user.userId else { return }
-
-        // Charger les conversations en commun
+        guard let userId = user.userId else { return }
         internalIsLoadingConversations = true
         do {
             let apiConversations = try await ConversationService.shared.listSharedWith(userId: userId)
             internalConversations = apiConversations.map { $0.toConversation(currentUserId: currentUserId) }
-        } catch {
-            // Silent fail
-        }
+        } catch {}
         internalIsLoadingConversations = false
+    }
+
+    // MARK: - State Resolution
+
+    private func resolveInitialState() async {
+        guard let userId = user.userId, !userId.isEmpty, userId != currentUserId else { return }
+        isBlocked = BlockService.shared.isBlocked(userId: userId)
+        resolveConnectionStatus()
+    }
+
+    private func resolveConnectionStatus() {
+        guard let userId = user.userId, !userId.isEmpty else { return }
+        let status = FriendshipCache.shared.status(for: userId)
+        switch status {
+        case .friend:
+            connectionStatus = .connected
+        case .pendingSent(let requestId):
+            pendingRequestId = requestId
+            connectionStatus = .pendingSent(requestId: requestId)
+        case .pendingReceived(let requestId):
+            pendingRequestId = requestId
+            connectionStatus = .pendingReceived(requestId: requestId)
+        case .none:
+            connectionStatus = .none
+        }
+    }
+
+    // MARK: - Toast Helper
+
+    private func postToast(_ message: String, isSuccess: Bool) {
+        NotificationCenter.default.post(
+            name: Notification.Name("meeshy.showToast"),
+            object: nil,
+            userInfo: ["message": message, "isSuccess": isSuccess]
+        )
+    }
+
+    // MARK: - Connection Actions
+
+    private func sendConnectionRequest() async {
+        guard let userId = user.userId, !userId.isEmpty else { return }
+        do {
+            let request = try await FriendService.shared.sendFriendRequest(receiverId: userId)
+            FriendshipCache.shared.didSendRequest(to: userId, requestId: request.id)
+            pendingRequestId = request.id
+            connectionStatus = .pendingSent(requestId: request.id)
+            HapticFeedback.success()
+            postToast("Demande envoyee", isSuccess: true)
+        } catch {
+            HapticFeedback.error()
+            postToast("Impossible d'envoyer la demande", isSuccess: false)
+        }
+    }
+
+    private func cancelRequest() async {
+        guard let requestId = pendingRequestId, let userId = user.userId else { return }
+        FriendshipCache.shared.didCancelRequest(to: userId)
+        pendingRequestId = nil
+        connectionStatus = .none
+        HapticFeedback.medium()
+        do {
+            try await FriendService.shared.deleteRequest(requestId: requestId)
+            postToast("Demande annulee", isSuccess: true)
+        } catch {
+            FriendshipCache.shared.didSendRequest(to: userId, requestId: requestId)
+            resolveConnectionStatus()
+            postToast("Impossible d'annuler", isSuccess: false)
+        }
+    }
+
+    private func resendRequest() async {
+        if let requestId = pendingRequestId {
+            try? await FriendService.shared.deleteRequest(requestId: requestId)
+        }
+        await sendConnectionRequest()
+    }
+
+    private func acceptRequest() async {
+        guard let requestId = pendingRequestId, let userId = user.userId else { return }
+        FriendshipCache.shared.didAcceptRequest(from: userId)
+        connectionStatus = .connected
+        pendingRequestId = nil
+        HapticFeedback.success()
+        do {
+            let _ = try await FriendService.shared.respond(requestId: requestId, accepted: true)
+            postToast("Connexion acceptee", isSuccess: true)
+        } catch {
+            FriendshipCache.shared.rollbackAccept(senderId: userId, requestId: requestId)
+            resolveConnectionStatus()
+            HapticFeedback.error()
+            postToast("Impossible d'accepter", isSuccess: false)
+        }
+    }
+
+    private func declineRequest() async {
+        guard let requestId = pendingRequestId, let userId = user.userId else { return }
+        FriendshipCache.shared.didRejectRequest(from: userId)
+        connectionStatus = .none
+        pendingRequestId = nil
+        HapticFeedback.medium()
+        do {
+            let _ = try await FriendService.shared.respond(requestId: requestId, accepted: false)
+            postToast("Demande refusee", isSuccess: true)
+        } catch {
+            FriendshipCache.shared.rollbackReject(senderId: userId, requestId: requestId)
+            resolveConnectionStatus()
+            HapticFeedback.error()
+            postToast("Impossible de refuser", isSuccess: false)
+        }
+    }
+
+    // MARK: - Block Actions
+
+    private func blockUser() async {
+        guard let userId = user.userId, !userId.isEmpty else { return }
+        do {
+            try await BlockService.shared.blockUser(userId: userId)
+            isBlocked = true
+            HapticFeedback.medium()
+            postToast("Utilisateur bloque", isSuccess: true)
+        } catch {
+            postToast("Impossible de bloquer", isSuccess: false)
+        }
+    }
+
+    private func unblockUser() async {
+        guard let userId = user.userId, !userId.isEmpty else { return }
+        do {
+            try await BlockService.shared.unblockUser(userId: userId)
+            isBlocked = false
+            resolveConnectionStatus()
+            HapticFeedback.light()
+            postToast("Utilisateur debloque", isSuccess: true)
+        } catch {
+            postToast("Impossible de debloquer", isSuccess: false)
+        }
     }
 
     // MARK: - Profile Tab
@@ -478,48 +571,38 @@ public struct UserProfileSheet: View {
         VStack(spacing: 10) {
             switch connectionStatus {
             case .none:
-                if let onConnectionRequest {
-                    profileActionButton(
-                        icon: "person.badge.plus.fill",
-                        label: "Demande de connexion",
-                        color: Color(hex: resolvedAccent),
-                        action: onConnectionRequest
-                    )
-                }
+                profileActionButton(
+                    icon: "person.badge.plus.fill",
+                    label: "Demande de connexion",
+                    color: Color(hex: resolvedAccent),
+                    action: { Task { await sendConnectionRequest() } }
+                )
             case .pendingSent:
-                if let onCancelRequest {
-                    profileActionButton(
-                        icon: "xmark.circle.fill",
-                        label: "Annuler la demande",
-                        color: theme.textMuted,
-                        action: onCancelRequest
-                    )
-                }
-                if let onResendRequest {
-                    profileActionButton(
-                        icon: "arrow.clockwise.circle.fill",
-                        label: "Renvoyer la demande",
-                        color: Color(hex: resolvedAccent),
-                        action: onResendRequest
-                    )
-                }
+                profileActionButton(
+                    icon: "xmark.circle.fill",
+                    label: "Annuler la demande",
+                    color: theme.textMuted,
+                    action: { Task { await cancelRequest() } }
+                )
+                profileActionButton(
+                    icon: "arrow.clockwise.circle.fill",
+                    label: "Renvoyer la demande",
+                    color: Color(hex: resolvedAccent),
+                    action: { Task { await resendRequest() } }
+                )
             case .pendingReceived:
-                if let onAcceptRequest {
-                    profileActionButton(
-                        icon: "checkmark.circle.fill",
-                        label: "Accepter la connexion",
-                        color: MeeshyColors.success,
-                        action: onAcceptRequest
-                    )
-                }
-                if let onDeclineRequest {
-                    profileActionButton(
-                        icon: "xmark.circle.fill",
-                        label: "Refuser la connexion",
-                        color: theme.textMuted,
-                        action: onDeclineRequest
-                    )
-                }
+                profileActionButton(
+                    icon: "checkmark.circle.fill",
+                    label: "Accepter la connexion",
+                    color: MeeshyColors.success,
+                    action: { Task { await acceptRequest() } }
+                )
+                profileActionButton(
+                    icon: "xmark.circle.fill",
+                    label: "Refuser la connexion",
+                    color: theme.textMuted,
+                    action: { Task { await declineRequest() } }
+                )
             case .connected:
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
@@ -535,19 +618,19 @@ public struct UserProfileSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
 
-            if isBlocked, let onUnblock {
+            if isBlocked {
                 profileActionButton(
                     icon: "hand.raised.slash.fill",
                     label: "Debloquer l'utilisateur",
                     color: MeeshyColors.warning,
-                    action: onUnblock
+                    action: { Task { await unblockUser() } }
                 )
-            } else if !isBlocked, let onBlock {
+            } else {
                 profileActionButton(
                     icon: "hand.raised.fill",
                     label: "Bloquer cet utilisateur",
                     color: theme.error,
-                    action: onBlock
+                    action: { Task { await blockUser() } }
                 )
             }
         }
@@ -692,11 +775,7 @@ public struct UserProfileSheet: View {
                     .frame(height: 1)
                     .onAppear {
                         Task {
-                            if let onLoadStats {
-                                await onLoadStats()
-                            } else {
-                                await loadStatsIfNeeded()
-                            }
+                            await loadStatsIfNeeded()
                         }
                     }
             }
@@ -922,7 +1001,7 @@ public struct UserProfileSheet: View {
             HapticFeedback.medium()
             if let onSendMessage {
                 onSendMessage()
-            } else if let targetUserId = (fullUser ?? internalFullUser)?.id ?? user.userId {
+            } else if let targetUserId = internalFullUser?.id ?? user.userId {
                 dismiss()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     NotificationCenter.default.post(
@@ -1009,7 +1088,7 @@ public struct UserProfileSheet: View {
 
             Button {
                 HapticFeedback.medium()
-                onUnblock?()
+                Task { await unblockUser() }
             } label: {
                 Text("Debloquer")
                     .font(.system(size: 14, weight: .semibold))

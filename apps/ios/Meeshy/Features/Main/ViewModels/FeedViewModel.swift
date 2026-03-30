@@ -238,8 +238,15 @@ class FeedViewModel: ObservableObject {
 
     func sendComment(postId: String, content: String, parentId: String? = nil) async {
         do {
-            _ = try await postService.addComment(postId: postId, content: content, parentId: parentId)
+            let apiComment = try await postService.addComment(postId: postId, content: content, parentId: parentId)
             if let index = posts.firstIndex(where: { $0.id == postId }) {
+                let feedComment = FeedComment(
+                    id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                    authorAvatarURL: apiComment.author.avatar,
+                    content: apiComment.content, timestamp: apiComment.createdAt,
+                    likes: 0, replies: 0
+                )
+                posts[index].comments.insert(feedComment, at: 0)
                 posts[index].commentCount += 1
             }
         } catch {
@@ -407,6 +414,14 @@ class FeedViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // --- post:bookmarked ---
+        socialSocket.postBookmarked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.debouncedCacheSave()
+            }
+            .store(in: &cancellables)
+
         // --- post:reposted ---
         socialSocket.postReposted
             .receive(on: DispatchQueue.main)
@@ -426,6 +441,16 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
+                let feedComment = FeedComment(
+                    id: data.comment.id, author: data.comment.author.name,
+                    authorId: data.comment.author.id,
+                    authorAvatarURL: data.comment.author.avatar,
+                    content: data.comment.content, timestamp: data.comment.createdAt,
+                    likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0
+                )
+                if !self.posts[index].comments.contains(where: { $0.id == feedComment.id }) {
+                    self.posts[index].comments.insert(feedComment, at: 0)
+                }
                 self.posts[index].commentCount = data.commentCount
             }
             .store(in: &cancellables)

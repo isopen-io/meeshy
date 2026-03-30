@@ -159,6 +159,7 @@ extension APIPost {
             }
             return FeedMedia(
                 id: m.id, type: m.mediaType, url: m.fileUrl,
+                thumbnailUrl: m.thumbnailUrl,
                 thumbnailColor: thumbnailColorForMime(m.mimeType),
                 width: m.width, height: m.height,
                 duration: m.duration.map { $0 / 1000 },

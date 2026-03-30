@@ -19,6 +19,7 @@ struct RootView: View {
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
+    @State private var feedWasVisibleBeforeNav = false
     @State private var showMenu = false
     @State private var pendingReplyContext: ReplyContext?
     @State private var showStoryViewerFromConv = false
@@ -181,9 +182,8 @@ struct RootView: View {
                     case .dataExport:
                         DataExportView()
                             .navigationBarHidden(true)
-                    case .postDetail(let postId):
-                        PostDetailView(postId: postId)
-                            .navigationBarHidden(true)
+                    case .postDetail(let postId, let initialPost):
+                        PostDetailView(postId: postId, initialPost: initialPost)
                     case .bookmarks:
                         BookmarksView()
                             .navigationBarHidden(true)
@@ -379,8 +379,13 @@ struct RootView: View {
             router.handleDeepLink(url)
         }
         .sheet(item: $router.deepLinkProfileUser) { user in
-            ProfileFetchingSheet(user: user)
-                .environmentObject(statusViewModel)
+            UserProfileSheet(
+                user: user,
+                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSharePicker) {
             if let content = router.pendingShareContent {
@@ -409,13 +414,20 @@ struct RootView: View {
         }
         .sheet(isPresented: $showNewConversation) {
             NewConversationView()
+                .environmentObject(statusViewModel)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .onChange(of: router.path) { _, newPath in
             if !newPath.isEmpty && showFeed {
+                feedWasVisibleBeforeNav = true
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showFeed = false
+                }
+            } else if newPath.isEmpty && feedWasVisibleBeforeNav {
+                feedWasVisibleBeforeNav = false
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showFeed = true
                 }
             }
         }
@@ -749,249 +761,6 @@ struct RootView: View {
         .ignoresSafeArea()
         .zIndex(showMenu ? 151 : -1)
         .allowsHitTesting(showMenu)
-    }
-}
-
-// MARK: - Profile Fetching Sheet
-
-private struct ProfileFetchingSheet: View {
-    let user: ProfileSheetUser
-    @State private var isLoading = true
-    @State private var fullUser: MeeshyUser?
-    @State private var fetchError: String?
-    @State private var connectionStatus: ConnectionStatus = .none
-    @State private var isBlocked = false
-    @State private var isBlockedByTarget = false
-    @State private var pendingRequestId: String?
-    @ObservedObject private var theme = ThemeManager.shared
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var statusViewModel: StatusViewModel
-
-    private var targetUserId: String { user.userId ?? "" }
-
-    var body: some View {
-        Group {
-            if let fetchError {
-                errorView(fetchError)
-            } else {
-                profileSheet
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .task {
-            let identifier = user.userId ?? user.username
-            let cached = await CacheCoordinator.shared.profiles.load(for: identifier)
-            switch cached {
-            case .fresh(let data, _):
-                if let profile = data.first {
-                    if profile.isActive == false {
-                        fetchError = "Ce compte a ete desactive."
-                    } else {
-                        fullUser = profile
-                    }
-                    isLoading = false
-                    resolveConnectionStatus()
-                    return
-                }
-            case .stale(let data, _):
-                if let profile = data.first, profile.isActive != false {
-                    fullUser = profile
-                }
-            case .expired, .empty:
-                break
-            }
-
-            do {
-                let fetched = try await UserService.shared.getProfile(idOrUsername: identifier)
-                if fetched.isActive == false {
-                    fetchError = "Ce compte a ete desactive."
-                } else {
-                    fullUser = fetched
-                    await CacheCoordinator.shared.profiles.save([fetched], for: identifier)
-                }
-            } catch let error as APIError {
-                switch error {
-                case .serverError(404, _):
-                    fetchError = "Utilisateur introuvable."
-                default:
-                    break
-                }
-            } catch {}
-            isLoading = false
-            resolveConnectionStatus()
-        }
-    }
-
-    private var profileSheet: some View {
-        UserProfileSheet(
-            user: user,
-            isBlocked: isBlocked,
-            isLoading: isLoading,
-            fullUser: fullUser,
-            connectionStatus: connectionStatus,
-            onBlock: {
-                Task { await blockUser() }
-            },
-            onUnblock: {
-                Task { await unblockUser() }
-            },
-            onConnectionRequest: {
-                Task { await sendConnectionRequest() }
-            },
-            onCancelRequest: {
-                Task { await cancelRequest() }
-            },
-            onResendRequest: {
-                Task { await resendRequest() }
-            },
-            onAcceptRequest: {
-                Task { await acceptRequest() }
-            },
-            onDeclineRequest: {
-                Task { await declineRequest() }
-            },
-            onDismiss: { dismiss() },
-            currentUserId: AuthManager.shared.currentUser?.id ?? "",
-            moodEmoji: statusViewModel.statusForUser(userId: targetUserId)?.moodEmoji,
-            onMoodTap: statusViewModel.moodTapHandler(for: targetUserId)
-        )
-    }
-
-    private func resolveConnectionStatus() {
-        guard !targetUserId.isEmpty else { return }
-        let status = FriendshipCache.shared.status(for: targetUserId)
-        switch status {
-        case .friend:
-            connectionStatus = .connected
-        case .pendingSent(let requestId):
-            pendingRequestId = requestId
-            connectionStatus = .pendingSent(requestId: requestId)
-        case .pendingReceived(let requestId):
-            pendingRequestId = requestId
-            connectionStatus = .pendingReceived(requestId: requestId)
-        case .none:
-            connectionStatus = .none
-        }
-    }
-
-    private func acceptRequest() async {
-        guard let requestId = pendingRequestId else { return }
-        FriendshipCache.shared.didAcceptRequest(from: targetUserId)
-        connectionStatus = .connected
-        pendingRequestId = nil
-        HapticFeedback.success()
-        do {
-            let _ = try await FriendService.shared.respond(requestId: requestId, accepted: true)
-            ToastManager.shared.showSuccess("Connexion acceptee")
-        } catch {
-            FriendshipCache.shared.rollbackAccept(senderId: targetUserId, requestId: requestId)
-            resolveConnectionStatus()
-            HapticFeedback.error()
-            ToastManager.shared.showError("Impossible d'accepter")
-        }
-    }
-
-    private func declineRequest() async {
-        guard let requestId = pendingRequestId else { return }
-        FriendshipCache.shared.didRejectRequest(from: targetUserId)
-        connectionStatus = .none
-        pendingRequestId = nil
-        HapticFeedback.medium()
-        do {
-            let _ = try await FriendService.shared.respond(requestId: requestId, accepted: false)
-            ToastManager.shared.showSuccess("Demande refusee")
-        } catch {
-            FriendshipCache.shared.rollbackReject(senderId: targetUserId, requestId: requestId)
-            resolveConnectionStatus()
-            HapticFeedback.error()
-            ToastManager.shared.showError("Impossible de refuser")
-        }
-    }
-
-    private func sendConnectionRequest() async {
-        guard !targetUserId.isEmpty else { return }
-        do {
-            let request = try await FriendService.shared.sendFriendRequest(receiverId: targetUserId)
-            FriendshipCache.shared.didSendRequest(to: targetUserId, requestId: request.id)
-            pendingRequestId = request.id
-            connectionStatus = .pendingSent(requestId: request.id)
-            HapticFeedback.success()
-            ToastManager.shared.showSuccess("Demande envoyee")
-        } catch {
-            HapticFeedback.error()
-            ToastManager.shared.showError("Impossible d'envoyer la demande")
-        }
-    }
-
-    private func cancelRequest() async {
-        guard let requestId = pendingRequestId else { return }
-        FriendshipCache.shared.didCancelRequest(to: targetUserId)
-        pendingRequestId = nil
-        connectionStatus = .none
-        HapticFeedback.medium()
-        do {
-            try await FriendService.shared.deleteRequest(requestId: requestId)
-            ToastManager.shared.showSuccess("Demande annulee")
-        } catch {
-            FriendshipCache.shared.didSendRequest(to: targetUserId, requestId: requestId)
-            resolveConnectionStatus()
-            ToastManager.shared.showError("Impossible d'annuler")
-        }
-    }
-
-    private func resendRequest() async {
-        if let requestId = pendingRequestId {
-            try? await FriendService.shared.deleteRequest(requestId: requestId)
-        }
-        await sendConnectionRequest()
-    }
-
-    private func blockUser() async {
-        guard !targetUserId.isEmpty else { return }
-        do {
-            try await BlockService.shared.blockUser(userId: targetUserId)
-            isBlocked = true
-            HapticFeedback.medium()
-            ToastManager.shared.showSuccess("Utilisateur bloque")
-        } catch {
-            ToastManager.shared.showError("Impossible de bloquer")
-        }
-    }
-
-    private func unblockUser() async {
-        guard !targetUserId.isEmpty else { return }
-        do {
-            try await BlockService.shared.unblockUser(userId: targetUserId)
-            isBlocked = false
-            HapticFeedback.light()
-            ToastManager.shared.showSuccess("Utilisateur debloque")
-        } catch {
-            ToastManager.shared.showError("Impossible de debloquer")
-        }
-    }
-
-    private func errorView(_ message: String) -> some View {
-        VStack(spacing: 16) {
-            Spacer()
-
-            Image(systemName: "person.crop.circle.badge.questionmark")
-                .font(.system(size: 48))
-                .foregroundColor(theme.textMuted)
-
-            Text(message)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(theme.textSecondary)
-                .multilineTextAlignment(.center)
-
-            Text("@\(user.username)")
-                .font(.system(size: 13))
-                .foregroundColor(theme.textMuted)
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .padding(24)
-        .background(theme.backgroundPrimary)
     }
 }
 

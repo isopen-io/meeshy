@@ -18,8 +18,8 @@ struct BookmarksView: View {
                             onBookmark: { postId in
                                 Task { await viewModel.removeBookmark(postId) }
                             },
-                            onTapPost: { postId in
-                                router.push(.postDetail(postId))
+                            onTapPost: { post in
+                                router.push(.postDetail(post.id, post))
                             },
                             onReport: { postId in
                                 Task {
