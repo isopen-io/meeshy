@@ -85,6 +85,38 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         XCTAssertEqual(receivedBuffer?.frameLength, buffer.frameLength)
     }
 
+    func test_processBuffer_withoutEffects_passesOriginalBufferToCallback() {
+        let mock = MockCallAudioEffectsService()
+        let sut = makeSUT(effectsService: mock)
+
+        var receivedBuffer: AVAudioPCMBuffer?
+        sut.onCleanAudioBuffer = { buffer in
+            receivedBuffer = buffer
+        }
+
+        let buffer = makeBuffer()
+        sut.processAudioBuffer(buffer)
+
+        XCTAssertTrue(receivedBuffer === buffer)
+    }
+
+    func test_processBuffer_withEffects_copiesBufferForCallback() throws {
+        let mock = MockCallAudioEffectsService()
+        try mock.setEffect(.voiceCoder(.default))
+        let sut = makeSUT(effectsService: mock)
+
+        var receivedBuffer: AVAudioPCMBuffer?
+        sut.onCleanAudioBuffer = { buffer in
+            receivedBuffer = buffer
+        }
+
+        let buffer = makeBuffer()
+        sut.processAudioBuffer(buffer)
+
+        XCTAssertNotNil(receivedBuffer)
+        XCTAssertFalse(receivedBuffer === buffer)
+    }
+
     func test_processBuffer_cleanBufferHasOriginalSamples() throws {
         let mock = MockCallAudioEffectsService()
         try mock.setEffect(.voiceCoder(.default))

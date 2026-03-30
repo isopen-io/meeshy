@@ -5,7 +5,7 @@ import os
 
 final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
 
-    // MARK: - Published State
+    // MARK: - State
 
     private(set) var activeVoiceEffect: AudioEffectType?
     private(set) var isBackSoundActive = false
@@ -23,12 +23,16 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     private var voiceEffectNodes: [AVAudioNode] = []
     private var backSoundPlayerNode: AVAudioPlayerNode?
     private var backSoundMixerNode: AVAudioMixerNode?
-    private var mainMixerNode: AVAudioMixerNode?
+    private var backSoundAudioFile: AVAudioFile?
 
     // MARK: - Current Config
 
     private var currentVoiceConfig: AudioEffectConfig?
     private var currentBackSoundConfig: BackSoundParams?
+
+    // MARK: - Thread Safety
+
+    private let lock = NSLock()
 
     // MARK: - Performance Monitoring
 
@@ -39,39 +43,53 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     // MARK: - Set Effect
 
     func setEffect(_ effect: AudioEffectConfig?) throws {
+        lock.lock()
+        defer { lock.unlock() }
+
         guard let effect else {
-            clearAllEffects()
+            clearAllEffectsLocked()
             return
         }
 
         if effect.isVoiceEffect {
-            try setVoiceEffect(effect)
+            try setVoiceEffectLocked(effect)
         } else if case .backSound(let params) = effect {
-            try setBackSound(params)
+            try setBackSoundLocked(params)
         }
     }
 
     func clearVoiceEffect() {
-        tearDownVoiceNodes()
+        lock.lock()
+        defer { lock.unlock() }
+        stopEngineLocked()
+        tearDownVoiceNodesLocked()
         currentVoiceConfig = nil
         activeVoiceEffect = nil
-        activeNodeChain = voiceEffectNodes
+        restartEngineIfNeededLocked()
         Logger.audioEffects.info("Voice effect cleared")
     }
 
     func clearBackSound() {
-        tearDownBackSoundNodes()
+        lock.lock()
+        defer { lock.unlock() }
+        stopEngineLocked()
+        tearDownBackSoundNodesLocked()
         currentBackSoundConfig = nil
         isBackSoundActive = false
+        backSoundAudioFile = nil
+        restartEngineIfNeededLocked()
         Logger.audioEffects.info("BackSound cleared")
     }
 
     // MARK: - Update Params
 
     func updateParams(_ config: AudioEffectConfig) throws {
+        lock.lock()
+        defer { lock.unlock() }
+
         guard config.isVoiceEffect else {
             if case .backSound(let params) = config, isBackSoundActive {
-                updateBackSoundParams(params)
+                updateBackSoundParamsLocked(params)
                 return
             }
             throw AudioEffectsError.invalidParams("No matching effect active for update")
@@ -83,7 +101,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
             )
         }
 
-        applyVoiceParams(config)
+        applyVoiceParamsLocked(config)
         currentVoiceConfig = config
         Logger.audioEffects.info("Updated params for \(config.effectType.rawValue)")
     }
@@ -91,10 +109,15 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     // MARK: - Process Audio Buffer
 
     func processAudioBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
-        guard isEffectsActive, !isAutoDegraded else { return buffer }
+        lock.lock()
+        let hasEffects = isEffectsActive && !isAutoDegraded
+        let nodes = voiceEffectNodes
+        lock.unlock()
+
+        guard hasEffects, !nodes.isEmpty else { return buffer }
 
         let start = CACurrentMediaTime()
-        let processed = renderThroughEffectChain(buffer)
+        let processed = renderThroughNodes(buffer, nodes: nodes)
         let elapsed = (CACurrentMediaTime() - start) * 1000
         lastProcessingTimeMs = elapsed
         reportProcessingTime(ms: elapsed)
@@ -105,7 +128,10 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     // MARK: - Reset
 
     func reset() {
-        clearAllEffects()
+        lock.lock()
+        defer { lock.unlock() }
+        stopEngineLocked()
+        clearAllEffectsLocked()
         consecutiveOverBudgetFrames = 0
         consecutiveUnderBudgetFrames = 0
         isAutoDegraded = false
@@ -137,10 +163,11 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         }
     }
 
-    // MARK: - Private — Voice Effect Setup
+    // MARK: - Private — Voice Effect Setup (must hold lock)
 
-    private func setVoiceEffect(_ config: AudioEffectConfig) throws {
-        tearDownVoiceNodes()
+    private func setVoiceEffectLocked(_ config: AudioEffectConfig) throws {
+        stopEngineLocked()
+        tearDownVoiceNodesLocked()
 
         let nodes: [AVAudioNode]
         switch config {
@@ -159,13 +186,13 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         currentVoiceConfig = config
         activeVoiceEffect = config.effectType
 
-        connectVoiceNodes()
+        rebuildEngineGraphLocked()
         Logger.audioEffects.info("Voice effect set: \(config.effectType.rawValue)")
     }
 
     private func buildVoiceCoderChain(_ params: VoiceCoderParams) -> [AVAudioNode] {
         let timePitch = AVAudioUnitTimePitch()
-        timePitch.pitch = params.pitch * 100  // semitones → cents
+        timePitch.pitch = params.pitch * 100  // semitones -> cents
 
         var nodes: [AVAudioNode] = [timePitch]
 
@@ -198,7 +225,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         timePitch.pitch = params.pitch * 100
 
         let distortion = AVAudioUnitDistortion()
-        distortion.loadFactoryPreset(.speechAlienChatter)
+        distortion.loadFactoryPreset(.drumsBitBrush)
         distortion.wetDryMix = params.distortion
 
         let reverb = AVAudioUnitReverb()
@@ -215,31 +242,73 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         return [timePitch, distortion, reverb, eq]
     }
 
-    // MARK: - Private — BackSound Setup
+    // MARK: - Private — BackSound Setup (must hold lock)
 
-    private func setBackSound(_ params: BackSoundParams) throws {
-        tearDownBackSoundNodes()
+    private func setBackSoundLocked(_ params: BackSoundParams) throws {
+        stopEngineLocked()
+        tearDownBackSoundNodesLocked()
+
+        guard !params.soundFile.isEmpty else {
+            throw AudioEffectsError.soundFileNotFound(params.soundFile)
+        }
+
+        guard let url = Bundle.main.url(forResource: params.soundFile, withExtension: nil) else {
+            throw AudioEffectsError.soundFileNotFound(params.soundFile)
+        }
+
+        let audioFile: AVAudioFile
+        do {
+            audioFile = try AVAudioFile(forReading: url)
+        } catch {
+            throw AudioEffectsError.soundFileNotFound(params.soundFile)
+        }
 
         let playerNode = AVAudioPlayerNode()
         let mixerNode = AVAudioMixerNode()
 
         backSoundPlayerNode = playerNode
         backSoundMixerNode = mixerNode
+        backSoundAudioFile = audioFile
         currentBackSoundConfig = params
         isBackSoundActive = true
 
-        updateBackSoundParams(params)
+        updateBackSoundParamsLocked(params)
+        rebuildEngineGraphLocked()
+        scheduleBackSoundPlaybackLocked()
         Logger.audioEffects.info("BackSound activated: \(params.soundFile)")
     }
 
-    private func updateBackSoundParams(_ params: BackSoundParams) {
+    private func updateBackSoundParamsLocked(_ params: BackSoundParams) {
         backSoundMixerNode?.outputVolume = params.volume / 100.0
         currentBackSoundConfig = params
     }
 
-    // MARK: - Private — Apply Params (real-time, no rebuild)
+    private func scheduleBackSoundPlaybackLocked() {
+        guard let player = backSoundPlayerNode,
+              let file = backSoundAudioFile else { return }
 
-    private func applyVoiceParams(_ config: AudioEffectConfig) {
+        let loopCount: Int
+        if let config = currentBackSoundConfig {
+            switch config.loopMode {
+            case .nTimes:
+                loopCount = max(config.loopValue, 1)
+            case .nMinutes:
+                let fileDuration = Double(file.length) / file.processingFormat.sampleRate
+                loopCount = fileDuration > 0 ? max(Int(Double(config.loopValue * 60) / fileDuration), 1) : 1
+            }
+        } else {
+            loopCount = 1
+        }
+
+        for _ in 0..<loopCount {
+            player.scheduleFile(file, at: nil)
+        }
+        player.play()
+    }
+
+    // MARK: - Private — Apply Params (real-time, no rebuild; must hold lock)
+
+    private func applyVoiceParamsLocked(_ config: AudioEffectConfig) {
         switch config {
         case .voiceCoder(let params):
             if let timePitch = voiceEffectNodes.first(where: { $0 is AVAudioUnitTimePitch }) as? AVAudioUnitTimePitch {
@@ -274,58 +343,28 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         }
     }
 
-    // MARK: - Private — Engine Graph
+    // MARK: - Private — Engine Graph (must hold lock)
 
-    private func connectVoiceNodes() {
+    private func rebuildEngineGraphLocked() {
+        let format = AVAudioFormat(
+            standardFormatWithSampleRate: AudioEffectsConstants.defaultSampleRate,
+            channels: 1
+        )!
+
+        // Attach voice effect nodes
         for node in voiceEffectNodes {
             engine.attach(node)
         }
-    }
 
-    private func tearDownVoiceNodes() {
-        for node in voiceEffectNodes {
-            engine.detach(node)
-        }
-        voiceEffectNodes = []
-        activeNodeChain = []
-    }
-
-    private func tearDownBackSoundNodes() {
+        // Attach BackSound nodes
         if let player = backSoundPlayerNode {
-            player.stop()
-            engine.detach(player)
+            engine.attach(player)
         }
         if let mixer = backSoundMixerNode {
-            engine.detach(mixer)
-        }
-        backSoundPlayerNode = nil
-        backSoundMixerNode = nil
-    }
-
-    private func clearAllEffects() {
-        tearDownVoiceNodes()
-        tearDownBackSoundNodes()
-        currentVoiceConfig = nil
-        currentBackSoundConfig = nil
-        activeVoiceEffect = nil
-        isBackSoundActive = false
-        activeNodeChain = []
-        Logger.audioEffects.info("All effects cleared")
-    }
-
-    // MARK: - Private — Offline Render
-
-    private func renderThroughEffectChain(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
-        guard !voiceEffectNodes.isEmpty else { return buffer }
-
-        let format = buffer.format
-
-        for node in voiceEffectNodes {
-            if node.engine == nil {
-                engine.attach(node)
-            }
+            engine.attach(mixer)
         }
 
+        // Connect voice chain: inputNode -> [effects] -> mainMixerNode
         var previousNode: AVAudioNode = engine.inputNode
         for node in voiceEffectNodes {
             engine.connect(previousNode, to: node, format: format)
@@ -333,10 +372,127 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         }
         engine.connect(previousNode, to: engine.mainMixerNode, format: format)
 
-        return buffer
+        // Connect BackSound chain: playerNode -> backSoundMixer -> mainMixerNode
+        if let player = backSoundPlayerNode, let mixer = backSoundMixerNode,
+           let file = backSoundAudioFile {
+            engine.connect(player, to: mixer, format: file.processingFormat)
+            engine.connect(mixer, to: engine.mainMixerNode, format: format)
+        }
+
+        do {
+            try engine.start()
+            Logger.audioEffects.info("Audio engine started")
+        } catch {
+            Logger.audioEffects.error("Failed to start audio engine: \(error.localizedDescription)")
+        }
+    }
+
+    private func stopEngineLocked() {
+        if engine.isRunning {
+            engine.stop()
+        }
+    }
+
+    private func restartEngineIfNeededLocked() {
+        guard isEffectsActive else { return }
+        rebuildEngineGraphLocked()
+    }
+
+    private func tearDownVoiceNodesLocked() {
+        for node in voiceEffectNodes {
+            if node.engine != nil {
+                engine.detach(node)
+            }
+        }
+        voiceEffectNodes = []
+        activeNodeChain = []
+    }
+
+    private func tearDownBackSoundNodesLocked() {
+        if let player = backSoundPlayerNode {
+            player.stop()
+            if player.engine != nil {
+                engine.detach(player)
+            }
+        }
+        if let mixer = backSoundMixerNode {
+            if mixer.engine != nil {
+                engine.detach(mixer)
+            }
+        }
+        backSoundPlayerNode = nil
+        backSoundMixerNode = nil
+    }
+
+    private func clearAllEffectsLocked() {
+        tearDownVoiceNodesLocked()
+        tearDownBackSoundNodesLocked()
+        currentVoiceConfig = nil
+        currentBackSoundConfig = nil
+        activeVoiceEffect = nil
+        isBackSoundActive = false
+        backSoundAudioFile = nil
+        activeNodeChain = []
+        Logger.audioEffects.info("All effects cleared")
+    }
+
+    // MARK: - Private — Render Through Nodes
+
+    private func renderThroughNodes(_ buffer: AVAudioPCMBuffer, nodes: [AVAudioNode]) -> AVAudioPCMBuffer {
+        guard !nodes.isEmpty else { return buffer }
+
+        var currentBuffer = buffer
+
+        for node in nodes {
+            guard let audioUnit = (node as? AVAudioUnit)?.auAudioUnit else { continue }
+
+            let renderBlock = audioUnit.renderBlock
+            let frameCount = currentBuffer.frameLength
+            let format = currentBuffer.format
+
+            guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+                continue
+            }
+            outputBuffer.frameLength = frameCount
+
+            let outputBufferList = outputBuffer.mutableAudioBufferList
+            var flags = AudioUnitRenderActionFlags()
+
+            var timestamp = AudioTimeStamp()
+            timestamp.mSampleTime = 0
+            timestamp.mFlags = .sampleTimeValid
+
+            // Provide the input buffer to the audio unit
+            let inputBlock: AURenderPullInputBlock = { _, inTimestamp, inFrameCount, inputBusNumber, inputBufferList -> AUAudioUnitStatus in
+                let srcBL = UnsafeMutableAudioBufferListPointer(currentBuffer.mutableAudioBufferList)
+                let dstBL = UnsafeMutableAudioBufferListPointer(inputBufferList)
+
+                for i in 0..<min(srcBL.count, dstBL.count) {
+                    dstBL[i].mDataByteSize = srcBL[i].mDataByteSize
+                    dstBL[i].mNumberChannels = srcBL[i].mNumberChannels
+                    if let srcData = srcBL[i].mData, let dstData = dstBL[i].mData {
+                        dstData.copyMemory(from: srcData, byteCount: Int(srcBL[i].mDataByteSize))
+                    }
+                }
+                return noErr
+            }
+
+            let status = renderBlock(&flags, &timestamp, frameCount, 0, outputBufferList, inputBlock)
+
+            if status == noErr {
+                currentBuffer = outputBuffer
+            } else {
+                Logger.audioEffects.error("Audio unit render failed with status: \(status)")
+            }
+        }
+
+        return currentBuffer
     }
 
     deinit {
-        reset()
+        lock.lock()
+        stopEngineLocked()
+        clearAllEffectsLocked()
+        lock.unlock()
     }
 }

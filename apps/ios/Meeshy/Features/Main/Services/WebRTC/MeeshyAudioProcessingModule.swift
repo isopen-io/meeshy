@@ -48,14 +48,21 @@ final class MeeshyAudioProcessingModule: NSObject {
     /// Always feeds the clean (original) buffer to the transcription callback first.
     /// If effects are active, replaces the buffer contents with processed audio.
     func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-        // CLEAN PATH: Always send original audio to transcription (before modification)
+        let hasEffects = effectsService.isEffectsActive
+
+        // CLEAN PATH: Send original audio to transcription
+        // Only copy when effects will modify the buffer; otherwise pass original directly
         if let callback = onCleanAudioBuffer {
-            let cleanCopy = copyBuffer(buffer)
-            callback(cleanCopy)
+            if hasEffects {
+                let cleanCopy = copyBuffer(buffer)
+                callback(cleanCopy)
+            } else {
+                callback(buffer)
+            }
         }
 
         // EFFECTS PATH: Process through effect chain if active
-        guard effectsService.isEffectsActive else { return }
+        guard hasEffects else { return }
 
         let processed = effectsService.processAudioBuffer(buffer)
 
