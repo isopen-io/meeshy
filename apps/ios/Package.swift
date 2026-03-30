@@ -29,9 +29,10 @@ let package = Package(
         ),
 
         // WebRTC for video/audio calls and peer-to-peer communication
+        // M141 (Oct 2025) — branch-heads/7390, compiled from official WebRTC source
         .package(
             url: "https://github.com/stasel/WebRTC.git",
-            from: "120.0.0"
+            from: "141.0.0"
         ),
 
         // Kingfisher for efficient image loading, caching, and processing

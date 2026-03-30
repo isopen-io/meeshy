@@ -442,7 +442,8 @@ interface RTCIceServerConfig {
 
 ### 4.1 SDK Integration
 
-**Package**: webrtc-sdk/Specs from https://github.com/webrtc-sdk/Specs
+**Package**: stasel/WebRTC from https://github.com/stasel/WebRTC (M141, branch-heads/7390)
+**Rationale**: SPM natif, memes types que Google WebRTC (pas de prefix LK), M141 = derniere version, communaute active
 **Import**: import WebRTC
 **Minimum iOS**: 16.0
 **Swift compatibility**: 6.0 - 6.2
@@ -1163,7 +1164,7 @@ When the user has Spotify/Apple Music playing and starts a Meeshy call:
 | packages/shared/types/attachment-audio.ts | Add isFinal, translatedText, translatedLanguage to TranscriptionSegment |
 | packages/shared/types/attachment-transcription.ts | Same additions (keep in sync) |
 | packages/MeeshySDK/Sources/MeeshySDK/Models/TranscriptionModels.swift | Add fields, CodingKeys, custom decoder |
-| apps/ios/Meeshy.xcodeproj/project.pbxproj | SPM webrtc-sdk/Specs, background modes |
+| apps/ios/Meeshy.xcodeproj/project.pbxproj | SPM stasel/WebRTC M141, background modes |
 | apps/ios/Meeshy/Info.plist | Background modes (voip, audio), PiP entitlement |
 | apps/ios/MeeshyApp.swift | RTCInitializeSSL at launch, RTCCleanupSSL at terminate |
 | apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift | Full rewrite with real SDK. Remove SSL init/deinit |
