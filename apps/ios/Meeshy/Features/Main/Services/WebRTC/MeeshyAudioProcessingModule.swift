@@ -10,10 +10,15 @@ import WebRTC
 /// Custom audio processing module that intercepts WebRTC's audio capture pipeline
 /// to apply real-time effects while maintaining a clean stream for transcription.
 ///
+/// Threading contract:
+/// - `audioProcessingProcess` is called on WebRTC's real-time audio thread
+/// - `onCleanAudioBuffer` callback is dispatched to a background queue (never audio thread)
+/// - No locks are held during audio processing
+///
 /// Dual-stream architecture:
 /// ```
 /// Microphone → WebRTC ADM capture → MeeshyAudioProcessingModule
-///     ├─ [CLEAN PATH] → onCleanAudioBuffer callback → SFSpeechRecognizer
+///     ├─ [CLEAN PATH] → background queue → SFSpeechRecognizer
 ///     └─ [EFFECTS PATH] → CallAudioEffectsService → processed buffer → WebRTC send
 /// ```
 final class MeeshyAudioProcessingModule: NSObject {
@@ -22,13 +27,21 @@ final class MeeshyAudioProcessingModule: NSObject {
 
     let effectsService: CallAudioEffectsServiceProviding
 
-    /// Callback for clean (unprocessed) audio buffers — used for transcription
+    /// Callback for clean (unprocessed) audio buffers — used for transcription.
+    /// Called on `transcriptionQueue`, never on the real-time audio thread.
     var onCleanAudioBuffer: ((AVAudioPCMBuffer) -> Void)?
 
     var isEffectsActive: Bool { effectsService.isEffectsActive }
 
     private var sampleRate: Int = 48000
     private var channelCount: Int = 1
+
+    /// Background queue for dispatching clean audio to transcription service.
+    /// Avoids blocking the real-time audio thread with SFSpeech operations.
+    private let transcriptionQueue = DispatchQueue(
+        label: "me.meeshy.audioprocessing.transcription",
+        qos: .userInitiated
+    )
 
     // MARK: - Init
 
@@ -42,22 +55,26 @@ final class MeeshyAudioProcessingModule: NSObject {
         Logger.audioEffects.info("MeeshyAudioProcessingModule deinit")
     }
 
-    // MARK: - Process Audio
+    // MARK: - Process Audio (called on real-time audio thread)
 
-    /// Process an audio buffer through the effects chain.
-    /// Always feeds the clean (original) buffer to the transcription callback first.
-    /// If effects are active, replaces the buffer contents with processed audio.
     func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
         let hasEffects = effectsService.isEffectsActive
 
         // CLEAN PATH: Send original audio to transcription
-        // Only copy when effects will modify the buffer; otherwise pass original directly
         if let callback = onCleanAudioBuffer {
             if hasEffects {
-                let cleanCopy = copyBuffer(buffer)
-                callback(cleanCopy)
+                // Effects will modify buffer — copy first, dispatch off audio thread
+                guard let cleanCopy = copyBuffer(buffer) else { return }
+                transcriptionQueue.async {
+                    callback(cleanCopy)
+                }
             } else {
-                callback(buffer)
+                // No effects — buffer won't be modified, but still dispatch off audio thread
+                // Copy needed because RTCAudioBuffer memory is only valid during this callback
+                guard let cleanCopy = copyBuffer(buffer) else { return }
+                transcriptionQueue.async {
+                    callback(cleanCopy)
+                }
             }
         }
 
@@ -66,7 +83,6 @@ final class MeeshyAudioProcessingModule: NSObject {
 
         let processed = effectsService.processAudioBuffer(buffer)
 
-        // Copy processed samples back into the original buffer (in-place modification)
         if processed !== buffer {
             copyBufferContents(from: processed, to: buffer)
         }
@@ -74,8 +90,14 @@ final class MeeshyAudioProcessingModule: NSObject {
 
     // MARK: - Private — Buffer Utilities
 
-    private func copyBuffer(_ source: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
-        let copy = AVAudioPCMBuffer(pcmFormat: source.format, frameCapacity: source.frameCapacity)!
+    private func copyBuffer(_ source: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let copy = AVAudioPCMBuffer(
+            pcmFormat: source.format,
+            frameCapacity: source.frameCapacity
+        ) else {
+            Logger.audioEffects.error("Failed to allocate clean buffer copy")
+            return nil
+        }
         copy.frameLength = source.frameLength
 
         guard let srcData = source.floatChannelData, let dstData = copy.floatChannelData else {
@@ -130,7 +152,6 @@ extension MeeshyAudioProcessingModule: RTCAudioCustomProcessingDelegate {
 
         pcmBuffer.frameLength = AVAudioFrameCount(frames)
 
-        // Copy RTCAudioBuffer data into AVAudioPCMBuffer
         if let floatData = pcmBuffer.floatChannelData {
             for ch in 0..<channels {
                 let rawChannel = audioBuffer.rawBuffer(forChannel: ch)
@@ -142,7 +163,6 @@ extension MeeshyAudioProcessingModule: RTCAudioCustomProcessingDelegate {
 
         processAudioBuffer(pcmBuffer)
 
-        // Copy processed data back into RTCAudioBuffer
         if effectsService.isEffectsActive, let floatData = pcmBuffer.floatChannelData {
             for ch in 0..<channels {
                 let rawChannel = audioBuffer.rawBuffer(forChannel: ch)

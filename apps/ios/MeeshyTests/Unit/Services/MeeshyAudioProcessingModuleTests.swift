@@ -73,46 +73,36 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         let mock = MockCallAudioEffectsService()
         let sut = makeSUT(effectsService: mock)
 
+        let expectation = expectation(description: "Clean buffer callback")
         var receivedBuffer: AVAudioPCMBuffer?
         sut.onCleanAudioBuffer = { buffer in
             receivedBuffer = buffer
+            expectation.fulfill()
         }
 
         let buffer = makeBuffer()
         sut.processAudioBuffer(buffer)
 
+        wait(for: [expectation], timeout: 1.0)
         XCTAssertNotNil(receivedBuffer)
         XCTAssertEqual(receivedBuffer?.frameLength, buffer.frameLength)
     }
 
-    func test_processBuffer_withoutEffects_passesOriginalBufferToCallback() {
+    func test_processBuffer_alwaysCopiesBufferForCallback() {
         let mock = MockCallAudioEffectsService()
         let sut = makeSUT(effectsService: mock)
 
+        let expectation = expectation(description: "Clean buffer callback")
         var receivedBuffer: AVAudioPCMBuffer?
         sut.onCleanAudioBuffer = { buffer in
             receivedBuffer = buffer
+            expectation.fulfill()
         }
 
         let buffer = makeBuffer()
         sut.processAudioBuffer(buffer)
 
-        XCTAssertTrue(receivedBuffer === buffer)
-    }
-
-    func test_processBuffer_withEffects_copiesBufferForCallback() throws {
-        let mock = MockCallAudioEffectsService()
-        try mock.setEffect(.voiceCoder(.default))
-        let sut = makeSUT(effectsService: mock)
-
-        var receivedBuffer: AVAudioPCMBuffer?
-        sut.onCleanAudioBuffer = { buffer in
-            receivedBuffer = buffer
-        }
-
-        let buffer = makeBuffer()
-        sut.processAudioBuffer(buffer)
-
+        wait(for: [expectation], timeout: 1.0)
         XCTAssertNotNil(receivedBuffer)
         XCTAssertFalse(receivedBuffer === buffer)
     }
@@ -122,9 +112,11 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         try mock.setEffect(.voiceCoder(.default))
         let sut = makeSUT(effectsService: mock)
 
+        let expectation = expectation(description: "Clean buffer callback")
         var receivedBuffer: AVAudioPCMBuffer?
         sut.onCleanAudioBuffer = { buffer in
             receivedBuffer = buffer
+            expectation.fulfill()
         }
 
         let buffer = makeBuffer()
@@ -132,6 +124,7 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
 
         sut.processAudioBuffer(buffer)
 
+        wait(for: [expectation], timeout: 1.0)
         XCTAssertNotNil(receivedBuffer)
         XCTAssertEqual(receivedBuffer?.floatChannelData![0][0], originalFirstSample, accuracy: 0.001)
     }
