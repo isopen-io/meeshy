@@ -25,6 +25,11 @@ struct ThemedConversationRow: View {
     var typingUsername: String? = nil
 
     private var accentColor: String { conversation.accentColor }
+
+    // Pre-parsed accent Color — avoids 19× hex parsing per render
+    private var accent: Color { accent }
+    private var accentSecondary: Color { accentSecondary }
+
     private var textPrimary: Color { isDark ? Color(hex: "F5F5F0") : Color(hex: "1C1917") }
     private var textSecondary: Color { isDark ? Color(hex: "F5F5F0").opacity(0.7) : Color(hex: "1C1917").opacity(0.6) }
     private var textMuted: Color { isDark ? Color(hex: "F5F5F0").opacity(0.5) : Color(hex: "1C1917").opacity(0.4) }
@@ -56,8 +61,8 @@ struct ThemedConversationRow: View {
         let botOpacity = topOpacity * 0.25
         return LinearGradient(
             colors: [
-                Color(hex: accentColor).opacity(topOpacity),
-                Color(hex: conversation.colorPalette.secondary).opacity(botOpacity)
+                accent.opacity(topOpacity),
+                accentSecondary.opacity(botOpacity)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -158,7 +163,7 @@ struct ThemedConversationRow: View {
                     // Timestamp — layoutPriority(1) pour ne jamais être écrasé
                     Text(timeAgo(conversation.lastMessageAt))
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundColor(accent)
                         .layoutPriority(1)
                         .padding(.top, 2)
                 }
@@ -181,7 +186,7 @@ struct ThemedConversationRow: View {
                 backgroundSecondary
                 heatBackground
                 if isDragging {
-                    Color(hex: accentColor).opacity(0.05)
+                    accent.opacity(0.05)
                 }
             }
         )
@@ -281,12 +286,12 @@ struct ThemedConversationRow: View {
                     .font(.system(size: 9, weight: .medium))
             }
         }
-        .foregroundColor(Color(hex: accentColor))
+        .foregroundColor(accent)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .background(
             Capsule()
-                .fill(Color(hex: accentColor).opacity(isDark ? 0.2 : 0.15))
+                .fill(accent.opacity(isDark ? 0.2 : 0.15))
         )
     }
 
@@ -307,13 +312,13 @@ struct ThemedConversationRow: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [Color(hex: accentColor), Color(hex: conversation.colorPalette.secondary)],
+                        colors: [accent, accentSecondary],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .frame(width: 24, height: 24)
-                .shadow(color: Color(hex: accentColor).opacity(0.25), radius: 3)
+                .shadow(color: accent.opacity(0.25), radius: 3)
 
             Text("\(min(conversation.unreadCount, 99))")
                 .font(.system(size: 11, weight: .bold))
@@ -340,7 +345,7 @@ struct ThemedConversationRow: View {
             HStack(spacing: 3) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
-                        .fill(Color(hex: accentColor))
+                        .fill(accent)
                         .frame(width: 5, height: 5)
                         .scaleEffect(isAnimating ? 1.0 : 0.5)
                         .opacity(isAnimating ? 1.0 : 0.4)
@@ -362,7 +367,7 @@ struct ThemedConversationRow: View {
         HStack(spacing: 5) {
             Text(typingUsername.map { "\($0) écrit" } ?? "est en train d'écrire")
                 .font(.system(size: 13).italic())
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(accent)
                 .lineLimit(1)
             TypingDotsView(accentColor: accentColor)
         }
@@ -379,7 +384,7 @@ struct ThemedConversationRow: View {
             if showEphemeralIcon {
                 Image(systemName: "timer")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundColor(accent)
             }
             senderLabel
             if !hasText && !attachments.isEmpty {
@@ -389,7 +394,7 @@ struct ThemedConversationRow: View {
                 if totalCount > 1 {
                     Text("+\(totalCount - 1)")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundColor(accent)
                 }
             } else if hasText {
                 if !attachments.isEmpty {
@@ -439,10 +444,10 @@ struct ThemedConversationRow: View {
                     senderLabel
                     Image(systemName: "flame")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundColor(accent)
                     Text(String(localized: "message.view_once", defaultValue: "Voir une fois"))
                         .font(.system(size: 13))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundColor(accent)
                         .lineLimit(1)
                 }
 
@@ -468,7 +473,7 @@ struct ThemedConversationRow: View {
         if let name = conversation.lastMessageSenderName, !name.isEmpty {
             Text(name)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(accent)
                 .lineLimit(1)
                 .layoutPriority(1)
         }

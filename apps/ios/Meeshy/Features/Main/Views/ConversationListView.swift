@@ -52,6 +52,7 @@ struct ConversationListView: View {
     var onStoryViewRequest: ((String, Bool) -> Void)? = nil  // (userId, fromTray)
     var onNewConversation: (() -> Void)? = nil
 
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var socketManager = MessageSocketManager.shared
     @ObservedObject var lockManager = ConversationLockManager.shared
@@ -479,6 +480,11 @@ struct ConversationListView: View {
                 async let conversations: Void = conversationViewModel.loadConversations()
                 async let communities: Void = loadUserCommunities()
                 _ = await (conversations, communities)
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active {
+                    conversationViewModel.handleForegroundReturn()
+                }
             }
             .onChange(of: conversationViewModel.userCategories) { _, categories in
                 for cat in categories where cat.isExpanded { expandedSections.insert(cat.id) }
