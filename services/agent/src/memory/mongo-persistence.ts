@@ -94,12 +94,21 @@ export class MongoPersistence {
 
     const users = await this.prisma.user.findMany({
       where: { id: { in: allUserIds } },
-      select: { id: true, displayName: true, username: true, systemLanguage: true },
+      select: { id: true, displayName: true, username: true, systemLanguage: true, lastActiveAt: true },
     });
-    type UserInfo = { displayName: string; username: string; systemLanguage: string | null };
-    const userMap: Map<string, UserInfo> = new Map(users.map((u: { id: string; displayName: string | null; username: string | null; systemLanguage: string | null }) => [u.id, { displayName: u.displayName ?? u.username ?? u.id, username: u.username ?? u.id, systemLanguage: u.systemLanguage }]));
+    type UserInfo = { displayName: string; username: string; systemLanguage: string | null; lastActiveAt: Date };
+    const userMap: Map<string, UserInfo> = new Map(users.map((u: { id: string; displayName: string | null; username: string | null; systemLanguage: string | null; lastActiveAt: Date }) => [u.id, { displayName: u.displayName ?? u.username ?? u.id, username: u.username ?? u.id, systemLanguage: u.systemLanguage, lastActiveAt: u.lastActiveAt }]));
 
-    const results: ControlledUser[] = roles.map((r: Record<string, any>) => ({
+    const recentLoginThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const results: ControlledUser[] = roles
+      .filter((r: Record<string, any>) => {
+        if (manualUserIds.has(r.userId as string)) return true;
+        const userInfo = userMap.get(r.userId as string);
+        if (!userInfo) return true;
+        return userInfo.lastActiveAt < recentLoginThreshold;
+      })
+      .map((r: Record<string, any>) => ({
       userId: r.userId as string,
       displayName: userMap.get(r.userId as string)?.displayName ?? r.userId,
       username: userMap.get(r.userId as string)?.username ?? r.userId,
@@ -189,6 +198,7 @@ export class MongoPersistence {
     excludedUserIds: string[],
   ) {
     const threshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
+    const recentLoginThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const existingRoles = await this.prisma.agentUserRole.findMany({
       where: { conversationId },
       select: { userId: true },
@@ -201,7 +211,10 @@ export class MongoPersistence {
         isActive: true,
         lastActiveAt: { lt: threshold },
         userId: { not: null, notIn: [...excludedUserIds, ...existingRoleUserIds] },
-        user: { role: { notIn: excludedRoles as UserRole[] } },
+        user: {
+          role: { notIn: excludedRoles as UserRole[] },
+          lastActiveAt: { lt: recentLoginThreshold },
+        },
       },
       select: {
         user: {
@@ -211,6 +224,7 @@ export class MongoPersistence {
             username: true,
             systemLanguage: true,
             agentGlobalProfile: true,
+            lastActiveAt: true,
           },
         },
       },
@@ -228,11 +242,15 @@ export class MongoPersistence {
     excludedUserIds: string[],
     existingControlledUserIds: string[],
   ) {
+    const recentLoginThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const participants = await this.prisma.participant.findMany({
       where: {
         conversationId,
         isActive: true,
         userId: { not: null, notIn: [...excludedUserIds, ...existingControlledUserIds] },
+        user: {
+          lastActiveAt: { lt: recentLoginThreshold },
+        },
       },
       select: {
         user: {
@@ -242,6 +260,7 @@ export class MongoPersistence {
             username: true,
             systemLanguage: true,
             agentGlobalProfile: true,
+            lastActiveAt: true,
           },
         },
       },

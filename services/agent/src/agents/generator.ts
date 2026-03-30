@@ -36,9 +36,9 @@ function buildGeneratorPrompt(
     ? `\nMENTIONS: Inclus naturellement ces @mentions: ${mentionUsernames.map((u) => `@${u}`).join(', ')}`
     : '';
   const instructionsText = agentInstructions ? `\nINSTRUCTIONS: ${agentInstructions}` : '';
-  const useCatchphrases = profile.catchphrases.length > 0 && Math.random() < 0.7;
+  const useCatchphrases = profile.catchphrases.length > 0 && Math.random() < 0.35;
   const catchphrasesText = useCatchphrases
-    ? `\n- EXPRESSIONS TYPIQUES: "${profile.catchphrases.join('", "')}"` : '';
+    ? `\n- EXPRESSIONS TYPIQUES (utiliser rarement, pas a chaque message): "${profile.catchphrases.join('", "')}"` : '';
   const emojisText = profile.commonEmojis.length > 0
     ? `\n- EMOJIS: ${profile.commonEmojis.join(' ')}` : '';
 
@@ -97,6 +97,7 @@ SUJET: ${topic}${mentionsText}
 - PAS de formules creuses ("Voici quelques pistes a considerer", "Il est indeniable que...", "Il existe plusieurs solutions")
 - PAS de clusters d'emojis (MAXIMUM 1 emoji par message, en fin de phrase si necessaire)
 - PAS de reformulation/paraphrase de ce qui vient d'etre dit
+- NE TERMINE PAS par une question ("Qu'en pensez-vous ?", "Et vous ?", "Non ?") sauf RAREMENT si le personnage est naturellement curieux ou nouveau dans la conversation. La plupart des gens affirment, ils ne demandent pas l'avis des autres a chaque message
 
 === VARIER LES EMOTIONS ===
 Ne sois PAS toujours d'accord ou positif. Sois humain:
