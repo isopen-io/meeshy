@@ -114,7 +114,7 @@ extension ProfileSheetUser {
         )
     }
 
-    public static func from(user: MeeshyUser) -> ProfileSheetUser {
+    public static func from(user: MeeshyUser, accentColor: String = "") -> ProfileSheetUser {
         let lastActive: Date? = {
             guard let str = user.lastActiveAt else { return nil }
             let fmt = ISO8601DateFormatter()
@@ -145,7 +145,7 @@ extension ProfileSheetUser {
             username: user.username,
             displayName: resolvedDisplayName,
             avatarURL: user.avatar,
-            accentColor: "",
+            accentColor: accentColor,
             bio: user.bio,
             systemLanguage: user.systemLanguage,
             regionalLanguage: user.regionalLanguage,
