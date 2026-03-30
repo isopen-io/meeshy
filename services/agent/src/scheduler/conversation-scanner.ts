@@ -102,7 +102,7 @@ export class ConversationScanner {
   }
 
   async scanConversation(conversationId: string): Promise<void> {
-    const config = await this.persistence.getAgentConfig(conversationId);
+    const config = await this.configCache.getConfig(conversationId);
     if (config?.enabled === false) return;
     const conversation = await this.persistence.getConversationWithType(conversationId);
     const conv: EligibleConversation = {
@@ -143,7 +143,8 @@ export class ConversationScanner {
       prioritizeRepliedUsers: config?.prioritizeRepliedUsers ?? true,
       reactionBoostFactor: config?.reactionBoostFactor ?? 1.5,
     };
-    await this.processConversation(conv);
+    await this.processConversation(conv, 'manual');
+    await this.redis.set(`agent:last-scan:${conversationId}`, String(Date.now()), 'EX', 86400);
   }
 
   private async scanAll(): Promise<void> {
@@ -210,9 +211,9 @@ export class ConversationScanner {
     }
   }
 
-  private async processConversation(conv: EligibleConversation): Promise<boolean> {
+  private async processConversation(conv: EligibleConversation, trigger: 'auto' | 'manual' = 'auto'): Promise<boolean> {
     const { conversationId } = conv;
-    const tracer = new ScanTracer(conversationId, 'auto');
+    const tracer = new ScanTracer(conversationId, trigger);
     this.tracerRef.current = tracer;
 
     const activity = await detectActivity(this.persistence, conversationId);
