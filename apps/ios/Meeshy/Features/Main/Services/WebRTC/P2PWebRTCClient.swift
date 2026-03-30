@@ -19,12 +19,20 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
     private var usingFrontCamera = true
     private(set) var videoFilterPipeline = VideoFilterPipeline()
     private var transcriptionDataChannel: RTCDataChannel?
+    private let audioProcessingModule: MeeshyAudioProcessingModule
+    private let _audioEffectsService: CallAudioEffectsService
+
+    var audioEffectsService: CallAudioEffectsServiceProviding? { _audioEffectsService }
 
     var isConnected: Bool {
         peerConnection?.connectionState == .connected
     }
 
     override init() {
+        let effectsService = CallAudioEffectsService()
+        self._audioEffectsService = effectsService
+        self.audioProcessingModule = MeeshyAudioProcessingModule(effectsService: effectsService)
+
         super.init()
         RTCInitializeSSL()
         let encoderFactory = RTCDefaultVideoEncoderFactory()
@@ -33,6 +41,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
             encoderFactory: encoderFactory,
             decoderFactory: decoderFactory
         )
+        factory.audioDeviceModule.capturePostProcessingDelegate = audioProcessingModule
     }
 
     // MARK: - Configuration
@@ -270,9 +279,21 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
         channel.sendData(buffer)
     }
 
+    // MARK: - Audio Effects
+
+    func setAudioEffect(_ effect: AudioEffectConfig?) throws {
+        try _audioEffectsService.setEffect(effect)
+        Logger.webrtc.info("Audio effect set: \(effect?.effectType.rawValue ?? "none")")
+    }
+
+    func updateAudioEffectParams(_ config: AudioEffectConfig) throws {
+        try _audioEffectsService.updateParams(config)
+    }
+
     // MARK: - Disconnect
 
     func disconnect() {
+        _audioEffectsService.reset()
         transcriptionDataChannel?.close()
         transcriptionDataChannel = nil
         videoCapturer?.stopCapture()
@@ -614,6 +635,10 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}
     func disconnect() {}
+
+    var audioEffectsService: CallAudioEffectsServiceProviding? { nil }
+    func setAudioEffect(_ effect: AudioEffectConfig?) throws { throw WebRTCError.notSupported }
+    func updateAudioEffectParams(_ config: AudioEffectConfig) throws { throw WebRTCError.notSupported }
 }
 
 #endif
