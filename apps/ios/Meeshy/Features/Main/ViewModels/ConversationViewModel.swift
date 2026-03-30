@@ -27,6 +27,7 @@ class ConversationViewModel: ObservableObject {
     @Published var messages: [Message] = [] {
         didSet {
             _messageIdIndex = nil
+            _messagesByDate = nil
             _topActiveMembers = nil
             _mediaSenderInfoMap = nil
             _allVisualAttachments = nil
@@ -167,17 +168,22 @@ class ConversationViewModel: ObservableObject {
         let messages: [Message]
     }
 
+    private var _messagesByDate: [DateGroup]?
+
     var messagesByDate: [DateGroup] {
+        if let cached = _messagesByDate { return cached }
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: messages) { msg -> DateComponents in
             calendar.dateComponents([.year, .month, .day], from: msg.createdAt)
         }
-        return grouped.map { (comps, msgs) in
+        let result = grouped.map { (comps, msgs) in
             let dateKey = "\(comps.year ?? 0)-\(comps.month ?? 0)-\(comps.day ?? 0)"
             let representativeDate = msgs.first?.createdAt ?? Date()
             return DateGroup(id: dateKey, date: representativeDate, messages: msgs)
         }
         .sorted { $0.date < $1.date }
+        _messagesByDate = result
+        return result
     }
 
     // MARK: - Conversation-Wide Media

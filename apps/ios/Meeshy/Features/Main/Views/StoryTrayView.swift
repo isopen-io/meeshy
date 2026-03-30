@@ -230,7 +230,9 @@ private struct MyStoryButton: View {
     @Binding var showOwnStoryViewer: Bool
     var onAddStatus: (() -> Void)?
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Lecture directe sans @ObservedObject — leaf view rendue dans le tray,
+    // évite que chaque changement de thème force un re-render du bouton.
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     var body: some View {

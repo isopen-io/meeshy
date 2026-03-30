@@ -24,13 +24,16 @@ struct FeedPostCard: View {
     var onPin: ((String) -> Void)? = nil
 
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
+    // évite que chaque changement de thème force un re-render de toutes les cards.
+    private var theme: ThemeManager { ThemeManager.shared }
     @State private var showCommentsSheet = false
     @State private var showTranslationSheet = false
     @State private var showRepostOptions = false
     @State private var selectedProfileUser: ProfileSheetUser?
 
     private var accentColor: String { post.authorColor }
+    private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -419,9 +422,6 @@ struct FeedPostCard: View {
                     .padding(.horizontal, 16)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    // Top 3 comments sorted by likes
-                    let topComments = post.comments.sorted { $0.likes > $1.likes }.prefix(3)
-
                     ForEach(Array(topComments.enumerated()), id: \.element.id) { index, comment in
                         topCommentRow(comment: comment, isLast: index == topComments.count - 1)
                     }

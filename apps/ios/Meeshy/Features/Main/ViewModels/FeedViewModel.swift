@@ -177,9 +177,11 @@ class FeedViewModel: ObservableObject {
     func likePost(_ postId: String) async {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
 
-        // Optimistic update
-        posts[index].isLiked.toggle()
-        posts[index].likes += posts[index].isLiked ? 1 : -1
+        // Optimistic update — batch mutations to trigger a single objectWillChange
+        var post = posts[index]
+        post.isLiked.toggle()
+        post.likes += post.isLiked ? 1 : -1
+        posts[index] = post
 
         do {
             if posts[index].isLiked {
@@ -192,9 +194,11 @@ class FeedViewModel: ObservableObject {
             }
             debouncedCacheSave()
         } catch {
-            // Revert on failure
-            posts[index].isLiked.toggle()
-            posts[index].likes += posts[index].isLiked ? 1 : -1
+            // Revert on failure — batch mutations
+            var revert = posts[index]
+            revert.isLiked.toggle()
+            revert.likes += revert.isLiked ? 1 : -1
+            posts[index] = revert
         }
     }
 
@@ -445,16 +449,18 @@ class FeedViewModel: ObservableObject {
                     translationModel: data.translation.translationModel,
                     confidenceScore: data.translation.confidenceScore
                 )
-                var translations = self.posts[index].translations ?? [:]
+                // Batch mutations into a single array assignment
+                var post = self.posts[index]
+                var translations = post.translations ?? [:]
                 translations[data.language] = translation
-                self.posts[index].translations = translations
+                post.translations = translations
                 let langs = self.preferredLanguages
                 if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
-                    // Only update if no translation was already set from a higher-priority language
-                    if self.posts[index].translatedContent == nil {
-                        self.posts[index].translatedContent = data.translation.text
+                    if post.translatedContent == nil {
+                        post.translatedContent = data.translation.text
                     }
                 }
+                self.posts[index] = post
             }
             .store(in: &cancellables)
 

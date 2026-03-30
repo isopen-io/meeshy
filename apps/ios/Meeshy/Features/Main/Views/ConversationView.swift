@@ -124,8 +124,9 @@ struct ConversationView: View {
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var theme = ThemeManager.shared
-    @ObservedObject var presenceManager = PresenceManager.shared
-    @ObservedObject var socketManager = MessageSocketManager.shared
+    // Lecture directe sans @ObservedObject — évite que chaque event presence force
+    // un re-render complet de la conversation. La présence est rafraîchie via les refreshs naturels.
+    var presenceManager: PresenceManager { PresenceManager.shared }
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var router: Router
@@ -580,7 +581,6 @@ struct ConversationView: View {
             VStack {
                 Color.clear.frame(height: composerState.showOptions ? 72 : 56)
                 ConnectionBanner()
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: socketManager.isConnected)
                 Spacer()
             }
             .zIndex(98)
