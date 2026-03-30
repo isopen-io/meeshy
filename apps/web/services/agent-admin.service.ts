@@ -347,6 +347,16 @@ export type TriggerResult = {
   triggeredAt: number;
 };
 
+export type AgentMessageEntry = {
+  id: string;
+  content: string;
+  createdAt: string;
+  senderId: string;
+  originalLanguage: string | null;
+  replyToId: string | null;
+  sender: { id: string; username: string; displayName: string | null; avatar: string | null } | null;
+};
+
 export type ScanLogSummary = {
   id: string;
   conversationId: string;
@@ -519,6 +529,11 @@ export const agentAdminService = {
   async triggerScan(conversationId: string): Promise<ApiResponse<TriggerResult>> {
     const response = await apiService.post(`/admin/agent/configs/${conversationId}/trigger`, {});
     return unwrapResponse<TriggerResult>(response);
+  },
+
+  async getAgentMessages(conversationId: string, page = 1, limit = 20): Promise<ApiResponse<AgentMessageEntry[]>> {
+    const response = await apiService.get(`/admin/agent/configs/${conversationId}/messages`, { page, limit });
+    return unwrapResponse<AgentMessageEntry[]>(response);
   },
 
   async getScanLogs(filters: ScanLogsFilters = {}): Promise<ApiResponse<ScanLogSummary[]>> {

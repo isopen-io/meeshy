@@ -1262,6 +1262,68 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // GET /configs/:conversationId/messages
+  fastify.get('/configs/:conversationId/messages', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'List messages sent by the agent in a conversation.',
+      tags: ['admin-agent'],
+      summary: 'List agent messages',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', default: 1 },
+          limit: { type: 'integer', default: 20 },
+        },
+      },
+      response: { 200: paginatedArrayResponse, ...stdErrorsWithNotFound },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
+
+      const { page = 1, limit = 20 } = request.query as { page?: number; limit?: number };
+      const limitNum = Math.min(Math.max(1, Number(limit)), 50);
+      const skip = (Math.max(1, Number(page)) - 1) * limitNum;
+
+      const config = await fastify.prisma.agentConfig.findUnique({ where: { conversationId } });
+      if (!config) return sendNotFound(reply, 'Config non trouvée');
+
+      const where = { conversationId, messageSource: 'agent' as const };
+
+      const [messages, total] = await Promise.all([
+        fastify.prisma.message.findMany({
+          where,
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            senderId: true,
+            originalLanguage: true,
+            replyToId: true,
+            sender: { select: { id: true, username: true, displayName: true, avatar: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limitNum,
+        }),
+        fastify.prisma.message.count({ where }),
+      ]);
+
+      return reply.send({
+        success: true,
+        data: messages,
+        pagination: { total, page: Math.max(1, Number(page)), limit: limitNum, hasMore: skip + limitNum < total },
+      });
+    } catch (error) {
+      logError(fastify.log, 'Error fetching agent messages:', error);
+      return sendInternalError(reply, 'Erreur serveur');
+    }
+  });
+
   // GET /scan-logs
   fastify.get('/scan-logs', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
