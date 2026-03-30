@@ -67,32 +67,21 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     public func hydrate(friendService: FriendServiceProviding = FriendService.shared) async {
         logger.info("Hydrating friendship cache...")
 
-        var allSent: [FriendRequest] = []
-        var allReceived: [FriendRequest] = []
-
         do {
-            var offset = 0
-            let pageSize = 100
-            while true {
-                let page = try await friendService.sentRequests(offset: offset, limit: pageSize)
-                allSent.append(contentsOf: page.data)
-                guard page.pagination?.hasMore == true else { break }
-                offset += pageSize
+            // Fetch sent and received requests in parallel
+            async let sentTask = Self.fetchAllPages { offset, limit in
+                try await friendService.sentRequests(offset: offset, limit: limit)
+            }
+            async let receivedTask = Self.fetchAllPages { offset, limit in
+                try await friendService.receivedRequests(offset: offset, limit: limit)
             }
 
-            offset = 0
-            while true {
-                let page = try await friendService.receivedRequests(offset: offset, limit: pageSize)
-                allReceived.append(contentsOf: page.data)
-                guard page.pagination?.hasMore == true else { break }
-                offset += pageSize
-            }
+            let (allSent, allReceived) = try await (sentTask, receivedTask)
+            applyHydration(sent: allSent, received: allReceived)
         } catch {
             logger.error("Failed to hydrate friendship cache: \(error.localizedDescription)")
             return
         }
-
-        applyHydration(sent: allSent, received: allReceived)
 
         await MainActor.run { objectWillChange.send() }
 
@@ -130,6 +119,23 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
 
         _isHydrated = true
         lock.unlock()
+    }
+
+    // MARK: - Pagination Helper
+
+    private static func fetchAllPages(
+        fetch: @Sendable (Int, Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]>
+    ) async throws -> [FriendRequest] {
+        var all: [FriendRequest] = []
+        var offset = 0
+        let pageSize = 100
+        while true {
+            let page = try await fetch(offset, pageSize)
+            all.append(contentsOf: page.data)
+            guard page.pagination?.hasMore == true else { break }
+            offset += pageSize
+        }
+        return all
     }
 
     // MARK: - Mutations (optimistic updates)
