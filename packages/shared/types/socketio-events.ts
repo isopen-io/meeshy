@@ -213,6 +213,8 @@ export const CLIENT_EVENTS = {
   CALL_QUALITY_REPORT: 'call:quality-report',
   CALL_RECONNECTING: 'call:reconnecting',
   CALL_RECONNECTED: 'call:reconnected',
+  CALL_BACKGROUNDED: 'call:backgrounded',
+  CALL_FOREGROUNDED: 'call:foregrounded',
   CALL_TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
   CALL_TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
   CALL_TRANSCRIPTION_ROLE: 'call:transcription-role',
@@ -885,6 +887,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_QUALITY_REPORT]: (data: CallQualityReportEvent) => void;
   [CLIENT_EVENTS.CALL_RECONNECTING]: (data: CallReconnectingEvent) => void;
   [CLIENT_EVENTS.CALL_RECONNECTED]: (data: CallReconnectedEvent) => void;
+  [CLIENT_EVENTS.CALL_BACKGROUNDED]: (data: { callId: string; participantId: string }) => void;
+  [CLIENT_EVENTS.CALL_FOREGROUNDED]: (data: { callId: string; participantId: string }) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT]: (data: CallTranscriptionSegmentEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_CAPABILITY]: (data: CallTranscriptionCapabilityEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_ROLE]: (data: CallTranscriptionRoleEvent) => void;

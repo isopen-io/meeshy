@@ -247,6 +247,10 @@ services:
       - FIREBASE_ADMIN_CREDENTIALS_PATH=/app/secrets/firebase-admin-sdk.json
       - ATTACHMENT_MASTER_KEY=${ATTACHMENT_MASTER_KEY}
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY:-}
+      # TURN server credentials (WebRTC calls)
+      - TURN_SECRET=${TURN_SECRET}
+      - TURN_SERVERS=${TURN_SERVERS:-turn.meeshy.me:3478}
+      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-3600}
     volumes:
       - gateway_staging_uploads:/app/uploads
       - ./secrets/firebase-admin-sdk.json:/app/secrets/firebase-admin-sdk.json:ro
@@ -390,6 +394,24 @@ services:
       - "traefik.http.routers.agent-staging.entrypoints=websecure"
       - "traefik.http.routers.agent-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.agent-staging.loadbalancer.server.port=3200"
+
+  # ===========================================================================
+  # COTURN - TURN/STUN Server for WebRTC
+  # ===========================================================================
+  coturn:
+    image: coturn/coturn:4.6
+    container_name: meeshy-staging-coturn
+    network_mode: host
+    volumes:
+      - ../config/turnserver.prod.conf:/etc/turnserver.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "turnutils_stunclient", "-p", "3478", "localhost"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 # =============================================================================
 # VOLUMES - Tous préfixés "staging" pour isolation

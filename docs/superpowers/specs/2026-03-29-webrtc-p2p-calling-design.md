@@ -664,8 +664,8 @@ function generateTURNCredentials(userId: string) {
 ### 6.1 Provider Configuration
 
 ```swift
-config.maximumCallsPerCallGroup = 1
-config.maximumCallGroups = 1
+config.maximumCallsPerCallGroup = 1  // One active call per group
+config.maximumCallGroups = 2         // Allow second ringing call for call waiting (§11.15)
 config.supportsVideo = true
 config.supportedHandleTypes = [.generic]
 config.ringtoneSound = "meeshy_ringtone.caf"
@@ -2379,3 +2379,229 @@ All new events introduced by this review (in addition to existing spec events):
 | packages/shared/types/video-call.ts | Add CallQualityFeedbackEvent, CallAnalytics types |
 | packages/shared/prisma/schema.prisma | Add feedback JSON field to CallSession |
 | services/gateway/src/socketio/CallEventsHandler.ts | Add translation consent handlers, audio chunk relay, crash recovery endpoint |
+
+---
+
+## 27. Review Phase 2 — Edge Cases & Competitive Gaps (2026-03-30)
+
+> This section documents all gaps, edge cases, and improvements identified during the comprehensive Phase 2 review. Each item is classified by severity and maps to a specific remediation.
+
+### 27.1 CRITICAL Gaps
+
+#### C1. TURN Server Not Wired on Web (§13.5)
+**Code**: `CallEventsHandler.ts:55-67` has `TODO: Add TURN servers for production` — only hardcoded Google STUN. `TURNCredentialService` generates creds but the ICE_SERVERS_CONFIG fallback at line 55 overrides them.
+**Impact**: ~10-15% call failure rate behind symmetric NAT / corporate firewalls.
+**Fix**: Remove hardcoded `ICE_SERVERS_CONFIG` constant. Build `iceServers` dynamically in `handleJoin()` by merging STUN defaults + TURN credentials from `TURNCredentialService`.
+
+#### C2. SFSpeech 1-Minute Rotation (§16.2.1)
+Already documented in spec. Implementation is sprint priority.
+**Additional gap**: When on-device model is NOT downloaded for the user's locale, `SFSpeechRecognizer(locale:)` returns `nil`. Must fall back to server-assisted Whisper immediately, not just on low confidence.
+
+#### C3. No Incoming Call Push for Background App (Phase 1.5)
+Phase 1 only handles foreground calls (Socket.IO connected). Phase 2 adds VoIP Push.
+**Interim Phase 1.5**: Send a regular APNs push with sound + action buttons on `call:initiate`:
+```json
+{
+  "aps": {
+    "alert": { "title": "Appel entrant", "body": "{callerName} vous appelle" },
+    "sound": "meeshy_ringtone.caf",
+    "category": "INCOMING_CALL"
+  },
+  "data": { "type": "incoming-call", "callId": "...", "conversationId": "...", "isVideo": true }
+}
+```
+Register `UNNotificationCategory("INCOMING_CALL")` with actions: [Accept, Decline].
+Accept → open app → auto-join call if still ringing.
+
+#### C4. Translator Model Cold Start (§16.4)
+NLLB model first load takes 5-10s. During active calls, the translator must keep models warm.
+**Fix — New `call:translation-warmup` flow**:
+1. When translation consent is accepted, Gateway sends ZMQ `{ type: "warmup", models: ["nllb"] }` to Translator
+2. Translator loads NLLB into GPU/CPU memory and keeps it loaded for 5 minutes after last translation
+3. If Translator service is unreachable, Gateway responds to `call:translation-request` with `{ accepted: false, reason: "service_unavailable" }` and client shows "Traduction indisponible"
+
+### 27.2 HIGH Gaps
+
+#### H1. iOS Background Heartbeat Limitations (§11.4)
+iOS kills background tasks after ~30s. `BGTaskScheduler` cannot maintain 15s heartbeat interval. The 60s server timeout will fire for ANY backgrounded call.
+**Fix**: New `call:backgrounded` / `call:foregrounded` events:
+```typescript
+// Client → Server
+'call:backgrounded': { callId: string; participantId: string }
+'call:foregrounded': { callId: string; participantId: string }
+```
+Server extends heartbeat timeout to **5 minutes** for backgrounded participants. Resumes 60s timeout on `call:foregrounded`.
+
+#### H2. CallKit maximumCallsPerCallGroup Contradiction
+§6.1 specifies `maximumCallsPerCallGroup = 1` but §11.15 (call waiting) requires handling a second incoming call.
+**Fix**: §6.1 updated to:
+```swift
+config.maximumCallsPerCallGroup = 1  // One active call at a time
+config.maximumCallGroups = 2         // Allow second ringing call (call waiting)
+```
+Note: `CallManager.swift:80` already has `maximumCallGroups = 2`. This is correct.
+
+#### H3. Missing Ringtone Specification
+- `meeshy_ringtone.caf` referenced in §6.1 does NOT exist in assets
+- No vibration pattern defined
+- No web ringtone behavior specified
+**Add**:
+- iOS: Custom `.caf` file (max 30s, per Apple spec). Loop until answered/timeout.
+- iOS vibration: System default (CallKit manages this)
+- Web: `<audio>` element with `.mp3` fallback. `Audio.play()` on `call:initiated`. Loop with `audio.loop = true`. Stop on answer/timeout/reject.
+- Volume follows system ringer volume on iOS (CallKit default). Web uses system audio volume.
+
+#### H4. Audio-Only Call Differences Not Enumerated
+Audio-only calls differ from video calls in several ways not documented:
+- No camera permission request
+- No video track added to `RTCPeerConnection`
+- No PiP (State B = pill only, no system PiP)
+- Different UI layout: larger avatar circle + audio waveform visualizer
+- Lower bandwidth: no video bitrate management needed
+- Quality thresholds: "Critical" level (audio-only auto-switch) is N/A — already audio-only
+- Battery: ~5% per hour (vs ~15-20% for video)
+
+#### H5. Opus DTX Should Be Enabled
+§4.4 sets `usedtx: 0` (disabled). DTX (Discontinuous Transmission) saves ~50% bandwidth during silence by sending comfort noise packets instead of full frames.
+**Recommendation**: Enable `usedtx: 1`. WhatsApp uses DTX. Opus comfort noise is high quality. Only concern is minor quality dip during silence transitions, which is imperceptible in practice.
+
+#### H6. Multi-Device Ring Timeout Sync (§17.1)
+If iOS gets `call:initiated` 2s before web (network latency), web has 2s less ring time.
+**Fix**: Include `ringDeadline` ISO timestamp in `call:initiated` event:
+```typescript
+interface CallInitiatedEvent {
+  // ... existing fields ...
+  ringDeadline: string  // ISO8601 — server time when ringing expires
+}
+```
+Clients compute local timeout from `ringDeadline` instead of starting independent 30s timers.
+
+#### H7. DataChannel for P2P Transcription Relay 📐
+Transcription segments relayed via Socket.IO add ~100ms latency (client → server → client).
+WebRTC DataChannel provides P2P relay with ~0ms additional latency.
+**New architecture**:
+```
+Local mic → Speech Framework → TranscriptionSegment
+  → DataChannel (P2P, label: "transcription", ordered: true)
+  → Remote client displays
+
+Fallback: If DataChannel not established → Socket.IO relay (existing)
+```
+**DataChannel message format**:
+```typescript
+interface DataChannelTranscriptionMessage {
+  type: 'transcription-segment'
+  segment: {
+    text: string
+    speakerId: string
+    startTime: number
+    isFinal: boolean
+    language: string
+    translatedText?: string
+    translatedLanguage?: string
+  }
+}
+```
+Translation still goes through server (NLLB) — only raw transcription is P2P.
+
+#### H8. Socket.IO Listener Leak on Reconnect (§24.3)
+`CallEventsHandler.registerCallEvents()` registers listeners on each socket. If Socket.IO reconnects with the same socket ID, listeners may duplicate.
+**Fix**: In `registerCallEvents()`, guard against double-registration:
+```typescript
+if ((socket as any).__callEventsRegistered) return;
+(socket as any).__callEventsRegistered = true;
+```
+Or use Socket.IO's built-in `socket.removeAllListeners('call:*')` before re-registering.
+
+### 27.3 MEDIUM Gaps
+
+#### M1. Live Activity (Dynamic Island) for Active Calls
+FaceTime/WhatsApp show call status in Dynamic Island (iPhone 14 Pro+, iOS 16.1+).
+**Phase 2**: Use `ActivityKit` to start a `CallActivity` on connect:
+- Compact: caller avatar + duration timer
+- Expanded: caller name + duration + mute/end buttons
+- Lock screen: caller name + duration
+
+#### M2. Tab Backgrounding on Web (Page Visibility API)
+When browser tab is backgrounded, `setInterval` is throttled to 1/sec. Quality monitor (3s) is affected.
+**Fix**: Use `document.addEventListener('visibilitychange', ...)`. When hidden:
+- Reduce quality monitor to 30s (browsers allow 1/sec minimum)
+- Continue heartbeat (15s > 1s threshold, so not throttled)
+- Pause call duration UI timer (use `Date.now() - startTime` on resume for accuracy)
+
+#### M3. Browser Tab Close Without Hangup
+Socket.IO disconnect → 5s grace → server ends call. But 5s is noticeable.
+**Fix**: Add `window.addEventListener('beforeunload', ...)` with `navigator.sendBeacon()` to emit `call:end` synchronously. New REST endpoint `POST /api/v1/calls/:id/end` for beacon (Socket.IO not available in `beforeunload`).
+
+#### M4. Metered Connection Warning
+No warning when starting video call on cellular.
+**Fix**:
+- iOS: Check `NWPathMonitor().currentPath.isExpensive`. Show alert: "Cet appel video utilisera vos donnees mobiles. Continuer ?"
+- Web: Check `navigator.connection?.type === 'cellular'`. Show toast.
+
+#### M5. Transcription RTL Language Support
+Arabic, Hebrew transcription segments must render right-to-left.
+**Fix**: Set `textAlignment` based on `segment.language`:
+```swift
+let isRTL = ["ar", "he", "fa", "ur"].contains(segment.language ?? "")
+text.environment(\.layoutDirection, isRTL ? .rightToLeft : .leftToRight)
+```
+
+#### M6. IPv6-Only Networks
+Some carriers (T-Mobile US) use IPv6-only + NAT64. WebRTC handles IPv6 candidates, but coturn must listen on IPv6.
+**Fix**: Add `listening-ip=::` to `turnserver.conf`. Already has `listening-ip=0.0.0.0` for IPv4.
+
+#### M7. Post-Call Summary Translation
+§9.3 says "Prisme Linguistique applies to call-summary messages" but doesn't specify HOW.
+**Clarification**: Call-summary is a regular message with `type: 'call-summary'`. The translator auto-translates its `metadata.transcription.text` field like any message. The transcript segments are already language-tagged — Prisme displays the matching translation or original.
+
+#### M8. Quality Feedback Rate Limiting
+`call:quality-feedback` has no rate limit defined.
+**Fix**: Add to SOCKET_RATE_LIMITS: `CALL_QUALITY_FEEDBACK: { max: 1, windowMs: 60000 }` (1 per minute per socket — effectively 1 per call).
+
+#### M9. Call Analytics Data Retention (GDPR)
+§24.1 `CallAnalytics` includes `deviceModel` (fingerprinting concern).
+**Policy**: Aggregate analytics after 30 days (remove `deviceModel`, keep platform). Delete raw data after 90 days. Document in privacy policy.
+
+#### M10. Opus FEC + RED Overlap
+§4.4 enables Opus FEC (`useinbandfec: 1`) AND RED audio redundancy on web.
+Both protect against packet loss but with overlapping coverage (~20% bandwidth overhead each).
+**Recommendation**: Use Opus FEC only (always). Enable RED only when packet loss > 5% (dynamic, based on quality monitor). Disable RED when packet loss < 2%. This saves ~20% audio bandwidth in good conditions.
+
+### 27.4 LOW Gaps (Phase 2+)
+
+| # | Gap | Recommendation |
+|---|-----|---------------|
+| L1 | No Call Recording | Phase 2: `MediaRecorder` (web), `AVAssetWriter` (iOS) |
+| L2 | No Screen Sharing | Phase 2: `getDisplayMedia()` (web), `RPScreenRecorder` (iOS) |
+| L3 | No CarPlay Support | Phase 2+: Requires `CPTemplateApplicationSceneDelegate` |
+| L4 | No Siri Integration | Phase 2: `INStartCallIntent` for "Hey Siri, call X on Meeshy" |
+| L5 | ProMotion 120Hz | Use `CADisplayLink` for smooth animations on Pro devices |
+| L6 | No "Call Again" on Missed | Add action button on missed call push notification |
+| L7 | No Focus Mode filter | Phase 2: Register `INFocusStatusCenter` |
+| L8 | Satellite >500ms RTT | Auto audio-only, higher jitter buffer, lower heartbeat frequency |
+| L9 | No call link sharing | Deep link `meeshy://call?id=X` for "Join my call" sharing |
+| L10 | No typing indicator during translation | Show "Traduction..." while NLLB processes |
+
+---
+
+## 28. Video Filter Pipeline Updates (Review Phase 2)
+
+### 28.1 Vision Framework Import
+`VideoFilterPipeline.swift` must `import Vision` for background blur (`VNGeneratePersonSegmentationRequest`) and skin smoothing (`VNDetectFaceRectanglesRequest`).
+
+### 28.2 DarkFrameDetector Enhancement
+Expose `lastAverageBrightness` as public property for low-light boost feature:
+```swift
+final class DarkFrameDetector {
+    private(set) var lastAverageBrightness: Float?  // NEW — normalized 0-255
+    // ... existing code ...
+}
+```
+
+### 28.3 Auto-Degradation Budget
+When total filter pipeline exceeds 25ms per frame for 10 consecutive frames:
+1. Disable skin smoothing first (saves ~3ms)
+2. If still >25ms, disable background blur (saves ~8ms)
+3. Show toast: "Filtres reduits pour maintenir la fluidite"
+4. Re-enable after 30s of stable performance (<15ms for 30 consecutive frames)

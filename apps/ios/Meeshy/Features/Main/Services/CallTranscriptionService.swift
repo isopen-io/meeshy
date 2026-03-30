@@ -255,14 +255,17 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         guard let recognizer = SFSpeechRecognizer(locale: locale) else {
             throw TranscriptionError.recognizerUnavailable(language: languageCode)
         }
-        guard recognizer.supportsOnDeviceRecognition else {
-            throw TranscriptionError.onDeviceNotSupported(language: languageCode)
-        }
 
         let request = SFSpeechAudioBufferRecognitionRequest()
-        request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = true
         request.addsPunctuation = true
+
+        if recognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        } else {
+            callsLogger.info("On-device model unavailable for \(languageCode), using server-assisted recognition")
+            request.requiresOnDeviceRecognition = false
+        }
 
         let stream = StreamRecognizer(recognizer: recognizer, speakerId: speakerId, language: languageCode)
         stream.request = request

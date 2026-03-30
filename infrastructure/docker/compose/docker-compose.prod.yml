@@ -295,6 +295,10 @@ services:
       - BRAND_LOGO_URL=${BRAND_LOGO_URL:-}
       # Firebase
       - FIREBASE_ADMIN_CREDENTIALS_PATH=/app/secrets/firebase-admin-sdk.json
+      # TURN server credentials (WebRTC calls)
+      - TURN_SECRET=${TURN_SECRET}
+      - TURN_SERVERS=${TURN_SERVERS:-turn.meeshy.me:3478}
+      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-3600}
     volumes:
       - gateway_uploads:/app/uploads
       - ./secrets/firebase-admin-sdk.json:/app/secrets/firebase-admin-sdk.json:ro
@@ -433,7 +437,7 @@ services:
     container_name: meeshy-coturn
     network_mode: host
     volumes:
-      - ./infrastructure/config/turnserver.conf:/etc/turnserver.conf:ro
+      - ../config/turnserver.prod.conf:/etc/turnserver.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     restart: unless-stopped
     healthcheck:

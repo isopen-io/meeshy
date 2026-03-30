@@ -139,6 +139,13 @@ export class CallService {
   }
 
   /**
+   * Generate ICE servers with per-user TURN credentials
+   */
+  generateIceServers(userId: string): any[] {
+    return this.turnCredentialService.generateCredentials(userId);
+  }
+
+  /**
    * Record a heartbeat from a participant
    */
   recordHeartbeat(callId: string, participantId: string): void {

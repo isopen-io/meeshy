@@ -235,6 +235,10 @@ services:
       ATABETH_FIRST_NAME: ${ATABETH_FIRST_NAME:-Atabeth}
       ATABETH_LAST_NAME: ${ATABETH_LAST_NAME:-Meeshy}
       ATABETH_ROLE: ${ATABETH_ROLE:-user}
+      # TURN server credentials (WebRTC calls)
+      TURN_SECRET: ${TURN_SECRET:-meeshy-turn-secret-CHANGE-IN-PRODUCTION}
+      TURN_SERVERS: ${TURN_SERVERS:-}
+      TURN_CREDENTIAL_TTL: ${TURN_CREDENTIAL_TTL:-3600}
       # Session configuration
       SESSION_EXPIRY_MOBILE_DAYS: ${SESSION_EXPIRY_MOBILE_DAYS:-365}
       SESSION_EXPIRY_DESKTOP_DAYS: ${SESSION_EXPIRY_DESKTOP_DAYS:-30}
@@ -333,6 +337,24 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # ===========================================================================
+  # COTURN - TURN/STUN Server for WebRTC (profile: full)
+  # ===========================================================================
+  coturn:
+    image: coturn/coturn:4.6
+    container_name: meeshy-dev-coturn
+    restart: unless-stopped
+    profiles: ["full"]
+    network_mode: host
+    volumes:
+      - ../config/turnserver.conf:/etc/turnserver.conf:ro
+    healthcheck:
+      test: ["CMD", "turnutils_stunclient", "-p", "3478", "localhost"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 networks:
   meeshy-dev-network:

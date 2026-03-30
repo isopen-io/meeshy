@@ -18,6 +18,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
     private var remoteAudioTrack_: RTCAudioTrack?
     private var usingFrontCamera = true
     private(set) var videoFilterPipeline = VideoFilterPipeline()
+    private var transcriptionDataChannel: RTCDataChannel?
 
     var isConnected: Bool {
         peerConnection?.connectionState == .connected
@@ -247,9 +248,33 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
         nil
     }
 
+    // MARK: - DataChannel
+
+    func createDataChannel(label: String) -> Bool {
+        guard let pc = peerConnection else { return false }
+        let config = RTCDataChannelConfiguration()
+        config.isOrdered = true
+        guard let channel = pc.dataChannel(forLabel: label, configuration: config) else {
+            Logger.webrtc.error("Failed to create DataChannel: \(label)")
+            return false
+        }
+        channel.delegate = self
+        transcriptionDataChannel = channel
+        Logger.webrtc.info("DataChannel created: \(label)")
+        return true
+    }
+
+    func sendDataChannelMessage(_ data: Data) {
+        guard let channel = transcriptionDataChannel, channel.readyState == .open else { return }
+        let buffer = RTCDataBuffer(data: data, isBinary: false)
+        channel.sendData(buffer)
+    }
+
     // MARK: - Disconnect
 
     func disconnect() {
+        transcriptionDataChannel?.close()
+        transcriptionDataChannel = nil
         videoCapturer?.stopCapture()
         localAudioTrack?.isEnabled = false
         localVideoTrack_?.isEnabled = false
@@ -306,7 +331,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
             "maxaveragebitrate=128000",
             "stereo=1",
             "useinbandfec=1",
-            "usedtx=0",
+            "usedtx=1",
             "maxplaybackrate=48000"
         ]
         let paramString = opusParams.joined(separator: ";")
@@ -545,6 +570,22 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
         Logger.webrtc.info("Data channel opened: \(dataChannel.label)")
+        if dataChannel.label == "transcription" {
+            dataChannel.delegate = self
+            transcriptionDataChannel = dataChannel
+        }
+    }
+}
+
+// MARK: - RTCDataChannelDelegate
+
+extension P2PWebRTCClient: RTCDataChannelDelegate {
+    func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        Logger.webrtc.info("DataChannel '\(dataChannel.label)' state: \(dataChannel.readyState.rawValue)")
+    }
+
+    func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
+        delegate?.webRTCClient(self, didReceiveDataChannelMessage: buffer.data)
     }
 }
 
@@ -570,6 +611,8 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func toggleVideo(_ enabled: Bool) {}
     func switchCamera() async throws {}
     func getStats() async -> CallStats? { nil }
+    func createDataChannel(label: String) -> Bool { false }
+    func sendDataChannelMessage(_ data: Data) {}
     func disconnect() {}
 }
 
