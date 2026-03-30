@@ -24,7 +24,7 @@ export class RedisStateManager {
   }
 
   async setMessages(conversationId: string, messages: MessageEntry[]): Promise<void> {
-    await this.redis.set(this.key(conversationId, 'messages'), JSON.stringify(messages), 'EX', 3600);
+    await this.redis.set(this.key(conversationId, 'messages'), JSON.stringify(messages), 'EX', 3600); // 1h
   }
 
   async getSummary(conversationId: string): Promise<string> {
@@ -32,7 +32,7 @@ export class RedisStateManager {
   }
 
   async setSummary(conversationId: string, summary: string): Promise<void> {
-    await this.redis.set(this.key(conversationId, 'summary'), summary, 'EX', 3600);
+    await this.redis.set(this.key(conversationId, 'summary'), summary, 'EX', 7200); // 2h — summaries change slower
   }
 
   async getToneProfiles(conversationId: string): Promise<Record<string, ToneProfile>> {
@@ -42,11 +42,12 @@ export class RedisStateManager {
   }
 
   async setToneProfiles(conversationId: string, profiles: Record<string, ToneProfile>): Promise<void> {
-    await this.redis.set(this.key(conversationId, 'profiles'), JSON.stringify(profiles), 'EX', 3600);
+    await this.redis.set(this.key(conversationId, 'profiles'), JSON.stringify(profiles), 'EX', 86400); // 24h — profiles change slowly
   }
 
   async setCooldown(conversationId: string, userId: string, seconds: number): Promise<void> {
-    await this.redis.set(`agent:cooldown:${conversationId}:${userId}`, '1', 'EX', seconds);
+    const ttl = Math.max(1, Math.floor(seconds));
+    await this.redis.set(`agent:cooldown:${conversationId}:${userId}`, '1', 'EX', ttl);
   }
 
   async isOnCooldown(conversationId: string, userId: string): Promise<boolean> {

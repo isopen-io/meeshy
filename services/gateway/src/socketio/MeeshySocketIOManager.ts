@@ -1492,13 +1492,22 @@ export class MeeshySocketIOManager {
     emoji: string;
   }): Promise<void> {
     try {
+      const participant = await this.prisma.participant.findFirst({
+        where: { userId: reaction.asUserId, conversationId: reaction.conversationId, isActive: true },
+        select: { id: true },
+      });
+      if (!participant) {
+        logger.warn(`[Agent] No active participant for userId=${reaction.asUserId} in conv=${reaction.conversationId}`);
+        return;
+      }
+
       const { ReactionService } = await import('../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
 
       const result = await reactionService.addReaction({
         messageId: reaction.targetMessageId,
         emoji: reaction.emoji,
-        participantId: reaction.asUserId,
+        participantId: participant.id,
       });
 
       if (!result) {
@@ -1510,7 +1519,7 @@ export class MeeshySocketIOManager {
         reaction.targetMessageId,
         reaction.emoji,
         'add',
-        reaction.asUserId,
+        participant.id,
         reaction.conversationId
       );
 

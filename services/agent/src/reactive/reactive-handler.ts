@@ -49,6 +49,7 @@ type StateManager = {
 
 export class ReactiveHandler {
   private conversationLocks = new Map<string, Promise<void>>();
+  private processedMessageIds = new Set<string>();
 
   constructor(
     private readonly llm: LlmProvider,
@@ -58,6 +59,11 @@ export class ReactiveHandler {
   ) {}
 
   async handleInterpellation(input: InterpellationInput): Promise<void> {
+    const msgId = input.triggerMessage.id;
+    if (this.processedMessageIds.has(msgId)) return;
+    this.processedMessageIds.add(msgId);
+    setTimeout(() => this.processedMessageIds.delete(msgId), 300_000); // 5min cleanup
+
     const lock = this.conversationLocks.get(input.conversationId) ?? Promise.resolve();
     const next = lock.then(() => this.processInterpellation(input)).catch(() => {});
     this.conversationLocks.set(input.conversationId, next);
