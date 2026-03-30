@@ -20,6 +20,7 @@ import { detectInterpellation } from './reactive/interpellation-detector';
 import { configRoutes } from './routes/config';
 import { rolesRoutes } from './routes/roles';
 import { analyticsRoutes } from './routes/analytics';
+import { deliveryRoutes } from './routes/delivery';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
 
 const server = Fastify({ logger: true });
@@ -71,6 +72,7 @@ async function start() {
   server.register((instance) => analyticsRoutes(instance, { stateManager, persistence }));
 
   const deliveryQueue = new DeliveryQueue(zmqPublisher, persistence, stateManager);
+  server.register((instance) => deliveryRoutes(instance, deliveryQueue));
   const reactiveHandler = new ReactiveHandler(llm, persistence, stateManager, deliveryQueue);
   const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager, tracerRef);
 

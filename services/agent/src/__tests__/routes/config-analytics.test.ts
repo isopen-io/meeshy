@@ -14,13 +14,15 @@ jest.mock('@meeshy/shared/prisma/client', () => {
 });
 
 import Fastify from 'fastify';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { configRoutes } from '../../routes/config';
 
 const sharedMock = jest.requireMock('@meeshy/shared/prisma/client');
 
 async function buildApp() {
   const app = Fastify();
-  await configRoutes(app);
+  const prisma = new PrismaClient();
+  await configRoutes(app, prisma);
   await app.ready();
   return app;
 }

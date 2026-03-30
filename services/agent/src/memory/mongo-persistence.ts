@@ -187,7 +187,7 @@ export class MongoPersistence {
       },
     });
     return participants
-      .flatMap((p) => (p.user ? [p.user] : []));
+      .flatMap((p: { user: unknown }) => (p.user ? [p.user] : []));
   }
 
   async getPotentialControlledUsers(
@@ -233,7 +233,7 @@ export class MongoPersistence {
     });
 
     return participants
-      .flatMap((p) => (p.user ? [p.user] : []));
+      .flatMap((p: { user: unknown }) => (p.user ? [p.user] : []));
   }
 
   async getLeastActiveParticipants(
@@ -269,7 +269,7 @@ export class MongoPersistence {
     });
 
     return participants
-      .flatMap((p) => (p.user ? [p.user] : []));
+      .flatMap((p: { user: unknown }) => (p.user ? [p.user] : []));
   }
 
   async getGlobalProfile(userId: string) {

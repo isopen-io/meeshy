@@ -135,6 +135,18 @@ export type AgentConfigUpsert = {
   reactionBoostFactor?: number;
 };
 
+export type DeliveryItemAction =
+  | { type: 'message'; asUserId: string; content: string; originalLanguage: string; replyToId?: string; mentionedUsernames: string[]; delaySeconds: number; messageSource: 'agent' }
+  | { type: 'reaction'; asUserId: string; targetMessageId: string; emoji: string; delaySeconds: number };
+
+export type DeliveryQueueItem = {
+  id: string;
+  conversationId: string;
+  scheduledAt: number;
+  remainingMs: number;
+  action: DeliveryItemAction;
+};
+
 export type AgentGlobalConfigData = {
   id: string;
   systemPrompt: string;
@@ -537,5 +549,21 @@ export const agentAdminService = {
   async resetUser(userId: string): Promise<ApiResponse<ResetResult>> {
     const response = await apiService.delete(`/admin/agent/reset/user/${userId}`);
     return unwrapResponse<ResetResult>(response);
+  },
+
+  async getDeliveryQueue(conversationId?: string): Promise<ApiResponse<DeliveryQueueItem[]>> {
+    const params = conversationId ? { conversationId } : {};
+    const response = await apiService.get('/admin/agent/delivery-queue', params);
+    return unwrapResponse<DeliveryQueueItem[]>(response);
+  },
+
+  async deleteDeliveryItem(id: string): Promise<ApiResponse<{ deleted: boolean }>> {
+    const response = await apiService.delete(`/admin/agent/delivery-queue/${id}`);
+    return unwrapResponse<{ deleted: boolean }>(response);
+  },
+
+  async editDeliveryItem(id: string, content: string): Promise<ApiResponse<DeliveryQueueItem>> {
+    const response = await apiService.patch(`/admin/agent/delivery-queue/${id}`, { content });
+    return unwrapResponse<DeliveryQueueItem>(response);
   },
 };
