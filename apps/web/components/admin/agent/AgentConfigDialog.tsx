@@ -27,6 +27,8 @@ const AgentScheduleTimeline = dynamic(() => import('./AgentScheduleTimeline'), {
 import { UserDisplay } from './UserDisplay';
 import { UserPicker } from './UserPicker';
 import { ConversationPicker } from './ConversationPicker';
+import { conversationsCrudService } from '@/services/conversations/crud.service';
+import type { Conversation } from '@meeshy/shared/types';
 import { toast } from 'sonner';
 
 interface AgentConfigDialogProps {
@@ -85,6 +87,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
   const [conversationId, setConversationId] = useState('');
 
   const [form, setForm] = useState<AgentConfigUpsert>({ ...DEFAULTS });
+  const [convMeta, setConvMeta] = useState<Conversation | null>(null);
 
   useEffect(() => {
     if (config) {
@@ -94,8 +97,17 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
     } else {
       setConversationId('');
       setForm({ ...DEFAULTS });
+      setConvMeta(null);
     }
   }, [config, open]);
+
+  useEffect(() => {
+    if (!isNew && conversationId && open) {
+      conversationsCrudService.getConversation(conversationId)
+        .then(setConvMeta)
+        .catch(() => setConvMeta(null));
+    }
+  }, [isNew, conversationId, open]);
 
   const handleSave = async () => {
     if (!conversationId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -144,6 +156,69 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 onClear={() => setConversationId('')}
                 placeholder="Rechercher un groupe, un canal ou une discussion..."
               />
+            </div>
+          )}
+
+          {/* Conversation Metadata */}
+          {!isNew && convMeta && (
+            <div className="p-4 rounded-lg bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30 space-y-2">
+              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Conversation</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <span className="block text-[10px] text-gray-400">ID</span>
+                  <button
+                    className="font-mono text-gray-600 dark:text-gray-300 hover:text-indigo-600 transition-colors truncate max-w-full text-left"
+                    title="Copier"
+                    onClick={() => { navigator.clipboard.writeText(convMeta.id); toast.success('ID copie'); }}
+                  >
+                    {convMeta.id}
+                  </button>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-gray-400">Type</span>
+                  <span className="inline-flex items-center gap-1 text-gray-600 dark:text-gray-300">
+                    <span className="capitalize">{convMeta.type}</span>
+                    <span className="text-gray-300 dark:text-gray-600">·</span>
+                    <span className="capitalize">{convMeta.visibility}</span>
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-gray-400">Participants</span>
+                  <span className="font-mono text-gray-600 dark:text-gray-300">{convMeta.memberCount}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-gray-400">Messages</span>
+                  <span className="font-mono text-gray-600 dark:text-gray-300">{convMeta.messageCount ?? '-'}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-gray-400">Cree le</span>
+                  <span className="text-gray-600 dark:text-gray-300">
+                    {new Date(convMeta.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-gray-400">Createur</span>
+                  {convMeta.createdBy ? (
+                    <UserDisplay userId={convMeta.createdBy} size="sm" showUsername />
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
+                </div>
+                <div>
+                  <span className="block text-[10px] text-gray-400">Derniere activite</span>
+                  <span className="text-gray-600 dark:text-gray-300">
+                    {convMeta.lastMessageAt
+                      ? new Date(convMeta.lastMessageAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      : '-'}
+                  </span>
+                </div>
+                {convMeta.identifier && (
+                  <div>
+                    <span className="block text-[10px] text-gray-400">Identifiant</span>
+                    <span className="font-mono text-gray-600 dark:text-gray-300">{convMeta.identifier}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

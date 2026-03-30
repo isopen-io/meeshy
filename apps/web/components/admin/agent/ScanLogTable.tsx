@@ -38,13 +38,17 @@ const TRIGGER_LABELS: Record<string, string> = {
   reply_to: 'Reply',
 };
 
-export default memo(function ScanLogTable() {
+type ScanLogTableProps = {
+  conversationId?: string;
+};
+
+export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps = {}) {
   const [logs, setLogs] = useState<ScanLogSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<ScanLogsFilters>({ limit: 15 });
+  const [filters, setFilters] = useState<ScanLogsFilters>({ limit: 15, conversationId });
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);

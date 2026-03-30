@@ -14,6 +14,14 @@ import { AgentConfigDialog } from './AgentConfigDialog';
 import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
+import dynamic from 'next/dynamic';
+
+const TriggerSchedulingModal = dynamic(() => import('./TriggerSchedulingModal'), {
+  loading: () => null,
+});
+const AgentMessagesModal = dynamic(() => import('./AgentMessagesModal'), {
+  loading: () => null,
+});
 
 const TYPE_LABELS: Record<string, string> = {
   direct: 'Direct',
@@ -51,6 +59,8 @@ export function AgentConversationsTab() {
   const [debouncedSearch] = useDebounce(searchTerm, 500);
   const [selectedConfig, setSelectedConfig] = useState<AgentConfigData | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [scheduleModalConfig, setScheduleModalConfig] = useState<AgentConfigData | null>(null);
+  const [messagesModalConfig, setMessagesModalConfig] = useState<AgentConfigData | null>(null);
   const limit = 20;
 
   const fetchConfigs = useCallback(async () => {
@@ -229,12 +239,16 @@ export function AgentConversationsTab() {
 
                       {/* Messages sent */}
                       <div className="text-right">
-                        <div className="flex items-center gap-1 justify-end">
+                        <button
+                          onClick={() => setMessagesModalConfig(config)}
+                          className="flex items-center gap-1 justify-end hover:text-indigo-500 transition-colors"
+                          title="Voir les messages agent"
+                        >
                           <MessageSquare className="h-3 w-3 text-gray-400 hidden lg:block" />
                           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
                             {analytics?.messagesSent ?? 0}
                           </span>
-                        </div>
+                        </button>
                       </div>
 
                       {/* Avg confidence */}
@@ -253,12 +267,16 @@ export function AgentConversationsTab() {
 
                       {/* Last response */}
                       <div className="text-right">
-                        <div className="flex items-center gap-1 justify-end">
+                        <button
+                          onClick={() => setScheduleModalConfig(config)}
+                          className="flex items-center gap-1 justify-end hover:text-indigo-500 transition-colors"
+                          title="Planificateur de triggers"
+                        >
                           <Clock className="h-3 w-3 text-gray-400 hidden lg:block" />
                           <span className="text-xs text-gray-500 tabular-nums">
                             {formatTimeAgo(analytics?.lastResponseAt)}
                           </span>
-                        </div>
+                        </button>
                       </div>
 
                       {/* Actions */}
@@ -316,6 +334,24 @@ export function AgentConversationsTab() {
         config={selectedConfig}
         onSave={handleDialogSave}
       />
+
+      {scheduleModalConfig && (
+        <TriggerSchedulingModal
+          conversationId={scheduleModalConfig.conversationId}
+          conversationTitle={conversationLabel(scheduleModalConfig)}
+          open={!!scheduleModalConfig}
+          onOpenChange={(open) => { if (!open) setScheduleModalConfig(null); }}
+        />
+      )}
+
+      {messagesModalConfig && (
+        <AgentMessagesModal
+          conversationId={messagesModalConfig.conversationId}
+          conversationTitle={conversationLabel(messagesModalConfig)}
+          open={!!messagesModalConfig}
+          onOpenChange={(open) => { if (!open) setMessagesModalConfig(null); }}
+        />
+      )}
     </>
   );
 }
