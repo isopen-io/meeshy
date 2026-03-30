@@ -75,6 +75,10 @@ export class CallEventsHandler {
     this.callService = new CallService(prisma);
   }
 
+  private getSocketUserId(sock: any): string | undefined {
+    return sock.userId || sock.data?.userId;
+  }
+
   private async resolveParticipantId(userId: string, conversationId: string): Promise<string | null> {
     const participant = await this.prisma.participant.findFirst({
       where: { userId, conversationId, isActive: true },
@@ -392,12 +396,23 @@ export class CallEventsHandler {
         // ACK with call session and ICE servers (with time-limited TURN credentials)
         ack?.({ success: true, data: { callSession: callSession as any, iceServers } });
 
-        // Broadcast to all OTHER call participants (exclude the participant who just joined)
-        // They already received their confirmation via call:join
-        socket.to(ROOMS.call(data.callId)).emit(
-          CALL_EVENTS.PARTICIPANT_JOINED,
-          joinedEvent
-        );
+        // Broadcast to all OTHER call participants with per-user TURN credentials (§3.4)
+        // The caller needs iceServers from this event to configure WebRTC before creating SDP offer
+        const socketsInRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
+        for (const remoteSocket of socketsInRoom) {
+          if (remoteSocket.id === socket.id) continue;
+          const remoteUserId = this.getSocketUserId(remoteSocket);
+          if (!remoteUserId) {
+            logger.warn('⚠️ Socket in call room has no userId, using STUN-only', { socketId: remoteSocket.id });
+          }
+          const remoteIceServers = remoteUserId
+            ? this.callService.generateIceServers(remoteUserId)
+            : ICE_SERVERS_CONFIG.iceServers;
+          remoteSocket.emit(CALL_EVENTS.PARTICIPANT_JOINED, {
+            ...joinedEvent,
+            iceServers: remoteIceServers
+          });
+        }
 
         logger.info('✅ Socket: User joined call', {
           callId: data.callId,

@@ -75,6 +75,7 @@ interface CallStoreState extends CallState {
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+let beforeUnloadHandler: (() => void) | null = null;
 
 const initialState: CallState = {
   // Current call
@@ -337,7 +338,6 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   // ===== HEARTBEAT =====
 
   startHeartbeat: (callId) => {
-    // Clear any existing heartbeat
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
     }
@@ -348,12 +348,32 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
         socket.emit(CLIENT_EVENTS.CALL_HEARTBEAT, { callId });
       }
     }, HEARTBEAT_INTERVAL_MS);
+
+    // Register beforeunload handler to end call on tab close (M3)
+    if (beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+    }
+    beforeUnloadHandler = () => {
+      const socket = meeshySocketIOService.getSocket();
+      if (socket?.connected) {
+        socket.emit(CLIENT_EVENTS.CALL_END, { callId, reason: 'completed' });
+      }
+      // sendBeacon fallback for when socket is already closing
+      if (typeof navigator.sendBeacon === 'function') {
+        navigator.sendBeacon(`/api/v1/calls/${callId}/end`);
+      }
+    };
+    window.addEventListener('beforeunload', beforeUnloadHandler);
   },
 
   stopHeartbeat: () => {
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
       heartbeatInterval = null;
+    }
+    if (beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+      beforeUnloadHandler = null;
     }
   },
 
@@ -383,10 +403,14 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   reset: () => {
     const state = get();
 
-    // Stop heartbeat
+    // Stop heartbeat and beforeunload handler
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
       heartbeatInterval = null;
+    }
+    if (beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+      beforeUnloadHandler = null;
     }
 
     // Stop local stream

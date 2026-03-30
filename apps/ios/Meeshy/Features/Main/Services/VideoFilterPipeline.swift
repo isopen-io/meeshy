@@ -254,10 +254,11 @@ final class VideoFilterPipeline: VideoFilterPipelineProviding {
             return image
         }
 
-        let maskImage = CIImage(cvPixelBuffer: maskPixelBuffer)
+        let rawMask = CIImage(cvPixelBuffer: maskPixelBuffer)
+        let maskImage = rawMask
             .transformed(by: CGAffineTransform(
-                scaleX: image.extent.width / CIImage(cvPixelBuffer: maskPixelBuffer).extent.width,
-                y: image.extent.height / CIImage(cvPixelBuffer: maskPixelBuffer).extent.height
+                scaleX: image.extent.width / rawMask.extent.width,
+                y: image.extent.height / rawMask.extent.height
             ))
 
         let blurredBackground = image
