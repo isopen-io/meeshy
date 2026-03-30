@@ -1,8 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
-
-const prisma = new PrismaClient();
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const agentConfigSchema = z.object({
   conversationId: z.string(),
@@ -51,7 +49,7 @@ const agentConfigSchema = z.object({
   messageFreshnessHours: z.number().optional(),
 });
 
-export async function configRoutes(fastify: FastifyInstance) {
+export async function configRoutes(fastify: FastifyInstance, prisma: PrismaClient) {
   fastify.get('/api/agent/config/:conversationId', async (req) => {
     const { conversationId } = req.params as { conversationId: string };
     const config = await prisma.agentConfig.findUnique({ where: { conversationId } });

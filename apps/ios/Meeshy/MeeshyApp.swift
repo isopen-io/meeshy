@@ -103,7 +103,6 @@ struct MeeshyApp: App {
                 .task {
                     MeeshyConfig.shared.restoreEnvironment()
                     await CacheCoordinator.shared.start()
-                    await FriendshipCache.shared.hydrate()
                     await OfflineQueue.shared.setRetrySend { @Sendable item in
                         do {
                             let request = SendMessageRequest(
@@ -121,7 +120,10 @@ struct MeeshyApp: App {
                             return false
                         }
                     }
-                    await authManager.checkExistingSession()
+                    // Parallelize: friendship hydration + session check are independent
+                    async let friendshipHydration: () = FriendshipCache.shared.hydrate()
+                    async let sessionCheck: () = authManager.checkExistingSession()
+                    _ = await (friendshipHydration, sessionCheck)
                     hasCheckedSession = true
                     if authManager.isAuthenticated {
                         await requestPushPermissionIfNeeded()

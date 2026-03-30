@@ -628,22 +628,31 @@ class ConversationListViewModel: ObservableObject {
                 guard !storyGroups.isEmpty else { return }
 
                 // Collecter les URLs à précharger (2 par groupe + reste des 3 premiers)
-                var urls: [String] = []
+                var imageURLs: [String] = []
+                var videoURLs: [String] = []
                 for (i, group) in storyGroups.enumerated() {
                     let limit = i < 3 ? group.stories.count : min(2, group.stories.count)
                     for story in group.stories.prefix(limit) {
-                        urls.append(contentsOf: story.media.compactMap(\.url).filter { !$0.isEmpty })
+                        for media in story.media {
+                            guard let url = media.url, !url.isEmpty else { continue }
+                            switch media.type {
+                            case .video:
+                                videoURLs.append(url)
+                            default:
+                                imageURLs.append(url)
+                            }
+                        }
                     }
                 }
 
-                // Précharger par lots de 8 via image(for:) qui gère le cache-hit en interne
+                // Précharger images par lots de 8
                 let imageStore = await CacheCoordinator.shared.images
-                let uniqueURLs = Array(Set(urls))
-                for chunk in stride(from: 0, to: uniqueURLs.count, by: 8) {
+                let uniqueImageURLs = Array(Set(imageURLs))
+                for chunk in stride(from: 0, to: uniqueImageURLs.count, by: 8) {
                     guard !Task.isCancelled else { return }
-                    let end = min(chunk + 8, uniqueURLs.count)
+                    let end = min(chunk + 8, uniqueImageURLs.count)
                     await withTaskGroup(of: Void.self) { taskGroup in
-                        for urlString in uniqueURLs[chunk..<end] {
+                        for urlString in uniqueImageURLs[chunk..<end] {
                             taskGroup.addTask {
                                 _ = await imageStore.image(for: urlString)
                             }
@@ -651,8 +660,23 @@ class ConversationListViewModel: ObservableObject {
                     }
                 }
 
+                // Précharger vidéos par lots de 4 (plus lourds)
+                let videoStore = await CacheCoordinator.shared.video
+                let uniqueVideoURLs = Array(Set(videoURLs))
+                for chunk in stride(from: 0, to: uniqueVideoURLs.count, by: 4) {
+                    guard !Task.isCancelled else { return }
+                    let end = min(chunk + 4, uniqueVideoURLs.count)
+                    await withTaskGroup(of: Void.self) { taskGroup in
+                        for urlString in uniqueVideoURLs[chunk..<end] {
+                            taskGroup.addTask {
+                                _ = try? await videoStore.data(for: urlString)
+                            }
+                        }
+                    }
+                }
+
                 await CacheCoordinator.shared.stories.save(storyGroups, for: "recent_tray")
-                Logger.messages.info("[ConversationListVM] Stories prefetched: \(storyGroups.count) groups, \(uniqueURLs.count) media URLs")
+                Logger.messages.info("[ConversationListVM] Stories prefetched: \(storyGroups.count) groups, \(uniqueImageURLs.count) images, \(uniqueVideoURLs.count) videos")
             } catch {
                 Logger.messages.error("[ConversationListVM] Story prefetch failed: \(error.localizedDescription)")
             }
@@ -661,6 +685,20 @@ class ConversationListViewModel: ObservableObject {
 
     func refreshStoriesPrefetch() {
         prefetchRecentStories()
+    }
+
+    /// Called when app returns to foreground — refresh stories if stale
+    func handleForegroundReturn() {
+        guard isCacheValid else { return }
+        Task {
+            let cached = await CacheCoordinator.shared.stories.load(for: "recent_tray")
+            switch cached {
+            case .stale, .expired, .empty:
+                prefetchRecentStories()
+            case .fresh:
+                break
+            }
+        }
     }
 
     // MARK: - Mark as Read (local update from ConversationView)

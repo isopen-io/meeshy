@@ -18,7 +18,14 @@ export class ConfigCache {
   async getConfig(conversationId: string) {
     const key = `${CONFIG_PREFIX}${conversationId}`;
     const cached = await this.redis.get(key);
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {
+        console.error(`[ConfigCache] Corrupted cache for conv=${conversationId}, clearing`);
+        await this.redis.del(key);
+      }
+    }
 
     const config = await this.persistence.getAgentConfig(conversationId);
     if (config) {
@@ -29,7 +36,14 @@ export class ConfigCache {
 
   async getGlobalConfig() {
     const cached = await this.redis.get(GLOBAL_CONFIG_KEY);
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {
+        console.error('[ConfigCache] Corrupted global config cache, clearing');
+        await this.redis.del(GLOBAL_CONFIG_KEY);
+      }
+    }
 
     const config = await this.persistence.getGlobalConfig();
     if (config) {

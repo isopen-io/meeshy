@@ -62,12 +62,12 @@ export class DailyBudgetManager {
     const date = todayKey();
     const counterKey = `${BUDGET_PREFIX}${conversationId}:${date}`;
     const usersKey = `${BUDGET_PREFIX}${conversationId}:${date}:users`;
-    await Promise.all([
-      this.redis.incr(counterKey),
-      this.redis.expire(counterKey, BUDGET_TTL),
-      this.redis.sadd(usersKey, userId),
-      this.redis.expire(usersKey, BUDGET_TTL),
-    ]);
+    const pipeline = this.redis.pipeline();
+    pipeline.incr(counterKey);
+    pipeline.expire(counterKey, BUDGET_TTL);
+    pipeline.sadd(usersKey, userId);
+    pipeline.expire(usersKey, BUDGET_TTL);
+    await pipeline.exec();
   }
 
   async recordBurst(conversationId: string) {
@@ -84,10 +84,10 @@ export class DailyBudgetManager {
 
   async recordScannedConversation() {
     const key = `${BUDGET_PREFIX}global:scanned-convs:${todayKey()}`;
-    await Promise.all([
-      this.redis.incr(key),
-      this.redis.expire(key, BUDGET_TTL),
-    ]);
+    const pipeline = this.redis.pipeline();
+    pipeline.incr(key);
+    pipeline.expire(key, BUDGET_TTL);
+    await pipeline.exec();
   }
 
   async getTodayStats(conversationId: string) {

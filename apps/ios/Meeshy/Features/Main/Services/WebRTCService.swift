@@ -21,6 +21,8 @@ final class WebRTCService: @unchecked Sendable {
     let videoFilterPipeline = VideoFilterPipeline()
     var videoFilters: VideoFilterPipeline { videoFilterPipeline }
 
+    var audioEffectsService: CallAudioEffectsServiceProviding? { client.audioEffectsService }
+
     private let client: any WebRTCClientProviding
     private var iceCandidateBuffer: [IceCandidate] = []
     private var hasRemoteDescription = false
@@ -214,6 +216,25 @@ final class WebRTCService: @unchecked Sendable {
     func sendTranscription(_ message: DataChannelTranscriptionMessage) {
         guard let data = try? JSONEncoder().encode(message) else { return }
         client.sendDataChannelMessage(data)
+    }
+
+    // MARK: - Audio Effects
+
+    func setAudioEffect(_ effect: AudioEffectConfig?) {
+        do {
+            try client.setAudioEffect(effect)
+            Logger.webrtc.info("Audio effect set via service: \(effect?.effectType.rawValue ?? "none")")
+        } catch {
+            Logger.webrtc.error("Failed to set audio effect: \(error.localizedDescription)")
+        }
+    }
+
+    func updateAudioEffectParams(_ config: AudioEffectConfig) {
+        do {
+            try client.updateAudioEffectParams(config)
+        } catch {
+            Logger.webrtc.error("Failed to update audio effect params: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - ICE Restart

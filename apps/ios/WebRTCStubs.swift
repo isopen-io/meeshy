@@ -107,11 +107,44 @@ class RTCMTLVideoView: UIView, RTCVideoRenderer {
     }
 }
 
+// Audio Custom Processing Delegate
+protocol RTCAudioCustomProcessingDelegate: AnyObject {
+    func audioProcessingInitialize(sampleRate sampleRateHz: Int, channels: Int)
+    func audioProcessingProcess(audioBuffer: RTCAudioBuffer)
+    func audioProcessingRelease()
+}
+
+// Audio Device Module Stub
+class RTCAudioDeviceModuleStub {
+    weak var capturePostProcessingDelegate: RTCAudioCustomProcessingDelegate?
+}
+
+// Audio Buffer
+class RTCAudioBuffer {
+    let channels: Int
+    let frames: Int
+    let framesPerBand: Int
+
+    init(channels: Int = 1, frames: Int = 1024, sampleRate: Int = 48000) {
+        self.channels = channels
+        self.frames = frames
+        self.framesPerBand = sampleRate
+    }
+
+    func rawBuffer(forChannel channel: Int) -> UnsafeMutablePointer<Float> {
+        let buffer = UnsafeMutablePointer<Float>.allocate(capacity: frames)
+        buffer.initialize(repeating: 0, count: frames)
+        return buffer
+    }
+}
+
 // Peer Connection Factory
 class RTCPeerConnectionFactory {
     init() {}
 
     init(encoderFactory: RTCDefaultVideoEncoderFactory, decoderFactory: RTCDefaultVideoDecoderFactory) {}
+
+    var audioDeviceModule: RTCAudioDeviceModuleStub { RTCAudioDeviceModuleStub() }
 
     func videoSource() -> RTCVideoSource {
         return RTCVideoSource()
