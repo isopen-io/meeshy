@@ -10,6 +10,7 @@ import MeeshyUI
 struct FeedView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject private var router: Router
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @StateObject var viewModel = FeedViewModel()
     @State private var searchText = ""
     @State var showComposer = false
@@ -296,8 +297,15 @@ struct FeedView: View {
             } : nil,
             onPin: isOwnPost ? { postId in
                 Task { await viewModel.pinPost(postId) }
-            } : nil
+            } : nil,
+            authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
+            onAuthorMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
+            moodLookup: { userId in
+                (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+                 tapHandler: statusViewModel.moodTapHandler(for: userId))
+            }
         )
+        .equatable()
     }
 
     // MARK: - Feed Scroll View

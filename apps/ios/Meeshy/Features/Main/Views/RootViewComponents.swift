@@ -230,8 +230,15 @@ struct ThemedFeedOverlay: View {
                             } : nil,
                             onReport: post.authorId != AuthManager.shared.currentUser?.id ? { postId in
                                 Task { await viewModel.reportPost(postId) }
-                            } : nil
+                            } : nil,
+                            authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
+                            onAuthorMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
+                            moodLookup: { userId in
+                                (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+                                 tapHandler: statusViewModel.moodTapHandler(for: userId))
+                            }
                         )
+                        .equatable()
                             .staggeredAppear(index: index, baseDelay: 0.06)
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
