@@ -28,6 +28,14 @@ const DEFAULT_CONFIG: VideoFilterConfig = {
   enabled: false,
 };
 
+export const FILTER_PRESETS = {
+  natural: { ...DEFAULT_CONFIG, enabled: true },
+  warm: { temperature: 0.65, brightness: 0.02, contrast: 1.05, saturation: 1.1, exposure: 0, enabled: true },
+  cool: { temperature: 0.35, brightness: 0, contrast: 1.05, saturation: 0.95, exposure: 0, enabled: true },
+  vivid: { temperature: 0.5, brightness: 0.03, contrast: 1.15, saturation: 1.3, exposure: 0.1, enabled: true },
+  muted: { temperature: 0.5, brightness: -0.02, contrast: 0.9, saturation: 0.7, exposure: -0.1, enabled: true },
+} as const satisfies Record<string, VideoFilterConfig>;
+
 const VERTEX_SHADER = `
   attribute vec2 a_position;
   attribute vec2 a_texCoord;
@@ -232,13 +240,23 @@ export function useVideoFilters() {
     setConfig(DEFAULT_CONFIG);
   }, []);
 
+  const applyPreset = useCallback((preset: keyof typeof FILTER_PRESETS) => {
+    setConfig(FILTER_PRESETS[preset]);
+  }, []);
+
+  const getFilteredVideoTrack = useCallback((): MediaStreamTrack | null => {
+    return outputStreamRef.current?.getVideoTracks()[0] ?? null;
+  }, []);
+
   return {
     config,
     updateConfig,
     resetConfig,
+    applyPreset,
     processStream,
     startProcessing,
     stopProcessing,
+    getFilteredVideoTrack,
     outputStream: outputStreamRef.current,
   };
 }

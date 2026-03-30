@@ -10,6 +10,8 @@ final class DarkFrameDetector {
     var onDarkFrameDetected: (() -> Void)?
     var onLightFrameRestored: (() -> Void)?
 
+    private(set) var lastAverageBrightness: Float?
+
     private var isDark = false
 
     func analyzeFrame(_ pixelBuffer: CVPixelBuffer) {
@@ -56,6 +58,7 @@ final class DarkFrameDetector {
 
         guard sampleCount > 0 else { return }
         let avgLuminance = luminanceSum / sampleCount
+        lastAverageBrightness = avgLuminance
 
         if avgLuminance < darkThreshold {
             consecutiveDarkFrames += 1
@@ -77,6 +80,7 @@ final class DarkFrameDetector {
     func reset() {
         consecutiveDarkFrames = 0
         isDark = false
+        lastAverageBrightness = nil
     }
 }
 

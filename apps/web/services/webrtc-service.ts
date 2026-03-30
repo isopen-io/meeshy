@@ -597,6 +597,18 @@ export class WebRTCService {
   }
 
   /**
+   * Replace the video track on the peer connection (for video filters).
+   * Pass null to restore the original camera track.
+   */
+  async replaceVideoTrack(newTrack: MediaStreamTrack | null): Promise<void> {
+    if (!this.peerConnection) return;
+    const sender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+    if (sender) {
+      await this.replaceTrack(sender, newTrack);
+    }
+  }
+
+  /**
    * Restart ICE connection (for recovering from failures)
    */
   async restartIce(): Promise<void> {
