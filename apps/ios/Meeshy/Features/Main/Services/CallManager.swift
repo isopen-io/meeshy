@@ -98,7 +98,7 @@ final class CallManager: ObservableObject {
 
     // MARK: - Outgoing Call
 
-    func startCall(userId: String, username: String, isVideo: Bool) {
+    func startCall(conversationId: String, userId: String, username: String, isVideo: Bool) {
         guard callState == .idle else {
             Logger.calls.warning("Cannot start call: already in state \(String(describing: self.callState))")
             return
@@ -128,6 +128,9 @@ final class CallManager: ObservableObject {
                 Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
             }
         }
+
+        // Emit call:initiate to server FIRST — creates the CallSession in DB
+        MessageSocketManager.shared.emitCallInitiate(conversationId: conversationId, isVideo: isVideo)
 
         Task { [weak self] in
             guard let self else { return }
