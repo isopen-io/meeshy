@@ -15,6 +15,32 @@ struct TranscriptionSegment: Identifiable, Equatable {
     let isFinal: Bool
     let confidence: Double
     let language: String
+    let translatedText: String?
+    let translatedLanguage: String?
+
+    init(
+        id: UUID,
+        text: String,
+        speakerId: String,
+        startTime: TimeInterval,
+        endTime: TimeInterval,
+        isFinal: Bool,
+        confidence: Double,
+        language: String,
+        translatedText: String? = nil,
+        translatedLanguage: String? = nil
+    ) {
+        self.id = id
+        self.text = text
+        self.speakerId = speakerId
+        self.startTime = startTime
+        self.endTime = endTime
+        self.isFinal = isFinal
+        self.confidence = confidence
+        self.language = language
+        self.translatedText = translatedText
+        self.translatedLanguage = translatedLanguage
+    }
 }
 
 // MARK: - Transcription Permission
@@ -75,6 +101,7 @@ private final class StreamRecognizer {
     var task: SFSpeechRecognitionTask?
     let speakerId: String
     let language: String
+    var rotationCount: Int = 0
 
     init(recognizer: SFSpeechRecognizer, speakerId: String, language: String) {
         self.recognizer = recognizer
@@ -282,6 +309,55 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         }
 
         replaceSegments(for: speakerId, with: newSegments, isFinal: result.isFinal)
+
+        if result.isFinal {
+            let boundaryText = result.bestTranscription.formattedString
+            rotateRecognitionRequest(for: speakerId, boundaryText: boundaryText)
+        }
+    }
+
+    private func rotateRecognitionRequest(for speakerId: String, boundaryText: String) {
+        let stream: StreamRecognizer?
+        if speakerId == localUserId {
+            stream = localStream
+        } else {
+            stream = remoteStream
+        }
+
+        guard let stream else { return }
+
+        stream.request?.endAudio()
+        stream.task?.cancel()
+        stream.rotationCount += 1
+
+        let newRequest = SFSpeechAudioBufferRecognitionRequest()
+        newRequest.requiresOnDeviceRecognition = true
+        newRequest.shouldReportPartialResults = true
+        newRequest.addsPunctuation = true
+        stream.request = newRequest
+
+        let language = stream.language
+
+        stream.task = stream.recognizer.recognitionTask(with: newRequest) { [weak self] result, error in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.handleRecognitionResult(result, error: error, speakerId: speakerId, language: language)
+            }
+        }
+
+        if stream.task == nil {
+            let consecutiveFailures = stream.rotationCount
+            if consecutiveFailures >= 3 {
+                lastError = .recognitionFailed(underlying: NSError(
+                    domain: "CallTranscriptionService",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Recognition rotation failed 3 times consecutively"]
+                ))
+                Logger.calls.error("Recognition rotation failed 3 times for speaker \(speakerId) — fallback needed")
+            }
+        }
+
+        Logger.calls.info("Rotated recognition request for speaker \(speakerId) (rotation #\(stream.rotationCount)), boundary: \(boundaryText.prefix(50))")
     }
 
     private func replaceSegments(for speakerId: String, with newSegments: [TranscriptionSegment], isFinal: Bool) {

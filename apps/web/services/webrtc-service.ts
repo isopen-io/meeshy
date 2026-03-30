@@ -49,12 +49,17 @@ export class WebRTCService {
   private config: WebRTCServiceConfig;
   private participantId: string | null = null;
   private qualityMonitorInterval: ReturnType<typeof setInterval> | null = null;
+  private serverIceServers: RTCIceServer[] | null = null;
 
   constructor(config: WebRTCServiceConfig = {}) {
     this.config = {
       iceServers: DEFAULT_ICE_SERVERS,
       ...config,
     };
+  }
+
+  setIceServers(iceServers: RTCIceServer[]): void {
+    this.serverIceServers = iceServers;
   }
 
   /**
@@ -229,9 +234,9 @@ export class WebRTCService {
 
       this.participantId = participantId;
 
-      // Create RTCPeerConnection
+      // Create RTCPeerConnection (prefer server-provided TURN servers over config defaults)
       this.peerConnection = new RTCPeerConnection({
-        iceServers: this.config.iceServers,
+        iceServers: this.serverIceServers ?? this.config.iceServers,
       });
 
       // Setup event listeners

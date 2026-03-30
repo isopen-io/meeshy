@@ -425,6 +425,24 @@ services:
       - "traefik.http.routers.agent.tls.certresolver=letsencrypt"
       - "traefik.http.services.agent.loadbalancer.server.port=3200"
 
+  # ===========================================================================
+  # COTURN - TURN/STUN Server for WebRTC
+  # ===========================================================================
+  coturn:
+    image: coturn/coturn:4.6
+    container_name: meeshy-coturn
+    network_mode: host
+    volumes:
+      - ./infrastructure/config/turnserver.conf:/etc/turnserver.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "turnutils_stunclient", "-p", "3478", "localhost"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
 # =============================================================================
 # VOLUMES
 # =============================================================================

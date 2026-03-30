@@ -1541,6 +1541,9 @@ model CallSession {
   /// Call metadata
   metadata Json? // { maxParticipants, recordingEnabled, etc. }
 
+  /// Post-call quality feedback (rating + issues)
+  feedback Json?
+
   /// Indexes
   @@index([conversationId])
   @@index([status])

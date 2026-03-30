@@ -105,6 +105,12 @@ export const getActiveCallSchema = z.object({
 });
 
 /**
+ * GET /api/calls/active - Get active call for user (crash recovery)
+ * No params or query needed — uses authenticated userId
+ */
+export const getActiveCallForUserSchema = z.object({});
+
+/**
  * Socket.IO Event: call:initiate
  */
 export const socketInitiateCallSchema = z.object({
@@ -248,6 +254,7 @@ export type EndCallInput = z.infer<typeof endCallSchema>;
 export type JoinCallInput = z.infer<typeof joinCallSchema>;
 export type LeaveCallInput = z.infer<typeof leaveCallSchema>;
 export type GetActiveCallInput = z.infer<typeof getActiveCallSchema>;
+export type GetActiveCallForUserInput = z.infer<typeof getActiveCallForUserSchema>;
 export type SocketInitiateCallInput = z.infer<typeof socketInitiateCallSchema>;
 export type SocketJoinCallInput = z.infer<typeof socketJoinCallSchema>;
 export type SocketLeaveCallInput = z.infer<typeof socketLeaveCallSchema>;

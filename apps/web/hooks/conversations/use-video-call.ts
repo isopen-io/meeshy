@@ -8,9 +8,10 @@
  * @module hooks/conversations/use-video-call
  */
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { useCallStore } from '@/stores/call-store';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Conversation } from '@meeshy/shared/types';
 
@@ -22,15 +23,14 @@ interface UseVideoCallOptions {
 }
 
 interface UseVideoCallReturn {
-  /**
-   * Démarre un appel vidéo
-   */
   startCall: () => Promise<void>;
-
-  /**
-   * Indique si les appels sont supportés pour cette conversation
-   */
+  answerCall: (callId: string) => Promise<void>;
+  rejectCall: (callId: string) => Promise<void>;
+  endCall: (callId: string) => Promise<void>;
+  toggleAudio: (callId: string, enabled: boolean) => Promise<void>;
+  toggleVideo: (callId: string, enabled: boolean) => Promise<void>;
   isCallSupported: boolean;
+  error: string | null;
 }
 
 /**
@@ -53,6 +53,9 @@ const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
  * Hook pour gérer les appels vidéo
  */
 export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCallReturn {
+  const [error, setError] = useState<string | null>(null);
+  const callStore = useCallStore();
+
   // Les appels ne sont supportés que pour les conversations directes
   const isCallSupported = conversation?.type === 'direct';
 
@@ -109,9 +112,55 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
     }
   }, [conversation]);
 
+  const answerCall = useCallback(async (callId: string) => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket?.connected) {
+      setError('Socket not connected');
+      return;
+    }
+    socket.emit(CLIENT_EVENTS.CALL_JOIN, { callId }, (response: { success: boolean; data?: { callSession: unknown; iceServers: RTCIceServer[] } }) => {
+      if (!response.success) {
+        setError('Failed to join call');
+      }
+    });
+  }, []);
+
+  const rejectCall = useCallback(async (callId: string) => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket?.connected) return;
+    socket.emit(CLIENT_EVENTS.CALL_END, { callId, reason: 'rejected' }, () => {});
+  }, []);
+
+  const endCall = useCallback(async (callId: string) => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket?.connected) return;
+    socket.emit(CLIENT_EVENTS.CALL_END, { callId, reason: 'completed' }, () => {});
+    callStore.reset();
+  }, [callStore]);
+
+  const toggleAudio = useCallback(async (callId: string, enabled: boolean) => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket?.connected) return;
+    socket.emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled }, () => {});
+    callStore.toggleAudio();
+  }, [callStore]);
+
+  const toggleVideo = useCallback(async (callId: string, enabled: boolean) => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket?.connected) return;
+    socket.emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled }, () => {});
+    callStore.toggleVideo();
+  }, [callStore]);
+
   return {
     startCall,
+    answerCall,
+    rejectCall,
+    endCall,
+    toggleAudio,
+    toggleVideo,
     isCallSupported,
+    error,
   };
 }
 

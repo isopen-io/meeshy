@@ -29,6 +29,15 @@ import type {
   CallTranslatedSegmentEvent,
   CallTranscriptionCapabilityEvent,
   CallTranscriptionRoleEvent,
+  CallTranslationRequestEvent,
+  CallTranslationResponseEvent,
+  CallAudioChunkEvent,
+  CallQualityFeedbackEvent,
+  CallScreenCaptureEvent,
+  CallTranslationRequestedEvent,
+  CallTranslationEnabledEvent,
+  CallTranscriptionResultEvent,
+  CallAlreadyAnsweredEvent,
 } from './video-call.js';
 
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
@@ -104,6 +113,11 @@ export const SERVER_EVENTS = {
   CALL_MISSED: 'call:missed',
   CALL_QUALITY_ALERT: 'call:quality-alert',
   CALL_TRANSLATED_SEGMENT: 'call:translated-segment',
+  CALL_TRANSLATION_REQUESTED: 'call:translation-requested',
+  CALL_TRANSLATION_ENABLED: 'call:translation-enabled',
+  CALL_TRANSCRIPTION_RESULT: 'call:transcription-result',
+  CALL_ALREADY_ANSWERED: 'call:already-answered',
+  CALL_SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
   READ_STATUS_UPDATED: 'read-status:updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
@@ -202,6 +216,11 @@ export const CLIENT_EVENTS = {
   CALL_TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
   CALL_TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
   CALL_TRANSCRIPTION_ROLE: 'call:transcription-role',
+  CALL_TRANSLATION_REQUEST: 'call:translation-request',
+  CALL_TRANSLATION_RESPONSE: 'call:translation-response',
+  CALL_AUDIO_CHUNK: 'call:audio-chunk',
+  CALL_QUALITY_FEEDBACK: 'call:quality-feedback',
+  CALL_SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
 
   // --- Location sharing ---
   LOCATION_SHARE: 'location:share',
@@ -672,6 +691,11 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_MISSED]: (data: CallMissedEvent) => void;
   [SERVER_EVENTS.CALL_QUALITY_ALERT]: (data: CallQualityAlertEvent) => void;
   [SERVER_EVENTS.CALL_TRANSLATED_SEGMENT]: (data: CallTranslatedSegmentEvent) => void;
+  [SERVER_EVENTS.CALL_TRANSLATION_REQUESTED]: (data: CallTranslationRequestedEvent) => void;
+  [SERVER_EVENTS.CALL_TRANSLATION_ENABLED]: (data: CallTranslationEnabledEvent) => void;
+  [SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT]: (data: CallTranscriptionResultEvent) => void;
+  [SERVER_EVENTS.CALL_ALREADY_ANSWERED]: (data: CallAlreadyAnsweredEvent) => void;
+  [SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT]: (data: CallScreenCaptureEvent) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
@@ -864,6 +888,11 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT]: (data: CallTranscriptionSegmentEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_CAPABILITY]: (data: CallTranscriptionCapabilityEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_ROLE]: (data: CallTranscriptionRoleEvent) => void;
+  [CLIENT_EVENTS.CALL_TRANSLATION_REQUEST]: (data: CallTranslationRequestEvent) => void;
+  [CLIENT_EVENTS.CALL_TRANSLATION_RESPONSE]: (data: CallTranslationResponseEvent) => void;
+  [CLIENT_EVENTS.CALL_AUDIO_CHUNK]: (data: CallAudioChunkEvent) => void;
+  [CLIENT_EVENTS.CALL_QUALITY_FEEDBACK]: (data: CallQualityFeedbackEvent) => void;
+  [CLIENT_EVENTS.CALL_SCREEN_CAPTURE_DETECTED]: (data: CallScreenCaptureEvent) => void;
 
   // Location sharing
   [CLIENT_EVENTS.LOCATION_SHARE]: (data: LocationShareData, callback?: (response: SocketIOResponse<LocationSharedEventData>) => void) => void;
