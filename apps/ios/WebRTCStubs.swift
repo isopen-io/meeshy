@@ -2,9 +2,13 @@
 //  WebRTCStubs.swift
 //  Meeshy
 //
-//  Placeholder types for WebRTC until the actual WebRTC SDK is integrated
-//  This allows the project to build without WebRTC dependency
+//  Placeholder types for WebRTC when the real SDK is not available.
+//  Guarded by #if !canImport(WebRTC) — these types are ONLY compiled
+//  when the WebRTC SPM package is not resolved (e.g. CI without WebRTC).
+//  When the real SDK IS available, this entire file is skipped.
 //
+
+#if !canImport(WebRTC)
 
 import Foundation
 import AVFoundation
@@ -487,3 +491,5 @@ func RTCInitializeSSL() {
 func RTCCleanupSSL() {
     // Stub
 }
+
+#endif // !canImport(WebRTC)
