@@ -106,18 +106,37 @@ public struct StoryCanvasReaderView: View {
 
     // MARK: - Background Media (image/vidéo de fond depuis storyEffects.mediaObjects)
 
+    private var bgTransformScale: CGFloat { story.storyEffects?.backgroundTransform?.scale ?? 1.0 }
+    private var bgTransformOffsetX: CGFloat { story.storyEffects?.backgroundTransform?.offsetX ?? 0 }
+    private var bgTransformOffsetY: CGFloat { story.storyEffects?.backgroundTransform?.offsetY ?? 0 }
+    private var bgTransformRotation: Double { story.storyEffects?.backgroundTransform?.rotation ?? 0 }
+
     @ViewBuilder
     private var backgroundMediaLayer: some View {
         if let bgMedia = story.storyEffects?.mediaObjects?.first(where: { $0.placement == "background" }) {
             if bgMedia.mediaType == "image" {
-                // TODO: charger depuis CacheCoordinator si disponible
                 if let urlStr = mediaURL(for: bgMedia.postMediaId) {
-                    CachedAsyncImage(url: urlStr) {
-                        Color.clear
+                    let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
+                    if let cached = DiskCacheStore.cachedImage(for: resolved) {
+                        Image(uiImage: cached)
+                            .resizable()
+                            .scaledToFill()
+                            .scaleEffect(bgTransformScale)
+                            .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
+                            .rotationEffect(.degrees(bgTransformRotation))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .clipped()
+                    } else {
+                        CachedAsyncImage(url: urlStr) {
+                            Color.clear
+                        }
+                        .scaledToFill()
+                        .scaleEffect(bgTransformScale)
+                        .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
+                        .rotationEffect(.degrees(bgTransformRotation))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
                     }
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
                 }
             } else if bgMedia.mediaType == "video" {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId),
@@ -125,33 +144,55 @@ public struct StoryCanvasReaderView: View {
                     let player = state.ensureBackgroundVideoPlayer(url: url)
                     VideoPlayer(player: player)
                         .disabled(true)
+                        .scaleEffect(bgTransformScale)
+                        .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
+                        .rotationEffect(.degrees(bgTransformRotation))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipped()
                 }
             }
         } else if let preloadedBg = preloadedImages[story.id] {
-            // Image de fond préchargée (mode preview — pas encore uploadée)
             Image(uiImage: preloadedBg)
                 .resizable()
                 .scaledToFill()
+                .scaleEffect(bgTransformScale)
+                .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
+                .rotationEffect(.degrees(bgTransformRotation))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
         } else if let legacyMedia = story.media.first,
                   let urlStr = legacyMedia.url {
-            // Fallback : média legacy de StoryItem.media (format pré-composer V2)
             if legacyMedia.type == .video, let url = MeeshyConfig.resolveMediaURL(urlStr) {
                 let player = state.ensureBackgroundVideoPlayer(url: url)
                 VideoPlayer(player: player)
                     .disabled(true)
+                    .scaleEffect(bgTransformScale)
+                    .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
+                    .rotationEffect(.degrees(bgTransformRotation))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
             } else {
-                CachedAsyncImage(url: urlStr) {
-                    Color.clear
+                let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
+                if let cached = DiskCacheStore.cachedImage(for: resolved) {
+                    Image(uiImage: cached)
+                        .resizable()
+                        .scaledToFill()
+                        .scaleEffect(bgTransformScale)
+                        .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
+                        .rotationEffect(.degrees(bgTransformRotation))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                } else {
+                    CachedAsyncImage(url: urlStr) {
+                        Color.clear
+                    }
+                    .scaledToFill()
+                    .scaleEffect(bgTransformScale)
+                    .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
+                    .rotationEffect(.degrees(bgTransformRotation))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
                 }
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
             }
         }
     }
@@ -266,21 +307,22 @@ public struct StoryCanvasReaderView: View {
                     }
                 }()
                 Text(content)
-                    .font(storyFont(for: style, size: fontSize * obj.scale))
+                    .font(storyFont(for: style, size: fontSize))
                     .foregroundColor(Color(hex: colorHex))
                     .multilineTextAlignment(alignment)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .background(
                         Group {
                             if obj.hasBg {
                                 RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.black.opacity(0.4))
+                                    .fill(Color.black.opacity(0.5))
                             }
                         }
                     )
                     .shadow(color: style == .neon ? Color(hex: colorHex).opacity(0.6) : .clear, radius: 10)
                     .frame(maxWidth: 280)
+                    .scaleEffect(obj.scale)
                     .opacity(opacity)
                     .rotationEffect(.degrees(obj.rotation))
                     .position(x: obj.x * size.width, y: obj.y * size.height)
@@ -573,13 +615,16 @@ private final class ReaderState: ObservableObject {
         guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
         let foregroundImages = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "image" }
         for media in foregroundImages {
-            // Asset precharge localement (mode preview) -- priorite sur le reseau.
             if let img = preloadedImages[media.id] {
                 loadedImages[media.id] = img
                 continue
             }
             guard let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url else { continue }
             guard let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString else { continue }
+            if let cached = DiskCacheStore.cachedImage(for: resolved) {
+                loadedImages[media.id] = cached
+                continue
+            }
             if let img = await CacheCoordinator.shared.images.image(for: resolved) {
                 loadedImages[media.id] = img
             }

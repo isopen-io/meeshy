@@ -232,6 +232,7 @@ public struct DraggableMediaView: View {
             if let player = activePlayer {
                 VideoPlayer(player: player)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .drawingGroup()
             } else if let image {
                 Image(uiImage: image)
                     .resizable()
@@ -248,6 +249,7 @@ public struct DraggableMediaView: View {
             if let player = activePlayer {
                 VideoPlayer(player: player)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .drawingGroup()
             } else if let image {
                 Image(uiImage: image)
                     .resizable()

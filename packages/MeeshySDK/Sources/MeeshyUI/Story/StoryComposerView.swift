@@ -1015,10 +1015,25 @@ public struct StoryComposerView: View {
             drawingCanvas.drawing = drawing
         }
         viewModel.drawingData = e.drawingData
+        if let bt = e.backgroundTransform {
+            viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
+                scale: bt.scale ?? 1.0, offsetX: bt.offsetX ?? 0,
+                offsetY: bt.offsetY ?? 0, rotation: bt.rotation ?? 0
+            )
+        } else {
+            viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform()
+        }
     }
 
     private func buildEffects() -> StoryEffects {
         let bgHex = selectedImage != nil ? nil : viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")
+        let bt = viewModel.backgroundTransform
+        let bgTransform = StoryBackgroundTransform(
+            scale: bt.scale != 1.0 ? bt.scale : nil,
+            offsetX: bt.offsetX != 0 ? bt.offsetX : nil,
+            offsetY: bt.offsetY != 0 ? bt.offsetY : nil,
+            rotation: bt.rotation != 0 ? bt.rotation : nil
+        )
         return StoryEffects(
             background: bgHex,
             filter: selectedFilter?.rawValue,
@@ -1034,6 +1049,7 @@ public struct StoryComposerView: View {
             textObjects: viewModel.currentEffects.textObjects,
             mediaObjects: viewModel.currentEffects.mediaObjects,
             audioPlayerObjects: viewModel.currentEffects.audioPlayerObjects,
+            backgroundTransform: bgTransform.isIdentity ? nil : bgTransform,
             slideDuration: Float(viewModel.currentSlideDuration)
         )
     }
