@@ -56,10 +56,10 @@ export function useAnonymousMessages(linkId: string) {
       
       if (offset === 0) {
         // Premier chargement, remplacer les messages
-        setMessages(result.messages || []);
+        setMessages((result.messages || []) as unknown as AnonymousMessage[]);
       } else {
         // Chargement paginé, ajouter les messages
-        setMessages(prev => [...prev, ...(result.messages || [])]);
+        setMessages(prev => [...prev, ...((result.messages || []) as unknown as AnonymousMessage[])]);
       }
       
       setHasMore(result.hasMore || false);
@@ -86,14 +86,15 @@ export function useAnonymousMessages(linkId: string) {
 
     try {
       const result = await anonymousChatService.sendMessage(content, originalLanguage);
-      
+
       // Ajouter le nouveau message à la liste
+      const msgResult = result as unknown as Record<string, unknown>;
       const newMessage: AnonymousMessage = {
-        id: result.messageId,
+        id: (msgResult.messageId as string) ?? result.id,
         content: content.trim(),
         originalLanguage,
         createdAt: new Date().toISOString(),
-        sender: result.message.sender
+        sender: ((msgResult.message as Record<string, unknown>)?.sender ?? (result as unknown as Record<string, unknown>).sender) as AnonymousMessage['sender']
       };
       
       setMessages(prev => [...prev, newMessage]);

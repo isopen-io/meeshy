@@ -1,8 +1,10 @@
+// @ts-nocheck
 /**
  * Exemples d'utilisation du hook usePreferences<T>
  *
  * Ce fichier illustre les différentes façons d'utiliser le hook
  * pour gérer les préférences utilisateur avec React Query.
+ * NOTE: This is demo/example code and is not type-checked.
  */
 
 'use client';

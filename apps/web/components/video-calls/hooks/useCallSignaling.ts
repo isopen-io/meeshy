@@ -104,7 +104,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
     socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
       callId,
       signal: fullSignal,
-    } as CallSignalEvent);
+    } as CallSignalEvent, () => {});
 
     logger.debug('[useCallSignaling]', 'Signal sent', {
       type: signal.type,
@@ -227,7 +227,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
 
-    socket.emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled });
+    socket.emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled }, () => {});
     logger.debug('[useCallSignaling]', 'Toggle audio emitted', { enabled });
   }, [callId]);
 
@@ -238,7 +238,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
 
-    socket.emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
+    socket.emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled }, () => {});
     logger.debug('[useCallSignaling]', 'Toggle video emitted', { enabled });
   }, [callId]);
 

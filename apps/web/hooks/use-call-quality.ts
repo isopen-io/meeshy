@@ -179,10 +179,12 @@ export function useCallQuality({
       socket?.emit(CLIENT_EVENTS.CALL_QUALITY_REPORT, {
         callId,
         stats: {
+          level: qualityStats.level,
           rtt: qualityStats.rtt ?? 0,
           packetLoss: qualityStats.packetLoss ?? 0,
-          bitrate: qualityStats.bitrate?.audio ?? 0,
+          bitrate: qualityStats.bitrate ?? { audio: 0, video: 0 },
           jitter: qualityStats.jitter ?? 0,
+          timestamp: qualityStats.timestamp ?? new Date(),
         },
       });
     }, 10_000);

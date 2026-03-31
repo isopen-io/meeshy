@@ -131,15 +131,15 @@ export function useMessageTranslations({
         const currentTimestamp = new Date(t.createdAt || message.createdAt);
         
         // CORRECTION: Améliorer la logique de déduplication des traductions
-        const existingTranslation = translationsMap.get(language);
-        const shouldReplace = !existingTranslation || 
+        const existingTranslation = translationsMap.get(language ?? '');
+        const shouldReplace = !existingTranslation ||
           currentTimestamp > new Date(existingTranslation.timestamp) ||
           (t.translationModel === 'premium' && existingTranslation.confidence < 0.95);
-        
+
         if (shouldReplace) {
           const translation: BubbleTranslation = {
-            language: language,
-            content: content,
+            language: language ?? '',
+            content: content ?? '',
             status: 'completed' as const,
             timestamp: currentTimestamp,
             confidence: t.confidenceScore || t.confidence || 0.9,
@@ -147,7 +147,7 @@ export function useMessageTranslations({
             cached: t.cached || false
           };
 
-          translationsMap.set(language, translation);
+          translationsMap.set(language ?? '', translation);
         }
       });
     

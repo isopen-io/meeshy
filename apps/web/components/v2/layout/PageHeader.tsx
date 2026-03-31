@@ -12,6 +12,7 @@ interface PageHeaderProps {
   actionButtons?: ReactNode;
   hideNotificationButton?: boolean;
   hideProfileButton?: boolean;
+  onBack?: () => void;
   children?: ReactNode;
 }
 
@@ -21,6 +22,7 @@ export function PageHeader({
   actionButtons,
   hideNotificationButton,
   hideProfileButton,
+  onBack,
   children,
 }: PageHeaderProps) {
   const { goBackToList, isMobile, showRightPanel } = useSplitView();
