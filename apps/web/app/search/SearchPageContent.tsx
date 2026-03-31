@@ -745,7 +745,7 @@ export function SearchPageContent() {
                               <div className="flex items-center gap-4 mb-3">
                                 <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
                                   <Users className="h-4 w-4" />
-                                  <span>{community.memberCount} membre{community.memberCount > 1 ? 's' : ''}</span>
+                                  <span>{community.memberCount ?? 0} membre{(community.memberCount ?? 0) > 1 ? 's' : ''}</span>
                                 </div>
                               </div>
 

@@ -321,7 +321,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                 if (m.id !== data.messageId) return m;
                 // Store translated audio metadata keyed by target language
                 const translatedAudios = { ...((m as CachedMessage).translatedAudios || {}) };
-                translatedAudios[targetLang] = data.translatedAudio;
+                translatedAudios[targetLang] = data.translatedAudio as unknown as SocketIOTranslation;
                 return { ...m, translatedAudios };
               }),
             })),

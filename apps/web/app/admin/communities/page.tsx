@@ -412,12 +412,12 @@ export default function AdminCommunitiesPage() {
                             <div className="flex items-center space-x-1">
                               <User className="h-4 w-4" />
                               <span>
-                                Créé par {community.creator.displayName || community.creator.username}
+                                Créé par {community.creator?.displayName || community.creator?.username}
                               </span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <Calendar className="h-4 w-4" />
-                              <span>{formatDate(community.createdAt)}</span>
+                              <span>{formatDate(String(community.createdAt))}</span>
                             </div>
                           </div>
                         </div>

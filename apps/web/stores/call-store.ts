@@ -356,7 +356,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     beforeUnloadHandler = () => {
       const socket = meeshySocketIOService.getSocket();
       if (socket?.connected) {
-        socket.emit(CLIENT_EVENTS.CALL_END, { callId, reason: 'completed' });
+        socket.emit(CLIENT_EVENTS.CALL_END, { callId, reason: 'completed' }, () => {});
       }
       // sendBeacon fallback for when socket is already closing
       if (typeof navigator.sendBeacon === 'function') {

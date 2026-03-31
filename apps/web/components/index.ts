@@ -39,7 +39,6 @@ export {
   PasswordSettings,
   VideoSettings,
   DocumentSettings,
-  MediaSettings,
   FontSelector,
   ThemeSettings,
 } from './settings';

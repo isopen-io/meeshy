@@ -13,7 +13,8 @@ export { VoiceProfileSettings } from './voice-profile-settings';
 export { PasswordSettings } from './password-settings';
 export { VideoSettings } from './VideoSettings';
 export { DocumentSettings } from './DocumentSettings';
-export { MediaSettings } from './MediaSettings';
+// MediaSettings not yet implemented
+// export { MediaSettings } from './MediaSettings';
 
 // Utility components
 export { FontSelector } from './font-selector';

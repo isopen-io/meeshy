@@ -60,8 +60,8 @@ export default memo(function DeliveryQueueItemCard({ item, onDelete, onEdit }: D
   }, [item.scheduledAt]);
 
   const isMessage = item.action.type === 'message';
-  const content = isMessage ? item.action.content : null;
-  const emoji = !isMessage ? item.action.emoji : null;
+  const content = item.action.type === 'message' ? item.action.content : null;
+  const emoji = item.action.type === 'reaction' ? item.action.emoji : null;
 
   const handleStartEdit = useCallback(() => {
     if (isMessage) {

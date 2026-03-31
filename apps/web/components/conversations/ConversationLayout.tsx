@@ -133,7 +133,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
         if (u?.id) users.push(u as { id: string; [key: string]: unknown });
       }
     }
-    if (users.length > 0) mergeParticipants(users as Parameters<typeof mergeParticipants>[0]);
+    if (users.length > 0) mergeParticipants(users as unknown as Parameters<typeof mergeParticipants>[0]);
   }, [conversations, mergeParticipants]);
 
   // Derived stable value for effect deps - avoids re-runs when conversation objects change but IDs don't (#10, #11)
@@ -254,7 +254,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       updatedAt: new Date().toISOString(),
       participants: [],
       unreadCount: 0,
-    } as Conversation;
+    } as unknown as Conversation;
   }, [selectedConversation, effectiveSelectedId]);
   const {
     messages,

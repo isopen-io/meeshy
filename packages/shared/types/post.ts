@@ -62,6 +62,7 @@ export interface Post {
   readonly visibilityUserIds?: readonly string[];
   readonly content?: string | null;
   readonly originalLanguage?: string | null;
+  readonly translations?: unknown;
   readonly communityId?: string | null;
   readonly moodEmoji?: string | null;
   readonly audioUrl?: string | null;

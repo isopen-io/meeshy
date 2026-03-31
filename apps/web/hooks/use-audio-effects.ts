@@ -243,26 +243,25 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
       logger.debug('[useAudioEffects]', 'Effect toggled', { effectType, enabled: newEnabled });
 
       // Disable other voice effects when enabling one (mutually exclusive)
-      const voiceOverrides: Partial<AudioEffectsState> = {};
+      let result = { ...prev };
       if (VOICE_EFFECTS.includes(effectType) && newEnabled) {
         for (const voiceType of VOICE_EFFECTS) {
           if (voiceType !== effectType) {
             const key = getEffectKey(voiceType);
             if (prev[key].enabled) {
-              voiceOverrides[key] = { ...prev[key], enabled: false };
+              result = { ...result, [key]: { ...prev[key], enabled: false } } as AudioEffectsState;
             }
           }
         }
       }
 
       return {
-        ...prev,
-        ...voiceOverrides,
+        ...result,
         [effectKey]: {
           ...prev[effectKey],
           enabled: newEnabled,
         },
-      };
+      } as AudioEffectsState;
     });
   }, []);
 

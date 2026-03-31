@@ -279,7 +279,7 @@ export default function SettingsPage() {
     label: tab.label,
     icon: tab.icon,
     content: (() => {
-      const Component = tab.component;
+      const Component = tab.component as React.ComponentType<{ user?: User | null; onUserUpdate?: (user: User) => void }>;
       return <Component user={currentUser} onUserUpdate={handleUserUpdate} />;
     })()
   })), [tabs, currentUser, handleUserUpdate]);

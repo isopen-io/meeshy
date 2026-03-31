@@ -104,7 +104,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
         },
       };
 
-      socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData);
+      socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData, () => {});
       toast.success('Starting call...');
     } catch (error: unknown) {
       cleanupStream(stream);
