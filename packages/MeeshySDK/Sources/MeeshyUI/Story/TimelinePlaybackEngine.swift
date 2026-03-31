@@ -172,8 +172,10 @@ final class TimelinePlaybackEngine {
     }
 
     private func applyMute() {
-        videoPlayer?.volume = isMuted ? 0 : 1.0 // Should use original element volume, but simplified for now
-        audioPlayer?.volume = isMuted ? 0 : 1.0
+        guard let activeId = activeMediaId,
+              let element = mediaElements.first(where: { $0.id == activeId }) else { return }
+        videoPlayer?.volume = isMuted ? 0 : element.volume
+        audioPlayer?.volume = isMuted ? 0 : element.volume
     }
 
     // MARK: - Display Link
