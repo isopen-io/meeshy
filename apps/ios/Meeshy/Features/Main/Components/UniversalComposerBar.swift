@@ -194,6 +194,8 @@ struct UniversalComposerBar: View {
 
     // Ephemeral picker
     @State var showEphemeralPicker = false
+    // Permanent effects inline picker (for comments)
+    @State var showPermanentEffectsPicker = false
 
     // Text analysis (sentiment + language detection from MessageComposer)
     @StateObject private var textAnalyzer = TextAnalyzer()
@@ -209,6 +211,17 @@ struct UniversalComposerBar: View {
     var resolvedShowVoice: Bool { mode?.showVoice ?? showVoice }
     var resolvedShowAttachment: Bool { mode?.showAttachment ?? showAttachment }
     private var resolvedShowLanguage: Bool { mode?.showLanguageSelector ?? showLanguageSelector }
+    private var resolvedHideEphemeral: Bool {
+        if let mode { return !mode.showEphemeral }
+        return hideEphemeral
+    }
+    private var resolvedHideEffects: Bool {
+        if let mode { return !mode.showEffectsSheet }
+        return hideEffects
+    }
+    private var resolvedShowPermanentEffects: Bool {
+        mode?.showPermanentEffects ?? false
+    }
 
     // MARK: - Computed
 
@@ -402,6 +415,12 @@ struct UniversalComposerBar: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
+                // Permanent effects inline picker (for comments)
+                if showPermanentEffectsPicker {
+                    permanentEffectsInlinePicker
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
                 // Top toolbar (ephemeral, sentiment, language, recording indicator, char counter)
                 topToolbar
                     .padding(.horizontal, 8)
@@ -445,6 +464,7 @@ struct UniversalComposerBar: View {
             .background(composerBackground)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
         .onChange(of: attachments.count) { _, _ in notifyContentChange() }
         .onChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
@@ -559,8 +579,8 @@ struct UniversalComposerBar: View {
 
     private var topToolbar: some View {
         HStack(spacing: 6) {
-            // Ephemeral mode toggle
-            if !hideEphemeral {
+            // Ephemeral mode toggle (hidden for comments)
+            if !resolvedHideEphemeral {
                 ephemeralToggleButton
             }
 
@@ -569,9 +589,14 @@ struct UniversalComposerBar: View {
                 blurToggleButton
             }
 
-            // Effects picker toggle
-            if !hideEffects {
+            // Effects picker toggle (full sheet — messages only)
+            if !resolvedHideEffects {
                 effectsToggleButton
+            }
+
+            // Permanent effects inline toggle (comments only)
+            if resolvedShowPermanentEffects {
+                permanentEffectsToggleButton
             }
 
             // Sentiment indicator
@@ -972,7 +997,7 @@ struct UniversalComposerBar: View {
                     .foregroundColor(isActive ? Color(hex: "A855F7") : mutedColor)
 
                 if isActive {
-                    Text("Blur")
+                    Text("Flou")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(Color(hex: "A855F7"))
                 }
@@ -1043,5 +1068,117 @@ extension UniversalComposerBar {
                             ? "\(effectCount) effet(s) actif(s)"
                             : "Ajouter des effets au message")
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
+    }
+
+    // ========================================================================
+    // MARK: - Permanent Effects Toggle Button (comments)
+    // ========================================================================
+
+    var permanentEffectsToggleButton: some View {
+        let persistentFlags: [MessageEffectFlags] = [.glow, .pulse, .rainbow, .sparkle]
+        let activeCount = persistentFlags.filter { pendingEffects.wrappedValue.flags.contains($0) }.count
+        let isActive = activeCount > 0
+
+        return Button {
+            onAnyInteraction?()
+            HapticFeedback.light()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showPermanentEffectsPicker.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isActive ? Color(hex: accentColor) : mutedColor)
+
+                if isActive {
+                    Text("\(activeCount)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Color(hex: accentColor))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(isActive
+                          ? Color(hex: accentColor).opacity(0.15)
+                          : Color.clear)
+                    .overlay(
+                        Capsule()
+                            .stroke(isActive
+                                    ? Color(hex: accentColor).opacity(0.3)
+                                    : Color.clear,
+                                    lineWidth: 0.5)
+                    )
+            )
+        }
+        .accessibilityLabel(isActive
+                            ? "\(activeCount) effet(s) permanent(s) actif(s)"
+                            : "Ajouter des effets permanents")
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
+    }
+
+    // ========================================================================
+    // MARK: - Permanent Effects Inline Picker (comments)
+    // ========================================================================
+
+    var permanentEffectsInlinePicker: some View {
+        let items: [(flag: MessageEffectFlags, icon: String, label: String)] = [
+            (.glow, "sun.max", "Lueur"),
+            (.pulse, "heart.fill", "Pulsation"),
+            (.rainbow, "rainbow", "Arc-en-ciel"),
+            (.sparkle, "sparkle", "Scintillant"),
+        ]
+
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(items, id: \.label) { item in
+                    let isSelected = pendingEffects.wrappedValue.flags.contains(item.flag)
+                    Button {
+                        HapticFeedback.light()
+                        if isSelected {
+                            pendingEffects.wrappedValue.flags.remove(item.flag)
+                        } else {
+                            pendingEffects.wrappedValue.flags.insert(item.flag)
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 11))
+                            Text(item.label)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(isSelected ? .white : Color(hex: accentColor))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(isSelected
+                                      ? Color(hex: accentColor)
+                                      : Color(hex: accentColor).opacity(0.1))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color(hex: accentColor).opacity(0.3), lineWidth: 0.5)
+                                )
+                        )
+                    }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
+                    .accessibilityLabel("\(item.label), \(isSelected ? "actif" : "inactif")")
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(style == .dark ? Color.black.opacity(0.3) : theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 0.5)
+                )
+        )
+        .padding(.horizontal, 8)
     }
 }

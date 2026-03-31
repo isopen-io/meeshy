@@ -15,13 +15,14 @@ struct CommentsSheetView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewModel: StoryViewModel
-    @State private var commentText = ""
     @State private var replyingTo: FeedComment? = nil
-    @FocusState private var isComposerFocused: Bool
-    @State private var commentBounce: Bool = false
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var liveComments: [FeedComment]?
     @State private var liveCommentCount: Int?
+    @State private var composerLanguage: String = "fr"
+    @State private var commentBlurEnabled: Bool = false
+    @State private var commentEffects: MessageEffects = .none
+    @State private var composerFocusTrigger: Bool = false
 
     private var comments: [FeedComment] { liveComments ?? post.comments }
     private var commentCount: Int { liveCommentCount ?? post.commentCount }
@@ -43,7 +44,7 @@ struct CommentsSheetView: View {
                                     accentColor: accentColor,
                                     onReply: {
                                         replyingTo = comment
-                                        isComposerFocused = true
+                                        composerFocusTrigger = true
                                     },
                                     onLikeComment: {
                                         onLikeComment?(post.id, comment.id)
@@ -182,174 +183,87 @@ struct CommentsSheetView: View {
         )
     }
 
-    // MARK: - Comment Composer
-    private var commentComposer: some View {
-        VStack(spacing: 0) {
-            // Reply indicator
-            if let replyingTo = replyingTo {
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color(hex: replyingTo.authorColor))
-                        .frame(width: 3, height: 36)
+    // MARK: - Comment Reply Banner
+    private func commentReplyBanner(_ reply: FeedComment) -> some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color(hex: reply.authorColor))
+                .frame(width: 3, height: 36)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(replyingTo.author)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: replyingTo.authorColor))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(reply.author)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Color(hex: reply.authorColor))
 
-                        Text(replyingTo.displayContent)
-                            .font(.system(size: 12))
-                            .foregroundColor(theme.textSecondary)
-                            .lineLimit(1)
-                    }
-
-                    Spacer()
-
-                    Button {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            self.replyingTo = nil
-                        }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(theme.textMuted)
-                            .frame(width: 24, height: 24)
-                            .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(theme.surfaceGradient(tint: accentColor))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
-                        )
-                )
-                .padding(.horizontal, 8)
+                Text(reply.displayContent)
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(1)
             }
 
-            // Composer
-            HStack(spacing: 12) {
-                // Avatar
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 36, height: 36)
-                    .overlay(
-                        Text("M")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
-                    )
+            Spacer()
 
-                // Text field
-                HStack(spacing: 8) {
-                    TextField(replyingTo != nil ? "Répondre..." : "Ajouter un commentaire...", text: $commentText)
-                        .focused($isComposerFocused)
-                        .font(.system(size: 15))
-                        .foregroundColor(theme.textPrimary)
-
-                    // Emoji button
-                    Button {
-                        HapticFeedback.light()
-                    } label: {
-                        Image(systemName: "face.smiling")
-                            .font(.system(size: 20))
-                            .foregroundColor(theme.textMuted)
-                    }
+            Button {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    replyingTo = nil
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(theme.inputBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(
-                                    isComposerFocused ?
-                                    Color(hex: accentColor).opacity(0.5) :
-                                        theme.inputBorder,
-                                    lineWidth: 1
-                                )
-                        )
-                )
-                .scaleEffect(commentBounce ? 1.02 : 1.0)
-                .onChange(of: isComposerFocused) { _, newValue in
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
-                        commentBounce = newValue
-                    }
-                }
-
-                // Send button
-                if !commentText.isEmpty {
-                    Button {
-                        let text = commentText
-                        let parentId = replyingTo?.id
-                        commentText = ""
-                        replyingTo = nil
-                        isComposerFocused = false
-                        HapticFeedback.success()
-                        Task {
-                            do {
-                                let apiComment = try await PostService.shared.addComment(postId: post.id, content: text, parentId: parentId)
-                                let feedComment = FeedComment(
-                                    id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
-                                    authorAvatarURL: apiComment.author.avatar,
-                                    content: apiComment.content, timestamp: apiComment.createdAt,
-                                    likes: 0, replies: 0
-                                )
-                                var current = liveComments ?? post.comments
-                                if !current.contains(where: { $0.id == feedComment.id }) {
-                                    current.insert(feedComment, at: 0)
-                                }
-                                liveComments = current
-                                liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
-                            } catch {
-                                ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
-                            }
-                        }
-                    } label: {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.7)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                Image(systemName: "paperplane.fill")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .rotationEffect(.degrees(45))
-                                    .offset(x: -1)
-                            )
-                            .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(theme.textMuted)
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Rectangle()
-                            .fill(theme.backgroundPrimary.opacity(0.8))
-                    )
-                    .shadow(color: Color.black.opacity(0.1), radius: 10, y: -5)
-            )
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: commentText.isEmpty)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: replyingTo?.id)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(theme.surfaceGradient(tint: accentColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 8)
+    }
+
+    // MARK: - Comment Composer (UniversalComposerBar)
+    private var commentComposer: some View {
+        UniversalComposerBar(
+            style: .light,
+            mode: .comment,
+            accentColor: accentColor,
+            selectedLanguage: composerLanguage,
+            onLanguageChange: { composerLanguage = $0 },
+            onSend: { text in
+                let parentId = replyingTo?.id
+                replyingTo = nil
+                Task {
+                    do {
+                        let apiComment = try await PostService.shared.addComment(postId: post.id, content: text, parentId: parentId)
+                        let feedComment = FeedComment(
+                            id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                            authorAvatarURL: apiComment.author.avatar,
+                            content: apiComment.content, timestamp: apiComment.createdAt,
+                            likes: 0, replies: 0
+                        )
+                        var current = liveComments ?? post.comments
+                        if !current.contains(where: { $0.id == feedComment.id }) {
+                            current.insert(feedComment, at: 0)
+                        }
+                        liveComments = current
+                        liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
+                    } catch {
+                        ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
+                    }
+                }
+            },
+            isBlurEnabled: $commentBlurEnabled,
+            pendingEffects: $commentEffects,
+            focusTrigger: $composerFocusTrigger,
+            replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) }
+        )
     }
 
     private func timeAgo(from date: Date) -> String {
