@@ -170,6 +170,7 @@ public struct FeedComment: Identifiable, Sendable {
     public let id: String
     public let author: String
     public let authorId: String
+    public let authorUsername: String?
     public let authorColor: String
     public let authorAvatarURL: String?
     public let parentId: String?
@@ -187,11 +188,12 @@ public struct FeedComment: Identifiable, Sendable {
         MessageEffects(flags: MessageEffectFlags(rawValue: UInt32(effectFlags)))
     }
 
-    public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
+    public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorUsername: String? = nil,
+                authorAvatarURL: String? = nil,
                 content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0,
                 parentId: String? = nil, effectFlags: Int = 0,
                 originalLanguage: String? = nil, translatedContent: String? = nil) {
-        self.id = id; self.author = author; self.authorId = authorId
+        self.id = id; self.author = author; self.authorId = authorId; self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL; self.parentId = parentId
         self.content = content; self.timestamp = timestamp; self.likes = likes; self.replies = replies
@@ -204,7 +206,7 @@ extension FeedComment: CacheIdentifiable {}
 
 extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, author, authorId, authorAvatarURL, parentId, content, timestamp, likes, replies
+        case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp, likes, replies
         case effectFlags, originalLanguage, translatedContent
     }
 
@@ -213,6 +215,7 @@ extension FeedComment: Codable {
         id = try c.decode(String.self, forKey: .id)
         author = try c.decode(String.self, forKey: .author)
         authorId = try c.decode(String.self, forKey: .authorId)
+        authorUsername = try c.decodeIfPresent(String.self, forKey: .authorUsername)
         authorAvatarURL = try c.decodeIfPresent(String.self, forKey: .authorAvatarURL)
         parentId = try c.decodeIfPresent(String.self, forKey: .parentId)
         content = try c.decode(String.self, forKey: .content)
@@ -230,6 +233,7 @@ extension FeedComment: Codable {
         try c.encode(id, forKey: .id)
         try c.encode(author, forKey: .author)
         try c.encode(authorId, forKey: .authorId)
+        try c.encodeIfPresent(authorUsername, forKey: .authorUsername)
         try c.encodeIfPresent(authorAvatarURL, forKey: .authorAvatarURL)
         try c.encodeIfPresent(parentId, forKey: .parentId)
         try c.encode(content, forKey: .content)
@@ -247,6 +251,7 @@ public struct FeedPost: Identifiable, Sendable {
     public let id: String
     public let author: String
     public let authorId: String
+    public let authorUsername: String?
     public let authorColor: String
     public let authorAvatarURL: String?
     public let type: String?
@@ -270,12 +275,13 @@ public struct FeedPost: Identifiable, Sendable {
     public var displayContent: String { translatedContent ?? content }
     public var availableLanguages: [String] { Array(translations?.keys ?? [String: PostTranslation]().keys) }
 
-    public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
+    public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorUsername: String? = nil,
+                authorAvatarURL: String? = nil,
                 type: String? = nil, content: String, timestamp: Date = Date(), likes: Int = 0,
                 comments: [FeedComment] = [], commentCount: Int? = nil, repost: RepostContent? = nil, repostAuthor: String? = nil,
                 isQuote: Bool = false, media: [FeedMedia] = [], mediaUrl: String? = nil,
                 originalLanguage: String? = nil, translations: [String: PostTranslation]? = nil, translatedContent: String? = nil) {
-        self.id = id; self.author = author; self.authorId = authorId
+        self.id = id; self.author = author; self.authorId = authorId; self.authorUsername = authorUsername
         let stableId = authorId.isEmpty ? author : authorId
         self.authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
         self.authorAvatarURL = authorAvatarURL; self.type = type
@@ -291,7 +297,7 @@ public struct FeedPost: Identifiable, Sendable {
 
 extension FeedPost: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, author, authorId, authorAvatarURL, type, content, timestamp, likes, isLiked
+        case id, author, authorId, authorUsername, authorAvatarURL, type, content, timestamp, likes, isLiked
         case comments, commentCount, repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
     }
@@ -301,6 +307,7 @@ extension FeedPost: Codable {
         id = try c.decode(String.self, forKey: .id)
         author = try c.decode(String.self, forKey: .author)
         authorId = try c.decode(String.self, forKey: .authorId)
+        authorUsername = try c.decodeIfPresent(String.self, forKey: .authorUsername)
         authorAvatarURL = try c.decodeIfPresent(String.self, forKey: .authorAvatarURL)
         type = try c.decodeIfPresent(String.self, forKey: .type)
         content = try c.decode(String.self, forKey: .content)
@@ -325,6 +332,7 @@ extension FeedPost: Codable {
         try c.encode(id, forKey: .id)
         try c.encode(author, forKey: .author)
         try c.encode(authorId, forKey: .authorId)
+        try c.encodeIfPresent(authorUsername, forKey: .authorUsername)
         try c.encodeIfPresent(authorAvatarURL, forKey: .authorAvatarURL)
         try c.encodeIfPresent(type, forKey: .type)
         try c.encode(content, forKey: .content)

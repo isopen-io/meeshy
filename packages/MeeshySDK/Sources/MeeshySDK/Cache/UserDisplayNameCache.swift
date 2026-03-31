@@ -1,5 +1,12 @@
 import Foundation
 
+public struct MentionedUser: Codable, Sendable {
+    public let userId: String
+    public let username: String
+    public let displayName: String?
+    public let avatar: String?
+}
+
 public final class UserDisplayNameCache: @unchecked Sendable {
     public static let shared = UserDisplayNameCache()
 
@@ -104,6 +111,17 @@ public final class UserDisplayNameCache: @unchecked Sendable {
                   !username.isEmpty, !displayName.isEmpty,
                   displayName != username else { continue }
             cache[username.lowercased()] = displayName
+        }
+        lock.unlock()
+    }
+
+    public func trackFromMentionedUsers(_ users: [MentionedUser]) {
+        lock.lock()
+        for u in users {
+            guard let displayName = u.displayName,
+                  !u.username.isEmpty, !displayName.isEmpty,
+                  displayName != u.username else { continue }
+            cache[u.username.lowercased()] = displayName
         }
         lock.unlock()
     }

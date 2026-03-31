@@ -179,6 +179,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 conversationId: conversationId, offset: 0, limit: 30, includeReplies: true
             )
             let userId = await currentUserId()
+            if let mentionedUsers = response.meta?.mentionedUsers {
+                UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
+            }
             let messages = response.data.map { $0.toMessage(currentUserId: userId) }
             await cache.messages.save(messages, for: conversationId)
             _messagesDidChange.send(conversationId)
@@ -369,6 +372,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     // MARK: - Socket Event Handlers
 
     private func handleNewMessage(_ apiMessage: APIMessage) async {
+        if let mentionedUsers = apiMessage.mentionedUsers {
+            UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
+        }
         let userId = await currentUserId()
         let msg = apiMessage.toMessage(currentUserId: userId)
         await cache.messages.upsert(item: msg, for: msg.conversationId) { existing, new in

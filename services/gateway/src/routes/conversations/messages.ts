@@ -17,6 +17,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import { resolveMentionedUsers } from '../../services/MentionService';
 import type {
   ConversationParams,
   SendMessageBody,
@@ -950,12 +951,20 @@ export function registerMessagesRoutes(
       // optional top-level `pagination`, and a `meta.userLanguage` field that iOS SDK
       // (MessagesListResponse / MessagesAPIResponse) and web parse at root level.
       // Migration to sendSuccess requires a coordinated client update (breaking change).
+      const mentionContents = mappedMessages
+        .map((m: any) => m.content as string)
+        .filter(Boolean);
+      const mentionedUsers = mentionContents.length > 0
+        ? await resolveMentionedUsers(prisma, mentionContents)
+        : [];
+
       const responsePayload: any = {
         success: true,
         data: mappedMessages,
         cursorPagination: cursorPaginationMeta,
         meta: {
-          userLanguage: userPreferredLanguage
+          userLanguage: userPreferredLanguage,
+          mentionedUsers
         }
       };
 
