@@ -9,6 +9,7 @@ import type { FastifyReply } from 'fastify';
 import type {
   ApiResponse,
   PaginationMeta,
+  CursorPaginationMeta,
   ResponseMeta
 } from '@meeshy/shared/types';
 
@@ -20,7 +21,7 @@ export function sendSuccess<T>(
   data: T,
   options?: {
     message?: string;
-    pagination?: PaginationMeta;
+    pagination?: PaginationMeta | CursorPaginationMeta;
     meta?: Partial<ResponseMeta>;
     statusCode?: number;
   }
@@ -29,10 +30,8 @@ export function sendSuccess<T>(
     success: true,
     data,
     message: options?.message,
-    meta: options?.pagination || options?.meta ? {
-      pagination: options?.pagination,
-      ...options?.meta
-    } : undefined
+    pagination: options?.pagination as any,
+    meta: options?.meta ? { ...options.meta } : undefined,
   };
 
   reply.status(options?.statusCode || 200).send(response);
@@ -54,10 +53,8 @@ export function sendPaginatedSuccess<T>(
     success: true,
     data,
     message: options?.message,
-    meta: {
-      pagination,
-      ...options?.meta
-    }
+    pagination,
+    meta: options?.meta ? { ...options.meta } : undefined,
   };
 
   reply.status(200).send(response);
@@ -167,10 +164,8 @@ export function buildSuccessResponse<T>(
     success: true,
     data,
     message: options?.message,
-    meta: options?.pagination || options?.meta ? {
-      pagination: options?.pagination,
-      ...options?.meta
-    } : undefined
+    pagination: options?.pagination,
+    meta: options?.meta ? { ...options.meta } : undefined,
   };
 }
 

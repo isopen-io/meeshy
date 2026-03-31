@@ -31,7 +31,7 @@ export class PostCommentService {
         postId,
         authorId,
         content,
-        parentId: parentId ?? undefined,
+        parentId: parentId ?? null,
       },
       select: {
         id: true,
@@ -68,7 +68,7 @@ export class PostCommentService {
     const where: any = {
       postId,
       isDeleted: false,
-      parentId: null, // top-level only
+      OR: [{ parentId: null }, { parentId: { isSet: false } }],
     };
 
     if (cursorData) {
