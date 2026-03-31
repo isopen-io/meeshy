@@ -517,6 +517,12 @@ struct ThemedMessageBubble: View {
                                         HapticFeedback.medium()
                                         onShowTranslationDetail?(message.id)
                                     }
+                                    .overlay(alignment: .topLeading) {
+                                        if message.isEdited {
+                                            editedIndicator
+                                                .offset(y: -14)
+                                        }
+                                    }
 
                                 secondaryContentView
 

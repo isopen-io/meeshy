@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 // MARK: - EmojiDetector
 
