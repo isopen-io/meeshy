@@ -14,6 +14,7 @@ import { useWebSocket } from '@/hooks/use-websocket';
 import { conversationsService } from '@/services/conversations.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { Message, User, TypingEvent } from '@meeshy/shared/types';
+import type { MentionedUser } from '@meeshy/shared/types/mention';
 
 export interface UseMessagesV2Options {
   enabled?: boolean;
@@ -31,6 +32,7 @@ export interface SendMessageOptions {
 export interface MessagesV2Return {
   // Data
   messages: Message[];
+  mentionedUsers: readonly MentionedUser[];
 
   // Loading states
   isLoading: boolean;
@@ -77,6 +79,7 @@ export function useMessagesV2(
   // Use existing messages hook with React Query
   const {
     messages,
+    mentionedUsers,
     isLoading,
     isLoadingMore,
     hasMore,
@@ -340,6 +343,7 @@ export function useMessagesV2(
 
   return {
     messages,
+    mentionedUsers,
     isLoading,
     isLoadingMore,
     isSending,
