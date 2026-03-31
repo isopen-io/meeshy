@@ -25,7 +25,7 @@ export function registerCommentRoutes(
       const result = await commentService.getComments(postId, cursor, limit);
 
       return sendSuccess(reply, result.items, {
-        meta: { pagination: { total: 0, offset: 0, limit, hasMore: result.hasMore }, nextCursor: result.nextCursor } as any,
+        pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId/comments] Error: ${error}`);
@@ -45,7 +45,7 @@ export function registerCommentRoutes(
       const result = await commentService.getReplies(commentId, cursor, limit);
 
       return sendSuccess(reply, result.items, {
-        meta: { pagination: { total: 0, offset: 0, limit, hasMore: result.hasMore }, nextCursor: result.nextCursor } as any,
+        pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
       });
     } catch (error) {
       fastify.log.error(`[GET comments/:commentId/replies] Error: ${error}`);

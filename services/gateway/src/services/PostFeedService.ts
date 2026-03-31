@@ -28,6 +28,7 @@ const feedPostInclude = {
   author: { select: authorSelect },
   media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
   comments: {
+    where: { isDeleted: false, OR: [{ parentId: null }, { parentId: { isSet: false } }] },
     select: {
       id: true,
       content: true,
