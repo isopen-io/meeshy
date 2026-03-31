@@ -31,7 +31,7 @@ enum Route: Hashable {
 extension Route {
     var isHub: Bool {
         switch self {
-        case .profile, .settings, .communityList, .contacts, .links:
+        case .profile, .settings, .communityList, .contacts, .links, .notifications:
             return true
         default:
             return false
@@ -58,6 +58,13 @@ final class Router: ObservableObject {
     }
 
     func push(_ route: Route) {
+        if currentRoute == route { return }
+
+        if route.isHub, let idx = path.lastIndex(where: { $0 == route }) {
+            path.removeSubrange((idx + 1)...)
+            return
+        }
+
         path.append(route)
     }
 
