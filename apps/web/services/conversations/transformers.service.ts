@@ -350,6 +350,16 @@ export class TransformersService {
       ? msg.validatedMentions.map(m => String(m))
       : undefined;
 
+    // Transformer mentionedUsers depuis la réponse API
+    const mentionedUsers = Array.isArray(msg.mentionedUsers)
+      ? msg.mentionedUsers.map((u: Record<string, unknown>) => ({
+          userId: String(u.userId || ''),
+          username: String(u.username || ''),
+          displayName: String(u.displayName || ''),
+          avatar: u.avatar ? String(u.avatar) : undefined,
+        }))
+      : undefined;
+
     // Resolve the User ID for this message (for alignment: isOwnMessage checks)
     // senderId from DB is a Participant ID; the actual User ID comes from sender relation
     const senderUserId = getSenderUserId(sender as Record<string, unknown>) || senderId;
@@ -382,6 +392,7 @@ export class TransformersService {
       replyTo,
       attachments,
       validatedMentions,
+      mentionedUsers,
       timestamp: createdAt,
     };
 

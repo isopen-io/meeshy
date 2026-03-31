@@ -49,7 +49,7 @@ export class MessagesService {
         success: boolean;
         data: unknown[];
         pagination?: PaginationMeta;
-        meta?: { userLanguage?: string };
+        meta?: { userLanguage?: string; mentionedUsers?: readonly import('@meeshy/shared/types/mention').MentionedUser[] };
       }>(
         `/conversations/${conversationId}/messages`,
         { offset, limit },
@@ -69,11 +69,14 @@ export class MessagesService {
 
       const pagination = response.data.pagination;
 
+      const mentionedUsers = response.data.meta?.mentionedUsers;
+
       return {
         messages: transformedMessages,
         total: pagination?.total ?? transformedMessages.length,
         hasMore: pagination?.hasMore ?? false,
         pagination,
+        mentionedUsers,
       };
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {

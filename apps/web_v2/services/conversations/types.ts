@@ -14,6 +14,7 @@ import type {
   MessageSource,
   MessageType,
 } from '@meeshy/shared/types';
+import type { MentionedUser } from '@meeshy/shared/types/mention';
 
 /**
  * Options de filtrage pour les participants
@@ -57,6 +58,7 @@ export interface GetMessagesResponse {
   total: number;
   hasMore: boolean;
   pagination?: PaginationMeta;
+  mentionedUsers?: readonly MentionedUser[];
 }
 
 /**

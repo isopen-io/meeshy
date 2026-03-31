@@ -1,9 +1,11 @@
 'use client';
 
-import { HTMLAttributes, useState, useCallback } from 'react';
+import { HTMLAttributes, useState, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { getLanguageColor, theme } from './theme';
 import { GhostIcon } from './GhostBadge';
+import { buildMentionDisplayMap, resolveDisplayContent } from '@/utils/mention-display';
+import type { MentionedUser } from '@meeshy/shared/types/mention';
 
 export interface Translation {
   languageCode: string;
@@ -30,6 +32,8 @@ export interface MessageBubbleProps extends HTMLAttributes<HTMLDivElement> {
   senderAvatar?: string;
   /** Whether the sender is anonymous (shows ghost icon) */
   isAnonymous?: boolean;
+  /** Mentioned users for @username → @displayName resolution */
+  mentionedUsers?: readonly MentionedUser[];
   /** Callback when a translation is selected */
   onTranslationSelect?: (languageCode: string) => void;
 }
@@ -87,6 +91,7 @@ export function MessageBubble({
   sender,
   senderAvatar,
   isAnonymous = false,
+  mentionedUsers,
   onTranslationSelect,
   className,
   ...props
@@ -106,6 +111,20 @@ export function MessageBubble({
 
   // État pour le menu déroulant des langues
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+
+  // Build mention display map for @username -> @displayName resolution
+  const mentionDisplayMap = useMemo(
+    () => mentionedUsers ? buildMentionDisplayMap(mentionedUsers) : new Map<string, string>(),
+    [mentionedUsers]
+  );
+
+  // Resolve displayed content with mention display names
+  const resolvedContent = useMemo(
+    () => mentionDisplayMap.size > 0
+      ? resolveDisplayContent(displayedVersion.content, mentionDisplayMap)
+      : displayedVersion.content,
+    [displayedVersion.content, mentionDisplayMap]
+  );
 
   const langColor = getLanguageColor(displayedVersion.languageCode);
 
@@ -259,7 +278,7 @@ export function MessageBubble({
         </div>
 
         {/* Message content */}
-        <p className="text-[0.95rem] leading-relaxed">{displayedVersion.content}</p>
+        <p className="text-[0.95rem] leading-relaxed">{resolvedContent}</p>
 
         {/* Translations list (scrollable, max 3 visible) */}
         {otherVersions.length > 0 && (

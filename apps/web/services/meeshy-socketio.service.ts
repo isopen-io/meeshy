@@ -526,7 +526,8 @@ class MeeshySocketIOService {
       replyTo: replyTo,
       sender: sender,
       attachments: attachments.length > 0 ? attachments : undefined,
-      validatedMentions: (socketMessage as any).validatedMentions || []
+      validatedMentions: (socketMessage as any).validatedMentions || [],
+      mentionedUsers: (socketMessage as any).mentionedUsers || undefined,
     } as unknown as Message;
   }
 }
