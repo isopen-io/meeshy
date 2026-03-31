@@ -121,6 +121,8 @@
 		CF236AB810E070AE44B8AE2F /* ThemedMessageBubble+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161B698A5C7ABD5B61A9F071 /* ThemedMessageBubble+Media.swift */; };
 		CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHPW001A001A001A001A0001 /* ChangePasswordView.swift */; };
 		CL6001A001A001A001A00001 /* CommunityLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CL6002A002A002A002A00002 /* CommunityLinksView.swift */; };
+		VP3600000000002F36 /* VoIPPushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP3600000000001F36 /* VoIPPushManager.swift */; };
+		BT3600000000002F36 /* BackgroundTaskManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BT3600000000001F36 /* BackgroundTaskManager.swift */; };
 		CM3600000000002F36 /* CallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CM3600000000001F36 /* CallManager.swift */; };
 		CS6001A001A001A001A00001 /* CreateShareLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CS6002A002A002A002A00002 /* CreateShareLinkView.swift */; };
 		CSHDR001B001B001B001B0002 /* ConversationSocketHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = CSHDR001A001A001A001A0001 /* ConversationSocketHandler.swift */; };
@@ -422,6 +424,8 @@
 		CFCF53B6AD169522F7F20047 /* ThermalStateMonitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThermalStateMonitor.swift; sourceTree = "<group>"; };
 		CHPW001A001A001A001A0001 /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
 		CL6002A002A002A002A00002 /* CommunityLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityLinksView.swift; sourceTree = "<group>"; };
+		VP3600000000001F36 /* VoIPPushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPPushManager.swift; sourceTree = "<group>"; };
+		BT3600000000001F36 /* BackgroundTaskManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTaskManager.swift; sourceTree = "<group>"; };
 		CM3600000000001F36 /* CallManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManager.swift; sourceTree = "<group>"; };
 		CS6002A002A002A002A00002 /* CreateShareLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateShareLinkView.swift; sourceTree = "<group>"; };
 		CSHDR001A001A001A001A0001 /* ConversationSocketHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSocketHandler.swift; sourceTree = "<group>"; };
@@ -796,6 +800,8 @@
 				CC2400000000001F24 /* ConversationLockManager.swift */,
 				TM2800000000001F28 /* ToastManager.swift */,
 				CM3600000000001F36 /* CallManager.swift */,
+				BT3600000000001F36 /* BackgroundTaskManager.swift */,
+				VP3600000000001F36 /* VoIPPushManager.swift */,
 				WR3700000000001F37 /* WebRTCService.swift */,
 				WEBRTCGRP00000001 /* WebRTC */,
 				WDMGR001A001A001A00001 /* WidgetDataManager.swift */,
@@ -1354,6 +1360,8 @@
 				VP02000000000002F002 /* VoiceProfileManageView.swift in Sources */,
 				LGCT0100000002F001 /* Logger+Categories.swift in Sources */,
 				CM3600000000002F36 /* CallManager.swift in Sources */,
+				BT3600000000002F36 /* BackgroundTaskManager.swift in Sources */,
+				VP3600000000002F36 /* VoIPPushManager.swift in Sources */,
 				WR3700000000002F37 /* WebRTCService.swift in Sources */,
 				WRTYPES000000002F01 /* WebRTCTypes.swift in Sources */,
 				P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */,

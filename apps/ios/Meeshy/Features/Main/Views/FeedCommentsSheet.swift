@@ -444,10 +444,10 @@ struct CommentsSheetView: View {
                     }
                 }
             },
+            replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
-            focusTrigger: $composerFocusTrigger,
-            replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) }
+            focusTrigger: $composerFocusTrigger
         )
     }
 

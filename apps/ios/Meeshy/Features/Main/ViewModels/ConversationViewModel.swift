@@ -641,7 +641,11 @@ class ConversationViewModel: ObservableObject {
                     let cached = await CacheCoordinator.shared.messages.load(for: targetId)
                     switch cached {
                     case .fresh(let data, _), .stale(let data, _):
-                        self.messages = data.sorted { $0.createdAt < $1.createdAt }
+                        // Merge: add new messages from cache, keep pending optimistic messages
+                        let currentIds = Set(self.messages.map(\.id))
+                        let newFromCache = data.filter { !currentIds.contains($0.id) }
+                        guard !newFromCache.isEmpty else { break }
+                        self.messages = (self.messages + newFromCache).sorted { $0.createdAt < $1.createdAt }
                     case .expired, .empty:
                         break
                     }
