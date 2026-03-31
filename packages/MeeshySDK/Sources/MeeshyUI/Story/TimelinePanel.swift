@@ -10,6 +10,7 @@ struct TimelinePanel: View {
     @State private var mediaDurationCache: [String: Float] = [:]
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showMediaEditor: String?
+    @State private var zoomAnchor: CGFloat = 1.0
     @Environment(\.theme) private var theme
 
     private var zoomScale: CGFloat { viewModel.timelineZoomScale }
@@ -61,6 +62,7 @@ struct TimelinePanel: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onAppear {
+            zoomAnchor = viewModel.timelineZoomScale
             buildTracks()
             configureEngine()
         }
@@ -294,11 +296,11 @@ struct TimelinePanel: View {
         .gesture(
             MagnificationGesture()
                 .onChanged { value in
-                    let logValue = log2(value)
-                    let newScale = pow(2, logValue) * zoomScale
-                    viewModel.timelineZoomScale = max(0.01, min(100.0, newScale))
+                    viewModel.timelineZoomScale = max(0.5, min(10.0, zoomAnchor * value))
                 }
-                .onEnded { _ in }
+                .onEnded { _ in
+                    zoomAnchor = viewModel.timelineZoomScale
+                }
         )
     }
 

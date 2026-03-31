@@ -88,6 +88,7 @@ export const UpdatePostSchema = z.object({
 export const CreateCommentSchema = z.object({
   content: z.string().min(1).max(2000),
   parentId: z.string().optional(),
+  effectFlags: z.number().int().min(0).optional(),
 });
 
 export const RepostSchema = z.object({

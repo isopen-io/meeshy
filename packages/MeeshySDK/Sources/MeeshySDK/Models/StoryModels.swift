@@ -380,6 +380,25 @@ public enum StoryTransitionEffect: String, Codable, CaseIterable, Sendable {
     }
 }
 
+// MARK: - Background Transform
+
+public struct StoryBackgroundTransform: Codable, Sendable {
+    public var scale: CGFloat?
+    public var offsetX: CGFloat?
+    public var offsetY: CGFloat?
+    public var rotation: Double?
+
+    public init(scale: CGFloat? = nil, offsetX: CGFloat? = nil,
+                offsetY: CGFloat? = nil, rotation: Double? = nil) {
+        self.scale = scale; self.offsetX = offsetX
+        self.offsetY = offsetY; self.rotation = rotation
+    }
+
+    public var isIdentity: Bool {
+        (scale ?? 1.0) == 1.0 && (offsetX ?? 0) == 0 && (offsetY ?? 0) == 0 && (rotation ?? 0) == 0
+    }
+}
+
 // MARK: - Story Effects
 
 public struct StoryEffects: Codable, Sendable {
@@ -416,6 +435,9 @@ public struct StoryEffects: Codable, Sendable {
     public var audioPlayerObjects: [StoryAudioPlayerObject]?
     public var backgroundAudioVariants: [StoryAudioVariant]?
 
+    // Transform appliqué à l'image/vidéo de fond (scale, offset, rotation)
+    public var backgroundTransform: StoryBackgroundTransform?
+
     // Durée totale du slide (sérialisée au publish)
     public var slideDuration: Float?
 
@@ -440,6 +462,7 @@ public struct StoryEffects: Codable, Sendable {
                 mediaObjects: [StoryMediaObject]? = nil,
                 audioPlayerObjects: [StoryAudioPlayerObject]? = nil,
                 backgroundAudioVariants: [StoryAudioVariant]? = nil,
+                backgroundTransform: StoryBackgroundTransform? = nil,
                 slideDuration: Float? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
         self.textPosition = textPosition; self.filter = filter; self.stickers = stickers
@@ -458,6 +481,7 @@ public struct StoryEffects: Codable, Sendable {
         self.mediaObjects = mediaObjects
         self.audioPlayerObjects = audioPlayerObjects
         self.backgroundAudioVariants = backgroundAudioVariants
+        self.backgroundTransform = backgroundTransform
         self.slideDuration = slideDuration
     }
 
