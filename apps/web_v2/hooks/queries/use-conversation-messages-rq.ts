@@ -86,6 +86,22 @@ async function fetchMessagesFromService(
   }
 }
 
+function deduplicateMentionedUsers(
+  pages: readonly { mentionedUsers?: readonly MentionedUser[] }[]
+): readonly MentionedUser[] {
+  const seen = new Map<string, MentionedUser>();
+  for (const page of pages) {
+    if (page.mentionedUsers) {
+      for (const u of page.mentionedUsers) {
+        if (!seen.has(u.userId)) {
+          seen.set(u.userId, u);
+        }
+      }
+    }
+  }
+  return Array.from(seen.values());
+}
+
 export function useConversationMessagesRQ(
   conversationId: string | null,
   currentUser: User | null,
@@ -353,6 +369,7 @@ export function useConversationMessagesRQ(
 
   return {
     messages,
+    mentionedUsers,
     isLoading,
     isLoadingMore: isFetchingNextPage,
     hasMore: hasNextPage ?? false,
