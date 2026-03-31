@@ -178,6 +178,7 @@ extension APIPost {
                         authorAvatarURL: c.author.avatar,
                         content: c.content,
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                        parentId: c.parentId,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent)
         }
 

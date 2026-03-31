@@ -244,7 +244,8 @@ class FeedViewModel: ObservableObject {
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                     authorAvatarURL: apiComment.author.avatar,
                     content: apiComment.content, timestamp: apiComment.createdAt,
-                    likes: 0, replies: 0
+                    likes: 0, replies: 0,
+                    parentId: parentId
                 )
                 posts[index].comments.insert(feedComment, at: 0)
                 posts[index].commentCount += 1
@@ -446,7 +447,8 @@ class FeedViewModel: ObservableObject {
                     authorId: data.comment.author.id,
                     authorAvatarURL: data.comment.author.avatar,
                     content: data.comment.content, timestamp: data.comment.createdAt,
-                    likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0
+                    likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
+                    parentId: data.comment.parentId
                 )
                 if !self.posts[index].comments.contains(where: { $0.id == feedComment.id }) {
                     self.posts[index].comments.insert(feedComment, at: 0)

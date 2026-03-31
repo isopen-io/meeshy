@@ -5,7 +5,9 @@ import MeeshySDK
 @MainActor
 class PostDetailViewModel: ObservableObject {
     @Published var post: FeedPost?
-    @Published var comments: [FeedComment] = []
+    @Published var comments: [FeedComment] = [] {
+        didSet { _topLevelComments = comments.filter { $0.parentId == nil } }
+    }
     @Published var isLoading = false
     @Published var isLoadingComments = false
     @Published var hasMoreComments = true
@@ -14,7 +16,10 @@ class PostDetailViewModel: ObservableObject {
 
     @Published var repliesMap: [String: [FeedComment]] = [:]
     @Published var expandedThreads: Set<String> = []
-    @Published var loadingReplies: Set<String> = []
+    @Published private(set) var loadingReplies: Set<String> = []
+
+    @Published private(set) var _topLevelComments: [FeedComment] = []
+    var topLevelComments: [FeedComment] { _topLevelComments }
 
     private var commentCursor: String?
     private let socialSocket = SocialSocketManager.shared
@@ -26,10 +31,6 @@ class PostDetailViewModel: ObservableObject {
 
     var userLanguage: String {
         preferredLanguages.first ?? "en"
-    }
-
-    var topLevelComments: [FeedComment] {
-        comments.filter { $0.parentId == nil }
     }
 
     func repliesFor(_ commentId: String) -> [FeedComment] {
@@ -102,6 +103,7 @@ class PostDetailViewModel: ObservableObject {
                     authorAvatarURL: c.author.avatar,
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: c.parentId,
                     originalLanguage: c.originalLanguage, translatedContent: translatedContent
                 )
             }
@@ -132,7 +134,7 @@ class PostDetailViewModel: ObservableObject {
     }
 
     func loadReplies(postId: String, commentId: String) async {
-        guard !loadingReplies.contains(commentId) else { return }
+        guard !loadingReplies.contains(commentId), repliesMap[commentId] == nil else { return }
         loadingReplies.insert(commentId)
         defer { loadingReplies.remove(commentId) }
         do {
@@ -156,7 +158,7 @@ class PostDetailViewModel: ObservableObject {
             }
             repliesMap[commentId] = replies
         } catch {
-            // Silent — user can retry by collapsing/expanding
+            expandedThreads.remove(commentId)
         }
     }
 
@@ -209,24 +211,25 @@ class PostDetailViewModel: ObservableObject {
 
     func sendReply(_ content: String) async {
         guard let post, let parent = replyingTo else { return }
+        let parentId = parent.id
+        replyingTo = nil
         do {
-            let apiComment = try await PostService.shared.addComment(postId: post.id, content: content, parentId: parent.id)
+            let apiComment = try await PostService.shared.addComment(postId: post.id, content: content, parentId: parentId)
             let reply = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                 authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0,
-                parentId: parent.id
+                parentId: parentId
             )
-            var existing = repliesMap[parent.id] ?? []
+            var existing = repliesMap[parentId] ?? []
             existing.insert(reply, at: 0)
-            repliesMap[parent.id] = existing
-            expandedThreads.insert(parent.id)
-            if let idx = comments.firstIndex(where: { $0.id == parent.id }) {
+            repliesMap[parentId] = existing
+            expandedThreads.insert(parentId)
+            if let idx = comments.firstIndex(where: { $0.id == parentId }) {
                 comments[idx].replies += 1
             }
             self.post?.commentCount += 1
-            replyingTo = nil
             await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
         } catch {
             ToastManager.shared.showError("Erreur lors de l'envoi de la r\u{00E9}ponse")
@@ -296,6 +299,8 @@ class PostDetailViewModel: ObservableObject {
             }
             .store(in: &cancellables)
     }
+
+    // MARK: - Translation Resolution
 
     static func resolveCommentTranslation(
         translations: [String: APIPostTranslationEntry]?,

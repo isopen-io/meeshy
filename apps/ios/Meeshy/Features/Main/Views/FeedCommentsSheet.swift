@@ -71,7 +71,6 @@ struct ThreadedCommentSection: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isExpanded)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: replies.count)
     }
 
     private var threadToggleButton: some View {
@@ -262,7 +261,7 @@ struct CommentsSheetView: View {
     }
 
     private func loadReplies(commentId: String) async {
-        guard !loadingReplies.contains(commentId) else { return }
+        guard !loadingReplies.contains(commentId), repliesMap[commentId] == nil else { return }
         loadingReplies.insert(commentId)
         defer { loadingReplies.remove(commentId) }
         do {
@@ -286,7 +285,7 @@ struct CommentsSheetView: View {
             }
             repliesMap[commentId] = replies
         } catch {
-            // Silent — user can retry
+            expandedThreads.remove(commentId)
         }
     }
 
@@ -479,7 +478,7 @@ struct CommentRowView: View {
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showOriginal = false
 
-    private var avatarContext: AvatarContext { isReply ? .postReaction : .postComment }
+    private var avatarContext: AvatarContext { .postComment }
     private var contentFont: CGFloat { isReply ? 14 : 15 }
     private var authorFont: CGFloat { isReply ? 13 : 14 }
 
