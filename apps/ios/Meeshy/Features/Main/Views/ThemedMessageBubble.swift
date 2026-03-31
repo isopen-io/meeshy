@@ -143,6 +143,19 @@ struct ThemedMessageBubble: View {
         return hasText || hasNonMedia
     }
 
+    private var emojiOnlyResult: EmojiDetector.EmojiOnlyResult {
+        guard !message.content.isEmpty,
+              message.attachments.isEmpty,
+              message.replyTo == nil else {
+            return .notEmojiOnly
+        }
+        return EmojiDetector.analyze(message.content)
+    }
+
+    private var isEmojiOnly: Bool {
+        emojiOnlyResult != .notEmojiOnly
+    }
+
     // Computed reaction summaries for display — order is stable (first-seen per emoji)
     private var reactionSummaries: [ReactionSummary] {
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
@@ -494,9 +507,24 @@ struct ThemedMessageBubble: View {
                             mediaStandaloneView(attachment)
                         }
 
-                        // Bulle texte + non-media attachments (file, location)
-                        // Also show the bubble if we have a reply reference (quoted message)
-                        if hasTextOrNonMediaContent || message.replyTo != nil {
+                        // Emoji-only: large emoji without bubble
+                        if isEmojiOnly {
+                            VStack(alignment: message.isMe ? .trailing : .leading, spacing: 2) {
+                                Text(message.content)
+                                    .font(.system(size: emojiOnlyResult.fontSize ?? 15))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .onLongPressGesture {
+                                        HapticFeedback.medium()
+                                        onShowTranslationDetail?(message.id)
+                                    }
+
+                                secondaryContentView
+
+                                identityBarSection
+                            }
+                        } else if hasTextOrNonMediaContent || message.replyTo != nil {
+                            // Bulle texte + non-media attachments (file, location)
+                            // Also show the bubble if we have a reply reference (quoted message)
                             VStack(alignment: .leading, spacing: 0) {
                                 // Quoted reply preview (inside bubble)
                                 if let reply = message.replyTo {
