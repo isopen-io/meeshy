@@ -240,7 +240,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return
         }
 
-        // Show cached user immediately while network call is in progress
+        // Show cached user immediately — authenticate from cache before any network call
         if let userJSON = keychain.load(forKey: userKey(for: userId)),
            let userData = userJSON.data(using: .utf8),
            let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) {
@@ -248,15 +248,26 @@ public final class AuthManager: ObservableObject, AuthManaging {
         }
 
         APIClient.shared.authToken = token
+        isAuthenticated = true
 
-        do {
-            let user = try await authService.me()
-            saveUserToKeychain(user, userId: userId)
-            currentUser = user
-            isAuthenticated = true
-            updateSavedAccountActivity(from: user)
-        } catch {
-            await attemptTokenRefresh(token: token, userId: userId)
+        // Background revalidation (stale-while-revalidate for auth)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let user = try await self.authService.me()
+                self.saveUserToKeychain(user, userId: userId)
+                self.currentUser = user
+                self.updateSavedAccountActivity(from: user)
+            } catch let error as MeeshyError {
+                switch error {
+                case .auth:
+                    self.clearActiveSession(userId: userId)
+                case .network, .server, .message, .media, .unknown:
+                    break
+                }
+            } catch {
+                // Non-MeeshyError — preserve session
+            }
         }
     }
 
@@ -333,8 +344,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
         do {
             let data = try await authService.refreshToken(token)
             applySession(token: data.token, user: data.user)
+        } catch let error as MeeshyError {
+            switch error {
+            case .auth:
+                clearActiveSession(userId: userId)
+            case .network, .server, .message, .media, .unknown:
+                break
+            }
         } catch {
-            clearActiveSession(userId: userId)
+            // Non-MeeshyError (e.g. CancellationError) — preserve session
         }
     }
 
