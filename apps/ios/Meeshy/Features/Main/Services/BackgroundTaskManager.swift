@@ -25,8 +25,8 @@ final class BackgroundTaskManager {
                 task.setTaskCompleted(success: false)
                 return
             }
-            Task { @MainActor in
-                await self.handleConversationSync(task: refreshTask)
+            Task { @MainActor [weak self] in
+                await self?.handleConversationSync(task: refreshTask)
             }
         }
 
@@ -38,8 +38,8 @@ final class BackgroundTaskManager {
                 task.setTaskCompleted(success: false)
                 return
             }
-            Task { @MainActor in
-                await self.handleMessagePrefetch(task: processingTask)
+            Task { @MainActor [weak self] in
+                await self?.handleMessagePrefetch(task: processingTask)
             }
         }
 
@@ -76,25 +76,25 @@ final class BackgroundTaskManager {
     private func handleConversationSync(task: BGAppRefreshTask) async {
         scheduleConversationSync()
 
-        activeSyncTask = Task {
+        let syncTask = Task {
             await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
         }
+        activeSyncTask = syncTask
 
-        task.expirationHandler = { [weak self] in
-            self?.activeSyncTask?.cancel()
+        task.expirationHandler = {
+            syncTask.cancel()
         }
 
-        await activeSyncTask?.value
-        let wasCancelled = activeSyncTask?.isCancelled ?? false
+        await syncTask.value
         activeSyncTask = nil
-        task.setTaskCompleted(success: !wasCancelled)
+        task.setTaskCompleted(success: !syncTask.isCancelled)
         logger.info("Background conversation sync completed")
     }
 
     private func handleMessagePrefetch(task: BGProcessingTask) async {
         scheduleMessagePrefetch()
 
-        activePrefetchTask = Task {
+        let prefetchTask = Task {
             let conversations = await CacheCoordinator.shared.conversations.load(for: "list")
             guard let items = conversations.value else { return }
 
@@ -104,15 +104,15 @@ final class BackgroundTaskManager {
                 await ConversationSyncEngine.shared.ensureMessages(for: conversation.id)
             }
         }
+        activePrefetchTask = prefetchTask
 
-        task.expirationHandler = { [weak self] in
-            self?.activePrefetchTask?.cancel()
+        task.expirationHandler = {
+            prefetchTask.cancel()
         }
 
-        await activePrefetchTask?.value
-        let wasCancelled = activePrefetchTask?.isCancelled ?? false
+        await prefetchTask.value
         activePrefetchTask = nil
-        task.setTaskCompleted(success: !wasCancelled)
+        task.setTaskCompleted(success: !prefetchTask.isCancelled)
         logger.info("Background message prefetch completed")
     }
 }

@@ -155,23 +155,18 @@ final class CallManager: ObservableObject {
         update.supportsGrouping = false
         update.supportsHolding = false
 
-        // PushKit REQUIRES reportNewIncomingCall() to be called — even when busy
-        callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
-            if let error {
-                Logger.calls.error("CallKit VoIP report failed: \(error.localizedDescription)")
-                Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
-            }
-        }
-
         guard callState == .idle else {
-            Logger.calls.info("VoIP push while busy — ending secondary call and showing banner")
+            // Busy: report + immediately end the secondary call
+            callProvider.reportNewIncomingCall(with: uuid, update: update) { _ in }
             callProvider.reportCall(with: uuid, endedAt: nil, reason: .unanswered)
             pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo)
             showCallWaitingBanner = true
+            Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
             HapticFeedback.medium()
             return
         }
 
+        // Set state BEFORE reporting to CallKit to avoid race
         currentCallId = callId
         remoteUserId = callerUserId
         remoteUsername = callerName
@@ -180,6 +175,14 @@ final class CallManager: ObservableObject {
         isSpeaker = isVideo
         callState = .ringing(isOutgoing: false)
         activeCallUUID = uuid
+
+        callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
+            guard let error else { return }
+            Logger.calls.error("CallKit VoIP report failed: \(error.localizedDescription)")
+            Task { @MainActor [weak self] in
+                self?.endCallInternal(reason: .failed("CallKit error"))
+            }
+        }
 
         Logger.calls.info("VoIP push incoming call reported: \(callId) from \(callerName)")
         HapticFeedback.medium()

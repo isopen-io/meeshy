@@ -93,6 +93,18 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             let description: String?
             let avatar: String?
             let banner: String?
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                if let title { try container.encode(title, forKey: .title) }
+                if let description { try container.encode(description, forKey: .description) }
+                if let avatar { try container.encode(avatar, forKey: .avatar) }
+                if let banner { try container.encode(banner, forKey: .banner) }
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case title, description, avatar, banner
+            }
         }
         let body = UpdateConversationRequest(title: title, description: description,
                                               avatar: avatar, banner: banner)

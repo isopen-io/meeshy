@@ -43,9 +43,9 @@ extension VoIPPushManager: @preconcurrency PKPushRegistryDelegate {
         let token = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
         logger.info("VoIP token received: \(token.prefix(8))...")
 
-        Task { @MainActor in
-            self.voipToken = token
-            await self.registerTokenWithBackend(token)
+        Task { @MainActor [weak self] in
+            self?.voipToken = token
+            await self?.registerTokenWithBackend(token)
         }
     }
 
@@ -63,22 +63,25 @@ extension VoIPPushManager: @preconcurrency PKPushRegistryDelegate {
 
         logger.info("VoIP push received: callId=\(callId), caller=\(callerName)")
 
-        Task { @MainActor in
+        // PushKit REQUIRES reportNewIncomingCall to be called synchronously
+        // before this callback returns. DispatchQueue.main.sync guarantees this.
+        DispatchQueue.main.sync {
             CallManager.shared.reportIncomingVoIPCall(
                 callId: callId,
                 callerUserId: callerUserId,
                 callerName: callerName,
                 isVideo: isVideo
             )
-            completion()
         }
+
+        completion()
     }
 
     nonisolated func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
         guard type == .voIP else { return }
         logger.info("VoIP token invalidated")
-        Task { @MainActor in
-            self.voipToken = nil
+        Task { @MainActor [weak self] in
+            self?.voipToken = nil
         }
     }
 
