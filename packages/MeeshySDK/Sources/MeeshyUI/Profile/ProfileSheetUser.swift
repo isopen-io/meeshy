@@ -64,6 +64,14 @@ public struct ProfileSheetUser: Identifiable, Equatable {
 
 extension ProfileSheetUser {
 
+    public static func from(idOrUsername value: String) -> ProfileSheetUser {
+        let isObjectId = value.count == 24 && value.allSatisfy(\.isHexDigit)
+        if isObjectId {
+            return ProfileSheetUser(userId: value, username: value)
+        }
+        return ProfileSheetUser(username: value)
+    }
+
     public static func from(message: MeeshyMessage) -> ProfileSheetUser {
         ProfileSheetUser(
             userId: message.senderUserId ?? message.senderId,
