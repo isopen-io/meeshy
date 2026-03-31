@@ -132,8 +132,16 @@ struct MeeshyApp: App {
                     }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
-                    if newPhase == .active {
+                    switch newPhase {
+                    case .active:
                         Task { await pushManager.resetBadge() }
+                        Task { await handleForegroundTransition() }
+                    case .background:
+                        Task { await handleBackgroundTransition() }
+                    case .inactive:
+                        break
+                    @unknown default:
+                        break
                     }
                 }
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
@@ -142,6 +150,7 @@ struct MeeshyApp: App {
                         Task { await requestPushPermissionIfNeeded() }
                         Task { await NotificationManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
+                        VoIPPushManager.shared.register()
                         Task {
                             do {
                                 let bundle = try E2EEService.shared.generatePublicBundle()
@@ -226,6 +235,26 @@ struct MeeshyApp: App {
                 pushManager.clearPendingNotification()
             }
         }
+    }
+
+    // MARK: - App Lifecycle Transitions
+
+    private func handleForegroundTransition() async {
+        guard authManager.isAuthenticated else { return }
+        await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
+        if !MessageSocketManager.shared.isConnected {
+            MessageSocketManager.shared.connect()
+        }
+        if !SocialSocketManager.shared.isConnected {
+            SocialSocketManager.shared.connect()
+        }
+    }
+
+    private func handleBackgroundTransition() async {
+        guard authManager.isAuthenticated else { return }
+        await CacheCoordinator.shared.flushAll()
+        BackgroundTaskManager.shared.scheduleConversationSync()
+        BackgroundTaskManager.shared.scheduleMessagePrefetch()
     }
 
     // MARK: - Guest Session Lifecycle

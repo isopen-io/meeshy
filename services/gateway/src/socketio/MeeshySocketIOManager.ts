@@ -326,6 +326,7 @@ export class MeeshySocketIOManager {
 
       // Initialiser le service de notifications pour CallEventsHandler
       this.callEventsHandler.setNotificationService(this.notificationService);
+      this.callEventsHandler.setPushNotificationService(pushService);
 
       // Écouter les événements de transcription seule prêtes
       this.translationService.on('transcriptionReady', this._handleTranscriptionReady.bind(this));
