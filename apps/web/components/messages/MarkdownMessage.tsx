@@ -22,6 +22,7 @@ interface MarkdownMessageProps {
   enableTracking?: boolean;
   onLinkClick?: (url: string, isTracking: boolean) => void;
   isOwnMessage?: boolean; // Pour adapter les couleurs en fonction de l'expéditeur
+  mentionDisplayMap?: Map<string, string>; // username → displayName for mention resolution
 }
 
 /**
@@ -225,7 +226,8 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
   className = '',
   enableTracking = true,
   onLinkClick,
-  isOwnMessage = false
+  isOwnMessage = false,
+  mentionDisplayMap,
 }) => {
   const { theme, resolvedTheme } = useTheme();
   const isDark = theme === 'dark' || resolvedTheme === 'dark';
@@ -361,13 +363,19 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
             const isMention = href?.startsWith('/u/');
 
             if (isMention) {
+              // Resolve display name from mentionDisplayMap if available
+              const username = href.replace('/u/', '');
+              const displayName = mentionDisplayMap?.get(username.toLowerCase());
+              const mentionLabel = displayName ? `@${displayName}` : children;
+
               return (
                 <a
                   href={href}
                   className="text-purple-600 dark:text-purple-400 hover:underline font-medium no-underline"
+                  title={`@${username}`}
                   {...props}
                 >
-                  {children}
+                  {mentionLabel}
                 </a>
               );
             }

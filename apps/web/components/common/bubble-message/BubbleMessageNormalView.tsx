@@ -1,11 +1,11 @@
 'use client';
 
-import { memo, useRef, useCallback } from 'react';
+import { memo, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
-import type { User, BubbleTranslation, ConversationType, TranslationModel } from '@meeshy/shared/types';
+import type { User, BubbleTranslation, ConversationType, TranslationModel, MentionedUser } from '@meeshy/shared/types';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 import type { Message } from '@meeshy/shared/types/conversation';
 import { useI18n } from '@/hooks/useI18n';
@@ -20,6 +20,7 @@ import { MessageContent } from './MessageContent';
 import { MessageAttachmentsSection } from './MessageAttachmentsSection';
 import { useMessageInteractions } from '@/hooks/use-message-interactions';
 import { useMessageDisplay } from '@/hooks/use-message-display';
+import { buildMentionDisplayMap } from '@/utils/mention-display';
 
 interface BubbleMessageNormalViewProps {
   message: Omit<Message, 'translations'> & {
@@ -148,6 +149,12 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
     currentDisplayLanguage,
   });
 
+  // Build username → displayName map from mentionedUsers on the message
+  const mentionDisplayMap = useMemo(() => {
+    const users = (message as any).mentionedUsers as readonly MentionedUser[] | undefined;
+    return users?.length ? buildMentionDisplayMap(users) : undefined;
+  }, [(message as any).mentionedUsers]);
+
   const hasReactions = message.reactionSummary && Object.keys(message.reactionSummary).length > 0;
 
   // Handler pour les quick reactions
@@ -232,6 +239,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
               conversationId={conversationId}
               messageReactionsHook={messageReactionsHook}
               onNavigateToMessage={onNavigateToMessage}
+              mentionDisplayMap={mentionDisplayMap}
               t={tBubble}
             />
 

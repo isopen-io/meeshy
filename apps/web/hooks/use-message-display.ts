@@ -2,8 +2,10 @@
 
 import { useMemo } from 'react';
 import type { BubbleTranslation } from '@meeshy/shared/types';
+import type { MentionedUser } from '@meeshy/shared/types/mention';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
 import { mentionsToLinks } from '@meeshy/shared/types/mention';
+import { buildMentionDisplayMap, resolveDisplayContent } from '@/utils/mention-display';
 
 interface UseMessageDisplayProps {
   message: {
@@ -13,6 +15,7 @@ interface UseMessageDisplayProps {
     originalLanguage?: string;
     translations?: BubbleTranslation[];
     validatedMentions?: string[];
+    mentionedUsers?: readonly MentionedUser[];
     replyTo?: {
       id: string;
       content: string;
@@ -45,11 +48,29 @@ export function useMessageDisplay({
     return message.content;
   }, [currentDisplayLanguage, message.originalLanguage, message.originalContent, message.content, message.translations]);
 
-  // Contenu avec mentions converties en liens
+  // Map username → displayName pour résoudre les mentions
+  const mentionDisplayMap = useMemo(() => {
+    return message.mentionedUsers?.length
+      ? buildMentionDisplayMap(message.mentionedUsers)
+      : new Map<string, string>();
+  }, [message.mentionedUsers]);
+
+  // Contenu avec mentions converties en liens (avec displayNames résolus)
   const displayContentWithMentions = useMemo(() => {
     const validUsernames = message.validatedMentions || [];
-    return mentionsToLinks(displayContent, '/u/{username}', [...validUsernames]);
-  }, [displayContent, message.validatedMentions]);
+    const withLinks = mentionsToLinks(displayContent, '/u/{username}', [...validUsernames]);
+    if (mentionDisplayMap.size === 0) return withLinks;
+    // Replace [@username](/u/username) with [@displayName](/u/username)
+    return withLinks.replace(
+      /\[@(\w{1,30})\]\(\/u\/(\w{1,30})\)/g,
+      (_match, mentionName, linkUsername) => {
+        const displayName = mentionDisplayMap.get(linkUsername.toLowerCase());
+        return displayName
+          ? `[@${displayName}](/u/${linkUsername})`
+          : `[@${mentionName}](/u/${linkUsername})`;
+      }
+    );
+  }, [displayContent, message.validatedMentions, mentionDisplayMap]);
 
   // Contenu traduit du message de réponse (replyTo)
   const replyToContent = useMemo(() => {

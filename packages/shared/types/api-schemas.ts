@@ -691,7 +691,21 @@ export const messageSchema = {
       type: 'array',
       items: { type: 'string' },
       nullable: true,
-      description: 'Array of validated user IDs mentioned in message'
+      description: 'Array of validated usernames mentioned in message'
+    },
+    mentionedUsers: {
+      type: 'array',
+      nullable: true,
+      description: 'Resolved mentioned users with displayName and avatar',
+      items: {
+        type: 'object',
+        properties: {
+          userId: { type: 'string' },
+          username: { type: 'string' },
+          displayName: { type: 'string', nullable: true },
+          avatar: { type: 'string', nullable: true }
+        }
+      }
     },
 
     // Encryption (encryptionMode is only on Conversation)

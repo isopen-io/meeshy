@@ -3,6 +3,8 @@
  * Utilisés par le gateway, le frontend web et l'app iOS
  */
 
+import type { MentionedUser } from './mention.js';
+
 // =====================================================
 // ENUMS
 // =====================================================
@@ -52,6 +54,7 @@ export interface PostComment {
   readonly isDeleted?: boolean;
   readonly createdAt: string | Date;
   readonly author?: PostAuthor;
+  readonly mentionedUsers?: readonly MentionedUser[];
 }
 
 export interface Post {
@@ -89,6 +92,7 @@ export interface Post {
   readonly media?: readonly PostMedia[];
   readonly comments?: readonly PostComment[];
   readonly repostOf?: Partial<Post> | null;
+  readonly mentionedUsers?: readonly MentionedUser[];
 }
 
 export interface PostReaction {

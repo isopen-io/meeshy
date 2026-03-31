@@ -37,6 +37,8 @@ export interface CursorPaginationMeta {
 /**
  * Extended metadata for responses (optional, for advanced use cases)
  */
+import type { MentionedUser } from './mention.js';
+
 export interface ResponseMeta {
   conversationStats?: ConversationStats;
   pagination?: PaginationMeta;
@@ -116,6 +118,7 @@ export interface GetMessagesResponseData<TMessage = unknown> {
  */
 export interface MessagesListMeta extends ResponseMeta {
   userLanguage?: string;
+  mentionedUsers?: readonly MentionedUser[];
 }
 
 /**

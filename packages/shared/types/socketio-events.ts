@@ -3,6 +3,8 @@
  * Remplace les anciens types WebSocket pour correspondre à la nouvelle architecture Socket.IO
  */
 
+import type { MentionedUser } from './mention.js';
+
 // Import unified Participant types
 import type { ParticipantType } from './participant.js';
 
@@ -951,6 +953,7 @@ export interface SocketIOMessage {
   readonly createdAt: Date;
   readonly updatedAt?: Date;
   readonly sender?: SocketIOMessageSender;
+  readonly mentionedUsers?: readonly MentionedUser[];
 }
 
 export interface UserPermissions {

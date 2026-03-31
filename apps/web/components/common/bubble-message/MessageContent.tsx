@@ -73,6 +73,7 @@ interface MessageContentProps {
   conversationId?: string;
   messageReactionsHook: UseReactionsQueryReturn;
   onNavigateToMessage?: (messageId: string) => void;
+  mentionDisplayMap?: Map<string, string>;
   t: (key: string) => string;
 }
 
@@ -87,6 +88,7 @@ export const MessageContent = memo(function MessageContent({
   conversationId,
   messageReactionsHook,
   onNavigateToMessage,
+  mentionDisplayMap,
   t,
 }: MessageContentProps) {
   if (!message.content || !message.content.trim()) {
@@ -140,6 +142,7 @@ export const MessageContent = memo(function MessageContent({
                   enableTracking={true}
                   isOwnMessage={isOwnMessage}
                   onLinkClick={() => {}}
+                  mentionDisplayMap={mentionDisplayMap}
                 />
               </motion.div>
             </AnimatePresence>

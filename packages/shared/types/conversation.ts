@@ -7,6 +7,7 @@ import type { SocketIOUser as User, MessageType } from './socketio-events.js';
 import type { Participant } from './participant.js';
 import type { Attachment } from './attachment.js';
 import type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus } from './message-types.js';
+import type { MentionedUser } from './mention.js';
 
 // Re-export canonical types from message-types.ts
 export type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus };
@@ -164,6 +165,7 @@ export interface Message {
 
   // ===== MENTIONS =====
   readonly validatedMentions?: readonly string[];
+  readonly mentionedUsers?: readonly MentionedUser[];
 
   // ===== EXPEDITEUR =====
   readonly sender?: Participant;
