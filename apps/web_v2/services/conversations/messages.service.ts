@@ -11,6 +11,7 @@ import type {
   SendMessageRequest,
   PaginationMeta,
 } from '@meeshy/shared/types';
+import type { MentionedUser } from '@meeshy/shared/types/mention';
 import type {
   GetMessagesResponse,
   MarkAsReadResponse,
@@ -49,7 +50,7 @@ export class MessagesService {
         success: boolean;
         data: unknown[];
         pagination?: PaginationMeta;
-        meta?: { userLanguage?: string; mentionedUsers?: readonly import('@meeshy/shared/types/mention').MentionedUser[] };
+        meta?: { userLanguage?: string; mentionedUsers?: readonly MentionedUser[] };
       }>(
         `/conversations/${conversationId}/messages`,
         { offset, limit },
