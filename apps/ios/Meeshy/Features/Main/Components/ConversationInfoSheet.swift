@@ -128,7 +128,9 @@ struct ConversationInfoSheet: View {
         .sheet(isPresented: $showSettings) {
             ConversationSettingsView(
                 conversation: conversation,
-                onUpdated: { _ in }
+                onUpdated: { _ in
+                    dismiss()
+                }
             )
         }
         .withStatusBubble()

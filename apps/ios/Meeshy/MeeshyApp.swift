@@ -127,6 +127,7 @@ struct MeeshyApp: App {
                     hasCheckedSession = true
                     if authManager.isAuthenticated {
                         await requestPushPermissionIfNeeded()
+                        VoIPPushManager.shared.register()
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
@@ -137,7 +138,7 @@ struct MeeshyApp: App {
                         Task { await pushManager.resetBadge() }
                         Task { await handleForegroundTransition() }
                     case .background:
-                        Task { await handleBackgroundTransition() }
+                        handleBackgroundTransition()
                     case .inactive:
                         break
                     @unknown default:
@@ -250,9 +251,8 @@ struct MeeshyApp: App {
         }
     }
 
-    private func handleBackgroundTransition() async {
+    private func handleBackgroundTransition() {
         guard authManager.isAuthenticated else { return }
-        await CacheCoordinator.shared.flushAll()
         BackgroundTaskManager.shared.scheduleConversationSync()
         BackgroundTaskManager.shared.scheduleMessagePrefetch()
     }

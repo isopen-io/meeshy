@@ -11,6 +11,9 @@ final class BackgroundTaskManager {
     static let conversationSyncTaskId = "me.meeshy.app.conversation-sync"
     static let messagePrefetchTaskId = "me.meeshy.app.message-prefetch"
 
+    private var activeSyncTask: Task<Void, Never>?
+    private var activePrefetchTask: Task<Void, Never>?
+
     private init() {}
 
     func registerTasks() {
@@ -18,8 +21,12 @@ final class BackgroundTaskManager {
             forTaskWithIdentifier: Self.conversationSyncTaskId,
             using: nil
         ) { task in
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
             Task { @MainActor in
-                await self.handleConversationSync(task: task as! BGAppRefreshTask)
+                await self.handleConversationSync(task: refreshTask)
             }
         }
 
@@ -27,8 +34,12 @@ final class BackgroundTaskManager {
             forTaskWithIdentifier: Self.messagePrefetchTaskId,
             using: nil
         ) { task in
+            guard let processingTask = task as? BGProcessingTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
             Task { @MainActor in
-                await self.handleMessagePrefetch(task: task as! BGProcessingTask)
+                await self.handleMessagePrefetch(task: processingTask)
             }
         }
 
@@ -65,23 +76,25 @@ final class BackgroundTaskManager {
     private func handleConversationSync(task: BGAppRefreshTask) async {
         scheduleConversationSync()
 
-        let syncTask = Task {
+        activeSyncTask = Task {
             await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
         }
 
-        task.expirationHandler = {
-            syncTask.cancel()
+        task.expirationHandler = { [weak self] in
+            self?.activeSyncTask?.cancel()
         }
 
-        await syncTask.value
-        task.setTaskCompleted(success: !syncTask.isCancelled)
+        await activeSyncTask?.value
+        let wasCancelled = activeSyncTask?.isCancelled ?? false
+        activeSyncTask = nil
+        task.setTaskCompleted(success: !wasCancelled)
         logger.info("Background conversation sync completed")
     }
 
     private func handleMessagePrefetch(task: BGProcessingTask) async {
         scheduleMessagePrefetch()
 
-        let prefetchTask = Task {
+        activePrefetchTask = Task {
             let conversations = await CacheCoordinator.shared.conversations.load(for: "list")
             guard let items = conversations.value else { return }
 
@@ -92,12 +105,14 @@ final class BackgroundTaskManager {
             }
         }
 
-        task.expirationHandler = {
-            prefetchTask.cancel()
+        task.expirationHandler = { [weak self] in
+            self?.activePrefetchTask?.cancel()
         }
 
-        await prefetchTask.value
-        task.setTaskCompleted(success: !prefetchTask.isCancelled)
+        await activePrefetchTask?.value
+        let wasCancelled = activePrefetchTask?.isCancelled ?? false
+        activePrefetchTask = nil
+        task.setTaskCompleted(success: !wasCancelled)
         logger.info("Background message prefetch completed")
     }
 }

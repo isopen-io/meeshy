@@ -147,8 +147,25 @@ final class CallManager: ObservableObject {
     // MARK: - VoIP Push Incoming Call
 
     func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool) {
+        let uuid = UUID()
+        let update = CXCallUpdate()
+        update.remoteHandle = CXHandle(type: .generic, value: callerUserId)
+        update.localizedCallerName = callerName
+        update.hasVideo = isVideo
+        update.supportsGrouping = false
+        update.supportsHolding = false
+
+        // PushKit REQUIRES reportNewIncomingCall() to be called — even when busy
+        callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
+            if let error {
+                Logger.calls.error("CallKit VoIP report failed: \(error.localizedDescription)")
+                Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
+            }
+        }
+
         guard callState == .idle else {
-            Logger.calls.info("VoIP push while busy — showing call waiting banner")
+            Logger.calls.info("VoIP push while busy — ending secondary call and showing banner")
+            callProvider.reportCall(with: uuid, endedAt: nil, reason: .unanswered)
             pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo)
             showCallWaitingBanner = true
             HapticFeedback.medium()
@@ -162,22 +179,7 @@ final class CallManager: ObservableObject {
         isMuted = false
         isSpeaker = isVideo
         callState = .ringing(isOutgoing: false)
-
-        let uuid = UUID()
         activeCallUUID = uuid
-        let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .generic, value: callerUserId)
-        update.localizedCallerName = callerName
-        update.hasVideo = isVideo
-        update.supportsGrouping = false
-        update.supportsHolding = false
-
-        callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
-            if let error {
-                Logger.calls.error("CallKit VoIP report failed: \(error.localizedDescription)")
-                Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
-            }
-        }
 
         Logger.calls.info("VoIP push incoming call reported: \(callId) from \(callerName)")
         HapticFeedback.medium()
