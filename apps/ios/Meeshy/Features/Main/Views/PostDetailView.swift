@@ -100,22 +100,31 @@ struct PostDetailView: View {
 
                         commentsHeader
 
-                        // Comments
-                        ForEach(viewModel.comments) { comment in
-                            CommentRowView(
+                        // Comments (threaded)
+                        ForEach(viewModel.topLevelComments) { comment in
+                            ThreadedCommentSection(
                                 comment: comment,
+                                replies: viewModel.repliesFor(comment.id),
+                                isExpanded: viewModel.expandedThreads.contains(comment.id),
+                                isLoadingReplies: viewModel.loadingReplies.contains(comment.id),
                                 accentColor: accentColor,
-                                onReply: {
-                                    viewModel.replyingTo = comment
+                                onReply: { target in
+                                    viewModel.replyingTo = target
                                 },
-                                onLikeComment: {
+                                onToggleThread: {
+                                    Task { await viewModel.toggleThread(comment.id, postId: postId) }
+                                },
+                                onLikeComment: { commentId in
                                     Task {
-                                        try? await PostService.shared.likeComment(postId: postId, commentId: comment.id)
+                                        try? await PostService.shared.likeComment(postId: postId, commentId: commentId)
                                     }
                                 },
                                 moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                                 storyState: storyViewModel.storyGroupForUser(userId: comment.authorId).map { $0.hasUnviewed ? .unread : .read } ?? .none,
-                                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline
+                                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline,
+                                replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                                replyStoryResolver: { storyViewModel.storyGroupForUser(userId: $0).map { $0.hasUnviewed ? .unread : .read } ?? .none },
+                                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
                             )
                             .padding(.horizontal, 16)
                         }

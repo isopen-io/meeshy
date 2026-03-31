@@ -12,6 +12,10 @@ class PostDetailViewModel: ObservableObject {
     @Published var error: String?
     @Published var replyingTo: FeedComment? = nil
 
+    @Published var repliesMap: [String: [FeedComment]] = [:]
+    @Published var expandedThreads: Set<String> = []
+    @Published var loadingReplies: Set<String> = []
+
     private var commentCursor: String?
     private let socialSocket = SocialSocketManager.shared
     private var cancellables = Set<AnyCancellable>()
@@ -22,6 +26,14 @@ class PostDetailViewModel: ObservableObject {
 
     var userLanguage: String {
         preferredLanguages.first ?? "en"
+    }
+
+    var topLevelComments: [FeedComment] {
+        comments.filter { $0.parentId == nil }
+    }
+
+    func repliesFor(_ commentId: String) -> [FeedComment] {
+        repliesMap[commentId] ?? []
     }
 
     func loadPost(_ postId: String) async {
@@ -106,6 +118,50 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Thread Management
+
+    func toggleThread(_ commentId: String, postId: String) async {
+        if expandedThreads.contains(commentId) {
+            expandedThreads.remove(commentId)
+        } else {
+            expandedThreads.insert(commentId)
+            if repliesMap[commentId] == nil {
+                await loadReplies(postId: postId, commentId: commentId)
+            }
+        }
+    }
+
+    func loadReplies(postId: String, commentId: String) async {
+        guard !loadingReplies.contains(commentId) else { return }
+        loadingReplies.insert(commentId)
+        defer { loadingReplies.remove(commentId) }
+        do {
+            let response = try await PostService.shared.getCommentReplies(
+                postId: postId, commentId: commentId
+            )
+            let langs = preferredLanguages
+            let replies = response.data.map { c -> FeedComment in
+                let translated = Self.resolveCommentTranslation(
+                    translations: c.translations, originalLanguage: c.originalLanguage,
+                    preferredLanguages: langs
+                )
+                return FeedComment(
+                    id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorAvatarURL: c.author.avatar,
+                    content: c.content, timestamp: c.createdAt,
+                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: commentId,
+                    originalLanguage: c.originalLanguage, translatedContent: translated
+                )
+            }
+            repliesMap[commentId] = replies
+        } catch {
+            // Silent — user can retry by collapsing/expanding
+        }
+    }
+
+    // MARK: - Actions
+
     func likePost() async {
         guard var current = post else { return }
         current.isLiked.toggle()
@@ -155,18 +211,25 @@ class PostDetailViewModel: ObservableObject {
         guard let post, let parent = replyingTo else { return }
         do {
             let apiComment = try await PostService.shared.addComment(postId: post.id, content: content, parentId: parent.id)
-            let comment = FeedComment(
+            let reply = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                 authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
-                likes: 0, replies: 0
+                likes: 0, replies: 0,
+                parentId: parent.id
             )
-            comments.insert(comment, at: 0)
+            var existing = repliesMap[parent.id] ?? []
+            existing.insert(reply, at: 0)
+            repliesMap[parent.id] = existing
+            expandedThreads.insert(parent.id)
+            if let idx = comments.firstIndex(where: { $0.id == parent.id }) {
+                comments[idx].replies += 1
+            }
             self.post?.commentCount += 1
             replyingTo = nil
             await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
         } catch {
-            ToastManager.shared.showError("Erreur lors de l'envoi de la reponse")
+            ToastManager.shared.showError("Erreur lors de l'envoi de la r\u{00E9}ponse")
         }
     }
 
@@ -174,21 +237,38 @@ class PostDetailViewModel: ObservableObject {
         replyingTo = nil
     }
 
+    // MARK: - Socket
+
     func subscribeToSocket(_ postId: String) {
         socialSocket.commentAdded
             .receive(on: DispatchQueue.main)
             .filter { $0.postId == postId }
             .sink { [weak self] data in
                 guard let self else { return }
+                let parentId = data.comment.parentId
                 let comment = FeedComment(
                     id: data.comment.id, author: data.comment.author.name,
                     authorId: data.comment.author.id,
                     authorAvatarURL: data.comment.author.avatar,
                     content: data.comment.content, timestamp: data.comment.createdAt,
-                    likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0
+                    likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
+                    parentId: parentId
                 )
-                if !self.comments.contains(where: { $0.id == comment.id }) {
-                    self.comments.insert(comment, at: 0)
+                if let parentId {
+                    if self.expandedThreads.contains(parentId) {
+                        var existing = self.repliesMap[parentId] ?? []
+                        if !existing.contains(where: { $0.id == comment.id }) {
+                            existing.insert(comment, at: 0)
+                            self.repliesMap[parentId] = existing
+                        }
+                    }
+                    if let idx = self.comments.firstIndex(where: { $0.id == parentId }) {
+                        self.comments[idx].replies += 1
+                    }
+                } else {
+                    if !self.comments.contains(where: { $0.id == comment.id }) {
+                        self.comments.insert(comment, at: 0)
+                    }
                 }
                 self.post?.commentCount = data.commentCount
             }
@@ -217,7 +297,7 @@ class PostDetailViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private static func resolveCommentTranslation(
+    static func resolveCommentTranslation(
         translations: [String: APIPostTranslationEntry]?,
         originalLanguage: String?,
         preferredLanguages: [String]
