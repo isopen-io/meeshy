@@ -324,7 +324,7 @@ export function MessageBubble({
                     isSent ? 'text-white/80' : 'text-[var(--gp-text-secondary)]'
                   )}
                 >
-                  {version.content}
+                  {mentionDisplayMap.size > 0 ? resolveDisplayContent(version.content, mentionDisplayMap) : version.content}
                 </p>
               </button>
             ))}
