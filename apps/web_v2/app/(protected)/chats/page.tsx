@@ -300,6 +300,7 @@ export default function V2ChatsPage() {
   // Messages hook
   const {
     messages,
+    mentionedUsers,
     isLoading: isLoadingMessages,
     isLoadingMore,
     isSending,
@@ -525,6 +526,7 @@ export default function V2ChatsPage() {
                       content: t.content,
                     })) || []}
                     sender={!isSent ? (msg.sender as any)?.displayName || (msg.sender as any)?.username : undefined}
+                    mentionedUsers={mentionedUsers}
                     timestamp={
                       <span className="inline-flex items-center gap-1">
                         {new Date(msg.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
