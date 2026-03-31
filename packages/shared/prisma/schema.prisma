@@ -2817,6 +2817,8 @@ model PostComment {
   /// Réactions embedded: { "❤️": 3, "😂": 1 }
   reactionSummary Json?
 
+  effectFlags Int @default(0)
+
   isEdited  Boolean   @default(false)
   isDeleted Boolean   @default(false)
   deletedAt DateTime?

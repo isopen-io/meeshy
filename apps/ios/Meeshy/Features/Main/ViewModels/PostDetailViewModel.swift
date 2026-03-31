@@ -191,15 +191,16 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
-    func sendComment(_ content: String) async {
+    func sendComment(_ content: String, effectFlags: Int? = nil) async {
         guard let post else { return }
         do {
-            let apiComment = try await PostService.shared.addComment(postId: post.id, content: content)
+            let apiComment = try await PostService.shared.addComment(postId: post.id, content: content, effectFlags: effectFlags)
             let comment = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                 authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
-                likes: 0, replies: 0
+                likes: 0, replies: 0,
+                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
             )
             comments.insert(comment, at: 0)
             self.post?.commentCount += 1
@@ -209,18 +210,19 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
-    func sendReply(_ content: String) async {
+    func sendReply(_ content: String, effectFlags: Int? = nil) async {
         guard let post, let parent = replyingTo else { return }
         let parentId = parent.id
         replyingTo = nil
         do {
-            let apiComment = try await PostService.shared.addComment(postId: post.id, content: content, parentId: parentId)
+            let apiComment = try await PostService.shared.addComment(postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags)
             let reply = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                 authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0,
-                parentId: parentId
+                parentId: parentId,
+                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
             )
             var existing = repliesMap[parentId] ?? []
             existing.insert(reply, at: 0)

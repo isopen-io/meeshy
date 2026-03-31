@@ -410,16 +410,23 @@ struct CommentsSheetView: View {
             onLanguageChange: { composerLanguage = $0 },
             onSend: { text in
                 let parentId = replyingTo?.id
+                let effects = commentEffects
+                let blur = commentBlurEnabled
                 replyingTo = nil
+                commentEffects = .none
+                commentBlurEnabled = false
                 Task {
                     do {
-                        let apiComment = try await PostService.shared.addComment(postId: post.id, content: text, parentId: parentId)
+                        let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+                        let effectFlags = flags > 0 ? Int(flags) : nil
+                        let apiComment = try await PostService.shared.addComment(postId: post.id, content: text, parentId: parentId, effectFlags: effectFlags)
                         let feedComment = FeedComment(
                             id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                             authorAvatarURL: apiComment.author.avatar,
                             content: apiComment.content, timestamp: apiComment.createdAt,
                             likes: 0, replies: 0,
-                            parentId: parentId
+                            parentId: parentId,
+                            effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
                         )
                         if let parentId {
                             var existing = repliesMap[parentId] ?? []
@@ -477,6 +484,7 @@ struct CommentRowView: View {
     @State private var isLiked = false
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showOriginal = false
+    @State private var hasPlayedAppearanceEffect = false
 
     private var avatarContext: AvatarContext { .postComment }
     private var contentFont: CGFloat { isReply ? 14 : 15 }
@@ -581,6 +589,14 @@ struct CommentRowView: View {
                     .foregroundColor(theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.2), value: showOriginal)
+                    .messageEffects(comment.effects, hasPlayedAppearance: hasPlayedAppearanceEffect)
+                    .onAppear {
+                        if comment.effects.hasAnyEffect && !hasPlayedAppearanceEffect {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                hasPlayedAppearanceEffect = true
+                            }
+                        }
+                    }
 
                 HStack(spacing: 20) {
                     Button {

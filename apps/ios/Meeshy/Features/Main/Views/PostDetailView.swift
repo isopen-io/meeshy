@@ -18,6 +18,10 @@ struct PostDetailView: View {
     @State private var activeDisplayLangCode: String? = nil
     @State private var fullscreenMediaId: String? = nil
     @State private var showFullscreenGallery = false
+    @State private var composerLanguage: String = "fr"
+    @State private var commentBlurEnabled: Bool = false
+    @State private var commentEffects: MessageEffects = .none
+    @State private var composerFocusTrigger: Bool = false
 
     private var displayPost: FeedPost? { viewModel.post ?? initialPost }
 
@@ -782,21 +786,28 @@ struct PostDetailView: View {
     private var composer: some View {
         UniversalComposerBar(
             style: .light,
-            placeholder: "Ajouter un commentaire...",
+            mode: .comment,
             accentColor: accentColor,
-            showVoice: false,
-            showLocation: false,
-            showAttachment: false,
-            showEmoji: true,
+            selectedLanguage: composerLanguage,
+            onLanguageChange: { composerLanguage = $0 },
             onSend: { text in
+                let effects = commentEffects
+                let blur = commentBlurEnabled
+                commentEffects = .none
+                commentBlurEnabled = false
                 Task {
+                    let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+                    let effectFlags = flags > 0 ? Int(flags) : nil
                     if viewModel.replyingTo != nil {
-                        await viewModel.sendReply(text)
+                        await viewModel.sendReply(text, effectFlags: effectFlags)
                     } else {
-                        await viewModel.sendComment(text)
+                        await viewModel.sendComment(text, effectFlags: effectFlags)
                     }
                 }
             },
+            isBlurEnabled: $commentBlurEnabled,
+            pendingEffects: $commentEffects,
+            focusTrigger: $composerFocusTrigger,
             replyBanner: replyBannerView
         )
     }

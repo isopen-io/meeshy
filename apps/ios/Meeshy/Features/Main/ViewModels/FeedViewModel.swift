@@ -236,16 +236,17 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func sendComment(postId: String, content: String, parentId: String? = nil) async {
+    func sendComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async {
         do {
-            let apiComment = try await postService.addComment(postId: postId, content: content, parentId: parentId)
+            let apiComment = try await postService.addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags)
             if let index = posts.firstIndex(where: { $0.id == postId }) {
                 let feedComment = FeedComment(
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                     authorAvatarURL: apiComment.author.avatar,
                     content: apiComment.content, timestamp: apiComment.createdAt,
                     likes: 0, replies: 0,
-                    parentId: parentId
+                    parentId: parentId,
+                    effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
                 )
                 posts[index].comments.insert(feedComment, at: 0)
                 posts[index].commentCount += 1
