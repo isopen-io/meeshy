@@ -104,6 +104,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
         name: validatedData.name,
         description: validatedData.description,
         avatar: validatedData.avatar,
+        banner: validatedData.banner,
         isPrivate: validatedData.isPrivate
       };
 

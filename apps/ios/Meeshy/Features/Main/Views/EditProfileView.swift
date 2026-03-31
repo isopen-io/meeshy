@@ -451,6 +451,7 @@ struct EditProfileView: View {
                 }
 
                 HapticFeedback.success()
+                ToastManager.shared.showSuccess("Profil mis a jour")
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     showSuccess = true
                 }
@@ -458,14 +459,17 @@ struct EditProfileView: View {
                 dismiss()
             } catch let error as MeeshyError {
                 HapticFeedback.error()
+                ToastManager.shared.showError(error.errorDescription ?? "Echec de la mise a jour")
                 errorMessage = error.errorDescription
                 isUploadingAvatar = false
             } catch let error as APIError {
                 HapticFeedback.error()
+                ToastManager.shared.showError(error.errorDescription ?? "Echec de la mise a jour")
                 errorMessage = error.errorDescription
                 isUploadingAvatar = false
             } catch {
                 HapticFeedback.error()
+                ToastManager.shared.showError("Echec de la mise a jour du profil")
                 errorMessage = String(localized: "Une erreur est survenue", defaultValue: "Une erreur est survenue")
                 isUploadingAvatar = false
             }

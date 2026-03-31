@@ -184,8 +184,10 @@ class StoryViewModel: ObservableObject {
                                      storyEffects: effects, createdAt: post.createdAt, isViewed: true)
             insertOrAppendStoryItem(newItem, forAuthor: post.author)
             showStoryComposer = false
+            ToastManager.shared.showSuccess("Story publiee")
         } catch {
             publishError = "Failed to publish story"
+            ToastManager.shared.showError("Echec de la publication de la story")
         }
 
         isPublishing = false
@@ -396,9 +398,11 @@ class StoryViewModel: ObservableObject {
                 activeUpload = nil
                 uploadTask = nil
                 HapticFeedback.success()
+                ToastManager.shared.showSuccess("Story publiee")
             } catch {
                 if !Task.isCancelled {
                     activeUpload?.phase = .failed(error.localizedDescription)
+                    ToastManager.shared.showError("Echec de la publication de la story")
                 }
             }
         }

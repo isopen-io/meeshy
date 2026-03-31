@@ -2,28 +2,20 @@ import SwiftUI
 import PhotosUI
 import MeeshySDK
 
-public struct CommunitySettingsView: View {
-    @StateObject private var viewModel: CommunitySettingsViewModel
+public struct ConversationSettingsView: View {
+    @StateObject private var viewModel: ConversationSettingsViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var avatarItem: PhotosPickerItem? = nil
     @State private var bannerItem: PhotosPickerItem? = nil
 
-    public var onUpdated: ((MeeshyCommunity) -> Void)? = nil
-    public var onDeleted: (() -> Void)? = nil
+    public var onUpdated: ((MeeshyConversation) -> Void)? = nil
     public var onLeft: (() -> Void)? = nil
 
-    private let presetColors = [
-        "FF2E63", "A855F7", "08D9D6", "FF6B6B",
-        "4ECDC4", "45B7D1", "F59E0B", "10B981",
-        "6366F1", "EC4899", "14B8A6", "F97316"
-    ]
-
-    public init(community: MeeshyCommunity, onUpdated: ((MeeshyCommunity) -> Void)? = nil, onDeleted: (() -> Void)? = nil, onLeft: (() -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: CommunitySettingsViewModel(community: community))
+    public init(conversation: MeeshyConversation, onUpdated: ((MeeshyConversation) -> Void)? = nil, onLeft: (() -> Void)? = nil) {
+        _viewModel = StateObject(wrappedValue: ConversationSettingsViewModel(conversation: conversation))
         self.onUpdated = onUpdated
-        self.onDeleted = onDeleted
         self.onLeft = onLeft
     }
 
@@ -38,7 +30,6 @@ public struct CommunitySettingsView: View {
                     VStack(spacing: 20) {
                         visualSection
                         editSection
-                        privacySection
                         dangerSection
                     }
                     .padding(.horizontal, 20)
@@ -51,29 +42,17 @@ public struct CommunitySettingsView: View {
         } message: {
             Text(viewModel.errorMessage ?? "Une erreur s'est produite")
         }
-        .alert("Supprimer la communauté", isPresented: $viewModel.showDeleteConfirm) {
-            Button("Supprimer", role: .destructive) {
-                Task {
-                    await viewModel.deleteCommunity()
-                    onDeleted?()
-                    dismiss()
-                }
-            }
-            Button("Annuler", role: .cancel) {}
-        } message: {
-            Text("Cette action est irréversible. Tous les membres, canaux et messages seront supprimés définitivement.")
-        }
-        .alert("Quitter la communauté", isPresented: $viewModel.showLeaveConfirm) {
+        .alert("Quitter la conversation", isPresented: $viewModel.showLeaveConfirm) {
             Button("Quitter", role: .destructive) {
                 Task {
-                    await viewModel.leaveCommunity()
+                    await viewModel.leaveConversation()
                     onLeft?()
                     dismiss()
                 }
             }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("Vous n'aurez plus accès aux canaux et messages de cette communauté.")
+            Text("Vous n'aurez plus acces aux messages de cette conversation.")
         }
         .onChange(of: avatarItem) { item in
             guard let item = item else { return }
@@ -95,7 +74,7 @@ public struct CommunitySettingsView: View {
 
             Spacer()
 
-            Text("Réglages")
+            Text("Reglages")
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -113,11 +92,11 @@ public struct CommunitySettingsView: View {
                 if viewModel.isSaving {
                     ProgressView()
                         .scaleEffect(0.8)
-                        .tint(Color(hex: "FF2E63"))
+                        .tint(MeeshyColors.indigo500)
                 } else {
                     Text("Sauvegarder")
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundColor(viewModel.hasChanges ? Color(hex: "FF2E63") : theme.textMuted)
+                        .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }
             }
             .disabled(!viewModel.hasChanges || viewModel.isSaving)
@@ -139,48 +118,20 @@ public struct CommunitySettingsView: View {
             sectionHeader("Apparence")
 
             VStack(spacing: 12) {
-                // Color picker
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Couleur")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.textSecondary)
-
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
-                        ForEach(presetColors, id: \.self) { hex in
-                            colorSwatch(hex: hex)
-                        }
-                    }
-                }
-                .padding(14)
-                .background(theme.backgroundSecondary.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                // Emoji picker
-                settingsField(label: "Emoji") {
-                    TextField("🏘️", text: $viewModel.localEmoji)
-                        .font(.system(size: 22))
-                        .foregroundColor(theme.textPrimary)
-                        .onChange(of: viewModel.localEmoji) { newValue in
-                            let trimmed = String(newValue.unicodeScalars.prefix(2))
-                            if trimmed != newValue { viewModel.localEmoji = trimmed }
-                        }
-                }
-
-                // Avatar
                 settingsField(label: "Avatar") {
                     HStack {
                         MeeshyAvatar(
-                            name: viewModel.name,
+                            name: viewModel.title.isEmpty ? viewModel.conversationName : viewModel.title,
                             context: .custom(40),
                             kind: .entity,
-                            accentColor: viewModel.localColor,
+                            accentColor: viewModel.accentColor,
                             avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl
                         )
-                        
+
                         PhotosPicker(selection: $avatarItem, matching: .images) {
                             Text(viewModel.isUploadingAvatar ? "Upload en cours..." : "Changer l'avatar")
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "4ECDC4"))
+                                .foregroundColor(MeeshyColors.indigo400)
                         }
                         .disabled(viewModel.isUploadingAvatar)
 
@@ -195,8 +146,7 @@ public struct CommunitySettingsView: View {
                     }
                 }
 
-                // Banner
-                settingsField(label: "Bannière") {
+                settingsField(label: "Banniere") {
                     HStack {
                         if !viewModel.bannerUrl.isEmpty {
                             AsyncImage(url: URL(string: viewModel.bannerUrl)) { image in
@@ -205,11 +155,11 @@ public struct CommunitySettingsView: View {
                                 RoundedRectangle(cornerRadius: 6).fill(theme.backgroundSecondary).frame(width: 60, height: 30)
                             }
                         }
-                        
+
                         PhotosPicker(selection: $bannerItem, matching: .images) {
-                            Text(viewModel.isUploadingBanner ? "Upload en cours..." : "Changer la bannière")
+                            Text(viewModel.isUploadingBanner ? "Upload en cours..." : "Changer la banniere")
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "4ECDC4"))
+                                .foregroundColor(MeeshyColors.indigo400)
                         }
                         .disabled(viewModel.isUploadingBanner)
 
@@ -227,28 +177,6 @@ public struct CommunitySettingsView: View {
         }
     }
 
-    private func colorSwatch(hex: String) -> some View {
-        let isSelected = viewModel.localColor == hex
-        return Circle()
-            .fill(Color(hex: hex))
-            .frame(width: 38, height: 38)
-            .overlay {
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                }
-            }
-            .overlay {
-                Circle()
-                    .stroke(Color.white.opacity(isSelected ? 0.6 : 0), lineWidth: 2)
-                    .padding(2)
-            }
-            .scaleEffect(isSelected ? 1.1 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-            .onTapGesture { viewModel.localColor = hex }
-    }
-
     // MARK: - Edit Section
 
     private var editSection: some View {
@@ -256,8 +184,8 @@ public struct CommunitySettingsView: View {
             sectionHeader("Infos")
 
             VStack(spacing: 12) {
-                settingsField(label: "Nom") {
-                    TextField("Nom de la communauté", text: $viewModel.name)
+                settingsField(label: "Titre") {
+                    TextField("Titre de la conversation", text: $viewModel.title)
                         .font(.system(size: 16, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                 }
@@ -272,68 +200,25 @@ public struct CommunitySettingsView: View {
         }
     }
 
-    // MARK: - Privacy Section
-
-    private var privacySection: some View {
-        VStack(spacing: 12) {
-            sectionHeader("Confidentialité")
-
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Communauté privée")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
-                    Text(viewModel.isPrivate ? "Sur invitation" : "Ouverte à tous")
-                        .font(.system(size: 12))
-                        .foregroundColor(theme.textSecondary)
-                }
-                Spacer()
-                Toggle("", isOn: $viewModel.isPrivate)
-                    .tint(Color(hex: "A855F7"))
-                    .labelsHidden()
-            }
-            .padding(14)
-            .background(theme.backgroundSecondary.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-    }
-
     // MARK: - Danger Section
 
     private var dangerSection: some View {
         VStack(spacing: 12) {
             sectionHeader("Zone dangereuse")
 
-            if viewModel.isCreator {
-                Button {
-                    viewModel.showDeleteConfirm = true
-                } label: {
-                    HStack {
-                        Image(systemName: "trash.fill")
-                        Text("Supprimer la communauté")
-                    }
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(.red)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.red.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            Button {
+                viewModel.showLeaveConfirm = true
+            } label: {
+                HStack {
+                    Image(systemName: "arrow.right.square.fill")
+                    Text("Quitter la conversation")
                 }
-            } else {
-                Button {
-                    viewModel.showLeaveConfirm = true
-                } label: {
-                    HStack {
-                        Image(systemName: "arrow.right.square.fill")
-                        Text("Quitter la communauté")
-                    }
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(.orange)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.orange.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(.orange)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.orange.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
     }
@@ -365,93 +250,72 @@ public struct CommunitySettingsView: View {
 // MARK: - ViewModel
 
 @MainActor
-final class CommunitySettingsViewModel: ObservableObject {
-    @Published var name: String
+final class ConversationSettingsViewModel: ObservableObject {
+    @Published var title: String
     @Published var descriptionText: String
-    @Published var isPrivate: Bool
     @Published var avatarUrl: String
     @Published var bannerUrl: String
-    @Published var localColor: String
-    @Published var localEmoji: String
     @Published var isUploadingAvatar = false
     @Published var isUploadingBanner = false
     @Published var isSaving = false
     @Published var showError = false
     @Published var errorMessage: String?
-    @Published var showDeleteConfirm = false
     @Published var showLeaveConfirm = false
 
-    let communityId: String
-    let isCreator: Bool
+    let conversationId: String
+    let conversationName: String
+    let accentColor: String
 
-    private let originalName: String
+    private let originalTitle: String
     private let originalDescription: String
-    private let originalIsPrivate: Bool
     private let originalAvatarUrl: String
     private let originalBannerUrl: String
-    private let originalLocalColor: String
-    private let originalLocalEmoji: String
 
     var hasChanges: Bool {
-        name != originalName ||
+        title != originalTitle ||
         descriptionText != originalDescription ||
-        isPrivate != originalIsPrivate ||
         avatarUrl != originalAvatarUrl ||
-        bannerUrl != originalBannerUrl ||
-        localColor != originalLocalColor ||
-        localEmoji != originalLocalEmoji
+        bannerUrl != originalBannerUrl
     }
 
-    init(community: MeeshyCommunity) {
-        self.communityId = community.id
-        self.isCreator = community.createdBy == (AuthManager.shared.currentUser?.id ?? "")
+    init(conversation: MeeshyConversation) {
+        self.conversationId = conversation.id
+        self.conversationName = conversation.name
+        self.accentColor = conversation.accentColor
 
-        self.name = community.name
-        self.descriptionText = community.description ?? ""
-        self.isPrivate = community.isPrivate
-        self.originalName = community.name
-        self.originalDescription = community.description ?? ""
-        self.originalIsPrivate = community.isPrivate
+        self.title = conversation.title ?? ""
+        self.descriptionText = conversation.description ?? ""
+        self.originalTitle = conversation.title ?? ""
+        self.originalDescription = conversation.description ?? ""
 
-        let avatarStr = community.avatar ?? ""
-        let bannerStr = community.banner ?? ""
+        let avatarStr = conversation.avatar ?? ""
+        let bannerStr = conversation.banner ?? ""
         self.avatarUrl = avatarStr
         self.bannerUrl = bannerStr
         self.originalAvatarUrl = avatarStr
         self.originalBannerUrl = bannerStr
-
-        let savedColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? "4ECDC4"
-        let savedEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(community.id)") ?? ""
-        self.localColor = savedColor
-        self.localEmoji = savedEmoji
-        self.originalLocalColor = savedColor
-        self.originalLocalEmoji = savedEmoji
     }
 
-    func save() async -> MeeshyCommunity? {
+    func save() async -> MeeshyConversation? {
         isSaving = true
         defer { isSaving = false }
 
         do {
+            let newTitle = title != originalTitle ? (title.isEmpty ? nil : title) : nil
+            let newDescription = descriptionText != originalDescription ? descriptionText : nil
             let newAvatar = avatarUrl != originalAvatarUrl ? (avatarUrl.isEmpty ? nil : avatarUrl) : nil
             let newBanner = bannerUrl != originalBannerUrl ? (bannerUrl.isEmpty ? nil : bannerUrl) : nil
-            let apiCommunity = try await CommunityService.shared.update(
-                communityId: communityId,
-                name: name != originalName ? name : nil,
-                description: descriptionText != originalDescription ? descriptionText : nil,
-                isPrivate: isPrivate != originalIsPrivate ? isPrivate : nil,
+
+            let apiConversation = try await ConversationService.shared.update(
+                conversationId: conversationId,
+                title: newTitle,
+                description: newDescription,
                 avatar: newAvatar,
                 banner: newBanner
             )
 
-            UserDefaults.standard.set(localColor, forKey: "community.color.\(communityId)")
-            UserDefaults.standard.set(localEmoji, forKey: "community.emoji.\(communityId)")
-
-            var community = apiCommunity.toCommunity()
-            community.color = localColor
-            community.emoji = localEmoji
-            postToast(message: "Communaute mise a jour", isSuccess: true)
-            return community
+            postToast(message: "Conversation mise a jour", isSuccess: true)
+            return apiConversation.toConversation(currentUserId: AuthManager.shared.currentUser?.id ?? "")
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -481,25 +345,26 @@ final class CommunitySettingsViewModel: ObservableObject {
         }
     }
 
-    private func postToast(message: String, isSuccess: Bool) {
-        NotificationCenter.default.post(
-            name: Notification.Name("meeshy.showToast"),
-            object: nil,
-            userInfo: ["message": message, "isSuccess": isSuccess]
-        )
+    func leaveConversation() async {
+        do {
+            try await ConversationService.shared.deleteForMe(conversationId: conversationId)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
     }
 
     private func uploadPhotoItem(_ item: PhotosPickerItem) async -> String? {
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else { return nil }
-            let fileName = "community_upload_\(UUID().uuidString).jpg"
+            let fileName = "conversation_upload_\(UUID().uuidString).jpg"
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try data.write(to: tempURL)
-            
+
             let serverOrigin = MeeshyConfig.shared.serverOrigin
             guard let baseURL = URL(string: serverOrigin),
                   let token = APIClient.shared.authToken else { return nil }
-            
+
             let manager = TusUploadManager(baseURL: baseURL)
             let result = try await manager.uploadFile(fileURL: tempURL, mimeType: "image/jpeg", token: token)
             try? FileManager.default.removeItem(at: tempURL)
@@ -513,21 +378,11 @@ final class CommunitySettingsViewModel: ObservableObject {
         }
     }
 
-    func deleteCommunity() async {
-        do {
-            try await CommunityService.shared.delete(communityId: communityId)
-        } catch {
-            errorMessage = error.localizedDescription
-            showError = true
-        }
-    }
-
-    func leaveCommunity() async {
-        do {
-            try await CommunityService.shared.leave(communityId: communityId)
-        } catch {
-            errorMessage = error.localizedDescription
-            showError = true
-        }
+    private func postToast(message: String, isSuccess: Bool) {
+        NotificationCenter.default.post(
+            name: Notification.Name("meeshy.showToast"),
+            object: nil,
+            userInfo: ["message": message, "isSuccess": isSuccess]
+        )
     }
 }

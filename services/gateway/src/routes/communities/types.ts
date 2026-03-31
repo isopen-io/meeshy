@@ -24,6 +24,7 @@ export const UpdateCommunitySchema = z.object({
   identifier: z.string().regex(/^[a-zA-Z0-9\-_@]*$/, 'Identifier can only contain letters, numbers, hyphens, underscores, and @').optional(),
   description: z.string().optional(),
   avatar: z.string().optional(),
+  banner: z.string().optional(),
   isPrivate: z.boolean().optional()
 });
 

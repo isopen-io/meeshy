@@ -190,6 +190,7 @@ extension ConversationView {
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
                     viewModel.error = "Echec de l'envoi du media: \(error.localizedDescription)"
                     HapticFeedback.error()
+                    ToastManager.shared.showError("Echec de l'envoi de la piece jointe")
                 }
             }
         }

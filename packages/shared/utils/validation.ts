@@ -594,6 +594,8 @@ export const ConversationSchemas = {
     title: CommonSchemas.conversationTitle.optional(),
     description: CommonSchemas.description,
     type: CommonSchemas.conversationType.optional(),
+    avatar: z.string().nullable().optional(),
+    banner: z.string().nullable().optional(),
   }).refine((data) => Object.keys(data).length > 0, {
     message: 'Au moins un champ doit être fourni pour la mise à jour',
   }),
