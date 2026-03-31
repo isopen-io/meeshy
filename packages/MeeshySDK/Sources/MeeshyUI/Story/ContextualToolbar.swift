@@ -34,7 +34,7 @@ struct ContextualToolbar: View {
                 if expandedGroup == .front {
                     HStack(spacing: 6) {
                         toolPill(.text, icon: "textformat", label: "Texte", badge: textCount)
-                        toolPill(.media, icon: "photo.on.rectangle", label: "Media", badge: fgMediaCount)
+                        toolPill(.media, icon: "photo.on.rectangle.angled", label: "Media", badge: fgMediaCount)
                         toolPill(.audio, icon: "waveform", label: "Audio", badge: fgAudioCount)
                     }
                     .transition(.asymmetric(

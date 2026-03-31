@@ -137,6 +137,7 @@ final class StoryComposerViewModel {
     var timelineZoomScale: CGFloat = 1.0
     var timelineScrollOffset: CGFloat = 0
     var timelineAdvanced: Bool = false
+    var isMuted: Bool = false
     var hasBackgroundImage: Bool = false
 
     // MARK: - Slide Duration
