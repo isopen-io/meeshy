@@ -84,11 +84,9 @@ export async function checkAuthStatus(): Promise<AuthState> {
 
   if (token) {
     try {
-      // Pass isSilent=true to avoid global redirection logic in apiService
-      // Use direct fetch to avoid potential circular dependency or global redirect
       const response = await fetch(buildApiUrl('/auth/me'), {
         headers: {
-          'Authorization': \`Bearer \${token}\`
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -119,8 +117,6 @@ export async function checkAuthStatus(): Promise<AuthState> {
         }
       }
       
-      // If we got here, token is likely invalid. Clean up but DON'T HARD REDIRECT HERE.
-      // The calling hook will handle redirection if necessary.
       return {
         isAuthenticated: false,
         user: null,
@@ -231,7 +227,7 @@ export function canAccessSharedConversation(authState: AuthState): boolean {
  */
 export function redirectToAuth(returnUrl?: string): void {
   if (typeof window !== 'undefined') {
-    const url = returnUrl ? \`/login?returnUrl=\${encodeURIComponent(returnUrl)}\` : '/login';
+    const url = returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login';
     window.location.href = url;
   }
 }

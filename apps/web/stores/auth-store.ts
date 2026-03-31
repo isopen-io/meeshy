@@ -1,24 +1,21 @@
 /**
  * Auth Store - Pure Zustand implementation with automatic persistence
- *
- * RÈGLE: Ce store ne doit JAMAIS accéder directement à localStorage
- * pour des clés legacy. Il utilise uniquement le persist Zustand.
- *
- * Pour accéder aux credentials: utiliser AuthManager (auth-manager.service.ts)
  */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import type { User } from '@meeshy/shared/types';
-import { AUTH_STORAGE_KEYS, authManager } from '@/services/auth-manager.service';
+import { AUTH_STORAGE_KEYS } from '@/constants/auth';
+import { authManager } from '@/services/auth-manager.service';
+
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isAuthChecking: boolean;
   authToken: string | null;
   refreshToken: string | null;
-  sessionToken: string | null; // Token de session pour "Se souvenir de l'appareil"
+  sessionToken: string | null;
   sessionExpiry: Date | null;
 }
 
@@ -47,153 +44,131 @@ const initialState: AuthState = {
 export const useAuthStore = create<AuthStore>()(
   devtools(
     persist(
-      (set, get) => ({
-        ...initialState,
-
-        setUser: (user: User | null) => {
-          set({
-            user,
-            isAuthenticated: !!user,
-            isAuthChecking: false,
+      (set, get) => {
+        // Register cleanup with AuthManager
+        if (typeof window !== 'undefined') {
+          authManager.registerOnClear(() => {
+            set({
+              user: null,
+              isAuthenticated: false,
+              authToken: null,
+              refreshToken: null,
+              sessionToken: null,
+              sessionExpiry: null,
+            });
           });
-        },
+        }
 
-        setAuthChecking: (checking: boolean) => {
-          set({ isAuthChecking: checking });
-        },
+        return {
+          ...initialState,
 
-        setTokens: (authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number) => {
-          const sessionExpiry = expiresIn
-            ? new Date(Date.now() + expiresIn * 1000)
-            : null;
+          setUser: (user: User | null) => {
+            set({
+              user,
+              isAuthenticated: !!user,
+              isAuthChecking: false,
+            });
+          },
 
-          set({
-            authToken,
-            refreshToken: refreshToken || get().refreshToken,
-            sessionToken: sessionToken || get().sessionToken,
-            sessionExpiry,
-          });
-        },
+          setAuthChecking: (checking: boolean) => {
+            set({ isAuthChecking: checking });
+          },
 
-        clearAuth: () => {
-          // 1. Reset state Zustand
-          set({
-            user: null,
-            isAuthenticated: false,
-            authToken: null,
-            refreshToken: null,
-            sessionToken: null,
-            sessionExpiry: null,
-            isAuthChecking: false,
-          });
+          setTokens: (authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number) => {
+            const sessionExpiry = expiresIn
+              ? new Date(Date.now() + expiresIn * 1000)
+              : null;
 
-          // 2. CRITIQUE: Supprimer explicitement localStorage persist
-          // Support: SSR, iframes, WAP browsers
-          if (typeof window !== 'undefined' && window.localStorage) {
-            try {
-              localStorage.removeItem(AUTH_STORAGE_KEYS.ZUSTAND_AUTH);
-            } catch (error) {
-              // Silently fail in case localStorage is disabled (private mode, iframe restrictions)
-              console.warn('[AUTH_STORE] Could not clear localStorage:', error);
-            }
-          }
+            set({
+              authToken,
+              refreshToken: refreshToken || get().refreshToken,
+              sessionToken: sessionToken || get().sessionToken,
+              sessionExpiry,
+            });
+          },
 
-          if (process.env.NODE_ENV === 'development') {
-          }
-        },
-
-        logout: async () => {
-
-          // NOUVEAU: Utiliser AuthManager pour nettoyage centralisé
-          // Import dynamique pour éviter circular deps
-          const { authManager } = await import('../services/auth-manager.service');
-          authManager.clearAllSessions();
-
-          // Reset user preferences store
-          const { resetUserPreferences } = await import('./user-preferences-store');
-          resetUserPreferences();
-
-          // Reset conversation UI store (typing, drafts, read status)
-          const { useConversationUIStore } = await import('./conversation-ui-store');
-          useConversationUIStore.getState().reset();
-
-          // Redirect to home page
-          if (typeof window !== 'undefined') {
-            // Petit délai pour s'assurer que tout est nettoyé
-            setTimeout(() => {
-              window.location.href = '/';
-            }, 100);
-          }
-        },
-
-        refreshSession: async (): Promise<boolean> => {
-          const { refreshToken, authToken } = get();
-          
-          if (!refreshToken && !authToken) {
-            return false;
-          }
-
-          try {
-            const response = await fetch('/api/auth/refresh', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`,
-              },
-              body: JSON.stringify({ refreshToken }),
+          clearAuth: () => {
+            set({
+              user: null,
+              isAuthenticated: false,
+              authToken: null,
+              refreshToken: null,
+              sessionToken: null,
+              sessionExpiry: null,
+              isAuthChecking: false,
             });
 
-            if (response.ok) {
-              const data = await response.json();
-              get().setTokens(data.accessToken, data.refreshToken, data.expiresIn);
-              return true;
+            if (typeof window !== 'undefined' && window.localStorage) {
+              try {
+                localStorage.removeItem(AUTH_STORAGE_KEYS.ZUSTAND_AUTH);
+              } catch (error) {}
             }
+          },
 
-            return false;
-          } catch (error) {
-            console.error('[AUTH_STORE] Session refresh failed:', error);
-            return false;
-          }
-        },
-
-        initializeAuth: async () => {
-          set({ isAuthChecking: true });
-
-          try {
-            const { authToken, refreshToken, sessionExpiry, user } = get();
-
-            if (process.env.NODE_ENV === 'development') {
+          logout: async () => {
+            authManager.clearAllSessions();
+            if (typeof window !== 'undefined') {
+              setTimeout(() => {
+                window.location.href = '/';
+              }, 100);
             }
+          },
 
-            if (authToken && user) {
-              // Check if session is expired
-              if (sessionExpiry && sessionExpiry < new Date()) {
-                if (process.env.NODE_ENV === 'development') {
-                }
-                
-                const refreshed = await get().refreshSession();
-                if (!refreshed) {
-                  if (process.env.NODE_ENV === 'development') {
-                  }
-                  get().clearAuth();
-                  return;
-                }
+          refreshSession: async (): Promise<boolean> => {
+            const { refreshToken, authToken } = get();
+
+            if (!refreshToken && !authToken) return false;
+
+            try {
+              const response = await fetch('/api/auth/refresh', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${authToken}`,
+                },
+                body: JSON.stringify({ refreshToken }),
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                get().setTokens(data.accessToken, data.refreshToken, data.expiresIn);
+                // Also update AuthManager
+                authManager.updateTokens(data.accessToken, data.refreshToken, undefined, data.expiresIn);
+                return true;
               }
 
-              if (process.env.NODE_ENV === 'development') {
+              return false;
+            } catch (error) {
+              return false;
+            }
+          },
+
+          initializeAuth: async () => {
+            set({ isAuthChecking: true });
+
+            try {
+              // 1. Sync from AuthManager (source of truth for primitives)
+              const token = authManager.getAuthToken();
+              const user = authManager.getCurrentUser();
+
+              if (token && user) {
+                set({
+                  authToken: token,
+                  user,
+                  isAuthenticated: true,
+                  refreshToken: authManager.getRefreshToken()
+                });
+              } else {
+                set({ isAuthenticated: false });
               }
-              set({ isAuthenticated: true });
-            } else {
+            } catch (error) {
               set({ isAuthenticated: false });
+            } finally {
+              set({ isAuthChecking: false });
             }
-          } catch (error) {
-            console.error('[AUTH_STORE] Initialization error:', error);
-            get().clearAuth();
-          } finally {
-            set({ isAuthChecking: false });
-          }
-        },
-      }),
+          },
+        };
+      },
       {
         name: 'meeshy-auth',
         partialize: (state) => ({
@@ -209,12 +184,10 @@ export const useAuthStore = create<AuthStore>()(
   )
 );
 
-// Selector hooks for better performance
 export const useUser = () => useAuthStore((state) => state.user);
 export const useIsAuthenticated = () => useAuthStore((state) => state.isAuthenticated);
 export const useIsAuthChecking = () => useAuthStore((state) => state.isAuthChecking);
 
-// Use useShallow to prevent infinite loops when selecting multiple actions
 export const useAuthActions = () => useAuthStore(
   useShallow((state) => ({
     setUser: state.setUser,

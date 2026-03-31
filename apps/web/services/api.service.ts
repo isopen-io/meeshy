@@ -94,7 +94,7 @@ class ApiService {
     token: string | null,
     customHeaders?: Record<string, string>
   ): Record<string, string> {
-    const cacheKey = \`\${method}-\${hasBody}-\${!!token}-\${JSON.stringify(customHeaders || {})}\`;
+    const cacheKey = `${method}-${hasBody}-${!!token}-${JSON.stringify(customHeaders || {})}`;
     if (this.headersCache.has(cacheKey)) {
       return this.headersCache.get(cacheKey)!;
     }
@@ -110,7 +110,7 @@ class ApiService {
     }
 
     if (token) {
-      headers['Authorization'] = \`Bearer \${token}\`;
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     this.headersCache.set(cacheKey, headers);
@@ -198,7 +198,7 @@ class ApiService {
         data = await response.json();
       } catch (parseError) {
         const text = await response.text();
-        throw new ApiServiceError(\`Erreur serveur (\${response.status}): \${text || 'Réponse invalide'}\`, response.status, 'PARSE_ERROR');
+        throw new ApiServiceError(`Erreur serveur (${response.status}): ${text || 'Réponse invalide'}`, response.status, 'PARSE_ERROR');
       }
 
       if (response.status === 401 && !isRetry && !endpoint.includes('/auth/')) {
@@ -217,7 +217,7 @@ class ApiService {
             }, 100);
           }
         }
-        throw new ApiServiceError(data.message || data.error || \`Erreur serveur (\${response.status})\`, response.status, data.code);
+        throw new ApiServiceError(data.message || data.error || `Erreur serveur (${response.status})`, response.status, data.code);
       }
 
       return {
@@ -229,7 +229,7 @@ class ApiService {
       clearTimeout(timeoutId);
       if (error instanceof ApiServiceError) throw error;
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new ApiServiceError(\`Timeout (\${requestTimeout}ms) - \${endpoint}\`, 408, 'TIMEOUT');
+        throw new ApiServiceError(`Timeout (${requestTimeout}ms) - ${endpoint}`, 408, 'TIMEOUT');
       }
       throw new ApiServiceError('Erreur de connexion au serveur', 0, 'NETWORK_ERROR');
     }
@@ -241,7 +241,7 @@ class ApiService {
       const validEntries = Object.entries(params).filter(([_, value]) => value !== undefined && value !== null);
       if (validEntries.length > 0) {
         const searchParams = new URLSearchParams(validEntries.map(([key, value]) => [key, String(value)]));
-        url += \`?\${searchParams.toString()}\`;
+        url += `?${searchParams.toString()}`;
       }
     }
     return this.request<T>(url, { method: 'GET', signal: options?.signal, headers: options?.headers });
@@ -272,13 +272,13 @@ class ApiService {
       });
     }
     const token = authManager.getAuthToken();
-    return this.request<T>(endpoint, { method: 'POST', body: formData, headers: { ...(token && { Authorization: \`Bearer \${token}\` }) } });
+    return this.request<T>(endpoint, { method: 'POST', body: formData, headers: { ...(token && { Authorization: `Bearer ${token}` }) } });
   }
 
   async getBlob(endpoint: string, options?: { signal?: AbortSignal; headers?: Record<string, string> }): Promise<Blob> {
     const url = buildApiUrl(endpoint);
     const token = authManager.getAuthToken();
-    const headers = { ...(token && { Authorization: \`Bearer \${token}\` }), ...options?.headers };
+    const headers = { ...(token && { Authorization: `Bearer ${token}` }), ...options?.headers };
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
@@ -286,7 +286,7 @@ class ApiService {
       const response = await fetch(url, { method: 'GET', headers, signal: options?.signal || controller.signal });
       clearTimeout(timeoutId);
       if (!response.ok) {
-        let errorMessage = \`Erreur serveur (\${response.status})\`;
+        let errorMessage = `Erreur serveur (${response.status})`;
         try {
           const errorData = await response.json();
           errorMessage = errorData.message || errorData.error || errorMessage;
@@ -298,7 +298,7 @@ class ApiService {
       clearTimeout(timeoutId);
       if (error instanceof ApiServiceError) throw error;
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new ApiServiceError(\`Timeout (\${this.config.timeout}ms) - \${endpoint}\`, 408, 'TIMEOUT');
+        throw new ApiServiceError(`Timeout (${this.config.timeout}ms) - ${endpoint}`, 408, 'TIMEOUT');
       }
       throw new ApiServiceError('Erreur de connexion au serveur', 0, 'NETWORK_ERROR');
     }

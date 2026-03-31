@@ -1,11 +1,6 @@
-import { isPublicRoute } from '@/utils/route-utils';
-/**
- * Connection Service
- * Handles Socket.IO connection management
- */
-
 'use client';
 
+import { isPublicRoute } from '@/utils/route-utils';
 import { io } from 'socket.io-client';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
@@ -18,8 +13,6 @@ import type { User } from '@/types';
 import type {
   TypedSocket,
   ConnectionState,
-  ConnectionStatus,
-  ConnectionDiagnostics
 } from './types';
 
 import enTranslations from '@/locales/en';
