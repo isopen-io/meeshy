@@ -15,6 +15,7 @@ import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
 import { AnonymousChatService } from '@/services/anonymous-chat.service';
 import type { Message, User } from '@meeshy/shared/types';
+import type { MentionedUser } from '@meeshy/shared/types/mention';
 
 export interface ConversationMessagesRQOptions {
   limit?: number;
@@ -28,6 +29,7 @@ export interface ConversationMessagesRQOptions {
 
 export interface ConversationMessagesRQReturn {
   messages: Message[];
+  mentionedUsers: readonly MentionedUser[];
   isLoading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
@@ -59,7 +61,7 @@ async function fetchMessagesFromService(
   page: number,
   limit: number,
   linkId?: string
-): Promise<{ messages: Message[]; hasMore: boolean; total: number }> {
+): Promise<{ messages: Message[]; hasMore: boolean; total: number; mentionedUsers?: readonly MentionedUser[] }> {
   if (linkId) {
     // Utilisateur anonyme via lien partagé - utiliser AnonymousChatService
     const service = getAnonymousChatService(linkId);
@@ -79,6 +81,7 @@ async function fetchMessagesFromService(
       messages: result.messages || [],
       hasMore: result.hasMore || false,
       total: result.total || 0,
+      mentionedUsers: result.mentionedUsers,
     };
   }
 }
@@ -134,6 +137,7 @@ export function useConversationMessagesRQ(
       pages: data.pages,
       pageParams: data.pageParams,
       messages: data.pages.flatMap((page) => page.messages),
+      mentionedUsers: deduplicateMentionedUsers(data.pages),
     }),
   });
 
@@ -149,6 +153,9 @@ export function useConversationMessagesRQ(
       return dateB - dateA;
     });
   }, [data?.messages]);
+
+  // Extract deduplicated mentionedUsers across all pages
+  const mentionedUsers: readonly MentionedUser[] = data?.mentionedUsers ?? [];
 
   // Load more function
   const loadMore = useCallback(async () => {
