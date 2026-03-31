@@ -5,6 +5,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { LikeSchema, RepostSchema, PostParams } from './types';
 import { sendSuccess } from '../../utils/response';
+import { resolveMentionedUsers } from '../../services/MentionService';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,

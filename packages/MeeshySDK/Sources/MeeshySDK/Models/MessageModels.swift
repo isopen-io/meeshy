@@ -154,6 +154,7 @@ public struct APIMessage: Sendable {
     public let readCount: Int?
     public let effectFlags: UInt32?
     public let translations: [APITextTranslation]?
+    public let mentionedUsers: [MentionedUser]?
 }
 
 extension APIMessage: Decodable {
@@ -166,7 +167,7 @@ extension APIMessage: Decodable {
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
         case reactionSummary, reactionCount, currentUserReactions
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount
-        case effectFlags, translations
+        case effectFlags, translations, mentionedUsers
         // MongoDB fallback
         case _id
     }
@@ -214,7 +215,13 @@ extension APIMessage: Decodable {
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount)
         effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
         translations = try c.decodeIfPresent([APITextTranslation].self, forKey: .translations)
+        mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
     }
+}
+
+public struct MessagesAPIMeta: Decodable, Sendable {
+    public let userLanguage: String?
+    public let mentionedUsers: [MentionedUser]?
 }
 
 public struct MessagesAPIResponse: Decodable, Sendable {
@@ -223,6 +230,7 @@ public struct MessagesAPIResponse: Decodable, Sendable {
     public let pagination: OffsetPagination?
     public let cursorPagination: CursorPagination?
     public let hasNewer: Bool?
+    public let meta: MessagesAPIMeta?
 }
 
 public struct SendMessageRequest: Encodable, Sendable {
@@ -368,6 +376,10 @@ extension APIMessage {
             if isBlurred == true { effects.flags.insert(.blurred) }
             if isViewOnce == true { effects.flags.insert(.viewOnce) }
             if expiresAt != nil { effects.flags.insert(.ephemeral) }
+        }
+
+        if let username = resolvedUsername, let displayName = senderDisplayName, displayName != username {
+            UserDisplayNameCache.shared.track(username: username, displayName: displayName)
         }
 
         return MeeshyMessage(

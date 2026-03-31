@@ -6,6 +6,7 @@ import { PostService } from '../../services/PostService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess } from '../../utils/response';
+import { resolveMentionedUsers } from '../../services/MentionService';
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,
@@ -64,7 +65,12 @@ export function registerCoreRoutes(
         }
       }
 
-      return sendSuccess(reply, post, { statusCode: 201 });
+      const postContent = (post as any).content as string | undefined;
+      const mentionedUsers = postContent
+        ? await resolveMentionedUsers(prisma, [postContent])
+        : [];
+
+      return sendSuccess(reply, post, { statusCode: 201, meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[POST /posts] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -85,7 +91,19 @@ export function registerCoreRoutes(
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
 
-      return sendSuccess(reply, post);
+      const contentStrings: string[] = [];
+      if ((post as any).content) contentStrings.push((post as any).content);
+      const embeddedComments = (post as any).comments as Array<{ content?: string }> | undefined;
+      if (embeddedComments) {
+        for (const c of embeddedComments) {
+          if (c.content) contentStrings.push(c.content);
+        }
+      }
+      const mentionedUsers = contentStrings.length > 0
+        ? await resolveMentionedUsers(prisma, contentStrings)
+        : [];
+
+      return sendSuccess(reply, post, { meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -113,7 +131,19 @@ export function registerCoreRoutes(
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
 
-      return sendSuccess(reply, post);
+      const updateContentStrings: string[] = [];
+      if ((post as any).content) updateContentStrings.push((post as any).content);
+      const updateComments = (post as any).comments as Array<{ content?: string }> | undefined;
+      if (updateComments) {
+        for (const c of updateComments) {
+          if (c.content) updateContentStrings.push(c.content);
+        }
+      }
+      const updateMentionedUsers = updateContentStrings.length > 0
+        ? await resolveMentionedUsers(prisma, updateContentStrings)
+        : [];
+
+      return sendSuccess(reply, post, { meta: { mentionedUsers: updateMentionedUsers } });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return reply.status(403).send({ success: false, error: 'Not authorized to edit this post' });

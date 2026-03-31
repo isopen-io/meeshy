@@ -31,6 +31,7 @@ import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import type { Message } from '@meeshy/shared/types/index';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
+import { resolveMentionedUsers } from '../../services/MentionService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
 import { AttachmentService } from '../../services/attachments/AttachmentService';
@@ -410,6 +411,13 @@ export class MessageHandler {
         ]);
         if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = originalMsg;
         if (originalConv) (messagePayload as Record<string, unknown>).forwardedFromConversation = originalConv;
+      }
+
+      if (message.content) {
+        const mentionedUsers = await resolveMentionedUsers(this.prisma, [message.content]);
+        if (mentionedUsers.length > 0) {
+          (messagePayload as Record<string, unknown>).mentionedUsers = mentionedUsers;
+        }
       }
 
       const room = ROOMS.conversation(normalizedId);
