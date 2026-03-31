@@ -76,7 +76,9 @@ final class UserProfileViewModel: ObservableObject {
     }
 
     private func hydrateProfileUserIfNeeded(from user: MeeshyUser?) {
-        guard let user, profileUser.userId == nil, let realId = user.id else { return }
+        guard let user else { return }
+        UserDisplayNameCache.shared.trackFromUser(user)
+        guard profileUser.userId == nil, user.id != nil else { return }
         profileUser = ProfileSheetUser.from(user: user, accentColor: profileUser.accentColor)
     }
 

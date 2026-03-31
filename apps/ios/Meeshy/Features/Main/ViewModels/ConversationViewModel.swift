@@ -334,11 +334,8 @@ class ConversationViewModel: ObservableObject {
 
     var mentionDisplayNames: [String: String] {
         if let cached = _mentionDisplayNames { return cached }
-        var map: [String: String] = [:]
-        for msg in messages {
-            guard let username = msg.senderUsername, let displayName = msg.senderName else { continue }
-            map[username] = displayName
-        }
+        UserDisplayNameCache.shared.trackFromMessages(messages)
+        let map = UserDisplayNameCache.shared.allMappings()
         _mentionDisplayNames = map
         return map
     }
@@ -414,6 +411,7 @@ class ConversationViewModel: ObservableObject {
     }
 
     private func mergeAPISuggestions(_ apiResults: [MentionSuggestion], localCandidates: [MentionCandidate]) -> [MentionCandidate] {
+        UserDisplayNameCache.shared.trackFromMentionSuggestions(apiResults)
         var seen = Set<String>()
         var merged: [MentionCandidate] = []
         for s in apiResults {

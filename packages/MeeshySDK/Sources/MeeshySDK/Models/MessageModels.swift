@@ -370,6 +370,10 @@ extension APIMessage {
             if expiresAt != nil { effects.flags.insert(.ephemeral) }
         }
 
+        if let username = resolvedUsername, let displayName = senderDisplayName, displayName != username {
+            UserDisplayNameCache.shared.track(username: username, displayName: displayName)
+        }
+
         return MeeshyMessage(
             id: id, conversationId: conversationId, senderId: senderId,
             content: content ?? "",

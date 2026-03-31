@@ -359,6 +359,7 @@ public struct UserProfileSheet: View {
         do {
             let fetchedUser = try await UserService.shared.getProfile(idOrUsername: idOrUsername)
             internalFullUser = fetchedUser
+            UserDisplayNameCache.shared.trackFromUser(fetchedUser)
             let cacheKey = fetchedUser.id ?? idOrUsername
             await CacheCoordinator.shared.profiles.save([fetchedUser], for: cacheKey)
         } catch let error as APIError {
