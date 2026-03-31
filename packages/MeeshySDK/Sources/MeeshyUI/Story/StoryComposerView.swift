@@ -293,11 +293,11 @@ public struct StoryComposerView: View {
                     mediaAudioEditorItem = AudioEditorItemWrapper(url: recordedURL)
                     showVoiceRecorderSheet = false
                 }
-                .navigationTitle("Enregistrer un vocal")
+                .navigationTitle(String(localized: "story.composer.recordVocal", defaultValue: "Enregistrer un vocal", bundle: .module))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Annuler") { showVoiceRecorderSheet = false }
+                        Button(String(localized: "story.composer.cancel", defaultValue: "Annuler", bundle: .module)) { showVoiceRecorderSheet = false }
                     }
                 }
             }
@@ -341,16 +341,16 @@ public struct StoryComposerView: View {
                 onCancel: { editingElementVideo = nil }
             )
         }
-        .alert("Reprendre votre story ?", isPresented: $showRestoreDraftAlert) {
-            Button("Reprendre") { restoreDraft() }
-            Button("Effacer le brouillon", role: .destructive) { clearAllDrafts() }
+        .alert(String(localized: "story.composer.resumeStory", defaultValue: "Reprendre votre story ?", bundle: .module), isPresented: $showRestoreDraftAlert) {
+            Button(String(localized: "story.composer.resume", defaultValue: "Reprendre", bundle: .module)) { restoreDraft() }
+            Button(String(localized: "story.composer.clearDraft", defaultValue: "Effacer le brouillon", bundle: .module), role: .destructive) { clearAllDrafts() }
         } message: {
-            Text("Vous avez un brouillon non publie.")
+            Text(String(localized: "story.composer.unpublishedDraft", defaultValue: "Vous avez un brouillon non publie.", bundle: .module))
         }
-        .alert("Quitter sans publier ?", isPresented: $showDiscardAlert) {
-            Button("Sauvegarder") { saveDraftAndDismiss() }
-            Button("Quitter", role: .destructive) { cancelAndDismiss() }
-            Button("Annuler", role: .cancel) { }
+        .alert(String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module), isPresented: $showDiscardAlert) {
+            Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
+            Button(String(localized: "story.composer.quit", defaultValue: "Quitter", bundle: .module), role: .destructive) { cancelAndDismiss() }
+            Button(String(localized: "story.composer.cancelAction", defaultValue: "Annuler", bundle: .module), role: .cancel) { }
         }
         .onAppear { checkForDraft() }
     }
@@ -418,7 +418,7 @@ public struct StoryComposerView: View {
     private var publishButton: some View {
         Button { publishAllSlides() } label: {
             HStack(spacing: 4) {
-                Text("Publier").font(.system(size: 13, weight: .bold)).lineLimit(1)
+                Text(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module)).font(.system(size: 13, weight: .bold)).lineLimit(1)
                 Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
             }
             .fixedSize()
@@ -432,24 +432,24 @@ public struct StoryComposerView: View {
     private var overflowMenu: some View {
         Menu {
             Button { saveDraft() } label: {
-                Label("Sauvegarder le brouillon", systemImage: "square.and.arrow.down")
+                Label(String(localized: "story.composer.saveDraft", defaultValue: "Sauvegarder le brouillon", bundle: .module), systemImage: "square.and.arrow.down")
             }
             Menu {
                 Button { visibility = "PUBLIC" } label: {
-                    Label("Public", systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
+                    Label(String(localized: "story.composer.public", defaultValue: "Public", bundle: .module), systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
                 }
                 Button { visibility = "FRIENDS" } label: {
-                    Label("Amis", systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
+                    Label(String(localized: "story.composer.friends", defaultValue: "Amis", bundle: .module), systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
                 }
                 Button { visibility = "PRIVATE" } label: {
-                    Label("Prive", systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
+                    Label(String(localized: "story.composer.private", defaultValue: "Prive", bundle: .module), systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
                 }
             } label: {
-                Label("Visibilite", systemImage: "eye")
+                Label(String(localized: "story.composer.visibility", defaultValue: "Visibilite", bundle: .module), systemImage: "eye")
             }
             Divider()
             Button(role: .destructive) { viewModel.reset() } label: {
-                Label("Supprimer tous les slides", systemImage: "trash")
+                Label(String(localized: "story.composer.deleteAllSlides", defaultValue: "Supprimer tous les slides", bundle: .module), systemImage: "trash")
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -516,7 +516,7 @@ public struct StoryComposerView: View {
                     viewModel.removeSlide(at: index)
                     restoreCanvas(from: viewModel.currentSlide)
                 } label: {
-                    Label("Supprimer", systemImage: "trash")
+                    Label(String(localized: "story.composer.deleteSlide", defaultValue: "Supprimer", bundle: .module), systemImage: "trash")
                 }
             }
             Button {
@@ -524,7 +524,7 @@ public struct StoryComposerView: View {
                 viewModel.duplicateSlide(at: index)
                 restoreCanvas(from: viewModel.currentSlide)
             } label: {
-                Label("Dupliquer", systemImage: "doc.on.doc")
+                Label(String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module), systemImage: "doc.on.doc")
             }
         }
     }
@@ -592,7 +592,7 @@ public struct StoryComposerView: View {
     private var bgMediaPanel: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("Arriere-plan")
+                Text(String(localized: "story.composer.backgroundLabel", defaultValue: "Arriere-plan", bundle: .module))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white.opacity(0.6))
                 Spacer()
@@ -600,7 +600,7 @@ public struct StoryComposerView: View {
                     HStack(spacing: 4) {
                         Image(systemName: selectedImage != nil ? "photo.fill" : "photo.on.rectangle")
                             .font(.system(size: 12, weight: .medium))
-                        Text(selectedImage != nil ? "Changer photo" : "Photo")
+                        Text(selectedImage != nil ? String(localized: "story.composer.changePhoto", defaultValue: "Changer photo", bundle: .module) : String(localized: "story.composer.photo", defaultValue: "Photo", bundle: .module))
                             .font(.system(size: 11, weight: .medium))
                     }
                     .foregroundColor(selectedImage != nil ? MeeshyColors.brandPrimary : .white.opacity(0.7))
@@ -614,7 +614,7 @@ public struct StoryComposerView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "pencil")
                                 .font(.system(size: 12, weight: .medium))
-                            Text("\u{00C9}diter")
+                            Text(String(localized: "story.composer.edit", defaultValue: "\u{00C9}diter", bundle: .module))
                                 .font(.system(size: 11, weight: .medium))
                         }
                         .foregroundColor(MeeshyColors.brandPrimary)
@@ -721,7 +721,7 @@ public struct StoryComposerView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 14, weight: .medium))
-                        Text(viewModel.selectedElementId != nil ? "Autre texte" : "Ajouter du texte")
+                        Text(viewModel.selectedElementId != nil ? String(localized: "story.composer.anotherText", defaultValue: "Autre texte", bundle: .module) : String(localized: "story.composer.addText", defaultValue: "Ajouter du texte", bundle: .module))
                             .font(.system(size: 13, weight: .medium))
                     }
                     .foregroundColor(MeeshyColors.brandPrimary)
@@ -740,7 +740,7 @@ public struct StoryComposerView: View {
                 PhotosPicker(selection: $fgPhotoItem, matching: .images) {
                     HStack(spacing: 6) {
                         Image(systemName: "photo.badge.plus").font(.system(size: 14, weight: .medium))
-                        Text("Image").font(.system(size: 13, weight: .medium))
+                        Text(String(localized: "story.composer.image", defaultValue: "Image", bundle: .module)).font(.system(size: 13, weight: .medium))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 11)
@@ -750,7 +750,7 @@ public struct StoryComposerView: View {
                 PhotosPicker(selection: $fgVideoItem, matching: .videos) {
                     HStack(spacing: 6) {
                         Image(systemName: "video.badge.plus").font(.system(size: 14, weight: .medium))
-                        Text("Video").font(.system(size: 13, weight: .medium))
+                        Text(String(localized: "story.composer.video", defaultValue: "Video", bundle: .module)).font(.system(size: 13, weight: .medium))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 11)
@@ -772,7 +772,7 @@ public struct StoryComposerView: View {
                 Button { showAudioDocumentPicker = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "waveform").font(.system(size: 14, weight: .medium))
-                        Text("Bibliotheque").font(.system(size: 13, weight: .medium))
+                        Text(String(localized: "story.composer.library", defaultValue: "Bibliotheque", bundle: .module)).font(.system(size: 13, weight: .medium))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -782,7 +782,7 @@ public struct StoryComposerView: View {
                 Button { showVoiceRecorderSheet = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "mic").font(.system(size: 14, weight: .medium))
-                        Text("Enregistrer").font(.system(size: 13, weight: .medium))
+                        Text(String(localized: "story.composer.recordAudio", defaultValue: "Enregistrer", bundle: .module)).font(.system(size: 13, weight: .medium))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -818,7 +818,7 @@ public struct StoryComposerView: View {
                                 .frame(width: 32, height: 32)
                                 .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
                         }
-                        Text(obj.mediaType == "video" ? "Video" : "Image")
+                        Text(obj.mediaType == "video" ? String(localized: "story.composer.videoLabel", defaultValue: "Video", bundle: .module) : String(localized: "story.composer.imageLabel", defaultValue: "Image", bundle: .module))
                             .font(.system(size: 12, weight: isSelected ? .bold : .medium))
                             .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
                         Spacer()
@@ -867,7 +867,7 @@ public struct StoryComposerView: View {
                             .foregroundStyle(MeeshyColors.indigo400)
                             .frame(width: 32, height: 32)
                             .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
-                        Text("Audio")
+                        Text(String(localized: "story.composer.audioLabel", defaultValue: "Audio", bundle: .module))
                             .font(.system(size: 12, weight: isSelected ? .bold : .medium))
                             .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
                         Spacer()
@@ -907,24 +907,24 @@ public struct StoryComposerView: View {
 
     private var transitionPicker: some View {
         VStack(spacing: 12) {
-            Text("Effet d'ouverture")
+            Text(String(localized: "story.composer.openingEffect", defaultValue: "Effet d'ouverture", bundle: .module))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.6))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    effectButton(effect: nil, label: "Aucun", icon: "minus.circle", isOpening: true)
+                    effectButton(effect: nil, label: String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module), icon: "minus.circle", isOpening: true)
                     ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
                         effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: true)
                     }
                 }
                 .padding(.horizontal, 2)
             }
-            Text("Effet de fermeture")
+            Text(String(localized: "story.composer.closingEffect", defaultValue: "Effet de fermeture", bundle: .module))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.6))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    effectButton(effect: nil, label: "Aucun", icon: "minus.circle", isOpening: false)
+                    effectButton(effect: nil, label: String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module), icon: "minus.circle", isOpening: false)
                     ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
                         effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: false)
                     }

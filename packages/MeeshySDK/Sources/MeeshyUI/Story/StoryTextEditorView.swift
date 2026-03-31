@@ -30,7 +30,7 @@ public struct StoryTextEditorView: View {
 
     private var textInputRow: some View {
         HStack(spacing: 8) {
-            TextField("Saisissez votre texte...", text: contentBinding, axis: .vertical)
+            TextField(String(localized: "story.textEditor.placeholder", defaultValue: "Saisissez votre texte...", bundle: .module), text: contentBinding, axis: .vertical)
                 .font(storyFont(for: textObject.parsedTextStyle, size: min(textObject.resolvedSize, 20)))
                 .foregroundColor(Color(hex: textObject.textColor ?? "FFFFFF"))
                 .multilineTextAlignment(resolvedAlignment)
@@ -125,10 +125,10 @@ public struct StoryTextEditorView: View {
     private var sectionPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                sectionTab(.style, label: "Style", icon: "textformat")
-                sectionTab(.color, label: "Couleur", icon: "paintpalette")
-                sectionTab(.size, label: "Taille", icon: "textformat.size")
-                sectionTab(.timing, label: "Timing", icon: "clock")
+                sectionTab(.style, label: String(localized: "story.textEditor.style", defaultValue: "Style", bundle: .module), icon: "textformat")
+                sectionTab(.color, label: String(localized: "story.textEditor.color", defaultValue: "Couleur", bundle: .module), icon: "paintpalette")
+                sectionTab(.size, label: String(localized: "story.textEditor.size", defaultValue: "Taille", bundle: .module), icon: "textformat.size")
+                sectionTab(.timing, label: String(localized: "story.textEditor.timing", defaultValue: "Timing", bundle: .module), icon: "clock")
             }
             .padding(.horizontal, 14)
         }
@@ -263,12 +263,12 @@ public struct StoryTextEditorView: View {
     private var timingSection: some View {
         VStack(spacing: 8) {
             HStack(spacing: 12) {
-                timingField(label: "Debut", value: startTimeBinding, range: 0...30, unit: "s")
-                timingField(label: "Duree", value: durationBinding, range: 0...30, unit: "s")
+                timingField(label: String(localized: "story.textEditor.start", defaultValue: "Debut", bundle: .module), value: startTimeBinding, range: 0...30, unit: "s")
+                timingField(label: String(localized: "story.textEditor.duration", defaultValue: "Duree", bundle: .module), value: durationBinding, range: 0...30, unit: "s")
             }
             HStack(spacing: 12) {
-                timingField(label: "Fondu in", value: fadeInBinding, range: 0...5, unit: "s")
-                timingField(label: "Fondu out", value: fadeOutBinding, range: 0...5, unit: "s")
+                timingField(label: String(localized: "story.textEditor.fadeIn", defaultValue: "Fondu in", bundle: .module), value: fadeInBinding, range: 0...5, unit: "s")
+                timingField(label: String(localized: "story.textEditor.fadeOut", defaultValue: "Fondu out", bundle: .module), value: fadeOutBinding, range: 0...5, unit: "s")
             }
         }
         .padding(.horizontal, 14)

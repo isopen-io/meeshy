@@ -24,16 +24,16 @@ public struct CommunityMembersView: View {
             } else if viewModel.members.isEmpty {
                 EmptyStateView(
                     icon: "person.3",
-                    title: "No Members",
-                    subtitle: "Invite people to join this community",
-                    actionLabel: "Invite",
+                    title: String(localized: "community.members.empty.title", defaultValue: "No Members", bundle: .module),
+                    subtitle: String(localized: "community.members.empty.subtitle", defaultValue: "Invite people to join this community", bundle: .module),
+                    actionLabel: String(localized: "community.members.empty.action", defaultValue: "Invite", bundle: .module),
                     onAction: { onInvite?() }
                 )
             } else {
                 memberList
             }
         }
-        .navigationTitle("Members")
+        .navigationTitle(String(localized: "community.members.title", defaultValue: "Members", bundle: .module))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -131,7 +131,7 @@ struct MemberRow: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     private var user: APICommunityUser? { member.user }
-    private var displayName: String { user?.name ?? "Unknown" }
+    private var displayName: String { user?.name ?? String(localized: "community.members.unknownUser", defaultValue: "Unknown", bundle: .module) }
     private var accentColor: String { DynamicColorGenerator.colorForName(displayName) }
 
     var body: some View {
@@ -177,7 +177,7 @@ struct MemberRow: View {
                     Button(role: .destructive) {
                         onRemove?()
                     } label: {
-                        Label("Remove", systemImage: "person.badge.minus")
+                        Label(String(localized: "community.members.remove", defaultValue: "Remove", bundle: .module), systemImage: "person.badge.minus")
                     }
                 } label: {
                     Image(systemName: "ellipsis")

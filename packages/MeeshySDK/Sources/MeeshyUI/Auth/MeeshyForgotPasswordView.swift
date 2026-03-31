@@ -30,9 +30,15 @@ public struct MeeshyForgotPasswordView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
 
-    enum RecoveryMode: String, CaseIterable {
-        case email = "Email"
-        case phone = "Telephone"
+    enum RecoveryMode: CaseIterable {
+        case email, phone
+
+        var label: String {
+            switch self {
+            case .email: return String(localized: "auth.forgotPassword.modeEmail", defaultValue: "Email", bundle: .module)
+            case .phone: return String(localized: "auth.forgotPassword.modePhone", defaultValue: "Telephone", bundle: .module)
+            }
+        }
     }
 
     enum PhoneStep {
@@ -55,9 +61,9 @@ public struct MeeshyForgotPasswordView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         // Mode picker
-                        Picker("Mode", selection: $mode) {
+                        Picker(String(localized: "auth.forgotPassword.modePicker", defaultValue: "Mode", bundle: .module), selection: $mode) {
                             ForEach(RecoveryMode.allCases, id: \.self) { m in
-                                Text(m.rawValue).tag(m)
+                                Text(m.label).tag(m)
                             }
                         }
                         .pickerStyle(.segmented)
@@ -72,11 +78,11 @@ public struct MeeshyForgotPasswordView: View {
                     .padding(.top, 20)
                 }
             }
-            .navigationTitle("Mot de passe oublie")
+            .navigationTitle(String(localized: "auth.forgotPassword.title", defaultValue: "Mot de passe oublie", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "auth.forgotPassword.close", defaultValue: "Fermer", bundle: .module)) { dismiss() }
                 }
             }
             .sheet(isPresented: $showResetPassword) {
@@ -95,7 +101,7 @@ public struct MeeshyForgotPasswordView: View {
                     .font(.system(size: 48))
                     .foregroundStyle(Color(hex: "4ECDC4"))
 
-                Text("Email envoye !")
+                Text(String(localized: "auth.forgotPassword.emailSent", defaultValue: "Email envoye !", bundle: .module))
                     .font(.title3.weight(.bold))
                     .foregroundStyle(theme.textPrimary)
 
@@ -106,13 +112,13 @@ public struct MeeshyForgotPasswordView: View {
             }
         } else {
             VStack(spacing: 16) {
-                Text("Entrez votre email pour recevoir un lien de reinitialisation.")
+                Text(String(localized: "auth.forgotPassword.emailPrompt", defaultValue: "Entrez votre email pour recevoir un lien de reinitialisation.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 24)
 
                 AuthTextField(
-                    title: "Email",
+                    title: String(localized: "auth.forgotPassword.emailField", defaultValue: "Email", bundle: .module),
                     icon: "envelope.fill",
                     text: $email,
                     keyboardType: .emailAddress
@@ -121,7 +127,7 @@ public struct MeeshyForgotPasswordView: View {
 
                 errorView
 
-                actionButton("Envoyer") {
+                actionButton(String(localized: "auth.forgotPassword.send", defaultValue: "Envoyer", bundle: .module)) {
                     isLoading = true
                     errorMessage = nil
                     let sent = await authManager.requestPasswordReset(email: email)
@@ -140,7 +146,7 @@ public struct MeeshyForgotPasswordView: View {
         switch phoneStep {
         case .lookup:
             VStack(spacing: 16) {
-                Text("Entrez votre numero de telephone pour retrouver votre compte.")
+                Text(String(localized: "auth.forgotPassword.phonePrompt", defaultValue: "Entrez votre numero de telephone pour retrouver votre compte.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 24)
@@ -150,7 +156,7 @@ public struct MeeshyForgotPasswordView: View {
 
                 errorView
 
-                actionButton("Rechercher") {
+                actionButton(String(localized: "auth.forgotPassword.search", defaultValue: "Rechercher", bundle: .module)) {
                     await phoneLookup()
                 }
             }
@@ -159,7 +165,7 @@ public struct MeeshyForgotPasswordView: View {
             VStack(spacing: 16) {
                 if let info = maskedInfo {
                     VStack(spacing: 8) {
-                        Text("Compte trouve")
+                        Text(String(localized: "auth.forgotPassword.accountFound", defaultValue: "Compte trouve", bundle: .module))
                             .font(.headline)
                             .foregroundStyle(theme.textPrimary)
                         Text(info.displayName)
@@ -176,38 +182,38 @@ public struct MeeshyForgotPasswordView: View {
                     .padding(.horizontal, 24)
                 }
 
-                Text("Pour verifier votre identite, entrez votre nom d'utilisateur et email complets.")
+                Text(String(localized: "auth.forgotPassword.verifyIdentityPrompt", defaultValue: "Pour verifier votre identite, entrez votre nom d'utilisateur et email complets.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 24)
 
-                AuthTextField(title: "Nom d'utilisateur complet", icon: "person.fill", text: $fullUsername)
+                AuthTextField(title: String(localized: "auth.forgotPassword.fullUsername", defaultValue: "Nom d'utilisateur complet", bundle: .module), icon: "person.fill", text: $fullUsername)
                     .padding(.horizontal, 24)
 
-                AuthTextField(title: "Email complet", icon: "envelope.fill", text: $fullEmail, keyboardType: .emailAddress)
+                AuthTextField(title: String(localized: "auth.forgotPassword.fullEmail", defaultValue: "Email complet", bundle: .module), icon: "envelope.fill", text: $fullEmail, keyboardType: .emailAddress)
                     .padding(.horizontal, 24)
 
                 errorView
 
-                actionButton("Verifier") {
+                actionButton(String(localized: "auth.forgotPassword.verify", defaultValue: "Verifier", bundle: .module)) {
                     await phoneVerifyIdentity()
                 }
             }
 
         case .verifyCode:
             VStack(spacing: 16) {
-                Text("Un code SMS a ete envoye a votre telephone.")
+                Text(String(localized: "auth.forgotPassword.smsCodeSent", defaultValue: "Un code SMS a ete envoye a votre telephone.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 24)
 
-                AuthTextField(title: "Code a 6 chiffres", icon: "number", text: $verificationCode, keyboardType: .numberPad)
+                AuthTextField(title: String(localized: "auth.forgotPassword.verificationCode", defaultValue: "Code a 6 chiffres", bundle: .module), icon: "number", text: $verificationCode, keyboardType: .numberPad)
                     .padding(.horizontal, 24)
 
                 errorView
 
-                actionButton("Confirmer") {
+                actionButton(String(localized: "auth.forgotPassword.confirm", defaultValue: "Confirmer", bundle: .module)) {
                     await phoneVerifyCode()
                 }
             }
@@ -228,11 +234,11 @@ public struct MeeshyForgotPasswordView: View {
                             .font(.system(size: 48))
                             .foregroundStyle(.green)
 
-                        Text("Mot de passe reinitialise !")
+                        Text(String(localized: "auth.forgotPassword.resetSuccess", defaultValue: "Mot de passe reinitialise !", bundle: .module))
                             .font(.title3.weight(.bold))
                             .foregroundStyle(theme.textPrimary)
 
-                        Button("Se connecter") {
+                        Button(String(localized: "auth.forgotPassword.login", defaultValue: "Se connecter", bundle: .module)) {
                             showResetPassword = false
                             dismiss()
                         }
@@ -243,31 +249,31 @@ public struct MeeshyForgotPasswordView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 24)
                     } else {
-                        AuthTextField(title: "Nouveau mot de passe", icon: "lock.fill", text: $newPassword, isSecure: true)
+                        AuthTextField(title: String(localized: "auth.forgotPassword.newPassword", defaultValue: "Nouveau mot de passe", bundle: .module), icon: "lock.fill", text: $newPassword, isSecure: true)
                             .padding(.horizontal, 24)
 
                         PasswordStrengthIndicator(password: newPassword)
                             .padding(.horizontal, 24)
 
-                        AuthTextField(title: "Confirmer le mot de passe", icon: "lock.fill", text: $confirmPassword, isSecure: true)
+                        AuthTextField(title: String(localized: "auth.forgotPassword.confirmPassword", defaultValue: "Confirmer le mot de passe", bundle: .module), icon: "lock.fill", text: $confirmPassword, isSecure: true)
                             .padding(.horizontal, 24)
 
                         if newPassword != confirmPassword && !confirmPassword.isEmpty {
-                            Text("Les mots de passe ne correspondent pas")
+                            Text(String(localized: "auth.forgotPassword.passwordMismatch", defaultValue: "Les mots de passe ne correspondent pas", bundle: .module))
                                 .font(.caption)
                                 .foregroundStyle(.red)
                         }
 
                         errorView
 
-                        actionButton("Reinitialiser") {
+                        actionButton(String(localized: "auth.forgotPassword.reset", defaultValue: "Reinitialiser", bundle: .module)) {
                             await doResetPassword()
                         }
                     }
                 }
                 .padding(.top, 20)
             }
-            .navigationTitle("Nouveau mot de passe")
+            .navigationTitle(String(localized: "auth.forgotPassword.newPasswordTitle", defaultValue: "Nouveau mot de passe", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
@@ -334,7 +340,7 @@ public struct MeeshyForgotPasswordView: View {
             )
             phoneStep = .verifyIdentity
         } catch {
-            errorMessage = "Aucun compte trouve avec ce numero"
+            errorMessage = String(localized: "auth.forgotPassword.noAccountFound", defaultValue: "Aucun compte trouve avec ce numero", bundle: .module)
         }
         isLoading = false
     }
@@ -351,7 +357,7 @@ public struct MeeshyForgotPasswordView: View {
             )
             phoneStep = .verifyCode
         } catch {
-            errorMessage = "Informations incorrectes"
+            errorMessage = String(localized: "auth.forgotPassword.incorrectInfo", defaultValue: "Informations incorrectes", bundle: .module)
         }
         isLoading = false
     }
@@ -369,14 +375,14 @@ public struct MeeshyForgotPasswordView: View {
             resetToken = res.data.resetToken
             showResetPassword = true
         } catch {
-            errorMessage = "Code invalide"
+            errorMessage = String(localized: "auth.forgotPassword.invalidCode", defaultValue: "Code invalide", bundle: .module)
         }
         isLoading = false
     }
 
     private func doResetPassword() async {
         guard newPassword == confirmPassword else {
-            errorMessage = "Les mots de passe ne correspondent pas"
+            errorMessage = String(localized: "auth.forgotPassword.passwordMismatch", defaultValue: "Les mots de passe ne correspondent pas", bundle: .module)
             return
         }
         isLoading = true; errorMessage = nil
@@ -388,7 +394,7 @@ public struct MeeshyForgotPasswordView: View {
             )
             resetSuccess = true
         } catch {
-            errorMessage = "Erreur lors de la reinitialisation"
+            errorMessage = String(localized: "auth.forgotPassword.resetError", defaultValue: "Erreur lors de la reinitialisation", bundle: .module)
         }
         isLoading = false
     }

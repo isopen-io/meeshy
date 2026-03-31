@@ -135,7 +135,7 @@ public struct CodeViewerView: View {
             if isLoading {
                 HStack(spacing: 6) {
                     ProgressView().scaleEffect(0.6)
-                    Text("Chargement...")
+                    Text(String(localized: "media.code.loading", defaultValue: "Chargement...", bundle: .module))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.3))
                 }
@@ -143,7 +143,7 @@ public struct CodeViewerView: View {
             } else if let code = codeContent {
                 codePreview(code)
             } else {
-                Text("Impossible de charger le fichier")
+                Text(String(localized: "media.code.loadError", defaultValue: "Impossible de charger le fichier", bundle: .module))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.3))
                     .frame(maxWidth: .infinity, minHeight: 40)
@@ -329,7 +329,7 @@ public struct CodeFullSheet: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Chargement du fichier...")
+            Text(String(localized: "media.code.loadingFile", defaultValue: "Chargement du fichier...", bundle: .module))
                 .font(.system(size: 14))
                 .foregroundColor(theme.textMuted)
         }

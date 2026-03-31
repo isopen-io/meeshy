@@ -119,7 +119,7 @@ struct TrackDetailPopover: View {
                 range: 0...1, unit: "%", displayMultiplier: 100
             )
             HStack {
-                Text("Boucle")
+                Text(String(localized: "story.trackDetail.loop", defaultValue: "Boucle", bundle: .module))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -143,7 +143,7 @@ struct TrackDetailPopover: View {
             HStack(spacing: 6) {
                 Image(systemName: "trash")
                     .font(.system(size: 11, weight: .medium))
-                Text("Supprimer")
+                Text(String(localized: "story.trackDetail.delete", defaultValue: "Supprimer", bundle: .module))
                     .font(.system(size: 12, weight: .medium))
             }
             .foregroundStyle(MeeshyColors.error)

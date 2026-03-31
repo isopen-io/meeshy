@@ -84,7 +84,7 @@ public struct JoinFlowSheet: View {
 
     private var headerBar: some View {
         HStack {
-            Text("Rejoindre")
+            Text(String(localized: "joinFlow.header.title", defaultValue: "Rejoindre", bundle: .module))
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -100,7 +100,7 @@ public struct JoinFlowSheet: View {
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
             }
-            .accessibilityLabel("Fermer")
+            .accessibilityLabel(String(localized: "joinFlow.close.accessibilityLabel", defaultValue: "Fermer", bundle: .module))
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -117,7 +117,7 @@ public struct JoinFlowSheet: View {
                 .scaleEffect(1.2)
                 .tint(MeeshyColors.indigo400)
 
-            Text("Chargement du lien...")
+            Text(String(localized: "joinFlow.loading.message", defaultValue: "Chargement du lien...", bundle: .module))
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
@@ -142,7 +142,7 @@ public struct JoinFlowSheet: View {
                     .foregroundColor(MeeshyColors.success)
             }
 
-            Text("Bienvenue !")
+            Text(String(localized: "joinFlow.success.title", defaultValue: "Bienvenue !", bundle: .module))
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -163,7 +163,7 @@ public struct JoinFlowSheet: View {
                 HStack(spacing: 8) {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
                         .font(.system(size: 16))
-                    Text("Ouvrir la conversation")
+                    Text(String(localized: "joinFlow.success.openConversation", defaultValue: "Ouvrir la conversation", bundle: .module))
                         .font(.system(size: 16, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -195,7 +195,7 @@ public struct JoinFlowSheet: View {
                     .foregroundColor(MeeshyColors.error)
             }
 
-            Text("Lien indisponible")
+            Text(String(localized: "joinFlow.error.title", defaultValue: "Lien indisponible", bundle: .module))
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -210,7 +210,7 @@ public struct JoinFlowSheet: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.clockwise")
-                    Text("Reessayer")
+                    Text(String(localized: "joinFlow.error.retry", defaultValue: "Reessayer", bundle: .module))
                         .font(.system(size: 15, weight: .semibold))
                 }
                 .foregroundColor(MeeshyColors.indigo400)
@@ -223,7 +223,7 @@ public struct JoinFlowSheet: View {
             }
             .padding(.top, 8)
 
-            Button("Fermer") {
+            Button(String(localized: "joinFlow.error.close", defaultValue: "Fermer", bundle: .module)) {
                 dismiss()
             }
             .font(.system(size: 14, weight: .medium))

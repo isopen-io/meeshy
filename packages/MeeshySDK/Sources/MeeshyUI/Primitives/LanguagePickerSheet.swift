@@ -197,7 +197,7 @@ public struct LanguagePickerSheet: View {
                 .padding(.top, 12)
 
             HStack {
-                Text("Langue de traduction")
+                Text(String(localized: "languagePicker.title", defaultValue: "Langue de traduction", bundle: .module))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(style == .dark ? .white : .primary)
                 Spacer()
@@ -222,7 +222,7 @@ public struct LanguagePickerSheet: View {
                 .foregroundColor(style == .dark ? .white.opacity(0.5) : .gray)
                 .font(.system(size: 15))
 
-            TextField("Rechercher une langue…", text: $searchText)
+            TextField(String(localized: "languagePicker.search", defaultValue: "Rechercher une langue…", bundle: .module), text: $searchText)
                 .font(.system(size: 15))
                 .foregroundColor(style == .dark ? .white : .primary)
                 .tint(Color(hex: "08D9D6"))

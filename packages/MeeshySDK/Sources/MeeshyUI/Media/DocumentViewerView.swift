@@ -210,11 +210,11 @@ public struct DocumentFullSheet: View {
                 .font(.system(size: 48))
                 .foregroundColor(Color(hex: docType.color))
 
-            Text(attachment.originalName.isEmpty ? "Document" : attachment.originalName)
+            Text(attachment.originalName.isEmpty ? String(localized: "media.document.defaultName", defaultValue: "Document", bundle: .module) : attachment.originalName)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Aper\u{00E7}u non disponible")
+            Text(String(localized: "media.document.previewUnavailable", defaultValue: "Aper\u{00E7}u non disponible", bundle: .module))
                 .font(.system(size: 14))
                 .foregroundColor(theme.textMuted)
 

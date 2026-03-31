@@ -43,7 +43,7 @@ public struct LiveLocationBadge: View {
                 Button {
                     onStop()
                 } label: {
-                    Text("Arreter")
+                    Text(String(localized: "location.live.stop", defaultValue: "Arreter", bundle: .module))
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(Color(hex: "FF6B6B"))
                         .padding(.horizontal, 8)
@@ -100,7 +100,7 @@ public struct LiveLocationDurationPicker: View {
                 Image(systemName: "timer")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
-                Text("Duree du partage")
+                Text(String(localized: "location.live.shareDuration", defaultValue: "Duree du partage", bundle: .module))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.primary)
             }

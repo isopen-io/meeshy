@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "MeeshySDK",
+    defaultLocalization: "fr",
     platforms: [.iOS(.v17)],
     products: [
         .library(name: "MeeshySDK", targets: ["MeeshySDK"]),
@@ -27,6 +28,7 @@ let package = Package(
         .target(
             name: "MeeshyUI",
             dependencies: ["MeeshySDK"],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

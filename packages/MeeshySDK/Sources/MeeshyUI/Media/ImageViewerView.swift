@@ -116,7 +116,7 @@ public struct ImageViewerView: View {
                         HStack(spacing: 3) {
                             Image(systemName: "pencil")
                                 .font(.system(size: 10, weight: .bold))
-                            Text("\u{00C9}diter")
+                            Text(String(localized: "media.image.edit", defaultValue: "\u{00C9}diter", bundle: .module))
                                 .font(.system(size: 10, weight: .semibold))
                         }
                         .foregroundColor(.white)

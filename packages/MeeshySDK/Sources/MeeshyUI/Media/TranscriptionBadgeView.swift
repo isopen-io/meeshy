@@ -33,7 +33,7 @@ public struct TranscriptionBadgeView: View {
             }
         }
         .accessibilityLabel("Transcription: \(transcriptionText)")
-        .accessibilityHint(isExpanded ? "Tap to collapse" : "Tap to expand")
+        .accessibilityHint(isExpanded ? String(localized: "media.transcription.collapseHint", defaultValue: "Tap to collapse", bundle: .module) : String(localized: "media.transcription.expandHint", defaultValue: "Tap to expand", bundle: .module))
     }
 
     private var collapsedBadge: some View {
@@ -42,7 +42,7 @@ public struct TranscriptionBadgeView: View {
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundColor(Color(hex: accentColor).opacity(0.8))
 
-            Text(isExpanded ? "Transcription" : previewText)
+            Text(isExpanded ? String(localized: "media.transcription.title", defaultValue: "Transcription", bundle: .module) : previewText)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
@@ -94,7 +94,7 @@ public struct TranscriptionBadgeView: View {
                     HStack(spacing: 3) {
                         Image(systemName: "iphone")
                             .font(.system(size: 8))
-                        Text("On-device")
+                        Text(String(localized: "media.transcription.onDevice", defaultValue: "On-device", bundle: .module))
                             .font(.system(size: 8, weight: .medium))
                     }
                     .foregroundColor(Color(hex: accentColor).opacity(0.7))

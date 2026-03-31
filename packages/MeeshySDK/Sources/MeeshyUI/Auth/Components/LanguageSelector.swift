@@ -65,7 +65,7 @@ public struct LanguageSelector: View {
                     if let sel = selected {
                         Text("\(sel.flag) \(sel.name)")
                     } else {
-                        Text("Choisir...")
+                        Text(String(localized: "auth.languageSelector.placeholder", defaultValue: "Choisir...", bundle: .module))
                             .foregroundStyle(.secondary)
                     }
                     Spacer()

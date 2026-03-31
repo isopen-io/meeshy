@@ -130,8 +130,8 @@ struct RecentConversationsWidget: Widget {
         StaticConfiguration(kind: kind, provider: ConversationProvider()) { entry in
             RecentConversationsWidgetView(entry: entry)
         }
-        .configurationDisplayName("Recent Conversations")
-        .description("View your recent conversations at a glance")
+        .configurationDisplayName(String(localized: "widget.recentConversations.title", defaultValue: "Recent Conversations"))
+        .description(String(localized: "widget.recentConversations.description", defaultValue: "View your recent conversations at a glance"))
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
@@ -195,7 +195,7 @@ struct MediumConversationView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Conversations", systemImage: "message.fill")
+                Label(String(localized: "widget.conversations", defaultValue: "Conversations"), systemImage: "message.fill")
                     .font(.headline)
                     .foregroundColor(.blue)
                 Spacer()
@@ -259,7 +259,7 @@ struct LargeConversationView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Recent Conversations", systemImage: "message.fill")
+                Label(String(localized: "widget.recentConversations", defaultValue: "Recent Conversations"), systemImage: "message.fill")
                     .font(.headline)
                     .foregroundColor(.blue)
                 Spacer()
@@ -330,8 +330,8 @@ struct UnreadCountWidget: Widget {
         StaticConfiguration(kind: kind, provider: ConversationProvider()) { entry in
             UnreadCountWidgetView(entry: entry)
         }
-        .configurationDisplayName("Unread Messages")
-        .description("Keep track of your unread messages")
+        .configurationDisplayName(String(localized: "widget.unreadMessages.title", defaultValue: "Unread Messages"))
+        .description(String(localized: "widget.unreadMessages.description", defaultValue: "Keep track of your unread messages"))
         #if os(iOS)
         .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular, .accessoryInline])
         #else
@@ -375,11 +375,11 @@ struct SmallUnreadView: View {
                 Text("\(count)")
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
-                Text("Unread")
+                Text(String(localized: "widget.unread", defaultValue: "Unread"))
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.9))
             } else {
-                Text("All Read")
+                Text(String(localized: "widget.allRead", defaultValue: "All Read"))
                     .font(.headline)
                     .foregroundColor(.white)
             }
@@ -452,8 +452,8 @@ struct QuickReplyWidget: Widget {
         StaticConfiguration(kind: kind, provider: ConversationProvider()) { entry in
             QuickReplyWidgetView(entry: entry)
         }
-        .configurationDisplayName("Quick Reply")
-        .description("Quickly reply to recent messages")
+        .configurationDisplayName(String(localized: "widget.quickReply.title", defaultValue: "Quick Reply"))
+        .description(String(localized: "widget.quickReply.description", defaultValue: "Quickly reply to recent messages"))
         .supportedFamilies([.systemMedium, .systemLarge])
     }
 }
@@ -464,7 +464,7 @@ struct QuickReplyWidgetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Quick Reply", systemImage: "text.bubble.fill")
+                Label(String(localized: "widget.quickReply", defaultValue: "Quick Reply"), systemImage: "text.bubble.fill")
                     .font(.headline)
                     .foregroundColor(.blue)
                 Spacer()
@@ -526,8 +526,8 @@ struct FavoriteContactsWidget: Widget {
         StaticConfiguration(kind: kind, provider: FavoriteContactsProvider()) { entry in
             FavoriteContactsWidgetView(entry: entry)
         }
-        .configurationDisplayName("Favorite Contacts")
-        .description("Quick access to your favorite contacts")
+        .configurationDisplayName(String(localized: "widget.favoriteContacts.title", defaultValue: "Favorite Contacts"))
+        .description(String(localized: "widget.favoriteContacts.description", defaultValue: "Quick access to your favorite contacts"))
         .supportedFamilies([.systemMedium, .systemLarge])
     }
 }
@@ -581,7 +581,7 @@ struct FavoriteContactsWidgetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Favorites", systemImage: "star.fill")
+                Label(String(localized: "widget.favorites", defaultValue: "Favorites"), systemImage: "star.fill")
                     .font(.headline)
                     .foregroundColor(.orange)
                 Spacer()

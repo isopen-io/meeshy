@@ -22,16 +22,16 @@ public struct VoiceProfileWizardView: View {
                     stepContent
                 }
             }
-            .navigationTitle("Profil vocal")
+            .navigationTitle(String(localized: "voiceProfile.wizard.title", defaultValue: "Profil vocal", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "voiceProfile.wizard.close", defaultValue: "Fermer", bundle: .module)) { dismiss() }
                         .foregroundColor(Color(hex: accentColor))
                 }
             }
-            .alert("Erreur", isPresented: .constant(viewModel.errorMessage != nil)) {
-                Button("OK") { viewModel.errorMessage = nil }
+            .alert(String(localized: "voiceProfile.wizard.errorTitle", defaultValue: "Erreur", bundle: .module), isPresented: .constant(viewModel.errorMessage != nil)) {
+                Button(String(localized: "voiceProfile.wizard.ok", defaultValue: "OK", bundle: .module)) { viewModel.errorMessage = nil }
             } message: {
                 Text(viewModel.errorMessage ?? "")
             }
@@ -81,29 +81,29 @@ public struct VoiceProfileWizardView: View {
                     .font(.system(size: 48))
                     .foregroundColor(Color(hex: accentColor))
 
-                Text("Clonage vocal")
+                Text(String(localized: "voiceProfile.consent.title", defaultValue: "Clonage vocal", bundle: .module))
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.primary)
 
-                Text("Meeshy peut cloner votre voix pour traduire vos messages audio dans d'autres langues avec votre propre voix.")
+                Text(String(localized: "voiceProfile.consent.description", defaultValue: "Meeshy peut cloner votre voix pour traduire vos messages audio dans d'autres langues avec votre propre voix.", bundle: .module))
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    consentPoint(icon: "mic.fill", text: "Enregistrez quelques echantillons de votre voix")
-                    consentPoint(icon: "brain.head.profile", text: "Un modele vocal unique est cree a partir de vos echantillons")
-                    consentPoint(icon: "globe", text: "Vos traductions audio utiliseront votre voix clonee")
-                    consentPoint(icon: "trash.fill", text: "Vous pouvez supprimer vos donnees vocales a tout moment (RGPD)")
-                    consentPoint(icon: "lock.shield.fill", text: "Vos echantillons sont chiffres et ne sont jamais partages")
+                    consentPoint(icon: "mic.fill", text: String(localized: "voiceProfile.consent.point1", defaultValue: "Enregistrez quelques echantillons de votre voix", bundle: .module))
+                    consentPoint(icon: "brain.head.profile", text: String(localized: "voiceProfile.consent.point2", defaultValue: "Un modele vocal unique est cree a partir de vos echantillons", bundle: .module))
+                    consentPoint(icon: "globe", text: String(localized: "voiceProfile.consent.point3", defaultValue: "Vos traductions audio utiliseront votre voix clonee", bundle: .module))
+                    consentPoint(icon: "trash.fill", text: String(localized: "voiceProfile.consent.point4", defaultValue: "Vous pouvez supprimer vos donnees vocales a tout moment (RGPD)", bundle: .module))
+                    consentPoint(icon: "lock.shield.fill", text: String(localized: "voiceProfile.consent.point5", defaultValue: "Vos echantillons sont chiffres et ne sont jamais partages", bundle: .module))
                 }
                 .padding(.horizontal, 24)
 
                 Spacer().frame(height: 10)
 
                 Toggle(isOn: $viewModel.consentGiven) {
-                    Text("J'accepte que mes echantillons vocaux soient utilises pour creer un profil vocal")
+                    Text(String(localized: "voiceProfile.consent.toggle", defaultValue: "J'accepte que mes echantillons vocaux soient utilises pour creer un profil vocal", bundle: .module))
                         .font(.system(size: 13))
                         .foregroundColor(.primary)
                 }
@@ -113,7 +113,7 @@ public struct VoiceProfileWizardView: View {
                 Button {
                     viewModel.advanceFromConsent()
                 } label: {
-                    Text("Continuer")
+                    Text(String(localized: "voiceProfile.consent.continue", defaultValue: "Continuer", bundle: .module))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -153,16 +153,16 @@ public struct VoiceProfileWizardView: View {
                 .font(.system(size: 48))
                 .foregroundColor(Color(hex: accentColor))
 
-            Text("Verification d'age")
+            Text(String(localized: "voiceProfile.age.title", defaultValue: "Verification d'age", bundle: .module))
                 .font(.system(size: 22, weight: .bold))
 
-            Text("Le clonage vocal est reserve aux personnes de 18 ans et plus.")
+            Text(String(localized: "voiceProfile.age.description", defaultValue: "Le clonage vocal est reserve aux personnes de 18 ans et plus.", bundle: .module))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
 
-            DatePicker("Date de naissance", selection: $viewModel.birthDate, displayedComponents: .date)
+            DatePicker(String(localized: "voiceProfile.age.birthDate", defaultValue: "Date de naissance", bundle: .module), selection: $viewModel.birthDate, displayedComponents: .date)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
                 .padding(.horizontal, 24)
@@ -170,7 +170,7 @@ public struct VoiceProfileWizardView: View {
             Button {
                 viewModel.advanceFromAgeVerification()
             } label: {
-                Text("Verifier")
+                Text(String(localized: "voiceProfile.age.verify", defaultValue: "Verifier", bundle: .module))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -193,10 +193,10 @@ public struct VoiceProfileWizardView: View {
         VStack(spacing: 20) {
             Spacer()
 
-            Text("Enregistrez votre voix")
+            Text(String(localized: "voiceProfile.recording.title", defaultValue: "Enregistrez votre voix", bundle: .module))
                 .font(.system(size: 22, weight: .bold))
 
-            Text("Lisez le texte ci-dessous a voix haute. Enregistrez au moins 3 echantillons de 10 secondes chacun.")
+            Text(String(localized: "voiceProfile.recording.description", defaultValue: "Lisez le texte ci-dessous a voix haute. Enregistrez au moins 3 echantillons de 10 secondes chacun.", bundle: .module))
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -226,10 +226,10 @@ public struct VoiceProfileWizardView: View {
                 .scaleEffect(1.5)
                 .tint(Color(hex: accentColor))
 
-            Text("Creation du profil vocal...")
+            Text(String(localized: "voiceProfile.processing.title", defaultValue: "Creation du profil vocal...", bundle: .module))
                 .font(.system(size: 18, weight: .semibold))
 
-            Text("Vos echantillons sont en cours de traitement. Cela peut prendre quelques minutes.")
+            Text(String(localized: "voiceProfile.processing.description", defaultValue: "Vos echantillons sont en cours de traitement. Cela peut prendre quelques minutes.", bundle: .module))
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -252,10 +252,10 @@ public struct VoiceProfileWizardView: View {
                 .font(.system(size: 60))
                 .foregroundColor(Color(hex: "2ECC71"))
 
-            Text("Profil vocal cree !")
+            Text(String(localized: "voiceProfile.complete.title", defaultValue: "Profil vocal cree !", bundle: .module))
                 .font(.system(size: 22, weight: .bold))
 
-            Text("Vos traductions audio utiliseront desormais votre voix clonee.")
+            Text(String(localized: "voiceProfile.complete.description", defaultValue: "Vos traductions audio utiliseront desormais votre voix clonee.", bundle: .module))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -265,7 +265,7 @@ public struct VoiceProfileWizardView: View {
                 onComplete?()
                 dismiss()
             } label: {
-                Text("Terminer")
+                Text(String(localized: "voiceProfile.complete.finish", defaultValue: "Terminer", bundle: .module))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -309,7 +309,7 @@ class VoiceProfileWizardViewModel: ObservableObject {
 
     func advanceFromAgeVerification() {
         guard isAgeVerified else {
-            errorMessage = "Vous devez avoir 18 ans ou plus pour utiliser le clonage vocal."
+            errorMessage = String(localized: "voiceProfile.age.tooYoungError", defaultValue: "Vous devez avoir 18 ans ou plus pour utiliser le clonage vocal.", bundle: .module)
             return
         }
         Task {

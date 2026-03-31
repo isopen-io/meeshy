@@ -11,13 +11,13 @@ public struct EmojiCategory: Identifiable, Sendable {
     }
 
     public static let all: [EmojiCategory] = [
-        EmojiCategory(name: "Reactions", icon: "🔥", emojis: [
+        EmojiCategory(name: String(localized: "emoji.category.reactions", defaultValue: "Reactions", bundle: .module), icon: "🔥", emojis: [
             "❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "😍",
             "💯", "🙏", "🤣", "😭", "✨", "🎉", "💪", "👍",
             "😊", "💕", "🤩", "😘", "❤️‍🔥", "🥺", "😎", "👀",
             "🫶", "💖", "😅", "🤔", "🥳", "💀", "😏", "🙌",
         ]),
-        EmojiCategory(name: "Visages", icon: "😀", emojis: [
+        EmojiCategory(name: String(localized: "emoji.category.faces", defaultValue: "Visages", bundle: .module), icon: "😀", emojis: [
             "😀", "😃", "😄", "😁", "😆", "🥹", "😊", "😇",
             "🙂", "😉", "😌", "😍", "🥰", "😘", "😗", "😙",
             "🥲", "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗",
@@ -27,25 +27,25 @@ public struct EmojiCategory: Identifiable, Sendable {
             "😷", "🤒", "🤕", "🤢", "🤮", "🥵", "🥶", "🥴",
             "😵", "🤯", "🤠", "🥳", "🥸", "😎", "🤓", "🧐",
         ]),
-        EmojiCategory(name: "Gestes", icon: "👋", emojis: [
+        EmojiCategory(name: String(localized: "emoji.category.gestures", defaultValue: "Gestes", bundle: .module), icon: "👋", emojis: [
             "👍", "👎", "👏", "🙌", "🫶", "🙏", "💪", "✊",
             "👊", "🤛", "🤜", "🤝", "👋", "🤚", "🖐️", "✋",
             "🖖", "🫱", "🫲", "🫳", "🫴", "👌", "🤌", "🤏",
             "✌️", "🤞", "🫰", "🤟", "🤘", "🤙", "👈", "👉",
             "👆", "🖕", "👇", "☝️", "🫵", "👐", "🤲", "🦾",
         ]),
-        EmojiCategory(name: "Coeurs", icon: "❤️", emojis: [
+        EmojiCategory(name: String(localized: "emoji.category.hearts", defaultValue: "Coeurs", bundle: .module), icon: "❤️", emojis: [
             "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍",
             "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "❣️", "💕", "💞", "💓",
             "💗", "💖", "💘", "💝", "💟", "♥️", "🫀", "💋",
         ]),
-        EmojiCategory(name: "Animaux", icon: "🐶", emojis: [
+        EmojiCategory(name: String(localized: "emoji.category.animals", defaultValue: "Animaux", bundle: .module), icon: "🐶", emojis: [
             "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼",
             "🐻‍❄️", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵",
             "🙈", "🙉", "🙊", "🐔", "🐧", "🐦", "🐤", "🦄",
             "🐝", "🦋", "🐌", "🐙", "🦑", "🐠", "🐡", "🐬",
         ]),
-        EmojiCategory(name: "Objets", icon: "🎁", emojis: [
+        EmojiCategory(name: String(localized: "emoji.category.objects", defaultValue: "Objets", bundle: .module), icon: "🎁", emojis: [
             "🎁", "🎈", "🎉", "🎊", "🎂", "🍰", "🥂", "🍾",
             "🏆", "🥇", "🎯", "🎮", "🎲", "🎭", "🎬", "🎤",
             "🎧", "🎵", "🎶", "🎸", "🥁", "🎺", "🎨", "🖌️",
@@ -189,7 +189,7 @@ public struct EmojiFullPickerSheet: View {
             Capsule()
                 .fill(style == .dark ? Color.white.opacity(0.3) : Color.gray.opacity(0.3))
                 .frame(width: 36, height: 4).padding(.top, 10)
-            Text("Reactions")
+            Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(style == .dark ? .white.opacity(0.8) : .primary)
                 .padding(.bottom, 4)

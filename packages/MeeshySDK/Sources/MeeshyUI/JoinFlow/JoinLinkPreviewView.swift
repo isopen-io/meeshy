@@ -46,7 +46,7 @@ public struct JoinLinkPreviewView: View {
                 conversationAvatar
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(linkInfo.conversation.title ?? "Conversation")
+                    Text(linkInfo.conversation.title ?? String(localized: "joinFlow.preview.defaultTitle", defaultValue: "Conversation", bundle: .module))
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(2)
@@ -139,7 +139,7 @@ public struct JoinLinkPreviewView: View {
             statItem(
                 icon: "person.2.fill",
                 value: "\(linkInfo.stats.totalParticipants)",
-                label: "Participants"
+                label: String(localized: "joinFlow.preview.participants", defaultValue: "Participants", bundle: .module)
             )
 
             Divider()
@@ -149,7 +149,7 @@ public struct JoinLinkPreviewView: View {
             statItem(
                 icon: "globe",
                 value: "\(linkInfo.stats.languageCount)",
-                label: linkInfo.stats.languageCount == 1 ? "Langue" : "Langues"
+                label: linkInfo.stats.languageCount == 1 ? String(localized: "joinFlow.preview.languageSingular", defaultValue: "Langue", bundle: .module) : String(localized: "joinFlow.preview.languagePlural", defaultValue: "Langues", bundle: .module)
             )
 
             Divider()
@@ -159,7 +159,7 @@ public struct JoinLinkPreviewView: View {
             statItem(
                 icon: "person.fill.checkmark",
                 value: "\(linkInfo.stats.memberCount)",
-                label: "Membres"
+                label: String(localized: "joinFlow.preview.members", defaultValue: "Membres", bundle: .module)
             )
         }
         .padding(.vertical, 16)
@@ -193,22 +193,22 @@ public struct JoinLinkPreviewView: View {
     private var requirementsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             if linkInfo.requireAccount || linkInfo.requireNickname || linkInfo.requireEmail || linkInfo.requireBirthday {
-                Text("Informations requises")
+                Text(String(localized: "joinFlow.preview.requiredInfo", defaultValue: "Informations requises", bundle: .module))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(theme.textMuted)
                     .padding(.bottom, 4)
 
                 if linkInfo.requireAccount {
-                    requirementBadge(icon: "person.crop.circle", text: "Compte requis", color: "FF6B6B")
+                    requirementBadge(icon: "person.crop.circle", text: String(localized: "joinFlow.preview.accountRequired", defaultValue: "Compte requis", bundle: .module), color: "FF6B6B")
                 }
                 if linkInfo.requireNickname {
-                    requirementBadge(icon: "at", text: "Nom d'utilisateur", color: "F8B500")
+                    requirementBadge(icon: "at", text: String(localized: "joinFlow.preview.usernameRequired", defaultValue: "Nom d'utilisateur", bundle: .module), color: "F8B500")
                 }
                 if linkInfo.requireEmail {
-                    requirementBadge(icon: "envelope.fill", text: "Adresse email", color: "3498DB")
+                    requirementBadge(icon: "envelope.fill", text: String(localized: "joinFlow.preview.emailRequired", defaultValue: "Adresse email", bundle: .module), color: "3498DB")
                 }
                 if linkInfo.requireBirthday {
-                    requirementBadge(icon: "gift.fill", text: "Date de naissance", color: "9B59B6")
+                    requirementBadge(icon: "gift.fill", text: String(localized: "joinFlow.preview.birthdayRequired", defaultValue: "Date de naissance", bundle: .module), color: "9B59B6")
                 }
             }
 
@@ -250,7 +250,7 @@ public struct JoinLinkPreviewView: View {
     private var joinButton: some View {
         VStack(spacing: 12) {
             if linkInfo.requireAccount {
-                Text("Un compte Meeshy est requis pour rejoindre cette conversation")
+                Text(String(localized: "joinFlow.preview.accountRequiredMessage", defaultValue: "Un compte Meeshy est requis pour rejoindre cette conversation", bundle: .module))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
@@ -260,7 +260,7 @@ public struct JoinLinkPreviewView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "arrow.right.circle.fill")
                             .font(.system(size: 18))
-                        Text("Rejoindre la conversation")
+                        Text(String(localized: "joinFlow.preview.joinButton", defaultValue: "Rejoindre la conversation", bundle: .module))
                             .font(.system(size: 16, weight: .bold))
                     }
                     .foregroundColor(.white)
@@ -307,19 +307,19 @@ public struct JoinLinkPreviewView: View {
 
     private var conversationTypeLabel: String {
         switch linkInfo.conversation.type.lowercased() {
-        case "direct": return "Conversation privee"
-        case "group": return "Groupe"
-        case "public": return "Public"
-        case "global": return "Global"
-        case "community": return "Communaute"
-        case "channel": return "Canal"
+        case "direct": return String(localized: "joinFlow.preview.typeDirect", defaultValue: "Conversation privee", bundle: .module)
+        case "group": return String(localized: "joinFlow.preview.typeGroup", defaultValue: "Groupe", bundle: .module)
+        case "public": return String(localized: "joinFlow.preview.typePublic", defaultValue: "Public", bundle: .module)
+        case "global": return String(localized: "joinFlow.preview.typeGlobal", defaultValue: "Global", bundle: .module)
+        case "community": return String(localized: "joinFlow.preview.typeCommunity", defaultValue: "Communaute", bundle: .module)
+        case "channel": return String(localized: "joinFlow.preview.typeChannel", defaultValue: "Canal", bundle: .module)
         default: return linkInfo.conversation.type.capitalized
         }
     }
 
     private func relativeDate(_ date: Date) -> String {
         let interval = date.timeIntervalSince(Date())
-        if interval <= 0 { return "expire" }
+        if interval <= 0 { return String(localized: "joinFlow.preview.expired", defaultValue: "expire", bundle: .module) }
         let hours = Int(interval / 3600)
         if hours < 1 { return "dans \(Int(interval / 60))min" }
         if hours < 24 { return "dans \(hours)h" }

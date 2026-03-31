@@ -1,0 +1,346 @@
+{
+  "sourceLanguage" : "en",
+  "version" : "1.0",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy needs access to your camera to take photos and videos for messages, video calls, and AR experiences."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy a besoin d'accéder à votre caméra pour prendre des photos et vidéos pour les messages, les appels vidéo et les expériences AR."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy benötigt Zugriff auf Ihre Kamera, um Fotos und Videos für Nachrichten, Videoanrufe und AR-Erlebnisse aufzunehmen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy necesita acceso a tu cámara para tomar fotos y videos para mensajes, videollamadas y experiencias AR."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy precisa de acesso à sua câmera para tirar fotos e gravar vídeos para mensagens, chamadas de vídeo e experiências AR."
+          }
+        }
+      }
+    },
+    "NSContactsUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy needs access to your contacts to help you connect with friends on the platform."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy a besoin d'accéder à vos contacts pour vous aider à retrouver vos amis sur la plateforme."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy benötigt Zugriff auf Ihre Kontakte, um Ihnen zu helfen, Freunde auf der Plattform zu finden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy necesita acceso a tus contactos para ayudarte a conectar con amigos en la plataforma."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy precisa de acesso aos seus contatos para ajudá-lo a se conectar com amigos na plataforma."
+          }
+        }
+      }
+    },
+    "NSFaceIDUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy uses Face ID to provide secure and convenient authentication."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utilise Face ID pour fournir une authentification sécurisée et pratique."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy verwendet Face ID für eine sichere und bequeme Authentifizierung."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utiliza Face ID para proporcionar una autenticación segura y práctica."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy usa o Face ID para fornecer autenticação segura e prática."
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy uses your location to share your current location with contacts and find nearby friends."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utilise votre position pour partager votre localisation avec vos contacts et trouver des amis à proximité."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy verwendet Ihren Standort, um ihn mit Kontakten zu teilen und Freunde in der Nähe zu finden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utiliza tu ubicación para compartirla con tus contactos y encontrar amigos cercanos."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy usa sua localização para compartilhá-la com seus contatos e encontrar amigos próximos."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy needs access to your microphone for voice messages, video calls, and audio recording."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy a besoin d'accéder à votre microphone pour les messages vocaux, les appels vidéo et l'enregistrement audio."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy benötigt Zugriff auf Ihr Mikrofon für Sprachnachrichten, Videoanrufe und Audioaufnahmen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy necesita acceso a tu micrófono para mensajes de voz, videollamadas y grabación de audio."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy precisa de acesso ao seu microfone para mensagens de voz, chamadas de vídeo e gravação de áudio."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryAddUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy needs permission to save photos and videos to your library."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy a besoin de l'autorisation pour enregistrer des photos et vidéos dans votre bibliothèque."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy benötigt die Erlaubnis, Fotos und Videos in Ihrer Bibliothek zu speichern."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy necesita permiso para guardar fotos y videos en tu biblioteca."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy precisa de permissão para salvar fotos e vídeos na sua biblioteca."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy needs access to your photo library to share photos and videos with your contacts."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy a besoin d'accéder à votre photothèque pour partager des photos et vidéos avec vos contacts."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy benötigt Zugriff auf Ihre Fotomediathek, um Fotos und Videos mit Ihren Kontakten zu teilen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy necesita acceso a tu biblioteca de fotos para compartir fotos y videos con tus contactos."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy precisa de acesso à sua biblioteca de fotos para compartilhar fotos e vídeos com seus contatos."
+          }
+        }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy uses on-device speech recognition for real-time voice translation and voice message transcription. Your voice data stays on your device for maximum privacy."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utilise la reconnaissance vocale sur l'appareil pour la traduction vocale en temps réel et la transcription des messages vocaux. Vos données vocales restent sur votre appareil pour une confidentialité maximale."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy verwendet die geräteinterne Spracherkennung für Echtzeit-Sprachübersetzung und Transkription von Sprachnachrichten. Ihre Sprachdaten verbleiben auf Ihrem Gerät für maximale Privatsphäre."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utiliza reconocimiento de voz en el dispositivo para traducción de voz en tiempo real y transcripción de mensajes de voz. Tus datos de voz permanecen en tu dispositivo para máxima privacidad."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy usa reconhecimento de fala no dispositivo para tradução de voz em tempo real e transcrição de mensagens de voz. Seus dados de voz permanecem no seu dispositivo para máxima privacidade."
+          }
+        }
+      }
+    },
+    "NSVoIPUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy uses VoIP to enable real-time voice and video calls with your contacts."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utilise la VoIP pour permettre les appels vocaux et vidéo en temps réel avec vos contacts."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy verwendet VoIP für Echtzeit-Sprach- und Videoanrufe mit Ihren Kontakten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utiliza VoIP para permitir llamadas de voz y video en tiempo real con tus contactos."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy usa VoIP para permitir chamadas de voz e vídeo em tempo real com seus contatos."
+          }
+        }
+      }
+    }
+  }
+}

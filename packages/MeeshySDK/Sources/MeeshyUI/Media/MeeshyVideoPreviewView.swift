@@ -83,7 +83,7 @@ public struct MeeshyVideoPreviewView: View {
                 onCancel?()
                 dismiss()
             } label: {
-                Text("Annuler")
+                Text(String(localized: "media.videoPreview.cancel", defaultValue: "Annuler", bundle: .module))
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
@@ -144,7 +144,7 @@ public struct MeeshyVideoPreviewView: View {
                     .padding(.horizontal, 16)
 
                 HStack {
-                    Text("Ajouter une l\u{00E9}gende...")
+                    Text(String(localized: "media.videoPreview.addCaption", defaultValue: "Ajouter une l\u{00E9}gende...", bundle: .module))
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.3))
                     Spacer()
@@ -215,7 +215,7 @@ public struct MeeshyVideoPreviewView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "pencil")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("\u{00C9}diter")
+                    Text(String(localized: "media.videoPreview.edit", defaultValue: "\u{00C9}diter", bundle: .module))
                         .font(.system(size: 15, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -239,7 +239,7 @@ public struct MeeshyVideoPreviewView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 12, weight: .bold))
-                    Text("Utiliser")
+                    Text(String(localized: "media.videoPreview.use", defaultValue: "Utiliser", bundle: .module))
                         .font(.system(size: 15, weight: .bold))
                 }
                 .foregroundStyle(.white)

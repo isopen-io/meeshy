@@ -409,7 +409,7 @@ public struct AudioPlayerView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "text.badge.plus")
                             .font(.system(size: 10, weight: .medium))
-                        Text("Transcrire")
+                        Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
                             .font(.system(size: 10, weight: .medium))
                     }
                     .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
@@ -660,7 +660,7 @@ public struct AudioPlayerView: View {
     private var languageSelector: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                audioLanguagePill(flag: "\u{1F50A}", code: "orig", label: "Original",
+                audioLanguagePill(flag: "\u{1F50A}", code: "orig", label: String(localized: "media.audio.original", defaultValue: "Original", bundle: .module),
                                   isSelected: selectedAudioLanguage == "orig")
 
                 ForEach(translatedAudios, id: \.id) { audio in

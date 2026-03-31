@@ -18,17 +18,17 @@ enum NotificationCategory: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .all: return "Toutes"
-        case .unread: return "Non lues"
-        case .messages: return "Messages"
-        case .reactions: return "Reactions"
-        case .mentions: return "Mentions"
-        case .social: return "Social"
-        case .contacts: return "Contacts"
-        case .groups: return "Groupes"
-        case .calls: return "Appels"
-        case .translations: return "Traductions"
-        case .system: return "Systeme"
+        case .all: return String(localized: "notifications.category.all", defaultValue: "Toutes", bundle: .module)
+        case .unread: return String(localized: "notifications.category.unread", defaultValue: "Non lues", bundle: .module)
+        case .messages: return String(localized: "notifications.category.messages", defaultValue: "Messages", bundle: .module)
+        case .reactions: return String(localized: "notifications.category.reactions", defaultValue: "Reactions", bundle: .module)
+        case .mentions: return String(localized: "notifications.category.mentions", defaultValue: "Mentions", bundle: .module)
+        case .social: return String(localized: "notifications.category.social", defaultValue: "Social", bundle: .module)
+        case .contacts: return String(localized: "notifications.category.contacts", defaultValue: "Contacts", bundle: .module)
+        case .groups: return String(localized: "notifications.category.groups", defaultValue: "Groupes", bundle: .module)
+        case .calls: return String(localized: "notifications.category.calls", defaultValue: "Appels", bundle: .module)
+        case .translations: return String(localized: "notifications.category.translations", defaultValue: "Traductions", bundle: .module)
+        case .system: return String(localized: "notifications.category.system", defaultValue: "Systeme", bundle: .module)
         }
     }
 
@@ -161,7 +161,7 @@ public struct NotificationListView: View {
     private var header: some View {
         VStack(spacing: 0) {
             CollapsibleHeader(
-                title: "Notifications",
+                title: String(localized: "notifications.title", defaultValue: "Notifications", bundle: .module),
                 scrollOffset: scrollOffset,
                 onBack: { onDismiss?() },
                 titleColor: theme.textPrimary,
@@ -173,7 +173,7 @@ public struct NotificationListView: View {
                             HapticFeedback.light()
                             Task { await viewModel.markAllRead() }
                         } label: {
-                            Text("Tout lire")
+                            Text(String(localized: "notifications.markAllRead", defaultValue: "Tout lire", bundle: .module))
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(brandColor)
                         }
@@ -298,7 +298,7 @@ public struct NotificationListView: View {
             Spacer()
             ProgressView()
                 .tint(brandColor)
-            Text("Chargement...")
+            Text(String(localized: "notifications.loading", defaultValue: "Chargement...", bundle: .module))
                 .font(.system(size: 14))
                 .foregroundColor(theme.textMuted)
             Spacer()
@@ -309,17 +309,17 @@ public struct NotificationListView: View {
         let category = viewModel.selectedCategory
         let emptyMessage: String = {
             switch category {
-            case .all: return "Aucune notification"
-            case .unread: return "Aucune notification non lue"
-            case .messages: return "Aucune notification de message"
-            case .reactions: return "Aucune reaction"
-            case .mentions: return "Aucune mention"
-            case .social: return "Aucune notification sociale"
-            case .contacts: return "Aucune notification de contact"
-            case .groups: return "Aucune notification de groupe"
-            case .calls: return "Aucun appel manque"
-            case .translations: return "Aucune traduction"
-            case .system: return "Aucune notification systeme"
+            case .all: return String(localized: "notifications.empty.all", defaultValue: "Aucune notification", bundle: .module)
+            case .unread: return String(localized: "notifications.empty.unread", defaultValue: "Aucune notification non lue", bundle: .module)
+            case .messages: return String(localized: "notifications.empty.messages", defaultValue: "Aucune notification de message", bundle: .module)
+            case .reactions: return String(localized: "notifications.empty.reactions", defaultValue: "Aucune reaction", bundle: .module)
+            case .mentions: return String(localized: "notifications.empty.mentions", defaultValue: "Aucune mention", bundle: .module)
+            case .social: return String(localized: "notifications.empty.social", defaultValue: "Aucune notification sociale", bundle: .module)
+            case .contacts: return String(localized: "notifications.empty.contacts", defaultValue: "Aucune notification de contact", bundle: .module)
+            case .groups: return String(localized: "notifications.empty.groups", defaultValue: "Aucune notification de groupe", bundle: .module)
+            case .calls: return String(localized: "notifications.empty.calls", defaultValue: "Aucun appel manque", bundle: .module)
+            case .translations: return String(localized: "notifications.empty.translations", defaultValue: "Aucune traduction", bundle: .module)
+            case .system: return String(localized: "notifications.empty.system", defaultValue: "Aucune notification systeme", bundle: .module)
             }
         }()
 
@@ -333,7 +333,7 @@ public struct NotificationListView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Vos notifications apparaitront ici")
+            Text(String(localized: "notifications.empty.subtitle", defaultValue: "Vos notifications apparaitront ici", bundle: .module))
                 .font(.system(size: 13))
                 .foregroundColor(theme.textMuted)
             Spacer()

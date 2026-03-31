@@ -50,8 +50,8 @@ public struct CommunityDetailView: View {
                         
                         // Section Segmentée : Channels / Posts
                         Picker("", selection: $selectedTab) {
-                            Text("Channels").tag(0)
-                            Text("Feed").tag(1)
+                            Text(String(localized: "community.detail.tab.channels", defaultValue: "Channels", bundle: .module)).tag(0)
+                            Text(String(localized: "community.detail.tab.feed", defaultValue: "Feed", bundle: .module)).tag(1)
                         }
                         .pickerStyle(.segmented)
                         .padding(.horizontal, 16)
@@ -72,9 +72,9 @@ public struct CommunityDetailView: View {
             } else if let error = viewModel.errorMessage {
                 EmptyStateView(
                     icon: "exclamationmark.triangle",
-                    title: "Error",
+                    title: String(localized: "common.error", defaultValue: "Error", bundle: .module),
                     subtitle: error,
-                    actionLabel: "Retry",
+                    actionLabel: String(localized: "common.retry", defaultValue: "Retry", bundle: .module),
                     onAction: { Task { await viewModel.load() } }
                 )
             }
@@ -84,9 +84,9 @@ public struct CommunityDetailView: View {
             localColor = UserDefaults.standard.string(forKey: "community.color.\(viewModel.communityId)")
             localEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(viewModel.communityId)")
         }
-        .alert("Quitter la communaute ?", isPresented: $showLeaveConfirm) {
-            Button("Annuler", role: .cancel) {}
-            Button("Quitter", role: .destructive) {
+        .alert(String(localized: "community.detail.leave.confirm.title", defaultValue: "Quitter la communaute ?", bundle: .module), isPresented: $showLeaveConfirm) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
+            Button(String(localized: "community.detail.leave.button", defaultValue: "Quitter", bundle: .module), role: .destructive) {
                 Task {
                     isLeaving = true
                     await viewModel.leaveCommunity()
@@ -99,7 +99,7 @@ public struct CommunityDetailView: View {
                 }
             }
         } message: {
-            Text("Vous ne pourrez plus acceder aux channels de cette communaute.")
+            Text(String(localized: "community.detail.leave.confirm.message", defaultValue: "Vous ne pourrez plus acceder aux channels de cette communaute.", bundle: .module))
         }
         .sheet(isPresented: $showAddChannel) {
             AddChannelSheet(
@@ -165,14 +165,14 @@ public struct CommunityDetailView: View {
                     Button {
                         showSettings = true
                     } label: {
-                        Label("Reglages", systemImage: "gearshape.fill")
+                        Label(String(localized: "community.detail.menu.settings", defaultValue: "Reglages", bundle: .module), systemImage: "gearshape.fill")
                     }
 
                     if !viewModel.isCreator {
                         Button(role: .destructive) {
                             showLeaveConfirm = true
                         } label: {
-                            Label("Quitter", systemImage: "rectangle.portrait.and.arrow.right")
+                            Label(String(localized: "community.detail.menu.leave", defaultValue: "Quitter", bundle: .module), systemImage: "rectangle.portrait.and.arrow.right")
                         }
                     }
                 } label: {
@@ -249,7 +249,7 @@ public struct CommunityDetailView: View {
                 HStack(spacing: 4) {
                     Image(systemName: community.isPrivate ? "lock.fill" : "globe")
                         .font(.system(size: 11))
-                    Text(community.isPrivate ? "Privee" : "Publique")
+                    Text(community.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privee", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
                         .font(.system(size: 12, weight: .medium))
                 }
                 .foregroundColor(theme.textMuted)
@@ -328,9 +328,9 @@ public struct CommunityDetailView: View {
     @ViewBuilder
     private func statsSection(_ community: MeeshyCommunity) -> some View {
         HStack(spacing: 0) {
-            statItem(value: "\(community.memberCount)", label: "Members", icon: "person.2.fill")
+            statItem(value: "\(community.memberCount)", label: String(localized: "community.detail.stats.members", defaultValue: "Members", bundle: .module), icon: "person.2.fill")
             Divider().frame(height: 30)
-            statItem(value: "\(community.conversationCount)", label: "Channels", icon: "bubble.left.and.bubble.right.fill")
+            statItem(value: "\(community.conversationCount)", label: String(localized: "community.detail.stats.channels", defaultValue: "Channels", bundle: .module), icon: "bubble.left.and.bubble.right.fill")
         }
         .padding(.vertical, 12)
         .background(theme.backgroundSecondary.opacity(0.5))
@@ -361,25 +361,25 @@ public struct CommunityDetailView: View {
     private func actionsSection(_ community: MeeshyCommunity) -> some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                actionButton(icon: "person.2.fill", title: "Membres") {
+                actionButton(icon: "person.2.fill", title: String(localized: "community.detail.action.members", defaultValue: "Membres", bundle: .module)) {
                     onOpenMembers?(community.id)
                 }
 
                 if viewModel.isMember {
-                    actionButton(icon: "person.badge.plus", title: "Inviter") {
+                    actionButton(icon: "person.badge.plus", title: String(localized: "community.detail.action.invite", defaultValue: "Inviter", bundle: .module)) {
                         onInvite?(community.id)
                     }
                 }
 
                 if viewModel.isAdmin {
-                    actionButton(icon: "plus.bubble.fill", title: "Channel") {
+                    actionButton(icon: "plus.bubble.fill", title: String(localized: "community.detail.action.channel", defaultValue: "Channel", bundle: .module)) {
                         showAddChannel = true
                     }
-                    actionButton(icon: "gearshape.fill", title: "Reglages") {
+                    actionButton(icon: "gearshape.fill", title: String(localized: "community.detail.action.settings", defaultValue: "Reglages", bundle: .module)) {
                         showSettings = true
                     }
                 } else if !viewModel.isMember {
-                    actionButton(icon: "arrow.right.circle.fill", title: "Rejoindre") {
+                    actionButton(icon: "arrow.right.circle.fill", title: String(localized: "community.detail.action.join", defaultValue: "Rejoindre", bundle: .module)) {
                         Task { await viewModel.joinCommunity() }
                     }
                 }
@@ -391,7 +391,7 @@ public struct CommunityDetailView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
-                        Text("Quitter la communaute")
+                        Text(String(localized: "community.detail.leave.label", defaultValue: "Quitter la communaute", bundle: .module))
                     }
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundColor(Color(hex: "FF2E63"))
@@ -431,9 +431,9 @@ public struct CommunityDetailView: View {
             if viewModel.conversations.isEmpty && !viewModel.isLoading {
                 EmptyStateView(
                     icon: "bubble.left.and.bubble.right",
-                    title: "No Channels Yet",
-                    subtitle: "Conversations will appear here",
-                    actionLabel: "Créer un Channel",
+                    title: String(localized: "community.detail.channels.empty.title", defaultValue: "No Channels Yet", bundle: .module),
+                    subtitle: String(localized: "community.detail.channels.empty.subtitle", defaultValue: "Conversations will appear here", bundle: .module),
+                    actionLabel: String(localized: "community.detail.channels.empty.action", defaultValue: "Créer un Channel", bundle: .module),
                     onAction: { showAddChannel = true }
                 )
                 .frame(height: 200)
@@ -459,9 +459,9 @@ public struct CommunityDetailView: View {
         VStack(spacing: 8) {
             EmptyStateView(
                 icon: "photo.on.rectangle.angled",
-                title: "No Posts Yet",
-                subtitle: "Community feed will appear here",
-                actionLabel: "Créer un post",
+                title: String(localized: "community.detail.posts.empty.title", defaultValue: "No Posts Yet", bundle: .module),
+                subtitle: String(localized: "community.detail.posts.empty.subtitle", defaultValue: "Community feed will appear here", bundle: .module),
+                actionLabel: String(localized: "community.detail.posts.empty.action", defaultValue: "Créer un post", bundle: .module),
                 onAction: { 
                     // To do: Show post creator
                 }
@@ -481,7 +481,7 @@ public struct CommunityDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(conversation.title ?? conversation.identifier ?? "Channel")
+                Text(conversation.title ?? conversation.identifier ?? String(localized: "community.detail.channel.fallbackName", defaultValue: "Channel", bundle: .module))
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
@@ -622,29 +622,29 @@ struct AddChannelSheet: View {
                     conversationList
                 }
             }
-            .navigationTitle("Ajouter un channel")
+            .navigationTitle(String(localized: "community.addChannel.title", defaultValue: "Ajouter un channel", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "Rechercher une conversation...")
+            .searchable(text: $searchText, prompt: String(localized: "community.addChannel.search.prompt", defaultValue: "Rechercher une conversation...", bundle: .module))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .module)) { dismiss() }
                 }
             }
         }
         .task { await loadConversations() }
         .presentationDetents([.medium, .large])
-        .alert("Deplacer cette conversation ?", isPresented: $showMoveConfirm) {
-            Button("Annuler", role: .cancel) {
+        .alert(String(localized: "community.addChannel.move.confirm.title", defaultValue: "Deplacer cette conversation ?", bundle: .module), isPresented: $showMoveConfirm) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {
                 pendingMoveConversation = nil
             }
-            Button("Deplacer") {
+            Button(String(localized: "community.addChannel.move.button", defaultValue: "Deplacer", bundle: .module)) {
                 if let conv = pendingMoveConversation {
                     Task { await addConversation(conv) }
                 }
                 pendingMoveConversation = nil
             }
         } message: {
-            Text("Cette conversation appartient deja a une autre communaute. Elle sera deplacee vers celle-ci.")
+            Text(String(localized: "community.addChannel.move.confirm.message", defaultValue: "Cette conversation appartient deja a une autre communaute. Elle sera deplacee vers celle-ci.", bundle: .module))
         }
     }
 
@@ -653,11 +653,11 @@ struct AddChannelSheet: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 40))
                 .foregroundColor(theme.textMuted)
-            Text(searchText.isEmpty ? "Aucune conversation disponible" : "Aucun resultat")
+            Text(searchText.isEmpty ? String(localized: "community.addChannel.empty.noConversations", defaultValue: "Aucune conversation disponible", bundle: .module) : String(localized: "community.addChannel.empty.noResults", defaultValue: "Aucun resultat", bundle: .module))
                 .font(.system(size: 15, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textSecondary)
             if searchText.isEmpty {
-                Text("Creez d'abord une conversation pour l'ajouter ici.")
+                Text(String(localized: "community.addChannel.empty.hint", defaultValue: "Creez d'abord une conversation pour l'ajouter ici.", bundle: .module))
                     .font(.system(size: 13))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
@@ -705,7 +705,7 @@ struct AddChannelSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(conversation.title ?? conversation.identifier ?? "Conversation")
+                Text(conversation.title ?? conversation.identifier ?? String(localized: "community.addChannel.conversation.fallbackName", defaultValue: "Conversation", bundle: .module))
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
@@ -718,7 +718,7 @@ struct AddChannelSheet: View {
                     }
 
                     if conversation.communityId != nil {
-                        Label("Autre communaute", systemImage: "arrow.triangle.swap")
+                        Label(String(localized: "community.addChannel.otherCommunity", defaultValue: "Autre communaute", bundle: .module), systemImage: "arrow.triangle.swap")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(Color(hex: "F59E0B"))
                     }

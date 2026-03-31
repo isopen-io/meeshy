@@ -53,7 +53,7 @@ public struct CommunityListView: View {
 
     private var navigationHeader: some View {
         CollapsibleHeader(
-            title: "Communautes",
+            title: String(localized: "community.list.title", defaultValue: "Communautes", bundle: .module),
             scrollOffset: scrollOffset,
             onBack: {
                 if let onDismiss {
@@ -77,7 +77,7 @@ public struct CommunityListView: View {
                             )
                         )
                 }
-                .accessibilityLabel("Creer une communaute")
+                .accessibilityLabel(String(localized: "community.list.create.accessibilityLabel", defaultValue: "Creer une communaute", bundle: .module))
             }
         )
     }
@@ -90,7 +90,7 @@ public struct CommunityListView: View {
                 .font(.system(size: 14))
                 .foregroundColor(theme.textMuted)
 
-            TextField("Rechercher...", text: $viewModel.searchText)
+            TextField(String(localized: "community.list.search.placeholder", defaultValue: "Rechercher...", bundle: .module), text: $viewModel.searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15, design: .rounded))
                 .foregroundColor(theme.textPrimary)
@@ -126,11 +126,11 @@ public struct CommunityListView: View {
                     )
                 )
 
-            Text("Aucune communaute")
+            Text(String(localized: "community.list.empty.title", defaultValue: "Aucune communaute", bundle: .module))
                 .font(.system(size: 18, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Rejoins ou cree une communaute pour collaborer")
+            Text(String(localized: "community.list.empty.subtitle", defaultValue: "Rejoins ou cree une communaute pour collaborer", bundle: .module))
                 .font(.system(size: 14, design: .rounded))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -138,7 +138,7 @@ public struct CommunityListView: View {
             Button { onCreateCommunity?() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus.circle.fill")
-                    Text("Creer une communaute")
+                    Text(String(localized: "community.list.empty.createButton", defaultValue: "Creer une communaute", bundle: .module))
                 }
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)

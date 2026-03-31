@@ -37,22 +37,22 @@ public struct ConversationSettingsView: View {
                 }
             }
         }
-        .alert("Erreur", isPresented: $viewModel.showError) {
-            Button("OK") {}
+        .alert(String(localized: "conversation.settings.error.title", defaultValue: "Erreur", bundle: .module), isPresented: $viewModel.showError) {
+            Button(String(localized: "common.ok", defaultValue: "OK", bundle: .module)) {}
         } message: {
-            Text(viewModel.errorMessage ?? "Une erreur s'est produite")
+            Text(viewModel.errorMessage ?? String(localized: "conversation.settings.error.default", defaultValue: "Une erreur s'est produite", bundle: .module))
         }
-        .alert("Quitter la conversation", isPresented: $viewModel.showLeaveConfirm) {
-            Button("Quitter", role: .destructive) {
+        .alert(String(localized: "conversation.settings.leave.confirm.title", defaultValue: "Quitter la conversation", bundle: .module), isPresented: $viewModel.showLeaveConfirm) {
+            Button(String(localized: "conversation.settings.leave.button", defaultValue: "Quitter", bundle: .module), role: .destructive) {
                 Task {
                     await viewModel.leaveConversation()
                     onLeft?()
                     dismiss()
                 }
             }
-            Button("Annuler", role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text("Vous n'aurez plus acces aux messages de cette conversation.")
+            Text(String(localized: "conversation.settings.leave.confirm.message", defaultValue: "Vous n'aurez plus acces aux messages de cette conversation.", bundle: .module))
         }
         .onChange(of: avatarItem) { item in
             guard let item = item else { return }
@@ -68,13 +68,13 @@ public struct ConversationSettingsView: View {
 
     private var settingsHeader: some View {
         HStack {
-            Button("Annuler") { dismiss() }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module)) { dismiss() }
                 .font(.system(size: 16, design: .rounded))
                 .foregroundColor(theme.textSecondary)
 
             Spacer()
 
-            Text("Reglages")
+            Text(String(localized: "conversation.settings.title", defaultValue: "Reglages", bundle: .module))
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -94,7 +94,7 @@ public struct ConversationSettingsView: View {
                         .scaleEffect(0.8)
                         .tint(MeeshyColors.indigo500)
                 } else {
-                    Text("Sauvegarder")
+                    Text(String(localized: "common.save", defaultValue: "Sauvegarder", bundle: .module))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }
@@ -115,10 +115,10 @@ public struct ConversationSettingsView: View {
 
     private var visualSection: some View {
         VStack(spacing: 16) {
-            sectionHeader("Apparence")
+            sectionHeader(String(localized: "conversation.settings.section.appearance", defaultValue: "Apparence", bundle: .module))
 
             VStack(spacing: 12) {
-                settingsField(label: "Avatar") {
+                settingsField(label: String(localized: "conversation.settings.avatar", defaultValue: "Avatar", bundle: .module)) {
                     HStack {
                         MeeshyAvatar(
                             name: viewModel.title.isEmpty ? viewModel.conversationName : viewModel.title,
@@ -129,7 +129,7 @@ public struct ConversationSettingsView: View {
                         )
 
                         PhotosPicker(selection: $avatarItem, matching: .images) {
-                            Text(viewModel.isUploadingAvatar ? "Upload en cours..." : "Changer l'avatar")
+                            Text(viewModel.isUploadingAvatar ? String(localized: "common.uploading", defaultValue: "Upload en cours...", bundle: .module) : String(localized: "conversation.settings.avatar.change", defaultValue: "Changer l'avatar", bundle: .module))
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
@@ -146,7 +146,7 @@ public struct ConversationSettingsView: View {
                     }
                 }
 
-                settingsField(label: "Banniere") {
+                settingsField(label: String(localized: "conversation.settings.banner", defaultValue: "Banniere", bundle: .module)) {
                     HStack {
                         if !viewModel.bannerUrl.isEmpty {
                             AsyncImage(url: URL(string: viewModel.bannerUrl)) { image in
@@ -157,7 +157,7 @@ public struct ConversationSettingsView: View {
                         }
 
                         PhotosPicker(selection: $bannerItem, matching: .images) {
-                            Text(viewModel.isUploadingBanner ? "Upload en cours..." : "Changer la banniere")
+                            Text(viewModel.isUploadingBanner ? String(localized: "common.uploading", defaultValue: "Upload en cours...", bundle: .module) : String(localized: "conversation.settings.banner.change", defaultValue: "Changer la banniere", bundle: .module))
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
@@ -181,17 +181,17 @@ public struct ConversationSettingsView: View {
 
     private var editSection: some View {
         VStack(spacing: 16) {
-            sectionHeader("Infos")
+            sectionHeader(String(localized: "conversation.settings.section.info", defaultValue: "Infos", bundle: .module))
 
             VStack(spacing: 12) {
-                settingsField(label: "Titre") {
-                    TextField("Titre de la conversation", text: $viewModel.title)
+                settingsField(label: String(localized: "conversation.settings.field.title", defaultValue: "Titre", bundle: .module)) {
+                    TextField(String(localized: "conversation.settings.field.title.placeholder", defaultValue: "Titre de la conversation", bundle: .module), text: $viewModel.title)
                         .font(.system(size: 16, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                 }
 
-                settingsField(label: "Description") {
-                    TextField("Description", text: $viewModel.descriptionText, axis: .vertical)
+                settingsField(label: String(localized: "conversation.settings.field.description", defaultValue: "Description", bundle: .module)) {
+                    TextField(String(localized: "conversation.settings.field.description", defaultValue: "Description", bundle: .module), text: $viewModel.descriptionText, axis: .vertical)
                         .font(.system(size: 16, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(3...6)
@@ -204,14 +204,14 @@ public struct ConversationSettingsView: View {
 
     private var dangerSection: some View {
         VStack(spacing: 12) {
-            sectionHeader("Zone dangereuse")
+            sectionHeader(String(localized: "conversation.settings.section.danger", defaultValue: "Zone dangereuse", bundle: .module))
 
             Button {
                 viewModel.showLeaveConfirm = true
             } label: {
                 HStack {
                     Image(systemName: "arrow.right.square.fill")
-                    Text("Quitter la conversation")
+                    Text(String(localized: "conversation.settings.leave.label", defaultValue: "Quitter la conversation", bundle: .module))
                 }
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(.orange)
@@ -314,7 +314,7 @@ final class ConversationSettingsViewModel: ObservableObject {
                 banner: newBanner
             )
 
-            postToast(message: "Conversation mise a jour", isSuccess: true)
+            postToast(message: String(localized: "conversation.settings.toast.updated", defaultValue: "Conversation mise a jour", bundle: .module), isSuccess: true)
             return apiConversation.toConversation(currentUserId: AuthManager.shared.currentUser?.id ?? "")
         } catch {
             errorMessage = error.localizedDescription
@@ -328,9 +328,9 @@ final class ConversationSettingsViewModel: ObservableObject {
         defer { isUploadingAvatar = false }
         if let url = await uploadPhotoItem(item) {
             avatarUrl = url
-            postToast(message: "Avatar televerse", isSuccess: true)
+            postToast(message: String(localized: "conversation.settings.toast.avatarUploaded", defaultValue: "Avatar televerse", bundle: .module), isSuccess: true)
         } else {
-            postToast(message: "Echec du telechargement de l'avatar", isSuccess: false)
+            postToast(message: String(localized: "conversation.settings.toast.avatarFailed", defaultValue: "Echec du telechargement de l'avatar", bundle: .module), isSuccess: false)
         }
     }
 
@@ -339,9 +339,9 @@ final class ConversationSettingsViewModel: ObservableObject {
         defer { isUploadingBanner = false }
         if let url = await uploadPhotoItem(item) {
             bannerUrl = url
-            postToast(message: "Banniere televersee", isSuccess: true)
+            postToast(message: String(localized: "conversation.settings.toast.bannerUploaded", defaultValue: "Banniere televersee", bundle: .module), isSuccess: true)
         } else {
-            postToast(message: "Echec du telechargement de la banniere", isSuccess: false)
+            postToast(message: String(localized: "conversation.settings.toast.bannerFailed", defaultValue: "Echec du telechargement de la banniere", bundle: .module), isSuccess: false)
         }
     }
 

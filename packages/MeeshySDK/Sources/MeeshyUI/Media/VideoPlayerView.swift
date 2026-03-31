@@ -261,7 +261,7 @@ public struct VideoPlayerView: View {
                         Image(systemName: transcription != nil ? "text.bubble.fill" : "text.badge.plus")
                             .font(.system(size: 11))
                         if !context.isCompact {
-                            Text(transcription != nil ? "Transcription" : "Transcrire")
+                            Text(transcription != nil ? String(localized: "media.videoPlayer.transcription", defaultValue: "Transcription", bundle: .module) : String(localized: "media.videoPlayer.transcribe", defaultValue: "Transcrire", bundle: .module))
                                 .font(.system(size: 10, weight: .medium))
                         }
                     }

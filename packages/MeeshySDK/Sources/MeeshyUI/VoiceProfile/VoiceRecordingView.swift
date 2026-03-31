@@ -50,7 +50,7 @@ public struct VoiceRecordingView: View {
                 Image(systemName: "text.quote")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
-                Text("Lisez ce texte a voix haute")
+                Text(String(localized: "voiceProfile.recording.readAloud", defaultValue: "Lisez ce texte a voix haute", bundle: .module))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
                 Spacer()
@@ -182,7 +182,7 @@ public struct VoiceRecordingView: View {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.right.circle.fill")
                     .font(.system(size: 16, weight: .semibold))
-                Text("Creer le profil vocal")
+                Text(String(localized: "voiceProfile.recording.createProfile", defaultValue: "Creer le profil vocal", bundle: .module))
                     .font(.system(size: 15, weight: .semibold))
             }
             .foregroundColor(.white)
