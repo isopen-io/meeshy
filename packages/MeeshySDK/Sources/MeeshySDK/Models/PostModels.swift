@@ -52,6 +52,7 @@ public struct APIPostComment: Decodable, Sendable {
     public let id: String
     public let content: String
     public let originalLanguage: String?
+    public let parentId: String?
     public let translations: [String: APIPostTranslationEntry]?
     public let likeCount: Int?
     public let replyCount: Int?
@@ -177,6 +178,7 @@ extension APIPost {
                         authorAvatarURL: c.author.avatar,
                         content: c.content,
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                        parentId: c.parentId,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent)
         }
 

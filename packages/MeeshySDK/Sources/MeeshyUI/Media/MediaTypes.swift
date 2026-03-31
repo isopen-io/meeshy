@@ -74,7 +74,28 @@ public enum ComposerMode: Equatable {
 
     public var showLanguageSelector: Bool {
         switch self {
+        case .message, .comment: return true
+        default: return false
+        }
+    }
+
+    public var showEphemeral: Bool {
+        switch self {
         case .message: return true
+        default: return false
+        }
+    }
+
+    public var showEffectsSheet: Bool {
+        switch self {
+        case .message: return true
+        default: return false
+        }
+    }
+
+    public var showPermanentEffects: Bool {
+        switch self {
+        case .comment: return true
         default: return false
         }
     }

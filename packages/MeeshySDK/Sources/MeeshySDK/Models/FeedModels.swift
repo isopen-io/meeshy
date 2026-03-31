@@ -172,6 +172,7 @@ public struct FeedComment: Identifiable, Sendable {
     public let authorId: String
     public let authorColor: String
     public let authorAvatarURL: String?
+    public let parentId: String?
     public let content: String
     public let timestamp: Date
     public var likes: Int
@@ -183,10 +184,11 @@ public struct FeedComment: Identifiable, Sendable {
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
                 content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0,
+                parentId: String? = nil,
                 originalLanguage: String? = nil, translatedContent: String? = nil) {
         self.id = id; self.author = author; self.authorId = authorId
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
-        self.authorAvatarURL = authorAvatarURL
+        self.authorAvatarURL = authorAvatarURL; self.parentId = parentId
         self.content = content; self.timestamp = timestamp; self.likes = likes; self.replies = replies
         self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
     }
@@ -196,7 +198,7 @@ extension FeedComment: CacheIdentifiable {}
 
 extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, author, authorId, authorAvatarURL, content, timestamp, likes, replies
+        case id, author, authorId, authorAvatarURL, parentId, content, timestamp, likes, replies
         case originalLanguage, translatedContent
     }
 
@@ -206,6 +208,7 @@ extension FeedComment: Codable {
         author = try c.decode(String.self, forKey: .author)
         authorId = try c.decode(String.self, forKey: .authorId)
         authorAvatarURL = try c.decodeIfPresent(String.self, forKey: .authorAvatarURL)
+        parentId = try c.decodeIfPresent(String.self, forKey: .parentId)
         content = try c.decode(String.self, forKey: .content)
         timestamp = try c.decode(Date.self, forKey: .timestamp)
         likes = try c.decode(Int.self, forKey: .likes)
@@ -221,6 +224,7 @@ extension FeedComment: Codable {
         try c.encode(author, forKey: .author)
         try c.encode(authorId, forKey: .authorId)
         try c.encodeIfPresent(authorAvatarURL, forKey: .authorAvatarURL)
+        try c.encodeIfPresent(parentId, forKey: .parentId)
         try c.encode(content, forKey: .content)
         try c.encode(timestamp, forKey: .timestamp)
         try c.encode(likes, forKey: .likes)

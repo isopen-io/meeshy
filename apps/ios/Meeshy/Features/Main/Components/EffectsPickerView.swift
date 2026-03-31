@@ -63,13 +63,13 @@ struct EffectsPickerView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     effectSection(title: "Comportement", items: [
-                        (.ephemeral, "hourglass", "Ephemere"),
+                        (.ephemeral, "hourglass", "\u{00C9}ph\u{00E9}m\u{00E8}re"),
                         (.blurred, "eye.slash", "Flou"),
                         (.viewOnce, "1.circle", "Vue unique"),
                     ])
 
-                    effectSection(title: "Animation d'entree", items: [
-                        (.shake, "waveform", "Shake"),
+                    effectSection(title: "Animation d'entr\u{00E9}e", items: [
+                        (.shake, "waveform", "Secousse"),
                         (.zoom, "arrow.up.left.and.arrow.down.right", "Zoom"),
                         (.explode, "rays", "Explosion"),
                         (.confetti, "party.popper", "Confetti"),
@@ -78,8 +78,8 @@ struct EffectsPickerView: View {
                     ])
 
                     effectSection(title: "Effet permanent", items: [
-                        (.glow, "sun.max", "Glow"),
-                        (.pulse, "heart.fill", "Pulse"),
+                        (.glow, "sun.max", "Lueur"),
+                        (.pulse, "heart.fill", "Pulsation"),
                         (.rainbow, "rainbow", "Arc-en-ciel"),
                         (.sparkle, "sparkle", "Scintillant"),
                     ])
@@ -122,7 +122,7 @@ struct EffectsPickerView: View {
 
     private var ephemeralDurationPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Duree ephemere")
+            Text("Dur\u{00E9}e \u{00E9}ph\u{00E9}m\u{00E8}re")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.secondary)
             HStack(spacing: 8) {
@@ -143,7 +143,7 @@ struct EffectsPickerView: View {
                                              : .secondary)
                             .clipShape(Capsule())
                     }
-                    .accessibilityLabel("Duree \(duration.label)")
+                    .accessibilityLabel("Dur\u{00E9}e \(duration.label)")
                     .accessibilityAddTraits(effects.ephemeralDuration == duration.rawValue ? .isSelected : [])
                 }
             }
