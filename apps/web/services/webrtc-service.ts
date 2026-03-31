@@ -685,7 +685,7 @@ export class WebRTCService {
     this.stopQualityMonitor();
 
     if (!this.peerConnection) {
-      logger.warn('[WebRTCService] Cannot start quality monitor: no peer connection');
+      logger.warn('[WebRTCService]', 'Cannot start quality monitor: no peer connection');
       return;
     }
 

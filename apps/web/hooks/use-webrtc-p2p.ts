@@ -88,7 +88,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
               callId,
               signal,
-            } as CallSignalEvent);
+            } as CallSignalEvent, () => {});
 
             logger.debug('[useWebRTCP2P]', 'ICE candidate sent', { participantId, callId });
           },
@@ -267,7 +267,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
           callId,
           signal,
-        } as CallSignalEvent);
+        } as CallSignalEvent, () => {});
 
         logger.info('[useWebRTCP2P]', 'Offer created and sent', { targetUserId, callId });
       } catch (error) {
@@ -336,7 +336,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
           callId,
           signal,
-        } as CallSignalEvent);
+        } as CallSignalEvent, () => {});
 
         // Process queued ICE candidates
         const queuedCandidates = iceCandidateQueueRef.current.get(fromUserId) || [];

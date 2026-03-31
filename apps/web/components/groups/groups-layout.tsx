@@ -61,7 +61,8 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
   const [copiedIdentifier, setCopiedIdentifier] = useState<string | null>(null);
 
   // React Query hooks pour la logique métier
-  const { data: groups = [], isLoading } = useCommunitiesQuery();
+  const { data: communities = [], isLoading } = useCommunitiesQuery();
+  const groups = communities as unknown as Group[];
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
 
   // Charger les détails quand un identifiant est dans l'URL mais pas trouvé localement

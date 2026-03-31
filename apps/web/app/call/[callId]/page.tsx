@@ -68,7 +68,7 @@ export default function CallPage({ params }: CallPageProps) {
             audioEnabled: true,
             videoEnabled: true,
           },
-        });
+        }, () => {});
 
         // Wait for call:participant-joined or call:initiated event
         // The CallManager component will handle these events and update the store

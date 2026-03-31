@@ -25,7 +25,12 @@ export type PreferenceCategory =
   | 'video'
   | 'message'
   | 'document'
-  | 'application';
+  | 'application'
+  | 'accessibility'
+  | 'translation';
+
+export type TranslationPreferences = Record<string, unknown>;
+export type AccessibilityPreferences = Record<string, unknown>;
 
 export interface PreferenceTypeMap {
   privacy: PrivacyPreference;
@@ -35,6 +40,8 @@ export interface PreferenceTypeMap {
   message: MessagePreference;
   document: DocumentPreference;
   application: ApplicationPreference;
+  accessibility: AccessibilityPreferences;
+  translation: TranslationPreferences;
 }
 
 export interface ConsentViolation {

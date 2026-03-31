@@ -144,8 +144,7 @@ function AudioPostComposer({
   // ── Real-time transcription (Web Speech API) ──────────────────────────
 
   const startTranscription = useCallback(() => {
-    const SpeechRecognition = (window as unknown as { SpeechRecognition?: typeof window.SpeechRecognition; webkitSpeechRecognition?: typeof window.SpeechRecognition }).SpeechRecognition
-      ?? (window as unknown as { webkitSpeechRecognition?: typeof window.SpeechRecognition }).webkitSpeechRecognition;
+    const SpeechRecognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) return;
 

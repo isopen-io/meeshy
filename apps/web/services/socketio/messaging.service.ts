@@ -127,7 +127,7 @@ export class MessagingService {
       this.messageListeners.forEach(listener => listener(convertMessageFn(data as unknown as SocketIOMessage)));
     });
 
-    socket.on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
+    (socket as unknown as { on: (event: string, handler: (data: AttachmentStatusUpdatedEventData) => void) => void }).on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
       this.attachmentStatusListeners.forEach(listener => listener(data));
     });
 
@@ -151,7 +151,10 @@ export class MessagingService {
     try {
       const encryptedPayload: EncryptedPayload = {
         ciphertext: encryptedContent,
-        metadata: encryptionMetadata
+        metadata: {
+          ...encryptionMetadata,
+          protocol: (encryptionMetadata as unknown as { protocol?: string }).protocol ?? (encryptionMetadata.mode === 'e2ee' ? 'signal_v3' : 'aes-256-gcm'),
+        } as EncryptedPayload['metadata']
       };
       const senderId = socketMessage.senderId;
       const decryptedContent = await this.encryptionHandlers.decrypt(encryptedPayload, senderId);
