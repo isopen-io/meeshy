@@ -95,7 +95,8 @@ extension ProfileSheetUser {
     public static func from(feedComment: FeedComment) -> ProfileSheetUser {
         ProfileSheetUser(
             userId: feedComment.authorId.isEmpty ? nil : feedComment.authorId,
-            username: feedComment.author,
+            username: feedComment.authorUsername ?? feedComment.author,
+            displayName: feedComment.author,
             avatarURL: feedComment.authorAvatarURL,
             accentColor: feedComment.authorColor
         )

@@ -170,6 +170,7 @@ public struct FeedComment: Identifiable, Sendable {
     public let id: String
     public let author: String
     public let authorId: String
+    public let authorUsername: String?
     public let authorColor: String
     public let authorAvatarURL: String?
     public let parentId: String?
@@ -180,6 +181,7 @@ public struct FeedComment: Identifiable, Sendable {
     public var effectFlags: Int
     public var originalLanguage: String?
     public var translatedContent: String?
+    public var translationLanguages: [String]
 
     public var displayContent: String { translatedContent ?? content }
 
@@ -187,16 +189,20 @@ public struct FeedComment: Identifiable, Sendable {
         MessageEffects(flags: MessageEffectFlags(rawValue: UInt32(effectFlags)))
     }
 
-    public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
+    public init(id: String = UUID().uuidString, author: String, authorId: String = "",
+                authorUsername: String? = nil, authorAvatarURL: String? = nil,
                 content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0,
                 parentId: String? = nil, effectFlags: Int = 0,
-                originalLanguage: String? = nil, translatedContent: String? = nil) {
+                originalLanguage: String? = nil, translatedContent: String? = nil,
+                translationLanguages: [String] = []) {
         self.id = id; self.author = author; self.authorId = authorId
+        self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL; self.parentId = parentId
         self.content = content; self.timestamp = timestamp; self.likes = likes; self.replies = replies
         self.effectFlags = effectFlags
         self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
+        self.translationLanguages = translationLanguages
     }
 }
 
@@ -204,8 +210,8 @@ extension FeedComment: CacheIdentifiable {}
 
 extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, author, authorId, authorAvatarURL, parentId, content, timestamp, likes, replies
-        case effectFlags, originalLanguage, translatedContent
+        case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp
+        case likes, replies, effectFlags, originalLanguage, translatedContent, translationLanguages
     }
 
     public init(from decoder: Decoder) throws {
@@ -213,6 +219,7 @@ extension FeedComment: Codable {
         id = try c.decode(String.self, forKey: .id)
         author = try c.decode(String.self, forKey: .author)
         authorId = try c.decode(String.self, forKey: .authorId)
+        authorUsername = try c.decodeIfPresent(String.self, forKey: .authorUsername)
         authorAvatarURL = try c.decodeIfPresent(String.self, forKey: .authorAvatarURL)
         parentId = try c.decodeIfPresent(String.self, forKey: .parentId)
         content = try c.decode(String.self, forKey: .content)
@@ -222,6 +229,7 @@ extension FeedComment: Codable {
         effectFlags = try c.decodeIfPresent(Int.self, forKey: .effectFlags) ?? 0
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        translationLanguages = try c.decodeIfPresent([String].self, forKey: .translationLanguages) ?? []
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -230,6 +238,7 @@ extension FeedComment: Codable {
         try c.encode(id, forKey: .id)
         try c.encode(author, forKey: .author)
         try c.encode(authorId, forKey: .authorId)
+        try c.encodeIfPresent(authorUsername, forKey: .authorUsername)
         try c.encodeIfPresent(authorAvatarURL, forKey: .authorAvatarURL)
         try c.encodeIfPresent(parentId, forKey: .parentId)
         try c.encode(content, forKey: .content)
@@ -239,6 +248,7 @@ extension FeedComment: Codable {
         try c.encode(effectFlags, forKey: .effectFlags)
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+        try c.encode(translationLanguages, forKey: .translationLanguages)
     }
 }
 

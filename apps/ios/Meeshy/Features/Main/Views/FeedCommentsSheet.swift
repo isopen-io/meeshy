@@ -10,6 +10,7 @@ struct ThreadedCommentSection: View {
     let isExpanded: Bool
     let isLoadingReplies: Bool
     let accentColor: String
+    var postAuthorId: String = ""
     let onReply: (FeedComment) -> Void
     let onToggleThread: () -> Void
     let onLikeComment: (String) -> Void
@@ -29,6 +30,7 @@ struct ThreadedCommentSection: View {
             CommentRowView(
                 comment: comment,
                 accentColor: accentColor,
+                postAuthorId: postAuthorId,
                 onReply: { onReply(comment) },
                 onLikeComment: { onLikeComment(comment.id) },
                 moodEmoji: moodEmoji,
@@ -36,7 +38,7 @@ struct ThreadedCommentSection: View {
                 presenceState: presenceState
             )
 
-            if comment.replies > 0 {
+            if comment.replies > 0 || isExpanded {
                 threadToggleButton
             }
 
@@ -59,6 +61,7 @@ struct ThreadedCommentSection: View {
                             comment: reply,
                             accentColor: accentColor,
                             isReply: true,
+                            postAuthorId: postAuthorId,
                             onReply: { onReply(reply) },
                             onLikeComment: { onLikeComment(reply.id) },
                             moodEmoji: replyMoodResolver?(reply.authorId),
@@ -124,6 +127,8 @@ struct CommentsSheetView: View {
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    @State private var composerText: String = ""
+    @State private var mentionProfileUser: ProfileSheetUser?
     @State private var repliesMap: [String: [FeedComment]] = [:]
     @State private var expandedThreads: Set<String> = []
     @State private var loadingReplies: Set<String> = []
@@ -150,8 +155,10 @@ struct CommentsSheetView: View {
                                     isExpanded: expandedThreads.contains(comment.id),
                                     isLoadingReplies: loadingReplies.contains(comment.id),
                                     accentColor: accentColor,
+                                    postAuthorId: post.authorId,
                                     onReply: { target in
                                         replyingTo = target
+                                        composerText = "@\(target.authorUsername ?? target.author) "
                                         composerFocusTrigger = true
                                     },
                                     onToggleThread: {
@@ -197,6 +204,23 @@ struct CommentsSheetView: View {
                 }
             }
         }
+        .environment(\.openURL, OpenURLAction { url in
+            guard url.host == "meeshy.me",
+                  url.pathComponents.count >= 3,
+                  url.pathComponents[1] == "u" else { return .systemAction }
+            let username = url.pathComponents[2]
+            mentionProfileUser = ProfileSheetUser(username: username, accentColor: accentColor)
+            return .handled
+        })
+        .sheet(item: $mentionProfileUser) { user in
+            UserProfileSheet(
+                user: user,
+                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .presentationDetents([.large, .medium])
         .presentationDragIndicator(.visible)
         .onReceive(
@@ -211,7 +235,8 @@ struct CommentsSheetView: View {
                 authorAvatarURL: data.comment.author.avatar,
                 content: data.comment.content, timestamp: data.comment.createdAt,
                 likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                parentId: parentId
+                parentId: parentId,
+                authorUsername: data.comment.author.username, translationLanguages: Array(data.comment.translations?.keys ?? [])
             )
             if let parentId {
                 if expandedThreads.contains(parentId) {
@@ -280,6 +305,7 @@ struct CommentsSheetView: View {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: commentId,
+                    authorUsername: c.author.username, translationLanguages: Array(c.translations?.keys ?? []),
                     originalLanguage: c.originalLanguage, translatedContent: translated
                 )
             }
@@ -408,11 +434,13 @@ struct CommentsSheetView: View {
             accentColor: accentColor,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
+            textBinding: $composerText,
             onSend: { text in
-                let parentId = replyingTo?.id
+                let parentId = replyingTo?.parentId ?? replyingTo?.id
                 let effects = commentEffects
                 let blur = commentBlurEnabled
                 replyingTo = nil
+                composerText = ""
                 commentEffects = .none
                 commentBlurEnabled = false
                 Task {
@@ -426,7 +454,8 @@ struct CommentsSheetView: View {
                             content: apiComment.content, timestamp: apiComment.createdAt,
                             likes: 0, replies: 0,
                             parentId: parentId,
-                            effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
+                            effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
+                            authorUsername: apiComment.author.username
                         )
                         if let parentId {
                             var existing = repliesMap[parentId] ?? []
@@ -473,6 +502,7 @@ struct CommentRowView: View {
     let comment: FeedComment
     let accentColor: String
     var isReply: Bool = false
+    var postAuthorId: String = ""
     let onReply: () -> Void
     var onLikeComment: (() -> Void)? = nil
     var moodEmoji: String? = nil
@@ -489,6 +519,7 @@ struct CommentRowView: View {
     private var avatarContext: AvatarContext { .postComment }
     private var contentFont: CGFloat { isReply ? 14 : 15 }
     private var authorFont: CGFloat { isReply ? 13 : 14 }
+    private var isPostAuthor: Bool { !postAuthorId.isEmpty && comment.authorId == postAuthorId }
 
     private var hasTranslation: Bool {
         comment.translatedContent != nil && comment.originalLanguage != nil
@@ -527,9 +558,36 @@ struct CommentRowView: View {
                             selectedProfileUser = .from(feedComment: comment)
                         }
 
-                    if hasTranslation {
-                        Text("\u{00B7}").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                    if isPostAuthor {
+                        Text("Auteur")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color(hex: accentColor)))
+                    }
+                }
 
+                MessageTextRenderer.render(
+                    effectiveCommentContent,
+                    fontSize: contentFont,
+                    color: theme.textPrimary,
+                    mentionColor: Color(hex: accentColor)
+                )
+                .fixedSize(horizontal: false, vertical: true)
+                .animation(.easeInOut(duration: 0.2), value: showOriginal)
+                .messageEffects(comment.effects, hasPlayedAppearance: hasPlayedAppearanceEffect)
+                .onAppear {
+                    if comment.effects.hasAnyEffect && !hasPlayedAppearanceEffect {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            hasPlayedAppearanceEffect = true
+                        }
+                    }
+                }
+
+                // Meta row: language flags, translate icon, timestamp
+                HStack(spacing: 6) {
+                    if hasTranslation {
                         let origDisplay = LanguageDisplay.from(code: comment.originalLanguage)
                         let isOrigActive = showOriginal
                         VStack(spacing: 1) {
@@ -575,28 +633,19 @@ struct CommentRowView: View {
                         Image(systemName: "translate")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(MeeshyColors.indigo400)
+                    } else if let origLang = comment.originalLanguage {
+                        let display = LanguageDisplay.from(code: origLang)
+                        Text(display?.flag ?? origLang)
+                            .font(.system(size: 10))
                     }
 
-                    Text("\u{00B7}").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                    Spacer()
 
                     Text(timeAgo(from: comment.timestamp))
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(theme.textMuted)
                 }
-
-                Text(effectiveCommentContent)
-                    .font(.system(size: contentFont))
-                    .foregroundColor(theme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .animation(.easeInOut(duration: 0.2), value: showOriginal)
-                    .messageEffects(comment.effects, hasPlayedAppearance: hasPlayedAppearanceEffect)
-                    .onAppear {
-                        if comment.effects.hasAnyEffect && !hasPlayedAppearanceEffect {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                hasPlayedAppearanceEffect = true
-                            }
-                        }
-                    }
+                .padding(.top, 2)
 
                 HStack(spacing: 20) {
                     Button {

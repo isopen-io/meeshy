@@ -22,6 +22,8 @@ struct PostDetailView: View {
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    @State private var composerText: String = ""
+    @State private var mentionProfileUser: ProfileSheetUser?
 
     private var displayPost: FeedPost? { viewModel.post ?? initialPost }
 
@@ -112,8 +114,11 @@ struct PostDetailView: View {
                                 isExpanded: viewModel.expandedThreads.contains(comment.id),
                                 isLoadingReplies: viewModel.loadingReplies.contains(comment.id),
                                 accentColor: accentColor,
+                                postAuthorId: displayPost?.authorId ?? "",
                                 onReply: { target in
                                     viewModel.replyingTo = target
+                                    composerText = "@\(target.authorUsername ?? target.author) "
+                                    composerFocusTrigger = true
                                 },
                                 onToggleThread: {
                                     Task { await viewModel.toggleThread(comment.id, postId: postId) }
@@ -195,6 +200,23 @@ struct PostDetailView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(item: $mentionProfileUser) { user in
+            UserProfileSheet(
+                user: user,
+                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .environment(\.openURL, OpenURLAction { url in
+            guard url.host == "meeshy.me",
+                  url.pathComponents.count >= 3,
+                  url.pathComponents[1] == "u" else { return .systemAction }
+            let username = url.pathComponents[2]
+            mentionProfileUser = ProfileSheetUser(username: username, accentColor: accentColor)
+            return .handled
+        })
         .fullScreenCover(isPresented: $showFullscreenGallery) {
             if let post = displayPost {
                 let attachments = post.media
@@ -790,11 +812,13 @@ struct PostDetailView: View {
             accentColor: accentColor,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
+            textBinding: $composerText,
             onSend: { text in
                 let effects = commentEffects
                 let blur = commentBlurEnabled
                 commentEffects = .none
                 commentBlurEnabled = false
+                composerText = ""
                 Task {
                     let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
                     let effectFlags = flags > 0 ? Int(flags) : nil

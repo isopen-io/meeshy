@@ -104,6 +104,7 @@ class PostDetailViewModel: ObservableObject {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: c.parentId,
+                    authorUsername: c.author.username, translationLanguages: Array(c.translations?.keys ?? []),
                     originalLanguage: c.originalLanguage, translatedContent: translatedContent
                 )
             }
@@ -153,6 +154,7 @@ class PostDetailViewModel: ObservableObject {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: commentId,
+                    authorUsername: c.author.username, translationLanguages: Array(c.translations?.keys ?? []),
                     originalLanguage: c.originalLanguage, translatedContent: translated
                 )
             }
@@ -200,7 +202,8 @@ class PostDetailViewModel: ObservableObject {
                 authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0,
-                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
+                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
+                authorUsername: apiComment.author.username
             )
             comments.insert(comment, at: 0)
             self.post?.commentCount += 1
@@ -212,7 +215,7 @@ class PostDetailViewModel: ObservableObject {
 
     func sendReply(_ content: String, effectFlags: Int? = nil) async {
         guard let post, let parent = replyingTo else { return }
-        let parentId = parent.id
+        let parentId = parent.parentId ?? parent.id
         replyingTo = nil
         do {
             let apiComment = try await PostService.shared.addComment(postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags)
@@ -222,7 +225,8 @@ class PostDetailViewModel: ObservableObject {
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0,
                 parentId: parentId,
-                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
+                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
+                authorUsername: apiComment.author.username
             )
             var existing = repliesMap[parentId] ?? []
             existing.insert(reply, at: 0)
@@ -257,7 +261,8 @@ class PostDetailViewModel: ObservableObject {
                     authorAvatarURL: data.comment.author.avatar,
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                    parentId: parentId
+                    parentId: parentId,
+                    authorUsername: data.comment.author.username, translationLanguages: Array(data.comment.translations?.keys ?? [])
                 )
                 if let parentId {
                     if self.expandedThreads.contains(parentId) {

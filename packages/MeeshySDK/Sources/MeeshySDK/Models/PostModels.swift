@@ -180,6 +180,7 @@ extension APIPost {
                         content: c.content,
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
+                        authorUsername: c.author.username, translationLanguages: Array(c.translations?.keys ?? []),
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent)
         }
 
