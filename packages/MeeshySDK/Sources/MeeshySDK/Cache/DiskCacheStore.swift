@@ -41,9 +41,12 @@ public actor DiskCacheStore: ReadableCacheStore {
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
             queue: .main
-        ) { [weak cache] _ in
-            cache?.removeAllObjects()
-            DiskCacheStore._imageCache.removeAllObjects()
+        ) { _ in
+            Task { @MainActor in
+                DiskCacheStore.clearImageCache()
+            }
+            // Cannot easily clear memoryCache as it's not isolated(unsafe) for closure capture
+            // but the static _imageCache is the main memory consumer.
         }
     }
 
@@ -231,6 +234,11 @@ public actor DiskCacheStore: ReadableCacheStore {
         return cache
     }()
 
+    @MainActor
+    public static func clearImageCache() {
+        _imageCache.removeAllObjects()
+    }
+
     nonisolated public static func cachedImage(for urlString: String) -> UIImage? {
         let key = fileKey(for: urlString) as NSString
         return _imageCache.object(forKey: key)
@@ -246,7 +254,9 @@ public actor DiskCacheStore: ReadableCacheStore {
         let result = await load(for: urlString)
         if let data = result.value?.first, let image = UIImage(data: data) {
             let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-            Self._imageCache.setObject(image, forKey: fileKey as NSString, cost: cost)
+            await MainActor.run {
+                Self._imageCache.setObject(image, forKey: fileKey as NSString, cost: cost)
+            }
             return image
         }
 
@@ -258,7 +268,9 @@ public actor DiskCacheStore: ReadableCacheStore {
                   let image = UIImage(data: data) else { return nil }
             await save(data, for: urlString)
             let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-            Self._imageCache.setObject(image, forKey: fileKey as NSString, cost: cost)
+            await MainActor.run {
+                Self._imageCache.setObject(image, forKey: fileKey as NSString, cost: cost)
+            }
             return image
         } catch {
             return nil

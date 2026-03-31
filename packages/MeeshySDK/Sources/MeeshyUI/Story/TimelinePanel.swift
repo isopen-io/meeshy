@@ -204,6 +204,7 @@ struct TimelinePanel: View {
             Button {
                 engine.configure(duration: slideDuration)
                 engine.configureMedia(buildMediaElements())
+                engine.isMuted = viewModel.isMuted
                 engine.toggle()
                 viewModel.isTimelinePlaying = engine.isPlaying
             } label: {
@@ -236,6 +237,20 @@ struct TimelinePanel: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(MeeshyColors.indigo400.opacity(0.15)))
+            }
+
+            Button {
+                viewModel.isMuted.toggle()
+                engine.isMuted = viewModel.isMuted
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: viewModel.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(viewModel.isMuted ? MeeshyColors.error : theme.textSecondary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle().fill(viewModel.isMuted ? MeeshyColors.error.opacity(0.15) : Color.clear)
+                    )
             }
 
             Button {

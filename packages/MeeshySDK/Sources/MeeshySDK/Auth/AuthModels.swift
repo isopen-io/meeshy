@@ -14,7 +14,7 @@ public struct LoginRequest: Encodable {
     }
 }
 
-public struct LoginResponseData: Decodable {
+public struct LoginResponseData: Decodable, Sendable {
     public let user: MeeshyUser
     public let token: String
     public let sessionToken: String?

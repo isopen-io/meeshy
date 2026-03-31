@@ -10,6 +10,9 @@ final class TimelinePlaybackEngine {
 
     var onTimeUpdate: ((Float) -> Void)?
     var onPlaybackEnd: (() -> Void)?
+    var isMuted = false {
+        didSet { applyMute() }
+    }
 
     private(set) var isPlaying = false
     private(set) var currentTime: Float = 0
@@ -121,7 +124,7 @@ final class TimelinePlaybackEngine {
             stopAllMedia()
             let playerItem = AVPlayerItem(url: url)
             let player = AVPlayer(playerItem: playerItem)
-            player.volume = element.volume
+            player.volume = isMuted ? 0 : element.volume
             videoPlayer = player
             activeMediaId = element.id
 
@@ -138,7 +141,7 @@ final class TimelinePlaybackEngine {
             stopAllMedia()
             do {
                 let player = try AVAudioPlayer(contentsOf: url)
-                player.volume = element.volume
+                player.volume = isMuted ? 0 : element.volume
                 player.currentTime = TimeInterval(offset)
                 player.prepareToPlay()
                 player.play()
@@ -166,6 +169,13 @@ final class TimelinePlaybackEngine {
         audioPlayer?.stop()
         audioPlayer = nil
         activeMediaId = nil
+    }
+
+    private func applyMute() {
+        guard let activeId = activeMediaId,
+              let element = mediaElements.first(where: { $0.id == activeId }) else { return }
+        videoPlayer?.volume = isMuted ? 0 : element.volume
+        audioPlayer?.volume = isMuted ? 0 : element.volume
     }
 
     // MARK: - Display Link

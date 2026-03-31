@@ -252,12 +252,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         // Background revalidation (stale-while-revalidate for auth)
         Task { [weak self] in
-            guard let self else { return }
             do {
-                let user = try await self.authService.me()
-                self.saveUserToKeychain(user, userId: userId)
-                self.currentUser = user
-                self.updateSavedAccountActivity(from: user)
+                let user = try await AuthService.shared.me()
+                await self?.updateUserAfterRevalidation(user, userId: userId)
             } catch let error as MeeshyError {
                 switch error {
                 case .auth:
@@ -338,6 +335,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             profileCompletionRate: user.profileCompletionRate,
             signalIdentityKeyPublic: user.signalIdentityKeyPublic
         )
+    }
+
+    private func updateUserAfterRevalidation(_ user: MeeshyUser, userId: String) {
+        saveUserToKeychain(user, userId: userId)
+        self.currentUser = user
+        self.updateSavedAccountActivity(from: user)
     }
 
     private func attemptTokenRefresh(token: String, userId: String) async {

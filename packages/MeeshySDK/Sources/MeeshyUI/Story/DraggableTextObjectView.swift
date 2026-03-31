@@ -47,6 +47,10 @@ public struct DraggableTextObjectView: View {
                 }
                 .onChange(of: geo.size) { newSize in canvasSize = newSize }
                 .onChange(of: textObject.id) { _ in syncBaseFromBinding() }
+                .onChange(of: textObject.x) { _ in syncBaseFromBinding() }
+                .onChange(of: textObject.y) { _ in syncBaseFromBinding() }
+                .onChange(of: textObject.scale) { _ in syncBaseFromBinding() }
+                .onChange(of: textObject.rotation) { _ in syncBaseFromBinding() }
         }
     }
 
