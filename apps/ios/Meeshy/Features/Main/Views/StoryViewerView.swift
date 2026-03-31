@@ -55,10 +55,10 @@ struct StoryViewerView: View {
 
     // === Transition states ===
 
-    // Appear
-    @State private var appearScale: CGFloat = 0.45
-    @State private var appearCornerRadius: CGFloat = 32
-    @State private var appearOpacity: Double = 0
+    // Appear — initialized to final state to avoid entry flash
+    @State private var appearScale: CGFloat = 1.0
+    @State private var appearCornerRadius: CGFloat = 0
+    @State private var appearOpacity: Double = 1
 
     // Dismiss
     @State var isDismissing = false // internal for cross-file extension access
@@ -111,8 +111,8 @@ struct StoryViewerView: View {
 
     var body: some View {
         ZStack {
-            // Opaque black base — prevents any white frame bleed
-            Color.black.ignoresSafeArea()
+            // Theme background — prevents any white frame bleed, respects user mode
+            theme.backgroundPrimary.ignoresSafeArea()
 
             GeometryReader { geometry in
                 ZStack {
@@ -156,8 +156,6 @@ struct StoryViewerView: View {
                 }
             }
         }
-        .background(Color.black)
-        .preferredColorScheme(.dark)
         .ignoresSafeArea()
         .statusBarHidden()
         .gesture(unifiedDragGesture)
@@ -165,12 +163,10 @@ struct StoryViewerView: View {
             startTimer()
             markCurrentViewed()
             prefetchCurrentGroup()
-            // Entrance: scale up from small card to fullscreen
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
-                appearScale = 1.0
-                appearCornerRadius = 0
-                appearOpacity = 1
-            }
+            // Immediate entrance without opacity flash
+            appearScale = 1.0
+            appearCornerRadius = 0
+            appearOpacity = 1
         }
         .onDisappear {
             timerCancellable?.cancel()
