@@ -72,94 +72,96 @@ extension ThemedMessageBubble {
         let attachmentIsProtected = attachment.isViewOnce || attachment.isBlurred
         let isRevealed = revealedAttachmentIds.contains(attachment.id)
 
-        ZStack {
-            Color.black
+        AnyView(
+            ZStack {
+                Color.black
 
-            switch attachment.type {
-            case .image:
-                gridImageView(attachment)
-            case .video:
-                gridVideoThumbnail(attachment, solo: solo)
-            default:
-                EmptyView()
-            }
+                switch attachment.type {
+                case .image:
+                    gridImageView(attachment)
+                case .video:
+                    gridVideoThumbnail(attachment, solo: solo)
+                default:
+                    EmptyView()
+                }
 
-            if overflowCount > 0 {
-                Color.black.opacity(0.5)
-                Text("+\(overflowCount)")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
-            }
+                if overflowCount > 0 {
+                    Color.black.opacity(0.5)
+                    Text("+\(overflowCount)")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+                }
 
-            // Per-attachment view-once / blur overlay
-            if attachmentIsProtected && !isRevealed {
-                AttachmentBlurOverlayView(
-                    isViewOnce: attachment.isViewOnce,
-                    onReveal: {
-                        HapticFeedback.medium()
-                        if attachment.isViewOnce {
-                            onConsumeViewOnce?(message.id) { success in
-                                guard success else { return }
+                // Per-attachment view-once / blur overlay
+                if attachmentIsProtected && !isRevealed {
+                    AttachmentBlurOverlayView(
+                        isViewOnce: attachment.isViewOnce,
+                        onReveal: {
+                            HapticFeedback.medium()
+                            if attachment.isViewOnce {
+                                onConsumeViewOnce?(message.id) { success in
+                                    guard success else { return }
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        _ = revealedAttachmentIds.insert(attachment.id)
+                                    }
+                                    let attachmentId = attachment.id
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                        withAnimation(.easeOut(duration: 0.5)) {
+                                            _ = revealedAttachmentIds.remove(attachmentId)
+                                        }
+                                    }
+                                }
+                            } else {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     _ = revealedAttachmentIds.insert(attachment.id)
                                 }
-                                let attachmentId = attachment.id
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                                    withAnimation(.easeOut(duration: 0.5)) {
-                                        _ = revealedAttachmentIds.remove(attachmentId)
-                                    }
-                                }
-                            }
-                        } else {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                _ = revealedAttachmentIds.insert(attachment.id)
                             }
                         }
-                    }
-                )
-            }
+                    )
+                }
 
-            // View count badge (top-trailing)
-            if attachment.isViewOnce && attachment.viewOnceCount > 0 {
-                VStack {
-                    HStack {
+                // View count badge (top-trailing)
+                if attachment.isViewOnce && attachment.viewOnceCount > 0 {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Text("\(attachment.viewOnceCount)")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white)
+                                .frame(width: 18, height: 18)
+                                .background(
+                                    Circle()
+                                        .fill(Color(hex: "FF6B6B").opacity(0.85))
+                                )
+                        }
+                        .padding(6)
                         Spacer()
-                        Text("\(attachment.viewOnceCount)")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .frame(width: 18, height: 18)
-                            .background(
-                                Circle()
-                                    .fill(Color(hex: "FF6B6B").opacity(0.85))
-                            )
                     }
-                    .padding(6)
-                    Spacer()
+                    .accessibilityLabel(Text("\(attachment.viewOnceCount) vue\(attachment.viewOnceCount > 1 ? "s" : "")"))
                 }
-                .accessibilityLabel(Text("\(attachment.viewOnceCount) vue\(attachment.viewOnceCount > 1 ? "s" : "")"))
             }
-        }
-        .clipped()
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard !attachmentIsProtected || isRevealed else { return }
-            if overflowCount > 0 {
-                let items = visualAttachments
-                carouselIndex = items.firstIndex(where: { $0.id == attachment.id }) ?? 0
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    showCarousel = true
+            .clipped()
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !attachmentIsProtected || isRevealed else { return }
+                if overflowCount > 0 {
+                    let items = visualAttachments
+                    carouselIndex = items.firstIndex(where: { $0.id == attachment.id }) ?? 0
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        showCarousel = true
+                    }
+                } else {
+                    fullscreenAttachment = attachment
                 }
-            } else {
-                fullscreenAttachment = attachment
+                HapticFeedback.light()
             }
-            HapticFeedback.light()
-        }
-        .overlay(alignment: .bottom) {
-            if !attachmentIsProtected || isRevealed {
-                downloadBadge(attachment)
-                    .padding(.bottom, 6)
+            .overlay(alignment: .bottom) {
+                if !attachmentIsProtected || isRevealed {
+                    downloadBadge(attachment)
+                        .padding(.bottom, 6)
+                }
             }
-        }
+        )
     }
 
     // MARK: - Grid Image
