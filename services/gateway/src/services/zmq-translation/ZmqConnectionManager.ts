@@ -142,16 +142,20 @@ export class ZmqConnectionManager {
    */
   async sendPing(): Promise<void> {
     if (!this.pushSocket) {
-      throw new Error('Socket PUSH non initialisé');
+      console.warn('⚠️ [ZMQ] Health check skipped: socket PUSH non initialisé');
+      return;
     }
 
-    const pingMessage = {
-      type: 'ping',
-      timestamp: Date.now()
-    };
+    try {
+      const pingMessage = {
+        type: 'ping',
+        timestamp: Date.now()
+      };
 
-    await this.pushSocket.send(JSON.stringify(pingMessage));
-    console.log(`🏓 Health check ping envoyé via port ${this.config.pushPort}`);
+      await this.pushSocket.send(JSON.stringify(pingMessage));
+    } catch (error) {
+      console.error(`❌ [ZMQ] Health check ping failed on port ${this.config.pushPort}:`, error);
+    }
   }
 
   /**

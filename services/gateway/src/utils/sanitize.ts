@@ -12,6 +12,7 @@
 
 import DOMPurify from 'isomorphic-dompurify';
 import { createHash } from 'crypto';
+import { NotificationTypeEnum } from '@meeshy/shared';
 
 export class SecuritySanitizer {
   /**
@@ -249,26 +250,7 @@ export class SecuritySanitizer {
    * @returns true if valid, false otherwise
    */
   static isValidNotificationType(type: string): boolean {
-    const validTypes = [
-      'new_message',
-      'new_conversation_direct',
-      'new_conversation_group',
-      'message_reply',
-      'member_joined',
-      'contact_request',
-      'contact_accepted',
-      'friend_request',
-      'friend_accepted',
-      'user_mentioned',
-      'message_reaction',
-      'missed_call',
-      'system',
-      'new_conversation',
-      'message_edited',
-      'translation_ready',
-    ];
-
-    return validTypes.includes(type);
+    return Object.values(NotificationTypeEnum).includes(type as NotificationTypeEnum);
   }
 
   /**

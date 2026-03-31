@@ -2819,29 +2819,41 @@ export const refreshTokenRequestSchema = {
  */
 export const verifyEmailRequestSchema = {
   type: 'object',
-  required: ['email'],
-  properties: {
-    token: {
-      type: 'string',
-      minLength: 1,
-      description: 'Verification token from email link'
-    },
-    code: {
-      type: 'string',
-      minLength: 6,
-      maxLength: 6,
-      pattern: '^[0-9]{6}$',
-      description: '6-digit verification code for mobile'
-    },
-    email: {
-      type: 'string',
-      format: 'email',
-      description: 'Email address to verify'
-    }
-  },
   oneOf: [
-    { required: ['token', 'email'] },
-    { required: ['code', 'email'] }
+    {
+      required: ['token', 'email'],
+      properties: {
+        token: {
+          type: 'string',
+          minLength: 1,
+          description: 'Verification token from email link'
+        },
+        email: {
+          type: 'string',
+          format: 'email',
+          description: 'Email address to verify'
+        }
+      },
+      additionalProperties: false
+    },
+    {
+      required: ['code', 'email'],
+      properties: {
+        code: {
+          type: 'string',
+          minLength: 6,
+          maxLength: 6,
+          pattern: '^[0-9]{6}$',
+          description: '6-digit verification code for mobile'
+        },
+        email: {
+          type: 'string',
+          format: 'email',
+          description: 'Email address to verify'
+        }
+      },
+      additionalProperties: false
+    }
   ]
 } as const;
 
