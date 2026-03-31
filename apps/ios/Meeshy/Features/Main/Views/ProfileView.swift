@@ -771,8 +771,10 @@ struct ProfileView: View {
                 let updatedUser = try await UserService.shared.updateAvatar(url: uploadedURL)
                 authManager.currentUser = updatedUser
                 HapticFeedback.success()
+                ToastManager.shared.showSuccess("Avatar mis a jour")
             } catch {
                 HapticFeedback.error()
+                ToastManager.shared.showError("Erreur lors du changement d'avatar")
                 withAnimation { errorMessage = "Erreur lors du changement d'avatar" }
             }
             isUploadingAvatar = false
@@ -789,8 +791,10 @@ struct ProfileView: View {
                 let updatedUser = try await UserService.shared.updateBanner(url: uploadedURL)
                 authManager.currentUser = updatedUser
                 HapticFeedback.success()
+                ToastManager.shared.showSuccess("Banniere mise a jour")
             } catch {
                 HapticFeedback.error()
+                ToastManager.shared.showError("Erreur lors du changement de banniere")
                 withAnimation { errorMessage = "Erreur lors du changement de banniere" }
             }
             isUploadingBanner = false

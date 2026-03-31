@@ -127,13 +127,22 @@ struct MeeshyApp: App {
                     hasCheckedSession = true
                     if authManager.isAuthenticated {
                         await requestPushPermissionIfNeeded()
+                        VoIPPushManager.shared.register()
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
-                    if newPhase == .active {
+                    switch newPhase {
+                    case .active:
                         Task { await pushManager.resetBadge() }
+                        Task { await handleForegroundTransition() }
+                    case .background:
+                        handleBackgroundTransition()
+                    case .inactive:
+                        break
+                    @unknown default:
+                        break
                     }
                 }
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
@@ -142,6 +151,7 @@ struct MeeshyApp: App {
                         Task { await requestPushPermissionIfNeeded() }
                         Task { await NotificationManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
+                        VoIPPushManager.shared.register()
                         Task {
                             do {
                                 let bundle = try E2EEService.shared.generatePublicBundle()
@@ -226,6 +236,25 @@ struct MeeshyApp: App {
                 pushManager.clearPendingNotification()
             }
         }
+    }
+
+    // MARK: - App Lifecycle Transitions
+
+    private func handleForegroundTransition() async {
+        guard authManager.isAuthenticated else { return }
+        await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
+        if !MessageSocketManager.shared.isConnected {
+            MessageSocketManager.shared.connect()
+        }
+        if !SocialSocketManager.shared.isConnected {
+            SocialSocketManager.shared.connect()
+        }
+    }
+
+    private func handleBackgroundTransition() {
+        guard authManager.isAuthenticated else { return }
+        BackgroundTaskManager.shared.scheduleConversationSync()
+        BackgroundTaskManager.shared.scheduleMessagePrefetch()
     }
 
     // MARK: - Guest Session Lifecycle

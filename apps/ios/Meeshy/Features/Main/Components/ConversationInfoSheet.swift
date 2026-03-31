@@ -34,6 +34,7 @@ struct ConversationInfoSheet: View {
     @State private var showShareSheet = false
     @State private var showLeaveConfirmation = false
     @State private var showSecurityVerification = false
+    @State private var showSettings = false
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-info")
 
@@ -124,6 +125,14 @@ struct ConversationInfoSheet: View {
                 safetyNumber: nil
             )
         }
+        .sheet(isPresented: $showSettings) {
+            ConversationSettingsView(
+                conversation: conversation,
+                onUpdated: { _ in
+                    dismiss()
+                }
+            )
+        }
         .withStatusBubble()
     }
 
@@ -159,6 +168,20 @@ struct ConversationInfoSheet: View {
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
+
+            if canManageMembers && !isDirect {
+                Button {
+                    HapticFeedback.light()
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                }
+                .accessibilityLabel("Reglages de la conversation")
+            }
 
             Button {
                 HapticFeedback.light()

@@ -1272,6 +1272,16 @@ export const updateConversationRequestSchema = {
       type: 'string',
       enum: ['direct', 'group', 'public', 'global'],
       description: 'New conversation type'
+    },
+    avatar: {
+      type: 'string',
+      nullable: true,
+      description: 'Conversation avatar URL'
+    },
+    banner: {
+      type: 'string',
+      nullable: true,
+      description: 'Conversation banner URL'
     }
   }
 } as const;

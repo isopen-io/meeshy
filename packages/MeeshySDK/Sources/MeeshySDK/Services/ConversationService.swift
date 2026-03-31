@@ -14,6 +14,7 @@ public protocol ConversationServiceProviding: Sendable {
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation]
     func removeParticipant(conversationId: String, participantId: String) async throws
     func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws
+    func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?) async throws -> APIConversation
 }
 
 public final class ConversationService: ConversationServiceProviding, @unchecked Sendable {
@@ -83,6 +84,33 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             endpoint: "/conversations/\(conversationId)/participants/\(participantId)/role",
             body: RoleBody(role: role)
         )
+    }
+
+    public func update(conversationId: String, title: String? = nil, description: String? = nil,
+                       avatar: String? = nil, banner: String? = nil) async throws -> APIConversation {
+        struct UpdateConversationRequest: Encodable {
+            let title: String?
+            let description: String?
+            let avatar: String?
+            let banner: String?
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                if let title { try container.encode(title, forKey: .title) }
+                if let description { try container.encode(description, forKey: .description) }
+                if let avatar { try container.encode(avatar, forKey: .avatar) }
+                if let banner { try container.encode(banner, forKey: .banner) }
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case title, description, avatar, banner
+            }
+        }
+        let body = UpdateConversationRequest(title: title, description: description,
+                                              avatar: avatar, banner: banner)
+        let response: APIResponse<APIConversation> = try await api.put(
+            endpoint: "/conversations/\(conversationId)", body: body)
+        return response.data
     }
 
     /// Récupère les conversations en commun avec un utilisateur spécifique

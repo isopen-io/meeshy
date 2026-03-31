@@ -942,7 +942,9 @@ export function registerCoreRoutes(
   }, async (request, reply) => {
     try {
       const { id } = request.params;
-      const { title, description } = request.body;
+      const { title, description, avatar, banner } = request.body as {
+        title?: string; description?: string; avatar?: string | null; banner?: string | null;
+      };
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
@@ -969,7 +971,9 @@ export function registerCoreRoutes(
         where: { id },
         data: {
           title,
-          description
+          description,
+          ...(avatar !== undefined && { avatar }),
+          ...(banner !== undefined && { banner }),
         },
         include: {
           participants: {

@@ -245,7 +245,7 @@ extension FeedView {
 
                 if let audioURL {
                     let result = try await uploader.uploadFile(
-                        fileURL: audioURL, mimeType: "audio/mp4", token: token
+                        fileURL: audioURL, mimeType: "audio/mp4", token: token, uploadContext: "post"
                     )
                     uploadedIds.append(result.id)
                     try? FileManager.default.removeItem(at: audioURL)
@@ -254,7 +254,7 @@ extension FeedView {
                 for attachment in attachments where attachment.type != .audio {
                     if let fileURL = mediaFiles[attachment.id] {
                         let result = try await uploader.uploadFile(
-                            fileURL: fileURL, mimeType: attachment.mimeType, token: token
+                            fileURL: fileURL, mimeType: attachment.mimeType, token: token, uploadContext: "post"
                         )
                         uploadedIds.append(result.id)
                         try? FileManager.default.removeItem(at: fileURL)
@@ -278,6 +278,7 @@ extension FeedView {
                     uploadProgress = nil
                     isUploading = false
                     HapticFeedback.success()
+                    ToastManager.shared.showSuccess("Post publie")
                 }
             } catch {
                 await MainActor.run {
@@ -287,6 +288,7 @@ extension FeedView {
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
                     HapticFeedback.error()
+                    ToastManager.shared.showError("Echec de la publication du post")
                 }
             }
         }
@@ -301,7 +303,7 @@ extension FeedView {
 
         do {
             let uploader = TusUploadManager(baseURL: baseURL)
-            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token)
+            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token, uploadContext: "post")
             try? FileManager.default.removeItem(at: audioURL)
 
             await viewModel.createPost(
@@ -312,12 +314,14 @@ extension FeedView {
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.success()
+                ToastManager.shared.showSuccess("Post audio publie")
             }
         } catch {
             try? FileManager.default.removeItem(at: audioURL)
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.error()
+                ToastManager.shared.showError("Echec de la publication du post audio")
             }
         }
     }
@@ -1056,7 +1060,7 @@ struct FeedComposerSheet: View {
                 var uploadedIds: [String] = []
                 for attachment in attachments {
                     if let fileURL = mediaFiles[attachment.id] {
-                        let result = try await uploader.uploadFile(fileURL: fileURL, mimeType: attachment.mimeType, token: token)
+                        let result = try await uploader.uploadFile(fileURL: fileURL, mimeType: attachment.mimeType, token: token, uploadContext: "post")
                         uploadedIds.append(result.id)
                         try? FileManager.default.removeItem(at: fileURL)
                     }
@@ -1070,6 +1074,7 @@ struct FeedComposerSheet: View {
                     uploadProgress = nil
                     onDismiss()
                     HapticFeedback.success()
+                    ToastManager.shared.showSuccess("Post publie")
                 }
             } catch {
                 await MainActor.run {
@@ -1077,6 +1082,7 @@ struct FeedComposerSheet: View {
                     uploadProgress = nil
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     HapticFeedback.error()
+                    ToastManager.shared.showError("Echec de la publication du post")
                 }
             }
         }

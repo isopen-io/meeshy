@@ -144,7 +144,51 @@ final class CallManager: ObservableObject {
         HapticFeedback.medium()
     }
 
-    // MARK: - Incoming Call
+    // MARK: - VoIP Push Incoming Call
+
+    func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool) {
+        let uuid = UUID()
+        let update = CXCallUpdate()
+        update.remoteHandle = CXHandle(type: .generic, value: callerUserId)
+        update.localizedCallerName = callerName
+        update.hasVideo = isVideo
+        update.supportsGrouping = false
+        update.supportsHolding = false
+
+        guard callState == .idle else {
+            // Busy: report + immediately end the secondary call
+            callProvider.reportNewIncomingCall(with: uuid, update: update) { _ in }
+            callProvider.reportCall(with: uuid, endedAt: nil, reason: .unanswered)
+            pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo)
+            showCallWaitingBanner = true
+            Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
+            HapticFeedback.medium()
+            return
+        }
+
+        // Set state BEFORE reporting to CallKit to avoid race
+        currentCallId = callId
+        remoteUserId = callerUserId
+        remoteUsername = callerName
+        isVideoEnabled = isVideo
+        isMuted = false
+        isSpeaker = isVideo
+        callState = .ringing(isOutgoing: false)
+        activeCallUUID = uuid
+
+        callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
+            guard let error else { return }
+            Logger.calls.error("CallKit VoIP report failed: \(error.localizedDescription)")
+            Task { @MainActor [weak self] in
+                self?.endCallInternal(reason: .failed("CallKit error"))
+            }
+        }
+
+        Logger.calls.info("VoIP push incoming call reported: \(callId) from \(callerName)")
+        HapticFeedback.medium()
+    }
+
+    // MARK: - Incoming Call (Socket)
 
     @Published var showCallWaitingBanner = false
 

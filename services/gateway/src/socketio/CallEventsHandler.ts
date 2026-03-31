@@ -13,6 +13,7 @@ import { Socket } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CallService } from '../services/CallService';
 import { NotificationService } from '../services/notifications/NotificationService';
+import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -69,6 +70,7 @@ const ICE_SERVERS_CONFIG = {
 export class CallEventsHandler {
   private callService: CallService;
   private notificationService: NotificationService | null = null;
+  private pushService: PushNotificationService | null = null;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(private prisma: PrismaClient) {
@@ -122,6 +124,11 @@ export class CallEventsHandler {
   setNotificationService(notificationService: NotificationService): void {
     this.notificationService = notificationService;
     logger.info('📢 CallEventsHandler: NotificationService initialized');
+  }
+
+  setPushNotificationService(pushService: PushNotificationService): void {
+    this.pushService = pushService;
+    logger.info('📢 CallEventsHandler: PushNotificationService initialized');
   }
 
   /**
@@ -283,6 +290,52 @@ export class CallEventsHandler {
           notifiedSockets: notifiedSocketsCount,
           roomName
         });
+
+        // Send VoIP push to offline members for incoming call wake-up
+        if (this.pushService) {
+          const initiatorUser = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { displayName: true, username: true }
+          });
+          const callerName = initiatorUser?.displayName || initiatorUser?.username || 'Unknown';
+          const notifiedSocketUserIds = new Set<string>();
+          for (const memberSocket of allSockets) {
+            const sid = getUserId(memberSocket.id);
+            if (sid) notifiedSocketUserIds.add(sid);
+          }
+
+          const offlineUserIds = memberUserIds.filter(
+            uid => uid !== userId && !notifiedSocketUserIds.has(uid)
+          );
+
+          for (const offlineUserId of offlineUserIds) {
+            this.pushService.sendToUser({
+              userId: offlineUserId,
+              payload: {
+                title: `${callerName} vous appelle`,
+                body: data.type === 'video' ? 'Appel video' : 'Appel audio',
+                data: {
+                  type: 'call',
+                  callId: callSession.id,
+                  conversationId: data.conversationId,
+                  callerName,
+                  callerUserId: userId,
+                  isVideo: String(data.type === 'video'),
+                },
+              },
+              types: ['voip'],
+            }).catch(err => {
+              logger.error('Failed to send VoIP push', { userId: offlineUserId, error: err });
+            });
+          }
+
+          if (offlineUserIds.length > 0) {
+            logger.info('📲 VoIP push sent to offline members', {
+              callId: callSession.id,
+              offlineUserIds,
+            });
+          }
+        }
       } catch (error: any) {
         logger.error('Error initiating call', error);
 

@@ -35,6 +35,11 @@ final class MockConversationService: ConversationServiceProviding {
     var listSharedWithResult: Result<[APIConversation], Error> = .success(
         JSONStub.decode("[]")
     )
+    var updateResult: Result<APIConversation, Error> = .success(
+        JSONStub.decode("""
+        {"id":"000000000000000000000001","type":"group","createdAt":"2026-01-01T00:00:00.000Z"}
+        """)
+    )
 
     // MARK: - Call Tracking
 
@@ -79,6 +84,13 @@ final class MockConversationService: ConversationServiceProviding {
     var listSharedWithCallCount = 0
     var lastListSharedWithUserId: String?
     var lastListSharedWithLimit: Int?
+
+    var updateCallCount = 0
+    var lastUpdateConversationId: String?
+    var lastUpdateTitle: String?
+    var lastUpdateDescription: String?
+    var lastUpdateAvatar: String?
+    var lastUpdateBanner: String?
 
     // MARK: - Protocol Conformance
 
@@ -179,6 +191,18 @@ final class MockConversationService: ConversationServiceProviding {
         return try await MainActor.run { try listSharedWithResult.get() }
     }
 
+    nonisolated func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?) async throws -> APIConversation {
+        await MainActor.run {
+            updateCallCount += 1
+            lastUpdateConversationId = conversationId
+            lastUpdateTitle = title
+            lastUpdateDescription = description
+            lastUpdateAvatar = avatar
+            lastUpdateBanner = banner
+        }
+        return try await MainActor.run { try updateResult.get() }
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -212,5 +236,11 @@ final class MockConversationService: ConversationServiceProviding {
         listSharedWithCallCount = 0
         lastListSharedWithUserId = nil
         lastListSharedWithLimit = nil
+        updateCallCount = 0
+        lastUpdateConversationId = nil
+        lastUpdateTitle = nil
+        lastUpdateDescription = nil
+        lastUpdateAvatar = nil
+        lastUpdateBanner = nil
     }
 }
