@@ -66,8 +66,7 @@ public struct StoryComposerView: View {
     // MARK: - Photo / media pickers
 
     @State private var bgPhotoItem: PhotosPickerItem?
-    @State private var fgPhotoItem: PhotosPickerItem?
-    @State private var fgVideoItem: PhotosPickerItem?
+    @State private var fgMediaItem: PhotosPickerItem?
 
     // MARK: - Media editor (triggered by edit button on canvas elements)
 
@@ -259,8 +258,7 @@ public struct StoryComposerView: View {
             publishTask = nil
         }
         .onChange(of: bgPhotoItem) { _, item in loadBackgroundPhoto(from: item) }
-        .onChange(of: fgPhotoItem) { _, item in addForegroundMedia(from: item, type: "image") }
-        .onChange(of: fgVideoItem) { _, item in addForegroundMedia(from: item, type: "video") }
+        .onChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
         .fileImporter(isPresented: $showAudioDocumentPicker, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first {
                 mediaAudioEditorItem = AudioEditorItemWrapper(url: url)
@@ -737,23 +735,16 @@ public struct StoryComposerView: View {
     private var mediaPanel: some View {
         VStack(spacing: 8) {
             HStack(spacing: 10) {
-                PhotosPicker(selection: $fgPhotoItem, matching: .images) {
+                PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
                     HStack(spacing: 6) {
-                        Image(systemName: "photo.badge.plus").font(.system(size: 14, weight: .medium))
-                        Text("Image").font(.system(size: 13, weight: .medium))
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Media")
+                            .font(.system(size: 13, weight: .medium))
                     }
                     .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 11)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
-                }
-
-                PhotosPicker(selection: $fgVideoItem, matching: .videos) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "video.badge.plus").font(.system(size: 14, weight: .medium))
-                        Text("Video").font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 11)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
                     .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
                 }
             }
@@ -1069,6 +1060,12 @@ public struct StoryComposerView: View {
         }
     }
 
+    private func handleForegroundMediaSelection(from item: PhotosPickerItem?) {
+        guard let item else { return }
+        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
+        addForegroundMedia(from: item, type: isVideo ? "video" : "image")
+    }
+
     private func addForegroundMedia(from item: PhotosPickerItem?, type: String) {
         guard let item else { return }
         Task {
@@ -1107,8 +1104,7 @@ public struct StoryComposerView: View {
                 }
             }
             await MainActor.run {
-                fgPhotoItem = nil
-                fgVideoItem = nil
+                fgMediaItem = nil
             }
         }
     }

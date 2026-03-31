@@ -5,8 +5,15 @@ public actor WaveformGenerator {
     public static let shared = WaveformGenerator()
     private init() {}
 
+    private var cache: [String: [Float]] = [:]
+
     /// Extrait ~sampleCount amplitudes normalisées (0.0–1.0) depuis une URL audio locale.
     public func generateSamples(from url: URL, sampleCount: Int = 80) async throws -> [Float] {
+        let cacheKey = "\(url.lastPathComponent)_\(sampleCount)"
+        if let cached = cache[cacheKey] {
+            return cached
+        }
+
         let asset = AVURLAsset(url: url)
         let duration = try await asset.load(.duration)
         guard duration.seconds > 0 else { return [] }
@@ -52,11 +59,13 @@ public actor WaveformGenerator {
         let bucketSize = allSamples.count / sampleCount
         guard bucketSize > 0 else { return Array(allSamples.prefix(sampleCount)) }
 
-        return (0..<sampleCount).map { i in
+        let result = (0..<sampleCount).map { i in
             let start = i * bucketSize
             let end = min(start + bucketSize, allSamples.count)
             let bucket = allSamples[start..<end]
             return bucket.reduce(0, +) / Float(bucket.count)
         }
+        cache[cacheKey] = result
+        return result
     }
 }
