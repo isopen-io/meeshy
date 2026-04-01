@@ -1,14 +1,6 @@
-/**
- * Connection Service
- * Handles Socket.IO connection management
- * - Connection/reconnection logic
- * - Authentication
- * - Conversation join/leave
- * - Connection state management
- */
-
 'use client';
 
+import { isPublicRoute } from '@/utils/route-utils';
 import { io } from 'socket.io-client';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
@@ -21,20 +13,13 @@ import type { User } from '@/types';
 import type {
   TypedSocket,
   ConnectionState,
-  ConnectionStatus,
-  ConnectionDiagnostics
 } from './types';
 
-// Import translations
 import enTranslations from '@/locales/en';
 import frTranslations from '@/locales/fr';
 import ptTranslations from '@/locales/pt';
 import esTranslations from '@/locales/es';
 
-/**
- * ConnectionService
- * Single Responsibility: Manage Socket.IO connection lifecycle
- */
 export class ConnectionService {
   private state: ConnectionState = {
     isConnected: false,
@@ -45,282 +30,66 @@ export class ConnectionService {
 
   private currentUser: User | null = null;
   private currentConversationId: string | null = null;
-
   private readonly maxReconnectAttempts = 5;
   private reconnectTimeout: NodeJS.Timeout | null = null;
-  private reconnectDebounceTimeout: NodeJS.Timeout | null = null;
-  private authSafetyTimeout: NodeJS.Timeout | null = null;
-
-  // Stored listener callbacks for reconnection
-  private listenerCallbacks: {
-    onAuthenticated: () => void;
-    onDisconnected: (reason: string) => void;
-    onError: (error: Error) => void;
-  } | null = null;
-
-  // Callback for auto-join after connection
-  private autoJoinCallback: (() => void) | null = null;
   private isAppUpdating = false;
 
-  /**
-   * Get translation helper
-   */
+  private listenerCallbacks: {
+    onAuthenticated?: (user: User) => void;
+    onDisconnected?: (reason: string) => void;
+    onError?: (error: any) => void;
+  } | null = null;
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('sw-update-available', () => {
+        this.isAppUpdating = true;
+        if (this.state.socket) this.state.socket.disconnect();
+      });
+    }
+  }
+
   private t(key: string): string {
-    try {
-      const userLang = typeof window !== 'undefined'
-        ? (localStorage.getItem('meeshy-i18n-language') || 'en')
-        : 'en';
-
-      const allTranslations =
-        userLang === 'fr' ? frTranslations :
-        userLang === 'pt' ? ptTranslations :
-        userLang === 'es' ? esTranslations :
-        enTranslations;
-
-      const keys = key.split('.');
-      let value: any = allTranslations;
-
-      for (const k of keys) {
-        value = value?.[k];
-      }
-
-      // Try double namespace nesting if not found
-      if (!value && keys.length >= 2) {
-        const namespace = keys[0];
-        value = (allTranslations as any)?.[namespace]?.[namespace];
-        for (let i = 1; i < keys.length; i++) {
-          value = value?.[keys[i]];
-        }
-      }
-
-      return value || key;
-    } catch (error) {
-      console.error('[ConnectionService] Translation error:', error);
-      return key;
+    const lang = typeof window !== 'undefined' ? localStorage.getItem('meeshy-language') || 'fr' : 'fr';
+    const bundle: any = lang === 'en' ? enTranslations : lang === 'pt' ? ptTranslations : lang === 'es' ? esTranslations : frTranslations;
+    const keys = key.split('.');
+    let value = bundle;
+    for (const k of keys) {
+      value = value?.[k];
     }
+    return value || key;
   }
 
-  /**
-   * Initialize connection
-   */
-  initializeConnection(): void {
-    // Server-side check
-    if (typeof window === 'undefined') {
-      logger.warn('[ConnectionService]', 'Server-side execution, skipping connection');
-      return;
-    }
+  initializeConnection(): TypedSocket | null {
+    if (this.state.socket) return this.state.socket;
+    const token = authManager.getAuthToken();
+    const anonymousSession = authManager.getAnonymousSession();
+    const sessionToken = anonymousSession?.token;
+    if (!token && !sessionToken) return null;
 
-    // Public page check
-    const currentPath = window.location.pathname;
-    const publicPaths = ['/about', '/contact', '/privacy', '/terms', '/partners'];
-    if (publicPaths.includes(currentPath)) {
-      logger.debug('[ConnectionService]', 'Public page detected, skipping connection', { path: currentPath });
-      return;
-    }
+    const socketUrl = getWebSocketUrl();
+    const socket = io(socketUrl, {
+      auth: { token: token || sessionToken },
+      transports: ['websocket', 'polling'],
+      autoConnect: false,
+      reconnection: true,
+      reconnectionAttempts: this.maxReconnectAttempts,
+      timeout: 20000
+    }) as unknown as TypedSocket;
 
-    // Prevent multiple connections
-    if (this.state.isConnecting || (this.state.socket && (this.state.isConnected || this.state.socket.connected))) {
-      return;
-    }
-
-    // Check authentication
-    const hasAuthToken = !!authManager.getAuthToken();
-    const hasSessionToken = !!authManager.getAnonymousSession()?.token;
-
-    if (!hasAuthToken && !hasSessionToken) {
-      this.state.isConnecting = false;
-      return;
-    }
-
-    // Clean up existing socket if needed
-    if (this.state.socket) {
-      const socketState = {
-        connected: this.state.socket.connected,
-        disconnected: this.state.socket.disconnected,
-        connecting: !this.state.socket.connected && !this.state.socket.disconnected
-      };
-
-      if (socketState.connected || socketState.disconnected) {
-        try {
-          this.state.socket.removeAllListeners();
-          if (socketState.connected) {
-            this.state.socket.disconnect();
-          }
-          this.state.socket = null;
-        } catch (e) {
-          console.warn('[ConnectionService] Cleanup error:', e);
-        }
-      } else {
-        return; // Reuse connecting socket
-      }
-    }
-
-    this.state.isConnecting = true;
-
-    // Get authentication tokens
-    const authToken = authManager.getAuthToken();
-    const sessionToken = authManager.getAnonymousSession()?.token;
-
-    if (!authToken && !sessionToken) {
-      this.state.isConnecting = false;
-      return;
-    }
-
-    const serverUrl = getWebSocketUrl();
-
-    // Prepare auth headers
-    const extraHeaders: Record<string, string> = {};
-    if (authToken) {
-      extraHeaders['Authorization'] = `Bearer ${authToken}`;
-    }
-    if (sessionToken) {
-      extraHeaders['x-session-token'] = sessionToken;
-    }
-
-    try {
-      // Prepare auth data
-      const authData: any = {};
-      if (authToken) {
-        authData.authToken = authToken;
-        authData.tokenType = 'jwt';
-      }
-      if (sessionToken) {
-        authData.sessionToken = sessionToken;
-        authData.sessionType = 'anonymous';
-      }
-
-      // Create socket with autoConnect: false
-      this.state.socket = io(serverUrl, {
-        auth: authData,
-        extraHeaders,
-        transports: ['websocket', 'polling'],
-        reconnection: true,
-        reconnectionAttempts: this.maxReconnectAttempts,
-        reconnectionDelay: 1000,
-        timeout: 10000,
-        path: '/socket.io/',
-        forceNew: false,
-        autoConnect: false
-      }) as TypedSocket;
-
-      this.state.isConnecting = false;
-
-    } catch (error) {
-      console.error('[ConnectionService] Socket creation error:', error);
-      this.state.isConnecting = false;
-      this.scheduleReconnect();
-    }
+    this.state.socket = socket;
+    return socket;
   }
 
-  /**
-   * Setup connection event listeners
-   * Must be called BEFORE connecting
-   */
-  setupConnectionListeners(
-    onAuthenticated: () => void,
-    onDisconnected: (reason: string) => void,
-    onError: (error: Error) => void
-  ): void {
-    if (!this.state.socket) return;
-
-    this.listenerCallbacks = { onAuthenticated, onDisconnected, onError };
-
-    // Connect event
-    this.state.socket.on('connect', () => {
-      this.state.isConnecting = false;
-      this.state.reconnectAttempts = 0;
-
-      // Safety timeout if AUTHENTICATED doesn't arrive (15s to allow slow DB queries)
-      if (this.authSafetyTimeout) clearTimeout(this.authSafetyTimeout);
-      this.authSafetyTimeout = setTimeout(() => {
-        if (!this.state.isConnected && this.state.socket?.connected) {
-          this.state.socket?.disconnect();
-        }
-        this.authSafetyTimeout = null;
-      }, 15000);
-    });
-
-    // Authenticated event
-    this.state.socket.on(SERVER_EVENTS.AUTHENTICATED, (response: any) => {
-      if (response?.success) {
-        this.state.isConnected = true;
-        if (this.authSafetyTimeout) {
-          clearTimeout(this.authSafetyTimeout);
-          this.authSafetyTimeout = null;
-        }
-
-        // WhatsApp style: Vérifier la version du serveur
-        const serverVersion = response.version;
-        const clientVersion = process.env.NEXT_PUBLIC_APP_VERSION || '1.1.0';
-
-        if (serverVersion && serverVersion !== clientVersion) {
-          console.log(`[SW] Version mismatch detected! Server: ${serverVersion}, Client: ${clientVersion}`);
-          // Déclencher le check de mise à jour du Service Worker
-          triggerManualUpdateCheck().catch(console.error);
-        }
-
-        onAuthenticated();
-
-        // Auto-join conversation if callback provided
-        if (this.autoJoinCallback) {
-          this.autoJoinCallback();
-        }
-      } else {
-        this.state.isConnected = false;
-        const errorMessage = response?.error || 'Unknown error';
-        this.handleAuthenticationFailure(errorMessage);
-      }
-    });
-
-    // Disconnect event
-    this.state.socket.on('disconnect', (reason) => {
-      this.state.isConnected = false;
-      this.state.isConnecting = false;
-
-      // Client-initiated disconnect or app updating — no reconnect
-      if (reason === 'io client disconnect' || this.isAppUpdating) return;
-
-      onDisconnected(reason);
-
-      // Single reconnect path with delay based on reason
-      const delay = (reason === 'transport close' || reason === 'transport error') ? 3000 : 2000;
-      setTimeout(() => {
-        if (!this.state.isConnected && !this.state.isConnecting && !this.isAppUpdating) {
-          this.reconnect();
-        }
-      }, delay);
-    });
-
-    // Connect error
-    this.state.socket.on('connect_error', (error) => {
-      console.error('[ConnectionService] Connect error:', error);
-      this.state.isConnected = false;
-      this.state.isConnecting = false;
-      onError(error);
-      this.scheduleReconnect();
-    });
-
-    // Error event
-    this.state.socket.on(SERVER_EVENTS.ERROR, (error) => {
-      console.error('[ConnectionService] Server error:', error);
-      const errorMessage = error.message || 'Server error';
-      this.handleAuthenticationFailure(errorMessage);
-    });
-  }
-
-  /**
-   * Connect the socket
-   * Must be called AFTER setupConnectionListeners
-   */
   connect(): void {
-    if (this.state.socket && !this.state.socket.connected) {
-      this.state.socket.connect();
+    if (this.isAppUpdating) return;
+    const socket = this.state.socket || this.initializeConnection();
+    if (socket && !socket.connected && !this.state.isConnecting) {
+      this.state.isConnecting = true;
+      socket.connect();
     }
   }
 
-  /**
-   * Disconnect the socket
-   */
   disconnect(): void {
     if (this.state.socket) {
       this.state.socket.disconnect();
@@ -329,349 +98,67 @@ export class ConnectionService {
     }
   }
 
-  /**
-   * Reconnect the socket
-   */
-  reconnect(): void {
-    // Debounce: éviter les reconnexions en rafale
-    if (this.reconnectDebounceTimeout) return;
+  setupConnectionListeners(onAuthenticated?: (user: User) => void, onDisconnected?: (reason: string) => void, onError?: (error: any) => void): void {
+    const socket = this.state.socket;
+    if (!socket) return;
 
-    this.reconnectDebounceTimeout = setTimeout(() => {
-      this.reconnectDebounceTimeout = null;
-    }, 2000);
+    this.listenerCallbacks = { onAuthenticated, onDisconnected, onError };
 
-    if (this.state.isConnecting) return;
+    socket.on('connect', () => {
+      this.state.isConnected = true;
+      this.state.isConnecting = false;
+      this.state.reconnectAttempts = 0;
+    });
 
-    const actuallyConnected = this.state.socket?.connected === true && this.state.isConnected;
-    if (this.state.socket && actuallyConnected) return;
+    socket.on('disconnect', (reason) => {
+      this.state.isConnected = false;
+      this.state.isConnecting = false;
+      if (onDisconnected) onDisconnected(reason);
+    });
 
-    // Clean up existing socket
-    if (this.state.socket) {
-      try {
-        this.state.socket.removeAllListeners();
-        this.state.socket.disconnect();
-      } catch (e) {
-        // Ignore
-      }
-      this.state.socket = null;
-    }
+    socket.on('connect_error', (error) => {
+      this.state.isConnecting = false;
+      if (onError) onError(error);
+      this.handleConnectionError(error);
+    });
 
-    this.state.isConnected = false;
-    this.state.isConnecting = false;
-    this.state.reconnectAttempts = 0;
+    socket.on(SERVER_EVENTS.AUTHENTICATED, (data: any) => {
+      this.currentUser = data.user;
+      if (onAuthenticated) onAuthenticated(data.user);
+    });
 
-    const hasAuthToken = typeof window !== 'undefined' && !!authManager.getAuthToken();
-    const hasSessionToken = typeof window !== 'undefined' && !!authManager.getAnonymousSession()?.token;
+    socket.on(SERVER_EVENTS.ERROR, (error: any) => {
+      this.handleConnectionError(error);
+    });
+  }
 
-    if (this.currentUser || hasAuthToken || hasSessionToken) {
-      this.initializeConnection();
-      // Re-attacher les listeners et connecter
-      if (this.listenerCallbacks && this.state.socket) {
-        this.setupConnectionListeners(
-          this.listenerCallbacks.onAuthenticated,
-          this.listenerCallbacks.onDisconnected,
-          this.listenerCallbacks.onError
-        );
-        this.connect();
-      }
-    } else {
-      toast.warning('Please reconnect to use real-time chat');
+  private handleConnectionError(error: any): void {
+    const errorMessage = error?.message || error?.error || 'Connection error';
+    if (errorMessage.includes('auth') || errorMessage.includes('token') || errorMessage.includes('session')) {
+      this.handleAuthenticationFailure(errorMessage);
     }
   }
 
-  /**
-   * Schedule reconnection attempt
-   */
-  private scheduleReconnect(): void {
-    if (this.isAppUpdating || this.state.reconnectAttempts >= this.maxReconnectAttempts) {
-      return;
-    }
-
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-    }
-
-    const delay = Math.pow(2, this.state.reconnectAttempts) * 1000;
-    this.state.reconnectAttempts++;
-
-    this.reconnectTimeout = setTimeout(() => {
-      if (!this.state.isConnected) {
-        this.initializeConnection();
-        if (this.listenerCallbacks && this.state.socket) {
-          this.setupConnectionListeners(
-            this.listenerCallbacks.onAuthenticated,
-            this.listenerCallbacks.onDisconnected,
-            this.listenerCallbacks.onError
-          );
-          this.connect();
-        }
-      }
-    }, delay);
-  }
-
-  /**
-   * Signal that an app update is in progress — prevents logout during update cycle
-   */
-  setAppUpdating(updating: boolean): void {
-    this.isAppUpdating = updating;
-  }
-
-  /**
-   * Gracefully disconnect for app update (client-initiated, no reconnect)
-   */
-  disconnectForUpdate(): void {
-    this.isAppUpdating = true;
-    if (this.state.socket) {
-      this.state.socket.disconnect();
-      this.state.socket = null;
-    }
-    this.state.isConnected = false;
-    this.state.isConnecting = false;
-  }
-
-  /**
-   * Handle authentication failure
-   */
   private async handleAuthenticationFailure(errorMessage: string): Promise<void> {
-    if (this.isAppUpdating) {
-      console.log('[ConnectionService] App update in progress, skipping auth failure handling');
-      return;
-    }
+    if (this.isAppUpdating) return;
+    const isAuthRequiredError = errorMessage.includes('Authentification requise') || errorMessage.includes('token');
+    if (!isAuthRequiredError) return;
 
-    const isAuthRequiredError = errorMessage.includes('Authentification requise') ||
-                                errorMessage.includes('Bearer token') ||
-                                errorMessage.includes('x-session-token');
-
-    if (!isAuthRequiredError) {
-      toast.error(errorMessage);
-      return;
-    }
-
-    // Try reconnection
-    const hasAuthToken = !!authManager.getAuthToken();
-    const hasSessionToken = !!authManager.getAnonymousSession()?.token;
-
-    if (hasAuthToken || hasSessionToken) {
-      try {
-        if (this.state.socket) {
-          this.state.socket.disconnect();
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 500));
-        this.initializeConnection();
-        if (this.listenerCallbacks && this.state.socket) {
-          this.setupConnectionListeners(
-            this.listenerCallbacks.onAuthenticated,
-            this.listenerCallbacks.onDisconnected,
-            this.listenerCallbacks.onError
-          );
-          this.connect();
-        }
-
-        for (let i = 0; i < 6; i++) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          if (this.state.isConnected) {
-            return; // Success
-          }
-        }
-      } catch (error) {
-        // Silence error
-      }
-    }
-
-    // Logout and redirect
-    await (authManager as any).logout();
-
-    const message = this.t('websocket.sessionExpired') || 'Your session has expired, please reconnect';
-    toast.error(message);
-
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
+    authManager.clearAllSessions();
     if (typeof window !== 'undefined') {
-      window.location.href = '/login';
-    }
-  }
-
-  /**
-   * Join conversation
-   */
-  joinConversation(conversationOrId: any): void {
-    if (!this.state.socket || !this.state.socket.connected) {
-      // Memorize for auto-join after connection
-      try {
-        let conversationId: string;
-        if (typeof conversationOrId === 'string') {
-          conversationId = conversationOrId;
-        } else {
-          conversationId = getConversationApiId(conversationOrId);
-        }
-        this.currentConversationId = conversationId;
-      } catch (error) {
-        // Ignore
+      const pathname = window.location.pathname;
+      if (pathname !== '/login' && !isPublicRoute(pathname)) {
+        window.location.href = '/login';
       }
-      return;
-    }
-
-    try {
-      let conversationId: string;
-
-      if (typeof conversationOrId === 'string') {
-        const idType = getConversationIdType(conversationOrId);
-        if (idType === 'objectId' || idType === 'identifier') {
-          conversationId = conversationOrId;
-        } else {
-          throw new Error(`Invalid conversation identifier: ${conversationOrId}`);
-        }
-      } else {
-        conversationId = getConversationApiId(conversationOrId);
-      }
-
-      this.currentConversationId = conversationId;
-      this.state.socket.emit(CLIENT_EVENTS.CONVERSATION_JOIN, { conversationId });
-    } catch (error) {
-      console.error('[ConnectionService] Error joining conversation:', error);
     }
   }
 
-  /**
-   * Leave conversation
-   */
-  leaveConversation(conversationOrId: any): void {
-    if (!this.state.socket) {
-      return;
-    }
-
-    try {
-      let conversationId: string;
-
-      if (typeof conversationOrId === 'string') {
-        const idType = getConversationIdType(conversationOrId);
-        if (idType === 'objectId' || idType === 'identifier') {
-          conversationId = conversationOrId;
-        } else {
-          throw new Error(`Invalid conversation identifier: ${conversationOrId}`);
-        }
-      } else {
-        conversationId = getConversationApiId(conversationOrId);
-      }
-
-      if (this.currentConversationId === conversationId) {
-        this.currentConversationId = null;
-      }
-
-      this.state.socket.emit(CLIENT_EVENTS.CONVERSATION_LEAVE, { conversationId });
-    } catch (error) {
-      console.error('[ConnectionService] Error leaving conversation:', error);
-    }
-  }
-
-  /**
-   * Set current user
-   */
-  setCurrentUser(user: User): void {
-    const userChanged = this.currentUser && this.currentUser.id !== user.id;
-
-    if (userChanged) {
-      logger.debug('[ConnectionService]', 'User changed, forcing reconnection', {
-        oldUser: this.currentUser?.username,
-        newUser: user.username
-      });
-      this.cleanup();
-    }
-
-    this.currentUser = user;
-  }
-
-  /**
-   * Set auto-join callback
-   */
-  setAutoJoinCallback(callback: () => void): void {
-    this.autoJoinCallback = callback;
-  }
-
-  /**
-   * Update current conversation ID (called after CONVERSATION_JOINED)
-   */
-  updateCurrentConversationId(conversationId: string): void {
-    this.currentConversationId = conversationId;
-  }
-
-  /**
-   * Get current conversation ID
-   */
-  getCurrentConversationId(): string | null {
-    return this.currentConversationId;
-  }
-
-  /**
-   * Get socket instance
-   */
-  getSocket(): TypedSocket | null {
-    return this.state.socket;
-  }
-
-  /**
-   * Get connection status
-   */
-  getConnectionStatus(): ConnectionStatus {
-    const socketConnected = this.state.socket?.connected === true;
-    const actuallyConnected = this.state.isConnected && socketConnected;
-
-    // Sync if desynchronized
-    if (this.state.isConnected !== socketConnected) {
-      this.state.isConnected = socketConnected;
-    }
-
-    return {
-      isConnected: actuallyConnected,
-      hasSocket: !!this.state.socket,
-      currentUser: this.currentUser?.username || 'Not defined'
-    };
-  }
-
-  /**
-   * Get connection diagnostics
-   */
-  getConnectionDiagnostics(): Omit<ConnectionDiagnostics, 'listenersCount'> {
-    const token = typeof window !== 'undefined' ? authManager.getAuthToken() : null;
-    const url = typeof window !== 'undefined' ? getWebSocketUrl() : 'N/A (server-side)';
-
-    return {
-      isConnected: this.state.isConnected,
-      hasSocket: !!this.state.socket,
-      hasToken: !!token,
-      url: url,
-      socketId: this.state.socket?.id,
-      transport: this.state.socket?.io.engine?.transport.name,
-      reconnectAttempts: this.state.reconnectAttempts,
-      currentUser: this.currentUser?.username
-    };
-  }
-
-  /**
-   * Cleanup
-   */
+  getSocket(): TypedSocket | null { return this.state.socket; }
   cleanup(): void {
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-    if (this.reconnectDebounceTimeout) {
-      clearTimeout(this.reconnectDebounceTimeout);
-      this.reconnectDebounceTimeout = null;
-    }
-    if (this.authSafetyTimeout) {
-      clearTimeout(this.authSafetyTimeout);
-      this.authSafetyTimeout = null;
-    }
-
-    if (this.state.socket) {
-      this.state.socket.disconnect();
-      this.state.socket = null;
-    }
-
-    this.state.isConnected = false;
+    this.disconnect();
+    this.state.socket = null;
     this.currentUser = null;
-    this.currentConversationId = null;
   }
 }
+
+export const meeshySocketIOService = new ConnectionService();

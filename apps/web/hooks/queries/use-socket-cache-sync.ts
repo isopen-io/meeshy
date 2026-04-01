@@ -134,8 +134,11 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // senderId is now always a User ID (resolved in message converters)
       const currentUser = useAuthStore.getState().user;
       if (currentUser && message.senderId !== currentUser.id && /^[a-f\d]{24}$/i.test(message.conversationId)) {
-        apiService.post(`/conversations/${message.conversationId}/mark-as-received`)
-          .catch(() => {}); // Non-critical, fire-and-forget
+        // Prevent background API calls if on login page to avoid infinite reload loops
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          apiService.post(`/conversations/${message.conversationId}/mark-as-received`)
+            .catch(() => {}); // Non-critical, fire-and-forget
+        }
       }
     };
 
