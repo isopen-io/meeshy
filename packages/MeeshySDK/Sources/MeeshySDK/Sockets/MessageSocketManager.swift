@@ -596,6 +596,21 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         }
     }
 
+    // MARK: - JWT Helpers
+
+    private static func isJWTExpired(_ token: String) -> Bool {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return true }
+        var base64 = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while base64.count % 4 != 0 { base64.append("=") }
+        guard let data = Data(base64Encoded: base64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let exp = json["exp"] as? TimeInterval else { return true }
+        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < Date()
+    }
+
     // MARK: - Connection
 
     public func connect() {
@@ -603,6 +618,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         guard let token = APIClient.shared.authToken else {
             Logger.socket.warning("No auth token, skipping connect")
+            return
+        }
+
+        let tokenExpired = Self.isJWTExpired(token)
+        if tokenExpired {
+            Logger.socket.warning("MessageSocket: JWT expired, triggering refresh instead of connecting")
+            Task { @MainActor in
+                AuthManager.shared.handleUnauthorized()
+            }
             return
         }
 
@@ -848,8 +872,17 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
         }
 
-        socket.on(clientEvent: .error) { _, args in
-            Logger.socket.error("MessageSocket error: \(args)")
+        socket.on(clientEvent: .error) { [weak self] data, _ in
+            Logger.socket.error("MessageSocket error: \(data)")
+            let errorStr = data.compactMap { "\($0)" }.joined(separator: " ")
+            if errorStr.contains("token") || errorStr.contains("auth") || errorStr.contains("JWT") || errorStr.contains("expired") || errorStr.contains("401") {
+                Logger.socket.warning("MessageSocket auth error — stopping reconnection")
+                self?.manager?.reconnects = false
+                self?.disconnect()
+                Task { @MainActor in
+                    AuthManager.shared.handleUnauthorized()
+                }
+            }
         }
 
         // --- Message events ---

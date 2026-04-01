@@ -5,6 +5,7 @@ import { io } from 'socket.io-client';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
 import { getWebSocketUrl } from '@/lib/config';
+import { isJWTExpired } from '@/utils/auth';
 import { authManager } from '../auth-manager.service';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { logConversationIdDebug, getConversationIdType, getConversationApiId } from '@/utils/conversation-id-utils';
@@ -69,6 +70,12 @@ export class ConnectionService {
     const anonymousSession = authManager.getAnonymousSession();
     const sessionToken = anonymousSession?.token;
     if (!token && !sessionToken) return null;
+
+    if (token && isJWTExpired(token)) {
+      logger.warn('[Socket] JWT expired, skipping connection — will reconnect after refresh');
+      this.handleAuthenticationFailure('token expired');
+      return null;
+    }
 
     const socketUrl = getWebSocketUrl();
     const socket = io(socketUrl, {
@@ -152,7 +159,10 @@ export class ConnectionService {
 
   private handleConnectionError(error: any): void {
     const errorMessage = error?.message || error?.error || 'Connection error';
-    if (errorMessage.includes('auth') || errorMessage.includes('token') || errorMessage.includes('session')) {
+    if (errorMessage.includes('auth') || errorMessage.includes('token') || errorMessage.includes('session') || errorMessage.includes('JWT') || errorMessage.includes('expired')) {
+      if (this.state.socket) {
+        this.state.socket.io.opts.reconnection = false;
+      }
       this.handleAuthenticationFailure(errorMessage);
     }
   }

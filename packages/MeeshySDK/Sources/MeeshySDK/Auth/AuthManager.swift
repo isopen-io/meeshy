@@ -89,6 +89,24 @@ public final class AuthManager: ObservableObject, AuthManaging {
         }
     }
 
+    // MARK: - Token Expiration Check
+
+    /// Returns true if the stored JWT is expired (with 30s margin).
+    /// Decodes the payload inline to read `exp`.
+    public var isCurrentTokenExpired: Bool {
+        guard let token = authToken else { return true }
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return true }
+        var base64 = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while base64.count % 4 != 0 { base64.append("=") }
+        guard let data = Data(base64Encoded: base64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let exp = json["exp"] as? TimeInterval else { return true }
+        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < Date()
+    }
+
     // MARK: - Login
 
     public func login(username: String, password: String) async {

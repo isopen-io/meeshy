@@ -1,6 +1,7 @@
 import { isPublicRoute } from '@/utils/route-utils';
 import { buildApiUrl } from '@/lib/config';
 import { getGeolocationHeaders } from '@/lib/geolocation';
+import { isJWTExpired } from '@/utils/auth';
 import { authManager } from './auth-manager.service';
 import { authService } from './auth.service';
 import type { ApiResponse, ApiError } from '@meeshy/shared/types';
@@ -171,7 +172,17 @@ class ApiService {
   ): Promise<ApiResponse<T>> {
     const url = buildApiUrl(endpoint);
     const requestTimeout = options.timeout || (this.isSlowConnection() ? TIMEOUT_SLOW_CONNECTION : this.config.timeout);
-    const token = authManager.getAuthToken();
+    let token = authManager.getAuthToken();
+
+    if (token && isJWTExpired(token) && !isRetry && !endpoint.includes('/auth/')) {
+      const refreshed = await this.refreshAuthToken();
+      if (refreshed) {
+        token = authManager.getAuthToken();
+      } else {
+        throw new ApiServiceError('Session expirée, veuillez vous reconnecter', 401, 'TOKEN_EXPIRED');
+      }
+    }
+
     const shouldExcludeContentType = ApiService.METHODS_WITH_OPTIONAL_BODY.has(options.method || '') && !options.body;
 
     const headers = this.buildHeaders(
