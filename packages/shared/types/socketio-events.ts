@@ -121,6 +121,10 @@ export const SERVER_EVENTS = {
   READ_STATUS_UPDATED: 'read-status:updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
+  CONVERSATION_UPDATED: 'conversation:updated',
+  CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
+  CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
+  CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   /**
    * UNE seule traduction quand une seule langue est demandée
