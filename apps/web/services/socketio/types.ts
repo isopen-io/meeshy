@@ -62,27 +62,19 @@ export interface ConnectionState {
 }
 
 /**
- * Connection status information
+ * Connection status — simple string union returned by ConnectionService
  */
-export interface ConnectionStatus {
-  isConnected: boolean;
-  hasSocket: boolean;
-  currentUser: string;
-}
+export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
 
 /**
  * Connection diagnostics
  */
 export interface ConnectionDiagnostics {
-  isConnected: boolean;
-  hasSocket: boolean;
-  hasToken: boolean;
-  url: string;
-  socketId?: string;
-  transport?: string;
+  status: ConnectionStatus;
   reconnectAttempts: number;
-  currentUser?: string;
-  listenersCount: {
+  transport: string;
+  socketId: string | null;
+  listenersCount?: {
     message: number;
     edit: number;
     delete: number;

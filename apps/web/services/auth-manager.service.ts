@@ -126,6 +126,20 @@ class AuthManager {
     }
   }
 
+  getSessionToken(): string | null {
+    return this.getAnonymousSession()?.token ?? null;
+  }
+
+  decodeJWT(token: string): Record<string, unknown> | null {
+    try {
+      const payload = token.split('.')[1];
+      if (!payload) return null;
+      return JSON.parse(atob(payload));
+    } catch {
+      return null;
+    }
+  }
+
   // ==================== CLEANUP ====================
 
   clearAllSessions(): void {
@@ -199,7 +213,7 @@ class AuthManager {
 
     const sessionData = {
       role: user.role,
-      canAccessAdmin: user.canAccessAdmin || ['ADMIN', 'SUPER_ADMIN', 'MODERATOR'].includes(user.role),
+      canAccessAdmin: (user as any).canAccessAdmin || ['ADMIN', 'SUPER_ADMIN', 'MODERATOR'].includes(user.role),
       userId: user.id
     };
 

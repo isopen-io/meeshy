@@ -25,6 +25,7 @@ import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encr
 import type { AudioTranslationReadyEventData } from '@meeshy/shared/types/socketio-events';
 
 import { SocketIOOrchestrator } from './socketio/orchestrator.service';
+import type { ConnectionStatus } from './socketio/types';
 
 class MeeshySocketIOService {
   private static instance: MeeshySocketIOService | null = null;
@@ -333,11 +334,7 @@ class MeeshySocketIOService {
   /**
    * Obtient le statut de connexion
    */
-  public getConnectionStatus(): {
-    isConnected: boolean;
-    hasSocket: boolean;
-    currentUser: string;
-  } {
+  public getConnectionStatus(): ConnectionStatus {
     return this.orchestrator.getConnectionStatus();
   }
 
