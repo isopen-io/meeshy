@@ -44,6 +44,7 @@ export type ToneProfile = {
     emotional?: Record<string, TraitValue>;
   };
   dominantEmotions?: string[];
+  _lastAnalyzedMessageId?: string;
 };
 
 export type ControlledUser = {

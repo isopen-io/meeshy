@@ -24,13 +24,16 @@ export async function runDailySnapshot(prisma: PrismaClient): Promise<number> {
         traitSocialStyleScore: true,
         traitAssertivenessScore: true,
         traitPositivityScore: true,
+        sentimentScore: true,
+        engagementLevel: true,
       },
     });
 
     const participantSnapshots = roles.map((r: Record<string, any>) => ({
       userId: r.userId,
       displayName: r.user?.displayName ?? r.userId,
-      sentimentScore: null,
+      sentimentScore: r.sentimentScore ?? null,
+      engagementLevel: r.engagementLevel ?? null,
       positivityScore: r.traitPositivityScore ?? null,
       socialStyleScore: r.traitSocialStyleScore ?? null,
       assertivenessScore: r.traitAssertivenessScore ?? null,

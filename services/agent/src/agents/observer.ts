@@ -195,7 +195,7 @@ export function createObserverNode(llm: LlmProvider) {
             continue;
           }
 
-          const lastAnalyzedId = (existing as any)?._lastAnalyzedMessageId as string | undefined;
+          const lastAnalyzedId = existing?._lastAnalyzedMessageId;
           const newMessages = lastAnalyzedId
             ? state.messages.filter((m) => m.senderId === userId && m.id > lastAnalyzedId)
             : state.messages.filter((m) => m.senderId === userId);
@@ -248,7 +248,7 @@ export function createObserverNode(llm: LlmProvider) {
             traits: Object.keys(mergedTraits).length > 0 ? mergedTraits : undefined,
             dominantEmotions: incomingDominantEmotions ?? existing?.dominantEmotions,
             _lastAnalyzedMessageId: latestMessageId,
-          } as ToneProfile & { _lastAnalyzedMessageId?: string };
+          };
         }
       }
 

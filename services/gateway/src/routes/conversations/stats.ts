@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { canAccessConversation } from './utils/access-control';
@@ -10,7 +10,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 export function registerStatsRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  requiredAuth: any
+  requiredAuth: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
 ) {
   fastify.get<{ Params: { id: string } }>('/conversations/:id/stats', {
     schema: {
@@ -60,7 +60,7 @@ export function registerStatsRoutes(
       const participantStats = (stats.participantStats ?? {}) as Record<string, unknown>;
       const participantIds = Object.keys(participantStats);
 
-      let enrichedParticipants: Record<string, unknown> = {};
+      let enrichedParticipants: Array<Record<string, unknown>> = [];
       if (participantIds.length > 0) {
         const users = await prisma.user.findMany({
           where: { id: { in: participantIds } },
@@ -70,12 +70,13 @@ export function registerStatsRoutes(
 
         for (const [userId, stat] of Object.entries(participantStats)) {
           const user = userMap.get(userId);
-          enrichedParticipants[userId] = {
+          enrichedParticipants.push({
+            userId,
             ...(stat as Record<string, unknown>),
             username: user?.username ?? null,
             displayName: user?.displayName ?? null,
             avatar: user?.avatar ?? null,
-          };
+          });
         }
       }
 

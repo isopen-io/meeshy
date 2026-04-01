@@ -771,7 +771,9 @@ struct ConversationDashboardView: View {
             agentAnalysis = try await ConversationAnalysisService.shared.fetchAnalysis(
                 conversationId: conversationId
             )
-        } catch {}
+        } catch {
+            print("[ConversationDashboard] Analysis load failed: \(error)")
+        }
     }
 
     private func loadStats() async {
@@ -780,7 +782,9 @@ struct ConversationDashboardView: View {
             serverStats = try await ConversationAnalysisService.shared.fetchStats(
                 conversationId: conversationId
             )
-        } catch {}
+        } catch {
+            print("[ConversationDashboard] Stats load failed: \(error)")
+        }
     }
 
     // MARK: - Computed Stats

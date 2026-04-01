@@ -38,7 +38,7 @@ function todayKey(): string {
 }
 
 function currentHour(): string {
-  return String(new Date().getHours());
+  return String(new Date().getUTCHours());
 }
 
 function pruneDailyActivity(daily: Record<string, number>): Record<string, number> {
@@ -81,6 +81,8 @@ export class ConversationMessageStatsService {
     this.cache.set(conversationId, { data, expiresAt: Date.now() + this.ttlMs });
   }
 
+  // NOTE: JSON fields (participantStats, dailyActivity, etc.) use read-modify-write
+  // which is not atomic under concurrent writes. Periodic recompute() corrects drift.
   async onNewMessage(
     prisma: PrismaClient,
     conversationId: string,
@@ -400,7 +402,7 @@ export class ConversationMessageStatsService {
       const day = msg.createdAt.toISOString().slice(0, 10);
       dailyActivity[day] = (dailyActivity[day] || 0) + 1;
 
-      const hour = String(msg.createdAt.getHours());
+      const hour = String(msg.createdAt.getUTCHours());
       hourlyDistribution[hour] = (hourlyDistribution[hour] || 0) + 1;
 
       if (msg.originalLanguage) {
