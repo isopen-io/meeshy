@@ -1,9 +1,10 @@
 import { MessageSquare, Users as UsersIcon, User as UserIcon } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Conversation } from '@/types';
 import { LastMessagePreview } from '@/app/dashboard/LastMessagePreview';
+import { formatConversationDate } from '@/utils/date-format';
 
 interface ConversationsWidgetProps {
   conversations: Conversation[];
@@ -42,52 +43,52 @@ export function ConversationsWidget({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {conversations.map((conversation) => (
-            <div
-              key={conversation.id}
-              className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
-              onClick={() => onConversationClick(conversation.id)}
-              style={{ contentVisibility: 'auto', containIntrinsicSize: '76px' }}
-            >
-              <Avatar className="h-10 w-10">
-                <AvatarFallback className="dark:bg-gray-700 dark:text-gray-300">
-                  {conversation.type === 'group' ? (
-                    <UsersIcon className="h-5 w-5" />
-                  ) : (
-                    <UserIcon className="h-5 w-5" />
-                  )}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                    {conversation.title}
-                  </p>
-                  <div className="flex items-center space-x-2">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {conversation.lastMessage &&
-                        new Date(conversation.lastMessage.createdAt).toLocaleTimeString(
-                          currentLanguage,
-                          {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          }
-                        )}
+          {conversations.map((conversation) => {
+            const avatarUrl = (conversation as any).avatar;
+            const initials = (conversation.title ?? '').slice(0, 2).toUpperCase();
+
+            return (
+              <div
+                key={conversation.id}
+                className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                onClick={() => onConversationClick(conversation.id)}
+                style={{ contentVisibility: 'auto', containIntrinsicSize: '76px' }}
+              >
+                <Avatar className="h-10 w-10">
+                  {avatarUrl && <AvatarImage src={avatarUrl} alt={conversation.title ?? ''} />}
+                  <AvatarFallback className="dark:bg-gray-700 dark:text-gray-300 text-xs">
+                    {initials || (conversation.type === 'group' ? (
+                      <UsersIcon className="h-5 w-5" />
+                    ) : (
+                      <UserIcon className="h-5 w-5" />
+                    ))}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {conversation.title}
                     </p>
+                    <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                        {conversation.lastMessage &&
+                          formatConversationDate(conversation.lastMessage.createdAt, { t })}
+                      </p>
+                    </div>
                   </div>
+                  {conversation.lastMessage && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                      <LastMessagePreview
+                        message={conversation.lastMessage}
+                        currentLanguage={currentLanguage}
+                        t={t}
+                      />
+                    </p>
+                  )}
                 </div>
-                {conversation.lastMessage && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                    <LastMessagePreview
-                      message={conversation.lastMessage}
-                      currentLanguage={currentLanguage}
-                      t={t}
-                    />
-                  </p>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {conversations.length === 0 && (
             <div className="text-center py-8">

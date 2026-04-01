@@ -133,7 +133,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {isNew ? 'Nouvelle configuration agent' : 'Modifier la configuration'}
@@ -334,7 +334,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           {/* Seuils */}
           <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Seuils & Contrôle</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Inactivité (heures)</Label>
@@ -665,7 +665,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Scheduling & Rythme</h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Messages/jour (semaine)</Label>
@@ -692,9 +692,6 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   max={200}
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Utilisateurs/jour (semaine)</Label>

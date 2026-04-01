@@ -27,7 +27,7 @@ const server = Fastify({ logger: true });
 const prisma = new PrismaClient();
 const redis = new Redis(env.REDIS_URL);
 
-server.get('/health', async () => ({
+server.get('/health', { logLevel: 'warn' }, async () => ({
   status: 'ok',
   service: 'agent',
   uptime: process.uptime(),
@@ -182,7 +182,6 @@ async function start() {
   scanner.start();
 
   // STARTUP SUMMARY LOGGING
-  // List conversations being monitored and their controlled users
   try {
     const globalConfig = await configCache.getGlobalConfig();
     const scanOptions = {
@@ -191,11 +190,6 @@ async function start() {
     };
     const eligible = await findEligibleConversations(persistence, scanOptions);
     server.log.info(`[Startup] Monitoring ${eligible.length} eligible conversations`);
-
-    for (const conv of eligible) {
-      const controlled = await persistence.getControlledUsers(conv.conversationId);
-      server.log.info(`[Startup] Conversation: ${conv.title || conv.conversationId} (${conv.conversationId}) | Controlled Users: ${controlled.length}`);
-    }
   } catch (err) {
     server.log.error({ err }, '[Startup] Failed to log monitoring summary');
   }

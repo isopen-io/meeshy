@@ -75,7 +75,7 @@ export default memo(function ScanLogDetail({ logId, onClose }: Props) {
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh]">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-4xl max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="text-sm">
             Scan Detail {log ? `— ${log.conversation?.title ?? log.conversationId.slice(0, 12)}` : ''}

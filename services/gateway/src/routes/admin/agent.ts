@@ -1148,6 +1148,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     eligibleConversationTypes: z.array(z.string()).optional(),
     messageFreshnessHours: z.number().int().min(1).max(168).optional(),
     maxConversationsPerCycle: z.number().int().min(0).optional(),
+    weekdayMaxConversations: z.number().int().min(1).max(500).optional(),
+    weekendMaxConversations: z.number().int().min(1).max(500).optional(),
   });
 
   // GET /configs/:conversationId/schedule

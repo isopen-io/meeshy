@@ -170,6 +170,12 @@ export class ConversationScanner {
 
     try {
       this.scanning = true;
+
+      const evicted = await this.persistence.evictRecentlyActiveUsers();
+      if (evicted > 0) {
+        console.log(`[Scanner] Evicted ${evicted} recently active users from agent control`);
+      }
+
       const globalConfig = await this.configCache.getGlobalConfig();
       const scanOptions = {
         eligibleTypes: globalConfig?.eligibleConversationTypes ?? ['group', 'channel', 'public', 'global'],

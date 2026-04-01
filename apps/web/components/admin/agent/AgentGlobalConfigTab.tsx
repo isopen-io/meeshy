@@ -39,6 +39,8 @@ export function AgentGlobalConfigTab() {
     eligibleConversationTypes: ['group', 'public', 'global'],
     messageFreshnessHours: 22,
     maxConversationsPerCycle: 0,
+    weekdayMaxConversations: 50,
+    weekendMaxConversations: 100,
   });
 
   useEffect(() => {
@@ -56,6 +58,8 @@ export function AgentGlobalConfigTab() {
           eligibleConversationTypes: res.data.eligibleConversationTypes ?? ['group', 'public', 'global'],
           messageFreshnessHours: res.data.messageFreshnessHours ?? 22,
           maxConversationsPerCycle: res.data.maxConversationsPerCycle ?? 0,
+          weekdayMaxConversations: res.data.weekdayMaxConversations ?? 50,
+          weekendMaxConversations: res.data.weekendMaxConversations ?? 100,
         });
       }
     }).catch(() => {
@@ -290,6 +294,37 @@ export function AgentGlobalConfigTab() {
                 className="bg-white dark:bg-gray-800"
               />
               <p className="text-xs text-gray-500">0 = illimité</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <Label>Budget scan/jour (semaine)</Label>
+                <InfoIcon content="Nombre maximum de conversations scannées par jour en semaine. Une fois ce budget épuisé, le scanner s'arrête jusqu'au lendemain. Chaque scan consomme 1 unité du budget." />
+              </div>
+              <Input
+                type="number"
+                value={form.weekdayMaxConversations ?? 50}
+                onChange={e => updateField('weekdayMaxConversations', Math.max(1, Math.min(500, parseInt(e.target.value) || 50)))}
+                min={1}
+                max={500}
+                className="bg-white dark:bg-gray-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <Label>Budget scan/jour (weekend)</Label>
+                <InfoIcon content="Nombre maximum de conversations scannées par jour le weekend. Généralement plus élevé car les utilisateurs sont plus actifs." />
+              </div>
+              <Input
+                type="number"
+                value={form.weekendMaxConversations ?? 100}
+                onChange={e => updateField('weekendMaxConversations', Math.max(1, Math.min(500, parseInt(e.target.value) || 100)))}
+                min={1}
+                max={500}
+                className="bg-white dark:bg-gray-800"
+              />
             </div>
           </div>
         </div>

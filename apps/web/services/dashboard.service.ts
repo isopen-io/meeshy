@@ -16,7 +16,9 @@ export interface DashboardCommunity {
   id: string;
   name: string;
   description?: string;
+  avatar?: string;
   isPrivate?: boolean;
+  updatedAt?: string;
   members: Array<{
     id: string;
     username: string;
@@ -24,6 +26,7 @@ export interface DashboardCommunity {
     avatar?: string;
   }>;
   memberCount: number;
+  conversationCount?: number;
 }
 
 export interface DashboardData {

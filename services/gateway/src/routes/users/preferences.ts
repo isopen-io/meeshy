@@ -162,6 +162,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             identifier: true,
             title: true,
             type: true,
+            avatar: true,
             updatedAt: true,
             messages: {
               orderBy: { createdAt: 'desc' },
@@ -214,10 +215,11 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             id: true,
             name: true,
             description: true,
+            avatar: true,
             isPrivate: true,
             updatedAt: true,
             _count: {
-              select: { members: true }
+              select: { members: true, Conversation: true }
             },
             members: {
               take: 5,
@@ -294,10 +296,15 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           }
         }
 
+        const otherUser = conv.type === 'direct'
+          ? conv.participants.find((m: any) => m.user?.id !== userId)?.user
+          : null;
+
         return {
           id: conv.id,
           title: displayTitle,
           type: conv.type,
+          avatar: conv.avatar ?? otherUser?.avatar ?? null,
           isActive: activeConversations > 0,
           lastMessage: conv.messages && conv.messages.length > 0 ? {
             content: conv.messages[0].content,
@@ -312,9 +319,12 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         id: community.id,
         name: community.name,
         description: community.description,
+        avatar: community.avatar,
         isPrivate: community.isPrivate,
+        updatedAt: community.updatedAt,
         members: community.members.map((member: any) => member.user),
-        memberCount: community._count?.members || community.members.length
+        memberCount: community._count?.members || community.members.length,
+        conversationCount: community._count?.Conversation ?? 0,
       }));
 
       return reply.send({

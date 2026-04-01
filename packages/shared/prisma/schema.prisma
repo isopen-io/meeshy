@@ -277,6 +277,8 @@ model User {
 
   // Agent global profile (1:1)
   agentGlobalProfile AgentGlobalProfile?
+  // Agent user roles (per-conversation control profiles)
+  agentUserRoles AgentUserRole[]
 
   // Unified participant model (replaces conversations + anonymousParticipants)
   participations Participant[]
@@ -359,6 +361,7 @@ model Conversation {
   agentConfig     AgentConfig?
   agentAnalytic   AgentAnalytic?
   agentScanLogs   AgentScanLog[]
+  agentUserRoles  AgentUserRole[]
 
   // Unified participant model (replaces members + anonymousParticipants)
   participants Participant[]
@@ -3017,6 +3020,9 @@ model AgentUserRole {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   userId            String   @db.ObjectId
   conversationId    String   @db.ObjectId
+
+  user              User         @relation(fields: [userId], references: [id])
+  conversation      Conversation @relation(fields: [conversationId], references: [id])
 
   origin            String
   archetypeId       String?

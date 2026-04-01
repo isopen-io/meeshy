@@ -76,6 +76,31 @@ export class MongoPersistence {
     return this.prisma.agentLlmConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
   }
 
+  async evictRecentlyActiveUsers(): Promise<number> {
+    const recentLoginThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const roles = await this.prisma.agentUserRole.findMany({
+      where: { user: { lastActiveAt: { gte: recentLoginThreshold } } },
+      select: { id: true, userId: true, conversationId: true },
+    });
+    if (roles.length === 0) return 0;
+
+    const manualConfigs = await this.prisma.agentConfig.findMany({
+      where: { conversationId: { in: [...new Set(roles.map((r) => r.conversationId))] } },
+      select: { conversationId: true, manualUserIds: true },
+    });
+    const manualMap = new Map(manualConfigs.map((c) => [c.conversationId, new Set((c.manualUserIds ?? []) as string[])]));
+
+    const toDelete = roles.filter((r) => !manualMap.get(r.conversationId)?.has(r.userId));
+    if (toDelete.length === 0) return 0;
+
+    await this.prisma.agentUserRole.deleteMany({
+      where: { id: { in: toDelete.map((r) => r.id) } },
+    });
+
+    return toDelete.length;
+  }
+
   async getControlledUsers(conversationId: string): Promise<ControlledUser[]> {
     const [roles, config] = await Promise.all([
       this.prisma.agentUserRole.findMany({ where: { conversationId } }),
@@ -294,6 +319,7 @@ export class MongoPersistence {
     const maxConversations = options?.maxConversations ?? 0;
 
     const freshnessThreshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000);
+    const recentLoginThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const [configuredConversations, freshConversations] = await Promise.all([
       this.prisma.conversation.findMany({
@@ -323,7 +349,37 @@ export class MongoPersistence {
       ...freshConversations.filter((c: { id: string }) => !seen.has(c.id)),
     ];
 
-    return maxConversations > 0 ? merged.slice(0, maxConversations) : merged;
+    const allConvIds = merged.map((c: { id: string }) => c.id);
+
+    const [existingRoles, eligibleParticipantCounts] = await Promise.all([
+      this.prisma.agentUserRole.groupBy({
+        by: ['conversationId'],
+        where: { conversationId: { in: allConvIds } },
+        _count: true,
+      }),
+      this.prisma.participant.groupBy({
+        by: ['conversationId'],
+        where: {
+          conversationId: { in: allConvIds },
+          isActive: true,
+          userId: { not: null },
+          user: { lastActiveAt: { lt: recentLoginThreshold } },
+        },
+        _count: true,
+      }),
+    ]);
+
+    const roleCountMap = new Map(existingRoles.map((r) => [r.conversationId, r._count]));
+    const eligibleCountMap = new Map(eligibleParticipantCounts.map((p) => [p.conversationId, p._count]));
+
+    const filtered = merged.filter((c: { id: string; agentConfig: any }) => {
+      const hasRoles = (roleCountMap.get(c.id) ?? 0) > 0;
+      const hasEligible = (eligibleCountMap.get(c.id) ?? 0) > 0;
+      const hasManualUsers = ((c.agentConfig?.manualUserIds as string[]) ?? []).length > 0;
+      return hasRoles || hasEligible || hasManualUsers;
+    });
+
+    return maxConversations > 0 ? filtered.slice(0, maxConversations) : filtered;
   }
 
   async getConversationContext(conversationId: string) {
