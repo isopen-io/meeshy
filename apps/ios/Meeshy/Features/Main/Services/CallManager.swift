@@ -54,6 +54,7 @@ final class CallManager: ObservableObject {
     private var callStartDate: Date?
     private var reconnectAttempt = 0
     private var participantJoinedCancellable: AnyCancellable?
+    private var signalOfferCancellable: AnyCancellable?
     private var pendingRemoteOffer: SessionDescription?
     private var cancellables = Set<AnyCancellable>()
 
@@ -184,6 +185,15 @@ final class CallManager: ObservableObject {
             }
         }
 
+        // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
+        webRTCService.configure(isVideo: isVideo)
+        Task { [weak self] in
+            guard let self else { return }
+            await self.webRTCService.startLocalMedia(isVideo: isVideo)
+            MessageSocketManager.shared.emitCallJoin(callId: callId)
+            Logger.calls.info("VoIP push — auto-joined room, awaiting SDP offer: \(callId)")
+        }
+
         Logger.calls.info("VoIP push incoming call reported: \(callId) from \(callerName)")
         HapticFeedback.medium()
     }
@@ -192,7 +202,7 @@ final class CallManager: ObservableObject {
 
     @Published var showCallWaitingBanner = false
 
-    func handleIncomingOffer(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, sdp: SessionDescription) {
+    func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool) {
         guard callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
             pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
@@ -208,8 +218,6 @@ final class CallManager: ObservableObject {
         isMuted = false
         isSpeaker = isVideo
         callState = .ringing(isOutgoing: false)
-
-        webRTCService.configure(isVideo: isVideo)
 
         let uuid = UUID()
         activeCallUUID = uuid
@@ -227,22 +235,60 @@ final class CallManager: ObservableObject {
             }
         }
 
-        pendingRemoteOffer = sdp
-
+        // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
+        webRTCService.configure(isVideo: isVideo)
         Task { [weak self] in
             guard let self else { return }
-            await webRTCService.setRemoteDescription(sdp)
-            await webRTCService.startLocalMedia(isVideo: isVideo)
+            await self.webRTCService.startLocalMedia(isVideo: isVideo)
+            MessageSocketManager.shared.emitCallJoin(callId: callId)
+            Logger.calls.info("Incoming call — auto-joined room, awaiting SDP offer: \(callId)")
         }
 
-        Logger.calls.info("Incoming call from \(fromUsername): \(callId)")
+        Logger.calls.info("Incoming call notification from \(fromUsername): \(callId)")
         HapticFeedback.medium()
+    }
+
+    // MARK: - Signal Offer (real SDP from caller after auto-join)
+
+    func handleSignalOffer(callId: String, sdp: SessionDescription) {
+        guard currentCallId == callId else {
+            Logger.calls.warning("Signal offer for unknown call: \(callId)")
+            return
+        }
+        guard let userId = remoteUserId else { return }
+
+        switch callState {
+        case .ringing:
+            // User hasn't accepted yet — buffer the offer
+            pendingRemoteOffer = sdp
+            Logger.calls.info("SDP offer buffered for call: \(callId), waiting for user to accept")
+
+        case .connecting:
+            // User already accepted but SDP arrived late — create answer immediately
+            Task { [weak self] in
+                guard let self else { return }
+                guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
+                    self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                    return
+                }
+                self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+                Logger.calls.info("SDP answer created from late offer for call: \(callId)")
+            }
+
+        default:
+            Logger.calls.warning("Signal offer received in unexpected state: \(String(describing: self.callState))")
+        }
+    }
+
+    func handleIncomingOffer(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, sdp: SessionDescription) {
+        handleIncomingCallNotification(callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
     }
 
     // MARK: - Answer Call
 
     func answerCall() {
         guard case .ringing(isOutgoing: false) = callState else { return }
+        guard let callId = currentCallId, let userId = remoteUserId else { return }
 
         callState = .connecting
 
@@ -254,20 +300,21 @@ final class CallManager: ObservableObject {
             }
         }
 
-        Task { [weak self] in
-            guard let self, let callId = currentCallId, let userId = remoteUserId else { return }
-            guard let remoteOffer = pendingRemoteOffer else {
-                Logger.calls.error("No remote offer available for answer")
-                endCallInternal(reason: .failed("No remote offer received"))
-                return
+        if let remoteOffer = pendingRemoteOffer {
+            // SDP offer already received while ringing — create answer immediately
+            Task { [weak self] in
+                guard let self else { return }
+                guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
+                    self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                    return
+                }
+                self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+                self.pendingRemoteOffer = nil
+                Logger.calls.info("Call answered with buffered SDP offer: \(callId)")
             }
-            guard let answer = await webRTCService.createAnswer(from: remoteOffer) else {
-                endCallInternal(reason: .failed("Failed to create SDP answer"))
-                return
-            }
-            emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
-            pendingRemoteOffer = nil
-            Logger.calls.info("Call answered: \(callId)")
+        } else {
+            // SDP offer not yet received — wait for it via handleSignalOffer
+            Logger.calls.info("Call answered but SDP offer not yet received, waiting: \(callId)")
         }
 
         HapticFeedback.success()
@@ -382,12 +429,11 @@ final class CallManager: ObservableObject {
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(0.5))
             guard let self else { return }
-            self.handleIncomingOffer(
+            self.handleIncomingCallNotification(
                 callId: pending.callId,
                 fromUserId: pending.fromUserId,
                 fromUsername: pending.fromUsername,
-                isVideo: pending.isVideo,
-                sdp: SessionDescription(type: .offer, sdp: "")
+                isVideo: pending.isVideo
             )
             self.pendingIncomingCall = nil
         }
@@ -619,6 +665,8 @@ final class CallManager: ObservableObject {
         }
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = nil
+        signalOfferCancellable?.cancel()
+        signalOfferCancellable = nil
         pendingRemoteOffer = nil
         thermalMonitor.stopMonitoring()
         callStartDate = nil
@@ -653,14 +701,21 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 let isVideo = event.mode == "video" || event.mode == nil
-                let sdp = SessionDescription(type: .offer, sdp: "")
-                self?.handleIncomingOffer(
+                self?.handleIncomingCallNotification(
                     callId: event.callId,
                     fromUserId: event.initiator.userId,
                     fromUsername: event.initiator.username,
-                    isVideo: isVideo,
-                    sdp: sdp
+                    isVideo: isVideo
                 )
+            }
+            .store(in: &cancellables)
+
+        socket.callSignalOfferReceived
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let sdpString = event.signal.sdp else { return }
+                let sdp = SessionDescription(type: .offer, sdp: sdpString)
+                self?.handleSignalOffer(callId: event.callId, sdp: sdp)
             }
             .store(in: &cancellables)
 

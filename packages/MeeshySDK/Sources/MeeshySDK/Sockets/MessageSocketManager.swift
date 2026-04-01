@@ -475,6 +475,7 @@ public protocol MessageSocketProviding: Sendable {
     var notificationCounts: PassthroughSubject<NotificationCountsEvent, Never> { get }
     var conversationOnlineStats: PassthroughSubject<ConversationOnlineStatsEvent, Never> { get }
     var callOfferReceived: PassthroughSubject<CallOfferData, Never> { get }
+    var callSignalOfferReceived: PassthroughSubject<CallAnswerData, Never> { get }
     var callAnswerReceived: PassthroughSubject<CallAnswerData, Never> { get }
     var callICECandidateReceived: PassthroughSubject<CallICECandidateData, Never> { get }
     var callEnded: PassthroughSubject<CallEndData, Never> { get }
@@ -587,6 +588,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — call signaling
     public let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
+    public let callSignalOfferReceived = PassthroughSubject<CallAnswerData, Never>()
     public let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
     public let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
     public let callEnded = PassthroughSubject<CallEndData, Never>()
@@ -1237,6 +1239,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                   let signalType = signalDict["type"] as? String else { return }
 
             switch signalType {
+            case "offer":
+                self.decode(CallAnswerData.self, from: data) { [weak self] event in
+                    self?.callSignalOfferReceived.send(event)
+                }
             case "answer":
                 self.decode(CallAnswerData.self, from: data) { [weak self] event in
                     self?.callAnswerReceived.send(event)

@@ -32,6 +32,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
     let conversationOnlineStats = PassthroughSubject<ConversationOnlineStatsEvent, Never>()
     let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
+    let callSignalOfferReceived = PassthroughSubject<CallAnswerData, Never>()
     let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
     let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
     let callEnded = PassthroughSubject<CallEndData, Never>()
