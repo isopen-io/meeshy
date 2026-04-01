@@ -109,6 +109,8 @@
 		CC1800000000002F18 /* MessageInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1800000000001F18 /* MessageInfoSheet.swift */; };
 		CC1900000000002F19 /* ForwardPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1900000000001F19 /* ForwardPickerSheet.swift */; };
 		CC1900000000004F19 /* ConversationInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1900000000003F19 /* ConversationInfoSheet.swift */; };
+		DD0100000000004F01 /* ConversationDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0100000000003F01 /* ConversationDashboardView.swift */; };
+		CPREF0000000004F01 /* ConversationPreferencesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = CPREF0000000003F01 /* ConversationPreferencesTab.swift */; };
 		CC2000000000002F20 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2000000000001F20 /* CameraView.swift */; };
 		CC2100000000002F21 /* ReportMessageSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2100000000001F21 /* ReportMessageSheet.swift */; };
 		CC2200000000002F22 /* MessageDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2200000000001F22 /* MessageDetailSheet.swift */; };
@@ -413,6 +415,8 @@
 		CC1800000000001F18 /* MessageInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageInfoSheet.swift; sourceTree = "<group>"; };
 		CC1900000000001F19 /* ForwardPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPickerSheet.swift; sourceTree = "<group>"; };
 		CC1900000000003F19 /* ConversationInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationInfoSheet.swift; sourceTree = "<group>"; };
+		DD0100000000003F01 /* ConversationDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDashboardView.swift; sourceTree = "<group>"; };
+		CPREF0000000003F01 /* ConversationPreferencesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationPreferencesTab.swift; sourceTree = "<group>"; };
 		CC2000000000001F20 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
 		CC2100000000001F21 /* ReportMessageSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportMessageSheet.swift; sourceTree = "<group>"; };
 		CC2200000000001F22 /* MessageDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailSheet.swift; sourceTree = "<group>"; };
@@ -589,6 +593,8 @@
 				CC1800000000001F18 /* MessageInfoSheet.swift */,
 				CC1900000000001F19 /* ForwardPickerSheet.swift */,
 				CC1900000000003F19 /* ConversationInfoSheet.swift */,
+				DD0100000000003F01 /* ConversationDashboardView.swift */,
+				CPREF0000000003F01 /* ConversationPreferencesTab.swift */,
 				CC2000000000001F20 /* CameraView.swift */,
 				AA1000000000001FA1 /* UploadProgressBar.swift */,
 				AA2000000000001FA2 /* LocationPickerView.swift */,
@@ -1295,6 +1301,8 @@
 				CC1800000000002F18 /* MessageInfoSheet.swift in Sources */,
 				CC1900000000002F19 /* ForwardPickerSheet.swift in Sources */,
 				CC1900000000004F19 /* ConversationInfoSheet.swift in Sources */,
+				DD0100000000004F01 /* ConversationDashboardView.swift in Sources */,
+				CPREF0000000004F01 /* ConversationPreferencesTab.swift in Sources */,
 				CC2000000000002F20 /* CameraView.swift in Sources */,
 				AA1000000000002FA1 /* UploadProgressBar.swift in Sources */,
 				AA2000000000002FA2 /* LocationPickerView.swift in Sources */,

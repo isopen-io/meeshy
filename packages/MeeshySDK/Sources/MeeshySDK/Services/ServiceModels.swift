@@ -128,7 +128,7 @@ public struct CreateStoryRequest: Encodable {
 
 // MARK: - Preference Requests
 
-public struct UpdateConversationPreferencesRequest: Encodable {
+public struct UpdateConversationPreferencesRequest: Encodable, Sendable {
     public var isPinned: Bool?
     public var isMuted: Bool?
     public var isArchived: Bool?

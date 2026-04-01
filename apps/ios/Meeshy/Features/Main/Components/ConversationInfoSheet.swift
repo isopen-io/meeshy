@@ -42,6 +42,7 @@ struct ConversationInfoSheet: View {
         case members = "Membres"
         case media = "Medias"
         case plus = "Plus"
+        case preferences = "Préf"
     }
 
     private var accent: Color { Color(hex: accentColor) }
@@ -336,6 +337,8 @@ struct ConversationInfoSheet: View {
                     accentColor: accentColor,
                     participants: participants
                 )
+            case .preferences:
+                ConversationPreferencesTab(conversation: conversation)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
@@ -901,6 +904,8 @@ struct ConversationInfoSheet: View {
         case .media:
             return mediaAttachments.count > 0 ? "\(mediaAttachments.count)" : nil
         case .plus:
+            return nil
+        case .preferences:
             return nil
         }
     }
