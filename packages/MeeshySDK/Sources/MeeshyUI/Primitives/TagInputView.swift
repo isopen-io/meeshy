@@ -13,7 +13,7 @@ public struct TagInputView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            FlowLayout(spacing: 6) {
+            TagFlowLayout(spacing: 6) {
                 ForEach(tags, id: \.self) { tag in
                     tagChip(tag)
                 }
@@ -80,7 +80,7 @@ public struct TagInputView: View {
     }
 }
 
-struct FlowLayout: Layout {
+struct TagFlowLayout: Layout {
     var spacing: CGFloat = 6
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

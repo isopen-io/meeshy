@@ -281,6 +281,14 @@ class ConversationListViewModel: ObservableObject {
                 self.conversations[index].memberCount -= 1
             }
             .store(in: &cancellables)
+
+        messageSocket.participantUnbanned
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let index = self.convIndex(for: event.conversationId) else { return }
+                self.conversations[index].memberCount += 1
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Typing Cleanup

@@ -152,7 +152,7 @@ export function registerBanRoutes(
 
       await prisma.participant.update({
         where: { id: targetParticipant.id },
-        data: { bannedAt: null },
+        data: { bannedAt: null, isActive: true, leftAt: null },
       })
 
       const socketIOManager = socketIOHandler?.getManager?.()

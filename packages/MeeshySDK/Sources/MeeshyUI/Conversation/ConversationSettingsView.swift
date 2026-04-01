@@ -43,7 +43,7 @@ public struct ConversationSettingsView: View {
                             permissionsSection
                         }
 
-                        membersPlaceholder
+                        membersSection
 
                         if viewModel.currentUserRole.hasMinimumRole(.admin) {
                             dangerSection
@@ -69,7 +69,7 @@ public struct ConversationSettingsView: View {
             }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("Vous quitterez definitivement cette conversation et perdrez l'acces a son historique.")
+            Text("Vous ne recevrez plus de messages. Votre historique restera lisible.")
         }
         .alert("Supprimer la conversation", isPresented: $viewModel.showDeleteConversation) {
             Button("Supprimer", role: .destructive) {
@@ -323,11 +323,155 @@ public struct ConversationSettingsView: View {
         }
     }
 
-    // MARK: - Members Placeholder
+    // MARK: - Members Section
+
+    private var membersSection: some View {
+        VStack(spacing: 16) {
+            sectionHeader("Membres (\(viewModel.totalMemberCount))")
+
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                    TextField("Rechercher un membre...", text: $viewModel.memberSearchText)
+                        .font(.system(size: 14, design: .rounded))
+                        .foregroundColor(theme.textPrimary)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    if !viewModel.memberSearchText.isEmpty {
+                        Button { viewModel.memberSearchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(theme.textMuted)
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+
+                if viewModel.isLoadingMembers && viewModel.participants.isEmpty {
+                    ProgressView()
+                        .padding(.vertical, 20)
+                } else {
+                    let filtered = filteredMembers
+                    if filtered.isEmpty {
+                        Text("Aucun membre trouve")
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundColor(theme.textMuted)
+                            .padding(.vertical, 20)
+                    } else {
+                        ForEach(Array(filtered.enumerated()), id: \.element.id) { index, participant in
+                            memberRow(participant)
+                            if index < filtered.count - 1 {
+                                Divider().padding(.leading, 60).opacity(0.4)
+                            }
+                        }
+                    }
+                }
+            }
+            .background(theme.backgroundSecondary.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private var filteredMembers: [APIParticipant] {
+        let query = viewModel.memberSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return viewModel.participants }
+        return viewModel.participants.filter { $0.name.lowercased().contains(query) }
+    }
+
+    private func memberRow(_ participant: APIParticipant) -> some View {
+        let displayName = participant.name
+        let role = MemberRole(rawValue: participant.effectiveRole) ?? .member
+
+        return HStack(spacing: 12) {
+            MeeshyAvatar(
+                name: displayName,
+                context: .userListItem,
+                accentColor: DynamicColorGenerator.colorForName(displayName),
+                avatarURL: participant.resolvedAvatar
+            )
+            .frame(width: 36, height: 36)
+            .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayName)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+                memberRoleBadge(role)
+            }
+
+            Spacer()
+
+            if viewModel.currentUserRole > role {
+                Menu {
+                    memberActions(for: participant, targetRole: role)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Circle())
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
 
     @ViewBuilder
-    private var membersPlaceholder: some View {
-        EmptyView()
+    private func memberRoleBadge(_ role: MemberRole) -> some View {
+        switch role {
+        case .creator:
+            HStack(spacing: 3) {
+                Image(systemName: "crown.fill").font(.system(size: 9))
+                Text("Creator").font(.system(size: 11, weight: .medium))
+            }.foregroundColor(Color(hex: "F8B500"))
+        case .admin:
+            HStack(spacing: 3) {
+                Image(systemName: "shield.fill").font(.system(size: 9))
+                Text("Admin").font(.system(size: 11, weight: .medium))
+            }.foregroundColor(Color(hex: "3B82F6"))
+        case .moderator:
+            HStack(spacing: 3) {
+                Image(systemName: "checkmark.shield.fill").font(.system(size: 9))
+                Text("Moderateur").font(.system(size: 11, weight: .medium))
+            }.foregroundColor(Color(hex: "4ECDC4"))
+        case .member:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private func memberActions(for participant: APIParticipant, targetRole: MemberRole) -> some View {
+        let participantId = participant.id
+        let userId = participant.userId ?? participant.id
+
+        if viewModel.currentUserRole == .creator && targetRole < .admin {
+            Button { Task { await viewModel.updateRole(participantId: participantId, newRole: "ADMIN") } } label: {
+                Label("Promouvoir Admin", systemImage: "shield.fill")
+            }
+        }
+        if viewModel.currentUserRole.hasMinimumRole(.admin) && targetRole == .member {
+            Button { Task { await viewModel.updateRole(participantId: participantId, newRole: "MODERATOR") } } label: {
+                Label("Promouvoir Moderateur", systemImage: "checkmark.shield.fill")
+            }
+        }
+        if viewModel.currentUserRole > targetRole && targetRole > .member {
+            Button { Task { await viewModel.updateRole(participantId: participantId, newRole: "MEMBER") } } label: {
+                Label("Retrograder Membre", systemImage: "person.fill")
+            }
+        }
+        Button(role: .destructive) { Task { await viewModel.expelParticipant(participantId: participantId) } } label: {
+            Label("Expulser", systemImage: "person.fill.xmark")
+        }
+        if viewModel.currentUserRole.hasMinimumRole(.admin) {
+            Button(role: .destructive) { Task { await viewModel.banParticipant(userId: userId) } } label: {
+                Label("Bannir", systemImage: "hand.raised.fill")
+            }
+        }
     }
 
     // MARK: - Danger Section

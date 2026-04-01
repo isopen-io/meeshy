@@ -94,6 +94,8 @@ public struct CategoryPickerView: View {
         }
     }
 
+    // TODO: Category creation not yet implemented — PreferenceService.createCategory does not exist.
+    // The UI clears the field and reloads, but no category is persisted server-side.
     private func createCategory() async {
         let name = newCategoryName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }

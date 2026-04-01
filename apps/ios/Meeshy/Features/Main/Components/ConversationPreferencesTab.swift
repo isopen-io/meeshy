@@ -9,6 +9,7 @@ struct ConversationPreferencesTab: View {
     let conversation: Conversation
 
     @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.dismiss) private var dismiss
 
     @State private var isPinned: Bool = false
     @State private var isMuted: Bool = false
@@ -330,6 +331,7 @@ struct ConversationPreferencesTab: View {
     private func leaveConversation() async {
         do {
             try await ConversationService.shared.leave(conversationId: conversation.id)
+            dismiss()
         } catch {
             errorMessage = "Impossible de quitter la conversation."
         }
@@ -338,6 +340,7 @@ struct ConversationPreferencesTab: View {
     private func deleteForMe() async {
         do {
             try await ConversationService.shared.deleteForMe(conversationId: conversation.id)
+            dismiss()
         } catch {
             errorMessage = "Impossible de supprimer la conversation."
         }
