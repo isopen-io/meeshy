@@ -1156,27 +1156,46 @@ export function registerCoreRoutes(
         return sendForbidden(reply, 'Access denied');
       }
 
-      const [summary, roles] = await Promise.all([
+      const TRAIT_FIELDS_MAP: Record<string, string[]> = {
+        communication: ['Verbosity', 'Formality', 'ResponseSpeed', 'InitiativeRate', 'Clarity', 'Argumentation'],
+        personality: ['SocialStyle', 'Assertiveness', 'Agreeableness', 'Humor', 'Emotionality', 'Openness', 'Confidence', 'Creativity', 'Patience', 'Adaptability'],
+        interpersonal: ['Empathy', 'Politeness', 'Leadership', 'ConflictStyle', 'Supportiveness', 'Diplomacy', 'TrustLevel'],
+        emotional: ['EmotionalStability', 'Positivity', 'Sensitivity', 'StressResponse'],
+      };
+
+      function buildTraits(role: Record<string, any>) {
+        const traits: Record<string, Record<string, { label: string; score: number }>> = {};
+        let hasAny = false;
+        for (const [cat, fields] of Object.entries(TRAIT_FIELDS_MAP)) {
+          const catTraits: Record<string, { label: string; score: number }> = {};
+          for (const field of fields) {
+            const label = role[`trait${field}`];
+            const score = role[`trait${field}Score`];
+            if (label != null && score != null) {
+              const key = field.charAt(0).toLowerCase() + field.slice(1);
+              catTraits[key] = { label, score };
+              hasAny = true;
+            }
+          }
+          if (Object.keys(catTraits).length > 0) traits[cat] = catTraits;
+        }
+        return hasAny ? traits : null;
+      }
+
+      const [summary, roles, snapshots] = await Promise.all([
         prisma.agentConversationSummary.findUnique({
           where: { conversationId }
         }),
         prisma.agentUserRole.findMany({
           where: { conversationId },
-          select: {
-            userId: true,
-            personaSummary: true,
-            tone: true,
-            vocabularyLevel: true,
-            typicalLength: true,
-            emojiUsage: true,
-            topicsOfExpertise: true,
-            catchphrases: true,
-            commonEmojis: true,
-            reactionPatterns: true,
-            messagesAnalyzed: true,
-            confidence: true,
-          }
-        })
+        }),
+        prisma.agentAnalysisSnapshot.findMany({
+          where: {
+            conversationId,
+            snapshotDate: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+          },
+          orderBy: { snapshotDate: 'asc' },
+        }),
       ]);
 
       // Enrichir les roles avec username/displayName
@@ -1190,7 +1209,7 @@ export function registerCoreRoutes(
 
       const userMap = new Map(users.map(u => [u.id, u]));
 
-      const participantProfiles = roles.map(role => {
+      const participantProfiles = roles.map((role: Record<string, any>) => {
         const user = userMap.get(role.userId);
         return {
           userId: role.userId,
@@ -1208,6 +1227,12 @@ export function registerCoreRoutes(
           reactionPatterns: role.reactionPatterns,
           messagesAnalyzed: role.messagesAnalyzed,
           confidence: role.confidence,
+          traits: buildTraits(role),
+          dominantEmotions: role.dominantEmotions ?? [],
+          relationshipMap: role.relationshipMap ?? {},
+          sentimentScore: role.sentimentScore ?? null,
+          engagementLevel: role.engagementLevel ?? null,
+          locked: role.locked,
         };
       });
 
@@ -1219,8 +1244,24 @@ export function registerCoreRoutes(
           overallTone: summary.overallTone,
           messageCount: summary.messageCount,
           updatedAt: summary.updatedAt,
+          healthScore: summary.healthScore ?? null,
+          engagementLevel: summary.engagementLevel ?? null,
+          conflictLevel: summary.conflictLevel ?? null,
+          dynamique: summary.dynamique ?? null,
+          dominantEmotions: summary.dominantEmotions ?? [],
         } : null,
         participantProfiles,
+        history: snapshots.map(s => ({
+          snapshotDate: s.snapshotDate.toISOString(),
+          overallTone: s.overallTone,
+          healthScore: s.healthScore,
+          engagementLevel: s.engagementLevel,
+          conflictLevel: s.conflictLevel,
+          topTopics: s.topTopics,
+          dominantEmotions: s.dominantEmotions,
+          messageCountAtSnapshot: s.messageCountAtSnapshot,
+          participantSnapshots: s.participantSnapshots,
+        })),
       });
 
     } catch (error) {
