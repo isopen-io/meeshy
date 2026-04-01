@@ -327,7 +327,7 @@ struct FeedView: View {
                     .frame(height: 0)
                     .id("feed-top")
 
-                    Color.clear.frame(height: CollapsibleHeader<EmptyView>.expandedHeight)
+                    Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
                     // Composer placeholder
                     composerPlaceholder

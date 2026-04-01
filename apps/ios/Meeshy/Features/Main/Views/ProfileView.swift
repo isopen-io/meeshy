@@ -191,7 +191,7 @@ struct ProfileView: View {
             }
             .frame(height: 0)
 
-            Color.clear.frame(height: CollapsibleHeader<EmptyView>.expandedHeight)
+            Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
             VStack(spacing: 24) {
                 bannerAndAvatarSection

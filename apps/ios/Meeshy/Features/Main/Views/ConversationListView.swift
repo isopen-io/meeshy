@@ -95,6 +95,7 @@ struct ConversationListView: View {
     
     // Widget preview state
     @State var showWidgetPreview = false
+    @State private var showShareLinkSheet = false
 
     // Communities data
     @State var userCommunities: [MeeshyCommunity] = []
@@ -688,21 +689,48 @@ struct ConversationListView: View {
         // Layer 3: Collapsible header overlay — pinned to top, respects safe area
         .overlay(alignment: .top) {
             CollapsibleHeader(
-                title: "Conversations",
+                title: "Meeshy",
                 scrollOffset: headerScrollOffset,
                 showBackButton: false,
                 titleColor: theme.textPrimary,
                 backArrowColor: MeeshyColors.indigo500,
                 backgroundColor: theme.backgroundPrimary,
+                titleView: {
+                    Text("Meeshy")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
+                        )
+                },
                 trailing: {
-                    Button {
-                        onNewConversation?()
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(MeeshyColors.indigo500)
+                    HStack(spacing: 12) {
+                        Button {
+                            showShareLinkSheet = true
+                        } label: {
+                            Image(systemName: "link.badge.plus")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(MeeshyColors.indigo500)
+                        }
+                        .accessibilityLabel("Creer un lien de partage")
+
+                        Button {
+                            onNewConversation?()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundColor(MeeshyColors.indigo500)
+                        }
+                        .accessibilityLabel("Nouvelle conversation")
                     }
-                    .accessibilityLabel("Nouvelle conversation")
+                }
+            )
+        }
+        .sheet(isPresented: $showShareLinkSheet) {
+            ShareLinkPickerSheet(
+                conversations: conversationViewModel.conversations.filter { canCreateShareLink(for: $0) },
+                onSelect: { conversation in
+                    showShareLinkSheet = false
+                    Task { await shareConversationLink(for: conversation) }
                 }
             )
         }
@@ -778,3 +806,71 @@ struct ConversationListView: View {
 
 // See ThemedConversationRow.swift
 // See ConversationListHelpers.swift (SectionHeaderView, ConversationPreviewView, ThemedCommunityCard, ThemedFilterChip, TagChip, legacy wrappers)
+
+// MARK: - Share Link Picker Sheet
+
+struct ShareLinkPickerSheet: View {
+    let conversations: [Conversation]
+    let onSelect: (Conversation) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private var theme: ThemeManager { .shared }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if conversations.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "link.badge.plus")
+                            .font(.system(size: 48))
+                            .foregroundStyle(MeeshyColors.indigo300)
+                        Text("Aucune conversation eligible")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(theme.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(conversations) { conversation in
+                        Button {
+                            onSelect(conversation)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: conversation.type == .group ? "person.3.fill" : "globe")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(MeeshyColors.indigo500)
+                                    .frame(width: 32, height: 32)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(conversation.name)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                        .lineLimit(1)
+
+                                    Text(conversation.type.rawValue.capitalized)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(theme.textSecondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "link")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(MeeshyColors.indigo400)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("Creer un lien de partage")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Fermer") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}

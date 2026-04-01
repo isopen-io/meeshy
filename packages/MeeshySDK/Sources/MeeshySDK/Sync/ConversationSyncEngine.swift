@@ -104,7 +104,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 _conversationsDidChange.send()
 
                 hasMore = response.pagination?.hasMore ?? false
-                offset += pageSize
+                offset += page.count
             } catch {
                 Self.logger.error("[SyncEngine] fullSync error: \(error.localizedDescription)")
                 break

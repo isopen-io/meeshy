@@ -1,6 +1,11 @@
 import SwiftUI
 
-public struct CollapsibleHeader<TrailingContent: View>: View {
+public enum CollapsibleHeaderMetrics {
+    public static var expandedHeight: CGFloat { 100 }
+    public static var collapsedHeight: CGFloat { 52 }
+}
+
+public struct CollapsibleHeader<TitleContent: View, TrailingContent: View>: View {
     let title: String
     let subtitle: String?
     let scrollOffset: CGFloat
@@ -9,6 +14,7 @@ public struct CollapsibleHeader<TrailingContent: View>: View {
     let titleColor: Color
     let backArrowColor: Color
     let backgroundColor: Color
+    let titleView: (() -> TitleContent)?
     let trailing: () -> TrailingContent
 
     public static var expandedHeight: CGFloat { 100 }
@@ -23,6 +29,7 @@ public struct CollapsibleHeader<TrailingContent: View>: View {
         titleColor: Color,
         backArrowColor: Color,
         backgroundColor: Color,
+        @ViewBuilder titleView: @escaping () -> TitleContent,
         @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
     ) {
         self.title = title
@@ -33,6 +40,7 @@ public struct CollapsibleHeader<TrailingContent: View>: View {
         self.titleColor = titleColor
         self.backArrowColor = backArrowColor
         self.backgroundColor = backgroundColor
+        self.titleView = titleView
         self.trailing = trailing
     }
 
@@ -86,11 +94,16 @@ public struct CollapsibleHeader<TrailingContent: View>: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: titleSize, weight: titleWeight, design: .rounded))
-                        .foregroundColor(titleColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                    if let titleView {
+                        titleView()
+                            .scaleEffect(lerp(1.0, 0.65, progress), anchor: .leading)
+                    } else {
+                        Text(title)
+                            .font(.system(size: titleSize, weight: titleWeight, design: .rounded))
+                            .foregroundColor(titleColor)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
 
                     if showExpandedSubtitle {
                         makeSubtitleText(subtitle ?? "", size: lerp(15, 12, progress), opacity: 0.6)
@@ -149,5 +162,32 @@ public struct CollapsibleHeader<TrailingContent: View>: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("Retour")
+    }
+}
+
+// MARK: - Convenience init (no custom titleView — backward compatible)
+
+extension CollapsibleHeader where TitleContent == EmptyView {
+    public init(
+        title: String,
+        subtitle: String? = nil,
+        scrollOffset: CGFloat,
+        showBackButton: Bool = true,
+        onBack: (() -> Void)? = nil,
+        titleColor: Color,
+        backArrowColor: Color,
+        backgroundColor: Color,
+        @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.scrollOffset = scrollOffset
+        self.showBackButton = showBackButton
+        self.onBack = onBack
+        self.titleColor = titleColor
+        self.backArrowColor = backArrowColor
+        self.backgroundColor = backgroundColor
+        self.titleView = nil
+        self.trailing = trailing
     }
 }
