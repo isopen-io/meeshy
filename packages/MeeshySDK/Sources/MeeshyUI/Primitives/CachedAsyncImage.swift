@@ -218,33 +218,58 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         self.thumbnailUrl = thumbnailUrl
         self.fullUrl = fullUrl
         self.placeholder = placeholder
+        let cachedFull: UIImage?
         if let fullUrl, !fullUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
-            _fullImage = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
+            cachedFull = DiskCacheStore.cachedImage(for: resolved)
+        } else {
+            cachedFull = nil
         }
-        if fullImage == nil, let thumbnailUrl, !thumbnailUrl.isEmpty {
+        _fullImage = State(initialValue: cachedFull)
+
+        if cachedFull == nil, let thumbnailUrl, !thumbnailUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
             _thumbnailImage = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
         }
     }
 
-    private var displayImage: UIImage? { fullImage ?? thumbnailImage }
-
     public var body: some View {
-        Group {
-            if let displayImage {
-                Image(uiImage: displayImage)
+        ZStack {
+            if let fullImage {
+                Image(uiImage: fullImage)
                     .resizable()
+                    .transition(.opacity)
+            } else if let thumbnailImage {
+                Image(uiImage: thumbnailImage)
+                    .resizable()
+                    .transition(.opacity)
             } else {
                 placeholder()
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: fullImage != nil)
+        .animation(.easeInOut(duration: 0.15), value: thumbnailImage != nil)
         .task(id: thumbnailUrl) {
             guard fullImage == nil else { return }
             await loadThumbnail()
         }
         .task(id: fullUrl) {
             await loadFullImage()
+        }
+        .onChange(of: thumbnailUrl) { newUrl in
+            guard fullImage == nil else { return }
+            guard let newUrl, !newUrl.isEmpty else { thumbnailImage = nil; return }
+            let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
+            thumbnailImage = DiskCacheStore.cachedImage(for: resolved)
+        }
+        .onChange(of: fullUrl) { newUrl in
+            guard let newUrl, !newUrl.isEmpty else { fullImage = nil; return }
+            let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
+            if let cached = DiskCacheStore.cachedImage(for: resolved) {
+                fullImage = cached
+            } else {
+                fullImage = nil
+            }
         }
     }
 
@@ -261,17 +286,10 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     private func loadFullImage() async {
         guard let fullUrl, !fullUrl.isEmpty else { return }
         let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
-        if DiskCacheStore.cachedImage(for: resolved) != nil {
-            if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
-                if !Task.isCancelled {
-                    withAnimation(.easeIn(duration: 0.2)) { fullImage = loaded }
-                }
-            }
-            return
-        }
+        if fullImage != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
         if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
             if !Task.isCancelled {
-                withAnimation(.easeIn(duration: 0.3)) { fullImage = loaded }
+                withAnimation(.easeIn(duration: 0.25)) { fullImage = loaded }
             }
         }
     }

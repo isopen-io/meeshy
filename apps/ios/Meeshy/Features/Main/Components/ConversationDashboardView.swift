@@ -19,6 +19,8 @@ struct ConversationDashboardView: View {
     @State private var isLoadingAnalysis = true
     @State private var serverStats: ConversationMessageStatsResponse?
     @State private var isLoadingStats = true
+    @State private var sectionsAppeared = false
+    @State private var ringsAnimated = false
 
     private var accent: Color { Color(hex: accentColor) }
 
@@ -31,41 +33,140 @@ struct ConversationDashboardView: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 22) {
             if let analysis = agentAnalysis {
-                agentSummarySection(analysis)
+                heroHealthCard(analysis)
+                    .staggerIn(sectionsAppeared, index: 0)
             }
-            statsGrid
+            statsRingsSection
+                .staggerIn(sectionsAppeared, index: 1)
             activityChartSection
+                .staggerIn(sectionsAppeared, index: 2)
             if let analysis = agentAnalysis, !analysis.participantProfiles.isEmpty {
                 agentParticipantProfilesSection(analysis.participantProfiles)
+                    .staggerIn(sectionsAppeared, index: 3)
             }
             if !participantStats.isEmpty {
                 participantBreakdownSection
+                    .staggerIn(sectionsAppeared, index: 4)
             }
             sentimentSection
+                .staggerIn(sectionsAppeared, index: 5)
             contentTypesSection
+                .staggerIn(sectionsAppeared, index: 6)
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
         .padding(.bottom, 32)
         .task { await loadAgentAnalysis() }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.6)) {
+                sectionsAppeared = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                    ringsAnimated = true
+                }
+            }
+        }
     }
 
-    // MARK: - Agent Summary Section
+    // MARK: - Hero Health Card
 
     @ViewBuilder
-    private func agentSummarySection(_ analysis: ConversationAnalysis) -> some View {
+    private func heroHealthCard(_ analysis: ConversationAnalysis) -> some View {
         if let summary = analysis.summary {
-            VStack(alignment: .leading, spacing: 12) {
+            sectionCard {
                 sectionHeader(icon: "brain.head.profile.fill", title: "Analyse IA")
 
-                if !summary.text.isEmpty {
+                if let health = summary.healthScore {
+                    VStack(spacing: 4) {
+                        ArcGauge(
+                            score: health,
+                            accent: accent,
+                            scoreColor: healthScoreColor(health)
+                        )
+                        .frame(height: 100)
+
+                        Text("Sante")
+                            .font(.system(size: 11, weight: .heavy, design: .rounded))
+                            .foregroundColor(theme.textMuted)
+                            .tracking(1.0)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+
+                    if summary.engagementLevel != nil || summary.conflictLevel != nil {
+                        HStack(spacing: 10) {
+                            if let engagement = summary.engagementLevel, !engagement.isEmpty {
+                                metricPill(
+                                    icon: "bolt.fill",
+                                    text: engagement,
+                                    color: accent
+                                )
+                            }
+                            if let conflict = summary.conflictLevel, !conflict.isEmpty {
+                                metricPill(
+                                    icon: "exclamationmark.triangle.fill",
+                                    text: conflict,
+                                    color: conflictLevelColor(conflict)
+                                )
+                            }
+                        }
+                    }
+                } else if !summary.text.isEmpty {
+                    HStack(alignment: .top, spacing: 4) {
+                        Text("\u{201C}")
+                            .font(.system(size: 48, weight: .bold, design: .serif))
+                            .foregroundColor(accent.opacity(0.3))
+                            .offset(y: -12)
+                        Text(summary.text)
+                            .font(.system(size: 14, weight: .regular, design: .serif))
+                            .italic()
+                            .foregroundColor(theme.textSecondary)
+                            .lineLimit(6)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if summary.healthScore != nil, !summary.text.isEmpty {
                     Text(summary.text)
-                        .font(.system(size: 13, weight: .regular))
+                        .font(.system(size: 13, weight: .regular, design: .serif))
+                        .italic()
                         .foregroundColor(theme.textSecondary)
-                        .lineLimit(6)
+                        .lineLimit(4)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if !summary.currentTopics.isEmpty {
+                    FlowLayout(spacing: 6) {
+                        ForEach(summary.currentTopics, id: \.self) { topic in
+                            Text(topic)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(accent)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule().fill(accent.opacity(theme.mode.isDark ? 0.12 : 0.08))
+                                )
+                        }
+                    }
+                }
+
+                if !summary.dominantEmotions.isEmpty {
+                    FlowLayout(spacing: 5) {
+                        ForEach(summary.dominantEmotions, id: \.self) { emotion in
+                            Text(emotion)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(theme.textSecondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(accent.opacity(theme.mode.isDark ? 0.08 : 0.05))
+                                )
+                        }
+                    }
                 }
 
                 if !summary.overallTone.isEmpty {
@@ -79,375 +180,109 @@ struct ConversationDashboardView: View {
                     }
                 }
 
-                if !summary.currentTopics.isEmpty {
-                    FlowLayout(spacing: 6) {
-                        ForEach(summary.currentTopics, id: \.self) { topic in
-                            Text(topic)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(accent)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule().fill(accent.opacity(theme.mode.isDark ? 0.15 : 0.1))
-                                )
-                        }
-                    }
-                }
-
-                if summary.healthScore != nil || summary.engagementLevel != nil || summary.conflictLevel != nil {
-                    Divider().opacity(0.2)
-
-                    HStack(spacing: 14) {
-                        if let health = summary.healthScore {
-                            HStack(spacing: 4) {
-                                Image(systemName: "heart.fill")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(healthScoreColor(health))
-                                Text("\(health)/100")
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundColor(healthScoreColor(health))
-                            }
-                        }
-
-                        if let engagement = summary.engagementLevel, !engagement.isEmpty {
-                            HStack(spacing: 3) {
-                                Image(systemName: "bolt.fill")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(accent)
-                                Text(engagement)
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(theme.textSecondary)
-                            }
-                        }
-
-                        if let conflict = summary.conflictLevel, !conflict.isEmpty {
-                            HStack(spacing: 3) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(conflictLevelColor(conflict))
-                                Text(conflict)
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(theme.textSecondary)
-                            }
-                        }
-                    }
-                }
-
                 if let dynamique = summary.dynamique, !dynamique.isEmpty {
                     Text(dynamique)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 12, weight: .regular, design: .serif))
                         .italic()
-                        .foregroundColor(theme.textSecondary)
-                }
-
-                if !summary.dominantEmotions.isEmpty {
-                    FlowLayout(spacing: 6) {
-                        ForEach(summary.dominantEmotions, id: \.self) { emotion in
-                            Text(emotion)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule().fill(accent.opacity(theme.mode.isDark ? 0.1 : 0.07))
-                                )
-                        }
-                    }
+                        .foregroundColor(theme.textMuted)
                 }
             }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(accent.opacity(theme.mode.isDark ? 0.06 : 0.03))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(accent.opacity(0.15), lineWidth: 1)
-            )
         }
     }
 
-    // MARK: - Agent Participant Profiles
+    private func metricPill(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(color)
+            Text(text)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule().fill(color.opacity(theme.mode.isDark ? 0.12 : 0.08))
+        )
+    }
 
-    private func agentParticipantProfilesSection(_ profiles: [ParticipantProfile]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "brain.fill", title: "Profils participants")
+    // MARK: - Stats Rings Section
 
-            ForEach(profiles) { profile in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(Color(hex: DynamicColorGenerator.colorForName(profile.displayName ?? profile.username ?? profile.userId)))
-                            .frame(width: 10, height: 10)
+    private var statsRingsSection: some View {
+        sectionCard {
+            sectionHeader(icon: "chart.bar.fill", title: "Statistiques")
 
-                        Text(profile.displayName ?? profile.username ?? "?")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(theme.textPrimary)
+            let maxMsg = max(effectiveTotalMessages, 1)
+            let maxWords = max(effectiveTotalWords, 1)
+            let maxChars = max(effectiveTotalCharacters, 1)
+            let mediaMax = max(max(effectiveImageCount, max(effectiveAudioCount, effectiveVideoCount)), 1)
 
-                        Spacer()
+            HStack(spacing: 16) {
+                StatRing(
+                    value: effectiveTotalMessages,
+                    maxValue: maxMsg,
+                    label: "Messages",
+                    accent: accent,
+                    textColor: theme.textPrimary,
+                    mutedColor: theme.textMuted,
+                    animated: ringsAnimated
+                )
+                StatRing(
+                    value: effectiveTotalWords,
+                    maxValue: maxWords,
+                    label: "Mots",
+                    accent: accent,
+                    textColor: theme.textPrimary,
+                    mutedColor: theme.textMuted,
+                    animated: ringsAnimated
+                )
+                StatRing(
+                    value: effectiveTotalCharacters,
+                    maxValue: maxChars,
+                    label: "Caracteres",
+                    accent: accent,
+                    textColor: theme.textPrimary,
+                    mutedColor: theme.textMuted,
+                    animated: ringsAnimated
+                )
+            }
 
-                        if profile.confidence > 0 {
-                            Text("\(Int(profile.confidence * 100))%")
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
-                                .foregroundColor(theme.textMuted)
-                        }
-                    }
-
-                    if !profile.personaSummary.isEmpty {
-                        Text(profile.personaSummary)
-                            .font(.system(size: 12))
-                            .foregroundColor(theme.textSecondary)
-                            .lineLimit(3)
-                    }
-
-                    HStack(spacing: 12) {
-                        if !profile.tone.isEmpty {
-                            profileTag(icon: "waveform.path", text: profile.tone)
-                        }
-                        if !profile.vocabularyLevel.isEmpty {
-                            profileTag(icon: "textformat.size", text: profile.vocabularyLevel)
-                        }
-                    }
-
-                    if !profile.topicsOfExpertise.isEmpty {
-                        HStack(spacing: 4) {
-                            ForEach(profile.topicsOfExpertise.prefix(4), id: \.self) { topic in
-                                Text(topic)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(theme.textMuted)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(
-                                        Capsule().fill(theme.textMuted.opacity(0.1))
-                                    )
-                            }
-                        }
-                    }
-
-                    if !profile.catchphrases.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "quote.opening")
-                                .font(.system(size: 8))
-                                .foregroundColor(theme.textMuted)
-                            Text(profile.catchphrases.prefix(3).joined(separator: " · "))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(theme.textMuted)
-                                .italic()
-                                .lineLimit(1)
-                        }
-                    }
-
-                    if !profile.commonEmojis.isEmpty {
-                        Text(profile.commonEmojis.prefix(8).joined(separator: " "))
-                            .font(.system(size: 14))
-                    }
-
-                    if let traits = profile.traits {
-                        traitsSummaryView(traits)
-                    }
-                }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.mode.isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
+            HStack(spacing: 16) {
+                StatRing(
+                    value: effectiveImageCount,
+                    maxValue: mediaMax,
+                    label: "Photos",
+                    accent: accent,
+                    textColor: theme.textPrimary,
+                    mutedColor: theme.textMuted,
+                    animated: ringsAnimated
+                )
+                StatRing(
+                    value: effectiveAudioCount,
+                    maxValue: mediaMax,
+                    label: "Audio",
+                    accent: accent,
+                    textColor: theme.textPrimary,
+                    mutedColor: theme.textMuted,
+                    animated: ringsAnimated
+                )
+                StatRing(
+                    value: effectiveVideoCount,
+                    maxValue: mediaMax,
+                    label: "Videos",
+                    accent: accent,
+                    textColor: theme.textPrimary,
+                    mutedColor: theme.textMuted,
+                    animated: ringsAnimated
                 )
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(accent.opacity(0.08), lineWidth: 1)
-        )
-    }
-
-    private func profileTag(icon: String, text: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon)
-                .font(.system(size: 9, weight: .semibold))
-            Text(text)
-                .font(.system(size: 11, weight: .medium))
-        }
-        .foregroundColor(theme.textSecondary)
-    }
-
-    // MARK: - Traits Summary
-
-    private func traitsSummaryView(_ traits: ParticipantTraits) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let comm = traits.communication {
-                let scores = extractTraitScores(from: comm)
-                if !scores.isEmpty {
-                    traitCategoryRow("Communication", traits: scores)
-                }
-            }
-            if let pers = traits.personality {
-                let scores = extractTraitScores(from: pers)
-                if !scores.isEmpty {
-                    traitCategoryRow("Personnalite", traits: scores)
-                }
-            }
-            if let inter = traits.interpersonal {
-                let scores = extractTraitScores(from: inter)
-                if !scores.isEmpty {
-                    traitCategoryRow("Interpersonnel", traits: scores)
-                }
-            }
-            if let emot = traits.emotional {
-                let scores = extractTraitScores(from: emot)
-                if !scores.isEmpty {
-                    traitCategoryRow("Emotionnel", traits: scores)
-                }
-            }
-        }
-    }
-
-    private func traitCategoryRow(_ category: String, traits: [TraitScore]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(category.uppercased())
-                .font(.system(size: 9, weight: .bold))
-                .foregroundColor(theme.textMuted)
-                .tracking(0.8)
-
-            FlowLayout(spacing: 4) {
-                ForEach(traits.prefix(5), id: \.label) { trait in
-                    HStack(spacing: 3) {
-                        Text(trait.label)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(theme.textSecondary)
-                        Text("\(trait.score)")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundColor(traitScoreColor(trait.score))
-                    }
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule().fill(accent.opacity(theme.mode.isDark ? 0.1 : 0.06))
-                    )
-                }
-            }
-        }
-    }
-
-    private func extractTraitScores<T: Codable>(from traits: T) -> [TraitScore] {
-        let mirror = Mirror(reflecting: traits)
-        return mirror.children.compactMap { child -> TraitScore? in
-            guard let score = child.value as? TraitScore? else { return nil }
-            return score
-        }
-    }
-
-    // MARK: - Color Helpers
-
-    private func healthScoreColor(_ score: Int) -> Color {
-        if score > 70 { return Color(hex: "34D399") }
-        if score > 40 { return Color(hex: "FBBF24") }
-        return Color(hex: "F87171")
-    }
-
-    private func conflictLevelColor(_ level: String) -> Color {
-        let lower = level.lowercased()
-        if lower.contains("high") || lower.contains("eleve") || lower.contains("fort") {
-            return Color(hex: "F87171")
-        }
-        if lower.contains("medium") || lower.contains("moyen") || lower.contains("modere") {
-            return Color(hex: "FBBF24")
-        }
-        return Color(hex: "34D399")
-    }
-
-    private func traitScoreColor(_ score: Int) -> Color {
-        if score >= 70 { return Color(hex: "34D399") }
-        if score >= 40 { return accent }
-        return theme.textMuted
-    }
-
-    // MARK: - Stats Grid
-
-    private var statsGrid: some View {
-        let columns = [
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10)
-        ]
-
-        return LazyVGrid(columns: columns, spacing: 10) {
-            miniStatCard(
-                icon: "bubble.left.and.bubble.right.fill",
-                value: formatNumber(effectiveTotalMessages),
-                label: "Messages"
-            )
-            miniStatCard(
-                icon: "textformat.abc",
-                value: formatNumber(effectiveTotalWords),
-                label: "Mots"
-            )
-            miniStatCard(
-                icon: "character.cursor.ibeam",
-                value: formatNumber(effectiveTotalCharacters),
-                label: "Caracteres"
-            )
-            miniStatCard(
-                icon: "photo.fill",
-                value: formatNumber(effectiveImageCount),
-                label: "Photos"
-            )
-            miniStatCard(
-                icon: "waveform",
-                value: formatNumber(effectiveAudioCount),
-                label: "Audio"
-            )
-            miniStatCard(
-                icon: "video.fill",
-                value: formatNumber(effectiveVideoCount),
-                label: "Videos"
-            )
-        }
-    }
-
-    private func miniStatCard(icon: String, value: String, label: String) -> some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(accent.opacity(theme.mode.isDark ? 0.15 : 0.1))
-                    .frame(width: 34, height: 34)
-
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(accent)
-            }
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(value)
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-
-                Text(label)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(accent.opacity(0.1), lineWidth: 1)
-        )
     }
 
     // MARK: - Activity Chart
 
     private var activityChartSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        sectionCard {
             HStack {
                 sectionHeader(icon: "chart.line.uptrend.xyaxis", title: "Activite")
                 Spacer()
@@ -474,12 +309,21 @@ struct ConversationDashboardView: View {
                         )
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [accent.opacity(0.3), accent.opacity(0.0)],
+                                colors: [accent.opacity(0.4), accent.opacity(0.0)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
                         .interpolationMethod(.catmullRom)
+                    }
+
+                    if let last = data.last {
+                        PointMark(
+                            x: .value("Date", last.label),
+                            y: .value("Messages", last.count)
+                        )
+                        .foregroundStyle(accent)
+                        .symbolSize(40)
                     }
                 }
                 .chartXAxis {
@@ -502,15 +346,6 @@ struct ConversationDashboardView: View {
                 .animation(.easeInOut(duration: 0.3), value: chartPeriod)
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(accent.opacity(0.08), lineWidth: 1)
-        )
     }
 
     private var periodPicker: some View {
@@ -553,10 +388,211 @@ struct ConversationDashboardView: View {
         .frame(maxWidth: .infinity)
     }
 
+    // MARK: - Agent Participant Profiles
+
+    private func agentParticipantProfilesSection(_ profiles: [ParticipantProfile]) -> some View {
+        sectionCard {
+            sectionHeader(icon: "brain.fill", title: "Profils participants")
+
+            ForEach(profiles) { profile in
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color(hex: DynamicColorGenerator.colorForName(profile.displayName ?? profile.username ?? profile.userId)))
+                            .frame(width: 10, height: 10)
+
+                        Text(profile.displayName ?? profile.username ?? "?")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(theme.textPrimary)
+
+                        Spacer()
+
+                        if profile.confidence > 0 {
+                            Text("\(Int(profile.confidence * 100))%")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundColor(theme.textMuted)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule().fill(accent.opacity(0.1))
+                                )
+                        }
+                    }
+
+                    if !profile.personaSummary.isEmpty {
+                        Text(profile.personaSummary)
+                            .font(.system(size: 12, weight: .regular, design: .serif))
+                            .italic()
+                            .foregroundColor(theme.textSecondary)
+                            .lineLimit(3)
+                    }
+
+                    HStack(spacing: 8) {
+                        if !profile.tone.isEmpty {
+                            profileTag(icon: "waveform.path", text: profile.tone)
+                        }
+                        if !profile.vocabularyLevel.isEmpty {
+                            profileTag(icon: "textformat.size", text: profile.vocabularyLevel)
+                        }
+                    }
+
+                    if let traits = profile.traits {
+                        traitBarsView(traits)
+                    }
+
+                    if !profile.catchphrases.isEmpty {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "quote.opening")
+                                .font(.system(size: 9))
+                                .foregroundColor(accent.opacity(0.5))
+                                .offset(y: 2)
+                            Text(profile.catchphrases.prefix(3).joined(separator: " \u{00B7} "))
+                                .font(.system(size: 11, weight: .medium, design: .serif))
+                                .italic()
+                                .foregroundColor(theme.textMuted)
+                                .lineLimit(2)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(accent.opacity(theme.mode.isDark ? 0.04 : 0.02))
+                        )
+                    }
+
+                    if !profile.topicsOfExpertise.isEmpty || !profile.commonEmojis.isEmpty {
+                        HStack(spacing: 8) {
+                            ForEach(profile.topicsOfExpertise.prefix(3), id: \.self) { topic in
+                                Text(topic)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(theme.textMuted)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule().fill(theme.textMuted.opacity(0.08))
+                                    )
+                            }
+                            if !profile.commonEmojis.isEmpty {
+                                Text(profile.commonEmojis.prefix(6).joined(separator: ""))
+                                    .font(.system(size: 13))
+                            }
+                        }
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(theme.mode.isDark ? Color.white.opacity(0.02) : Color.black.opacity(0.01))
+                )
+                .overlay(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color(hex: DynamicColorGenerator.colorForName(profile.displayName ?? profile.username ?? profile.userId)))
+                        .frame(width: 4)
+                        .padding(.vertical, 6)
+                }
+            }
+        }
+    }
+
+    private func profileTag(icon: String, text: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 9, weight: .semibold))
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+        }
+        .foregroundColor(theme.textSecondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule().fill(accent.opacity(theme.mode.isDark ? 0.08 : 0.05))
+        )
+    }
+
+    // MARK: - Trait Bars
+
+    private func traitBarsView(_ traits: ParticipantTraits) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let comm = traits.communication {
+                let scores = extractTraitScores(from: comm)
+                if !scores.isEmpty {
+                    traitBarCategory("Communication", traits: scores)
+                }
+            }
+            if let pers = traits.personality {
+                let scores = extractTraitScores(from: pers)
+                if !scores.isEmpty {
+                    traitBarCategory("Personnalite", traits: scores)
+                }
+            }
+            if let inter = traits.interpersonal {
+                let scores = extractTraitScores(from: inter)
+                if !scores.isEmpty {
+                    traitBarCategory("Interpersonnel", traits: scores)
+                }
+            }
+            if let emot = traits.emotional {
+                let scores = extractTraitScores(from: emot)
+                if !scores.isEmpty {
+                    traitBarCategory("Emotionnel", traits: scores)
+                }
+            }
+        }
+    }
+
+    private func traitBarCategory(_ category: String, traits: [TraitScore]) -> some View {
+        let sorted = traits.sorted { $0.score > $1.score }
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(category.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(theme.textMuted)
+                .tracking(0.8)
+
+            ForEach(sorted.prefix(4), id: \.label) { trait in
+                HStack(spacing: 8) {
+                    Text(trait.label)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.textSecondary)
+                        .frame(width: 80, alignment: .leading)
+                        .lineLimit(1)
+
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(accent.opacity(0.08))
+                                .frame(height: 4)
+
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(accent.opacity(0.7))
+                                .frame(
+                                    width: geo.size.width * CGFloat(trait.score) / 100.0,
+                                    height: 4
+                                )
+                        }
+                    }
+                    .frame(height: 4)
+
+                    Text("\(trait.score)")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundColor(traitScoreColor(trait.score))
+                        .frame(width: 24, alignment: .trailing)
+                }
+            }
+        }
+    }
+
+    private func extractTraitScores<T: Codable>(from traits: T) -> [TraitScore] {
+        let mirror = Mirror(reflecting: traits)
+        return mirror.children.compactMap { child -> TraitScore? in
+            guard let score = child.value as? TraitScore? else { return nil }
+            return score
+        }
+    }
+
     // MARK: - Participant Breakdown
 
     private var participantBreakdownSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        sectionCard {
             sectionHeader(icon: "person.2.fill", title: "Activite par participant")
 
             let stats = participantStats.prefix(10)
@@ -564,58 +600,60 @@ struct ConversationDashboardView: View {
 
             ForEach(Array(stats.enumerated()), id: \.element.name) { index, stat in
                 HStack(spacing: 10) {
-                    Circle()
-                        .fill(Color(hex: DynamicColorGenerator.colorForName(stat.name)))
-                        .frame(width: 8, height: 8)
+                    if index < 3 {
+                        Text("#\(index + 1)")
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .foregroundColor(accent)
+                            .frame(width: 24)
+                    } else {
+                        Circle()
+                            .fill(Color(hex: DynamicColorGenerator.colorForName(stat.name)))
+                            .frame(width: 8, height: 8)
+                            .frame(width: 24)
+                    }
 
-                    Text(stat.name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-                        .frame(width: 80, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(stat.name)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+                        Text("\(formatNumber(stat.wordCount)) mots")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                    }
+                    .frame(width: 80, alignment: .leading)
 
                     GeometryReader { geo in
                         let width = geo.size.width * CGFloat(stat.messageCount) / CGFloat(max(maxCount, 1))
-                        RoundedRectangle(cornerRadius: 3)
+                        Capsule()
                             .fill(
                                 LinearGradient(
-                                    colors: [accent, accent.opacity(0.6)],
+                                    colors: [accent, accent.opacity(0.5)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
-                            .frame(width: max(width, 4), height: 14)
+                            .frame(width: max(width, 6), height: 18)
                     }
-                    .frame(height: 14)
+                    .frame(height: 18)
 
                     Text("\(stat.messageCount)")
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textSecondary)
                         .frame(width: 40, alignment: .trailing)
                 }
-                .padding(.vertical, 2)
-                .opacity(Double(stats.count - index) / Double(stats.count) * 0.4 + 0.6)
+                .padding(.vertical, 3)
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(accent.opacity(0.08), lineWidth: 1)
-        )
     }
 
     // MARK: - Sentiment Section
 
+    @ViewBuilder
     private var sentimentSection: some View {
         let analysis = sentimentAnalysis
-        guard analysis.total > 0 else { return AnyView(EmptyView()) }
-
-        return AnyView(
-            VStack(alignment: .leading, spacing: 12) {
+        if analysis.total > 0 {
+            sectionCard {
                 sectionHeader(icon: "face.smiling", title: "Sentiment")
 
                 HStack(spacing: 0) {
@@ -644,16 +682,7 @@ struct ConversationDashboardView: View {
 
                 sentimentBar(analysis: analysis)
             }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(accent.opacity(0.08), lineWidth: 1)
-            )
-        )
+        }
     }
 
     private func sentimentSegment(emoji: String, label: String, count: Int, total: Int, color: Color) -> some View {
@@ -677,37 +706,44 @@ struct ConversationDashboardView: View {
         let neuFrac = CGFloat(analysis.neutral) / CGFloat(total)
         let negFrac = CGFloat(analysis.negative) / CGFloat(total)
 
+        let dominantColor: Color = {
+            if posFrac >= neuFrac && posFrac >= negFrac { return Color(hex: "34D399") }
+            if neuFrac >= posFrac && neuFrac >= negFrac { return Color(hex: "FBBF24") }
+            return Color(hex: "F87171")
+        }()
+
         return GeometryReader { geo in
             HStack(spacing: 2) {
                 if posFrac > 0 {
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: 6)
                         .fill(Color(hex: "34D399"))
                         .frame(width: max(geo.size.width * posFrac - 1, 2))
                 }
                 if neuFrac > 0 {
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: 6)
                         .fill(Color(hex: "FBBF24"))
                         .frame(width: max(geo.size.width * neuFrac - 1, 2))
                 }
                 if negFrac > 0 {
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: 6)
                         .fill(Color(hex: "F87171"))
                         .frame(width: max(geo.size.width * negFrac - 1, 2))
                 }
             }
         }
-        .frame(height: 8)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .frame(height: 12)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .shadow(color: dominantColor.opacity(0.3), radius: 4, y: 2)
     }
 
     // MARK: - Content Types
 
+    @ViewBuilder
     private var contentTypesSection: some View {
         let types = contentTypeStats
-        guard !types.isEmpty else { return AnyView(EmptyView()) }
-
-        return AnyView(
-            VStack(alignment: .leading, spacing: 12) {
+        if !types.isEmpty {
+            let maxCount = types.map(\.count).max() ?? 1
+            sectionCard {
                 sectionHeader(icon: "square.grid.2x2.fill", title: "Types de contenu")
 
                 ForEach(types, id: \.type) { stat in
@@ -718,43 +754,96 @@ struct ConversationDashboardView: View {
                             .frame(width: 20)
 
                         Text(stat.type)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(theme.textPrimary)
+                            .frame(width: 60, alignment: .leading)
 
-                        Spacer()
+                        GeometryReader { geo in
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: stat.color).opacity(0.7), Color(hex: stat.color).opacity(0.3)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(
+                                    width: max(geo.size.width * CGFloat(stat.count) / CGFloat(max(maxCount, 1)), 4),
+                                    height: 10
+                                )
+                        }
+                        .frame(height: 10)
 
                         Text("\(stat.count)")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
                             .foregroundColor(theme.textSecondary)
+                            .frame(width: 40, alignment: .trailing)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 3)
                 }
             }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(accent.opacity(0.08), lineWidth: 1)
-            )
+        }
+    }
+
+    // MARK: - Section Container & Header
+
+    private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            content()
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(theme.mode.isDark ? Color.white.opacity(0.035) : Color.white.opacity(0.9))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [accent.opacity(0.2), accent.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         )
     }
 
-    // MARK: - Section Header
-
     private func sectionHeader(icon: String, title: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(accent)
-
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
                 .foregroundColor(theme.textMuted)
-                .tracking(1.2)
+                .tracking(1.5)
         }
+    }
+
+    // MARK: - Color Helpers
+
+    private func healthScoreColor(_ score: Int) -> Color {
+        if score > 70 { return Color(hex: "34D399") }
+        if score > 40 { return Color(hex: "FBBF24") }
+        return Color(hex: "F87171")
+    }
+
+    private func conflictLevelColor(_ level: String) -> Color {
+        let lower = level.lowercased()
+        if lower.contains("high") || lower.contains("eleve") || lower.contains("fort") {
+            return Color(hex: "F87171")
+        }
+        if lower.contains("medium") || lower.contains("moyen") || lower.contains("modere") {
+            return Color(hex: "FBBF24")
+        }
+        return Color(hex: "34D399")
+    }
+
+    private func traitScoreColor(_ score: Int) -> Color {
+        if score >= 70 { return Color(hex: "34D399") }
+        if score >= 40 { return accent }
+        return theme.textMuted
     }
 
     // MARK: - Load Agent Analysis
@@ -1021,3 +1110,128 @@ struct ConversationDashboardView: View {
     }
 }
 
+// MARK: - StatRing
+
+private struct StatRing: View {
+    let value: Int
+    let maxValue: Int
+    let label: String
+    let accent: Color
+    let textColor: Color
+    let mutedColor: Color
+    let animated: Bool
+
+    private var progress: CGFloat {
+        guard maxValue > 0 else { return 0 }
+        return min(CGFloat(value) / CGFloat(maxValue), 1.0)
+    }
+
+    private var displayValue: String {
+        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
+        if value >= 10_000 { return String(format: "%.1fk", Double(value) / 1_000) }
+        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
+        return "\(value)"
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .stroke(accent.opacity(0.1), lineWidth: 5)
+
+                Circle()
+                    .trim(from: 0, to: animated ? progress : 0)
+                    .stroke(accent, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.spring(response: 0.8, dampingFraction: 0.7), value: animated)
+
+                Text(displayValue)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundColor(textColor)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+            }
+            .frame(width: 60, height: 60)
+
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .foregroundColor(mutedColor)
+                .tracking(0.5)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - ArcGauge
+
+private struct ArcGauge: View {
+    let score: Int
+    let accent: Color
+    let scoreColor: Color
+
+    private var progress: CGFloat {
+        min(CGFloat(score) / 100.0, 1.0)
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = min(geo.size.width, geo.size.height * 2)
+            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height)
+            let radius = size / 2 - 12
+
+            ZStack {
+                ArcShape(startAngle: .degrees(180), endAngle: .degrees(360))
+                    .stroke(accent.opacity(0.1), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .frame(width: radius * 2, height: radius)
+                    .position(x: center.x, y: center.y)
+
+                ArcShape(
+                    startAngle: .degrees(180),
+                    endAngle: .degrees(180 + 180 * Double(progress))
+                )
+                .stroke(scoreColor, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .frame(width: radius * 2, height: radius)
+                .position(x: center.x, y: center.y)
+
+                VStack(spacing: 0) {
+                    Text("\(score)")
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundColor(scoreColor)
+                }
+                .position(x: center.x, y: center.y - radius * 0.35)
+            }
+        }
+    }
+}
+
+private struct ArcShape: Shape {
+    let startAngle: Angle
+    let endAngle: Angle
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.maxY)
+        let radius = min(rect.width / 2, rect.height)
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: startAngle,
+            endAngle: endAngle,
+            clockwise: false
+        )
+        return path
+    }
+}
+
+// MARK: - Stagger Animation Modifier
+
+private extension View {
+    func staggerIn(_ appeared: Bool, index: Int) -> some View {
+        self
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 12)
+            .animation(.easeOut(duration: 0.5).delay(Double(index) * 0.08), value: appeared)
+    }
+}
