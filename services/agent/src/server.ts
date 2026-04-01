@@ -22,6 +22,7 @@ import { rolesRoutes } from './routes/roles';
 import { analyticsRoutes } from './routes/analytics';
 import { deliveryRoutes } from './routes/delivery';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
+import { startDailySnapshotCron } from './cron/daily-snapshot';
 
 const server = Fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -201,6 +202,8 @@ async function start() {
 
   scanner.start();
 
+  const snapshotInterval = startDailySnapshotCron(prisma);
+
   // STARTUP SUMMARY LOGGING
   try {
     const globalConfig = await configCache.getGlobalConfig();
@@ -220,6 +223,7 @@ async function start() {
   const shutdown = async () => {
     server.log.info('Shutting down agent service...');
     scanner.stop();
+    clearInterval(snapshotInterval);
     deliveryQueue.clearAll();
     await configCache.stopListening();
     await zmqListener.close();

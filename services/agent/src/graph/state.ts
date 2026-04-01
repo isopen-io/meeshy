@@ -11,6 +11,11 @@ export type MessageEntry = {
   originalLanguage?: string;
 };
 
+export type TraitValue = {
+  label: string;
+  score: number;
+};
+
 export type ToneProfile = {
   userId: string;
   displayName: string;
@@ -23,7 +28,7 @@ export type ToneProfile = {
   emojiUsage: string;
   topicsOfExpertise: string[];
   topicsAvoided: string[];
-  relationshipMap: Record<string, string>;
+  relationshipMap: Record<string, string | { attitude: string; score: number; detail: string }>;
   catchphrases: string[];
   responseTriggers: string[];
   silenceTriggers: string[];
@@ -32,6 +37,13 @@ export type ToneProfile = {
   messagesAnalyzed: number;
   confidence: number;
   locked: boolean;
+  traits?: {
+    communication?: Record<string, TraitValue>;
+    personality?: Record<string, TraitValue>;
+    interpersonal?: Record<string, TraitValue>;
+    emotional?: Record<string, TraitValue>;
+  };
+  dominantEmotions?: string[];
 };
 
 export type ControlledUser = {

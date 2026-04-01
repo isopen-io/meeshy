@@ -1,31 +1,80 @@
-import type { ConversationState, ToneProfile } from '../graph/state';
+import type { ConversationState, ToneProfile, TraitValue } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 
-const OBSERVER_SYSTEM_PROMPT = `Tu es un analyste conversationnel expert en profilage stylistique. Tu dois identifier ce qui rend CHAQUE participant UNIQUE.
+const OBSERVER_SYSTEM_PROMPT = `Tu es un analyste conversationnel expert en profilage psychologique et stylistique. Tu dois identifier ce qui rend CHAQUE participant UNIQUE.
 
 Analyse la conversation et retourne un JSON avec:
-1. "summary": un resume concis de la conversation (max 200 mots)
-2. "overallTone": le ton general
-3. "profiles": un objet avec chaque userId comme cle et un profil DISTINCTIF contenant:
-   - "tone": le ton SPECIFIQUE (pas juste "neutre" — sois precis: "sarcastique et joueur", "enthousiaste et direct", "reserve mais bienveillant", "critique constructif", "blagueur decontracte", "factuel et concis")
+1. "summary": resume concis de la conversation (max 200 mots)
+2. "overallTone": ton general
+3. "healthScore": sante globale de la conversation (0-100: 0=toxique, 50=neutre, 100=sain et dynamique)
+4. "engagementLevel": dormant|faible|modere|actif|intense
+5. "conflictLevel": aucun|leger|modere|eleve|critique
+6. "dynamique": description courte de la dynamique de groupe (1-2 phrases)
+7. "dominantEmotions": emotions dominantes de la conversation (array de strings)
+8. "profiles": un objet avec chaque userId comme cle contenant:
+
+   // STYLISTIQUE (existant)
+   - "tone": ton SPECIFIQUE (pas juste "neutre" — sois precis: "sarcastique et joueur", "enthousiaste et direct")
    - "vocabularyLevel": "familier" | "courant" | "soutenu"
-   - "typicalLength": "expeditif" | "court" | "moyen" | "long" | "tres long" (base sur le NOMBRE MOYEN DE MOTS par message: expeditif=1-15, court=10-60, moyen=30-150, long=100-250, tres long=200-500)
+   - "typicalLength": "expeditif" | "court" | "moyen" | "long" | "tres long"
    - "emojiUsage": "jamais" | "occasionnel" | "abondant"
    - "topicsOfExpertise": sujets sur lesquels il intervient
-   - "catchphrases": expressions recurrentes et TICS DE LANGAGE (ex: "du coup", "en vrai", "c'est ouf", "perso je", "clairement"). MINIMUM 3 si possible.
+   - "catchphrases": expressions recurrentes et TICS DE LANGAGE. MINIMUM 3 si possible.
    - "responseTriggers": types de messages qui le font reagir
    - "silenceTriggers": types de messages qu'il ignore
-   - "commonEmojis": emojis SPECIFIQUES qu'il utilise dans ses messages (pas generiques)
-   - "reactionPatterns": emojis qu'il utilise en reaction (liste de strings, MINIMUM 2)
-   - "personaSummary": description DETAILLEE et UNIQUE de sa personnalite (50-100 mots). Decris ses traits distinctifs, ses opinions, son style de communication, ce qui le differencie des autres. NE PAS utiliser des descriptions generiques.
+   - "commonEmojis": emojis SPECIFIQUES qu'il utilise dans ses messages
+   - "reactionPatterns": emojis reactions (MINIMUM 2)
+   - "personaSummary": description DETAILLEE UNIQUE (50-100 mots)
+
+   // PSYCHOLOGIQUE (nouveau) — chaque trait: { "label": "une des 5 categories", "score": 0-100 }
+   - "communication": { "verbosity", "formality", "responseSpeed", "initiativeRate", "clarity", "argumentation" }
+   - "personality": { "socialStyle", "assertiveness", "agreeableness", "humor", "emotionality", "openness", "confidence", "creativity", "patience", "adaptability" }
+   - "interpersonal": { "empathy", "politeness", "leadership", "conflictStyle", "supportiveness", "diplomacy", "trustLevel" }
+   - "emotional": { "emotionalStability", "positivity", "sensitivity", "stressResponse" }
+
+   - "dominantEmotions": emotions dominantes de l'utilisateur (array)
+   - "relationshipMap": { [autreUserId]: { "attitude": string, "score": -100 a 100, "detail": string (1 phrase) } }
+
+CATEGORIES DE TRAITS:
+- verbosity: laconique|concis|modere|detaille|prolixe
+- formality: argotique|familier|courant|soigne|academique
+- responseSpeed: tres_lent|lent|modere|rapide|instantane
+- initiativeRate: passif|reactif|equilibre|proactif|meneur
+- clarity: confus|vague|correct|clair|limpide
+- argumentation: inexistante|faible|moyenne|structuree|rigoureuse
+- socialStyle: introverti|reserve|ambivert|sociable|extraverti
+- assertiveness: timide|discret|mesure|affirme|dominant
+- agreeableness: confrontant|critique|neutre|conciliant|bienveillant
+- humor: absent|rare|occasionnel|frequent|omnipresent
+- emotionality: stoique|contenu|modere|expressif|debordant
+- openness: ferme|prudent|receptif|curieux|aventurier
+- confidence: insecure|hesitant|modere|assure|inebranlable
+- creativity: conventionnel|classique|modere|creatif|visionnaire
+- patience: impatient|presse|modere|patient|zen
+- adaptability: rigide|constant|flexible|adaptable|cameleon
+- empathy: indifferent|distant|attentif|empathique|fusionnel
+- politeness: abrupt|direct|correct|poli|ceremonieux
+- leadership: suiveur|discret|participant|influent|leader
+- conflictStyle: evitant|passif|diplomate|confrontant|combatif
+- supportiveness: absent|rare|ponctuel|present|pilier
+- diplomacy: maladroit|brut|correct|habile|maitre
+- trustLevel: mefiant|prudent|neutre|confiant|naif
+- emotionalStability: volatile|instable|variable|stable|inebranlable
+- positivity: pessimiste|negatif|neutre|positif|optimiste
+- sensitivity: insensible|epais|modere|sensible|hypersensible
+- stressResponse: panique|anxieux|gerable|calme|imperturbable
+- relationshipMap attitude: hostile|froid|distant|neutre|cordial|amical|chaleureux
 
 REGLES CRITIQUES:
-- Chaque profil DOIT etre DIFFERENT des autres. Si deux profils se ressemblent, enrichis les distinctions.
-- "personaSummary" doit capturer l'ESSENCE UNIQUE de la personne — comme un portrait psychologique.
-- "tone" doit etre une DESCRIPTION RICHE, pas un seul mot. Combine 2-3 adjectifs.
-- "catchphrases" doit contenir des VRAIS tics de langage observes dans les messages.
-- Valeurs categoriques TOUJOURS en francais (familier/courant/soutenu, court/moyen/long, jamais/occasionnel/abondant).
+- Chaque profil DOIT etre DIFFERENT des autres
+- "personaSummary" doit capturer l'ESSENCE UNIQUE de la personne
+- "tone" doit etre une DESCRIPTION RICHE, pas un seul mot
+- "catchphrases" doit contenir des VRAIS tics de langage observes
+- Scores bases sur des PREUVES dans les messages, pas des suppositions
+- relationshipMap score: -100 (haine) a 100 (adoration), detail: 1 phrase explicative
+- Si pas assez de donnees pour un trait, l'omettre
+- Valeurs categoriques TOUJOURS en francais
 Retourne UNIQUEMENT du JSON valide, aucun texte autour.`;
 
 function mergeStringArrays(incoming: unknown, existing: string[] | undefined): string[] {
@@ -40,6 +89,46 @@ function safeString(value: unknown, fallback: string): string {
 }
 
 const CONFIDENCE_DECAY = 0.005;
+
+const TRAIT_CATEGORIES = ['communication', 'personality', 'interpersonal', 'emotional'] as const;
+
+function extractTraitCategory(raw: unknown): Record<string, TraitValue> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const result: Record<string, TraitValue> = {};
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (val && typeof val === 'object' && 'label' in val && 'score' in val) {
+      const tv = val as { label: unknown; score: unknown };
+      if (typeof tv.label === 'string' && typeof tv.score === 'number') {
+        result[key] = { label: tv.label, score: tv.score };
+      }
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function extractTraits(p: Record<string, unknown>): NonNullable<ToneProfile['traits']> {
+  const traits: NonNullable<ToneProfile['traits']> = {};
+  for (const cat of TRAIT_CATEGORIES) {
+    const extracted = extractTraitCategory(p[cat]);
+    if (extracted) (traits as Record<string, Record<string, TraitValue>>)[cat] = extracted;
+  }
+  return traits;
+}
+
+function mergeTraitCategories(
+  existing: NonNullable<ToneProfile['traits']>,
+  incoming: NonNullable<ToneProfile['traits']>,
+): NonNullable<ToneProfile['traits']> {
+  const merged: NonNullable<ToneProfile['traits']> = { ...existing };
+  for (const cat of TRAIT_CATEGORIES) {
+    const existingCat = (existing as Record<string, Record<string, TraitValue> | undefined>)[cat];
+    const incomingCat = (incoming as Record<string, Record<string, TraitValue> | undefined>)[cat];
+    if (incomingCat) {
+      (merged as Record<string, Record<string, TraitValue>>)[cat] = { ...existingCat, ...incomingCat };
+    }
+  }
+  return merged;
+}
 
 export function createObserverNode(llm: LlmProvider) {
   return async function observe(state: ConversationState) {
@@ -65,10 +154,10 @@ export function createObserverNode(llm: LlmProvider) {
         systemPrompt: OBSERVER_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: contextPrompt }],
         temperature: 0.3,
-        maxTokens: 1024,
+        maxTokens: 3072,
       });
 
-      let parsed: { summary?: string; overallTone?: string; profiles?: Record<string, unknown> };
+      let parsed: { summary?: string; overallTone?: string; profiles?: Record<string, unknown>; healthScore?: number; engagementLevel?: string; conflictLevel?: string; dynamique?: string; dominantEmotions?: string[] };
       try {
         parsed = parseJsonLlm<typeof parsed>(response.content);
       } catch {
@@ -114,6 +203,27 @@ export function createObserverNode(llm: LlmProvider) {
           const messagesAnalyzed = (existing?.messagesAnalyzed ?? 0) + newCount;
           const latestMessageId = newMessages.length > 0 ? newMessages[newMessages.length - 1].id : lastAnalyzedId;
 
+          const incomingTraits = extractTraits(p);
+          const mergedTraits = existing?.traits
+            ? mergeTraitCategories(existing.traits, incomingTraits)
+            : incomingTraits;
+
+          const incomingRelMap = p.relationshipMap as Record<string, unknown> | undefined;
+          const mergedRelationshipMap: ToneProfile['relationshipMap'] = { ...(existing?.relationshipMap ?? {}) };
+          if (incomingRelMap && typeof incomingRelMap === 'object') {
+            for (const [relUserId, relValue] of Object.entries(incomingRelMap)) {
+              if (typeof relValue === 'string') {
+                mergedRelationshipMap[relUserId] = relValue;
+              } else if (relValue && typeof relValue === 'object' && 'attitude' in relValue) {
+                mergedRelationshipMap[relUserId] = relValue as { attitude: string; score: number; detail: string };
+              }
+            }
+          }
+
+          const incomingDominantEmotions = Array.isArray(p.dominantEmotions)
+            ? (p.dominantEmotions as unknown[]).filter((e): e is string => typeof e === 'string')
+            : undefined;
+
           updatedProfiles[userId] = {
             userId,
             displayName: displayNameMap.get(userId) ?? existing?.displayName ?? userId,
@@ -126,7 +236,7 @@ export function createObserverNode(llm: LlmProvider) {
             emojiUsage: safeString(p.emojiUsage, existing?.emojiUsage ?? 'occasionnel'),
             topicsOfExpertise: mergeStringArrays(p.topicsOfExpertise, existing?.topicsOfExpertise).slice(-10),
             topicsAvoided: mergeStringArrays(p.topicsAvoided, existing?.topicsAvoided).slice(-10),
-            relationshipMap: existing?.relationshipMap ?? {},
+            relationshipMap: mergedRelationshipMap,
             catchphrases: mergeStringArrays(p.catchphrases, existing?.catchphrases),
             responseTriggers: mergeStringArrays(p.responseTriggers, existing?.responseTriggers),
             silenceTriggers: mergeStringArrays(p.silenceTriggers, existing?.silenceTriggers),
@@ -135,6 +245,8 @@ export function createObserverNode(llm: LlmProvider) {
             messagesAnalyzed,
             confidence: Math.min(messagesAnalyzed / 50, 1.0),
             locked: messagesAnalyzed >= 50,
+            traits: Object.keys(mergedTraits).length > 0 ? mergedTraits : undefined,
+            dominantEmotions: incomingDominantEmotions ?? existing?.dominantEmotions,
             _lastAnalyzedMessageId: latestMessageId,
           } as ToneProfile & { _lastAnalyzedMessageId?: string };
         }
@@ -149,6 +261,12 @@ export function createObserverNode(llm: LlmProvider) {
         _traceExtra: {
           profilesUpdated: Object.keys(parsed.profiles ?? {}).length,
           summaryChanged: (parsed.summary ?? '') !== state.summary,
+          overallTone: parsed.overallTone,
+          healthScore: parsed.healthScore,
+          engagementLevel: parsed.engagementLevel,
+          conflictLevel: parsed.conflictLevel,
+          dynamique: parsed.dynamique,
+          dominantEmotions: parsed.dominantEmotions,
         },
       };
     } catch (error) {
