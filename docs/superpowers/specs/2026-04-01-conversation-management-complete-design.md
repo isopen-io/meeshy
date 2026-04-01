@@ -81,7 +81,7 @@ Chaque section utilise le pattern existant de `SettingsView` :
 | Champ | Type | Description |
 |-------|------|-------------|
 | Muet | Toggle | `isMuted` — silence toutes les notifications |
-| Mentions seulement | Toggle (si muet = off) | Future: ne notifier que pour @mentions |
+| Mentions seulement | Toggle (si muet = off) | Ne notifier que pour @mentions (nécessite filtrage push côté gateway — à implémenter dans cette spec) |
 
 #### Section "Actions" — Couleur : `#6B7280` (gray)
 3 boutons séparés avec sémantique claire :
