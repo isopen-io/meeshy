@@ -7,7 +7,7 @@ struct PostDetailView: View {
     var initialPost: FeedPost?
 
     @StateObject private var viewModel = PostDetailViewModel()
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var router: Router
