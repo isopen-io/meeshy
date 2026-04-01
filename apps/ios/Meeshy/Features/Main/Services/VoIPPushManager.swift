@@ -35,7 +35,7 @@ final class VoIPPushManager: NSObject, ObservableObject {
 
 // MARK: - PKPushRegistryDelegate
 
-extension VoIPPushManager: @preconcurrency PKPushRegistryDelegate {
+extension VoIPPushManager: PKPushRegistryDelegate {
 
     nonisolated func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
         guard type == .voIP else { return }

@@ -66,7 +66,7 @@ final class UserProfileViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             let user = try await UserService.shared.getProfile(idOrUsername: idOrUsername)
-            let cacheKey = user.id ?? idOrUsername
+            let cacheKey = user.id
             await CacheCoordinator.shared.profiles.save([user], for: cacheKey)
             fullUser = user
             hydrateProfileUserIfNeeded(from: user)
@@ -78,7 +78,7 @@ final class UserProfileViewModel: ObservableObject {
     private func hydrateProfileUserIfNeeded(from user: MeeshyUser?) {
         guard let user else { return }
         UserDisplayNameCache.shared.trackFromUser(user)
-        guard profileUser.userId == nil, user.id != nil else { return }
+        guard profileUser.userId == nil else { return }
         profileUser = ProfileSheetUser.from(user: user, accentColor: profileUser.accentColor)
     }
 

@@ -1,3 +1,4 @@
+@preconcurrency import AVFAudio
 import AVFoundation
 import os
 

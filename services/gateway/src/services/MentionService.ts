@@ -814,7 +814,7 @@ export async function resolveMentionedUsers(
   });
 
   return users.map((u) => {
-    const displayName = u.displayName ?? [u.firstName, u.lastName].filter(Boolean).join(' ') || null;
+    const displayName = u.displayName ?? ([u.firstName, u.lastName].filter(Boolean).join(' ') || null);
     return {
       userId: u.id,
       username: u.username,

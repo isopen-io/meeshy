@@ -9,6 +9,7 @@
  */
 
 import type { ConversationStats } from './conversation.js';
+import type { MentionedUser } from './mention.js';
 
 /**
  * Standard pagination metadata - SINGLE SOURCE OF TRUTH
@@ -43,6 +44,7 @@ export interface ResponseMeta {
   timestamp?: string;
   requestId?: string;
   processingTime?: number;
+  mentionedUsers?: MentionedUser[];
 }
 
 /**

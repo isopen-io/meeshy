@@ -854,7 +854,7 @@ extension CallManager: WebRTCServiceDelegate {
 
     nonisolated func webRTCService(_ service: WebRTCService, didChangeQualityLevel level: VideoQualityLevel, from previous: VideoQualityLevel) {
         Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard self != nil else { return }
             guard UIAccessibility.isReduceMotionEnabled == false else { return }
             switch level {
             case .poor, .critical:
