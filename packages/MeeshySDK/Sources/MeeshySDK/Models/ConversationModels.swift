@@ -79,6 +79,7 @@ public struct APIConversationPreferences: Decodable, Sendable {
     public let tags: [String]?
     public let categoryId: String?
     public let reaction: String?
+    public let customName: String?
 }
 
 public struct APIConversation: Decodable, Sendable {
