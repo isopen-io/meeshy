@@ -200,3 +200,79 @@ public struct CachedBannerImage: View {
         }
     }
 }
+
+public struct ProgressiveCachedImage<Placeholder: View>: View {
+    public let thumbnailUrl: String?
+    public let fullUrl: String?
+    public let placeholder: () -> Placeholder
+
+    @State private var thumbnailImage: UIImage?
+    @State private var fullImage: UIImage?
+    @State private var isLoadingFull = false
+
+    public init(
+        thumbnailUrl: String?,
+        fullUrl: String?,
+        @ViewBuilder placeholder: @escaping () -> Placeholder
+    ) {
+        self.thumbnailUrl = thumbnailUrl
+        self.fullUrl = fullUrl
+        self.placeholder = placeholder
+        if let fullUrl, !fullUrl.isEmpty {
+            let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
+            _fullImage = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
+        }
+        if fullImage == nil, let thumbnailUrl, !thumbnailUrl.isEmpty {
+            let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
+            _thumbnailImage = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
+        }
+    }
+
+    private var displayImage: UIImage? { fullImage ?? thumbnailImage }
+
+    public var body: some View {
+        Group {
+            if let displayImage {
+                Image(uiImage: displayImage)
+                    .resizable()
+            } else {
+                placeholder()
+            }
+        }
+        .task(id: thumbnailUrl) {
+            guard fullImage == nil else { return }
+            await loadThumbnail()
+        }
+        .task(id: fullUrl) {
+            await loadFullImage()
+        }
+    }
+
+    private func loadThumbnail() async {
+        guard let thumbnailUrl, !thumbnailUrl.isEmpty, thumbnailImage == nil else { return }
+        let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
+        if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
+            if !Task.isCancelled, fullImage == nil {
+                withAnimation(.easeIn(duration: 0.15)) { thumbnailImage = loaded }
+            }
+        }
+    }
+
+    private func loadFullImage() async {
+        guard let fullUrl, !fullUrl.isEmpty else { return }
+        let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
+        if DiskCacheStore.cachedImage(for: resolved) != nil {
+            if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
+                if !Task.isCancelled {
+                    withAnimation(.easeIn(duration: 0.2)) { fullImage = loaded }
+                }
+            }
+            return
+        }
+        if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
+            if !Task.isCancelled {
+                withAnimation(.easeIn(duration: 0.3)) { fullImage = loaded }
+            }
+        }
+    }
+}
