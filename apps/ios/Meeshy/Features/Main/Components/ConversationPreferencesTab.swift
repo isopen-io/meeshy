@@ -26,6 +26,7 @@ struct ConversationPreferencesTab: View {
     @State private var showLeaveConfirm: Bool = false
     @State private var showDeleteConfirm: Bool = false
     @State private var errorMessage: String? = nil
+    @State private var showEmojiPicker: Bool = false
 
     private let customNameSubject = PassthroughSubject<String, Never>()
     @State private var cancellables = Set<AnyCancellable>()
@@ -94,22 +95,62 @@ struct ConversationPreferencesTab: View {
 
     private var displaySection: some View {
         settingsSection(title: "Mon affichage", icon: "paintbrush.fill", color: "A855F7") {
-            settingsRow(icon: "textformat", iconColor: "A855F7", title: "Nom personnalisé") {
-                TextField("Nom...", text: $customName)
-                    .font(.system(size: 14))
-                    .foregroundColor(theme.textSecondary)
-                    .multilineTextAlignment(.trailing)
-                    .frame(maxWidth: 160)
-                    .onChange(of: customName) { _, newValue in
-                        customNameSubject.send(newValue)
+            settingsRow(icon: "pencil", iconColor: "A855F7", title: "Nom personnalisé") {
+                HStack(spacing: 6) {
+                    TextField("Nom personnalisé...", text: $customName)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 160)
+                        .onChange(of: customName) { _, newValue in
+                            customNameSubject.send(newValue)
+                        }
+                    if !customName.isEmpty {
+                        Button {
+                            customName = ""
+                            customNameSubject.send("")
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        .buttonStyle(.plain)
                     }
+                }
             }
             Divider().padding(.leading, 54).opacity(0.3)
-            settingsRow(icon: "face.smiling", iconColor: "A855F7", title: "Réaction") {
-                Text(reaction.isEmpty ? "Aucune" : reaction)
-                    .font(.system(size: 20))
-                    .foregroundColor(reaction.isEmpty ? theme.textMuted : theme.textPrimary)
+            Button {
+                showEmojiPicker = true
+            } label: {
+                settingsRow(icon: "heart.fill", iconColor: "A855F7", title: "Réaction") {
+                    HStack(spacing: 6) {
+                        if reaction.isEmpty {
+                            Text("Aucune")
+                                .font(.system(size: 14))
+                                .foregroundColor(theme.textMuted)
+                        } else {
+                            Text(reaction)
+                                .font(.system(size: 24))
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(theme.textMuted)
+                    }
+                }
             }
+            .buttonStyle(.plain)
+        }
+        .sheet(isPresented: $showEmojiPicker) {
+            EmojiPickerSheet(
+                quickReactions: ["❤️", "😂", "👍", "🔥", "😍", "😮", "😢", "👏", "🎉"],
+                onSelect: { emoji in
+                    reaction = emoji
+                    showEmojiPicker = false
+                    Task { await save(UpdateConversationPreferencesRequest(reaction: emoji)) }
+                }
+            )
+            .presentationDetents([.medium, .large])
         }
     }
 
