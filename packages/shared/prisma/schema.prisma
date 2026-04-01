@@ -1696,6 +1696,9 @@ model UserConversationPreferences {
   /// Mute notifications for this conversation
   isMuted Boolean @default(false)
 
+  /// Only notify for mentions and @everyone (requires isMuted = false)
+  mentionsOnly Boolean @default(false)
+
   /// Archive conversation (hide from main list)
   isArchived Boolean @default(false)
 

@@ -815,7 +815,22 @@ export class MessageProcessor {
       const alreadyNotified = new Set([senderUserId, ...validatedMentionUserIds]);
       if (originalMessageAuthorUserId) alreadyNotified.add(originalMessageAuthorUserId);
 
-      const regularRecipients = memberIds.filter(id => !alreadyNotified.has(id));
+      const candidateRegularRecipients = memberIds.filter(id => !alreadyNotified.has(id));
+
+      // Fetch mentionsOnly preferences for all candidate recipients
+      const conversationPrefs = candidateRegularRecipients.length > 0
+        ? await this.prisma.userConversationPreferences.findMany({
+            where: {
+              conversationId: data.conversationId,
+              userId: { in: candidateRegularRecipients },
+              mentionsOnly: true,
+            },
+            select: { userId: true },
+          })
+        : [];
+
+      const mentionsOnlyUserIds = new Set(conversationPrefs.map(p => p.userId));
+      const regularRecipients = candidateRegularRecipients.filter(id => !mentionsOnlyUserIds.has(id));
 
       if (regularRecipients.length > 0) {
         await Promise.all(regularRecipients.map(recipientUserId =>

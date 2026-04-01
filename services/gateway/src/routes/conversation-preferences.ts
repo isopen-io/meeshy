@@ -21,6 +21,7 @@ import { UnifiedAuthRequest } from '../middleware/auth';
 interface ConversationPreferencesBody {
   isPinned?: boolean;
   isMuted?: boolean;
+  mentionsOnly?: boolean;
   isArchived?: boolean;
   tags?: string[];
   categoryId?: string | null;
@@ -44,6 +45,7 @@ const conversationPreferencesSchema = {
     conversationId: { type: 'string', description: 'Conversation ID' },
     isPinned: { type: 'boolean', description: 'Whether conversation is pinned' },
     isMuted: { type: 'boolean', description: 'Whether conversation is muted' },
+    mentionsOnly: { type: 'boolean', description: 'Whether to only receive notifications for mentions' },
     isArchived: { type: 'boolean', description: 'Whether conversation is archived' },
     tags: { type: 'array', items: { type: 'string' }, description: 'User-defined tags' },
     categoryId: { type: 'string', nullable: true, description: 'Category ID if conversation is categorized' },
@@ -88,6 +90,7 @@ const updateConversationPreferencesRequestSchema = {
   properties: {
     isPinned: { type: 'boolean', description: 'Pin/unpin conversation' },
     isMuted: { type: 'boolean', description: 'Mute/unmute conversation' },
+    mentionsOnly: { type: 'boolean', description: 'Only notify for mentions and @everyone' },
     isArchived: { type: 'boolean', description: 'Archive/unarchive conversation' },
     tags: { type: 'array', items: { type: 'string' }, description: 'User tags for conversation' },
     categoryId: { type: 'string', nullable: true, description: 'Category ID or null to uncategorize' },
@@ -440,6 +443,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const updateData: any = {};
         if (data.isPinned !== undefined) updateData.isPinned = data.isPinned;
         if (data.isMuted !== undefined) updateData.isMuted = data.isMuted;
+        if (data.mentionsOnly !== undefined) updateData.mentionsOnly = data.mentionsOnly;
         if (data.isArchived !== undefined) updateData.isArchived = data.isArchived;
         if (data.tags !== undefined) updateData.tags = data.tags;
         if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
