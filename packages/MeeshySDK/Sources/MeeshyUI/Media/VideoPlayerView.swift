@@ -39,6 +39,12 @@ public struct VideoPlayerView: View {
         }
     }
 
+    private var videoAspectRatio: CGFloat? {
+        guard context == .feedPost || context == .storyOverlay else { return nil }
+        guard let w = attachment.width, let h = attachment.height, w > 0, h > 0 else { return nil }
+        return CGFloat(w) / CGFloat(h)
+    }
+
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
                 accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
                 onRequestTranscription: (() -> Void)? = nil,
@@ -86,7 +92,8 @@ public struct VideoPlayerView: View {
                     }
                 }
             }
-            .frame(height: videoHeight)
+            .aspectRatio(videoAspectRatio, contentMode: .fit)
+            .frame(maxHeight: videoHeight)
             .clipShape(RoundedRectangle(cornerRadius: context.cornerRadius))
 
             controlsBar
