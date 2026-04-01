@@ -77,7 +77,7 @@ struct ConversationPreferencesTab: View {
             }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("Vous perdrez l'accès à l'historique de cette conversation.")
+            Text("Vous ne recevrez plus de messages. Votre historique restera lisible.")
         }
         .confirmationDialog("Supprimer pour moi ?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Supprimer", role: .destructive) {
@@ -298,6 +298,7 @@ struct ConversationPreferencesTab: View {
             let prefs = try await PreferenceService.shared.getConversationPreferences(conversationId: conversation.id)
             isPinned = prefs.isPinned ?? false
             isMuted = prefs.isMuted ?? false
+            mentionsOnly = prefs.mentionsOnly ?? false
             isArchived = prefs.isArchived ?? false
             customName = prefs.customName ?? ""
             reaction = prefs.reaction ?? ""

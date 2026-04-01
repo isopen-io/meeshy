@@ -362,12 +362,14 @@ struct MemberManagementSection: View {
             handler: { await viewModel.expelParticipant(participantId: participantId) }
         ))
 
-        actions.append(MemberAction(
-            label: "Bannir",
-            icon: "hand.raised.fill",
-            isDestructive: true,
-            handler: { await viewModel.banParticipant(userId: userId) }
-        ))
+        if currentUserRole.hasMinimumRole(.admin) {
+            actions.append(MemberAction(
+                label: "Bannir",
+                icon: "hand.raised.fill",
+                isDestructive: true,
+                handler: { await viewModel.banParticipant(userId: userId) }
+            ))
+        }
 
         return actions
     }

@@ -80,6 +80,7 @@ public struct APIConversationPreferences: Decodable, Sendable {
     public let categoryId: String?
     public let reaction: String?
     public let customName: String?
+    public let mentionsOnly: Bool?
 }
 
 public struct APIConversation: Decodable, Sendable {

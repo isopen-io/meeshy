@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
+import { resolveConversationId } from '../../utils/conversation-id-cache'
 
 const ROLE_LEVELS: Record<string, number> = {
   CREATOR: 40,
@@ -38,9 +39,11 @@ export function registerBanRoutes(
       preValidation: [requiredAuth],
     },
     async (request, reply) => {
-      const { id, userId: targetUserId } = request.params
+      const { id: rawId, userId: targetUserId } = request.params
       const authRequest = request as UnifiedAuthRequest
       const currentUserId = authRequest.authContext.userId
+
+      const id = await resolveConversationId(prisma, rawId) ?? rawId
 
       const currentParticipant = await prisma.participant.findFirst({
         where: { conversationId: id, userId: currentUserId, isActive: true },
@@ -85,6 +88,7 @@ export function registerBanRoutes(
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, {
           conversationId: id,
           userId: targetUserId,
+          bannedBy: { id: currentUserId },
           bannedAt: now.toISOString(),
         })
 
@@ -117,9 +121,11 @@ export function registerBanRoutes(
       preValidation: [requiredAuth],
     },
     async (request, reply) => {
-      const { id, userId: targetUserId } = request.params
+      const { id: rawUnbanId, userId: targetUserId } = request.params
       const authRequest = request as UnifiedAuthRequest
       const currentUserId = authRequest.authContext.userId
+
+      const id = await resolveConversationId(prisma, rawUnbanId) ?? rawUnbanId
 
       const currentParticipant = await prisma.participant.findFirst({
         where: { conversationId: id, userId: currentUserId, isActive: true },

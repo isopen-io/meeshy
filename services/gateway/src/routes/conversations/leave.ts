@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
+import { resolveConversationId } from '../../utils/conversation-id-cache'
 
 export function registerLeaveRoutes(
   fastify: FastifyInstance,
@@ -28,9 +29,11 @@ export function registerLeaveRoutes(
       preValidation: [requiredAuth],
     },
     async (request, reply) => {
-      const { id } = request.params
+      const { id: rawId } = request.params
       const authRequest = request as UnifiedAuthRequest
       const userId = authRequest.authContext.userId
+
+      const id = await resolveConversationId(prisma, rawId) ?? rawId
 
       const participant = await prisma.participant.findFirst({
         where: { conversationId: id, userId, isActive: true },
@@ -50,6 +53,10 @@ export function registerLeaveRoutes(
             "Le créateur doit transférer l'ownership ou supprimer la conversation avant de quitter"
           )
         }
+        await prisma.conversation.update({
+          where: { id },
+          data: { isActive: false },
+        })
       }
 
       const now = new Date()
@@ -66,7 +73,7 @@ export function registerLeaveRoutes(
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, {
           conversationId: id,
           userId,
-          username: participant.displayName,
+          displayName: participant.displayName,
           leftAt: now.toISOString(),
         })
 

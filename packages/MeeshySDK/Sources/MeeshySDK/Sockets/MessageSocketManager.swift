@@ -237,6 +237,10 @@ public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
     public let participant: ParticipantRoleUpdatedParticipantInfo
 }
 
+public struct SocketEventUser: Decodable, Sendable {
+    public let id: String
+}
+
 public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let title: String?
@@ -247,21 +251,21 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let isAnnouncementChannel: Bool?
     public let slowModeSeconds: Int?
     public let autoTranslateEnabled: Bool?
-    public let updatedBy: String
+    public let updatedBy: SocketEventUser
     public let updatedAt: String
 }
 
 public struct ParticipantLeftEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
-    public let username: String
+    public let displayName: String
     public let leftAt: String
 }
 
 public struct ParticipantBannedEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
-    public let bannedBy: String
+    public let bannedBy: SocketEventUser
     public let bannedAt: String
 }
 

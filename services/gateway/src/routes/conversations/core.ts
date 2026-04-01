@@ -975,6 +975,13 @@ export function registerCoreRoutes(
         return sendForbidden(reply, 'The global conversation cannot be modified');
       }
 
+      if (membership?.role === 'MODERATOR') {
+        if (defaultWriteRole !== undefined || isAnnouncementChannel !== undefined ||
+            slowModeSeconds !== undefined || autoTranslateEnabled !== undefined) {
+          return sendForbidden(reply, 'Les modérateurs ne peuvent pas modifier les permissions');
+        }
+      }
+
       const updatedConversation = await prisma.conversation.update({
         where: { id },
         data: {

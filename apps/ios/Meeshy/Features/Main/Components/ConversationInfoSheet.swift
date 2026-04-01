@@ -129,7 +129,7 @@ struct ConversationInfoSheet: View {
                 Task { await leaveConversation() }
             }
         } message: {
-            Text("Vous quitterez definitivement cette conversation et perdrez l'acces a son historique.")
+            Text("Vous ne recevrez plus de messages. Votre historique restera lisible.")
         }
         .sheet(isPresented: $showSecurityVerification) {
             SecurityVerificationView(
