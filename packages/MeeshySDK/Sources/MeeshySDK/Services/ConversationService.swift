@@ -14,7 +14,20 @@ public protocol ConversationServiceProviding: Sendable {
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation]
     func removeParticipant(conversationId: String, participantId: String) async throws
     func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws
-    func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?) async throws -> APIConversation
+    func update(
+        conversationId: String,
+        title: String?,
+        description: String?,
+        avatar: String?,
+        banner: String?,
+        defaultWriteRole: String?,
+        isAnnouncementChannel: Bool?,
+        slowModeSeconds: Int?,
+        autoTranslateEnabled: Bool?
+    ) async throws -> APIConversation
+    func leave(conversationId: String) async throws
+    func banParticipant(conversationId: String, userId: String) async throws
+    func unbanParticipant(conversationId: String, userId: String) async throws
 }
 
 public final class ConversationService: ConversationServiceProviding, @unchecked Sendable {
@@ -86,13 +99,26 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         )
     }
 
-    public func update(conversationId: String, title: String? = nil, description: String? = nil,
-                       avatar: String? = nil, banner: String? = nil) async throws -> APIConversation {
+    public func update(
+        conversationId: String,
+        title: String? = nil,
+        description: String? = nil,
+        avatar: String? = nil,
+        banner: String? = nil,
+        defaultWriteRole: String? = nil,
+        isAnnouncementChannel: Bool? = nil,
+        slowModeSeconds: Int? = nil,
+        autoTranslateEnabled: Bool? = nil
+    ) async throws -> APIConversation {
         struct UpdateConversationRequest: Encodable {
             let title: String?
             let description: String?
             let avatar: String?
             let banner: String?
+            let defaultWriteRole: String?
+            let isAnnouncementChannel: Bool?
+            let slowModeSeconds: Int?
+            let autoTranslateEnabled: Bool?
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
@@ -100,17 +126,51 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
                 if let description { try container.encode(description, forKey: .description) }
                 if let avatar { try container.encode(avatar, forKey: .avatar) }
                 if let banner { try container.encode(banner, forKey: .banner) }
+                if let defaultWriteRole { try container.encode(defaultWriteRole, forKey: .defaultWriteRole) }
+                if let isAnnouncementChannel { try container.encode(isAnnouncementChannel, forKey: .isAnnouncementChannel) }
+                if let slowModeSeconds { try container.encode(slowModeSeconds, forKey: .slowModeSeconds) }
+                if let autoTranslateEnabled { try container.encode(autoTranslateEnabled, forKey: .autoTranslateEnabled) }
             }
 
             enum CodingKeys: String, CodingKey {
                 case title, description, avatar, banner
+                case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
             }
         }
-        let body = UpdateConversationRequest(title: title, description: description,
-                                              avatar: avatar, banner: banner)
+        let body = UpdateConversationRequest(
+            title: title,
+            description: description,
+            avatar: avatar,
+            banner: banner,
+            defaultWriteRole: defaultWriteRole,
+            isAnnouncementChannel: isAnnouncementChannel,
+            slowModeSeconds: slowModeSeconds,
+            autoTranslateEnabled: autoTranslateEnabled
+        )
         let response: APIResponse<APIConversation> = try await api.put(
             endpoint: "/conversations/\(conversationId)", body: body)
         return response.data
+    }
+
+    public func leave(conversationId: String) async throws {
+        let _: APIResponse<LeaveConversationResponse> = try await api.request(
+            endpoint: "/conversations/\(conversationId)/leave",
+            method: "POST"
+        )
+    }
+
+    public func banParticipant(conversationId: String, userId: String) async throws {
+        let _: APIResponse<BanParticipantResponse> = try await api.request(
+            endpoint: "/conversations/\(conversationId)/participants/\(userId)/ban",
+            method: "PATCH"
+        )
+    }
+
+    public func unbanParticipant(conversationId: String, userId: String) async throws {
+        let _: APIResponse<UnbanParticipantResponse> = try await api.request(
+            endpoint: "/conversations/\(conversationId)/participants/\(userId)/unban",
+            method: "PATCH"
+        )
     }
 
     /// Récupère les conversations en commun avec un utilisateur spécifique
@@ -124,4 +184,20 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         )
         return response.data
     }
+}
+
+// MARK: - Response Types
+
+struct LeaveConversationResponse: Decodable {
+    let conversationId: String
+    let leftAt: String
+}
+
+struct BanParticipantResponse: Decodable {
+    let userId: String
+    let bannedAt: String
+}
+
+struct UnbanParticipantResponse: Decodable {
+    let userId: String
 }
