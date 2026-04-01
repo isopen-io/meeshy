@@ -39,7 +39,7 @@ dnspython==2.7.0
 # Détection de langue et analyse de texte
 langdetect==1.0.9
 nltk==3.9.1
-textstat==0.7.4
+textstat==0.7.13
 
 # Utilitaires système
 psutil==6.1.1
