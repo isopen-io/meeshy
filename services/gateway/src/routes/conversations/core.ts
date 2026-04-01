@@ -28,6 +28,7 @@ import type {
   CreateConversationBody
 } from './types';
 import { buildCursorPaginationMeta } from '../../utils/pagination';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 /**
  * Enregistre les routes CRUD de base pour les conversations
@@ -942,8 +943,15 @@ export function registerCoreRoutes(
   }, async (request, reply) => {
     try {
       const { id } = request.params;
-      const { title, description, avatar, banner } = request.body as {
-        title?: string; description?: string; avatar?: string | null; banner?: string | null;
+      const { title, description, avatar, banner, defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled } = request.body as {
+        title?: string
+        description?: string
+        avatar?: string | null
+        banner?: string | null
+        defaultWriteRole?: string
+        isAnnouncementChannel?: boolean
+        slowModeSeconds?: number
+        autoTranslateEnabled?: boolean
       };
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
@@ -974,6 +982,10 @@ export function registerCoreRoutes(
           description,
           ...(avatar !== undefined && { avatar }),
           ...(banner !== undefined && { banner }),
+          ...(defaultWriteRole !== undefined && { defaultWriteRole }),
+          ...(isAnnouncementChannel !== undefined && { isAnnouncementChannel }),
+          ...(slowModeSeconds !== undefined && { slowModeSeconds }),
+          ...(autoTranslateEnabled !== undefined && { autoTranslateEnabled }),
         },
         include: {
           participants: {
@@ -990,6 +1002,29 @@ export function registerCoreRoutes(
           }
         }
       });
+
+      const changedFields: Record<string, unknown> = {}
+      if (title !== undefined) changedFields.title = title
+      if (description !== undefined) changedFields.description = description
+      if (avatar !== undefined) changedFields.avatar = avatar
+      if (banner !== undefined) changedFields.banner = banner
+      if (defaultWriteRole !== undefined) changedFields.defaultWriteRole = defaultWriteRole
+      if (isAnnouncementChannel !== undefined) changedFields.isAnnouncementChannel = isAnnouncementChannel
+      if (slowModeSeconds !== undefined) changedFields.slowModeSeconds = slowModeSeconds
+      if (autoTranslateEnabled !== undefined) changedFields.autoTranslateEnabled = autoTranslateEnabled
+
+      const socketIOHandler = (fastify as any).socketIOHandler
+      const socketIOManager = socketIOHandler?.getManager?.()
+      const io = socketIOManager?.io || (socketIOHandler as any)?.io
+      if (io) {
+        const room = ROOMS.conversation(id)
+        io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+          conversationId: id,
+          ...changedFields,
+          updatedBy: { id: userId },
+          updatedAt: new Date().toISOString(),
+        })
+      }
 
       return sendSuccess(reply, updatedConversation);
 
@@ -1074,6 +1109,116 @@ export function registerCoreRoutes(
     } catch (error) {
       console.error('Error deleting conversation:', error);
       sendInternalError(reply, 'Erreur lors de la suppression de la conversation');
+    }
+  });
+
+  // Route pour obtenir l'analyse agent d'une conversation
+  fastify.get<{ Params: ConversationParams }>('/conversations/:id/analysis', {
+    schema: {
+      description: 'Get agent analysis for a conversation (summary, tone, participant profiles)',
+      tags: ['conversations'],
+      summary: 'Get conversation analysis',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      response: {
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+      const { id } = request.params;
+      const userId = authRequest.authContext.userId;
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return sendNotFound(reply, 'Conversation not found');
+      }
+
+      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!canAccess) {
+        return sendForbidden(reply, 'Access denied');
+      }
+
+      const [summary, roles] = await Promise.all([
+        prisma.agentConversationSummary.findUnique({
+          where: { conversationId }
+        }),
+        prisma.agentUserRole.findMany({
+          where: { conversationId },
+          select: {
+            userId: true,
+            personaSummary: true,
+            tone: true,
+            vocabularyLevel: true,
+            typicalLength: true,
+            emojiUsage: true,
+            topicsOfExpertise: true,
+            catchphrases: true,
+            commonEmojis: true,
+            reactionPatterns: true,
+            messagesAnalyzed: true,
+            confidence: true,
+          }
+        })
+      ]);
+
+      // Enrichir les roles avec username/displayName
+      const userIds = roles.map(r => r.userId);
+      const users = userIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, username: true, firstName: true, lastName: true, avatar: true }
+          })
+        : [];
+
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      const participantProfiles = roles.map(role => {
+        const user = userMap.get(role.userId);
+        return {
+          userId: role.userId,
+          username: user?.username ?? null,
+          displayName: user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.username : null,
+          avatar: user?.avatar ?? null,
+          personaSummary: role.personaSummary,
+          tone: role.tone,
+          vocabularyLevel: role.vocabularyLevel,
+          typicalLength: role.typicalLength,
+          emojiUsage: role.emojiUsage,
+          topicsOfExpertise: role.topicsOfExpertise,
+          catchphrases: role.catchphrases,
+          commonEmojis: role.commonEmojis,
+          reactionPatterns: role.reactionPatterns,
+          messagesAnalyzed: role.messagesAnalyzed,
+          confidence: role.confidence,
+        };
+      });
+
+      return sendSuccess(reply, {
+        conversationId,
+        summary: summary ? {
+          text: summary.summary,
+          currentTopics: summary.currentTopics,
+          overallTone: summary.overallTone,
+          messageCount: summary.messageCount,
+          updatedAt: summary.updatedAt,
+        } : null,
+        participantProfiles,
+      });
+
+    } catch (error) {
+      console.error('Error fetching conversation analysis:', error);
+      sendInternalError(reply, 'Error fetching conversation analysis');
     }
   });
 }
