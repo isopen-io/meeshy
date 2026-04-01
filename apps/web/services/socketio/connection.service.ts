@@ -13,6 +13,8 @@ import type { User } from '@/types';
 import type {
   TypedSocket,
   ConnectionState,
+  ConnectionStatus,
+  ConnectionDiagnostics
 } from './types';
 
 import enTranslations from '@/locales/en';
@@ -33,6 +35,7 @@ export class ConnectionService {
   private readonly maxReconnectAttempts = 5;
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private isAppUpdating = false;
+  private autoJoinCallback: (() => void) | null = null;
 
   private listenerCallbacks: {
     onAuthenticated?: (user: User) => void;
@@ -98,6 +101,20 @@ export class ConnectionService {
     }
   }
 
+  reconnect(): void {
+    this.disconnect();
+    setTimeout(() => this.connect(), 500);
+  }
+
+  disconnectForUpdate(): void {
+    this.isAppUpdating = true;
+    this.disconnect();
+  }
+
+  setAutoJoinCallback(callback: () => void): void {
+    this.autoJoinCallback = callback;
+  }
+
   setupConnectionListeners(onAuthenticated?: (user: User) => void, onDisconnected?: (reason: string) => void, onError?: (error: any) => void): void {
     const socket = this.state.socket;
     if (!socket) return;
@@ -108,6 +125,7 @@ export class ConnectionService {
       this.state.isConnected = true;
       this.state.isConnecting = false;
       this.state.reconnectAttempts = 0;
+      if (this.autoJoinCallback) this.autoJoinCallback();
     });
 
     socket.on('disconnect', (reason) => {
@@ -153,7 +171,47 @@ export class ConnectionService {
     }
   }
 
+  joinConversation(conversationOrId: any): void {
+    const socket = this.getSocket();
+    if (!socket || !socket.connected) return;
+
+    const conversationId = typeof conversationOrId === 'string' ? conversationOrId : getConversationApiId(conversationOrId);
+    socket.emit(CLIENT_EVENTS.CONVERSATION_JOIN, { conversationId });
+  }
+
+  leaveConversation(conversationOrId: any): void {
+    const socket = this.getSocket();
+    if (!socket || !socket.connected) return;
+
+    const conversationId = typeof conversationOrId === 'string' ? conversationOrId : getConversationApiId(conversationOrId);
+    socket.emit(CLIENT_EVENTS.CONVERSATION_LEAVE, { conversationId });
+  }
+
+  updateCurrentConversationId(conversationId: string | null): void {
+    this.currentConversationId = conversationId;
+  }
+
+  getCurrentConversationId(): string | null {
+    return this.currentConversationId;
+  }
+
+  getConnectionStatus(): ConnectionStatus {
+    if (this.state.isConnected) return 'connected';
+    if (this.state.isConnecting) return 'connecting';
+    return 'disconnected';
+  }
+
+  getConnectionDiagnostics(): ConnectionDiagnostics {
+    return {
+      status: this.getConnectionStatus(),
+      reconnectAttempts: this.state.reconnectAttempts,
+      transport: this.state.socket?.io?.engine?.transport?.name || 'unknown',
+      socketId: this.state.socket?.id || null
+    };
+  }
+
   getSocket(): TypedSocket | null { return this.state.socket; }
+
   cleanup(): void {
     this.disconnect();
     this.state.socket = null;
