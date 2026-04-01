@@ -26,6 +26,13 @@ import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
+// Emoji-only detection: matches strings containing only emoji (+ optional whitespace)
+const EMOJI_REGEX = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\s]+$/u;
+function isEmojiOnly(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.length > 0 && trimmed.length <= 40 && EMOJI_REGEX.test(trimmed);
+}
+
 export interface MessageData {
   id?: string;
   conversationId: string;
@@ -129,6 +136,21 @@ export class MessageTranslationService extends EventEmitter {
   async handleNewMessage(messageData: MessageData): Promise<{ messageId: string; status: string }> {
     try {
       const startTime = Date.now();
+
+      // Skip translation for emoji-only messages (no translatable text)
+      if (messageData.content && isEmojiOnly(messageData.content)) {
+        logger.debug('Skipping translation for emoji-only message', {
+          conversationId: messageData.conversationId,
+          content: messageData.content.substring(0, 20)
+        });
+
+        if (!messageData.id) {
+          const savedMessage = await this._saveMessageToDatabase(messageData);
+          this.stats.incrementMessagesSaved();
+          return { messageId: savedMessage.id, status: 'emoji_only_skipped' };
+        }
+        return { messageId: messageData.id, status: 'emoji_only_skipped' };
+      }
 
       // SECURITY: Skip translation for E2EE messages
       if (messageData.encryptionMode === 'e2ee') {

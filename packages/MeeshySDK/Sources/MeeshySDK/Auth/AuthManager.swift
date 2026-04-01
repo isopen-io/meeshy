@@ -258,7 +258,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } catch let error as MeeshyError {
                 switch error {
                 case .auth:
-                    self.clearActiveSession(userId: userId)
+                    self?.clearActiveSession(userId: userId)
                 case .network, .server, .message, .media, .unknown:
                     break
                 }

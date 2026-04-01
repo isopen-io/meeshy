@@ -416,6 +416,7 @@ struct ThemedMessageBubble: View {
 
     @ViewBuilder
     private var identityBarSection: some View {
+        let showTranslation = hasAnyTranslation && !isEmojiOnly
         if showIdentityBar {
             UserIdentityBar.messageBubble(
                 name: message.senderName ?? "?",
@@ -425,10 +426,10 @@ struct ThemedMessageBubble: View {
                 role: nil,
                 time: timeString,
                 delivery: message.isMe ? message.deliveryStatus : nil,
-                flags: buildAvailableFlags(),
-                activeFlag: secondaryLangCode,
-                onFlagTap: { code in handleFlagTap(code) },
-                onTranslateTap: hasAnyTranslation ? { onShowTranslationDetail?(message.id) } : nil,
+                flags: showTranslation ? buildAvailableFlags() : [],
+                activeFlag: showTranslation ? secondaryLangCode : nil,
+                onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
+                onTranslateTap: showTranslation ? { onShowTranslationDetail?(message.id) } : nil,
                 presenceState: presenceState,
                 moodEmoji: senderMoodEmoji,
                 storyRingState: senderStoryRingState,
@@ -441,10 +442,10 @@ struct ThemedMessageBubble: View {
             UserIdentityBar.metaRow(
                 time: timeString,
                 delivery: message.isMe ? message.deliveryStatus : nil,
-                flags: hasAnyTranslation ? buildAvailableFlags() : [],
-                activeFlag: secondaryLangCode,
-                onFlagTap: hasAnyTranslation ? { code in handleFlagTap(code) } : nil,
-                onTranslateTap: hasAnyTranslation ? { onShowTranslationDetail?(message.id) } : nil,
+                flags: showTranslation ? buildAvailableFlags() : [],
+                activeFlag: showTranslation ? secondaryLangCode : nil,
+                onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
+                onTranslateTap: showTranslation ? { onShowTranslationDetail?(message.id) } : nil,
                 isMe: message.isMe
             )
             .padding(.horizontal, 14)
