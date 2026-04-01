@@ -212,6 +212,10 @@ export class ConnectionService {
 
   getSocket(): TypedSocket | null { return this.state.socket; }
 
+  setCurrentUser(user: User): void {
+    this.currentUser = user;
+  }
+
   cleanup(): void {
     this.disconnect();
     this.state.socket = null;
