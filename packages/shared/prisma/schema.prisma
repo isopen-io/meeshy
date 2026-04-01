@@ -362,6 +362,9 @@ model Conversation {
   agentAnalytic   AgentAnalytic?
   agentScanLogs   AgentScanLog[]
   agentUserRoles  AgentUserRole[]
+  agentConversationSummary AgentConversationSummary?
+  agentAnalysisSnapshots AgentAnalysisSnapshot[]
+  conversationMessageStats ConversationMessageStats?
 
   // Unified participant model (replaces members + anonymousParticipants)
   participants Participant[]
@@ -3044,6 +3047,69 @@ model AgentUserRole {
   commonEmojis      String[]  @default([])
   reactionPatterns  String[]  @default([])
 
+  // ── Psychological Dimensions (23 traits) ──
+  traitVerbosity            String?
+  traitVerbosityScore       Int?
+  traitFormality            String?
+  traitFormalityScore       Int?
+  traitResponseSpeed        String?
+  traitResponseSpeedScore   Int?
+  traitInitiativeRate       String?
+  traitInitiativeRateScore  Int?
+  traitClarity              String?
+  traitClarityScore         Int?
+  traitArgumentation        String?
+  traitArgumentationScore   Int?
+
+  traitSocialStyle          String?
+  traitSocialStyleScore     Int?
+  traitAssertiveness        String?
+  traitAssertivenessScore   Int?
+  traitAgreeableness        String?
+  traitAgreeablenessScore   Int?
+  traitHumor                String?
+  traitHumorScore           Int?
+  traitEmotionality         String?
+  traitEmotionalityScore    Int?
+  traitOpenness             String?
+  traitOpennessScore        Int?
+  traitConfidence           String?
+  traitConfidenceScore      Int?
+  traitCreativity           String?
+  traitCreativityScore      Int?
+  traitPatience             String?
+  traitPatienceScore        Int?
+  traitAdaptability         String?
+  traitAdaptabilityScore    Int?
+
+  traitEmpathy              String?
+  traitEmpathyScore         Int?
+  traitPoliteness           String?
+  traitPolitenessScore      Int?
+  traitLeadership           String?
+  traitLeadershipScore      Int?
+  traitConflictStyle        String?
+  traitConflictStyleScore   Int?
+  traitSupportiveness       String?
+  traitSupportivenessScore  Int?
+  traitDiplomacy            String?
+  traitDiplomacyScore       Int?
+  traitTrustLevel           String?
+  traitTrustLevelScore      Int?
+
+  traitEmotionalStability      String?
+  traitEmotionalStabilityScore Int?
+  traitPositivity              String?
+  traitPositivityScore         Int?
+  traitSensitivity             String?
+  traitSensitivityScore        Int?
+  traitStressResponse          String?
+  traitStressResponseScore     Int?
+
+  dominantEmotions          String[]  @default([])
+  engagementLevel           String?
+  sentimentScore            Float?
+
   /// Conversation-level overrides (take priority over AgentGlobalProfile)
   overrideTone             String?
   overrideVocabularyLevel  String?
@@ -3073,9 +3139,66 @@ model AgentConversationSummary {
   lastMessageId   String   @db.ObjectId
   messageCount    Int
 
+  healthScore               Int?
+  engagementLevel           String?
+  conflictLevel             String?
+  dynamique                 String?
+  dominantEmotions          String[]  @default([])
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id])
+
   updatedAt       DateTime @updatedAt
 
   @@unique([conversationId])
+}
+
+model AgentAnalysisSnapshot {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId  String   @db.ObjectId
+  snapshotDate    DateTime
+
+  overallTone     String
+  healthScore     Int?
+  engagementLevel String?
+  conflictLevel   String?
+  topTopics       String[]
+  dominantEmotions String[]
+  messageCountAtSnapshot Int
+
+  participantSnapshots Json
+
+  createdAt       DateTime @default(now())
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id])
+
+  @@unique([conversationId, snapshotDate])
+  @@index([conversationId])
+  @@index([snapshotDate])
+}
+
+model ConversationMessageStats {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId  String   @unique @db.ObjectId
+
+  totalMessages   Int      @default(0)
+  totalWords      Int      @default(0)
+  totalCharacters Int      @default(0)
+
+  textMessages    Int      @default(0)
+  imageCount      Int      @default(0)
+  audioCount      Int      @default(0)
+  videoCount      Int      @default(0)
+  fileCount       Int      @default(0)
+  locationCount   Int      @default(0)
+
+  participantStats Json    @default("{}")
+  dailyActivity   Json     @default("{}")
+  hourlyDistribution Json  @default("{}")
+  languageDistribution Json @default("{}")
+
+  updatedAt       DateTime @updatedAt
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id])
 }
 
 model AgentLlmConfig {
