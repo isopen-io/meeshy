@@ -4,7 +4,7 @@
 
 **Goal:** Cover all conversation management gaps — leave endpoint, real-time socket events, personal preferences tab, admin view with member management, ban/unban, and share link management.
 
-**Architecture:** Feature Slice Vertical — each task delivers Gateway + SDK + iOS changes end-to-end. Two UX surfaces: a "Préférences" tab in the existing ConversationInfoSheet (personal settings) and a full-page ConversationAdminView (admin settings pushed via NavigationStack).
+**Architecture:** Feature Slice Vertical — each task delivers Gateway + SDK + iOS changes end-to-end. Two UX surfaces: a "Préférences" tab in the existing ConversationInfoSheet (personal settings) and an enriched ConversationSettingsView (existing SDK view, expanded with Permissions, Members, Share Links, Danger Zone sections, presented as full-page push instead of sheet).
 
 **Tech Stack:** TypeScript/Fastify (gateway), Swift/SwiftUI (iOS + SDK), Prisma (schema), Socket.IO (real-time), Zod (validation)
 
@@ -21,8 +21,7 @@
 | `services/gateway/src/routes/conversations/leave.ts` | Leave conversation endpoint |
 | `services/gateway/src/routes/conversations/ban.ts` | Ban/unban participant endpoints |
 | `apps/ios/Meeshy/Features/Main/Components/ConversationPreferencesTab.swift` | Personal preferences tab in info sheet |
-| `apps/ios/Meeshy/Features/Main/Views/ConversationAdminView.swift` | Full-page admin view |
-| `apps/ios/Meeshy/Features/Main/ViewModels/ConversationAdminViewModel.swift` | Admin view state + save logic |
+| `apps/ios/Meeshy/Features/Main/Components/PermissionsSection.swift` | Permissions section (defaultWriteRole, announcement, slow mode) |
 | `apps/ios/Meeshy/Features/Main/Components/MemberManagementSection.swift` | Member list + role management + ban/expel |
 | `packages/MeeshySDK/Sources/MeeshyUI/Primitives/TagInputView.swift` | Reusable tag input with autocomplete + FlowLayout |
 | `packages/MeeshySDK/Sources/MeeshyUI/Primitives/CategoryPickerView.swift` | Reusable category picker with inline creation |
@@ -41,7 +40,8 @@
 | `packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift` | Add 4 new listeners + publishers |
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/CoreModels.swift` | Add missing fields to MeeshyConversation |
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationModels.swift` | Add customName to APIConversationPreferences |
-| `apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift` | Add 4th tab, change gear → NavigationLink |
+| `packages/MeeshySDK/Sources/MeeshyUI/Conversation/ConversationSettingsView.swift` | Enrich with Permissions, Members, Share Links, Danger Zone sections; fix leave semantics |
+| `apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift` | Add Préférences tab, change gear sheet→NavigationLink push, fix "Quitter" action button semantics, remove redundant ParticipantsView fullScreenCover |
 | `apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift` | Fix "Supprimer" label semantics |
 | `apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift` | Subscribe to new socket events |
 
@@ -1296,474 +1296,362 @@ git commit -m "feat(sdk): add TagInputView reusable component with FlowLayout"
 
 ---
 
-## Task 10: iOS — ConversationAdminView + ViewModel
+## Task 10: Enrich ConversationSettingsView + Fix ConversationInfoSheet
+
+**Context:** `ConversationSettingsView` (SDK) already handles avatar/banner upload, title/description editing, and save with TUS upload flow. We enrich it with new sections instead of replacing it. `ConversationInfoSheet` (App) has several issues to fix: redundant "Quitter" buttons, gear opens as sheet instead of push, and `ParticipantsView` is a separate fullScreenCover.
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/ConversationAdminView.swift`
-- Create: `apps/ios/Meeshy/Features/Main/ViewModels/ConversationAdminViewModel.swift`
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Conversation/ConversationSettingsView.swift`
+- Create: `apps/ios/Meeshy/Features/Main/Components/PermissionsSection.swift`
 - Modify: `apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift`
 
-- [ ] **Step 1: Create ConversationAdminViewModel**
+- [ ] **Step 1: Enrich ConversationSettingsViewModel with permissions + members fields**
 
-Create `apps/ios/Meeshy/Features/Main/ViewModels/ConversationAdminViewModel.swift`:
+In `ConversationSettingsView.swift`, find `ConversationSettingsViewModel` (line 276). Add these published properties after the existing ones:
 
 ```swift
-import SwiftUI
-import MeeshySDK
-import PhotosUI
+// Permissions
+@Published var defaultWriteRole: String = "everyone"
+@Published var isAnnouncementChannel: Bool = false
+@Published var slowModeSeconds: Int = 0
+@Published var autoTranslateEnabled: Bool = true
 
-@MainActor
-final class ConversationAdminViewModel: ObservableObject {
-    let conversationId: String
-    private let conversationService: ConversationService
-    private let participantService: ParticipantService
+// Members
+@Published var participants: [APIParticipant] = []
+@Published var isLoadingMembers = false
+@Published var memberSearchText: String = ""
+@Published var totalMemberCount: Int = 0
 
-    // Identity
-    @Published var title: String = ""
-    @Published var description: String = ""
-    @Published var avatarURL: String? = nil
-    @Published var bannerURL: String? = nil
-    @Published var selectedAvatarItem: PhotosPickerItem? = nil
-    @Published var selectedBannerItem: PhotosPickerItem? = nil
-    @Published var isUploadingAvatar = false
-    @Published var isUploadingBanner = false
+// Danger zone
+@Published var showDeleteConversation = false
 
-    // Permissions
-    @Published var defaultWriteRole: String = "everyone"
-    @Published var isAnnouncementChannel: Bool = false
-    @Published var slowModeSeconds: Int = 0
-    @Published var autoTranslateEnabled: Bool = true
+// Role of current user
+let currentUserRole: MemberRole
+```
 
-    // Members
-    @Published var participants: [APIParticipant] = []
-    @Published var isLoadingMembers = false
-    @Published var memberSearchText: String = ""
-    @Published var totalMemberCount: Int = 0
+Add original tracking fields for permissions dirty checking:
 
-    // State
-    @Published var isSaving = false
-    @Published var saveError: String? = nil
-    @Published var showDeleteConversation = false
+```swift
+private var originalDefaultWriteRole: String = "everyone"
+private var originalIsAnnouncement: Bool = false
+private var originalSlowMode: Int = 0
+private var originalAutoTranslate: Bool = true
+```
 
-    private var originalTitle: String = ""
-    private var originalDescription: String = ""
-    private var originalDefaultWriteRole: String = "everyone"
-    private var originalIsAnnouncement: Bool = false
-    private var originalSlowMode: Int = 0
-    private var originalAutoTranslate: Bool = true
+Update `hasChanges` computed property to include the new fields:
 
-    var hasChanges: Bool {
-        title != originalTitle ||
-        description != originalDescription ||
-        defaultWriteRole != originalDefaultWriteRole ||
-        isAnnouncementChannel != originalIsAnnouncement ||
-        slowModeSeconds != originalSlowMode ||
-        autoTranslateEnabled != originalAutoTranslate
+```swift
+var hasChanges: Bool {
+    title != originalTitle ||
+    descriptionText != originalDescription ||
+    avatarUrl != originalAvatarUrl ||
+    bannerUrl != originalBannerUrl ||
+    defaultWriteRole != originalDefaultWriteRole ||
+    isAnnouncementChannel != originalIsAnnouncement ||
+    slowModeSeconds != originalSlowMode ||
+    autoTranslateEnabled != originalAutoTranslate
+}
+```
+
+Update `init(conversation:)` to accept and store `currentUserRole` and load permissions:
+
+```swift
+init(conversation: MeeshyConversation, currentUserRole: MemberRole = .member) {
+    // ... existing init code ...
+    self.currentUserRole = currentUserRole
+    self.defaultWriteRole = conversation.defaultWriteRole ?? "everyone"
+    self.isAnnouncementChannel = conversation.isAnnouncementChannel
+    self.slowModeSeconds = conversation.slowModeSeconds ?? 0
+    self.autoTranslateEnabled = conversation.autoTranslateEnabled ?? true
+    self.totalMemberCount = conversation.memberCount
+    self.originalDefaultWriteRole = self.defaultWriteRole
+    self.originalIsAnnouncement = self.isAnnouncementChannel
+    self.originalSlowMode = self.slowModeSeconds
+    self.originalAutoTranslate = self.autoTranslateEnabled
+}
+```
+
+- [ ] **Step 2: Enrich save() to include permissions fields**
+
+In the `save()` method, extend the `ConversationService.shared.update()` call to include the new fields:
+
+```swift
+let apiConversation = try await ConversationService.shared.update(
+    conversationId: conversationId,
+    title: newTitle,
+    description: newDescription,
+    avatar: newAvatar,
+    banner: newBanner,
+    defaultWriteRole: defaultWriteRole != originalDefaultWriteRole ? defaultWriteRole : nil,
+    isAnnouncementChannel: isAnnouncementChannel != originalIsAnnouncement ? isAnnouncementChannel : nil,
+    slowModeSeconds: slowModeSeconds != originalSlowMode ? slowModeSeconds : nil,
+    autoTranslateEnabled: autoTranslateEnabled != originalAutoTranslate ? autoTranslateEnabled : nil
+)
+```
+
+- [ ] **Step 3: Add member management methods to ViewModel**
+
+Add these methods to `ConversationSettingsViewModel`:
+
+```swift
+func loadMembers() async {
+    isLoadingMembers = true
+    defer { isLoadingMembers = false }
+    do {
+        let response = try await ConversationService.shared.getParticipants(
+            conversationId: conversationId, limit: 50, cursor: nil
+        )
+        participants = response.data ?? []
+    } catch {
+        print("[ConversationSettingsVM] Failed to load members: \(error)")
     }
+}
 
-    init(
-        conversationId: String,
-        conversationService: ConversationService = .shared,
-        participantService: ParticipantService = .shared
-    ) {
-        self.conversationId = conversationId
-        self.conversationService = conversationService
-        self.participantService = participantService
+func updateRole(participantId: String, newRole: String) async {
+    do {
+        try await ConversationService.shared.updateParticipantRole(
+            conversationId: conversationId, participantId: participantId, role: newRole
+        )
+        await loadMembers()
+    } catch {
+        errorMessage = error.localizedDescription; showError = true
     }
+}
 
-    func load(from conversation: MeeshyConversation) {
-        title = conversation.title ?? ""
-        description = conversation.description ?? ""
-        avatarURL = conversation.avatar
-        bannerURL = conversation.banner
-        defaultWriteRole = conversation.defaultWriteRole ?? "everyone"
-        isAnnouncementChannel = conversation.isAnnouncementChannel
-        slowModeSeconds = conversation.slowModeSeconds ?? 0
-        autoTranslateEnabled = conversation.autoTranslateEnabled ?? true
-        totalMemberCount = conversation.memberCount
-
-        originalTitle = title
-        originalDescription = description
-        originalDefaultWriteRole = defaultWriteRole
-        originalIsAnnouncement = isAnnouncementChannel
-        originalSlowMode = slowModeSeconds
-        originalAutoTranslate = autoTranslateEnabled
+func expelParticipant(participantId: String) async {
+    do {
+        try await ConversationService.shared.removeParticipant(
+            conversationId: conversationId, participantId: participantId
+        )
+        participants.removeAll { $0.id == participantId }
+        totalMemberCount -= 1
+    } catch {
+        errorMessage = error.localizedDescription; showError = true
     }
+}
 
-    func save() async {
-        isSaving = true
-        saveError = nil
-        defer { isSaving = false }
+func banParticipant(userId: String) async {
+    do {
+        try await ConversationService.shared.banParticipant(
+            conversationId: conversationId, userId: userId
+        )
+        await loadMembers()
+    } catch {
+        errorMessage = error.localizedDescription; showError = true
+    }
+}
 
-        do {
-            _ = try await conversationService.update(
-                conversationId: conversationId,
-                title: title,
-                description: description,
-                defaultWriteRole: defaultWriteRole,
-                isAnnouncementChannel: isAnnouncementChannel,
-                slowModeSeconds: slowModeSeconds,
-                autoTranslateEnabled: autoTranslateEnabled
-            )
-            originalTitle = title
-            originalDescription = description
-            originalDefaultWriteRole = defaultWriteRole
-            originalIsAnnouncement = isAnnouncementChannel
-            originalSlowMode = slowModeSeconds
-            originalAutoTranslate = autoTranslateEnabled
-        } catch {
-            saveError = "Erreur lors de la sauvegarde: \(error.localizedDescription)"
+func deleteConversationForAll() async {
+    do {
+        try await ConversationService.shared.delete(conversationId: conversationId)
+    } catch {
+        errorMessage = error.localizedDescription; showError = true
+    }
+}
+```
+
+- [ ] **Step 4: Fix leaveConversation() to use real leave endpoint**
+
+Replace the existing `leaveConversation()` method (line ~371) which incorrectly calls `deleteForMe`:
+
+```swift
+func leaveConversation() async {
+    do {
+        try await ConversationService.shared.leave(conversationId: conversationId)
+    } catch {
+        errorMessage = error.localizedDescription
+        showError = true
+    }
+}
+```
+
+- [ ] **Step 5: Add Permissions + Members + Danger sections to the View body**
+
+In the `ConversationSettingsView` body (line ~29), after `editSection` and before `dangerSection`, add:
+
+```swift
+PermissionsSection(viewModel: viewModel)
+MemberManagementSection(viewModel: viewModel, currentUserRole: viewModel.currentUserRole)
+shareLinkSection
+```
+
+Replace the existing `dangerSection` with a more complete version that shows "Supprimer la conversation" (creator only) with double confirmation, distinct from the existing "Quitter":
+
+```swift
+private var dangerSection: some View {
+    VStack(spacing: 12) {
+        sectionHeader("Zone dangereuse")
+
+        // Leave button (non-creator)
+        if viewModel.currentUserRole != .creator {
+            Button {
+                viewModel.showLeaveConfirm = true
+            } label: {
+                HStack {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                    Text("Quitter la conversation")
+                }
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(.orange)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.orange.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
         }
-    }
 
-    func loadMembers() async {
-        isLoadingMembers = true
-        defer { isLoadingMembers = false }
-        do {
-            let response = try await conversationService.getParticipants(
-                conversationId: conversationId,
-                limit: 50,
-                cursor: nil
-            )
-            participants = response.data ?? []
-        } catch {
-            print("[ConversationAdminVM] Failed to load members: \(error)")
-        }
-    }
-
-    func updateRole(participantId: String, newRole: String) async {
-        do {
-            try await conversationService.updateParticipantRole(
-                conversationId: conversationId,
-                participantId: participantId,
-                role: newRole
-            )
-            await loadMembers()
-        } catch {
-            print("[ConversationAdminVM] Failed to update role: \(error)")
-        }
-    }
-
-    func expelParticipant(participantId: String) async {
-        do {
-            try await conversationService.removeParticipant(
-                conversationId: conversationId,
-                participantId: participantId
-            )
-            participants.removeAll { $0.id == participantId }
-            totalMemberCount -= 1
-        } catch {
-            print("[ConversationAdminVM] Failed to expel: \(error)")
-        }
-    }
-
-    func banParticipant(userId: String) async {
-        do {
-            try await conversationService.banParticipant(
-                conversationId: conversationId,
-                userId: userId
-            )
-            await loadMembers()
-        } catch {
-            print("[ConversationAdminVM] Failed to ban: \(error)")
-        }
-    }
-
-    func deleteConversation() async {
-        do {
-            try await conversationService.delete(conversationId: conversationId)
-        } catch {
-            print("[ConversationAdminVM] Failed to delete: \(error)")
+        // Delete button (creator only)
+        if viewModel.currentUserRole == .creator {
+            Button {
+                viewModel.showDeleteConversation = true
+            } label: {
+                HStack {
+                    Image(systemName: "trash.fill")
+                    Text("Supprimer la conversation")
+                }
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(MeeshyColors.error)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(MeeshyColors.error.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .confirmationDialog("Supprimer définitivement ?", isPresented: $viewModel.showDeleteConversation, titleVisibility: .visible) {
+                Button("Supprimer pour tous", role: .destructive) {
+                    Task {
+                        await viewModel.deleteConversationForAll()
+                        onLeft?()
+                        dismiss()
+                    }
+                }
+            } message: {
+                Text("Cette action est irréversible. Tous les messages seront supprimés pour tous les participants.")
+            }
         }
     }
 }
 ```
 
-- [ ] **Step 2: Create ConversationAdminView**
+- [ ] **Step 6: Update ConversationSettingsView init to accept currentUserRole**
 
-Create `apps/ios/Meeshy/Features/Main/Views/ConversationAdminView.swift`:
+Update the public init:
 
 ```swift
-import SwiftUI
-import MeeshySDK
-import MeeshyUI
-import PhotosUI
+public init(conversation: MeeshyConversation, currentUserRole: MemberRole = .member, onUpdated: ((MeeshyConversation) -> Void)? = nil, onLeft: (() -> Void)? = nil) {
+    _viewModel = StateObject(wrappedValue: ConversationSettingsViewModel(conversation: conversation, currentUserRole: currentUserRole))
+    self.onUpdated = onUpdated
+    self.onLeft = onLeft
+}
+```
 
-struct ConversationAdminView: View {
-    let conversation: MeeshyConversation
-    let currentUserRole: MemberRole
-    @StateObject private var viewModel: ConversationAdminViewModel
-    @Environment(\.themeManager) private var theme
-    @Environment(\.dismiss) private var dismiss
+Add `.task { await viewModel.loadMembers() }` to the body if not already present.
 
-    init(conversation: MeeshyConversation, currentUserRole: MemberRole) {
-        self.conversation = conversation
-        self.currentUserRole = currentUserRole
-        self._viewModel = StateObject(wrappedValue: ConversationAdminViewModel(conversationId: conversation.id))
+- [ ] **Step 7: Fix ConversationInfoSheet — change gear from sheet to NavigationLink push**
+
+In `ConversationInfoSheet.swift`, the gear button (line 178-189) currently uses `showSettings = true` which triggers a `.sheet`. Change it:
+
+1. Remove the `@State private var showSettings = false` property
+2. Remove the `.sheet(isPresented: $showSettings) { ConversationSettingsView(...) }` modifier (lines 134-141)
+3. Wrap the entire `ConversationInfoSheet` body in a `NavigationStack` if not already
+4. Replace the gear button with a `NavigationLink`:
+
+```swift
+if canManageMembers && !isDirect {
+    NavigationLink {
+        ConversationSettingsView(
+            conversation: conversation,
+            currentUserRole: MemberRole(rawValue: conversation.currentUserRole?.lowercased() ?? "member") ?? .member,
+            onUpdated: { _ in dismiss() },
+            onLeft: { dismiss() }
+        )
+    } label: {
+        Image(systemName: "gearshape.fill")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(theme.textMuted)
+            .frame(width: 28, height: 28)
+            .background(Circle().fill(theme.textMuted.opacity(0.12)))
     }
+    .accessibilityLabel("Reglages de la conversation")
+}
+```
 
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                identitySection
-                permissionsSection
-                MemberManagementSection(
-                    viewModel: viewModel,
-                    currentUserRole: currentUserRole
-                )
-                dangerSection
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-        }
-        .background(theme.backgroundGradient)
-        .navigationTitle("Administration")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Enregistrer") {
-                    Task { await viewModel.save() }
-                }
-                .disabled(!viewModel.hasChanges || viewModel.isSaving)
-                .fontWeight(.semibold)
-            }
-        }
-        .task {
-            viewModel.load(from: conversation)
-            await viewModel.loadMembers()
-        }
+- [ ] **Step 8: Fix ConversationInfoSheet — fix "Quitter" action button**
+
+The `actionButtons` section (line 724) has a "Quitter" button that calls `leaveConversation()`. This function (find it in the file) likely calls `ConversationService.shared.delete(conversationId:)`. Fix it to use the correct leave endpoint:
+
+```swift
+private func leaveConversation() async {
+    do {
+        try await ConversationService.shared.leave(conversationId: conversation.id)
+        dismiss()
+    } catch {
+        // handle error
     }
+}
+```
 
-    // MARK: - Identité (#4ECDC4)
+Also update the confirmation text to be more precise:
 
-    private var identitySection: some View {
-        adminSection(title: "Identité", icon: "person.crop.rectangle.fill", color: "4ECDC4") {
-            VStack(spacing: 12) {
-                // Banner
-                ZStack(alignment: .bottomTrailing) {
-                    if let bannerURL = viewModel.bannerURL {
-                        CachedBannerImage(url: bannerURL, height: 140)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(theme.surfaceGradient(tint: "4ECDC4"))
-                            .frame(height: 140)
-                    }
-                    PhotosPicker(selection: $viewModel.selectedBannerItem, matching: .images) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Circle().fill(Color(hex: "4ECDC4")))
-                    }
-                    .padding(8)
-                }
-
-                // Avatar + Title/Description
-                HStack(alignment: .top, spacing: 14) {
-                    ZStack(alignment: .bottomTrailing) {
-                        MeeshyAvatar(
-                            name: viewModel.title,
-                            avatarURL: viewModel.avatarURL,
-                            size: .profile
-                        )
-                        PhotosPicker(selection: $viewModel.selectedAvatarItem, matching: .images) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(.white)
-                                .padding(5)
-                                .background(Circle().fill(Color(hex: "4ECDC4")))
-                        }
-                    }
-
-                    VStack(spacing: 8) {
-                        TextField("Titre", text: $viewModel.title)
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(theme.inputBackground))
-
-                        TextEditor(text: $viewModel.description)
-                            .font(.system(size: 14))
-                            .foregroundColor(theme.textPrimary)
-                            .frame(minHeight: 60, maxHeight: 120)
-                            .padding(8)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(theme.inputBackground))
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 10)
-            }
-        }
+```swift
+.alert("Quitter la conversation", isPresented: $showLeaveConfirmation) {
+    Button("Annuler", role: .cancel) {}
+    Button("Quitter", role: .destructive) {
+        Task { await leaveConversation() }
     }
+} message: {
+    Text("Vous ne recevrez plus de messages. Votre historique restera lisible.")
+}
+```
 
-    // MARK: - Permissions (#F8B500)
+- [ ] **Step 9: Remove redundant ParticipantsView fullScreenCover**
 
-    private var permissionsSection: some View {
-        adminSection(title: "Permissions", icon: "lock.shield.fill", color: "F8B500") {
-            VStack(spacing: 0) {
-                settingsRow(icon: "pencil.line", iconColor: "F8B500", title: "Qui peut écrire") {
-                    Picker("", selection: $viewModel.defaultWriteRole) {
-                        Text("Tout le monde").tag("everyone")
-                        Text("Membres").tag("member")
-                        Text("Modérateurs").tag("moderator")
-                        Text("Admins").tag("admin")
-                    }
-                    .pickerStyle(.menu)
-                    .disabled(viewModel.isAnnouncementChannel)
-                }
+Since member management is now integrated in `ConversationSettingsView`, remove the `showParticipantsView` state and the `.fullScreenCover(isPresented: $showParticipantsView)` modifier. Also remove or repurpose the "Gérer les membres" button in the members tab — it should now navigate to ConversationSettingsView which includes members.
 
-                Divider().padding(.leading, 52)
+Update the `manageMembersButton` to be a NavigationLink to ConversationSettingsView instead:
 
-                settingsRow(icon: "megaphone.fill", iconColor: "F8B500", title: "Mode annonce") {
-                    Toggle("", isOn: $viewModel.isAnnouncementChannel)
-                        .labelsHidden()
-                }
-
-                Divider().padding(.leading, 52)
-
-                settingsRow(icon: "tortoise.fill", iconColor: "F8B500", title: "Mode lent") {
-                    Picker("", selection: $viewModel.slowModeSeconds) {
-                        Text("Off").tag(0)
-                        Text("10s").tag(10)
-                        Text("30s").tag(30)
-                        Text("60s").tag(60)
-                        Text("5min").tag(300)
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                Divider().padding(.leading, 52)
-
-                settingsRow(icon: "globe", iconColor: "F8B500", title: "Traduction auto") {
-                    Toggle("", isOn: $viewModel.autoTranslateEnabled)
-                        .labelsHidden()
-                }
-            }
-        }
-    }
-
-    // MARK: - Zone dangereuse (#F87171)
-
-    private var dangerSection: some View {
-        Group {
-            if currentUserRole == .creator {
-                adminSection(title: "Zone dangereuse", icon: "exclamationmark.triangle.fill", color: "F87171") {
-                    Button {
-                        viewModel.showDeleteConversation = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "trash.fill")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(Color(hex: "F87171"))
-                                .frame(width: 28, height: 28)
-                                .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "F87171").opacity(0.12)))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Supprimer la conversation")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(Color(hex: "F87171"))
-                                Text("Irréversible. Tous les messages seront supprimés pour tous.")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(theme.textMuted)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                    }
-                    .confirmationDialog("Supprimer définitivement ?", isPresented: $viewModel.showDeleteConversation, titleVisibility: .visible) {
-                        Button("Supprimer pour tous", role: .destructive) {
-                            Task {
-                                await viewModel.deleteConversation()
-                                dismiss()
-                            }
-                        }
-                    } message: {
-                        Text("Cette action est irréversible. Tous les messages seront supprimés pour tous les participants.")
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Section Builders (matching SettingsView pattern)
-
-    private func adminSection<Content: View>(title: String, icon: String, color: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
-                Text(title.uppercased())
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: color))
-                    .tracking(1.2)
-            }
-            .padding(.leading, 4)
-
-            VStack(spacing: 0) {
-                content()
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(theme.surfaceGradient(tint: color))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(theme.border(tint: color), lineWidth: 1)
-                    )
-            )
-        }
-    }
-
-    private func settingsRow<Trailing: View>(icon: String, iconColor: String, title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: iconColor))
-                .frame(width: 28, height: 28)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: iconColor).opacity(0.12)))
-            Text(title)
-                .font(.system(size: 15))
-                .foregroundColor(theme.textPrimary)
+```swift
+private var manageMembersButton: some View {
+    NavigationLink {
+        ConversationSettingsView(
+            conversation: conversation,
+            currentUserRole: MemberRole(rawValue: conversation.currentUserRole?.lowercased() ?? "member") ?? .member,
+            onUpdated: { _ in dismiss() },
+            onLeft: { dismiss() }
+        )
+    } label: {
+        HStack(spacing: 8) {
+            Image(systemName: "person.2.badge.gearshape")
+                .font(.system(size: 13, weight: .semibold))
+            Text("Gerer les membres")
+                .font(.system(size: 13, weight: .semibold))
             Spacer()
-            trailing()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(theme.textMuted)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .foregroundColor(accent)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(accent.opacity(theme.mode.isDark ? 0.12 : 0.08))
+        )
     }
+    .padding(.horizontal, 20)
+    .padding(.top, 12)
 }
 ```
 
-- [ ] **Step 3: Wire gear button in ConversationInfoSheet to NavigationLink**
-
-In `ConversationInfoSheet.swift`, find the gear button that opens `ConversationSettingsView` (search for `ConversationSettingsView` or gear icon). Replace the sheet/navigation to `ConversationSettingsView` with a `NavigationLink` to `ConversationAdminView`:
-
-```swift
-NavigationLink {
-    ConversationAdminView(
-        conversation: conversation,
-        currentUserRole: MemberRole(rawValue: conversation.currentUserRole?.lowercased() ?? "member") ?? .member
-    )
-} label: {
-    Image(systemName: "gearshape.fill")
-        .font(.system(size: 16, weight: .medium))
-        .foregroundColor(theme.textSecondary)
-}
-```
-
-Ensure the ConversationInfoSheet is wrapped in a `NavigationStack` if not already (check the sheet presentation in the parent view).
-
-- [ ] **Step 4: Build iOS app**
+- [ ] **Step 10: Build iOS app**
 
 Run: `./apps/ios/meeshy.sh build`
 Expected: Build succeeds
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/ConversationAdminView.swift apps/ios/Meeshy/Features/Main/ViewModels/ConversationAdminViewModel.swift apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift
-git commit -m "feat(ios): add ConversationAdminView with identity + permissions + danger zone sections"
+git add packages/MeeshySDK/Sources/MeeshyUI/Conversation/ConversationSettingsView.swift apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift apps/ios/Meeshy/Features/Main/Components/PermissionsSection.swift
+git commit -m "feat: enrich ConversationSettingsView with permissions/members/danger + fix InfoSheet gear/leave semantics"
 ```
 
 ---
@@ -1783,7 +1671,7 @@ import MeeshySDK
 import MeeshyUI
 
 struct MemberManagementSection: View {
-    @ObservedObject var viewModel: ConversationAdminViewModel
+    @ObservedObject var viewModel: ConversationSettingsViewModel
     let currentUserRole: MemberRole
     @Environment(\.themeManager) private var theme
     @State private var showAddMember = false
