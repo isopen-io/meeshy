@@ -18,4 +18,5 @@ export function createLlmProvider(config: LlmProviderConfig): LlmProvider {
   return withRetry(base);
 }
 
+export { withFallback } from './llm-fallback';
 export { type LlmProvider, type LlmProviderConfig, type LlmChatParams, type LlmChatResponse } from './types';
