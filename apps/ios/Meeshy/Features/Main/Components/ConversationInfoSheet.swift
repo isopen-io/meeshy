@@ -26,7 +26,6 @@ struct ConversationInfoSheet: View {
     @State private var totalParticipants: Int = 0
     @State private var appearAnimation = false
     @State private var selectedTab: InfoTab = .members
-    @State private var showParticipantsView = false
     @State private var showBlockConfirm = false
     @State private var isBlocking = false
     @State private var isCreatingShareLink = false
@@ -34,14 +33,15 @@ struct ConversationInfoSheet: View {
     @State private var showShareSheet = false
     @State private var showLeaveConfirmation = false
     @State private var showSecurityVerification = false
-    @State private var showSettings = false
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-info")
+
+    @State private var showAllPinnedMessages = false
 
     enum InfoTab: String, CaseIterable {
         case members = "Membres"
         case media = "Medias"
-        case pinned = "Epingles"
+        case plus = "Plus"
     }
 
     private var accent: Color { Color(hex: accentColor) }
@@ -73,30 +73,41 @@ struct ConversationInfoSheet: View {
 
     // MARK: - Body
 
+    private var resolvedUserRole: MemberRole {
+        MemberRole(rawValue: conversation.currentUserRole?.lowercased() ?? "member") ?? .member
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            headerBar
-            conversationHeader
-            if isDirect, otherUserId != nil {
-                blockUserButton
+        NavigationStack {
+            VStack(spacing: 0) {
+                headerBar
+                conversationHeader
+                if isDirect, otherUserId != nil {
+                    blockUserButton
+                }
+                actionButtons
+                securitySection
+                pinnedPreview
+                tabSelector
+                tabContent
             }
-            actionButtons
-            securitySection
-            tabSelector
-            tabContent
+            .background(sheetBackground)
+            .navigationBarHidden(true)
+            .navigationDestination(for: String.self) { destination in
+                if destination == "settings" {
+                    ConversationSettingsView(
+                        conversation: conversation,
+                        currentUserRole: resolvedUserRole,
+                        onUpdated: { _ in dismiss() },
+                        onLeft: { dismiss() }
+                    )
+                }
+            }
         }
-        .background(sheetBackground)
         .presentationDragIndicator(.visible)
         .task {
             totalParticipants = conversation.memberCount
             await loadParticipants()
-        }
-        .fullScreenCover(isPresented: $showParticipantsView) {
-            ParticipantsView(
-                conversationId: conversation.id,
-                accentColor: accentColor,
-                currentUserRole: conversation.currentUserRole
-            )
         }
         .alert("Bloquer cet utilisateur", isPresented: $showBlockConfirm) {
             Button("Annuler", role: .cancel) { }
@@ -117,7 +128,7 @@ struct ConversationInfoSheet: View {
                 Task { await leaveConversation() }
             }
         } message: {
-            Text("Vous ne recevrez plus de messages de cette conversation.")
+            Text("Vous quitterez definitivement cette conversation et perdrez l'acces a son historique.")
         }
         .sheet(isPresented: $showSecurityVerification) {
             SecurityVerificationView(
@@ -125,13 +136,8 @@ struct ConversationInfoSheet: View {
                 safetyNumber: nil
             )
         }
-        .sheet(isPresented: $showSettings) {
-            ConversationSettingsView(
-                conversation: conversation,
-                onUpdated: { _ in
-                    dismiss()
-                }
-            )
+        .sheet(isPresented: $showAllPinnedMessages) {
+            allPinnedMessagesSheet
         }
         .withStatusBubble()
     }
@@ -170,10 +176,7 @@ struct ConversationInfoSheet: View {
             Spacer()
 
             if canManageMembers && !isDirect {
-                Button {
-                    HapticFeedback.light()
-                    showSettings = true
-                } label: {
+                NavigationLink(value: "settings") {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -326,8 +329,13 @@ struct ConversationInfoSheet: View {
                 membersSection
             case .media:
                 mediaSection
-            case .pinned:
-                pinnedSection
+            case .plus:
+                ConversationDashboardView(
+                    conversationId: conversation.id,
+                    messages: messages,
+                    accentColor: accentColor,
+                    participants: participants
+                )
             }
         }
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
@@ -374,10 +382,7 @@ struct ConversationInfoSheet: View {
     }
 
     private var manageMembersButton: some View {
-        Button {
-            HapticFeedback.light()
-            showParticipantsView = true
-        } label: {
+        NavigationLink(value: "settings") {
             HStack(spacing: 8) {
                 Image(systemName: "person.2.badge.gearshape")
                     .font(.system(size: 13, weight: .semibold))
@@ -532,35 +537,128 @@ struct ConversationInfoSheet: View {
         .contentShape(Rectangle())
     }
 
-    // MARK: - Pinned Section
+    // MARK: - Pinned Preview (before tabs)
 
-    private var pinnedSection: some View {
-        VStack(spacing: 0) {
-            if pinnedMessages.isEmpty {
-                emptyState(icon: "pin.slash", text: "Aucun message epingle")
-            } else {
+    @ViewBuilder
+    private var pinnedPreview: some View {
+        let pinned = pinnedMessages
+        if !pinned.isEmpty {
+            Button {
+                HapticFeedback.light()
+                showAllPinnedMessages = true
+            } label: {
+                VStack(spacing: 0) {
+                    ForEach(pinned.prefix(2)) { msg in
+                        pinnedPreviewRow(msg)
+                    }
+                    if pinned.count > 2 {
+                        HStack(spacing: 4) {
+                            Text("Voir les \(pinned.count) messages epingles")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(accent)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(accent)
+                        }
+                        .padding(.vertical, 6)
+                    }
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(accent.opacity(theme.mode.isDark ? 0.08 : 0.05))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(accent.opacity(0.12), lineWidth: 1)
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+            .opacity(appearAnimation ? 1 : 0)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appearAnimation)
+        }
+    }
+
+    private func pinnedPreviewRow(_ msg: Message) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "pin.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(accent)
+                .rotationEffect(.degrees(45))
+
+            Text(msg.senderName ?? "?")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .lineLimit(1)
+
+            if !msg.content.isEmpty {
+                Text(msg.content)
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(1)
+            } else if let att = msg.attachments.first {
+                HStack(spacing: 3) {
+                    Image(systemName: attachmentIcon(att.type))
+                        .font(.system(size: 9))
+                    Text(attachmentLabel(att.type))
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundColor(theme.textMuted)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 7)
+    }
+
+    // MARK: - All Pinned Messages Sheet
+
+    private var allPinnedMessagesSheet: some View {
+        NavigationStack {
+            ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(pinnedMessages) { msg in
-                        pinnedMessageRow(msg)
+                        fullPinnedRow(msg)
+                        if msg.id != pinnedMessages.last?.id {
+                            Divider()
+                                .padding(.horizontal, 20)
+                        }
                     }
                 }
                 .padding(.top, 8)
             }
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Messages epingles")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showAllPinnedMessages = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(theme.textMuted)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                    }
+                }
+            }
         }
-        .padding(.bottom, 32)
+        .presentationDragIndicator(.visible)
     }
 
-    private func pinnedMessageRow(_ msg: Message) -> some View {
+    private func fullPinnedRow(_ msg: Message) -> some View {
         HStack(spacing: 12) {
-            // Pin icon
             ZStack {
                 Circle()
-                    .fill(Color(hex: "3498DB").opacity(theme.mode.isDark ? 0.2 : 0.12))
+                    .fill(accent.opacity(theme.mode.isDark ? 0.2 : 0.12))
                     .frame(width: 36, height: 36)
 
                 Image(systemName: "pin.fill")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color(hex: "3498DB"))
+                    .foregroundColor(accent)
                     .rotationEffect(.degrees(45))
             }
 
@@ -582,7 +680,7 @@ struct ConversationInfoSheet: View {
                     Text(msg.content)
                         .font(.system(size: 13))
                         .foregroundColor(theme.textSecondary)
-                        .lineLimit(2)
+                        .lineLimit(4)
                 } else if let att = msg.attachments.first {
                     HStack(spacing: 4) {
                         Image(systemName: attachmentIcon(att.type))
@@ -597,7 +695,7 @@ struct ConversationInfoSheet: View {
             Spacer()
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
     }
 
     // MARK: - Empty State
@@ -760,7 +858,7 @@ struct ConversationInfoSheet: View {
 
     private func leaveConversation() async {
         do {
-            try await ConversationService.shared.delete(conversationId: conversation.id)
+            try await ConversationService.shared.leave(conversationId: conversation.id)
             dismiss()
         } catch {
             ToastManager.shared.showError("Erreur lors du depart de la conversation")
@@ -802,8 +900,8 @@ struct ConversationInfoSheet: View {
             return participants.count > 0 ? "\(participants.count)" : nil
         case .media:
             return mediaAttachments.count > 0 ? "\(mediaAttachments.count)" : nil
-        case .pinned:
-            return pinnedMessages.count > 0 ? "\(pinnedMessages.count)" : nil
+        case .plus:
+            return nil
         }
     }
 

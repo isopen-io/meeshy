@@ -13,8 +13,16 @@ public struct ConversationSettingsView: View {
     public var onUpdated: ((MeeshyConversation) -> Void)? = nil
     public var onLeft: (() -> Void)? = nil
 
-    public init(conversation: MeeshyConversation, onUpdated: ((MeeshyConversation) -> Void)? = nil, onLeft: (() -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: ConversationSettingsViewModel(conversation: conversation))
+    public init(
+        conversation: MeeshyConversation,
+        currentUserRole: MemberRole = .member,
+        onUpdated: ((MeeshyConversation) -> Void)? = nil,
+        onLeft: (() -> Void)? = nil
+    ) {
+        _viewModel = StateObject(wrappedValue: ConversationSettingsViewModel(
+            conversation: conversation,
+            currentUserRole: currentUserRole
+        ))
         self.onUpdated = onUpdated
         self.onLeft = onLeft
     }
@@ -30,7 +38,16 @@ public struct ConversationSettingsView: View {
                     VStack(spacing: 20) {
                         visualSection
                         editSection
-                        dangerSection
+
+                        if viewModel.currentUserRole.hasMinimumRole(.admin) {
+                            permissionsSection
+                        }
+
+                        membersPlaceholder
+
+                        if viewModel.currentUserRole.hasMinimumRole(.admin) {
+                            dangerSection
+                        }
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 16)
@@ -52,15 +69,28 @@ public struct ConversationSettingsView: View {
             }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("Vous n'aurez plus acces aux messages de cette conversation.")
+            Text("Vous quitterez definitivement cette conversation et perdrez l'acces a son historique.")
         }
-        .onChange(of: avatarItem) { item in
-            guard let item = item else { return }
-            Task { await viewModel.uploadAvatar(item) }
+        .alert("Supprimer la conversation", isPresented: $viewModel.showDeleteConversation) {
+            Button("Supprimer", role: .destructive) {
+                Task {
+                    await viewModel.deleteConversationForAll()
+                    onLeft?()
+                    dismiss()
+                }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Cette action est irreversible. La conversation et tous ses messages seront supprimes pour tous les membres.")
         }
-        .onChange(of: bannerItem) { item in
-            guard let item = item else { return }
-            Task { await viewModel.uploadBanner(item) }
+        .entityImagePickerFlow(pickerItem: $avatarItem, context: .avatar, accentColor: viewModel.accentColor, maxSizeKB: 500) { data in
+            Task { await viewModel.uploadCompressedAvatar(data) }
+        }
+        .entityImagePickerFlow(pickerItem: $bannerItem, context: .banner, accentColor: viewModel.accentColor, maxSizeKB: 800) { data in
+            Task { await viewModel.uploadCompressedBanner(data) }
+        }
+        .task {
+            await viewModel.loadMembers()
         }
     }
 
@@ -111,70 +141,95 @@ public struct ConversationSettingsView: View {
         }
     }
 
-    // MARK: - Visual Section
+    // MARK: - Visual Section (Hero Banner + Avatar)
 
     private var visualSection: some View {
-        VStack(spacing: 16) {
-            sectionHeader("Apparence")
+        VStack(spacing: 0) {
+            ZStack(alignment: .bottomTrailing) {
+                bannerView
+                    .frame(height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
 
-            VStack(spacing: 12) {
-                settingsField(label: "Avatar") {
-                    HStack {
-                        MeeshyAvatar(
-                            name: viewModel.title.isEmpty ? viewModel.conversationName : viewModel.title,
-                            context: .custom(40),
-                            kind: .entity,
-                            accentColor: viewModel.accentColor,
-                            avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl
-                        )
-
-                        PhotosPicker(selection: $avatarItem, matching: .images) {
-                            Text(viewModel.isUploadingAvatar ? "Upload en cours..." : "Changer l'avatar")
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(MeeshyColors.indigo400)
-                        }
-                        .disabled(viewModel.isUploadingAvatar)
-
-                        if !viewModel.avatarUrl.isEmpty {
-                            Spacer()
-                            Button(role: .destructive) {
-                                viewModel.avatarUrl = ""
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                        }
-                    }
+                PhotosPicker(selection: $bannerItem, matching: .images) {
+                    Label("Modifier", systemImage: "photo.fill")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Color.black.opacity(0.5)))
                 }
+                .disabled(viewModel.isUploadingBanner)
+                .padding(8)
 
-                settingsField(label: "Banniere") {
-                    HStack {
-                        if !viewModel.bannerUrl.isEmpty {
-                            AsyncImage(url: URL(string: viewModel.bannerUrl)) { image in
-                                image.resizable().scaledToFill().frame(width: 60, height: 30).clipShape(RoundedRectangle(cornerRadius: 6))
-                            } placeholder: {
-                                RoundedRectangle(cornerRadius: 6).fill(theme.backgroundSecondary).frame(width: 60, height: 30)
-                            }
-                        }
-
-                        PhotosPicker(selection: $bannerItem, matching: .images) {
-                            Text(viewModel.isUploadingBanner ? "Upload en cours..." : "Changer la banniere")
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(MeeshyColors.indigo400)
-                        }
-                        .disabled(viewModel.isUploadingBanner)
-
-                        if !viewModel.bannerUrl.isEmpty {
-                            Spacer()
-                            Button(role: .destructive) {
-                                viewModel.bannerUrl = ""
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                        }
-                    }
+                if viewModel.isUploadingBanner {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.black.opacity(0.4))
+                        .frame(height: 120)
+                        .overlay(ProgressView().tint(.white))
                 }
             }
+
+            ZStack(alignment: .bottomTrailing) {
+                MeeshyAvatar(
+                    name: viewModel.title.isEmpty ? viewModel.conversationName : viewModel.title,
+                    context: .profileSheet,
+                    kind: .entity,
+                    accentColor: viewModel.accentColor,
+                    avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl
+                )
+                .overlay(
+                    Circle()
+                        .stroke(theme.backgroundPrimary, lineWidth: 4)
+                )
+
+                PhotosPicker(selection: $avatarItem, matching: .images) {
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(Color(hex: viewModel.accentColor))
+                        .background(Circle().fill(theme.backgroundPrimary))
+                }
+                .disabled(viewModel.isUploadingAvatar)
+                .offset(x: 4, y: 4)
+
+                if viewModel.isUploadingAvatar {
+                    Circle()
+                        .fill(Color.black.opacity(0.4))
+                        .frame(width: 80, height: 80)
+                        .overlay(ProgressView().tint(.white))
+                }
+            }
+            .offset(y: -40)
+            .padding(.bottom, -40)
+
+            Text(viewModel.title.isEmpty ? viewModel.conversationName : viewModel.title)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+                .padding(.top, 8)
         }
+    }
+
+    @ViewBuilder
+    private var bannerView: some View {
+        if !viewModel.bannerUrl.isEmpty, let url = URL(string: viewModel.bannerUrl) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    bannerPlaceholder
+                }
+            }
+        } else {
+            bannerPlaceholder
+        }
+    }
+
+    private var bannerPlaceholder: some View {
+        LinearGradient(
+            colors: [Color(hex: viewModel.accentColor).opacity(0.6), Color(hex: viewModel.accentColor).opacity(0.2)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     // MARK: - Edit Section
@@ -200,25 +255,117 @@ public struct ConversationSettingsView: View {
         }
     }
 
+    // MARK: - Permissions Section
+
+    private var permissionsSection: some View {
+        VStack(spacing: 16) {
+            sectionHeader("Permissions")
+
+            VStack(spacing: 12) {
+                settingsField(label: "Qui peut ecrire") {
+                    Picker("", selection: $viewModel.defaultWriteRole) {
+                        Text("Tout le monde").tag("everyone")
+                        Text("Membres").tag("member")
+                        Text("Moderateurs").tag("moderator")
+                        Text("Admins").tag("admin")
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(viewModel.isAnnouncementChannel)
+                }
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Mode annonce")
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundColor(theme.textPrimary)
+                        Text("Seuls les admins peuvent ecrire")
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundColor(theme.textMuted)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $viewModel.isAnnouncementChannel)
+                        .labelsHidden()
+                        .tint(Color(hex: viewModel.accentColor))
+                }
+                .padding(12)
+                .background(theme.backgroundSecondary.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                settingsField(label: "Mode lent") {
+                    Picker("", selection: $viewModel.slowModeSeconds) {
+                        Text("Desactive").tag(0)
+                        Text("10s").tag(10)
+                        Text("30s").tag(30)
+                        Text("1min").tag(60)
+                        Text("5min").tag(300)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Traduction automatique")
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundColor(theme.textPrimary)
+                        Text("Les messages sont traduits automatiquement")
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundColor(theme.textMuted)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $viewModel.autoTranslateEnabled)
+                        .labelsHidden()
+                        .tint(Color(hex: viewModel.accentColor))
+                }
+                .padding(12)
+                .background(theme.backgroundSecondary.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
+    // MARK: - Members Placeholder
+
+    @ViewBuilder
+    private var membersPlaceholder: some View {
+        EmptyView()
+    }
+
     // MARK: - Danger Section
 
     private var dangerSection: some View {
         VStack(spacing: 12) {
             sectionHeader("Zone dangereuse")
 
-            Button {
-                viewModel.showLeaveConfirm = true
-            } label: {
-                HStack {
-                    Image(systemName: "arrow.right.square.fill")
-                    Text("Quitter la conversation")
+            if viewModel.currentUserRole == .creator {
+                Button {
+                    viewModel.showDeleteConversation = true
+                } label: {
+                    HStack {
+                        Image(systemName: "trash.fill")
+                        Text("Supprimer la conversation")
+                    }
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(MeeshyColors.error)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(MeeshyColors.error.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundColor(.orange)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color.orange.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                Button {
+                    viewModel.showLeaveConfirm = true
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.right.square.fill")
+                        Text("Quitter la conversation")
+                    }
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.orange.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
             }
         }
     }
@@ -250,7 +397,7 @@ public struct ConversationSettingsView: View {
 // MARK: - ViewModel
 
 @MainActor
-final class ConversationSettingsViewModel: ObservableObject {
+public final class ConversationSettingsViewModel: ObservableObject {
     @Published var title: String
     @Published var descriptionText: String
     @Published var avatarUrl: String
@@ -261,27 +408,48 @@ final class ConversationSettingsViewModel: ObservableObject {
     @Published var showError = false
     @Published var errorMessage: String?
     @Published var showLeaveConfirm = false
+    @Published var showDeleteConversation = false
 
-    let conversationId: String
+    @Published var defaultWriteRole: String
+    @Published var isAnnouncementChannel: Bool
+    @Published var slowModeSeconds: Int
+    @Published var autoTranslateEnabled: Bool
+
+    @Published public var participants: [APIParticipant] = []
+    @Published public var isLoadingMembers = false
+    @Published public var memberSearchText: String = ""
+    @Published public var totalMemberCount: Int = 0
+
+    public let conversationId: String
     let conversationName: String
     let accentColor: String
+    public let currentUserRole: MemberRole
 
     private let originalTitle: String
     private let originalDescription: String
     private let originalAvatarUrl: String
     private let originalBannerUrl: String
+    private let originalDefaultWriteRole: String
+    private let originalIsAnnouncementChannel: Bool
+    private let originalSlowModeSeconds: Int
+    private let originalAutoTranslateEnabled: Bool
 
     var hasChanges: Bool {
         title != originalTitle ||
         descriptionText != originalDescription ||
         avatarUrl != originalAvatarUrl ||
-        bannerUrl != originalBannerUrl
+        bannerUrl != originalBannerUrl ||
+        defaultWriteRole != originalDefaultWriteRole ||
+        isAnnouncementChannel != originalIsAnnouncementChannel ||
+        slowModeSeconds != originalSlowModeSeconds ||
+        autoTranslateEnabled != originalAutoTranslateEnabled
     }
 
-    init(conversation: MeeshyConversation) {
+    init(conversation: MeeshyConversation, currentUserRole: MemberRole = .member) {
         self.conversationId = conversation.id
         self.conversationName = conversation.name
         self.accentColor = conversation.accentColor
+        self.currentUserRole = currentUserRole
 
         self.title = conversation.title ?? ""
         self.descriptionText = conversation.description ?? ""
@@ -294,6 +462,24 @@ final class ConversationSettingsViewModel: ObservableObject {
         self.bannerUrl = bannerStr
         self.originalAvatarUrl = avatarStr
         self.originalBannerUrl = bannerStr
+
+        let writeRole = conversation.defaultWriteRole ?? "everyone"
+        self.defaultWriteRole = writeRole
+        self.originalDefaultWriteRole = writeRole
+
+        let announcement = conversation.isAnnouncementChannel
+        self.isAnnouncementChannel = announcement
+        self.originalIsAnnouncementChannel = announcement
+
+        let slowMode = conversation.slowModeSeconds ?? 0
+        self.slowModeSeconds = slowMode
+        self.originalSlowModeSeconds = slowMode
+
+        let autoTranslate = conversation.autoTranslateEnabled ?? true
+        self.autoTranslateEnabled = autoTranslate
+        self.originalAutoTranslateEnabled = autoTranslate
+
+        self.totalMemberCount = conversation.memberCount
     }
 
     func save() async -> MeeshyConversation? {
@@ -305,13 +491,21 @@ final class ConversationSettingsViewModel: ObservableObject {
             let newDescription = descriptionText != originalDescription ? descriptionText : nil
             let newAvatar = avatarUrl != originalAvatarUrl ? (avatarUrl.isEmpty ? nil : avatarUrl) : nil
             let newBanner = bannerUrl != originalBannerUrl ? (bannerUrl.isEmpty ? nil : bannerUrl) : nil
+            let newWriteRole = defaultWriteRole != originalDefaultWriteRole ? defaultWriteRole : nil
+            let newAnnouncement = isAnnouncementChannel != originalIsAnnouncementChannel ? isAnnouncementChannel : nil
+            let newSlowMode = slowModeSeconds != originalSlowModeSeconds ? slowModeSeconds : nil
+            let newAutoTranslate = autoTranslateEnabled != originalAutoTranslateEnabled ? autoTranslateEnabled : nil
 
             let apiConversation = try await ConversationService.shared.update(
                 conversationId: conversationId,
                 title: newTitle,
                 description: newDescription,
                 avatar: newAvatar,
-                banner: newBanner
+                banner: newBanner,
+                defaultWriteRole: newWriteRole,
+                isAnnouncementChannel: newAnnouncement,
+                slowModeSeconds: newSlowMode,
+                autoTranslateEnabled: newAutoTranslate
             )
 
             postToast(message: "Conversation mise a jour", isSuccess: true)
@@ -323,10 +517,10 @@ final class ConversationSettingsViewModel: ObservableObject {
         }
     }
 
-    func uploadAvatar(_ item: PhotosPickerItem) async {
+    func uploadCompressedAvatar(_ data: Data) async {
         isUploadingAvatar = true
         defer { isUploadingAvatar = false }
-        if let url = await uploadPhotoItem(item) {
+        if let url = await uploadCompressedImage(data, prefix: "conversation_avatar") {
             avatarUrl = url
             postToast(message: "Avatar televerse", isSuccess: true)
         } else {
@@ -334,10 +528,10 @@ final class ConversationSettingsViewModel: ObservableObject {
         }
     }
 
-    func uploadBanner(_ item: PhotosPickerItem) async {
+    func uploadCompressedBanner(_ data: Data) async {
         isUploadingBanner = true
         defer { isUploadingBanner = false }
-        if let url = await uploadPhotoItem(item) {
+        if let url = await uploadCompressedImage(data, prefix: "conversation_banner") {
             bannerUrl = url
             postToast(message: "Banniere televersee", isSuccess: true)
         } else {
@@ -347,17 +541,90 @@ final class ConversationSettingsViewModel: ObservableObject {
 
     func leaveConversation() async {
         do {
-            try await ConversationService.shared.deleteForMe(conversationId: conversationId)
+            try await ConversationService.shared.leave(conversationId: conversationId)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
         }
     }
 
-    private func uploadPhotoItem(_ item: PhotosPickerItem) async -> String? {
+    func deleteConversationForAll() async {
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else { return nil }
-            let fileName = "conversation_upload_\(UUID().uuidString).jpg"
+            try await ConversationService.shared.delete(conversationId: conversationId)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    // MARK: - Member Management
+
+    public func loadMembers() async {
+        isLoadingMembers = true
+        defer { isLoadingMembers = false }
+
+        do {
+            let response = try await ConversationService.shared.getParticipants(
+                conversationId: conversationId,
+                limit: 50,
+                cursor: nil
+            )
+            participants = response.data
+            if response.data.count > totalMemberCount {
+                totalMemberCount = response.data.count
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    public func updateRole(participantId: String, newRole: String) async {
+        do {
+            try await ConversationService.shared.updateParticipantRole(
+                conversationId: conversationId,
+                participantId: participantId,
+                role: newRole
+            )
+            postToast(message: "Role mis a jour", isSuccess: true)
+            await loadMembers()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    public func expelParticipant(participantId: String) async {
+        do {
+            try await ConversationService.shared.removeParticipant(
+                conversationId: conversationId,
+                participantId: participantId
+            )
+            postToast(message: "Membre expulse", isSuccess: true)
+            await loadMembers()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    public func banParticipant(userId: String) async {
+        do {
+            try await ConversationService.shared.banParticipant(
+                conversationId: conversationId,
+                userId: userId
+            )
+            postToast(message: "Membre banni", isSuccess: true)
+            await loadMembers()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    private func uploadCompressedImage(_ data: Data, prefix: String) async -> String? {
+        do {
+            let fileName = "\(prefix)_\(UUID().uuidString).jpg"
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try data.write(to: tempURL)
 
