@@ -1467,23 +1467,48 @@ func leaveConversation() async {
 
 - [ ] **Step 5: Add Permissions + Members + Danger sections to the View body**
 
-In the `ConversationSettingsView` body (line ~29), after `editSection` and before `dangerSection`, add:
+In the `ConversationSettingsView` body (line ~29), after `editSection`, add sections **conditionally by role**:
 
 ```swift
-PermissionsSection(viewModel: viewModel)
+// Permissions: Admin + Creator only (NOT moderator)
+if viewModel.currentUserRole.hasMinimumRole(.admin) {
+    PermissionsSection(viewModel: viewModel)
+}
+
+// Members: all managers (moderator+), but menu actions adapt to role
 MemberManagementSection(viewModel: viewModel, currentUserRole: viewModel.currentUserRole)
-shareLinkSection
+
+// Share links: Admin + Creator only
+if viewModel.currentUserRole.hasMinimumRole(.admin) {
+    shareLinkSection
+}
+
+// Danger zone: Admin and Creator only (NOT moderator)
+// Moderator accesses leave/archive via PreferencesTab like regular members
+if viewModel.currentUserRole.hasMinimumRole(.admin) {
+    dangerSection
+}
 ```
 
-Replace the existing `dangerSection` with a more complete version that shows "Supprimer la conversation" (creator only) with double confirmation, distinct from the existing "Quitter":
+**Role visibility matrix for ConversationSettingsView sections:**
+
+| Section | Moderator | Admin | Creator |
+|---------|-----------|-------|---------|
+| Identité (avatar/banner/title/desc) | ✅ edit | ✅ edit | ✅ edit |
+| Permissions (writeRole, announce, slow) | ❌ hidden | ✅ edit | ✅ edit |
+| Membres (list + contextual actions) | ✅ expel members only | ✅ promote/demote/expel/ban | ✅ all + promote admin |
+| Liens de partage | ❌ hidden | ✅ | ✅ |
+| Zone dangereuse | ❌ hidden | ✅ "Quitter" | ✅ "Supprimer pour tous" |
+
+Replace the existing `dangerSection` with role-aware logic:
 
 ```swift
 private var dangerSection: some View {
     VStack(spacing: 12) {
         sectionHeader("Zone dangereuse")
 
-        // Leave button (non-creator)
-        if viewModel.currentUserRole != .creator {
+        // Admin (not creator): can leave
+        if viewModel.currentUserRole == .admin {
             Button {
                 viewModel.showLeaveConfirm = true
             } label: {
@@ -1500,7 +1525,7 @@ private var dangerSection: some View {
             }
         }
 
-        // Delete button (creator only)
+        // Creator: can delete for all (NOT leave — must transfer ownership first)
         if viewModel.currentUserRole == .creator {
             Button {
                 viewModel.showDeleteConversation = true
@@ -1531,6 +1556,8 @@ private var dangerSection: some View {
     }
 }
 ```
+
+**Note:** Moderators and regular members use the "Quitter" action in the **ConversationPreferencesTab** (Task 8), NOT in ConversationSettingsView. The PreferencesTab "Quitter" is available to all non-creator group members regardless of role.
 
 - [ ] **Step 6: Update ConversationSettingsView init to accept currentUserRole**
 

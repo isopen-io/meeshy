@@ -107,7 +107,19 @@ Toutes les modifications appellent `PreferenceService.updateConversationPreferen
 
 ### 4.1 Accès
 
-Depuis `ConversationInfoSheet`, le bouton gear (déjà conditionnel au rôle) fait un `NavigationLink` push vers `ConversationAdminView` au lieu d'ouvrir `ConversationSettingsView` (qui sera remplacé).
+Depuis `ConversationInfoSheet`, le bouton gear (déjà conditionnel au rôle moderator+) fait un `NavigationLink` push vers `ConversationSettingsView` (enrichi, pas remplacé).
+
+**Matrice de visibilité des sections par rôle :**
+
+| Section | Moderator | Admin | Creator |
+|---------|-----------|-------|---------|
+| Identité (avatar/banner/title/desc) | ✅ edit | ✅ edit | ✅ edit |
+| Permissions (writeRole, announce, slow) | ❌ hidden | ✅ edit | ✅ edit |
+| Membres (list + contextual actions) | ✅ expulser members seulement | ✅ promouvoir/rétrograder/expulser/bannir | ✅ tout + promouvoir admin |
+| Liens de partage | ❌ hidden | ✅ | ✅ |
+| Zone dangereuse | ❌ hidden | ✅ "Quitter" | ✅ "Supprimer pour tous" |
+
+**Note :** Les modérateurs et membres réguliers quittent via la tab "Préférences" (Surface A), pas via ConversationSettingsView.
 
 ### 4.2 Sections avec couleurs thématiques
 
