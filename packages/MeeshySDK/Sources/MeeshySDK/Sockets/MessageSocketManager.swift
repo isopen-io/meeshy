@@ -237,6 +237,39 @@ public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
     public let participant: ParticipantRoleUpdatedParticipantInfo
 }
 
+public struct ConversationUpdatedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let title: String?
+    public let description: String?
+    public let avatar: String?
+    public let banner: String?
+    public let defaultWriteRole: String?
+    public let isAnnouncementChannel: Bool?
+    public let slowModeSeconds: Int?
+    public let autoTranslateEnabled: Bool?
+    public let updatedBy: String
+    public let updatedAt: String
+}
+
+public struct ParticipantLeftEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+    public let username: String
+    public let leftAt: String
+}
+
+public struct ParticipantBannedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+    public let bannedBy: String
+    public let bannedAt: String
+}
+
+public struct ParticipantUnbannedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+}
+
 public struct MessageConsumedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
@@ -415,6 +448,10 @@ public protocol MessageSocketProviding: Sendable {
     var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
+    var conversationUpdated: PassthroughSubject<ConversationUpdatedEvent, Never> { get }
+    var participantSelfLeft: PassthroughSubject<ParticipantLeftEvent, Never> { get }
+    var participantBanned: PassthroughSubject<ParticipantBannedEvent, Never> { get }
+    var participantUnbanned: PassthroughSubject<ParticipantUnbannedEvent, Never> { get }
     var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
     var conversationStatsReceived: PassthroughSubject<ConversationStatsEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
@@ -501,6 +538,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — participant role
     public let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
+
+    // Combine publishers — conversation & participant lifecycle
+    public let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
+    public let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
+    public let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
+    public let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
 
     // Combine publishers — user preferences
     public let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
@@ -1044,6 +1087,34 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(ParticipantRoleUpdatedEvent.self, from: data) { [weak self] event in
                 self?.participantRoleUpdated.send(event)
+            }
+        }
+
+        socket.on("conversation:updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationUpdatedEvent.self, from: data) { [weak self] event in
+                self?.conversationUpdated.send(event)
+            }
+        }
+
+        socket.on("conversation:participant-left") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantLeftEvent.self, from: data) { [weak self] event in
+                self?.participantSelfLeft.send(event)
+            }
+        }
+
+        socket.on("conversation:participant-banned") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantBannedEvent.self, from: data) { [weak self] event in
+                self?.participantBanned.send(event)
+            }
+        }
+
+        socket.on("conversation:participant-unbanned") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantUnbannedEvent.self, from: data) { [weak self] event in
+                self?.participantUnbanned.send(event)
             }
         }
 
