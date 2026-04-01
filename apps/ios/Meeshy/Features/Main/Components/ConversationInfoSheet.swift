@@ -207,71 +207,168 @@ struct ConversationInfoSheet: View {
     // MARK: - Conversation Header
 
     private var conversationHeader: some View {
+        Group {
+            if isDirect {
+                directConversationHeader
+            } else {
+                heroConversationHeader
+            }
+        }
+        .opacity(appearAnimation ? 1 : 0)
+        .offset(y: appearAnimation ? 0 : 10)
+    }
+
+    // MARK: - Direct Conversation Header (unchanged)
+
+    private var directConversationHeader: some View {
         VStack(spacing: 12) {
-            // Avatar
             MeeshyAvatar(
                 name: conversation.name,
                 context: .profileSheet,
                 accentColor: accentColor,
-                avatarURL: isDirect
-                    ? conversation.participantAvatarURL
-                    : conversation.avatar,
+                avatarURL: conversation.participantAvatarURL,
                 moodEmoji: otherUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
                 onMoodTap: otherUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
             )
 
-            // Name
             Text(conversation.name)
                 .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
 
-            // Type & member count
-            HStack(spacing: 6) {
-                Image(systemName: conversationTypeIcon)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(accent)
+            conversationInfoRow
 
-                Text(conversationTypeLabel)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
+            muteIndicator
 
-                if conversation.memberCount > 0 {
-                    Text("·")
-                        .foregroundColor(theme.textMuted)
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(theme.textMuted)
-                    Text("\(conversation.memberCount)")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(theme.textSecondary)
-                }
-            }
-
-            // Mute indicator
-            if conversation.isMuted {
-                HStack(spacing: 4) {
-                    Image(systemName: "bell.slash.fill")
-                        .font(.system(size: 10))
-                    Text("Notifications desactivees")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .foregroundColor(theme.textMuted)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(theme.textMuted.opacity(0.1)))
-            }
-
-            // Created date
             Text("Cree le \(dateFormatter.string(from: conversation.createdAt))")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
-        .opacity(appearAnimation ? 1 : 0)
-        .offset(y: appearAnimation ? 0 : 10)
+    }
+
+    // MARK: - Hero Conversation Header (group/public/global)
+
+    private var heroConversationHeader: some View {
+        VStack(spacing: 0) {
+            // Banner
+            heroBannerImage
+                .frame(height: 140)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .padding(.horizontal, 16)
+
+            // Avatar overlapping banner
+            MeeshyAvatar(
+                name: conversation.name,
+                context: .profileBanner,
+                accentColor: accentColor,
+                avatarURL: conversation.avatar
+            )
+            .overlay(
+                Circle()
+                    .stroke(theme.backgroundPrimary, lineWidth: 4)
+            )
+            .offset(y: -40)
+            .padding(.bottom, -40)
+
+            // Name
+            Text(conversation.name)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .padding(.top, 10)
+
+            // Info row
+            conversationInfoRow
+                .padding(.top, 8)
+
+            muteIndicator
+                .padding(.top, 6)
+
+            Text("Cree le \(dateFormatter.string(from: conversation.createdAt))")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .padding(.top, 6)
+        }
+        .padding(.horizontal, 4)
+        .padding(.bottom, 16)
+    }
+
+    @ViewBuilder
+    private var heroBannerImage: some View {
+        if let bannerURL = conversation.banner, let url = URL(string: bannerURL) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                case .failure:
+                    heroBannerPlaceholder
+                default:
+                    heroBannerPlaceholder
+                        .overlay(ProgressView().tint(accent))
+                }
+            }
+        } else {
+            heroBannerPlaceholder
+        }
+    }
+
+    private var heroBannerPlaceholder: some View {
+        LinearGradient(
+            colors: [
+                accent.opacity(0.4),
+                accent.opacity(0.15),
+                accent.opacity(0.3)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    // MARK: - Shared Info Sub-views
+
+    private var conversationInfoRow: some View {
+        HStack(spacing: 6) {
+            Image(systemName: conversationTypeIcon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(accent)
+
+            Text(conversationTypeLabel)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+
+            if conversation.memberCount > 0 {
+                Text("·")
+                    .foregroundColor(theme.textMuted)
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(theme.textMuted)
+                Text("\(conversation.memberCount)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var muteIndicator: some View {
+        if conversation.isMuted {
+            HStack(spacing: 4) {
+                Image(systemName: "bell.slash.fill")
+                    .font(.system(size: 10))
+                Text("Notifications desactivees")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(theme.textMuted)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(theme.textMuted.opacity(0.1)))
+        }
     }
 
     // MARK: - Tab Selector
@@ -338,7 +435,7 @@ struct ConversationInfoSheet: View {
                     participants: participants
                 )
             case .preferences:
-                ConversationPreferencesTab(conversation: conversation)
+                ConversationPreferencesTab(conversation: conversation, participants: participants, accentColor: accentColor)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
