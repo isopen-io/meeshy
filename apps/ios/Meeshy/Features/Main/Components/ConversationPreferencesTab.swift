@@ -2,13 +2,44 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 import Combine
+import os
+
+// MARK: - User Search Models (Preferences)
+
+private struct PrefsUserSearchResult: Identifiable, Decodable {
+    let id: String
+    let username: String
+    let firstName: String?
+    let lastName: String?
+    let displayName: String?
+    let avatar: String?
+    let isOnline: Bool?
+
+    var name: String {
+        displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").prefsIfEmptyFallback(username)
+    }
+}
+
+private extension String {
+    func prefsIfEmptyFallback(_ fallback: String) -> String {
+        isEmpty ? fallback : self
+    }
+}
+
+private struct PrefsUserSearchResponse: Decodable {
+    let success: Bool
+    let data: [PrefsUserSearchResult]
+}
 
 // MARK: - ConversationPreferencesTab
 
 struct ConversationPreferencesTab: View {
     let conversation: Conversation
+    let participants: [PaginatedParticipant]
+    let accentColor: String
 
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @Environment(\.dismiss) private var dismiss
 
     @State private var isPinned: Bool = false
@@ -28,14 +59,43 @@ struct ConversationPreferencesTab: View {
     @State private var errorMessage: String? = nil
     @State private var showEmojiPicker: Bool = false
 
+    @State private var memberSearchQuery: String = ""
+    @State private var platformSearchResults: [PrefsUserSearchResult] = []
+    @State private var isSearchingPlatform: Bool = false
+    @State private var addingUserId: String? = nil
+    @State private var addedUserIds: Set<String> = []
+
     private let customNameSubject = PassthroughSubject<String, Never>()
+    private let memberSearchSubject = PassthroughSubject<String, Never>()
     @State private var cancellables = Set<AnyCancellable>()
+
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-prefs")
+    private var presenceManager: PresenceManager { PresenceManager.shared }
 
     private var isDirect: Bool { conversation.type == .direct }
     private var isCreator: Bool { conversation.currentUserRole?.lowercased() == "creator" }
+    private var accent: Color { Color(hex: accentColor) }
 
     private var canLeave: Bool {
         !isDirect && !isCreator
+    }
+
+    private var canManageMembers: Bool {
+        guard let role = conversation.currentUserRole?.lowercased() else { return false }
+        return ["creator", "admin", "moderator"].contains(role)
+    }
+
+    private var filteredParticipants: [PaginatedParticipant] {
+        let trimmed = memberSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return participants }
+        return participants.filter { p in
+            p.name.lowercased().contains(trimmed) ||
+            (p.username?.lowercased().contains(trimmed) ?? false)
+        }
+    }
+
+    private var existingMemberIds: Set<String> {
+        Set(participants.compactMap(\.userId))
     }
 
     var body: some View {
@@ -44,6 +104,7 @@ struct ConversationPreferencesTab: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 200)
             } else {
+                membersSection
                 displaySection
                 organizationSection
                 notificationsSection
@@ -62,7 +123,7 @@ struct ConversationPreferencesTab: View {
         .padding(.top, 16)
         .padding(.bottom, 32)
         .task { await loadPreferences() }
-        .onAppear { setupDebounce() }
+        .onAppear { setupDebounce(); setupMemberSearchDebounce() }
         .confirmationDialog(
             isArchived ? "Désarchiver la conversation ?" : "Archiver la conversation ?",
             isPresented: $showArchiveConfirm,
@@ -88,6 +149,229 @@ struct ConversationPreferencesTab: View {
             Button("Annuler", role: .cancel) {}
         } message: {
             Text("Cette conversation sera supprimée de votre liste. Les autres membres ne seront pas affectés.")
+        }
+    }
+
+    // MARK: - Members Section
+
+    private var membersSection: some View {
+        settingsSection(title: "Membres (\(participants.count))", icon: "person.2.fill", color: "6366F1") {
+            memberSearchField
+            Divider().padding(.leading, 54).opacity(0.3)
+
+            if filteredParticipants.isEmpty && memberSearchQuery.isEmpty {
+                HStack {
+                    Spacer()
+                    Text("Aucun membre")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                    Spacer()
+                }
+                .padding(.vertical, 16)
+            } else {
+                ForEach(filteredParticipants) { participant in
+                    participantRow(participant)
+                    if participant.id != filteredParticipants.last?.id {
+                        Divider().padding(.leading, 54).opacity(0.3)
+                    }
+                }
+
+                if !memberSearchQuery.isEmpty && filteredParticipants.isEmpty {
+                    HStack {
+                        Spacer()
+                        Text("Aucun membre correspondant")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                        Spacer()
+                    }
+                    .padding(.vertical, 10)
+                }
+            }
+
+            if !platformSearchResults.isEmpty && canManageMembers {
+                Divider().opacity(0.3)
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(accent)
+                    Text("Résultats de recherche")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(accent)
+                        .tracking(0.5)
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
+                ForEach(platformSearchResults) { user in
+                    platformUserRow(user)
+                    if user.id != platformSearchResults.last?.id {
+                        Divider().padding(.leading, 54).opacity(0.3)
+                    }
+                }
+            }
+
+            if isSearchingPlatform {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Spacer()
+                }
+                .padding(.vertical, 8)
+            }
+        }
+    }
+
+    private var memberSearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.textMuted)
+
+            TextField("Rechercher ou ajouter...", text: $memberSearchQuery)
+                .font(.system(size: 14))
+                .foregroundColor(theme.textPrimary)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .onChange(of: memberSearchQuery) { _, newValue in
+                    memberSearchSubject.send(newValue)
+                    if newValue.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 {
+                        platformSearchResults = []
+                    }
+                }
+
+            if !memberSearchQuery.isEmpty {
+                Button {
+                    memberSearchQuery = ""
+                    platformSearchResults = []
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textMuted)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    private func participantRow(_ participant: PaginatedParticipant) -> some View {
+        let color = DynamicColorGenerator.colorForName(participant.name)
+        let presence = presenceManager.presenceState(for: participant.id)
+
+        return HStack(spacing: 10) {
+            MeeshyAvatar(
+                name: participant.name,
+                context: .userListItem,
+                accentColor: color,
+                avatarURL: participant.avatar,
+                moodEmoji: participant.userId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                presenceState: presence,
+                onMoodTap: participant.userId.flatMap { statusViewModel.moodTapHandler(for: $0) }
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(participant.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+
+                    if let role = participant.conversationRole,
+                       role.lowercased() != "member" {
+                        Text(roleBadgeLabel(role))
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(roleBadgeColor(role)))
+                    }
+                }
+
+                if let username = participant.username {
+                    Text("@\(username)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    private func platformUserRow(_ user: PrefsUserSearchResult) -> some View {
+        let isMember = existingMemberIds.contains(user.id) || addedUserIds.contains(user.id)
+        let isAdding = addingUserId == user.id
+        let color = DynamicColorGenerator.colorForName(user.username)
+
+        return HStack(spacing: 10) {
+            MeeshyAvatar(
+                name: user.name,
+                context: .userListItem,
+                accentColor: color,
+                avatarURL: user.avatar
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(user.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+
+                Text("@\(user.username)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if isMember {
+                Text("Membre")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(theme.textMuted.opacity(0.1)))
+            } else if isAdding {
+                ProgressView()
+                    .scaleEffect(0.7)
+            } else {
+                Button {
+                    Task { await addParticipant(userId: user.id) }
+                } label: {
+                    Text("Ajouter")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(accent))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    private func roleBadgeLabel(_ role: String) -> String {
+        switch role.lowercased() {
+        case "admin", "creator": return "Admin"
+        case "moderator": return "Mod"
+        default: return role.capitalized
+        }
+    }
+
+    private func roleBadgeColor(_ role: String) -> Color {
+        switch role.lowercased() {
+        case "admin", "creator": return Color(hex: "FF6B6B")
+        case "moderator": return Color(hex: "F8B500")
+        default: return Color(hex: "45B7D1")
         }
     }
 
@@ -331,6 +615,65 @@ struct ConversationPreferencesTab: View {
                 Task { await save(UpdateConversationPreferencesRequest(customName: value.isEmpty ? nil : value)) }
             }
             .store(in: &cancellables)
+    }
+
+    private func setupMemberSearchDebounce() {
+        let manage = canManageMembers
+        memberSearchSubject
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { query in
+                guard manage else { return }
+                let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard trimmed.count >= 3 else {
+                    platformSearchResults = []
+                    return
+                }
+                Task { await searchPlatformUsers(query: trimmed) }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func searchPlatformUsers(query: String) async {
+        isSearchingPlatform = true
+        defer { isSearchingPlatform = false }
+
+        do {
+            let response: PrefsUserSearchResponse = try await APIClient.shared.request(
+                endpoint: "/users/search",
+                queryItems: [
+                    URLQueryItem(name: "q", value: query),
+                    URLQueryItem(name: "limit", value: "10"),
+                ]
+            )
+            if response.success {
+                platformSearchResults = response.data.filter { !existingMemberIds.contains($0.id) && !addedUserIds.contains($0.id) }
+            }
+        } catch {
+            Self.logger.error("Platform user search failed: \(error.localizedDescription)")
+            platformSearchResults = []
+        }
+    }
+
+    private func addParticipant(userId: String) async {
+        addingUserId = userId
+
+        struct AddBody: Encodable { let userId: String }
+
+        do {
+            let _: APIResponse<[String: String]> = try await APIClient.shared.post(
+                endpoint: "/conversations/\(conversation.id)/participants",
+                body: AddBody(userId: userId)
+            )
+            HapticFeedback.success()
+            addedUserIds.insert(userId)
+            platformSearchResults.removeAll { $0.id == userId }
+        } catch {
+            Self.logger.error("Failed to add participant: \(error.localizedDescription)")
+            HapticFeedback.error()
+            errorMessage = "Impossible d'ajouter ce membre."
+        }
+
+        addingUserId = nil
     }
 
     private func loadPreferences() async {
