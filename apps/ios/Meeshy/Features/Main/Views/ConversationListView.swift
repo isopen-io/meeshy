@@ -404,8 +404,8 @@ struct ConversationListView: View {
         }
 
         actions.append(SwipeAction(
-            icon: "trash.fill",
-            label: String(localized: "swipe.delete", defaultValue: "Supprimer"),
+            icon: "eye.slash.fill",
+            label: String(localized: "swipe.hide", defaultValue: "Masquer"),
             color: Color(hex: "EF4444")
         ) {
             Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
