@@ -245,7 +245,7 @@ export default function SettingsPage() {
 
   const TAB_TO_CATEGORY: Record<string, PreferenceCategory> = useMemo(() => ({
     privacy: 'privacy',
-    notification: 'notifications',
+    notification: 'notification',
     media: 'audio',
     message: 'message',
     application: 'application',

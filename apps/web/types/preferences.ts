@@ -20,7 +20,7 @@ export type {
 
 export type PreferenceCategory =
   | 'privacy'
-  | 'notifications'
+  | 'notification'
   | 'audio'
   | 'video'
   | 'message'
@@ -34,7 +34,7 @@ export type AccessibilityPreferences = Record<string, unknown>;
 
 export interface PreferenceTypeMap {
   privacy: PrivacyPreference;
-  notifications: NotificationPreference;
+  notification: NotificationPreference;
   audio: AudioPreference;
   video: VideoPreference;
   message: MessagePreference;

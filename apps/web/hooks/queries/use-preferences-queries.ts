@@ -5,7 +5,7 @@ function createPreferenceHook<C extends PreferenceCategory>(category: C) {
   return (options?: UsePreferencesOptions) => usePreferences(category, options);
 }
 
-export const useNotificationPrefs = createPreferenceHook('notifications');
+export const useNotificationPrefs = createPreferenceHook('notification');
 export const usePrivacyPrefs = createPreferenceHook('privacy');
 export const useAudioPrefs = createPreferenceHook('audio');
 export const useVideoPrefs = createPreferenceHook('video');

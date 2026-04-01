@@ -141,7 +141,7 @@ export function NotificationPreferencesExample() {
     isUpdating,
     updatePreferences,
     error,
-  } = usePreferences('notifications', {
+  } = usePreferences('notification', {
     onSuccess: () => {
       toast.success('Notification preferences updated');
     },
