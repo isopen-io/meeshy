@@ -1079,6 +1079,12 @@ public struct StoryComposerView: View {
                 do {
                     try data.write(to: tempURL)
                     let thumbnail = Self.generateVideoThumbnail(url: tempURL)
+                    let asset = AVURLAsset(url: tempURL)
+                    var mediaDuration: Float?
+                    if let cmDur = try? await asset.load(.duration) {
+                        let secs = CMTimeGetSeconds(cmDur)
+                        if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
+                    }
                     await MainActor.run {
                         viewModel.loadedVideoURLs[objectId] = tempURL
                         if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
@@ -1088,6 +1094,9 @@ public struct StoryComposerView: View {
                             if obj.id != objectId {
                                 viewModel.loadedVideoURLs.removeValue(forKey: objectId)
                                 viewModel.loadedImages.removeValue(forKey: objectId)
+                            }
+                            if let dur = mediaDuration {
+                                viewModel.autoExtendDuration(forElementEnd: dur)
                             }
                         }
                     }
@@ -1113,6 +1122,12 @@ public struct StoryComposerView: View {
         guard let url = confirmedMediaAudioURL else { return }
         Task {
             let samples = (try? await WaveformGenerator.shared.generateSamples(from: url)) ?? []
+            let asset = AVURLAsset(url: url)
+            var mediaDuration: Float?
+            if let cmDur = try? await asset.load(.duration) {
+                let secs = CMTimeGetSeconds(cmDur)
+                if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
+            }
             await MainActor.run {
                 if let obj = viewModel.addAudioObject() {
                     viewModel.loadedAudioURLs[obj.id] = url
@@ -1121,6 +1136,9 @@ public struct StoryComposerView: View {
                     if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == obj.id }) {
                         effects.audioPlayerObjects?[idx].waveformSamples = samples
                         viewModel.currentEffects = effects
+                    }
+                    if let dur = mediaDuration {
+                        viewModel.autoExtendDuration(forElementEnd: dur)
                     }
                 }
                 confirmedMediaAudioURL = nil
