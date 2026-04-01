@@ -75,13 +75,11 @@ public struct CommunitySettingsView: View {
         } message: {
             Text("Vous n'aurez plus accès aux canaux et messages de cette communauté.")
         }
-        .onChange(of: avatarItem) { item in
-            guard let item = item else { return }
-            Task { await viewModel.uploadAvatar(item) }
+        .entityImagePickerFlow(pickerItem: $avatarItem, context: .avatar, maxSizeKB: 500) { data in
+            Task { await viewModel.uploadCompressedAvatar(data) }
         }
-        .onChange(of: bannerItem) { item in
-            guard let item = item else { return }
-            Task { await viewModel.uploadBanner(item) }
+        .entityImagePickerFlow(pickerItem: $bannerItem, context: .banner, maxSizeKB: 800) { data in
+            Task { await viewModel.uploadCompressedBanner(data) }
         }
     }
 
@@ -113,11 +111,11 @@ public struct CommunitySettingsView: View {
                 if viewModel.isSaving {
                     ProgressView()
                         .scaleEffect(0.8)
-                        .tint(Color(hex: "FF2E63"))
+                        .tint(MeeshyColors.indigo500)
                 } else {
                     Text("Sauvegarder")
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundColor(viewModel.hasChanges ? Color(hex: "FF2E63") : theme.textMuted)
+                        .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }
             }
             .disabled(!viewModel.hasChanges || viewModel.isSaving)
@@ -134,97 +132,124 @@ public struct CommunitySettingsView: View {
 
     // MARK: - Visual Section
 
+    // MARK: - Visual Section (Hero Banner + Avatar)
+
     private var visualSection: some View {
         VStack(spacing: 16) {
-            sectionHeader("Apparence")
+            VStack(spacing: 0) {
+                ZStack(alignment: .bottomTrailing) {
+                    communityBannerView
+                        .frame(height: 120)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
 
-            VStack(spacing: 12) {
-                // Color picker
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Couleur")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.textSecondary)
-
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
-                        ForEach(presetColors, id: \.self) { hex in
-                            colorSwatch(hex: hex)
-                        }
+                    PhotosPicker(selection: $bannerItem, matching: .images) {
+                        Label("Modifier", systemImage: "photo.fill")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.black.opacity(0.5)))
                     }
-                }
-                .padding(14)
-                .background(theme.backgroundSecondary.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .disabled(viewModel.isUploadingBanner)
+                    .padding(8)
 
-                // Emoji picker
-                settingsField(label: "Emoji") {
-                    TextField("🏘️", text: $viewModel.localEmoji)
-                        .font(.system(size: 22))
-                        .foregroundColor(theme.textPrimary)
-                        .onChange(of: viewModel.localEmoji) { newValue in
-                            let trimmed = String(newValue.unicodeScalars.prefix(2))
-                            if trimmed != newValue { viewModel.localEmoji = trimmed }
-                        }
-                }
-
-                // Avatar
-                settingsField(label: "Avatar") {
-                    HStack {
-                        MeeshyAvatar(
-                            name: viewModel.name,
-                            context: .custom(40),
-                            kind: .entity,
-                            accentColor: viewModel.localColor,
-                            avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl
-                        )
-                        
-                        PhotosPicker(selection: $avatarItem, matching: .images) {
-                            Text(viewModel.isUploadingAvatar ? "Upload en cours..." : "Changer l'avatar")
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "4ECDC4"))
-                        }
-                        .disabled(viewModel.isUploadingAvatar)
-
-                        if !viewModel.avatarUrl.isEmpty {
-                            Spacer()
-                            Button(role: .destructive) {
-                                viewModel.avatarUrl = ""
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                        }
+                    if viewModel.isUploadingBanner {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.black.opacity(0.4))
+                            .frame(height: 120)
+                            .overlay(ProgressView().tint(.white))
                     }
                 }
 
-                // Banner
-                settingsField(label: "Bannière") {
-                    HStack {
-                        if !viewModel.bannerUrl.isEmpty {
-                            AsyncImage(url: URL(string: viewModel.bannerUrl)) { image in
-                                image.resizable().scaledToFill().frame(width: 60, height: 30).clipShape(RoundedRectangle(cornerRadius: 6))
-                            } placeholder: {
-                                RoundedRectangle(cornerRadius: 6).fill(theme.backgroundSecondary).frame(width: 60, height: 30)
-                            }
-                        }
-                        
-                        PhotosPicker(selection: $bannerItem, matching: .images) {
-                            Text(viewModel.isUploadingBanner ? "Upload en cours..." : "Changer la bannière")
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "4ECDC4"))
-                        }
-                        .disabled(viewModel.isUploadingBanner)
+                ZStack(alignment: .bottomTrailing) {
+                    MeeshyAvatar(
+                        name: viewModel.name,
+                        context: .profileSheet,
+                        kind: .entity,
+                        accentColor: viewModel.localColor,
+                        avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(theme.backgroundPrimary, lineWidth: 4)
+                    )
 
-                        if !viewModel.bannerUrl.isEmpty {
-                            Spacer()
-                            Button(role: .destructive) {
-                                viewModel.bannerUrl = ""
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                        }
+                    PhotosPicker(selection: $avatarItem, matching: .images) {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(Color(hex: viewModel.localColor))
+                            .background(Circle().fill(theme.backgroundPrimary))
+                    }
+                    .disabled(viewModel.isUploadingAvatar)
+                    .offset(x: 4, y: 4)
+
+                    if viewModel.isUploadingAvatar {
+                        Circle()
+                            .fill(Color.black.opacity(0.4))
+                            .frame(width: 80, height: 80)
+                            .overlay(ProgressView().tint(.white))
+                    }
+                }
+                .offset(y: -40)
+                .padding(.bottom, -40)
+
+                Text(viewModel.name)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+                    .padding(.top, 8)
+            }
+
+            // Color picker
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Couleur")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.textSecondary)
+
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
+                    ForEach(presetColors, id: \.self) { hex in
+                        colorSwatch(hex: hex)
                     }
                 }
             }
+            .padding(14)
+            .background(theme.backgroundSecondary.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            // Emoji picker
+            settingsField(label: "Emoji") {
+                TextField("🏘️", text: $viewModel.localEmoji)
+                    .font(.system(size: 22))
+                    .foregroundColor(theme.textPrimary)
+                    .onChange(of: viewModel.localEmoji) { newValue in
+                        let trimmed = String(newValue.unicodeScalars.prefix(2))
+                        if trimmed != newValue { viewModel.localEmoji = trimmed }
+                    }
+            }
         }
+    }
+
+    @ViewBuilder
+    private var communityBannerView: some View {
+        if !viewModel.bannerUrl.isEmpty, let url = URL(string: viewModel.bannerUrl) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    communityBannerPlaceholder
+                }
+            }
+        } else {
+            communityBannerPlaceholder
+        }
+    }
+
+    private var communityBannerPlaceholder: some View {
+        LinearGradient(
+            colors: [Color(hex: viewModel.localColor).opacity(0.6), Color(hex: viewModel.localColor).opacity(0.2)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     private func colorSwatch(hex: String) -> some View {
@@ -289,7 +314,7 @@ public struct CommunitySettingsView: View {
                 }
                 Spacer()
                 Toggle("", isOn: $viewModel.isPrivate)
-                    .tint(Color(hex: "A855F7"))
+                    .tint(MeeshyColors.indigo500)
                     .labelsHidden()
             }
             .padding(14)
@@ -459,10 +484,10 @@ final class CommunitySettingsViewModel: ObservableObject {
         }
     }
 
-    func uploadAvatar(_ item: PhotosPickerItem) async {
+    func uploadCompressedAvatar(_ data: Data) async {
         isUploadingAvatar = true
         defer { isUploadingAvatar = false }
-        if let url = await uploadPhotoItem(item) {
+        if let url = await uploadCompressedImage(data, prefix: "community_avatar") {
             avatarUrl = url
             postToast(message: "Avatar televerse", isSuccess: true)
         } else {
@@ -470,10 +495,10 @@ final class CommunitySettingsViewModel: ObservableObject {
         }
     }
 
-    func uploadBanner(_ item: PhotosPickerItem) async {
+    func uploadCompressedBanner(_ data: Data) async {
         isUploadingBanner = true
         defer { isUploadingBanner = false }
-        if let url = await uploadPhotoItem(item) {
+        if let url = await uploadCompressedImage(data, prefix: "community_banner") {
             bannerUrl = url
             postToast(message: "Banniere televersee", isSuccess: true)
         } else {
@@ -489,17 +514,16 @@ final class CommunitySettingsViewModel: ObservableObject {
         )
     }
 
-    private func uploadPhotoItem(_ item: PhotosPickerItem) async -> String? {
+    private func uploadCompressedImage(_ data: Data, prefix: String) async -> String? {
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else { return nil }
-            let fileName = "community_upload_\(UUID().uuidString).jpg"
+            let fileName = "\(prefix)_\(UUID().uuidString).jpg"
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try data.write(to: tempURL)
-            
+
             let serverOrigin = MeeshyConfig.shared.serverOrigin
             guard let baseURL = URL(string: serverOrigin),
                   let token = APIClient.shared.authToken else { return nil }
-            
+
             let manager = TusUploadManager(baseURL: baseURL)
             let result = try await manager.uploadFile(fileURL: tempURL, mimeType: "image/jpeg", token: token)
             try? FileManager.default.removeItem(at: tempURL)

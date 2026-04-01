@@ -162,10 +162,12 @@ public struct CommunityDetailView: View {
 
             if viewModel.isAdmin {
                 Menu {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Label("Reglages", systemImage: "gearshape.fill")
+                    if viewModel.isCreator {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Label("Reglages", systemImage: "gearshape.fill")
+                        }
                     }
 
                     if !viewModel.isCreator {
@@ -375,6 +377,8 @@ public struct CommunityDetailView: View {
                     actionButton(icon: "plus.bubble.fill", title: "Channel") {
                         showAddChannel = true
                     }
+                }
+                if viewModel.isCreator {
                     actionButton(icon: "gearshape.fill", title: "Reglages") {
                         showSettings = true
                     }
