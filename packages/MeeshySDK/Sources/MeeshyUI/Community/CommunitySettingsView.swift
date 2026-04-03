@@ -136,21 +136,6 @@ public struct CommunitySettingsView: View {
 
     private var visualSection: some View {
         VStack(spacing: 16) {
-<<<<<<< HEAD
-            sectionHeader(String(localized: "community.settings.section.appearance", defaultValue: "Apparence", bundle: .module))
-
-            VStack(spacing: 12) {
-                // Color picker
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(String(localized: "community.settings.color", defaultValue: "Couleur", bundle: .module))
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.textSecondary)
-
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
-                        ForEach(presetColors, id: \.self) { hex in
-                            colorSwatch(hex: hex)
-                        }
-=======
             VStack(spacing: 0) {
                 ZStack(alignment: .bottomTrailing) {
                     communityBannerView
@@ -158,76 +143,16 @@ public struct CommunitySettingsView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
 
                     PhotosPicker(selection: $bannerItem, matching: .images) {
-                        Label("Modifier", systemImage: "photo.fill")
+                        Label(String(localized: "community.settings.banner.edit", defaultValue: "Modifier", bundle: .module), systemImage: "photo.fill")
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundColor(.white)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(Capsule().fill(Color.black.opacity(0.5)))
->>>>>>> origin/main
                     }
                     .disabled(viewModel.isUploadingBanner)
                     .padding(8)
 
-<<<<<<< HEAD
-                // Emoji picker
-                settingsField(label: String(localized: "community.settings.emoji", defaultValue: "Emoji", bundle: .module)) {
-                    TextField("🏘️", text: $viewModel.localEmoji)
-                        .font(.system(size: 22))
-                        .foregroundColor(theme.textPrimary)
-                        .onChange(of: viewModel.localEmoji) { newValue in
-                            let trimmed = String(newValue.unicodeScalars.prefix(2))
-                            if trimmed != newValue { viewModel.localEmoji = trimmed }
-                        }
-                }
-
-                // Avatar
-                settingsField(label: String(localized: "community.settings.avatar", defaultValue: "Avatar", bundle: .module)) {
-                    HStack {
-                        MeeshyAvatar(
-                            name: viewModel.name,
-                            context: .custom(40),
-                            kind: .entity,
-                            accentColor: viewModel.localColor,
-                            avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl
-                        )
-
-                        PhotosPicker(selection: $avatarItem, matching: .images) {
-                            Text(viewModel.isUploadingAvatar ? String(localized: "common.uploading", defaultValue: "Upload en cours...", bundle: .module) : String(localized: "community.settings.avatar.change", defaultValue: "Changer l'avatar", bundle: .module))
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "4ECDC4"))
-                        }
-                        .disabled(viewModel.isUploadingAvatar)
-
-                        if !viewModel.avatarUrl.isEmpty {
-                            Spacer()
-                            Button(role: .destructive) {
-                                viewModel.avatarUrl = ""
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                        }
-                    }
-                }
-
-                // Banner
-                settingsField(label: String(localized: "community.settings.banner", defaultValue: "Bannière", bundle: .module)) {
-                    HStack {
-                        if !viewModel.bannerUrl.isEmpty {
-                            AsyncImage(url: URL(string: viewModel.bannerUrl)) { image in
-                                image.resizable().scaledToFill().frame(width: 60, height: 30).clipShape(RoundedRectangle(cornerRadius: 6))
-                            } placeholder: {
-                                RoundedRectangle(cornerRadius: 6).fill(theme.backgroundSecondary).frame(width: 60, height: 30)
-                            }
-                        }
-
-                        PhotosPicker(selection: $bannerItem, matching: .images) {
-                            Text(viewModel.isUploadingBanner ? String(localized: "common.uploading", defaultValue: "Upload en cours...", bundle: .module) : String(localized: "community.settings.banner.change", defaultValue: "Changer la bannière", bundle: .module))
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(hex: "4ECDC4"))
-                        }
-                        .disabled(viewModel.isUploadingBanner)
-=======
                     if viewModel.isUploadingBanner {
                         RoundedRectangle(cornerRadius: 16)
                             .fill(Color.black.opacity(0.4))
@@ -248,7 +173,6 @@ public struct CommunitySettingsView: View {
                         Circle()
                             .stroke(theme.backgroundPrimary, lineWidth: 4)
                     )
->>>>>>> origin/main
 
                     PhotosPicker(selection: $avatarItem, matching: .images) {
                         Image(systemName: "pencil.circle.fill")
