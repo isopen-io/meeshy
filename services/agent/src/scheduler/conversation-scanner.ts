@@ -12,7 +12,7 @@ import { ScanTracer } from '../tracing/scan-tracer';
 import type { TracerRef } from '../graph/graph';
 
 type CompiledGraph = {
-  invoke: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  invoke: (input: Record<string, unknown>, config?: any) => Promise<Record<string, unknown>>;
 };
 
 function extractRecentTopicCategories(
@@ -148,6 +148,11 @@ export class ConversationScanner {
   }
 
   private async scanAll(): Promise<void> {
+    const globalConfig = await this.configCache.getGlobalConfig();
+    if (globalConfig?.globalScanEnabled) {
+      return this.scanSequentially();
+    }
+
     const lockKey = 'agent:scanning:lock';
     const lockTtl = 120;
     const acquired = await this.redis.set(lockKey, '1', 'EX', lockTtl, 'NX');
@@ -217,8 +222,66 @@ export class ConversationScanner {
     }
   }
 
+  private async scanSequentially(): Promise<void> {
+    const lockKey = 'agent:scanning:sequential:lock';
+    const lockTtl = 3600; // Longer lock for sequential scan
+    const acquired = await this.redis.set(lockKey, '1', 'EX', lockTtl, 'NX');
+    if (!acquired) return;
+
+    try {
+      const evicted = await this.persistence.evictRecentlyActiveUsers();
+      if (evicted > 0) {
+        console.log(`[Scanner] Evicted ${evicted} recently active users`);
+      }
+
+      const globalConfig = await this.configCache.getGlobalConfig();
+      const scanOptions = {
+        eligibleTypes: globalConfig?.eligibleConversationTypes ?? ['group', 'channel', 'public', 'global'],
+        freshnessHours: globalConfig?.messageFreshnessHours ?? 24,
+        maxConversations: globalConfig?.maxConversationsPerCycle ?? 0,
+      };
+      const eligible = await findEligibleConversations(this.persistence, scanOptions);
+
+      for (const conv of eligible) {
+        // Re-check global enabled flag before each conversation
+        const currentGlobal = await this.configCache.getGlobalConfig();
+        if (!currentGlobal?.globalScanEnabled) break;
+
+        try {
+          const lastScanKey = `agent:last-scan:${conv.conversationId}`;
+          const lastScan = parseInt(await this.redis.get(lastScanKey) || '0', 10);
+          if (Date.now() - lastScan < conv.scanIntervalMinutes * 60_000) continue;
+
+          const globalBudgetCheck = await this.budgetManager.canScanConversation({
+            weekdayMaxConversations: globalConfig?.weekdayMaxConversations ?? 50,
+            weekendMaxConversations: globalConfig?.weekendMaxConversations ?? 100,
+          });
+
+          if (!globalBudgetCheck.allowed) break;
+
+          const processed = await this.processConversation(conv);
+          if (processed) {
+            await this.budgetManager.recordScannedConversation();
+          }
+          await this.redis.set(lastScanKey, String(Date.now()), 'EX', 86400);
+
+          // Wait random interval before next conversation
+          const min = globalConfig?.globalScanMinInterval ?? 60;
+          const max = globalConfig?.globalScanMaxInterval ?? 300;
+          const delay = Math.floor(Math.random() * (max - min + 1) + min) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } catch (error) {
+          console.error(`[Scanner] Sequential scan error for conv=${conv.conversationId}:`, error);
+        }
+      }
+    } finally {
+      await this.redis.del(lockKey);
+    }
+  }
+
   private async processConversation(conv: EligibleConversation, trigger: 'auto' | 'manual' = 'auto'): Promise<boolean> {
     const { conversationId } = conv;
+    await this.persistence.updateScanStatus(conversationId, true, 'starting');
     const tracer = new ScanTracer(conversationId, trigger);
     this.tracerRef.current = tracer;
 
@@ -227,8 +290,11 @@ export class ConversationScanner {
     if (activity.shouldSkip) {
       console.log(`[Scanner] Skipping conv=${conversationId}: ${activity.reason}`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      this.persistence.createScanLog(tracer.finalize()).catch(err =>
-        console.error(`[Scanner] Error persisting scan log:`, err));
+      await Promise.all([
+        this.persistence.createScanLog(tracer.finalize()).catch(err =>
+          console.error(`[Scanner] Error persisting scan log:`, err)),
+        this.persistence.updateScanStatus(conversationId, false, null),
+      ]);
       this.tracerRef.current = null;
       return false;
     }
@@ -378,8 +444,11 @@ export class ConversationScanner {
     if (controlledUsers.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no controlled users`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      this.persistence.createScanLog(tracer.finalize()).catch(err =>
-        console.error(`[Scanner] Error persisting scan log:`, err));
+      await Promise.all([
+        this.persistence.createScanLog(tracer.finalize()).catch(err =>
+          console.error(`[Scanner] Error persisting scan log:`, err)),
+        this.persistence.updateScanStatus(conversationId, false, null),
+      ]);
       this.tracerRef.current = null;
       return false;
     }
@@ -393,8 +462,11 @@ export class ConversationScanner {
     if (availableUsers.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: all controlled users on cooldown`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      this.persistence.createScanLog(tracer.finalize()).catch(err =>
-        console.error(`[Scanner] Error persisting scan log:`, err));
+      await Promise.all([
+        this.persistence.createScanLog(tracer.finalize()).catch(err =>
+          console.error(`[Scanner] Error persisting scan log:`, err)),
+        this.persistence.updateScanStatus(conversationId, false, null),
+      ]);
       this.tracerRef.current = null;
       return false;
     }
@@ -405,8 +477,8 @@ export class ConversationScanner {
       const dbMessages = await this.persistence.getRecentMessages(conversationId, 50);
       const reversed = dbMessages.reverse();
       effectiveMessages = reversed
-        .filter((m: typeof reversed[number]) => m.senderId !== null)
-        .map((m: typeof reversed[number]) => ({
+        .filter((m: any) => m.senderId !== null)
+        .map((m: any) => ({
           id: m.id,
           senderId: m.senderId!,
           senderName: m.sender?.displayName ?? m.sender?.user?.username ?? m.senderId!,
@@ -425,8 +497,11 @@ export class ConversationScanner {
     if (effectiveMessages.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no messages`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      this.persistence.createScanLog(tracer.finalize()).catch(err =>
-        console.error(`[Scanner] Error persisting scan log:`, err));
+      await Promise.all([
+        this.persistence.createScanLog(tracer.finalize()).catch(err =>
+          console.error(`[Scanner] Error persisting scan log:`, err)),
+        this.persistence.updateScanStatus(conversationId, false, null),
+      ]);
       this.tracerRef.current = null;
       return false;
     }
@@ -463,8 +538,11 @@ export class ConversationScanner {
     if (todayStats.usersActive >= maxUsersToday) {
       console.log(`[Scanner] User budget exhausted for conv=${conversationId}: ${todayStats.usersActive}/${maxUsersToday} users today`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      this.persistence.createScanLog(tracer.finalize()).catch(err =>
-        console.error(`[Scanner] Error persisting scan log:`, err));
+      await Promise.all([
+        this.persistence.createScanLog(tracer.finalize()).catch(err =>
+          console.error(`[Scanner] Error persisting scan log:`, err)),
+        this.persistence.updateScanStatus(conversationId, false, null),
+      ]);
       this.tracerRef.current = null;
       return false;
     }
@@ -476,51 +554,74 @@ export class ConversationScanner {
 
     let result: Record<string, unknown>;
     try {
+      const stopFlagKey = `agent:scan-stop:${conversationId}`;
+      const onNodeStart = async (node: string) => {
+        const stopped = await this.redis.get(stopFlagKey);
+        if (stopped) {
+          throw new Error('Scan interrupted by user');
+        }
+        await this.persistence.updateScanStatus(conversationId, true, node);
+      };
+
       result = await this.graph.invoke({
-      conversationId,
-      messages: effectiveMessages,
-      summary,
-      toneProfiles,
-      controlledUsers,
-      triggerContext: { type: 'scan' },
-      pendingActions: [],
-      interventionPlan: null,
-      activityScore: activity.activityScore,
-      contextWindowSize: conv.contextWindowSize,
-      agentType: conv.agentType,
-      useFullHistory: conv.useFullHistory,
-      conversationTitle: conv.title ?? '',
-      conversationDescription: conv.description ?? '',
-      agentInstructions: conv.agentInstructions ?? '',
-      webSearchEnabled: conv.webSearchEnabled,
-      minWordsPerMessage: conv.minWordsPerMessage,
-      maxWordsPerMessage: conv.maxWordsPerMessage,
-      generationTemperature: conv.generationTemperature,
-      qualityGateEnabled: conv.qualityGateEnabled,
-      qualityGateMinScore: conv.qualityGateMinScore,
-      minResponsesPerCycle: conv.minResponsesPerCycle,
-      maxResponsesPerCycle: conv.maxResponsesPerCycle,
-      reactionsEnabled: conv.reactionsEnabled,
-      maxReactionsPerCycle: conv.maxReactionsPerCycle,
-      budgetRemaining: effectiveBudgetRemaining,
-      todayUsersActive: todayStats.usersActive,
-      maxUsersToday,
-      burstMode: conv.burstEnabled,
-      burstSize: conv.burstSize,
-      prioritizeTaggedUsers: conv.prioritizeTaggedUsers,
-      prioritizeRepliedUsers: conv.prioritizeRepliedUsers,
-      reactionBoostFactor: conv.reactionBoostFactor,
-      agentHistory,
-      todayActiveUserIds,
-      lastAgentUserId,
-      recentTopicCategories,
-      engagementData,
-    });
+        conversationId,
+        messages: effectiveMessages,
+        summary,
+        toneProfiles,
+        controlledUsers,
+        triggerContext: { type: 'scan' },
+        pendingActions: [],
+        interventionPlan: null,
+        activityScore: activity.activityScore,
+        contextWindowSize: conv.contextWindowSize,
+        agentType: conv.agentType,
+        useFullHistory: conv.useFullHistory,
+        conversationTitle: conv.title ?? '',
+        conversationDescription: conv.description ?? '',
+        agentInstructions: conv.agentInstructions ?? '',
+        webSearchEnabled: conv.webSearchEnabled,
+        minWordsPerMessage: conv.minWordsPerMessage,
+        maxWordsPerMessage: conv.maxWordsPerMessage,
+        generationTemperature: conv.generationTemperature,
+        qualityGateEnabled: conv.qualityGateEnabled,
+        qualityGateMinScore: conv.qualityGateMinScore,
+        minResponsesPerCycle: conv.minResponsesPerCycle,
+        maxResponsesPerCycle: conv.maxResponsesPerCycle,
+        reactionsEnabled: conv.reactionsEnabled,
+        maxReactionsPerCycle: conv.maxReactionsPerCycle,
+        budgetRemaining: effectiveBudgetRemaining,
+        todayUsersActive: todayStats.usersActive,
+        maxUsersToday,
+        burstMode: conv.burstEnabled,
+        burstSize: conv.burstSize,
+        prioritizeTaggedUsers: conv.prioritizeTaggedUsers,
+        prioritizeRepliedUsers: conv.prioritizeRepliedUsers,
+        reactionBoostFactor: conv.reactionBoostFactor,
+        agentHistory,
+        todayActiveUserIds,
+        lastAgentUserId,
+        recentTopicCategories,
+        engagementData,
+      }, {
+        callbacks: [{
+          handleGraphNodeStart: async (node: any) => {
+            if (node && typeof node === 'object' && node.id) {
+              await onNodeStart(node.id);
+            }
+          },
+        }],
+      });
+      await this.redis.del(stopFlagKey);
     } catch (graphError) {
-      console.error(`[Scanner] Graph invocation failed for conv=${conversationId}:`, graphError);
-      tracer.setOutcome({ outcome: 'error', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      this.persistence.createScanLog(tracer.finalize()).catch(err =>
-        console.error(`[Scanner] Error persisting scan log:`, err));
+      const isInterrupt = graphError instanceof Error && graphError.message === 'Scan interrupted by user';
+      console.error(`[Scanner] Graph invocation ${isInterrupt ? 'interrupted' : 'failed'} for conv=${conversationId}:`, graphError);
+      tracer.setOutcome({ outcome: isInterrupt ? 'skipped' : 'error', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
+      await Promise.all([
+        this.persistence.createScanLog(tracer.finalize()).catch(err =>
+          console.error(`[Scanner] Error persisting scan log:`, err)),
+        this.persistence.updateScanStatus(conversationId, false, null),
+        this.redis.del(`agent:scan-stop:${conversationId}`),
+      ]);
       this.tracerRef.current = null;
       return false;
     }
@@ -627,8 +728,11 @@ export class ConversationScanner {
       messagesRejected: 0,
       userIdsUsed: [...new Set(msgActions.map((a) => (a as any).asUserId).filter(Boolean))],
     });
-    this.persistence.createScanLog(tracer.finalize()).catch(err =>
-      console.error(`[Scanner] Error persisting scan log:`, err));
+    await Promise.all([
+      this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err)),
+      this.persistence.updateScanStatus(conversationId, false, null),
+    ]);
     this.tracerRef.current = null;
 
     return true;

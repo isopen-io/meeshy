@@ -63,6 +63,8 @@ export default memo(function TriggerSchedulingModal({
   conversationId, conversationTitle, open, onOpenChange,
 }: TriggerSchedulingModalProps) {
   const [schedule, setSchedule] = useState<AgentScheduleData | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [currentNode, setCurrentNode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -89,11 +91,18 @@ export default memo(function TriggerSchedulingModal({
 
   const fetchSchedule = useCallback(async () => {
     try {
-      const res = await agentAdminService.getSchedule(conversationId);
-      if (res.success && res.data) {
-        setSchedule(res.data);
-        setFreqHours(Math.floor(res.data.scanIntervalMinutes / 60));
-        setFreqMinutes(res.data.scanIntervalMinutes % 60);
+      const [schedRes, liveRes] = await Promise.all([
+        agentAdminService.getSchedule(conversationId),
+        agentAdminService.getLiveState(conversationId),
+      ]);
+      if (schedRes.success && schedRes.data) {
+        setSchedule(schedRes.data);
+        setFreqHours(Math.floor(schedRes.data.scanIntervalMinutes / 60));
+        setFreqMinutes(schedRes.data.scanIntervalMinutes % 60);
+      }
+      if (liveRes.success && liveRes.data) {
+        setIsScanning(liveRes.data.isScanning ?? false);
+        setCurrentNode(liveRes.data.currentNode ?? null);
       }
     } catch {
       // silent
@@ -126,19 +135,27 @@ export default memo(function TriggerSchedulingModal({
   const handleTriggerNow = useCallback(async () => {
     setTriggering(true);
     try {
-      const res = await agentAdminService.triggerScan(conversationId);
-      if (res.success) {
-        toast.success('Scan declenche');
-        setTimeout(fetchSchedule, 2000);
+      if (isScanning) {
+        const res = await agentAdminService.stopScan(conversationId);
+        if (res.success) {
+          toast.success('Interruption demandée');
+          setTimeout(fetchSchedule, 1000);
+        }
       } else {
-        toast.error('Erreur lors du declenchement');
+        const res = await agentAdminService.triggerScan(conversationId);
+        if (res.success) {
+          toast.success('Scan declenche');
+          setTimeout(fetchSchedule, 1000);
+        } else {
+          toast.error('Erreur lors du declenchement');
+        }
       }
     } catch {
       toast.error('Erreur reseau');
     } finally {
       setTriggering(false);
     }
-  }, [conversationId, fetchSchedule]);
+  }, [conversationId, fetchSchedule, isScanning]);
 
   const handleScheduleAtTime = useCallback(() => {
     if (!scheduleTime) return;
@@ -307,19 +324,28 @@ export default memo(function TriggerSchedulingModal({
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                     {/* Immediate trigger */}
                     <div className="col-span-2 sm:col-span-1 p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <Zap className="h-3 w-3 text-indigo-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Immediat</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Zap className={`h-3 w-3 ${isScanning ? 'text-red-500 animate-pulse' : 'text-indigo-500'}`} />
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                            {isScanning ? 'En cours' : 'Immediat'}
+                          </span>
+                        </div>
+                        {isScanning && (
+                          <Badge variant="destructive" className="text-[8px] h-3.5 px-1 uppercase animate-pulse">
+                            {currentNode ?? 'Active'}
+                          </Badge>
+                        )}
                       </div>
                       <Button
-                        variant="outline"
+                        variant={isScanning ? 'destructive' : 'outline'}
                         size="sm"
                         onClick={handleTriggerNow}
                         disabled={triggering}
-                        className="w-full h-8 text-xs gap-1.5 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50"
+                        className={`w-full h-8 text-xs gap-1.5 ${!isScanning ? 'border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50' : ''}`}
                       >
-                        {triggering ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-                        Declencher maintenant
+                        {triggering ? <Loader2 className="h-3 w-3 animate-spin" /> : (isScanning ? <PauseCircle className="h-3 w-3" /> : <Zap className="h-3 w-3" />)}
+                        {isScanning ? 'STOP!' : 'Declencher maintenant'}
                       </Button>
                     </div>
 

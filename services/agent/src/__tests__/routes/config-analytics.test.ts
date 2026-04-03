@@ -22,7 +22,8 @@ const sharedMock = jest.requireMock('@meeshy/shared/prisma/client');
 async function buildApp() {
   const app = Fastify();
   const prisma = new PrismaClient();
-  await configRoutes(app, prisma);
+  const redis = { set: jest.fn() };
+  await configRoutes(app, prisma, redis);
   await app.ready();
   return app;
 }

@@ -2943,6 +2943,10 @@ model AgentConfig {
   conversationId           String   @db.ObjectId
   /// Enabled by default for all conversations (Animator)
   enabled                  Boolean  @default(true)
+  /// Currently being scanned/processed by the agent service
+  isScanning               Boolean  @default(false)
+  /// Current node/step in the agent workflow (LangGraph node)
+  currentNode              String?
   configuredBy             String?  @db.ObjectId
 
   /// Type of agent behavior: "support", "faq", "personal", "animator"
@@ -3244,6 +3248,12 @@ model AgentGlobalConfig {
   systemPrompt          String   @default("Tu es un systeme d'animation de conversations. Ton role est de maintenir des echanges naturels et engageants en imitant le style des utilisateurs inactifs.")
   /// Global kill switch
   enabled               Boolean  @default(true)
+  /// Sequential scan of conversations (one by one with random interval)
+  globalScanEnabled     Boolean  @default(false)
+  /// Minimum interval between two sequential scans (seconds)
+  globalScanMinInterval Int      @default(60)
+  /// Maximum interval between two sequential scans (seconds)
+  globalScanMaxInterval Int      @default(300)
   /// Default LLM provider
   defaultProvider       String   @default("openai")
   /// Default LLM model

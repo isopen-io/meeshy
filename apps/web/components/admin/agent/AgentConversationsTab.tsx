@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
-import { Settings, Trash2, ChevronLeft, ChevronRight, Plus, Search as SearchIcon, MessageSquare, Clock } from 'lucide-react';
+import { Settings, Trash2, ChevronLeft, ChevronRight, Plus, Search as SearchIcon, MessageSquare, Clock, Play, Square } from 'lucide-react';
 import { agentAdminService, type AgentConfigData } from '@/services/agent-admin.service';
 import { AgentConfigDialog } from './AgentConfigDialog';
 import { UserDisplay } from './UserDisplay';
@@ -77,9 +77,9 @@ export function AgentConversationsTab() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, limit, debouncedSearch]);
 
-  useEffect(() => { fetchConfigs(); }, [fetchConfigs, debouncedSearch]);
+  useEffect(() => { fetchConfigs(); }, [fetchConfigs]);
 
   const handleToggle = async (config: AgentConfigData) => {
     try {
@@ -101,6 +101,21 @@ export function AgentConversationsTab() {
       toast.success('Configuration supprimée');
     } catch {
       toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  const handleTrigger = async (config: AgentConfigData) => {
+    try {
+      if (config.isScanning) {
+        await agentAdminService.stopScan(config.conversationId);
+        toast.success('Interruption demandée');
+      } else {
+        await agentAdminService.triggerScan(config.conversationId);
+        toast.success('Scan déclenché');
+      }
+      fetchConfigs();
+    } catch {
+      toast.error('Erreur lors du déclenchement');
     }
   };
 
@@ -205,14 +220,34 @@ export function AgentConversationsTab() {
                     {/* Mobile: compact row / Desktop: individual columns */}
                     <div className="flex items-center gap-2 lg:contents flex-wrap">
                       {/* Status */}
-                      <div className="flex items-center gap-1.5">
-                        <Switch
-                          checked={config.enabled}
-                          onCheckedChange={() => handleToggle(config)}
-                        />
-                        <Badge variant={config.enabled ? 'default' : 'secondary'} className="text-[10px]">
-                          {config.enabled ? 'Actif' : 'Off'}
-                        </Badge>
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          size="sm"
+                          variant={config.isScanning ? 'destructive' : 'default'}
+                          className={`h-10 w-full flex-col gap-0.5 px-2 ${config.isScanning ? 'animate-pulse' : ''}`}
+                          onClick={() => handleTrigger(config)}
+                        >
+                          {config.isScanning ? (
+                            <>
+                              <Square className="h-3 w-3 fill-current" />
+                              <span className="text-[8px] font-bold">STOP!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-4 w-4 fill-current" />
+                              <span className="text-[8px] font-bold uppercase">Play</span>
+                            </>
+                          )}
+                        </Button>
+                        <div className="flex items-center gap-1.5 justify-center">
+                          <Switch
+                            checked={config.enabled}
+                            onCheckedChange={() => handleToggle(config)}
+                          />
+                          <Badge variant={config.enabled ? 'default' : 'secondary'} className="text-[10px]">
+                            {config.enabled ? 'Actif' : 'Off'}
+                          </Badge>
+                        </div>
                       </div>
 
                       {/* Triggers */}

@@ -40,30 +40,58 @@ export default memo(function AgentMessagesModal({
 }: AgentMessagesModalProps) {
   const [messages, setMessages] = useState<AgentMessageEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 20;
 
-  const fetchMessages = useCallback(async () => {
-    setLoading(true);
+  const fetchMessages = useCallback(async (isLoadMore = false) => {
+    if (isLoadMore) setLoadingMore(true);
+    else setLoading(true);
+
     try {
       const res = await agentAdminService.getAgentMessages(conversationId, page, limit);
       if (res.success && res.data) {
-        setMessages(res.data);
+        if (isLoadMore) {
+          setMessages(prev => [...prev, ...(res.data || [])]);
+        } else {
+          setMessages(res.data);
+        }
         setTotal(res.pagination?.total ?? 0);
       }
     } catch {
       // silent
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [conversationId, page]);
 
   useEffect(() => {
-    if (open) fetchMessages();
-  }, [open, fetchMessages]);
+    if (open) {
+      setPage(1);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      fetchMessages(page > 1);
+    }
+  }, [open, page]);
 
   const hasMore = page * limit < total;
+
+  const handleLoadMore = () => {
+    if (hasMore && !loadingMore) {
+      setPage(p => p + 1);
+    }
+  };
+
+  useEffect(() => {
+    if (page > 1) {
+      fetchMessages(true);
+    }
+  }, [page]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -137,6 +165,21 @@ export default memo(function AgentMessagesModal({
                   </div>
                 </div>
               ))}
+
+              {hasMore && (
+                <div className="py-4 flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="text-xs gap-2"
+                  >
+                    {loadingMore ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronRight className="h-3 w-3 rotate-90" />}
+                    Charger la suite
+                  </Button>
+                </div>
+              )}
             </div>
           </ScrollArea>
         )}

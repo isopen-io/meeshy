@@ -41,7 +41,7 @@ server.get('/debug/zmq-status', async () => ({
   timestamp: Date.now(),
 }));
 
-server.register((instance) => configRoutes(instance, prisma));
+server.register((instance) => configRoutes(instance, prisma, redis));
 server.register((instance) => rolesRoutes(instance, prisma));
 
 async function start() {
