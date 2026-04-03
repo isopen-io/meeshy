@@ -81,7 +81,7 @@ public struct DrawingToolbarPanel: View {
                 .frame(width: max(4, toolWidth * 0.6), height: max(4, toolWidth * 0.6))
 
             Slider(value: $toolWidth, in: 1...30) {
-                Text("Taille pinceau")
+                Text(String(localized: "story.drawing.brushSize", defaultValue: "Taille pinceau", bundle: .module))
             }
             .tint(toolColor)
 
@@ -145,7 +145,7 @@ public struct DrawingToolbarPanel: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Circle())
             }
-            .accessibilityLabel("Annuler")
+            .accessibilityLabel(String(localized: "story.drawing.undo", defaultValue: "Annuler", bundle: .module))
 
             Button {
                 onRedo()
@@ -157,7 +157,7 @@ public struct DrawingToolbarPanel: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Circle())
             }
-            .accessibilityLabel("Restaurer")
+            .accessibilityLabel(String(localized: "story.drawing.redo", defaultValue: "Restaurer", bundle: .module))
 
             Button {
                 onClear()
@@ -188,9 +188,9 @@ public enum DrawingTool: String, CaseIterable {
 
     public var label: String {
         switch self {
-        case .pen: return "Pen"
-        case .marker: return "Marker"
-        case .eraser: return "Gomme"
+        case .pen: return String(localized: "story.drawing.pen", defaultValue: "Pen", bundle: .module)
+        case .marker: return String(localized: "story.drawing.marker", defaultValue: "Marker", bundle: .module)
+        case .eraser: return String(localized: "story.drawing.eraser", defaultValue: "Gomme", bundle: .module)
         }
     }
 }

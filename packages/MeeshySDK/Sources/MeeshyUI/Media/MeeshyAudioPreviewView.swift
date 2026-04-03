@@ -101,7 +101,7 @@ public struct MeeshyAudioPreviewView: View {
                 onCancel?()
                 dismiss()
             } label: {
-                Text("Annuler")
+                Text(String(localized: "media.audio.cancel", defaultValue: "Annuler", bundle: .module))
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
@@ -294,7 +294,7 @@ public struct MeeshyAudioPreviewView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "pencil")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("\u{00C9}diter")
+                    Text(String(localized: "media.audio.edit", defaultValue: "\u{00C9}diter", bundle: .module))
                         .font(.system(size: 15, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -316,7 +316,7 @@ public struct MeeshyAudioPreviewView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 12, weight: .bold))
-                    Text("Utiliser")
+                    Text(String(localized: "media.audio.use", defaultValue: "Utiliser", bundle: .module))
                         .font(.system(size: 15, weight: .bold))
                 }
                 .foregroundStyle(.white)

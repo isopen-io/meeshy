@@ -241,7 +241,7 @@ public struct UserProfileSheet: View {
                 Circle()
                     .fill(Color(hex: "2ECC71"))
                     .frame(width: 8, height: 8)
-                Text("En ligne")
+                Text(String(localized: "profile.presence.online", defaultValue: "En ligne", bundle: .module))
                     .font(.system(size: 12))
                     .foregroundColor(Color(hex: "2ECC71"))
             }
@@ -438,10 +438,10 @@ public struct UserProfileSheet: View {
             pendingRequestId = request.id
             connectionStatus = .pendingSent(requestId: request.id)
             HapticFeedback.success()
-            postToast("Demande envoyee", isSuccess: true)
+            postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyee", bundle: .module), isSuccess: true)
         } catch {
             HapticFeedback.error()
-            postToast("Impossible d'envoyer la demande", isSuccess: false)
+            postToast(String(localized: "profile.toast.requestSendFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .module), isSuccess: false)
         }
     }
 
@@ -453,11 +453,11 @@ public struct UserProfileSheet: View {
         HapticFeedback.medium()
         do {
             try await FriendService.shared.deleteRequest(requestId: requestId)
-            postToast("Demande annulee", isSuccess: true)
+            postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulee", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.didSendRequest(to: userId, requestId: requestId)
             resolveConnectionStatus()
-            postToast("Impossible d'annuler", isSuccess: false)
+            postToast(String(localized: "profile.toast.cancelFailed", defaultValue: "Impossible d'annuler", bundle: .module), isSuccess: false)
         }
     }
 
@@ -476,12 +476,12 @@ public struct UserProfileSheet: View {
         HapticFeedback.success()
         do {
             let _ = try await FriendService.shared.respond(requestId: requestId, accepted: true)
-            postToast("Connexion acceptee", isSuccess: true)
+            postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptee", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.rollbackAccept(senderId: userId, requestId: requestId)
             resolveConnectionStatus()
             HapticFeedback.error()
-            postToast("Impossible d'accepter", isSuccess: false)
+            postToast(String(localized: "profile.toast.acceptFailed", defaultValue: "Impossible d'accepter", bundle: .module), isSuccess: false)
         }
     }
 
@@ -493,12 +493,12 @@ public struct UserProfileSheet: View {
         HapticFeedback.medium()
         do {
             let _ = try await FriendService.shared.respond(requestId: requestId, accepted: false)
-            postToast("Demande refusee", isSuccess: true)
+            postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusee", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.rollbackReject(senderId: userId, requestId: requestId)
             resolveConnectionStatus()
             HapticFeedback.error()
-            postToast("Impossible de refuser", isSuccess: false)
+            postToast(String(localized: "profile.toast.declineFailed", defaultValue: "Impossible de refuser", bundle: .module), isSuccess: false)
         }
     }
 
@@ -510,9 +510,9 @@ public struct UserProfileSheet: View {
             try await BlockService.shared.blockUser(userId: userId)
             isBlocked = true
             HapticFeedback.medium()
-            postToast("Utilisateur bloque", isSuccess: true)
+            postToast(String(localized: "profile.toast.userBlocked", defaultValue: "Utilisateur bloque", bundle: .module), isSuccess: true)
         } catch {
-            postToast("Impossible de bloquer", isSuccess: false)
+            postToast(String(localized: "profile.toast.blockFailed", defaultValue: "Impossible de bloquer", bundle: .module), isSuccess: false)
         }
     }
 
@@ -523,9 +523,9 @@ public struct UserProfileSheet: View {
             isBlocked = false
             resolveConnectionStatus()
             HapticFeedback.light()
-            postToast("Utilisateur debloque", isSuccess: true)
+            postToast(String(localized: "profile.toast.userUnblocked", defaultValue: "Utilisateur debloque", bundle: .module), isSuccess: true)
         } catch {
-            postToast("Impossible de debloquer", isSuccess: false)
+            postToast(String(localized: "profile.toast.unblockFailed", defaultValue: "Impossible de debloquer", bundle: .module), isSuccess: false)
         }
     }
 
@@ -584,33 +584,33 @@ public struct UserProfileSheet: View {
             case .none:
                 profileActionButton(
                     icon: "person.badge.plus.fill",
-                    label: "Demande de connexion",
+                    label: String(localized: "profile.action.connectionRequest", defaultValue: "Demande de connexion", bundle: .module),
                     color: Color(hex: resolvedAccent),
                     action: { Task { await sendConnectionRequest() } }
                 )
             case .pendingSent:
                 profileActionButton(
                     icon: "xmark.circle.fill",
-                    label: "Annuler la demande",
+                    label: String(localized: "profile.action.cancelRequest", defaultValue: "Annuler la demande", bundle: .module),
                     color: theme.textMuted,
                     action: { Task { await cancelRequest() } }
                 )
                 profileActionButton(
                     icon: "arrow.clockwise.circle.fill",
-                    label: "Renvoyer la demande",
+                    label: String(localized: "profile.action.resendRequest", defaultValue: "Renvoyer la demande", bundle: .module),
                     color: Color(hex: resolvedAccent),
                     action: { Task { await resendRequest() } }
                 )
             case .pendingReceived:
                 profileActionButton(
                     icon: "checkmark.circle.fill",
-                    label: "Accepter la connexion",
+                    label: String(localized: "profile.action.acceptConnection", defaultValue: "Accepter la connexion", bundle: .module),
                     color: MeeshyColors.success,
                     action: { Task { await acceptRequest() } }
                 )
                 profileActionButton(
                     icon: "xmark.circle.fill",
-                    label: "Refuser la connexion",
+                    label: String(localized: "profile.action.declineConnection", defaultValue: "Refuser la connexion", bundle: .module),
                     color: theme.textMuted,
                     action: { Task { await declineRequest() } }
                 )
@@ -619,7 +619,7 @@ public struct UserProfileSheet: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 14))
                         .foregroundColor(MeeshyColors.success)
-                    Text("Connectes")
+                    Text(String(localized: "profile.status.connected", defaultValue: "Connectes", bundle: .module))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(MeeshyColors.success)
                 }
@@ -632,14 +632,14 @@ public struct UserProfileSheet: View {
             if isBlocked {
                 profileActionButton(
                     icon: "hand.raised.slash.fill",
-                    label: "Debloquer l'utilisateur",
+                    label: String(localized: "profile.action.unblockUser", defaultValue: "Debloquer l'utilisateur", bundle: .module),
                     color: MeeshyColors.warning,
                     action: { Task { await unblockUser() } }
                 )
             } else {
                 profileActionButton(
                     icon: "hand.raised.fill",
-                    label: "Bloquer cet utilisateur",
+                    label: String(localized: "profile.action.blockUser", defaultValue: "Bloquer cet utilisateur", bundle: .module),
                     color: theme.error,
                     action: { Task { await blockUser() } }
                 )
@@ -690,8 +690,8 @@ public struct UserProfileSheet: View {
                 }
 
                 Text(isInteractionDisabled
-                     ? "Interactions desactivees"
-                     : "Aucune conversation en commun")
+                     ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions desactivees", bundle: .module)
+                     : String(localized: "profile.conversations.noShared", defaultValue: "Aucune conversation en commun", bundle: .module))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(theme.textMuted.opacity(0.7))
             }
@@ -768,7 +768,7 @@ public struct UserProfileSheet: View {
             if let createdAt = displayUser.createdAt {
                 statCard(
                     icon: "calendar",
-                    label: "Membre depuis",
+                    label: String(localized: "profile.stats.memberSince", defaultValue: "Membre depuis", bundle: .module),
                     value: formatRegistrationDate(createdAt)
                 )
                 .padding(.horizontal, 20)
@@ -799,7 +799,7 @@ public struct UserProfileSheet: View {
             // Stats cards
             StatsCard(
                 icon: "paperplane.fill",
-                label: "Messages envoyés",
+                label: String(localized: "profile.stats.messagesSent", defaultValue: "Messages envoyés", bundle: .module),
                 value: "\(stats.totalMessages)",
                 accentColor: resolvedAccent
             )
@@ -807,7 +807,7 @@ public struct UserProfileSheet: View {
 
             StatsCard(
                 icon: "character.book.closed.fill",
-                label: "Traductions",
+                label: String(localized: "profile.stats.translations", defaultValue: "Traductions", bundle: .module),
                 value: "\(stats.totalTranslations)",
                 accentColor: resolvedAccent
             )
@@ -815,7 +815,7 @@ public struct UserProfileSheet: View {
 
             StatsCard(
                 icon: "globe",
-                label: "Langues utilisées",
+                label: String(localized: "profile.stats.languagesUsed", defaultValue: "Langues utilisées", bundle: .module),
                 value: "\(stats.languagesUsed)",
                 accentColor: resolvedAccent
             )
@@ -823,7 +823,7 @@ public struct UserProfileSheet: View {
 
             StatsCard(
                 icon: "calendar.badge.checkmark",
-                label: "Jours d'ancienneté",
+                label: String(localized: "profile.stats.memberDays", defaultValue: "Jours d'ancienneté", bundle: .module),
                 value: "\(stats.memberDays)",
                 accentColor: resolvedAccent
             )
@@ -840,7 +840,7 @@ public struct UserProfileSheet: View {
     @ViewBuilder
     private func achievementsSection(achievements: [Achievement]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Succès")
+            Text(String(localized: "profile.stats.achievements", defaultValue: "Succès", bundle: .module))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .padding(.horizontal, 20)
@@ -947,7 +947,7 @@ public struct UserProfileSheet: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Color(hex: "2ECC71"))
 
-            Text("Chiffrement de bout en bout activé")
+            Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Color(hex: "2ECC71"))
         }
@@ -1025,7 +1025,7 @@ public struct UserProfileSheet: View {
             HStack(spacing: compact ? 6 : 8) {
                 Image(systemName: "paperplane.fill")
                     .font(.system(size: compact ? 12 : 14, weight: .semibold))
-                Text("Envoyer un message")
+                Text(String(localized: "profile.action.sendMessage", defaultValue: "Envoyer un message", bundle: .module))
                     .font(.system(size: compact ? 13 : 15, weight: .semibold))
             }
             .foregroundColor(.white)
@@ -1074,11 +1074,11 @@ public struct UserProfileSheet: View {
                 .font(.system(size: 20))
                 .foregroundColor(theme.error)
 
-            Text("Profil restreint")
+            Text(String(localized: "profile.blocked.restrictedProfile", defaultValue: "Profil restreint", bundle: .module))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Cet utilisateur a restreint l'acces a son profil.")
+            Text(String(localized: "profile.blocked.restrictedDescription", defaultValue: "Cet utilisateur a restreint l'acces a son profil.", bundle: .module))
                 .font(.system(size: 13))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -1093,7 +1093,7 @@ public struct UserProfileSheet: View {
 
     private var blockedByMeCard: some View {
         VStack(spacing: 12) {
-            Text("Vous avez bloque cet utilisateur")
+            Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloque cet utilisateur", bundle: .module))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
@@ -1101,7 +1101,7 @@ public struct UserProfileSheet: View {
                 HapticFeedback.medium()
                 Task { await unblockUser() }
             } label: {
-                Text("Debloquer")
+                Text(String(localized: "profile.blocked.unblock", defaultValue: "Debloquer", bundle: .module))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
@@ -1126,7 +1126,7 @@ public struct UserProfileSheet: View {
 
     private func lastActiveText(from date: Date) -> String {
         let seconds = Int(-date.timeIntervalSinceNow)
-        if seconds < 60 { return "Vu a l'instant" }
+        if seconds < 60 { return String(localized: "profile.presence.justNow", defaultValue: "Vu a l'instant", bundle: .module) }
         if seconds < 3600 { return "Vu il y a \(seconds / 60)min" }
         if seconds < 86400 { return "Vu il y a \(seconds / 3600)h" }
         return "Vu il y a \(seconds / 86400)j"
@@ -1155,7 +1155,13 @@ enum ProfileTab: String, CaseIterable {
     case conversations = "Conversations"
     case stats = "Stats"
 
-    var title: String { rawValue }
+    var title: String {
+        switch self {
+        case .profile: return String(localized: "profile.tab.profile", defaultValue: "Profil", bundle: .module)
+        case .conversations: return String(localized: "profile.tab.conversations", defaultValue: "Conversations", bundle: .module)
+        case .stats: return String(localized: "profile.tab.stats", defaultValue: "Stats", bundle: .module)
+        }
+    }
 
     var icon: String {
         switch self {

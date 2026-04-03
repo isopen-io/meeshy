@@ -181,6 +181,7 @@
 		HLPR0001000100010001001 /* JSONStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPR0001000100010001000 /* JSONStub.swift */; };
 		IC3900000000002F39 /* IncomingCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IC3900000000001F39 /* IncomingCallView.swift */; };
 		L10N0001B001B001B001B0002 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = L10N0001A001A001A001A0001 /* Localizable.xcstrings */; };
+		L10N0002B002B002B002B0002 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = L10N0002A002A002A002A0001 /* InfoPlist.xcstrings */; };
 		LANG001A001A001A001A0002 /* LanguagePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = LANG001A001A001A001A0001 /* LanguagePickerSheet.swift */; };
 		LGCT0100000002F001 /* Logger+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = LGCT0100000001F001 /* Logger+Categories.swift */; };
 		LH6001A001A001A001A00001 /* LinksHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LH6002A002A002A002A00002 /* LinksHubView.swift */; };
@@ -475,6 +476,7 @@
 		HLPR0001000100010001000 /* JSONStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONStub.swift; sourceTree = "<group>"; };
 		IC3900000000001F39 /* IncomingCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallView.swift; sourceTree = "<group>"; };
 		L10N0001A001A001A001A0001 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		L10N0002A002A002A002A0001 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		LANG001A001A001A001A0001 /* LanguagePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguagePickerSheet.swift; sourceTree = "<group>"; };
 		LGCT0100000001F001 /* Logger+Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Logger+Categories.swift"; sourceTree = "<group>"; };
 		LH6002A002A002A002A00002 /* LinksHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinksHubView.swift; sourceTree = "<group>"; };
@@ -656,6 +658,7 @@
 			children = (
 				13A020468B6C8367F8121928 /* Assets.xcassets */,
 				L10N0001A001A001A001A0001 /* Localizable.xcstrings */,
+				L10N0002A002A002A002A0001 /* InfoPlist.xcstrings */,
 				7D674426B581D850405E32AE /* Info.plist */,
 				B7E3A1D4C9F2085E6A3B71D0 /* PrivacyInfo.xcprivacy */,
 				467B3BA1305D0EA5CEFF3EEE /* Meeshy.entitlements */,
@@ -1166,6 +1169,10 @@
 			knownRegions = (
 				Base,
 				en,
+				fr,
+				de,
+				es,
+				"pt-BR",
 			);
 			mainGroup = 4B839730A63FC9359E52BECF;
 			minimizedProjectReferenceProxies = 1;
@@ -1191,6 +1198,7 @@
 			files = (
 				4C9760B519E90994F76DC90A /* Assets.xcassets in Resources */,
 				L10N0001B001B001B001B0002 /* Localizable.xcstrings in Resources */,
+				L10N0002B002B002B002B0002 /* InfoPlist.xcstrings in Resources */,
 				A1F8D3E5B7C2094A6E3F81B2 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

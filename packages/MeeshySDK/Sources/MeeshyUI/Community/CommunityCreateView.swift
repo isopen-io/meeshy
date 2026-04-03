@@ -26,10 +26,10 @@ public struct CommunityCreateView: View {
                 scrollContent
             }
         }
-        .alert("Erreur", isPresented: $viewModel.showError) {
-            Button("OK") {}
+        .alert(String(localized: "community.create.error.title", defaultValue: "Erreur", bundle: .module), isPresented: $viewModel.showError) {
+            Button(String(localized: "common.ok", defaultValue: "OK", bundle: .module)) {}
         } message: {
-            Text(viewModel.errorMessage ?? "Une erreur est survenue")
+            Text(viewModel.errorMessage ?? String(localized: "community.create.error.default", defaultValue: "Une erreur est survenue", bundle: .module))
         }
     }
 
@@ -51,7 +51,7 @@ public struct CommunityCreateView: View {
 
             Spacer()
 
-            Text("Nouvelle communaute")
+            Text(String(localized: "community.create.title", defaultValue: "Nouvelle communaute", bundle: .module))
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -110,7 +110,7 @@ public struct CommunityCreateView: View {
             )
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(viewModel.name.isEmpty ? "Ma communaute" : viewModel.name)
+                Text(viewModel.name.isEmpty ? String(localized: "community.create.preview.placeholder", defaultValue: "Ma communaute", bundle: .module) : viewModel.name)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .lineLimit(2)
@@ -125,7 +125,7 @@ public struct CommunityCreateView: View {
                 HStack(spacing: 6) {
                     Image(systemName: viewModel.isPrivate ? "lock.fill" : "globe")
                         .font(.system(size: 10, weight: .semibold))
-                    Text(viewModel.isPrivate ? "Privee" : "Publique")
+                    Text(viewModel.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privee", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
                         .font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundColor(.white.opacity(0.9))
@@ -144,19 +144,19 @@ public struct CommunityCreateView: View {
 
     private var formFields: some View {
         VStack(spacing: 16) {
-            fieldGroup(label: "Nom", required: true) {
-                TextField("Nom de la communaute", text: $viewModel.name)
+            fieldGroup(label: String(localized: "community.create.field.name", defaultValue: "Nom", bundle: .module), required: true) {
+                TextField(String(localized: "community.create.field.name.placeholder", defaultValue: "Nom de la communaute", bundle: .module), text: $viewModel.name)
                     .textFieldStyle(.plain)
                     .font(.system(size: 16, design: .rounded))
                     .foregroundColor(theme.textPrimary)
             }
 
-            fieldGroup(label: "Identifiant", required: false) {
+            fieldGroup(label: String(localized: "community.create.field.identifier", defaultValue: "Identifiant", bundle: .module), required: false) {
                 HStack(spacing: 4) {
                     Text("mshy_")
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .foregroundColor(theme.textMuted)
-                    TextField("mon-groupe", text: $viewModel.identifier)
+                    TextField(String(localized: "community.create.field.identifier.placeholder", defaultValue: "mon-groupe", bundle: .module), text: $viewModel.identifier)
                         .textFieldStyle(.plain)
                         .font(.system(size: 16, design: .rounded))
                         .foregroundColor(theme.textPrimary)
@@ -165,8 +165,8 @@ public struct CommunityCreateView: View {
                 }
             }
 
-            fieldGroup(label: "Description", required: false) {
-                TextField("De quoi parle cette communaute ?", text: $viewModel.description, axis: .vertical)
+            fieldGroup(label: String(localized: "community.create.field.description", defaultValue: "Description", bundle: .module), required: false) {
+                TextField(String(localized: "community.create.field.description.placeholder", defaultValue: "De quoi parle cette communaute ?", bundle: .module), text: $viewModel.description, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 16, design: .rounded))
                     .foregroundColor(theme.textPrimary)
@@ -199,7 +199,7 @@ public struct CommunityCreateView: View {
 
     private var emojiPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Emoji")
+            Text(String(localized: "community.create.field.emoji", defaultValue: "Emoji", bundle: .module))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textSecondary)
 
@@ -255,10 +255,10 @@ public struct CommunityCreateView: View {
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Communaute privee")
+                Text(String(localized: "community.create.privacy.title", defaultValue: "Communaute privee", bundle: .module))
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
-                Text(viewModel.isPrivate ? "Seuls les membres invites peuvent rejoindre" : "Tout le monde peut decouvrir et rejoindre")
+                Text(viewModel.isPrivate ? String(localized: "community.create.privacy.private.description", defaultValue: "Seuls les membres invites peuvent rejoindre", bundle: .module) : String(localized: "community.create.privacy.public.description", defaultValue: "Tout le monde peut decouvrir et rejoindre", bundle: .module))
                     .font(.system(size: 12, design: .rounded))
                     .foregroundColor(theme.textSecondary)
             }
@@ -279,7 +279,7 @@ public struct CommunityCreateView: View {
 
     private var memberSearchSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Ajouter des membres")
+            Text(String(localized: "community.create.members.title", defaultValue: "Ajouter des membres", bundle: .module))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textSecondary)
 
@@ -287,7 +287,7 @@ public struct CommunityCreateView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 14))
                     .foregroundColor(theme.textMuted)
-                TextField("Rechercher par nom ou username...", text: $viewModel.memberSearch)
+                TextField(String(localized: "community.create.members.search.placeholder", defaultValue: "Rechercher par nom ou username...", bundle: .module), text: $viewModel.memberSearch)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15, design: .rounded))
                     .foregroundColor(theme.textPrimary)
@@ -430,7 +430,7 @@ public struct CommunityCreateView: View {
                 } else {
                     Image(systemName: "plus.circle.fill")
                 }
-                Text("Creer la communaute")
+                Text(String(localized: "community.create.button", defaultValue: "Creer la communaute", bundle: .module))
             }
             .font(.system(size: 16, weight: .semibold, design: .rounded))
             .foregroundColor(.white)

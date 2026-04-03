@@ -23,31 +23,31 @@ public struct CountryPicker: View {
     }
 
     public static let countries: [CountryCode] = [
-        CountryCode(id: "FR", name: "France", dialCode: "+33", flag: "🇫🇷"),
-        CountryCode(id: "US", name: "Etats-Unis", dialCode: "+1", flag: "🇺🇸"),
-        CountryCode(id: "GB", name: "Royaume-Uni", dialCode: "+44", flag: "🇬🇧"),
-        CountryCode(id: "DE", name: "Allemagne", dialCode: "+49", flag: "🇩🇪"),
-        CountryCode(id: "ES", name: "Espagne", dialCode: "+34", flag: "🇪🇸"),
-        CountryCode(id: "IT", name: "Italie", dialCode: "+39", flag: "🇮🇹"),
-        CountryCode(id: "PT", name: "Portugal", dialCode: "+351", flag: "🇵🇹"),
-        CountryCode(id: "BE", name: "Belgique", dialCode: "+32", flag: "🇧🇪"),
-        CountryCode(id: "CH", name: "Suisse", dialCode: "+41", flag: "🇨🇭"),
-        CountryCode(id: "CA", name: "Canada", dialCode: "+1", flag: "🇨🇦"),
-        CountryCode(id: "MA", name: "Maroc", dialCode: "+212", flag: "🇲🇦"),
-        CountryCode(id: "DZ", name: "Algerie", dialCode: "+213", flag: "🇩🇿"),
-        CountryCode(id: "TN", name: "Tunisie", dialCode: "+216", flag: "🇹🇳"),
-        CountryCode(id: "SN", name: "Senegal", dialCode: "+221", flag: "🇸🇳"),
-        CountryCode(id: "CI", name: "Cote d'Ivoire", dialCode: "+225", flag: "🇨🇮"),
-        CountryCode(id: "CM", name: "Cameroun", dialCode: "+237", flag: "🇨🇲"),
-        CountryCode(id: "JP", name: "Japon", dialCode: "+81", flag: "🇯🇵"),
-        CountryCode(id: "CN", name: "Chine", dialCode: "+86", flag: "🇨🇳"),
-        CountryCode(id: "KR", name: "Coree du Sud", dialCode: "+82", flag: "🇰🇷"),
-        CountryCode(id: "IN", name: "Inde", dialCode: "+91", flag: "🇮🇳"),
-        CountryCode(id: "BR", name: "Bresil", dialCode: "+55", flag: "🇧🇷"),
-        CountryCode(id: "MX", name: "Mexique", dialCode: "+52", flag: "🇲🇽"),
-        CountryCode(id: "RU", name: "Russie", dialCode: "+7", flag: "🇷🇺"),
-        CountryCode(id: "TR", name: "Turquie", dialCode: "+90", flag: "🇹🇷"),
-        CountryCode(id: "AU", name: "Australie", dialCode: "+61", flag: "🇦🇺"),
+        CountryCode(id: "FR", name: String(localized: "auth.country.FR", defaultValue: "France", bundle: .module), dialCode: "+33", flag: "🇫🇷"),
+        CountryCode(id: "US", name: String(localized: "auth.country.US", defaultValue: "Etats-Unis", bundle: .module), dialCode: "+1", flag: "🇺🇸"),
+        CountryCode(id: "GB", name: String(localized: "auth.country.GB", defaultValue: "Royaume-Uni", bundle: .module), dialCode: "+44", flag: "🇬🇧"),
+        CountryCode(id: "DE", name: String(localized: "auth.country.DE", defaultValue: "Allemagne", bundle: .module), dialCode: "+49", flag: "🇩🇪"),
+        CountryCode(id: "ES", name: String(localized: "auth.country.ES", defaultValue: "Espagne", bundle: .module), dialCode: "+34", flag: "🇪🇸"),
+        CountryCode(id: "IT", name: String(localized: "auth.country.IT", defaultValue: "Italie", bundle: .module), dialCode: "+39", flag: "🇮🇹"),
+        CountryCode(id: "PT", name: String(localized: "auth.country.PT", defaultValue: "Portugal", bundle: .module), dialCode: "+351", flag: "🇵🇹"),
+        CountryCode(id: "BE", name: String(localized: "auth.country.BE", defaultValue: "Belgique", bundle: .module), dialCode: "+32", flag: "🇧🇪"),
+        CountryCode(id: "CH", name: String(localized: "auth.country.CH", defaultValue: "Suisse", bundle: .module), dialCode: "+41", flag: "🇨🇭"),
+        CountryCode(id: "CA", name: String(localized: "auth.country.CA", defaultValue: "Canada", bundle: .module), dialCode: "+1", flag: "🇨🇦"),
+        CountryCode(id: "MA", name: String(localized: "auth.country.MA", defaultValue: "Maroc", bundle: .module), dialCode: "+212", flag: "🇲🇦"),
+        CountryCode(id: "DZ", name: String(localized: "auth.country.DZ", defaultValue: "Algerie", bundle: .module), dialCode: "+213", flag: "🇩🇿"),
+        CountryCode(id: "TN", name: String(localized: "auth.country.TN", defaultValue: "Tunisie", bundle: .module), dialCode: "+216", flag: "🇹🇳"),
+        CountryCode(id: "SN", name: String(localized: "auth.country.SN", defaultValue: "Senegal", bundle: .module), dialCode: "+221", flag: "🇸🇳"),
+        CountryCode(id: "CI", name: String(localized: "auth.country.CI", defaultValue: "Cote d'Ivoire", bundle: .module), dialCode: "+225", flag: "🇨🇮"),
+        CountryCode(id: "CM", name: String(localized: "auth.country.CM", defaultValue: "Cameroun", bundle: .module), dialCode: "+237", flag: "🇨🇲"),
+        CountryCode(id: "JP", name: String(localized: "auth.country.JP", defaultValue: "Japon", bundle: .module), dialCode: "+81", flag: "🇯🇵"),
+        CountryCode(id: "CN", name: String(localized: "auth.country.CN", defaultValue: "Chine", bundle: .module), dialCode: "+86", flag: "🇨🇳"),
+        CountryCode(id: "KR", name: String(localized: "auth.country.KR", defaultValue: "Coree du Sud", bundle: .module), dialCode: "+82", flag: "🇰🇷"),
+        CountryCode(id: "IN", name: String(localized: "auth.country.IN", defaultValue: "Inde", bundle: .module), dialCode: "+91", flag: "🇮🇳"),
+        CountryCode(id: "BR", name: String(localized: "auth.country.BR", defaultValue: "Bresil", bundle: .module), dialCode: "+55", flag: "🇧🇷"),
+        CountryCode(id: "MX", name: String(localized: "auth.country.MX", defaultValue: "Mexique", bundle: .module), dialCode: "+52", flag: "🇲🇽"),
+        CountryCode(id: "RU", name: String(localized: "auth.country.RU", defaultValue: "Russie", bundle: .module), dialCode: "+7", flag: "🇷🇺"),
+        CountryCode(id: "TR", name: String(localized: "auth.country.TR", defaultValue: "Turquie", bundle: .module), dialCode: "+90", flag: "🇹🇷"),
+        CountryCode(id: "AU", name: String(localized: "auth.country.AU", defaultValue: "Australie", bundle: .module), dialCode: "+61", flag: "🇦🇺"),
     ]
 
     private var filteredCountries: [CountryCode] {
@@ -89,7 +89,7 @@ public struct CountryPicker: View {
             .buttonStyle(.plain)
 
             // Phone number field
-            TextField("Numero de telephone", text: $phoneNumber)
+            TextField(String(localized: "auth.countryPicker.phoneNumber", defaultValue: "Numero de telephone", bundle: .module), text: $phoneNumber)
                 .keyboardType(.phonePad)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
@@ -119,12 +119,12 @@ public struct CountryPicker: View {
                         }
                     }
                 }
-                .searchable(text: $searchText, prompt: "Rechercher un pays")
-                .navigationTitle("Pays")
+                .searchable(text: $searchText, prompt: String(localized: "auth.countryPicker.searchPrompt", defaultValue: "Rechercher un pays", bundle: .module))
+                .navigationTitle(String(localized: "auth.countryPicker.title", defaultValue: "Pays", bundle: .module))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Fermer") { showPicker = false }
+                        Button(String(localized: "auth.countryPicker.close", defaultValue: "Fermer", bundle: .module)) { showPicker = false }
                     }
                 }
             }

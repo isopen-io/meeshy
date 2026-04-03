@@ -287,7 +287,7 @@ struct ShareContentView: View {
 
                 // Contact selection
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Send to")
+                    Text(String(localized: "share.sendTo", defaultValue: "Send to"))
                         .font(.headline)
                         .padding(.horizontal)
                         .padding(.top)
@@ -296,7 +296,7 @@ struct ShareContentView: View {
                     HStack {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.secondary)
-                        TextField("Search contacts", text: $searchText)
+                        TextField(String(localized: "share.searchContacts", defaultValue: "Search contacts"), text: $searchText)
                     }
                     .padding()
                     .background(Color.secondary.opacity(0.1))
@@ -416,7 +416,7 @@ struct SharedItemPreview: View {
                     Image(systemName: "video.fill")
                         .font(.largeTitle)
                         .foregroundColor(.blue)
-                    Text("Video")
+                    Text(String(localized: "share.type.video", defaultValue: "Video"))
                         .font(.caption)
                 }
 
@@ -425,7 +425,7 @@ struct SharedItemPreview: View {
                     Image(systemName: "doc.fill")
                         .font(.largeTitle)
                         .foregroundColor(.gray)
-                    Text("File")
+                    Text(String(localized: "share.type.file", defaultValue: "File"))
                         .font(.caption)
                 }
 
@@ -434,7 +434,7 @@ struct SharedItemPreview: View {
                     Image(systemName: "mappin.circle.fill")
                         .font(.largeTitle)
                         .foregroundColor(.red)
-                    Text("Location")
+                    Text(String(localized: "share.type.location", defaultValue: "Location"))
                         .font(.caption)
                 }
             }

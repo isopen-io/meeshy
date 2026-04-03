@@ -72,7 +72,7 @@ public struct StoryFilterPicker: View {
                             .stroke(selectedFilter == nil ? Color.white : Color.clear, lineWidth: 2)
                     )
 
-                Text("Original")
+                Text(String(localized: "story.filter.original", defaultValue: "Original", bundle: .module))
                     .font(.system(size: 10, weight: selectedFilter == nil ? .bold : .medium))
                     .foregroundColor(.white.opacity(selectedFilter == nil ? 1 : 0.6))
             }

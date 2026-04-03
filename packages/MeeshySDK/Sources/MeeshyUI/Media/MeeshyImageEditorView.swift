@@ -56,10 +56,10 @@ public struct MeeshyImageEditorView: View {
 
         var label: String {
             switch self {
-            case .crop: return "Crop"
-            case .filters: return "Filtres"
-            case .adjustments: return "Ajust."
-            case .effects: return "FX"
+            case .crop: return String(localized: "media.editor.tab.crop", defaultValue: "Crop", bundle: .module)
+            case .filters: return String(localized: "media.editor.tab.filters", defaultValue: "Filtres", bundle: .module)
+            case .adjustments: return String(localized: "media.editor.tab.adjustments", defaultValue: "Ajust.", bundle: .module)
+            case .effects: return String(localized: "media.editor.tab.effects", defaultValue: "FX", bundle: .module)
             }
         }
 
@@ -125,7 +125,7 @@ public struct MeeshyImageEditorView: View {
                 onCancel?()
                 dismiss()
             } label: {
-                Text("Annuler")
+                Text(String(localized: "media.editor.cancel", defaultValue: "Annuler", bundle: .module))
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
@@ -353,7 +353,7 @@ public struct MeeshyImageEditorView: View {
 
     private var cropPanel: some View {
         VStack(spacing: 16) {
-            Text("Faites glisser les poignees pour recadrer")
+            Text(String(localized: "media.editor.cropHint", defaultValue: "Faites glisser les poignees pour recadrer", bundle: .module))
                 .font(.system(size: 13))
                 .foregroundColor(.white.opacity(0.5))
 
@@ -426,11 +426,11 @@ public struct MeeshyImageEditorView: View {
     private var adjustmentsPanel: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 10) {
-                adjustmentRow(icon: "sun.max.fill", label: "Luminosite", value: $engine.brightness, range: -0.5...0.5)
-                adjustmentRow(icon: "circle.lefthalf.filled", label: "Contraste", value: $engine.contrast, range: 0.5...2.0)
-                adjustmentRow(icon: "drop.fill", label: "Saturation", value: $engine.saturation, range: 0...2.0)
-                adjustmentRow(icon: "sparkle", label: "Nettete", value: $engine.sharpness, range: 0...1.0)
-                adjustmentRow(icon: "camera.filters", label: "Vignette", value: $engine.vignetteIntensity, range: 0...2.0)
+                adjustmentRow(icon: "sun.max.fill", label: String(localized: "media.editor.brightness", defaultValue: "Luminosite", bundle: .module), value: $engine.brightness, range: -0.5...0.5)
+                adjustmentRow(icon: "circle.lefthalf.filled", label: String(localized: "media.editor.contrast", defaultValue: "Contraste", bundle: .module), value: $engine.contrast, range: 0.5...2.0)
+                adjustmentRow(icon: "drop.fill", label: String(localized: "media.editor.saturation", defaultValue: "Saturation", bundle: .module), value: $engine.saturation, range: 0...2.0)
+                adjustmentRow(icon: "sparkle", label: String(localized: "media.editor.sharpness", defaultValue: "Nettete", bundle: .module), value: $engine.sharpness, range: 0...1.0)
+                adjustmentRow(icon: "camera.filters", label: String(localized: "media.editor.vignette", defaultValue: "Vignette", bundle: .module), value: $engine.vignetteIntensity, range: 0...2.0)
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -441,7 +441,7 @@ public struct MeeshyImageEditorView: View {
                         engine.vignetteIntensity = 0
                     }
                 } label: {
-                    Text("Reinitialiser")
+                    Text(String(localized: "media.editor.reset", defaultValue: "Reinitialiser", bundle: .module))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(Color(hex: accentColor))
                 }
@@ -528,7 +528,7 @@ public struct MeeshyImageEditorView: View {
             HStack(spacing: 6) {
                     Image(systemName: "eye")
                         .font(.system(size: 13, weight: .bold))
-                    Text("Aper\u{00E7}u")
+                    Text(String(localized: "media.editor.preview", defaultValue: "Aper\u{00E7}u", bundle: .module))
                         .font(.system(size: 16, weight: .bold))
                 }
                 .foregroundColor(.white)

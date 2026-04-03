@@ -179,7 +179,7 @@ struct TimelinePanel: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 24))
                 .foregroundStyle(theme.textMuted)
-            Text("Media non disponible")
+            Text(String(localized: "story.timeline.mediaUnavailable", defaultValue: "Media non disponible", bundle: .module))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(theme.textMuted)
         }
@@ -632,7 +632,7 @@ struct TimelinePanel: View {
                         startPoint: .top, endPoint: .bottom
                     )
                 )
-            Text("Ajoutez du contenu pour voir la timeline")
+            Text(String(localized: "story.timeline.addContent", defaultValue: "Ajoutez du contenu pour voir la timeline", bundle: .module))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(theme.textMuted)
         }
@@ -648,7 +648,7 @@ struct TimelinePanel: View {
 
         if viewModel.hasBackgroundImage {
             result.append(TimelineTrack(
-                id: "bg-image-main", name: "Image Fond", type: .bgImage,
+                id: "bg-image-main", name: String(localized: "story.timeline.bgImage", defaultValue: "Image Fond", bundle: .module), type: .bgImage,
                 startTime: 0, duration: nil,
                 volume: nil, loop: false,
                 fadeIn: nil, fadeOut: nil
@@ -660,7 +660,7 @@ struct TimelinePanel: View {
         }) {
             let bgVidURL = viewModel.loadedVideoURLs[bgVid.id]
             result.append(TimelineTrack(
-                id: bgVid.id, name: "Video BG", type: .bgVideo,
+                id: bgVid.id, name: String(localized: "story.timeline.bgVideo", defaultValue: "Video BG", bundle: .module), type: .bgVideo,
                 startTime: bgVid.startTime ?? 0, duration: bgVid.duration,
                 volume: bgVid.volume, loop: bgVid.loop ?? false,
                 fadeIn: bgVid.fadeIn, fadeOut: bgVid.fadeOut,
@@ -673,7 +673,7 @@ struct TimelinePanel: View {
             $0.placement == "background" && $0.mediaType == "image"
         }) ?? [] {
             result.append(TimelineTrack(
-                id: bgImg.id, name: "Image BG", type: .bgImage,
+                id: bgImg.id, name: String(localized: "story.timeline.bgImageElement", defaultValue: "Image BG", bundle: .module), type: .bgImage,
                 startTime: bgImg.startTime ?? 0, duration: bgImg.duration,
                 volume: nil, loop: false,
                 fadeIn: bgImg.fadeIn, fadeOut: bgImg.fadeOut,
@@ -683,7 +683,7 @@ struct TimelinePanel: View {
 
         if viewModel.drawingData != nil {
             result.append(TimelineTrack(
-                id: "drawing", name: "Dessin", type: .drawing,
+                id: "drawing", name: String(localized: "story.timeline.drawing", defaultValue: "Dessin", bundle: .module), type: .drawing,
                 startTime: 0, duration: nil,
                 volume: nil, loop: false,
                 fadeIn: nil, fadeOut: nil
@@ -692,7 +692,7 @@ struct TimelinePanel: View {
 
         if effects.backgroundAudioId != nil {
             result.append(TimelineTrack(
-                id: "bg-audio", name: "Audio BG", type: .bgAudio,
+                id: "bg-audio", name: String(localized: "story.timeline.bgAudio", defaultValue: "Audio BG", bundle: .module), type: .bgAudio,
                 startTime: Float(effects.backgroundAudioStart ?? 0),
                 duration: effects.backgroundAudioEnd.map { Float($0) },
                 volume: effects.backgroundAudioVolume ?? 1.0, loop: true,
@@ -703,7 +703,7 @@ struct TimelinePanel: View {
         for bgAudio in effects.audioPlayerObjects?.filter({ $0.placement == "background" }) ?? [] {
             let bgAudURL = viewModel.loadedAudioURLs[bgAudio.id]
             result.append(TimelineTrack(
-                id: bgAudio.id, name: "Audio BG", type: .bgAudio,
+                id: bgAudio.id, name: String(localized: "story.timeline.bgAudio", defaultValue: "Audio BG", bundle: .module), type: .bgAudio,
                 startTime: bgAudio.startTime ?? 0, duration: bgAudio.duration,
                 volume: bgAudio.volume, loop: bgAudio.loop ?? true,
                 fadeIn: bgAudio.fadeIn, fadeOut: bgAudio.fadeOut,
@@ -716,7 +716,7 @@ struct TimelinePanel: View {
             $0.placement == "foreground" && $0.mediaType == "image"
         }) ?? [] {
             result.append(TimelineTrack(
-                id: img.id, name: "Image", type: .fgImage,
+                id: img.id, name: String(localized: "story.timeline.image", defaultValue: "Image", bundle: .module), type: .fgImage,
                 startTime: img.startTime ?? 0, duration: img.duration,
                 volume: nil, loop: false,
                 fadeIn: img.fadeIn, fadeOut: img.fadeOut,
@@ -729,7 +729,7 @@ struct TimelinePanel: View {
         }) ?? [] {
             let vidURL = viewModel.loadedVideoURLs[vid.id]
             result.append(TimelineTrack(
-                id: vid.id, name: "Video", type: .fgVideo,
+                id: vid.id, name: String(localized: "story.timeline.video", defaultValue: "Video", bundle: .module), type: .fgVideo,
                 startTime: vid.startTime ?? 0, duration: vid.duration,
                 volume: vid.volume, loop: vid.loop ?? false,
                 fadeIn: vid.fadeIn, fadeOut: vid.fadeOut,
@@ -741,7 +741,7 @@ struct TimelinePanel: View {
         for aud in effects.audioPlayerObjects?.filter({ $0.placement == "foreground" }) ?? [] {
             let audURL = viewModel.loadedAudioURLs[aud.id]
             result.append(TimelineTrack(
-                id: aud.id, name: "Audio", type: .fgAudio,
+                id: aud.id, name: String(localized: "story.timeline.audio", defaultValue: "Audio", bundle: .module), type: .fgAudio,
                 startTime: aud.startTime ?? 0, duration: aud.duration,
                 volume: aud.volume, loop: aud.loop ?? false,
                 fadeIn: aud.fadeIn, fadeOut: aud.fadeOut,
@@ -753,7 +753,7 @@ struct TimelinePanel: View {
         for text in effects.textObjects ?? [] {
             let label = String(text.content.prefix(10)) + (text.content.count > 10 ? "..." : "")
             result.append(TimelineTrack(
-                id: text.id, name: label.isEmpty ? "Texte" : label, type: .text,
+                id: text.id, name: label.isEmpty ? String(localized: "story.timeline.text", defaultValue: "Texte", bundle: .module) : label, type: .text,
                 startTime: text.startTime ?? 0, duration: text.displayDuration,
                 volume: nil, loop: false,
                 fadeIn: text.fadeIn, fadeOut: text.fadeOut

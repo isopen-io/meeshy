@@ -78,7 +78,7 @@ public struct StoryMusicPicker: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.white.opacity(0.4))
 
-            TextField("Search music...", text: $searchText)
+            TextField(String(localized: "story.music.searchPlaceholder", defaultValue: "Search music...", bundle: .module), text: $searchText)
                 .font(.system(size: 15))
                 .foregroundColor(.white)
 
@@ -165,7 +165,7 @@ public struct StoryMusicPicker: View {
     private var trimControl: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("Trim")
+                Text(String(localized: "story.music.trim", defaultValue: "Trim", bundle: .module))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white.opacity(0.7))
                 Spacer()

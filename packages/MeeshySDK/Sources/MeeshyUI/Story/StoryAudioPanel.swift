@@ -5,8 +5,15 @@ import AVFoundation
 // MARK: - Audio Panel Tab
 
 private enum AudioPanelTab: String, CaseIterable {
-    case library = "Bibliothèque"
-    case record = "Enregistrer"
+    case library
+    case record
+
+    var displayName: String {
+        switch self {
+        case .library: return String(localized: "story.audioPanel.library", defaultValue: "Bibliothèque", bundle: .module)
+        case .record: return String(localized: "story.audioPanel.record", defaultValue: "Enregistrer", bundle: .module)
+        }
+    }
 }
 
 // MARK: - Audio Item Model
@@ -86,7 +93,7 @@ public struct StoryAudioPanel: View {
                         activeTab = tab
                     }
                 } label: {
-                    Text(tab.rawValue)
+                    Text(tab.displayName)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(activeTab == tab ? .white : .white.opacity(0.45))
                         .frame(maxWidth: .infinity)
@@ -142,7 +149,7 @@ public struct StoryAudioPanel: View {
                     .tint(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if items.isEmpty {
-                Text("Aucun son disponible")
+                Text(String(localized: "story.audioPanel.noSound", defaultValue: "Aucun son disponible", bundle: .module))
                     .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.4))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -167,7 +174,7 @@ public struct StoryAudioPanel: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
-            TextField("", text: $searchQuery, prompt: Text("Rechercher un son...").foregroundColor(.white.opacity(0.3)))
+            TextField("", text: $searchQuery, prompt: Text(String(localized: "story.audioPanel.searchSound", defaultValue: "Rechercher un son...", bundle: .module)).foregroundColor(.white.opacity(0.3)))
                 .font(.system(size: 13))
                 .foregroundColor(.white)
                 .submitLabel(.search)
@@ -213,7 +220,7 @@ public struct StoryAudioPanel: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white.opacity(0.6))
                 }
-                Text("Aucun son")
+                Text(String(localized: "story.audioPanel.noAudio", defaultValue: "Aucun son", bundle: .module))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                 Spacer()

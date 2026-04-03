@@ -46,34 +46,34 @@ public struct CommunitySettingsView: View {
                 }
             }
         }
-        .alert("Erreur", isPresented: $viewModel.showError) {
-            Button("OK") {}
+        .alert(String(localized: "community.settings.error.title", defaultValue: "Erreur", bundle: .module), isPresented: $viewModel.showError) {
+            Button(String(localized: "common.ok", defaultValue: "OK", bundle: .module)) {}
         } message: {
-            Text(viewModel.errorMessage ?? "Une erreur s'est produite")
+            Text(viewModel.errorMessage ?? String(localized: "community.settings.error.default", defaultValue: "Une erreur s'est produite", bundle: .module))
         }
-        .alert("Supprimer la communauté", isPresented: $viewModel.showDeleteConfirm) {
-            Button("Supprimer", role: .destructive) {
+        .alert(String(localized: "community.settings.delete.confirm.title", defaultValue: "Supprimer la communauté", bundle: .module), isPresented: $viewModel.showDeleteConfirm) {
+            Button(String(localized: "community.settings.delete.button", defaultValue: "Supprimer", bundle: .module), role: .destructive) {
                 Task {
                     await viewModel.deleteCommunity()
                     onDeleted?()
                     dismiss()
                 }
             }
-            Button("Annuler", role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text("Cette action est irréversible. Tous les membres, canaux et messages seront supprimés définitivement.")
+            Text(String(localized: "community.settings.delete.confirm.message", defaultValue: "Cette action est irréversible. Tous les membres, canaux et messages seront supprimés définitivement.", bundle: .module))
         }
-        .alert("Quitter la communauté", isPresented: $viewModel.showLeaveConfirm) {
-            Button("Quitter", role: .destructive) {
+        .alert(String(localized: "community.settings.leave.confirm.title", defaultValue: "Quitter la communauté", bundle: .module), isPresented: $viewModel.showLeaveConfirm) {
+            Button(String(localized: "community.settings.leave.button", defaultValue: "Quitter", bundle: .module), role: .destructive) {
                 Task {
                     await viewModel.leaveCommunity()
                     onLeft?()
                     dismiss()
                 }
             }
-            Button("Annuler", role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text("Vous n'aurez plus accès aux canaux et messages de cette communauté.")
+            Text(String(localized: "community.settings.leave.confirm.message", defaultValue: "Vous n'aurez plus accès aux canaux et messages de cette communauté.", bundle: .module))
         }
         .entityImagePickerFlow(pickerItem: $avatarItem, context: .avatar, maxSizeKB: 500) { data in
             Task { await viewModel.uploadCompressedAvatar(data) }
@@ -87,13 +87,13 @@ public struct CommunitySettingsView: View {
 
     private var settingsHeader: some View {
         HStack {
-            Button("Annuler") { dismiss() }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module)) { dismiss() }
                 .font(.system(size: 16, design: .rounded))
                 .foregroundColor(theme.textSecondary)
 
             Spacer()
 
-            Text("Réglages")
+            Text(String(localized: "community.settings.title", defaultValue: "Réglages", bundle: .module))
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -113,7 +113,7 @@ public struct CommunitySettingsView: View {
                         .scaleEffect(0.8)
                         .tint(MeeshyColors.indigo500)
                 } else {
-                    Text("Sauvegarder")
+                    Text(String(localized: "common.save", defaultValue: "Sauvegarder", bundle: .module))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }
@@ -136,6 +136,21 @@ public struct CommunitySettingsView: View {
 
     private var visualSection: some View {
         VStack(spacing: 16) {
+<<<<<<< HEAD
+            sectionHeader(String(localized: "community.settings.section.appearance", defaultValue: "Apparence", bundle: .module))
+
+            VStack(spacing: 12) {
+                // Color picker
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(String(localized: "community.settings.color", defaultValue: "Couleur", bundle: .module))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundColor(theme.textSecondary)
+
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
+                        ForEach(presetColors, id: \.self) { hex in
+                            colorSwatch(hex: hex)
+                        }
+=======
             VStack(spacing: 0) {
                 ZStack(alignment: .bottomTrailing) {
                     communityBannerView
@@ -149,10 +164,70 @@ public struct CommunitySettingsView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(Capsule().fill(Color.black.opacity(0.5)))
+>>>>>>> origin/main
                     }
                     .disabled(viewModel.isUploadingBanner)
                     .padding(8)
 
+<<<<<<< HEAD
+                // Emoji picker
+                settingsField(label: String(localized: "community.settings.emoji", defaultValue: "Emoji", bundle: .module)) {
+                    TextField("🏘️", text: $viewModel.localEmoji)
+                        .font(.system(size: 22))
+                        .foregroundColor(theme.textPrimary)
+                        .onChange(of: viewModel.localEmoji) { newValue in
+                            let trimmed = String(newValue.unicodeScalars.prefix(2))
+                            if trimmed != newValue { viewModel.localEmoji = trimmed }
+                        }
+                }
+
+                // Avatar
+                settingsField(label: String(localized: "community.settings.avatar", defaultValue: "Avatar", bundle: .module)) {
+                    HStack {
+                        MeeshyAvatar(
+                            name: viewModel.name,
+                            context: .custom(40),
+                            kind: .entity,
+                            accentColor: viewModel.localColor,
+                            avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl
+                        )
+
+                        PhotosPicker(selection: $avatarItem, matching: .images) {
+                            Text(viewModel.isUploadingAvatar ? String(localized: "common.uploading", defaultValue: "Upload en cours...", bundle: .module) : String(localized: "community.settings.avatar.change", defaultValue: "Changer l'avatar", bundle: .module))
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "4ECDC4"))
+                        }
+                        .disabled(viewModel.isUploadingAvatar)
+
+                        if !viewModel.avatarUrl.isEmpty {
+                            Spacer()
+                            Button(role: .destructive) {
+                                viewModel.avatarUrl = ""
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                        }
+                    }
+                }
+
+                // Banner
+                settingsField(label: String(localized: "community.settings.banner", defaultValue: "Bannière", bundle: .module)) {
+                    HStack {
+                        if !viewModel.bannerUrl.isEmpty {
+                            AsyncImage(url: URL(string: viewModel.bannerUrl)) { image in
+                                image.resizable().scaledToFill().frame(width: 60, height: 30).clipShape(RoundedRectangle(cornerRadius: 6))
+                            } placeholder: {
+                                RoundedRectangle(cornerRadius: 6).fill(theme.backgroundSecondary).frame(width: 60, height: 30)
+                            }
+                        }
+
+                        PhotosPicker(selection: $bannerItem, matching: .images) {
+                            Text(viewModel.isUploadingBanner ? String(localized: "common.uploading", defaultValue: "Upload en cours...", bundle: .module) : String(localized: "community.settings.banner.change", defaultValue: "Changer la bannière", bundle: .module))
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "4ECDC4"))
+                        }
+                        .disabled(viewModel.isUploadingBanner)
+=======
                     if viewModel.isUploadingBanner {
                         RoundedRectangle(cornerRadius: 16)
                             .fill(Color.black.opacity(0.4))
@@ -173,6 +248,7 @@ public struct CommunitySettingsView: View {
                         Circle()
                             .stroke(theme.backgroundPrimary, lineWidth: 4)
                     )
+>>>>>>> origin/main
 
                     PhotosPicker(selection: $avatarItem, matching: .images) {
                         Image(systemName: "pencil.circle.fill")
@@ -278,17 +354,17 @@ public struct CommunitySettingsView: View {
 
     private var editSection: some View {
         VStack(spacing: 16) {
-            sectionHeader("Infos")
+            sectionHeader(String(localized: "community.settings.section.info", defaultValue: "Infos", bundle: .module))
 
             VStack(spacing: 12) {
-                settingsField(label: "Nom") {
-                    TextField("Nom de la communauté", text: $viewModel.name)
+                settingsField(label: String(localized: "community.settings.field.name", defaultValue: "Nom", bundle: .module)) {
+                    TextField(String(localized: "community.settings.field.name.placeholder", defaultValue: "Nom de la communauté", bundle: .module), text: $viewModel.name)
                         .font(.system(size: 16, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                 }
 
-                settingsField(label: "Description") {
-                    TextField("Description", text: $viewModel.descriptionText, axis: .vertical)
+                settingsField(label: String(localized: "community.settings.field.description", defaultValue: "Description", bundle: .module)) {
+                    TextField(String(localized: "community.settings.field.description", defaultValue: "Description", bundle: .module), text: $viewModel.descriptionText, axis: .vertical)
                         .font(.system(size: 16, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(3...6)
@@ -301,14 +377,14 @@ public struct CommunitySettingsView: View {
 
     private var privacySection: some View {
         VStack(spacing: 12) {
-            sectionHeader("Confidentialité")
+            sectionHeader(String(localized: "community.settings.section.privacy", defaultValue: "Confidentialité", bundle: .module))
 
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Communauté privée")
+                    Text(String(localized: "community.settings.privacy.title", defaultValue: "Communauté privée", bundle: .module))
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
-                    Text(viewModel.isPrivate ? "Sur invitation" : "Ouverte à tous")
+                    Text(viewModel.isPrivate ? String(localized: "community.settings.privacy.byInvitation", defaultValue: "Sur invitation", bundle: .module) : String(localized: "community.settings.privacy.openToAll", defaultValue: "Ouverte à tous", bundle: .module))
                         .font(.system(size: 12))
                         .foregroundColor(theme.textSecondary)
                 }
@@ -327,7 +403,7 @@ public struct CommunitySettingsView: View {
 
     private var dangerSection: some View {
         VStack(spacing: 12) {
-            sectionHeader("Zone dangereuse")
+            sectionHeader(String(localized: "community.settings.section.danger", defaultValue: "Zone dangereuse", bundle: .module))
 
             if viewModel.isCreator {
                 Button {
@@ -335,7 +411,7 @@ public struct CommunitySettingsView: View {
                 } label: {
                     HStack {
                         Image(systemName: "trash.fill")
-                        Text("Supprimer la communauté")
+                        Text(String(localized: "community.settings.delete.label", defaultValue: "Supprimer la communauté", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(.red)
@@ -350,7 +426,7 @@ public struct CommunitySettingsView: View {
                 } label: {
                     HStack {
                         Image(systemName: "arrow.right.square.fill")
-                        Text("Quitter la communauté")
+                        Text(String(localized: "community.settings.leave.label", defaultValue: "Quitter la communauté", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(.orange)
@@ -475,7 +551,7 @@ final class CommunitySettingsViewModel: ObservableObject {
             var community = apiCommunity.toCommunity()
             community.color = localColor
             community.emoji = localEmoji
-            postToast(message: "Communaute mise a jour", isSuccess: true)
+            postToast(message: String(localized: "community.settings.toast.updated", defaultValue: "Communaute mise a jour", bundle: .module), isSuccess: true)
             return community
         } catch {
             errorMessage = error.localizedDescription
@@ -489,9 +565,9 @@ final class CommunitySettingsViewModel: ObservableObject {
         defer { isUploadingAvatar = false }
         if let url = await uploadCompressedImage(data, prefix: "community_avatar") {
             avatarUrl = url
-            postToast(message: "Avatar televerse", isSuccess: true)
+            postToast(message: String(localized: "community.settings.toast.avatarUploaded", defaultValue: "Avatar televerse", bundle: .module), isSuccess: true)
         } else {
-            postToast(message: "Echec du telechargement de l'avatar", isSuccess: false)
+            postToast(message: String(localized: "community.settings.toast.avatarFailed", defaultValue: "Echec du telechargement de l'avatar", bundle: .module), isSuccess: false)
         }
     }
 
@@ -500,9 +576,9 @@ final class CommunitySettingsViewModel: ObservableObject {
         defer { isUploadingBanner = false }
         if let url = await uploadCompressedImage(data, prefix: "community_banner") {
             bannerUrl = url
-            postToast(message: "Banniere televersee", isSuccess: true)
+            postToast(message: String(localized: "community.settings.toast.bannerUploaded", defaultValue: "Banniere televersee", bundle: .module), isSuccess: true)
         } else {
-            postToast(message: "Echec du telechargement de la banniere", isSuccess: false)
+            postToast(message: String(localized: "community.settings.toast.bannerFailed", defaultValue: "Echec du telechargement de la banniere", bundle: .module), isSuccess: false)
         }
     }
 

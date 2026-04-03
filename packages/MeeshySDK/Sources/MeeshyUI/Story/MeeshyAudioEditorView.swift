@@ -146,7 +146,7 @@ public struct MeeshyAudioEditorView: View {
             Spacer()
 
             VStack(spacing: 2) {
-                Text("Éditeur audio")
+                Text(String(localized: "story.audioEditor.title", defaultValue: "Éditeur audio", bundle: .module))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                 Text(shortFilename)
@@ -427,7 +427,7 @@ public struct MeeshyAudioEditorView: View {
             Image(systemName: "waveform.and.mic")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Color(hex: secondaryColor))
-            Text("Transcription")
+            Text(String(localized: "story.audioEditor.transcription", defaultValue: "Transcription", bundle: .module))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white)
 
@@ -464,7 +464,7 @@ public struct MeeshyAudioEditorView: View {
                     HStack(spacing: 4) {
                         Image(systemName: txState == .idle ? "waveform" : "arrow.clockwise")
                             .font(.system(size: 11, weight: .medium))
-                        Text(txState == .idle ? "Transcrire" : "Retranscrire")
+                        Text(txState == .idle ? String(localized: "story.audioEditor.transcribe", defaultValue: "Transcrire", bundle: .module) : String(localized: "story.audioEditor.retranscribe", defaultValue: "Retranscrire", bundle: .module))
                             .font(.system(size: 11, weight: .medium))
                     }
                     .foregroundColor(Color(hex: secondaryColor))
@@ -486,7 +486,7 @@ public struct MeeshyAudioEditorView: View {
         case .idle:
             VStack(spacing: 8) {
                 Image(systemName: "text.bubble").font(.system(size: 22)).foregroundColor(.white.opacity(0.4))
-                Text("Appuyez sur « Transcrire »")
+                Text(String(localized: "story.audioEditor.tapTranscribe", defaultValue: "Appuyez sur « Transcrire »", bundle: .module))
                     .font(.system(size: 12)).foregroundColor(.white.opacity(0.5))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -494,7 +494,7 @@ public struct MeeshyAudioEditorView: View {
         case .loading:
             VStack(spacing: 10) {
                 ProgressView().tint(Color(hex: secondaryColor))
-                Text("Transcription en cours…")
+                Text(String(localized: "story.audioEditor.transcribing", defaultValue: "Transcription en cours…", bundle: .module))
                     .font(.system(size: 12)).foregroundColor(.white.opacity(0.36))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -512,7 +512,7 @@ public struct MeeshyAudioEditorView: View {
             VStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 20)).foregroundColor(Color(hex: accentColor).opacity(0.5))
-                Text("Transcription impossible")
+                Text(String(localized: "story.audioEditor.transcriptionFailed", defaultValue: "Transcription impossible", bundle: .module))
                     .font(.system(size: 12)).foregroundColor(.white.opacity(0.5))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -543,7 +543,7 @@ public struct MeeshyAudioEditorView: View {
             teardown()
             onConfirm(url, tx, trimStart, trimEnd)
         } label: {
-            Text("Utiliser cet enregistrement")
+            Text(String(localized: "story.audioEditor.useRecording", defaultValue: "Utiliser cet enregistrement", bundle: .module))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)

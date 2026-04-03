@@ -252,7 +252,7 @@ public struct MeeshyVideoEditorView: View {
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Color(hex: accentColor))
                     )
-                Text("Transcription")
+                Text(String(localized: "media.video.transcription", defaultValue: "Transcription", bundle: .module))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                 Spacer()
@@ -274,14 +274,14 @@ public struct MeeshyVideoEditorView: View {
                     ProgressView()
                         .tint(Color(hex: accentColor))
                         .scaleEffect(0.85)
-                    Text("Analyse de l'audio\u{2026}")
+                    Text(String(localized: "media.video.analyzingAudio", defaultValue: "Analyse de l'audio\u{2026}", bundle: .module))
                         .font(.system(size: 13))
                         .foregroundStyle(.white.opacity(0.55))
                 }
                 .padding(.vertical, 2)
             case .done:
                 ScrollView(.vertical, showsIndicators: false) {
-                    Text(transcription.isEmpty ? "Aucun audio d\u{00E9}tect\u{00E9}." : transcription)
+                    Text(transcription.isEmpty ? String(localized: "media.video.noAudioDetected", defaultValue: "Aucun audio d\u{00E9}tect\u{00E9}.", bundle: .module) : transcription)
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(.white.opacity(0.88))
                         .multilineTextAlignment(.leading)
@@ -293,7 +293,7 @@ public struct MeeshyVideoEditorView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 12))
                         .foregroundStyle(Color(hex: "FF453A"))
-                    Text("Transcription indisponible.")
+                    Text(String(localized: "media.video.transcriptionUnavailable", defaultValue: "Transcription indisponible.", bundle: .module))
                         .font(.system(size: 13))
                         .foregroundStyle(Color(hex: "FF453A").opacity(0.9))
                 }
@@ -351,7 +351,7 @@ public struct MeeshyVideoEditorView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "eye")
                         .font(.system(size: 13, weight: .bold))
-                    Text("Aper\u{00E7}u")
+                    Text(String(localized: "media.video.preview", defaultValue: "Aper\u{00E7}u", bundle: .module))
                         .font(.system(size: 15, weight: .bold))
                 }
                 .foregroundStyle(.white)
@@ -391,10 +391,10 @@ public struct MeeshyVideoEditorView: View {
 
     private var transcriptionLabel: String {
         switch transcriptionState {
-        case .idle:    return "Transcrire"
+        case .idle:    return String(localized: "media.video.transcribe", defaultValue: "Transcrire", bundle: .module)
         case .loading: return "\u{2026}"
-        case .done:    return showTranscription ? "Masquer" : "Voir"
-        case .failed:  return "R\u{00E9}essayer"
+        case .done:    return showTranscription ? String(localized: "media.video.hide", defaultValue: "Masquer", bundle: .module) : String(localized: "media.video.show", defaultValue: "Voir", bundle: .module)
+        case .failed:  return String(localized: "media.video.retry", defaultValue: "R\u{00E9}essayer", bundle: .module)
         }
     }
 

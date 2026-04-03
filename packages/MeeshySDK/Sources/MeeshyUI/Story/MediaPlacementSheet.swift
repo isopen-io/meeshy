@@ -31,13 +31,13 @@ public struct MediaPlacementSheet: View {
             HStack(spacing: 16) {
                 placementButton(placement: .background,
                                 icon: "rectangle.fill",
-                                label: "Arrière-plan",
-                                subtitle: "Remplit la slide")
+                                label: String(localized: "story.placement.background", defaultValue: "Arrière-plan", bundle: .module),
+                                subtitle: String(localized: "story.placement.backgroundSubtitle", defaultValue: "Remplit la slide", bundle: .module))
 
                 placementButton(placement: .foreground,
                                 icon: "square.on.square",
-                                label: "Premier plan",
-                                subtitle: "Élément draggable")
+                                label: String(localized: "story.placement.foreground", defaultValue: "Premier plan", bundle: .module),
+                                subtitle: String(localized: "story.placement.foregroundSubtitle", defaultValue: "Élément draggable", bundle: .module))
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
@@ -81,7 +81,7 @@ public struct AudioSourceSheet: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Text("Source audio")
+            Text(String(localized: "story.audioSource.title", defaultValue: "Source audio", bundle: .module))
                 .font(.headline)
                 .padding(.top, 20)
                 .padding(.bottom, 16)
@@ -89,11 +89,11 @@ public struct AudioSourceSheet: View {
             HStack(spacing: 16) {
                 sourceButton(source: .library,
                              icon: "folder.fill",
-                             label: "Bibliothèque")
+                             label: String(localized: "story.audioSource.library", defaultValue: "Bibliothèque", bundle: .module))
 
                 sourceButton(source: .record,
                              icon: "mic.fill",
-                             label: "Enregistrer")
+                             label: String(localized: "story.audioSource.record", defaultValue: "Enregistrer", bundle: .module))
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)

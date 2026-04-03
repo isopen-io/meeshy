@@ -102,7 +102,7 @@ public struct LocationFullscreenView: View {
                     .foregroundColor(Color(hex: accentColor))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(placeName ?? "Position partagee")
+                    Text(placeName ?? String(localized: "location.fullscreen.sharedPosition", defaultValue: "Position partagee", bundle: .module))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.primary)
                     if let addr = address {
@@ -125,7 +125,7 @@ public struct LocationFullscreenView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "map.fill")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Ouvrir dans Plans")
+                        Text(String(localized: "location.fullscreen.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .module))
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundColor(.white)
@@ -143,7 +143,7 @@ public struct LocationFullscreenView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Itineraire")
+                        Text(String(localized: "location.fullscreen.directions", defaultValue: "Itineraire", bundle: .module))
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: accentColor))

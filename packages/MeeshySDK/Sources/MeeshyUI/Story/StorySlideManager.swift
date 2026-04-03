@@ -153,13 +153,13 @@ public struct StorySlideCarousel: View {
                 Button(role: .destructive) {
                     manager.removeSlide(at: index)
                 } label: {
-                    Label("Delete", systemImage: "trash")
+                    Label(String(localized: "story.slide.delete", defaultValue: "Delete", bundle: .module), systemImage: "trash")
                 }
             }
             Button {
                 manager.duplicateSlide(at: index)
             } label: {
-                Label("Duplicate", systemImage: "doc.on.doc")
+                Label(String(localized: "story.slide.duplicate", defaultValue: "Duplicate", bundle: .module), systemImage: "doc.on.doc")
             }
         }
     }
@@ -183,6 +183,6 @@ public struct StorySlideCarousel: View {
                     .foregroundColor(.white.opacity(0.5))
             }
         }
-        .accessibilityLabel("Add slide")
+        .accessibilityLabel(String(localized: "story.slide.addSlide", defaultValue: "Add slide", bundle: .module))
     }
 }

@@ -26,22 +26,22 @@ public struct VoiceProfileManageView: View {
                     .padding(.top, 12)
                 }
             }
-            .navigationTitle("Profil vocal")
+            .navigationTitle(String(localized: "voiceProfile.manage.title", defaultValue: "Profil vocal", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "voiceProfile.manage.close", defaultValue: "Fermer", bundle: .module)) { dismiss() }
                         .foregroundColor(Color(hex: accentColor))
                 }
             }
             .task { await viewModel.loadProfile() }
-            .alert("Supprimer le profil vocal ?", isPresented: $viewModel.showDeleteConfirmation) {
-                Button("Annuler", role: .cancel) {}
-                Button("Supprimer tout", role: .destructive) {
+            .alert(String(localized: "voiceProfile.manage.deleteTitle", defaultValue: "Supprimer le profil vocal ?", bundle: .module), isPresented: $viewModel.showDeleteConfirmation) {
+                Button(String(localized: "voiceProfile.manage.cancelDelete", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
+                Button(String(localized: "voiceProfile.manage.deleteAll", defaultValue: "Supprimer tout", bundle: .module), role: .destructive) {
                     Task { await viewModel.deleteProfile() }
                 }
             } message: {
-                Text("Cette action supprimera definitivement votre profil vocal, tous vos echantillons et revoquera votre consentement. Cette action est irreversible (RGPD).")
+                Text(String(localized: "voiceProfile.manage.deleteMessage", defaultValue: "Cette action supprimera definitivement votre profil vocal, tous vos echantillons et revoquera votre consentement. Cette action est irreversible (RGPD).", bundle: .module))
             }
         }
     }
@@ -70,10 +70,10 @@ public struct VoiceProfileManageView: View {
 
             if let profile = viewModel.profile {
                 HStack(spacing: 16) {
-                    statItem(label: "Echantillons", value: "\(profile.sampleCount)")
-                    statItem(label: "Duree totale", value: "\(profile.totalDurationSeconds)s")
+                    statItem(label: String(localized: "voiceProfile.manage.samples", defaultValue: "Echantillons", bundle: .module), value: "\(profile.sampleCount)")
+                    statItem(label: String(localized: "voiceProfile.manage.totalDuration", defaultValue: "Duree totale", bundle: .module), value: "\(profile.totalDurationSeconds)s")
                     if let quality = profile.quality {
-                        statItem(label: "Qualite", value: "\(Int(quality * 100))%")
+                        statItem(label: String(localized: "voiceProfile.manage.quality", defaultValue: "Qualite", bundle: .module), value: "\(Int(quality * 100))%")
                     }
                 }
             }
@@ -98,24 +98,24 @@ public struct VoiceProfileManageView: View {
     }
 
     private var statusTitle: String {
-        guard let profile = viewModel.profile else { return "Aucun profil" }
+        guard let profile = viewModel.profile else { return String(localized: "voiceProfile.status.noProfile", defaultValue: "Aucun profil", bundle: .module) }
         switch profile.status {
-        case .ready: return "Profil actif"
-        case .processing: return "En traitement..."
-        case .pending: return "En attente"
-        case .failed: return "Erreur"
-        case .expired: return "Expire"
+        case .ready: return String(localized: "voiceProfile.status.active", defaultValue: "Profil actif", bundle: .module)
+        case .processing: return String(localized: "voiceProfile.status.processing", defaultValue: "En traitement...", bundle: .module)
+        case .pending: return String(localized: "voiceProfile.status.pending", defaultValue: "En attente", bundle: .module)
+        case .failed: return String(localized: "voiceProfile.status.failed", defaultValue: "Erreur", bundle: .module)
+        case .expired: return String(localized: "voiceProfile.status.expired", defaultValue: "Expire", bundle: .module)
         }
     }
 
     private var statusSubtitle: String {
-        guard let profile = viewModel.profile else { return "Creez un profil vocal pour activer le clonage" }
+        guard let profile = viewModel.profile else { return String(localized: "voiceProfile.subtitle.noProfile", defaultValue: "Creez un profil vocal pour activer le clonage", bundle: .module) }
         switch profile.status {
-        case .ready: return "Votre voix est utilisee pour les traductions audio"
-        case .processing: return "Vos echantillons sont en cours de traitement"
-        case .pending: return "En attente de traitement"
-        case .failed: return "Le traitement a echoue, reessayez"
-        case .expired: return "Enregistrez de nouveaux echantillons"
+        case .ready: return String(localized: "voiceProfile.subtitle.active", defaultValue: "Votre voix est utilisee pour les traductions audio", bundle: .module)
+        case .processing: return String(localized: "voiceProfile.subtitle.processing", defaultValue: "Vos echantillons sont en cours de traitement", bundle: .module)
+        case .pending: return String(localized: "voiceProfile.subtitle.pending", defaultValue: "En attente de traitement", bundle: .module)
+        case .failed: return String(localized: "voiceProfile.subtitle.failed", defaultValue: "Le traitement a echoue, reessayez", bundle: .module)
+        case .expired: return String(localized: "voiceProfile.subtitle.expired", defaultValue: "Enregistrez de nouveaux echantillons", bundle: .module)
         }
     }
 
@@ -133,10 +133,10 @@ public struct VoiceProfileManageView: View {
                 )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Clonage vocal actif")
+                Text(String(localized: "voiceProfile.manage.cloningActive", defaultValue: "Clonage vocal actif", bundle: .module))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.primary)
-                Text("Utiliser votre voix pour les traductions")
+                Text(String(localized: "voiceProfile.manage.cloningSubtitle", defaultValue: "Utiliser votre voix pour les traductions", bundle: .module))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -165,14 +165,14 @@ public struct VoiceProfileManageView: View {
                 Image(systemName: "waveform")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
-                Text("ECHANTILLONS VOCAUX")
+                Text(String(localized: "voiceProfile.manage.samplesHeader", defaultValue: "ECHANTILLONS VOCAUX", bundle: .module))
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: accentColor))
                     .tracking(1.0)
             }
 
             if viewModel.samples.isEmpty {
-                Text("Aucun echantillon enregistre")
+                Text(String(localized: "voiceProfile.manage.noSamples", defaultValue: "Aucun echantillon enregistre", bundle: .module))
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -184,7 +184,7 @@ public struct VoiceProfileManageView: View {
                             .font(.system(size: 13))
                             .foregroundColor(Color(hex: accentColor))
 
-                        Text("Echantillon")
+                        Text(String(localized: "voiceProfile.manage.sample", defaultValue: "Echantillon", bundle: .module))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.primary)
 
@@ -223,7 +223,7 @@ public struct VoiceProfileManageView: View {
                 HStack {
                     Image(systemName: "trash.fill")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Supprimer toutes les donnees vocales")
+                    Text(String(localized: "voiceProfile.manage.deleteAllData", defaultValue: "Supprimer toutes les donnees vocales", bundle: .module))
                         .font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundColor(Color(hex: "EF4444"))
@@ -239,7 +239,7 @@ public struct VoiceProfileManageView: View {
                 )
             }
 
-            Text("Conforme au RGPD - Vos donnees vocales seront definitivement supprimees de nos serveurs.")
+            Text(String(localized: "voiceProfile.manage.gdprNotice", defaultValue: "Conforme au RGPD - Vos donnees vocales seront definitivement supprimees de nos serveurs.", bundle: .module))
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

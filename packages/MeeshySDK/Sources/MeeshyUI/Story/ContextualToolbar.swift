@@ -19,9 +19,9 @@ struct ContextualToolbar: View {
 
                 if expandedGroup == .fond {
                     HStack(spacing: 6) {
-                        toolPill(.bgMedia, icon: "photo.fill", label: "Fond", badge: bgMediaCount)
-                        toolPill(.drawing, icon: "pencil.tip", label: "Dessin", badge: hasDrawing ? 1 : 0)
-                        toolPill(.bgAudio, icon: "music.note", label: "Ambiance", badge: hasBgAudio ? 1 : 0)
+                        toolPill(.bgMedia, icon: "photo.fill", label: String(localized: "story.toolbar.background", defaultValue: "Fond", bundle: .module), badge: bgMediaCount)
+                        toolPill(.drawing, icon: "pencil.tip", label: String(localized: "story.toolbar.drawing", defaultValue: "Dessin", bundle: .module), badge: hasDrawing ? 1 : 0)
+                        toolPill(.bgAudio, icon: "music.note", label: String(localized: "story.toolbar.ambiance", defaultValue: "Ambiance", bundle: .module), badge: hasBgAudio ? 1 : 0)
                     }
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading).combined(with: .opacity),
@@ -33,9 +33,9 @@ struct ContextualToolbar: View {
 
                 if expandedGroup == .front {
                     HStack(spacing: 6) {
-                        toolPill(.text, icon: "textformat", label: "Texte", badge: textCount)
-                        toolPill(.media, icon: "photo.on.rectangle.angled", label: "Media", badge: fgMediaCount)
-                        toolPill(.audio, icon: "waveform", label: "Audio", badge: fgAudioCount)
+                        toolPill(.text, icon: "textformat", label: String(localized: "story.toolbar.text", defaultValue: "Texte", bundle: .module), badge: textCount)
+                        toolPill(.media, icon: "photo.on.rectangle.angled", label: String(localized: "story.toolbar.media", defaultValue: "Media", bundle: .module), badge: fgMediaCount)
+                        toolPill(.audio, icon: "waveform", label: String(localized: "story.toolbar.audio", defaultValue: "Audio", bundle: .module), badge: fgAudioCount)
                     }
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading).combined(with: .opacity),
@@ -47,9 +47,9 @@ struct ContextualToolbar: View {
 
                 if expandedGroup == .plus {
                     HStack(spacing: 6) {
-                        toolPill(.filter, icon: "camera.filters", label: "Filtre", badge: hasFilter ? 1 : 0)
-                        toolPill(.effects, icon: "sparkles", label: "Effets", badge: hasEffects ? 1 : 0)
-                        toolPill(.timeline, icon: "timeline.selection", label: "Timeline", badge: 0)
+                        toolPill(.filter, icon: "camera.filters", label: String(localized: "story.toolbar.filter", defaultValue: "Filtre", bundle: .module), badge: hasFilter ? 1 : 0)
+                        toolPill(.effects, icon: "sparkles", label: String(localized: "story.toolbar.effects", defaultValue: "Effets", bundle: .module), badge: hasEffects ? 1 : 0)
+                        toolPill(.timeline, icon: "timeline.selection", label: String(localized: "story.toolbar.timeline", defaultValue: "Timeline", bundle: .module), badge: 0)
                     }
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading).combined(with: .opacity),

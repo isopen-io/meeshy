@@ -40,11 +40,11 @@ public struct UnifiedPostComposer: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { onDismiss() }
+                    Button(String(localized: "story.post.cancel", defaultValue: "Cancel", bundle: .module)) { onDismiss() }
                         .foregroundColor(.white.opacity(0.7))
                 }
                 ToolbarItem(placement: .principal) {
-                    Text("Create")
+                    Text(String(localized: "story.post.create", defaultValue: "Create", bundle: .module))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
@@ -145,7 +145,7 @@ public struct UnifiedPostComposer: View {
 
     private var postComposer: some View {
         VStack(spacing: 12) {
-            TextField("What's on your mind?", text: $content, axis: .vertical)
+            TextField(String(localized: "story.post.whatOnYourMind", defaultValue: "What's on your mind?", bundle: .module), text: $content, axis: .vertical)
                 .font(.system(size: 16))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(3...12)
@@ -159,7 +159,7 @@ public struct UnifiedPostComposer: View {
 
             HStack(spacing: 16) {
                 PhotosPicker(selection: $selectedPhotoItem, matching: .any(of: [.images, .videos])) {
-                    Label("Média", systemImage: "photo.on.rectangle")
+                    Label(String(localized: "story.post.media", defaultValue: "Média", bundle: .module), systemImage: "photo.on.rectangle")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                 }
@@ -174,7 +174,7 @@ public struct UnifiedPostComposer: View {
     private var statusComposer: some View {
         VStack(spacing: 16) {
             moodEmojiPicker
-            TextField("How are you feeling?", text: $content, axis: .vertical)
+            TextField(String(localized: "story.post.howFeeling", defaultValue: "How are you feeling?", bundle: .module), text: $content, axis: .vertical)
                 .font(.system(size: 16))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2...4)
@@ -190,7 +190,7 @@ public struct UnifiedPostComposer: View {
             Image(systemName: "camera.fill")
                 .font(.system(size: 40))
                 .foregroundColor(.white.opacity(0.3))
-            Text("Tap to open Story Editor")
+            Text(String(localized: "story.post.tapStoryEditor", defaultValue: "Tap to open Story Editor", bundle: .module))
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -264,9 +264,9 @@ public struct UnifiedPostComposer: View {
 
     private var visibilityPicker: some View {
         Menu {
-            Button { visibility = "PUBLIC" } label: { Label("Public", systemImage: "globe") }
-            Button { visibility = "FRIENDS" } label: { Label("Friends", systemImage: "person.2") }
-            Button { visibility = "PRIVATE" } label: { Label("Private", systemImage: "lock") }
+            Button { visibility = "PUBLIC" } label: { Label(String(localized: "story.post.public", defaultValue: "Public", bundle: .module), systemImage: "globe") }
+            Button { visibility = "FRIENDS" } label: { Label(String(localized: "story.post.friends", defaultValue: "Friends", bundle: .module), systemImage: "person.2") }
+            Button { visibility = "PRIVATE" } label: { Label(String(localized: "story.post.private", defaultValue: "Private", bundle: .module), systemImage: "lock") }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: visibilityIcon)
@@ -305,7 +305,7 @@ public struct UnifiedPostComposer: View {
             onPublish(selectedType, content, moodEmoji, nil, selectedImage)
             HapticFeedback.success()
         } label: {
-            Text("Post")
+            Text(String(localized: "story.post.publish", defaultValue: "Post", bundle: .module))
                 .font(.system(size: 15, weight: .bold))
                 .foregroundColor(canPublish ? .white : .white.opacity(0.5))
                 .padding(.horizontal, 16)

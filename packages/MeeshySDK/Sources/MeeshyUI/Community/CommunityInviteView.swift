@@ -21,11 +21,11 @@ public struct CommunityInviteView: View {
                     resultsList
                 }
             }
-            .navigationTitle("Invite Members")
+            .navigationTitle(String(localized: "community.invite.title", defaultValue: "Invite Members", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button(String(localized: "common.done", defaultValue: "Done", bundle: .module)) { dismiss() }
                         .foregroundColor(theme.textSecondary)
                 }
             }
@@ -38,7 +38,7 @@ public struct CommunityInviteView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(theme.textMuted)
-            TextField("Search users...", text: $viewModel.searchText)
+            TextField(String(localized: "community.invite.search.placeholder", defaultValue: "Search users...", bundle: .module), text: $viewModel.searchText)
                 .font(.system(size: 16, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .textFieldStyle(.plain)
@@ -64,8 +64,8 @@ public struct CommunityInviteView: View {
             } else if viewModel.searchResults.isEmpty && !viewModel.searchText.isEmpty {
                 EmptyStateView(
                     icon: "person.crop.circle.badge.questionmark",
-                    title: "No Users Found",
-                    subtitle: "Try a different search term"
+                    title: String(localized: "community.invite.empty.title", defaultValue: "No Users Found", bundle: .module),
+                    subtitle: String(localized: "community.invite.empty.subtitle", defaultValue: "Try a different search term", bundle: .module)
                 )
             } else if !viewModel.invitedUserIds.isEmpty {
                 VStack(spacing: 12) {
@@ -82,7 +82,7 @@ public struct CommunityInviteView: View {
     private var invitedSection: some View {
         if !viewModel.recentlyInvited.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Recently Invited")
+                Text(String(localized: "community.invite.recentlyInvited", defaultValue: "Recently Invited", bundle: .module))
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textMuted)
                     .textCase(.uppercase)
@@ -141,7 +141,7 @@ public struct CommunityInviteView: View {
                 Button {
                     Task { await viewModel.inviteUser(userId: user.id) }
                 } label: {
-                    Text("Invite")
+                    Text(String(localized: "community.invite.button", defaultValue: "Invite", bundle: .module))
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)

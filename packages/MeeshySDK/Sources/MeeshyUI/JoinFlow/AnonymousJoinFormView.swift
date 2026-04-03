@@ -43,7 +43,7 @@ public struct AnonymousJoinFormView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Retour")
+                        Text(String(localized: "joinFlow.form.back", defaultValue: "Retour", bundle: .module))
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(MeeshyColors.indigo400)
@@ -52,7 +52,7 @@ public struct AnonymousJoinFormView: View {
                 Spacer()
             }
 
-            Text("Rejoindre la conversation")
+            Text(String(localized: "joinFlow.form.title", defaultValue: "Rejoindre la conversation", bundle: .module))
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -70,14 +70,14 @@ public struct AnonymousJoinFormView: View {
 
     private var requiredFields: some View {
         VStack(spacing: 14) {
-            Text("Informations requises")
+            Text(String(localized: "joinFlow.form.requiredSection", defaultValue: "Informations requises", bundle: .module))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(theme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             formField(
                 icon: "person.fill",
-                placeholder: "Prenom",
+                placeholder: String(localized: "joinFlow.form.firstName", defaultValue: "Prenom", bundle: .module),
                 text: $viewModel.firstName,
                 field: .firstName,
                 autocapitalization: .words
@@ -85,7 +85,7 @@ public struct AnonymousJoinFormView: View {
 
             formField(
                 icon: "person.fill",
-                placeholder: "Nom",
+                placeholder: String(localized: "joinFlow.form.lastName", defaultValue: "Nom", bundle: .module),
                 text: $viewModel.lastName,
                 field: .lastName,
                 autocapitalization: .words
@@ -94,7 +94,7 @@ public struct AnonymousJoinFormView: View {
             if viewModel.linkInfo?.requireNickname == true {
                 formField(
                     icon: "at",
-                    placeholder: "Nom d'utilisateur",
+                    placeholder: String(localized: "joinFlow.form.username", defaultValue: "Nom d'utilisateur", bundle: .module),
                     text: $viewModel.username,
                     field: .username
                 )
@@ -103,7 +103,7 @@ public struct AnonymousJoinFormView: View {
             if viewModel.linkInfo?.requireEmail == true {
                 formField(
                     icon: "envelope.fill",
-                    placeholder: "Adresse email",
+                    placeholder: String(localized: "joinFlow.form.email", defaultValue: "Adresse email", bundle: .module),
                     text: $viewModel.email,
                     field: .email,
                     keyboardType: .emailAddress
@@ -125,7 +125,7 @@ public struct AnonymousJoinFormView: View {
 
         if hasOptional {
             VStack(spacing: 14) {
-                Text("Optionnel")
+                Text(String(localized: "joinFlow.form.optionalSection", defaultValue: "Optionnel", bundle: .module))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -133,7 +133,7 @@ public struct AnonymousJoinFormView: View {
                 if viewModel.linkInfo?.requireNickname != true {
                     formField(
                         icon: "at",
-                        placeholder: "Nom d'utilisateur (optionnel)",
+                        placeholder: String(localized: "joinFlow.form.usernameOptional", defaultValue: "Nom d'utilisateur (optionnel)", bundle: .module),
                         text: $viewModel.username,
                         field: .username
                     )
@@ -142,7 +142,7 @@ public struct AnonymousJoinFormView: View {
                 if viewModel.linkInfo?.requireEmail != true {
                     formField(
                         icon: "envelope",
-                        placeholder: "Email (optionnel)",
+                        placeholder: String(localized: "joinFlow.form.emailOptional", defaultValue: "Email (optionnel)", bundle: .module),
                         text: $viewModel.email,
                         field: .email,
                         keyboardType: .emailAddress
@@ -202,7 +202,7 @@ public struct AnonymousJoinFormView: View {
                 .frame(width: 20)
 
             DatePicker(
-                "Date de naissance",
+                String(localized: "joinFlow.form.birthday", defaultValue: "Date de naissance", bundle: .module),
                 selection: $viewModel.birthday,
                 in: ...Calendar.current.date(byAdding: .year, value: -13, to: Date())!,
                 displayedComponents: .date
@@ -226,13 +226,13 @@ public struct AnonymousJoinFormView: View {
                 .foregroundStyle(MeeshyColors.info)
                 .frame(width: 20)
 
-            Text("Langue")
+            Text(String(localized: "joinFlow.form.language", defaultValue: "Langue", bundle: .module))
                 .font(.system(size: 14))
                 .foregroundColor(theme.textSecondary)
 
             Spacer()
 
-            Picker("Langue", selection: $viewModel.language) {
+            Picker(String(localized: "joinFlow.form.language", defaultValue: "Langue", bundle: .module), selection: $viewModel.language) {
                 Text("Francais").tag("fr")
                 Text("English").tag("en")
                 Text("Espanol").tag("es")
@@ -292,7 +292,7 @@ public struct AnonymousJoinFormView: View {
                 } else {
                     Image(systemName: "arrow.right.circle.fill")
                         .font(.system(size: 18))
-                    Text("Rejoindre")
+                    Text(String(localized: "joinFlow.form.submit", defaultValue: "Rejoindre", bundle: .module))
                         .font(.system(size: 16, weight: .bold))
                 }
             }
