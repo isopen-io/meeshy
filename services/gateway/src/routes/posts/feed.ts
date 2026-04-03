@@ -4,6 +4,21 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostFeedService } from '../../services/PostFeedService';
 import { FeedQuerySchema, UserParams, CommunityParams } from './types';
 import { sendSuccess } from '../../utils/response';
+import { resolveMentionedUsers } from '../../services/MentionService';
+
+function collectPostContents(posts: unknown[]): string[] {
+  const contents: string[] = [];
+  for (const post of posts) {
+    const p = post as any;
+    if (p.content) contents.push(p.content);
+    if (Array.isArray(p.comments)) {
+      for (const c of p.comments) {
+        if (c.content) contents.push(c.content);
+      }
+    }
+  }
+  return contents;
+}
 
 export function registerFeedRoutes(
   fastify: FastifyInstance,
@@ -28,8 +43,14 @@ export function registerFeedRoutes(
 
       const result = await feedService.getFeed(authContext.registeredUser.id, cursor, limit);
 
+      const feedContents = collectPostContents(result.items);
+      const mentionedUsers = feedContents.length > 0
+        ? await resolveMentionedUsers(prisma, feedContents)
+        : [];
+
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers },
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed] Error: ${error}`);
@@ -48,7 +69,13 @@ export function registerFeedRoutes(
       }
 
       const stories = await feedService.getStories(authContext.registeredUser.id);
-      return sendSuccess(reply, stories);
+
+      const storyContents = collectPostContents(stories);
+      const storyMentionedUsers = storyContents.length > 0
+        ? await resolveMentionedUsers(prisma, storyContents)
+        : [];
+
+      return sendSuccess(reply, stories, { meta: { mentionedUsers: storyMentionedUsers } });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/stories] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -70,8 +97,14 @@ export function registerFeedRoutes(
 
       const result = await feedService.getStatuses(authContext.registeredUser.id, cursor, limit);
 
+      const statusContents = collectPostContents(result.items);
+      const statusMentionedUsers = statusContents.length > 0
+        ? await resolveMentionedUsers(prisma, statusContents)
+        : [];
+
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers: statusMentionedUsers },
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/statuses] Error: ${error}`);
@@ -94,8 +127,14 @@ export function registerFeedRoutes(
 
       const result = await feedService.getDiscoverStatuses(authContext.registeredUser.id, cursor, limit);
 
+      const discoverContents = collectPostContents(result.items);
+      const discoverMentionedUsers = discoverContents.length > 0
+        ? await resolveMentionedUsers(prisma, discoverContents)
+        : [];
+
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers: discoverMentionedUsers },
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/statuses/discover] Error: ${error}`);
@@ -117,8 +156,14 @@ export function registerFeedRoutes(
 
       const result = await feedService.getUserPosts(userId, viewerUserId, cursor, limit);
 
+      const userPostContents = collectPostContents(result.items);
+      const userPostMentionedUsers = userPostContents.length > 0
+        ? await resolveMentionedUsers(prisma, userPostContents)
+        : [];
+
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers: userPostMentionedUsers },
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/user/:userId] Error: ${error}`);
@@ -140,8 +185,14 @@ export function registerFeedRoutes(
 
       const result = await feedService.getCommunityFeed(communityId, viewerUserId, cursor, limit);
 
+      const communityContents = collectPostContents(result.items);
+      const communityMentionedUsers = communityContents.length > 0
+        ? await resolveMentionedUsers(prisma, communityContents)
+        : [];
+
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers: communityMentionedUsers },
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/community/:communityId] Error: ${error}`);
@@ -164,8 +215,14 @@ export function registerFeedRoutes(
 
       const result = await feedService.getBookmarks(authContext.registeredUser.id, cursor, limit);
 
+      const bookmarkContents = collectPostContents(result.items);
+      const bookmarkMentionedUsers = bookmarkContents.length > 0
+        ? await resolveMentionedUsers(prisma, bookmarkContents)
+        : [];
+
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers: bookmarkMentionedUsers },
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/bookmarks] Error: ${error}`);

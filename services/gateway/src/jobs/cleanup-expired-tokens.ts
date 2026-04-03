@@ -75,13 +75,9 @@ export class CleanupExpiredTokens {
 
       if (result.count > 0) {
         console.log(`[CleanupExpiredTokens] ✅ Deleted ${result.count} expired/used/revoked tokens`);
-      } else {
-        console.log('[CleanupExpiredTokens] No expired tokens to clean up');
+        const stats = await this.getStats();
+        console.log('[CleanupExpiredTokens] Current stats:', stats);
       }
-
-      // Log statistics
-      const stats = await this.getStats();
-      console.log('[CleanupExpiredTokens] Current stats:', stats);
 
     } catch (error) {
       console.error('[CleanupExpiredTokens] Error during cleanup:', error);

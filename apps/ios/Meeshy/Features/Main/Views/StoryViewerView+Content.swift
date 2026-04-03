@@ -376,19 +376,19 @@ extension StoryViewerView {
         closingScale = 1.0
         contentOpacity = 0
 
-        // Read closing effect from the OUTGOING story before swapping
         let closingEffect = currentStory?.storyEffects?.closing
 
         // 2. Swap to the incoming story (invisible because contentOpacity = 0)
         update()
         markCurrentViewed()
+
+        // Prefetch incoming story's media and await it (max 300ms) so L1 cache is warm
+        let incomingPrefetch = currentStory.map { prefetchAllMedia(for: $0) }
         prefetchStory(at: currentStoryIndex + 1)
         prefetchStory(at: currentStoryIndex + 2)
 
-        // Read opening effect from the INCOMING story (currentStory is now the new one)
         let incomingEffect = currentStory?.storyEffects?.opening
 
-        // Set initial animation state for incoming content
         switch incomingEffect {
         case .zoom:
             openingScale = 0.88
@@ -401,8 +401,8 @@ extension StoryViewerView {
         case .reveal:
             openingScale = 1.0
             textSlideOffset = 0
-            isRevealActive = false   // start collapsed
-        default: // fade ou nil
+            isRevealActive = false
+        default:
             textSlideOffset = 14
             openingScale = 1.0
             isRevealActive = false
@@ -425,22 +425,37 @@ extension StoryViewerView {
             animation = .easeOut(duration: 0.35)
         }
 
-        // 3. Animate incoming in + outgoing out with closing effect applied
-        withAnimation(animation) {
-            outgoingOpacity = 0
-            contentOpacity = 1
-            openingScale = 1.0
-            textSlideOffset = 0
-            if incomingEffect == .reveal { isRevealActive = true }
-            if closingEffect == .zoom { closingScale = 1.08 }
+        // 3. Await cache warm-up (max 300ms), then animate
+        let performAnimation = { [self] in
+            withAnimation(animation) {
+                outgoingOpacity = 0
+                contentOpacity = 1
+                openingScale = 1.0
+                textSlideOffset = 0
+                if incomingEffect == .reveal { isRevealActive = true }
+                if closingEffect == .zoom { closingScale = 1.08 }
+            }
+
+            restartTimer()
+            DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.04) {
+                outgoingStory = nil
+                isTransitioning = false
+                closingScale = 1.0
+            }
         }
 
-        restartTimer()
-        DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.04) {
-            outgoingStory = nil
-            isTransitioning = false
-            closingScale = 1.0
-            // isRevealActive is reset at the start of each new transition (switch incomingEffect above)
+        if let prefetch = incomingPrefetch {
+            Task { @MainActor in
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask { await prefetch.value }
+                    group.addTask { try? await Task.sleep(nanoseconds: 300_000_000) }
+                    _ = await group.next()
+                    group.cancelAll()
+                }
+                performAnimation()
+            }
+        } else {
+            performAnimation()
         }
     }
 
@@ -457,18 +472,31 @@ extension StoryViewerView {
             groupSlide = exitX
         }
 
-        // 2. Swap content while off-screen, slide new card in
+        // 2. Swap content while off-screen, prefetch first story, then slide new card in
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             update()
             markCurrentViewed()
+            let firstStory = currentGroupIndex < groups.count ? groups[currentGroupIndex].stories.first : nil
+            let firstPrefetch = firstStory.map { prefetchAllMedia(for: $0) }
             prefetchCurrentGroup()
-            groupSlide = enterX
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                groupSlide = 0
-            }
-            restartTimer()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                isTransitioning = false
+
+            Task { @MainActor in
+                if let prefetch = firstPrefetch {
+                    await withTaskGroup(of: Void.self) { group in
+                        group.addTask { await prefetch.value }
+                        group.addTask { try? await Task.sleep(nanoseconds: 200_000_000) }
+                        _ = await group.next()
+                        group.cancelAll()
+                    }
+                }
+                groupSlide = enterX
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    groupSlide = 0
+                }
+                restartTimer()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    isTransitioning = false
+                }
             }
         }
     }
@@ -748,14 +776,13 @@ extension StoryViewerView {
     // MARK: - Prefetch
 
     /// Précharge tous les médias d'une story : legacy media, mediaObjects, audioPlayerObjects, backgroundAudio.
-    private func prefetchAllMedia(for story: StoryItem) {
-        // Collecter toutes les URLs à prefetch
+    /// Retourne un Task awaitable pour permettre de bloquer sur le chargement si nécessaire.
+    @discardableResult
+    private func prefetchAllMedia(for story: StoryItem) -> Task<Void, Never> {
         var urls: [String] = []
 
-        // Legacy story.media URLs
         urls.append(contentsOf: story.media.compactMap(\.url))
 
-        // Composer V2 media objects (foreground + background images/videos)
         if let mediaObjs = story.storyEffects?.mediaObjects {
             for obj in mediaObjs {
                 if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
@@ -764,7 +791,6 @@ extension StoryViewerView {
             }
         }
 
-        // Foreground audio player objects
         if let audioObjs = story.storyEffects?.audioPlayerObjects {
             for obj in audioObjs {
                 if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
@@ -773,16 +799,14 @@ extension StoryViewerView {
             }
         }
 
-        // Background audio
         if let bgAudioId = story.storyEffects?.backgroundAudioId {
             if let urlStr = story.media.first(where: { $0.id == bgAudioId })?.url {
                 urls.append(urlStr)
             }
         }
 
-        // Prefetch dans un contexte async (CacheCoordinator stores)
         let uniqueURLs = Array(Set(urls))
-        Task {
+        return Task {
             let images = await CacheCoordinator.shared.images
             for url in uniqueURLs {
                 _ = try? await images.data(for: url)
@@ -791,21 +815,20 @@ extension StoryViewerView {
     }
 
     /// Précharge la story à l'index donné dans le groupe actuel.
-    func prefetchStory(at index: Int) {
-        guard currentGroupIndex < groups.count else { return }
+    @discardableResult
+    func prefetchStory(at index: Int) -> Task<Void, Never>? {
+        guard currentGroupIndex < groups.count else { return nil }
         let stories = groups[currentGroupIndex].stories
-        guard index >= 0, index < stories.count else { return }
-        prefetchAllMedia(for: stories[index])
+        guard index >= 0, index < stories.count else { return nil }
+        return prefetchAllMedia(for: stories[index])
     }
 
     /// Précharge toutes les stories du groupe actuel + les 2 premières du groupe suivant.
     func prefetchCurrentGroup() {
         guard currentGroupIndex >= 0, currentGroupIndex < groups.count else { return }
 
-        // Groupe actuel : toutes les stories
         groups[currentGroupIndex].stories.forEach { prefetchAllMedia(for: $0) }
 
-        // Groupe suivant : les 2 premières stories (lookahead)
         let nextGroupIdx = currentGroupIndex + 1
         if nextGroupIdx < groups.count {
             let nextStories = groups[nextGroupIdx].stories

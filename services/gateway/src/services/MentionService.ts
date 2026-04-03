@@ -9,6 +9,7 @@ import { PrismaClient, User } from '@meeshy/shared/prisma/client';
 import { getCacheStore, type CacheStore } from './CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { parseMentions, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
+import type { MentionedUser } from '@meeshy/shared/types';
 
 // Logger dédié pour MentionService
 const logger = enhancedLogger.child({ module: 'MentionService' });
@@ -779,4 +780,46 @@ export class MentionService {
 
     return !!member;
   }
+}
+
+/**
+ * Résout les @username trouvés dans un ou plusieurs contenus texte
+ * en utilisateurs avec displayName, avatar, userId.
+ *
+ * Batch-query unique sur la collection User — performant pour les listes.
+ * Retourne un tableau dédupliqué de MentionedUser.
+ */
+export async function resolveMentionedUsers(
+  prisma: PrismaClient,
+  contents: readonly string[]
+): Promise<MentionedUser[]> {
+  const usernames = new Set<string>();
+  const mentionRegex = /@(\w{1,30})/g;
+
+  for (const content of contents) {
+    if (!content) continue;
+    for (const match of content.matchAll(mentionRegex)) {
+      if (match[1]) usernames.add(match[1].toLowerCase());
+    }
+  }
+
+  if (usernames.size === 0) return [];
+
+  const users = await prisma.user.findMany({
+    where: {
+      username: { in: [...usernames], mode: 'insensitive' },
+      isActive: true
+    },
+    select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true }
+  });
+
+  return users.map((u) => {
+    const displayName = u.displayName ?? ([u.firstName, u.lastName].filter(Boolean).join(' ') || null);
+    return {
+      userId: u.id,
+      username: u.username,
+      displayName,
+      avatar: u.avatar
+    };
+  });
 }

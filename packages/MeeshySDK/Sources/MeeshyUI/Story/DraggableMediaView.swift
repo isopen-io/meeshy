@@ -90,6 +90,10 @@ public struct DraggableMediaView: View {
                 .onChange(of: mediaObject.id) { _ in
                     syncBaseFromBinding()
                 }
+                .onChange(of: mediaObject.x) { _ in syncBaseFromBinding() }
+                .onChange(of: mediaObject.y) { _ in syncBaseFromBinding() }
+                .onChange(of: mediaObject.scale) { _ in syncBaseFromBinding() }
+                .onChange(of: mediaObject.rotation) { _ in syncBaseFromBinding() }
                 .onDisappear {
                     if externalPlayer == nil {
                         teardownInternalPlayer()

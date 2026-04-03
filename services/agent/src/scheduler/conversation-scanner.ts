@@ -170,6 +170,12 @@ export class ConversationScanner {
 
     try {
       this.scanning = true;
+
+      const evicted = await this.persistence.evictRecentlyActiveUsers();
+      if (evicted > 0) {
+        console.log(`[Scanner] Evicted ${evicted} recently active users from agent control`);
+      }
+
       const globalConfig = await this.configCache.getGlobalConfig();
       const scanOptions = {
         eligibleTypes: globalConfig?.eligibleConversationTypes ?? ['group', 'channel', 'public', 'global'],
@@ -526,6 +532,29 @@ export class ConversationScanner {
     try {
       if (result.toneProfiles) await this.stateManager.setToneProfiles(conversationId, result.toneProfiles as Record<string, any>);
     } catch (err) { console.error(`[Scanner] Error persisting tone profiles for conv=${conversationId}:`, err); }
+
+    // Persist summary + conversation-level metrics to MongoDB
+    try {
+      if (result.summary) {
+        const observerExtra = tracer.getNodeExtra('observe') ?? {};
+        const lastMsg = effectiveMessages[effectiveMessages.length - 1];
+        this.persistence.upsertSummary(
+          conversationId,
+          result.summary as string,
+          (result.toneProfiles ? Object.values(result.toneProfiles as Record<string, ToneProfile>).flatMap((p) => p.topicsOfExpertise).slice(0, 20) : []),
+          (observerExtra.overallTone as string) ?? 'neutre',
+          lastMsg?.id ?? '',
+          effectiveMessages.length,
+          {
+            healthScore: typeof observerExtra.healthScore === 'number' ? observerExtra.healthScore : undefined,
+            engagementLevel: typeof observerExtra.engagementLevel === 'string' ? observerExtra.engagementLevel : undefined,
+            conflictLevel: typeof observerExtra.conflictLevel === 'string' ? observerExtra.conflictLevel : undefined,
+            dynamique: typeof observerExtra.dynamique === 'string' ? observerExtra.dynamique : undefined,
+            dominantEmotions: Array.isArray(observerExtra.dominantEmotions) ? observerExtra.dominantEmotions as string[] : undefined,
+          },
+        ).catch((err) => console.error(`[Scanner] Error persisting summary to MongoDB for conv=${conversationId}:`, err));
+      }
+    } catch (err) { console.error(`[Scanner] Error building summary data for conv=${conversationId}:`, err); }
 
     // P1.1: Persist global profiles for non-controlled users (enables auto-pickup)
     // P3.2: Persist updated Observer profiles for controlled users

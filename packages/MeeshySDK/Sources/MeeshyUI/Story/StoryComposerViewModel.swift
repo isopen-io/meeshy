@@ -137,6 +137,7 @@ final class StoryComposerViewModel {
     var timelineZoomScale: CGFloat = 1.0
     var timelineScrollOffset: CGFloat = 0
     var timelineAdvanced: Bool = false
+    var isMuted: Bool = false
     var hasBackgroundImage: Bool = false
 
     // MARK: - Slide Duration
@@ -144,7 +145,7 @@ final class StoryComposerViewModel {
     var currentSlideDuration: Float {
         get { Float(currentSlide.duration) }
         set {
-            let clamped = max(2, min(30, newValue))
+            let clamped = max(2, min(600, newValue))
             var slide = currentSlide
             slide.duration = TimeInterval(clamped)
             currentSlide = slide
@@ -153,7 +154,7 @@ final class StoryComposerViewModel {
 
     func autoExtendDuration(forElementEnd end: Float) {
         if end > currentSlideDuration {
-            currentSlideDuration = min(30, end + 0.5)
+            currentSlideDuration = min(600, end + 0.5)
         }
     }
 

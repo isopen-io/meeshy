@@ -83,8 +83,10 @@
       "private": "Privada",
       "members": "membros",
       "member": "membro",
-      "membersCount": "{count} membros"
+      "membersCount": "{count} membros",
+      "conversationsCount": "{count} conv."
     },
+    "yesterday": "Ontem {time}",
     "anonymous": "Anônimo"
   }
 }

@@ -20,38 +20,34 @@ on:
 
 jobs:
   sdk-tests:
-    runs-on: macos-15
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode 16
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+      - name: Select Xcode 15.4
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
 
       - name: Run SDK tests
         run: |
           xcodebuild test \
             -scheme MeeshySDK-Package \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
             -quiet
         working-directory: packages/MeeshySDK
 
   ios-tests:
-    runs-on: macos-15
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode 16
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
-
-      - name: Boot Simulator
-        run: |
-          xcrun simctl boot "iPhone 16 Pro" 2>/dev/null || true
+      - name: Select Xcode 15.4
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
 
       - name: Run iOS tests
         run: |
           xcodebuild test \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
             -only-testing:MeeshyTests \
             -quiet

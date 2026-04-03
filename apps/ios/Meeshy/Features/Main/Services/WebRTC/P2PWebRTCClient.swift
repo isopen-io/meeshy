@@ -3,9 +3,9 @@ import AVFoundation
 import os
 
 #if canImport(WebRTC)
-import WebRTC
+@preconcurrency import WebRTC
 
-final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
+final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendable {
     weak var delegate: (any WebRTCClientDelegate)?
 
     private var peerConnection: RTCPeerConnection?
@@ -41,7 +41,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
             encoderFactory: encoderFactory,
             decoderFactory: decoderFactory
         )
-        factory.audioDeviceModule.capturePostProcessingDelegate = audioProcessingModule
+        // factory.audioDeviceModule is not available in the public WebRTC SDK build
+        // Custom audio processing delegate requires a custom WebRTC build with ADM exposed
     }
 
     // MARK: - Configuration
@@ -122,7 +123,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
         }
 
         let fps = targetFrameRate(for: format)
-        capturer.startCapture(with: frontCamera, format: format, fps: fps)
+        capturer.startCapture(with: frontCamera, format: format, fps: fps) { error in
+            if let error { Logger.webrtc.error("Camera start failed: \(error.localizedDescription)") }
+        }
         Logger.webrtc.info("Local audio + video tracks started (front camera, \(fps)fps)")
     }
 
@@ -247,9 +250,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
             throw WebRTCError.noCameraFormatAvailable
         }
 
-        capturer.stopCapture()
+        capturer.stopCapture { }
         let fps = targetFrameRate(for: selectedFormat)
-        capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
+        capturer.startCapture(with: camera, format: selectedFormat, fps: fps) { error in
+            if let error { Logger.webrtc.error("Camera switch failed: \(error.localizedDescription)") }
+        }
         Logger.webrtc.info("Switched to \(self.usingFrontCamera ? "front" : "back") camera")
     }
 
@@ -511,10 +516,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding {
     }
 
     private func targetFrameRate(for format: AVCaptureDevice.Format) -> Int {
-        let fps = format.videoSupportedFrameRateRanges
-            .compactMap { $0.maxFrameRate }
-            .min(by: { abs($0 - 30) < abs($1 - 30) }) ?? 30
-        return Int(fps)
+        let rates: [Float64] = format.videoSupportedFrameRateRanges.map { $0.maxFrameRate }
+        let closest: Float64 = rates.min(by: { abs($0 - 30) < abs($1 - 30) }) ?? 30
+        return Int(closest)
     }
 }
 

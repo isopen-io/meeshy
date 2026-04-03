@@ -10,6 +10,7 @@ struct TimelinePanel: View {
     @State private var mediaDurationCache: [String: Float] = [:]
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showMediaEditor: String?
+    @State private var zoomAnchor: CGFloat = 1.0
     @Environment(\.theme) private var theme
 
     private var zoomScale: CGFloat { viewModel.timelineZoomScale }
@@ -61,6 +62,7 @@ struct TimelinePanel: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onAppear {
+            zoomAnchor = viewModel.timelineZoomScale
             buildTracks()
             configureEngine()
         }
@@ -202,6 +204,7 @@ struct TimelinePanel: View {
             Button {
                 engine.configure(duration: slideDuration)
                 engine.configureMedia(buildMediaElements())
+                engine.isMuted = viewModel.isMuted
                 engine.toggle()
                 viewModel.isTimelinePlaying = engine.isPlaying
             } label: {
@@ -234,6 +237,20 @@ struct TimelinePanel: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(MeeshyColors.indigo400.opacity(0.15)))
+            }
+
+            Button {
+                viewModel.isMuted.toggle()
+                engine.isMuted = viewModel.isMuted
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: viewModel.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(viewModel.isMuted ? MeeshyColors.error : theme.textSecondary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle().fill(viewModel.isMuted ? MeeshyColors.error.opacity(0.15) : Color.clear)
+                    )
             }
 
             Button {
@@ -294,11 +311,11 @@ struct TimelinePanel: View {
         .gesture(
             MagnificationGesture()
                 .onChanged { value in
-                    let logValue = log2(value)
-                    let newScale = pow(2, logValue) * zoomScale
-                    viewModel.timelineZoomScale = max(0.01, min(100.0, newScale))
+                    viewModel.timelineZoomScale = max(0.5, min(10.0, zoomAnchor * value))
                 }
-                .onEnded { _ in }
+                .onEnded { _ in
+                    zoomAnchor = viewModel.timelineZoomScale
+                }
         )
     }
 

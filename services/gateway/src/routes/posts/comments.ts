@@ -5,6 +5,7 @@ import { PostCommentService } from '../../services/PostCommentService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
 import { sendSuccess } from '../../utils/response';
+import { resolveMentionedUsers } from '../../services/MentionService';
 
 export function registerCommentRoutes(
   fastify: FastifyInstance,
@@ -24,8 +25,16 @@ export function registerCommentRoutes(
 
       const result = await commentService.getComments(postId, cursor, limit);
 
+      const commentContents = result.items
+        .map((c: any) => c.content as string)
+        .filter(Boolean);
+      const mentionedUsers = commentContents.length > 0
+        ? await resolveMentionedUsers(prisma, commentContents)
+        : [];
+
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers },
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId/comments] Error: ${error}`);
@@ -44,8 +53,16 @@ export function registerCommentRoutes(
 
       const result = await commentService.getReplies(commentId, cursor, limit);
 
+      const replyContents = result.items
+        .map((c: any) => c.content as string)
+        .filter(Boolean);
+      const replyMentionedUsers = replyContents.length > 0
+        ? await resolveMentionedUsers(prisma, replyContents)
+        : [];
+
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers: replyMentionedUsers },
       });
     } catch (error) {
       fastify.log.error(`[GET comments/:commentId/replies] Error: ${error}`);
@@ -73,7 +90,8 @@ export function registerCommentRoutes(
         postId,
         authContext.registeredUser.id,
         parsed.data.content,
-        parsed.data.parentId
+        parsed.data.parentId,
+        parsed.data.effectFlags
       );
 
       if (!comment) {
@@ -139,7 +157,11 @@ export function registerCommentRoutes(
         }
       }
 
-      return sendSuccess(reply, comment, { statusCode: 201 });
+      const newCommentMentionedUsers = parsed.data.content
+        ? await resolveMentionedUsers(prisma, [parsed.data.content])
+        : [];
+
+      return sendSuccess(reply, comment, { statusCode: 201, meta: { mentionedUsers: newCommentMentionedUsers } });
     } catch (error) {
       if (error instanceof Error && error.message === 'PARENT_NOT_FOUND') {
         return reply.status(404).send({ success: false, error: 'Parent comment not found' });

@@ -110,51 +110,54 @@ struct StoryViewerView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Opaque black base — prevents any white frame bleed
-                Color.black.ignoresSafeArea()
+        ZStack {
+            // Opaque black base — prevents any white frame bleed
+            Color.black.ignoresSafeArea()
 
-                // The story card with all transforms layered
-                storyCard(geometry: geometry)
-                    .scaleEffect(cardScale * (1.0 - slideProgress * 0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
-                    .opacity(cardOpacity)
-                    .offset(x: totalSlideX, y: cardOffsetY)
-                    .rotation3DEffect(
-                        .degrees(Double(-totalSlideX) / 25.0),
-                        axis: (x: 0, y: 1, z: 0),
-                        perspective: 0.6
-                    )
-                    .shadow(
-                        color: .black.opacity(dragProgress > 0.05 || slideProgress > 0.02 ? 0.5 : 0),
-                        radius: 40, y: 15
-                    )
+            GeometryReader { geometry in
+                ZStack {
+                    // The story card with all transforms layered
+                    storyCard(geometry: geometry)
+                        .scaleEffect(cardScale * (1.0 - slideProgress * 0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
+                        .opacity(cardOpacity)
+                        .offset(x: totalSlideX, y: cardOffsetY)
+                        .rotation3DEffect(
+                            .degrees(Double(-totalSlideX) / 25.0),
+                            axis: (x: 0, y: 1, z: 0),
+                            perspective: 0.6
+                        )
+                        .shadow(
+                            color: .black.opacity(dragProgress > 0.05 || slideProgress > 0.02 ? 0.5 : 0),
+                            radius: 40, y: 15
+                        )
 
-                // Bouton ✕ uniquement en preview mode
-                if isPreviewMode {
-                    VStack {
-                        HStack {
-                            Button {
-                                isPresented = false
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(Color.black.opacity(0.5)))
+                    // Bouton ✕ uniquement en preview mode
+                    if isPreviewMode {
+                        VStack {
+                            HStack {
+                                Button {
+                                    isPresented = false
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .frame(width: 36, height: 36)
+                                        .background(Circle().fill(Color.black.opacity(0.5)))
+                                }
+                                .accessibilityLabel("Fermer la story")
+                                .padding(.leading, 16)
+                                .padding(.top, max(geometry.safeAreaInsets.top, 59) + 4)
+                                Spacer()
                             }
-                            .accessibilityLabel("Fermer la story")
-                            .padding(.leading, 16)
-                            .padding(.top, max(geometry.safeAreaInsets.top, 59) + 4)
                             Spacer()
                         }
-                        Spacer()
                     }
                 }
-
             }
         }
+        .background(Color.black)
+        .preferredColorScheme(.dark)
         .ignoresSafeArea()
         .statusBarHidden()
         .gesture(unifiedDragGesture)

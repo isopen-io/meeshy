@@ -118,6 +118,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var tags: [MeeshyConversationTag] = []
 
     public var isAnnouncementChannel: Bool = false
+    public var defaultWriteRole: String? = nil
+    public var slowModeSeconds: Int? = nil
+    public var autoTranslateEnabled: Bool? = nil
 
     public var isPinned: Bool = false
     public var sectionId: String? = nil
@@ -207,7 +210,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 lastMessageIsViewOnce: Bool = false,
                 lastMessageExpiresAt: Date? = nil,
                 recentMessages: [RecentMessagePreview] = [],
-                tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, isPinned: Bool = false, sectionId: String? = nil,
+                tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, defaultWriteRole: String? = nil, slowModeSeconds: Int? = nil, autoTranslateEnabled: Bool? = nil, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
                 currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil, reaction: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
@@ -219,6 +222,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastMessageAt = lastMessageAt; self.encryptionMode = encryptionMode
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.isAnnouncementChannel = isAnnouncementChannel
+        self.defaultWriteRole = defaultWriteRole; self.slowModeSeconds = slowModeSeconds; self.autoTranslateEnabled = autoTranslateEnabled
         self.isPinned = isPinned; self.sectionId = sectionId; self.isMuted = isMuted
         self.participantUserId = participantUserId; self.participantUsername = participantUsername; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
         self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt; self.reaction = reaction

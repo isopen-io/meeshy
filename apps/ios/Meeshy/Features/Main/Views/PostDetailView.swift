@@ -7,7 +7,7 @@ struct PostDetailView: View {
     var initialPost: FeedPost?
 
     @StateObject private var viewModel = PostDetailViewModel()
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var router: Router
@@ -18,6 +18,11 @@ struct PostDetailView: View {
     @State private var activeDisplayLangCode: String? = nil
     @State private var fullscreenMediaId: String? = nil
     @State private var showFullscreenGallery = false
+    @State private var composerLanguage: String = "fr"
+    @State private var commentBlurEnabled: Bool = false
+    @State private var commentEffects: MessageEffects = .none
+    @State private var composerFocusTrigger: Bool = false
+    @State private var isTextExpanded = false
 
     private var displayPost: FeedPost? { viewModel.post ?? initialPost }
 
@@ -42,6 +47,13 @@ struct PostDetailView: View {
             return translation.text
         }
         return post.displayContent
+    }
+
+    private var textTruncation: (text: String, isTruncated: Bool) {
+        let words = effectiveContent.split(separator: " ", omittingEmptySubsequences: true)
+        if words.count <= 60 { return (effectiveContent, false) }
+        let truncated = words.prefix(60).joined(separator: " ")
+        return (truncated, true)
     }
 
     private var secondaryContent: String? {
@@ -90,9 +102,25 @@ struct PostDetailView: View {
             if let post = displayPost {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 0) {
-                        // Post content
-                        postFixedSection(post)
+                        // ZONE 1: Text
+                        textZone(post)
 
+                        // ZONE 2: Media
+                        if post.hasMedia {
+                            detailMediaSection(post.media)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 8)
+                        }
+
+                        // Repost embed
+                        if let repost = post.repost {
+                            repostEmbed(repost)
+                        }
+
+                        // Actions bar
+                        actionsBar(post)
+
+                        // Separator + Comments (ZONE 3)
                         Rectangle()
                             .fill(theme.inputBorder.opacity(0.5))
                             .frame(height: 1)
@@ -245,10 +273,10 @@ struct PostDetailView: View {
         .padding(.vertical, 8)
     }
 
-    // MARK: - Post Fixed Section (not scrollable)
+    // MARK: - Text Zone
 
     @ViewBuilder
-    private func postFixedSection(_ post: FeedPost) -> some View {
+    private func textZone(_ post: FeedPost) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Author header
             HStack(spacing: 12) {
@@ -319,13 +347,39 @@ struct PostDetailView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
 
-            // Content
-            Text(effectiveContent)
-                .font(.system(size: 16))
-                .foregroundColor(theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-                .padding(.horizontal, 16)
+            // Content with truncation
+            let truncation = textTruncation
+            Group {
+                if truncation.isTruncated && !isTextExpanded {
+                    Text(truncation.text + "... ")
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.textPrimary)
+                    + Text("voir plus")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Color(hex: accentColor))
+                } else if truncation.isTruncated && isTextExpanded {
+                    Text(effectiveContent + " ")
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.textPrimary)
+                    + Text("voir moins")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Color(hex: accentColor))
+                } else {
+                    Text(effectiveContent)
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.textPrimary)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+            .padding(.horizontal, 16)
+            .onTapGesture {
+                if truncation.isTruncated {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isTextExpanded.toggle()
+                    }
+                }
+            }
 
             // Inline secondary translation panel
             if let content = secondaryContent, let code = secondaryLangCode {
@@ -361,119 +415,118 @@ struct PostDetailView: View {
                 .padding(.top, 6)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+        }
+    }
 
-            // Media
-            if post.hasMedia {
-                detailMediaSection(post.media)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-            }
+    // MARK: - Repost Embed
 
-            // Repost embed
-            if let repost = post.repost {
-                Button {
-                    HapticFeedback.light()
-                    router.push(.postDetail(repost.id))
-                } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 6) {
-                            MeeshyAvatar(
-                                name: repost.author,
-                                context: .postComment,
-                                accentColor: repost.authorColor,
-                                avatarURL: repost.authorAvatarURL
-                            )
-                            Text(repost.author)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(theme.accentText(repost.authorColor))
-                            Text("·").foregroundColor(theme.textMuted)
-                            Text(repost.timestamp, style: .relative)
-                                .font(.system(size: 10))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        Text(repost.content)
-                            .font(.system(size: 13))
-                            .foregroundColor(theme.textSecondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                    }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(theme.surfaceGradient(tint: repost.authorColor))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(theme.border(tint: repost.authorColor, intensity: 0.2), lineWidth: 1)
-                            )
+    @ViewBuilder
+    private func repostEmbed(_ repost: RepostContent) -> some View {
+        Button {
+            HapticFeedback.light()
+            router.push(.postDetail(repost.id))
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    MeeshyAvatar(
+                        name: repost.author,
+                        context: .postComment,
+                        accentColor: repost.authorColor,
+                        avatarURL: repost.authorAvatarURL
                     )
-                }
-                .buttonStyle(PlainButtonStyle())
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-            }
-
-            // Actions bar
-            HStack(spacing: 0) {
-                Button {
-                    Task { await viewModel.likePost() }
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                        likeScale = 1.3
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            likeScale = 1.0
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        let heartColor: Color = post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textSecondary)
-                        Image(systemName: post.isLiked || post.likes > 0 ? "heart.fill" : "heart")
-                            .font(.system(size: 18))
-                            .foregroundColor(heartColor)
-                            .scaleEffect(likeScale)
-                        Text("\(post.likes)")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textMuted))
-                    }
-                }
-
-                Spacer()
-
-                HStack(spacing: 5) {
-                    Image(systemName: "bubble.right")
-                        .font(.system(size: 17))
-                        .foregroundColor(Color(hex: accentColor))
-                    Text("\(post.commentCount)")
-                        .font(.system(size: 12, weight: .medium))
+                    Text(repost.author)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.accentText(repost.authorColor))
+                    Text("·").foregroundColor(theme.textMuted)
+                    Text(repost.timestamp, style: .relative)
+                        .font(.system(size: 10))
                         .foregroundColor(theme.textMuted)
                 }
+                Text(repost.content)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(theme.surfaceGradient(tint: repost.authorColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(theme.border(tint: repost.authorColor, intensity: 0.2), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
 
-                Spacer()
+    // MARK: - Actions Bar
 
-                Button {
-                    Task { await viewModel.bookmarkPost() }
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "bookmark")
-                        .font(.system(size: 17))
-                        .foregroundColor(theme.textSecondary)
+    @ViewBuilder
+    private func actionsBar(_ post: FeedPost) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                Task { await viewModel.likePost() }
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                    likeScale = 1.3
                 }
-
-                Spacer()
-
-                Button {
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 17))
-                        .foregroundColor(theme.textSecondary)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        likeScale = 1.0
+                    }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    let heartColor: Color = post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textSecondary)
+                    Image(systemName: post.isLiked || post.likes > 0 ? "heart.fill" : "heart")
+                        .font(.system(size: 18))
+                        .foregroundColor(heartColor)
+                        .scaleEffect(likeScale)
+                    Text("\(post.likes)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textMuted))
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
+
+            Spacer()
+
+            HStack(spacing: 5) {
+                Image(systemName: "bubble.right")
+                    .font(.system(size: 17))
+                    .foregroundColor(Color(hex: accentColor))
+                Text("\(post.commentCount)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+            }
+
+            Spacer()
+
+            Button {
+                Task { await viewModel.bookmarkPost() }
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: "bookmark")
+                    .font(.system(size: 17))
+                    .foregroundColor(theme.textSecondary)
+            }
+
+            Spacer()
+
+            Button {
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 17))
+                    .foregroundColor(theme.textSecondary)
+            }
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
     }
 
     // MARK: - Media Views
@@ -514,21 +567,18 @@ struct PostDetailView: View {
     private func detailSingleMedia(_ media: FeedMedia) -> some View {
         switch media.type {
         case .image:
-            let urlStr = media.url ?? media.thumbnailUrl ?? ""
-            Group {
-                if !urlStr.isEmpty {
-                    CachedAsyncImage(url: urlStr) {
-                        Color(hex: media.thumbnailColor).shimmer()
-                    }
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: 300)
-                } else {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: media.thumbnailColor))
-                        .frame(height: 200)
-                        .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
-                }
+            let aspectRatio: CGFloat? = {
+                guard let w = media.width, let h = media.height, w > 0, h > 0 else { return nil }
+                return CGFloat(w) / CGFloat(h)
+            }()
+            ProgressiveCachedImage(
+                thumbnailUrl: media.thumbnailUrl,
+                fullUrl: media.url
+            ) {
+                Color(hex: media.thumbnailColor).shimmer()
             }
+            .aspectRatio(aspectRatio, contentMode: .fit)
+            .frame(maxWidth: .infinity, maxHeight: 400)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .onTapGesture { openMediaFullscreen(media) }
 
@@ -538,7 +588,7 @@ struct PostDetailView: View {
                 accentColor: accentColor,
                 onExpandFullscreen: { openMediaFullscreen(media) }
             )
-            .frame(maxWidth: .infinity, maxHeight: 300)
+            .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
         case .audio:
@@ -672,18 +722,16 @@ struct PostDetailView: View {
     }
 
     private func detailGridCell(_ media: FeedMedia) -> some View {
-        let thumbUrl = media.thumbnailUrl ?? media.url ?? ""
         return ZStack {
-            if !thumbUrl.isEmpty {
-                CachedAsyncImage(url: thumbUrl) {
-                    Color(hex: media.thumbnailColor).shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                .clipped()
-            } else {
-                Color(hex: media.thumbnailColor)
+            ProgressiveCachedImage(
+                thumbnailUrl: media.thumbnailUrl,
+                fullUrl: media.url
+            ) {
+                Color(hex: media.thumbnailColor).shimmer()
             }
+            .aspectRatio(contentMode: .fill)
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+            .clipped()
 
             if media.type == .video {
                 ZStack {
@@ -782,22 +830,29 @@ struct PostDetailView: View {
     private var composer: some View {
         UniversalComposerBar(
             style: .light,
-            placeholder: "Ajouter un commentaire...",
+            mode: .comment,
             accentColor: accentColor,
-            showVoice: false,
-            showLocation: false,
-            showAttachment: false,
-            showEmoji: true,
+            selectedLanguage: composerLanguage,
+            onLanguageChange: { composerLanguage = $0 },
             onSend: { text in
+                let effects = commentEffects
+                let blur = commentBlurEnabled
+                commentEffects = .none
+                commentBlurEnabled = false
                 Task {
+                    let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+                    let effectFlags = flags > 0 ? Int(flags) : nil
                     if viewModel.replyingTo != nil {
-                        await viewModel.sendReply(text)
+                        await viewModel.sendReply(text, effectFlags: effectFlags)
                     } else {
-                        await viewModel.sendComment(text)
+                        await viewModel.sendComment(text, effectFlags: effectFlags)
                     }
                 }
             },
-            replyBanner: replyBannerView
+            replyBanner: replyBannerView,
+            isBlurEnabled: $commentBlurEnabled,
+            pendingEffects: $commentEffects,
+            focusTrigger: $composerFocusTrigger
         )
     }
 }

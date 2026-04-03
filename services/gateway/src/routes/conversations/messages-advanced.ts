@@ -4,6 +4,7 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { conversationStatsService } from '../../services/ConversationStatsService';
+import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -453,6 +454,10 @@ export function registerMessagesAdvancedRoutes(
         () => []
       );
 
+      conversationMessageStatsService.onMessageEdited(
+        prisma, conversationId, userId, existingMessage.content ?? '', processedContent
+      ).catch(err => logger.error('[MESSAGES] Stats edit update error:', err));
+
       // Construire la réponse avec mentions validées (PAS de traductions - elles arriveront via socket)
       const messageResponse = {
         ...updatedMessage,
@@ -545,7 +550,7 @@ export function registerMessagesAdvancedRoutes(
             select: { id: true, userId: true }
           },
           attachments: {
-            select: { id: true }
+            select: { id: true, mimeType: true }
           }
         }
       });
@@ -608,6 +613,17 @@ export function registerMessagesAdvancedRoutes(
           deletedAt: new Date()
         }
       });
+
+      conversationMessageStatsService.onMessageDeleted(
+        prisma, conversationId, existingMessage.sender?.userId ?? '', existingMessage.content ?? '',
+        (existingMessage.attachments ?? []).map(a => {
+          const mime = a.mimeType ?? '';
+          if (mime.startsWith('image/')) return 'image';
+          if (mime.startsWith('audio/')) return 'audio';
+          if (mime.startsWith('video/')) return 'video';
+          return 'file';
+        })
+      ).catch(err => logger.error('[MESSAGES] Stats delete update error:', err));
 
       // Invalider et recalculer les stats
       const stats = await conversationStatsService.getOrCompute(

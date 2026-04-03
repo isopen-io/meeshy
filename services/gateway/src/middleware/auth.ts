@@ -9,6 +9,8 @@ import { PermissionDeniedError } from '../errors/custom-errors';
 import { getCacheStore } from '../services/CacheStore';
 
 const AUTH_USER_CACHE_TTL = 300; // 5 minutes
+const expiredJwtLoggedTokens = new Map<string, number>(); // token prefix -> last log timestamp
+const EXPIRED_JWT_LOG_INTERVAL = 60_000; // Log same expired token at most once per minute
 
 // ===== TYPES =====
 
@@ -239,7 +241,19 @@ export class AuthMiddleware {
 
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
-        console.warn('[UnifiedAuth] JWT expired:', new Date(error.expiredAt).toISOString());
+        const tokenPrefix = jwtToken.slice(-8);
+        const now = Date.now();
+        const lastLogged = expiredJwtLoggedTokens.get(tokenPrefix) ?? 0;
+        if (now - lastLogged > EXPIRED_JWT_LOG_INTERVAL) {
+          console.warn('[UnifiedAuth] JWT expired:', new Date(error.expiredAt).toISOString(), `(token ...${tokenPrefix})`);
+          expiredJwtLoggedTokens.set(tokenPrefix, now);
+          // Prevent memory leak: clean old entries
+          if (expiredJwtLoggedTokens.size > 100) {
+            for (const [key, ts] of expiredJwtLoggedTokens) {
+              if (now - ts > EXPIRED_JWT_LOG_INTERVAL * 10) expiredJwtLoggedTokens.delete(key);
+            }
+          }
+        }
       } else if (error instanceof jwt.JsonWebTokenError) {
         console.warn('[UnifiedAuth] JWT invalid:', error.message);
       } else {

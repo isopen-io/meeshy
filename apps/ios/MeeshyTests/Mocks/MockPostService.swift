@@ -130,7 +130,7 @@ final class MockPostService: PostServiceProviding {
         try bookmarkResult.get()
     }
 
-    func addComment(postId: String, content: String, parentId: String?) async throws -> APIPostComment {
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int? = nil) async throws -> APIPostComment {
         addCommentCallCount += 1
         lastAddCommentPostId = postId
         lastAddCommentContent = content

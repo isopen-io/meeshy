@@ -30,7 +30,7 @@ struct LinksHubView: View {
                     }
                     .frame(height: 0)
 
-                    Color.clear.frame(height: CollapsibleHeader<EmptyView>.expandedHeight)
+                    Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
                     VStack(spacing: 20) {
                         headerBanner

@@ -79,6 +79,8 @@ public struct APIConversationPreferences: Decodable, Sendable {
     public let tags: [String]?
     public let categoryId: String?
     public let reaction: String?
+    public let customName: String?
+    public let mentionsOnly: Bool?
 }
 
 public struct APIConversation: Decodable, Sendable {
@@ -93,6 +95,9 @@ public struct APIConversation: Decodable, Sendable {
     public let isActive: Bool?
     public let memberCount: Int?
     public let isAnnouncementChannel: Bool?
+    public let defaultWriteRole: String?
+    public let slowModeSeconds: Int?
+    public let autoTranslateEnabled: Bool?
     public let lastMessageAt: Date?
     public let participants: [APIParticipant]?
     public let lastMessage: APIConversationLastMessage?
@@ -198,6 +203,9 @@ extension APIConversation {
             lastMessageExpiresAt: lastMessage?.expiresAt,
             recentMessages: recentPreviews,
             tags: tags, isAnnouncementChannel: isAnnouncementChannel ?? false,
+            defaultWriteRole: defaultWriteRole,
+            slowModeSeconds: slowModeSeconds,
+            autoTranslateEnabled: autoTranslateEnabled,
             isPinned: prefs?.isPinned ?? false,
             sectionId: prefs?.categoryId,
             isMuted: prefs?.isMuted ?? false,

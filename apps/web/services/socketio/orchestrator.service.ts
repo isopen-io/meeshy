@@ -274,7 +274,7 @@ export class SocketIOOrchestrator {
     const socket = this.connectionService.getSocket();
     const status = this.connectionService.getConnectionStatus();
 
-    if (socket && (status.isConnected || socket.connected)) {
+    if (socket && (status === 'connected' || socket.connected)) {
       return;
     }
 

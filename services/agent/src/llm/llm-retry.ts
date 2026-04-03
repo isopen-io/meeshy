@@ -19,6 +19,7 @@ function sleep(ms: number): Promise<void> {
 function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
+    if (msg.includes('insufficient_quota') || msg.includes('billing') || msg.includes('exceeded your current quota')) return false;
     if (msg.includes('rate limit') || msg.includes('429') || msg.includes('too many requests')) return true;
     if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('econnreset')) return true;
     if (msg.includes('502') || msg.includes('503') || msg.includes('504')) return true;

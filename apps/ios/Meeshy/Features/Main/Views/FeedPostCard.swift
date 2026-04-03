@@ -43,6 +43,13 @@ struct FeedPostCard: View {
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
 
+    private var truncatedContent: (text: String, isTruncated: Bool) {
+        let words = effectiveContent.split(separator: " ", omittingEmptySubsequences: true)
+        if words.count <= 20 { return (effectiveContent, false) }
+        let truncated = words.prefix(20).joined(separator: " ")
+        return (truncated, true)
+    }
+
     // MARK: - Prisme Linguistique
 
     private var currentDisplayLangCode: String {
@@ -116,11 +123,18 @@ struct FeedPostCard: View {
                     // Author header
                     authorHeader
 
-                    // Post content (Prisme Linguistique)
-                    Text(effectiveContent)
+                    // Post content (truncated for feed — Prisme Linguistique)
+                    let truncation = truncatedContent
+                    (Text(truncation.text)
                         .font(.system(size: 15))
                         .foregroundColor(theme.textPrimary)
-                        .lineLimit(nil)
+                    + (truncation.isTruncated
+                        ? Text("... ").font(.system(size: 15)).foregroundColor(theme.textPrimary)
+                          + Text("voir plus").font(.system(size: 15, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                        : Text("")
+                    ))
+                    .lineLimit(nil)
 
                     // Inline secondary translation panel
                     if let content = secondaryContent, let code = secondaryLangCode {

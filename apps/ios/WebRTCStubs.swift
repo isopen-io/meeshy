@@ -58,7 +58,6 @@ class RTCCameraVideoCapturer {
     }
 
     static func captureDevices() -> [AVCaptureDevice] {
-        var devices: [AVCaptureDevice] = []
         let discoverySession = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.builtInWideAngleCamera],
             mediaType: .video,

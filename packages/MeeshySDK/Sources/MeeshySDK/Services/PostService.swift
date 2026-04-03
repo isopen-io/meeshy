@@ -10,7 +10,7 @@ public protocol PostServiceProviding: Sendable {
     func like(postId: String) async throws
     func unlike(postId: String) async throws
     func bookmark(postId: String) async throws
-    func addComment(postId: String, content: String, parentId: String?) async throws -> APIPostComment
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
     func repost(postId: String, quote: String?) async throws
     func share(postId: String) async throws
@@ -60,8 +60,8 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/bookmark", method: "POST")
     }
 
-    public func addComment(postId: String, content: String, parentId: String? = nil) async throws -> APIPostComment {
-        let body = CreateCommentRequest(content: content, parentId: parentId)
+    public func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
+        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags)
         let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
         return response.data
     }

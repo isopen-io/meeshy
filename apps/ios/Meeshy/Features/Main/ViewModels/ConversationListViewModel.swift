@@ -251,6 +251,44 @@ class ConversationListViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        messageSocket.conversationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let index = self.convIndex(for: event.conversationId) else { return }
+                if let title = event.title { self.conversations[index].title = title }
+                if let description = event.description { self.conversations[index].description = description }
+                if let avatar = event.avatar { self.conversations[index].avatar = avatar }
+                if let banner = event.banner { self.conversations[index].banner = banner }
+                if let isAnnouncement = event.isAnnouncementChannel {
+                    self.conversations[index].isAnnouncementChannel = isAnnouncement
+                }
+            }
+            .store(in: &cancellables)
+
+        messageSocket.participantSelfLeft
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let index = self.convIndex(for: event.conversationId) else { return }
+                self.conversations[index].memberCount -= 1
+            }
+            .store(in: &cancellables)
+
+        messageSocket.participantBanned
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let index = self.convIndex(for: event.conversationId) else { return }
+                self.conversations[index].memberCount -= 1
+            }
+            .store(in: &cancellables)
+
+        messageSocket.participantUnbanned
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let index = self.convIndex(for: event.conversationId) else { return }
+                self.conversations[index].memberCount += 1
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Typing Cleanup

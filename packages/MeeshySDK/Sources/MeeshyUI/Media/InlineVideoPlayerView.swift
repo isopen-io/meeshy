@@ -9,7 +9,7 @@ private struct AVPlayerLayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PlayerUIView {
         let view = PlayerUIView()
-        view.playerLayer.videoGravity = .resizeAspectFill
+        view.playerLayer.videoGravity = .resizeAspect
         view.playerLayer.player = player
         return view
     }
@@ -55,6 +55,13 @@ public struct InlineVideoPlayerView: View {
 
     private var isThisPlayerActive: Bool {
         isActive && manager.activeURL == attachment.fileUrl
+    }
+
+    private var videoAspectRatio: CGFloat {
+        guard let w = attachment.width, let h = attachment.height, w > 0, h > 0 else {
+            return 16.0 / 9.0
+        }
+        return CGFloat(w) / CGFloat(h)
     }
 
     public init(
@@ -103,6 +110,9 @@ public struct InlineVideoPlayerView: View {
                 playButton
             }
         }
+        .aspectRatio(videoAspectRatio, contentMode: .fit)
+        .frame(maxHeight: 400)
+        .background(Color.black)
         .clipped()
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.2), value: showControls)
@@ -119,9 +129,7 @@ public struct InlineVideoPlayerView: View {
             CachedAsyncImage(url: thumbUrl) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }
-            .aspectRatio(contentMode: .fill)
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-            .clipped()
+            .aspectRatio(contentMode: .fit)
         } else if !attachment.fileUrl.isEmpty {
             VideoThumbnailView(
                 videoUrlString: attachment.fileUrl,

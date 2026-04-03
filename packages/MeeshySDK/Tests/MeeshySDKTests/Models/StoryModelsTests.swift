@@ -321,4 +321,66 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(sticker.scale, 1.0)
         XCTAssertEqual(sticker.rotation, 0)
     }
+
+    // MARK: - StoryBackgroundTransform
+
+    func testBackgroundTransformInitDefaults() {
+        let bt = StoryBackgroundTransform()
+        XCTAssertNil(bt.scale)
+        XCTAssertNil(bt.offsetX)
+        XCTAssertNil(bt.offsetY)
+        XCTAssertNil(bt.rotation)
+        XCTAssertTrue(bt.isIdentity)
+    }
+
+    func testBackgroundTransformIsIdentity() {
+        let identity = StoryBackgroundTransform(scale: 1.0, offsetX: 0, offsetY: 0, rotation: 0)
+        XCTAssertTrue(identity.isIdentity)
+
+        let nonIdentity = StoryBackgroundTransform(scale: 1.5, offsetX: 10, offsetY: -5, rotation: 45)
+        XCTAssertFalse(nonIdentity.isIdentity)
+    }
+
+    func testBackgroundTransformCodableRoundtrip() throws {
+        let original = StoryBackgroundTransform(scale: 2.0, offsetX: 15.5, offsetY: -30, rotation: 90)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(StoryBackgroundTransform.self, from: data)
+        XCTAssertEqual(decoded.scale, 2.0)
+        XCTAssertEqual(decoded.offsetX, 15.5)
+        XCTAssertEqual(decoded.offsetY, -30)
+        XCTAssertEqual(decoded.rotation, 90)
+    }
+
+    func testBackgroundTransformDecodesWithMissingFields() throws {
+        let json = "{}".data(using: .utf8)!
+        let bt = try JSONDecoder().decode(StoryBackgroundTransform.self, from: json)
+        XCTAssertNil(bt.scale)
+        XCTAssertNil(bt.offsetX)
+        XCTAssertNil(bt.offsetY)
+        XCTAssertNil(bt.rotation)
+    }
+
+    func testStoryEffectsWithBackgroundTransformRoundtrip() throws {
+        let bt = StoryBackgroundTransform(scale: 1.5, offsetX: 20, offsetY: -10, rotation: 30)
+        let effects = StoryEffects(background: "FF0000", backgroundTransform: bt)
+        let data = try JSONEncoder().encode(effects)
+        let decoded = try JSONDecoder().decode(StoryEffects.self, from: data)
+        XCTAssertNotNil(decoded.backgroundTransform)
+        XCTAssertEqual(decoded.backgroundTransform?.scale, 1.5)
+        XCTAssertEqual(decoded.backgroundTransform?.offsetX, 20)
+        XCTAssertEqual(decoded.backgroundTransform?.offsetY, -10)
+        XCTAssertEqual(decoded.backgroundTransform?.rotation, 30)
+    }
+
+    func testStoryEffectsWithNilBackgroundTransformRoundtrip() throws {
+        let effects = StoryEffects(background: "000000")
+        let data = try JSONEncoder().encode(effects)
+        let decoded = try JSONDecoder().decode(StoryEffects.self, from: data)
+        XCTAssertNil(decoded.backgroundTransform)
+    }
+
+    func testStoryEffectsInitIncludesBackgroundTransform() {
+        let effects = StoryEffects()
+        XCTAssertNil(effects.backgroundTransform)
+    }
 }

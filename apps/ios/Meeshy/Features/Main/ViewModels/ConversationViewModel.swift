@@ -123,6 +123,7 @@ class ConversationViewModel: ObservableObject {
 
     @Published var mentionSuggestions: [MentionCandidate] = []
     @Published var activeMentionQuery: String? = nil
+    private(set) var draftMentions: [String: MentionCandidate] = [:]
 
     // MARK: - Search State
 
@@ -333,11 +334,8 @@ class ConversationViewModel: ObservableObject {
 
     var mentionDisplayNames: [String: String] {
         if let cached = _mentionDisplayNames { return cached }
-        var map: [String: String] = [:]
-        for msg in messages {
-            guard let username = msg.senderUsername, let displayName = msg.senderName else { continue }
-            map[username] = displayName
-        }
+        UserDisplayNameCache.shared.trackFromMessages(messages)
+        let map = UserDisplayNameCache.shared.allMappings()
         _mentionDisplayNames = map
         return map
     }
@@ -413,6 +411,7 @@ class ConversationViewModel: ObservableObject {
     }
 
     private func mergeAPISuggestions(_ apiResults: [MentionSuggestion], localCandidates: [MentionCandidate]) -> [MentionCandidate] {
+        UserDisplayNameCache.shared.trackFromMentionSuggestions(apiResults)
         var seen = Set<String>()
         var merged: [MentionCandidate] = []
         for s in apiResults {
@@ -440,20 +439,17 @@ class ConversationViewModel: ObservableObject {
         activeMentionQuery = nil
     }
 
-    /// Replaces the active `@query` at the end of `text` with `@DisplayName ` or `@username `.
-    /// Returns the new text string.
+    /// Replaces the active `@query` at the end of `text` with `@username `.
+    /// Always inserts `@username` so the server regex `/@(\w{1,30})/g` reliably matches.
+    /// `MessageTextRenderer` resolves `@username` → display name for rendering.
     func insertMention(_ candidate: MentionCandidate, into text: String) -> String {
-        let insertText: String
-        if candidate.displayName != candidate.username {
-            insertText = "@\(candidate.displayName) "
-        } else {
-            insertText = "@\(candidate.username) "
-        }
+        let insertText = "@\(candidate.username) "
 
         guard let atRange = text.range(of: "@", options: .backwards) else {
             return text + insertText
         }
         let newText = text[..<atRange.lowerBound] + insertText
+        draftMentions[candidate.username] = candidate
         clearMentionSuggestions()
         return String(newText)
     }
@@ -910,6 +906,7 @@ class ConversationViewModel: ObservableObject {
             if pendingEffects.hasAnyEffect {
                 pendingEffects = .none
             }
+            draftMentions.removeAll()
             isSending = false
             return true
         } catch {

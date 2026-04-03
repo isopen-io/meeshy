@@ -191,7 +191,7 @@ struct ProfileView: View {
             }
             .frame(height: 0)
 
-            Color.clear.frame(height: CollapsibleHeader<EmptyView>.expandedHeight)
+            Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
             VStack(spacing: 24) {
                 bannerAndAvatarSection
@@ -766,7 +766,7 @@ struct ProfileView: View {
         isUploadingAvatar = true
         Task {
             do {
-                let compressed = compressImage(image, maxSizeKB: 500)
+                let compressed = ImageCompressor.compress(image, maxSizeKB: 500)
                 let uploadedURL = try await UserService.shared.uploadImage(compressed, filename: "avatar.jpg")
                 let updatedUser = try await UserService.shared.updateAvatar(url: uploadedURL)
                 authManager.currentUser = updatedUser
@@ -786,7 +786,7 @@ struct ProfileView: View {
         isUploadingBanner = true
         Task {
             do {
-                let compressed = compressImage(image, maxSizeKB: 800)
+                let compressed = ImageCompressor.compress(image, maxSizeKB: 800)
                 let uploadedURL = try await UserService.shared.uploadImage(compressed, filename: "banner.jpg")
                 let updatedUser = try await UserService.shared.updateBanner(url: uploadedURL)
                 authManager.currentUser = updatedUser
@@ -802,15 +802,6 @@ struct ProfileView: View {
         }
     }
 
-    private func compressImage(_ image: UIImage, maxSizeKB: Int) -> Data {
-        var compression: CGFloat = 0.8
-        var compressed = image.jpegData(compressionQuality: compression) ?? Data()
-        while compressed.count > maxSizeKB * 1024, compression > 0.1 {
-            compression -= 0.1
-            compressed = image.jpegData(compressionQuality: compression) ?? Data()
-        }
-        return compressed
-    }
 
     private func parseAndFormatDate(_ dateString: String) -> String? {
         let iso = ISO8601DateFormatter()
@@ -823,8 +814,3 @@ struct ProfileView: View {
     }
 }
 
-// MARK: - UIImage + Identifiable (for fullScreenCover)
-
-extension UIImage: @retroactive Identifiable {
-    public var id: ObjectIdentifier { ObjectIdentifier(self) }
-}

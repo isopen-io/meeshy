@@ -1,3 +1,4 @@
+@preconcurrency import AVFAudio
 import AVFoundation
 import os
 
@@ -126,7 +127,7 @@ final class MeeshyAudioProcessingModule: NSObject {
 
 // MARK: - RTCAudioCustomProcessingDelegate
 
-#if canImport(WebRTC)
+#if false // RTCAudioCustomProcessingDelegate requires a custom WebRTC build
 extension MeeshyAudioProcessingModule: RTCAudioCustomProcessingDelegate {
     func audioProcessingInitialize(sampleRate sampleRateHz: Int, channels: Int) {
         self.sampleRate = sampleRateHz

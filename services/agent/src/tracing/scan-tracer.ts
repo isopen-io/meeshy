@@ -91,6 +91,10 @@ export class ScanTracer {
     this._configChangedAt = date;
   }
 
+  getNodeExtra(name: NodeName): Record<string, unknown> | undefined {
+    return this.nodes[name]?.extra;
+  }
+
   finalize(): ScanLogData {
     const now = Date.now();
     let totalInput = 0;

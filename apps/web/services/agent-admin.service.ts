@@ -175,6 +175,8 @@ export type AgentGlobalConfigUpsert = {
   eligibleConversationTypes?: string[];
   messageFreshnessHours?: number;
   maxConversationsPerCycle?: number;
+  weekdayMaxConversations?: number;
+  weekendMaxConversations?: number;
 };
 
 export type AgentRoleData = {

@@ -22,12 +22,13 @@ import { rolesRoutes } from './routes/roles';
 import { analyticsRoutes } from './routes/analytics';
 import { deliveryRoutes } from './routes/delivery';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
+import { startDailySnapshotCron } from './cron/daily-snapshot';
 
 const server = Fastify({ logger: true });
 const prisma = new PrismaClient();
 const redis = new Redis(env.REDIS_URL);
 
-server.get('/health', async () => ({
+server.get('/health', { logLevel: 'warn' }, async () => ({
   status: 'ok',
   service: 'agent',
   uptime: process.uptime(),
@@ -44,15 +45,35 @@ server.register((instance) => configRoutes(instance, prisma));
 server.register((instance) => rolesRoutes(instance, prisma));
 
 async function start() {
-  const apiKey = env.LLM_PROVIDER === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error(`Missing API key for LLM provider "${env.LLM_PROVIDER}". Set ${env.LLM_PROVIDER === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'} env var.`);
+  const globalConfig = await prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+
+  const primaryProvider = (globalConfig?.defaultProvider as 'openai' | 'anthropic' | null) ?? env.LLM_PROVIDER;
+  const primaryModel = (globalConfig?.defaultModel as string | null)
+    ?? (primaryProvider === 'openai' ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL);
+  const primaryKey = primaryProvider === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY;
+
+  if (!primaryKey) {
+    throw new Error(`Missing API key for LLM provider "${primaryProvider}". Set ${primaryProvider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'} env var.`);
   }
-  const llm = createLlmProvider({
-    provider: env.LLM_PROVIDER,
-    apiKey,
-    model: env.LLM_PROVIDER === 'openai' ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL,
-  });
+
+  const primary = createLlmProvider({ provider: primaryProvider, apiKey: primaryKey, model: primaryModel });
+
+  const fallbackProviderName = (globalConfig?.fallbackProvider as 'openai' | 'anthropic' | null)
+    ?? (primaryProvider === 'openai' ? 'anthropic' : 'openai');
+  const fallbackKey = fallbackProviderName === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY;
+  const fallbackModel = (globalConfig?.fallbackModel as string | null)
+    ?? (fallbackProviderName === 'openai' ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL);
+
+  let llm: ReturnType<typeof createLlmProvider>;
+  if (fallbackKey && fallbackProviderName !== primaryProvider) {
+    const { withFallback } = await import('./llm/llm-fallback');
+    const fallback = createLlmProvider({ provider: fallbackProviderName, apiKey: fallbackKey, model: fallbackModel });
+    llm = withFallback(primary, fallback);
+    server.log.info(`[LLM] Primary: ${primaryProvider}/${primaryModel} | Fallback: ${fallbackProviderName}/${fallbackModel}`);
+  } else {
+    llm = primary;
+    server.log.info(`[LLM] Provider: ${primaryProvider}/${primaryModel} (no fallback configured)`);
+  }
 
   const tracerRef: TracerRef = { current: null };
   const graph = buildAgentGraph(llm, tracerRef);
@@ -181,8 +202,9 @@ async function start() {
 
   scanner.start();
 
+  const snapshotInterval = startDailySnapshotCron(prisma);
+
   // STARTUP SUMMARY LOGGING
-  // List conversations being monitored and their controlled users
   try {
     const globalConfig = await configCache.getGlobalConfig();
     const scanOptions = {
@@ -191,11 +213,6 @@ async function start() {
     };
     const eligible = await findEligibleConversations(persistence, scanOptions);
     server.log.info(`[Startup] Monitoring ${eligible.length} eligible conversations`);
-
-    for (const conv of eligible) {
-      const controlled = await persistence.getControlledUsers(conv.conversationId);
-      server.log.info(`[Startup] Conversation: ${conv.title || conv.conversationId} (${conv.conversationId}) | Controlled Users: ${controlled.length}`);
-    }
   } catch (err) {
     server.log.error({ err }, '[Startup] Failed to log monitoring summary');
   }
@@ -206,6 +223,7 @@ async function start() {
   const shutdown = async () => {
     server.log.info('Shutting down agent service...');
     scanner.stop();
+    clearInterval(snapshotInterval);
     deliveryQueue.clearAll();
     await configCache.stopListening();
     await zmqListener.close();

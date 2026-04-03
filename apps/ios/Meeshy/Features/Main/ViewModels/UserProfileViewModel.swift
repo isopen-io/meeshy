@@ -21,7 +21,11 @@ final class UserProfileViewModel: ObservableObject {
 
     var isCurrentUser: Bool {
         guard let currentId = authManager.currentUser?.id else { return false }
-        return profileUser.userId == currentId
+        if profileUser.userId == currentId { return true }
+        if let currentUsername = authManager.currentUser?.username {
+            return profileUser.username == currentUsername
+        }
+        return false
     }
 
     init(
@@ -35,36 +39,51 @@ final class UserProfileViewModel: ObservableObject {
         self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager)
     }
 
-    func loadFullProfile() async {
-        guard let userId = profileUser.userId, !isCurrentUser else { return }
+    private var resolvedIdentifier: String? {
+        profileUser.userId ?? (profileUser.username.isEmpty ? nil : profileUser.username)
+    }
 
-        let cached = await CacheCoordinator.shared.profiles.load(for: userId)
+    func loadFullProfile() async {
+        guard let identifier = resolvedIdentifier, !isCurrentUser else { return }
+
+        let cached = await CacheCoordinator.shared.profiles.load(for: identifier)
         switch cached {
         case .fresh(let data, _):
             fullUser = data.first
+            hydrateProfileUserIfNeeded(from: data.first)
             return
         case .stale(let data, _):
             fullUser = data.first
-            await refreshProfile(userId: userId)
+            hydrateProfileUserIfNeeded(from: data.first)
+            await refreshProfile(idOrUsername: identifier)
         case .expired, .empty:
             isLoading = fullUser == nil
-            await refreshProfile(userId: userId)
+            await refreshProfile(idOrUsername: identifier)
         }
     }
 
-    private func refreshProfile(userId: String) async {
+    private func refreshProfile(idOrUsername: String) async {
         defer { isLoading = false }
         do {
-            let user = try await UserService.shared.getProfile(idOrUsername: userId)
-            await CacheCoordinator.shared.profiles.save([user], for: userId)
+            let user = try await UserService.shared.getProfile(idOrUsername: idOrUsername)
+            let cacheKey = user.id
+            await CacheCoordinator.shared.profiles.save([user], for: cacheKey)
             fullUser = user
+            hydrateProfileUserIfNeeded(from: user)
         } catch let APIError.serverError(code, _) where code == 403 {
             isBlockedByTarget = true
         } catch {}
     }
 
+    private func hydrateProfileUserIfNeeded(from user: MeeshyUser?) {
+        guard let user else { return }
+        UserDisplayNameCache.shared.trackFromUser(user)
+        guard profileUser.userId == nil else { return }
+        profileUser = ProfileSheetUser.from(user: user, accentColor: profileUser.accentColor)
+    }
+
     func loadUserStats() async {
-        guard let userId = profileUser.userId else { return }
+        guard let userId = profileUser.userId ?? fullUser?.id else { return }
         statsError = nil
 
         let cached = await CacheCoordinator.shared.stats.load(for: userId)
@@ -93,14 +112,14 @@ final class UserProfileViewModel: ObservableObject {
     }
 
     func findSharedConversations(from allConversations: [Conversation]) {
-        guard let targetId = profileUser.userId else { return }
+        guard let targetId = profileUser.userId ?? fullUser?.id else { return }
         sharedConversations = allConversations.filter { conv in
             conv.type == .direct && conv.participantUserId == targetId
         }
     }
 
     func blockUser() async {
-        guard let userId = profileUser.userId else { return }
+        guard let userId = profileUser.userId ?? fullUser?.id else { return }
         do {
             try await blockService.blockUser(userId: userId)
             isBlocked = true
@@ -108,7 +127,7 @@ final class UserProfileViewModel: ObservableObject {
     }
 
     func unblockUser() async {
-        guard let userId = profileUser.userId else { return }
+        guard let userId = profileUser.userId ?? fullUser?.id else { return }
         do {
             try await blockService.unblockUser(userId: userId)
             isBlocked = false

@@ -66,8 +66,7 @@ public struct StoryComposerView: View {
     // MARK: - Photo / media pickers
 
     @State private var bgPhotoItem: PhotosPickerItem?
-    @State private var fgPhotoItem: PhotosPickerItem?
-    @State private var fgVideoItem: PhotosPickerItem?
+    @State private var fgMediaItem: PhotosPickerItem?
 
     // MARK: - Media editor (triggered by edit button on canvas elements)
 
@@ -259,8 +258,7 @@ public struct StoryComposerView: View {
             publishTask = nil
         }
         .onChange(of: bgPhotoItem) { _, item in loadBackgroundPhoto(from: item) }
-        .onChange(of: fgPhotoItem) { _, item in addForegroundMedia(from: item, type: "image") }
-        .onChange(of: fgVideoItem) { _, item in addForegroundMedia(from: item, type: "video") }
+        .onChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
         .fileImporter(isPresented: $showAudioDocumentPicker, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first {
                 mediaAudioEditorItem = AudioEditorItemWrapper(url: url)
@@ -737,23 +735,16 @@ public struct StoryComposerView: View {
     private var mediaPanel: some View {
         VStack(spacing: 8) {
             HStack(spacing: 10) {
-                PhotosPicker(selection: $fgPhotoItem, matching: .images) {
+                PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
                     HStack(spacing: 6) {
-                        Image(systemName: "photo.badge.plus").font(.system(size: 14, weight: .medium))
-                        Text(String(localized: "story.composer.image", defaultValue: "Image", bundle: .module)).font(.system(size: 13, weight: .medium))
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(String(localized: "story.composer.media", defaultValue: "Media", bundle: .module))
+                            .font(.system(size: 13, weight: .medium))
                     }
                     .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 11)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
-                }
-
-                PhotosPicker(selection: $fgVideoItem, matching: .videos) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "video.badge.plus").font(.system(size: 14, weight: .medium))
-                        Text(String(localized: "story.composer.video", defaultValue: "Video", bundle: .module)).font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 11)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
                     .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
                 }
             }
@@ -1015,10 +1006,25 @@ public struct StoryComposerView: View {
             drawingCanvas.drawing = drawing
         }
         viewModel.drawingData = e.drawingData
+        if let bt = e.backgroundTransform {
+            viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
+                scale: bt.scale ?? 1.0, offsetX: bt.offsetX ?? 0,
+                offsetY: bt.offsetY ?? 0, rotation: bt.rotation ?? 0
+            )
+        } else {
+            viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform()
+        }
     }
 
     private func buildEffects() -> StoryEffects {
         let bgHex = selectedImage != nil ? nil : viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")
+        let bt = viewModel.backgroundTransform
+        let bgTransform = StoryBackgroundTransform(
+            scale: bt.scale != 1.0 ? bt.scale : nil,
+            offsetX: bt.offsetX != 0 ? bt.offsetX : nil,
+            offsetY: bt.offsetY != 0 ? bt.offsetY : nil,
+            rotation: bt.rotation != 0 ? bt.rotation : nil
+        )
         return StoryEffects(
             background: bgHex,
             filter: selectedFilter?.rawValue,
@@ -1034,6 +1040,7 @@ public struct StoryComposerView: View {
             textObjects: viewModel.currentEffects.textObjects,
             mediaObjects: viewModel.currentEffects.mediaObjects,
             audioPlayerObjects: viewModel.currentEffects.audioPlayerObjects,
+            backgroundTransform: bgTransform.isIdentity ? nil : bgTransform,
             slideDuration: Float(viewModel.currentSlideDuration)
         )
     }
@@ -1053,6 +1060,12 @@ public struct StoryComposerView: View {
         }
     }
 
+    private func handleForegroundMediaSelection(from item: PhotosPickerItem?) {
+        guard let item else { return }
+        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
+        addForegroundMedia(from: item, type: isVideo ? "video" : "image")
+    }
+
     private func addForegroundMedia(from item: PhotosPickerItem?, type: String) {
         guard let item else { return }
         Task {
@@ -1066,6 +1079,12 @@ public struct StoryComposerView: View {
                 do {
                     try data.write(to: tempURL)
                     let thumbnail = Self.generateVideoThumbnail(url: tempURL)
+                    let asset = AVURLAsset(url: tempURL)
+                    var mediaDuration: Float?
+                    if let cmDur = try? await asset.load(.duration) {
+                        let secs = CMTimeGetSeconds(cmDur)
+                        if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
+                    }
                     await MainActor.run {
                         viewModel.loadedVideoURLs[objectId] = tempURL
                         if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
@@ -1075,6 +1094,9 @@ public struct StoryComposerView: View {
                             if obj.id != objectId {
                                 viewModel.loadedVideoURLs.removeValue(forKey: objectId)
                                 viewModel.loadedImages.removeValue(forKey: objectId)
+                            }
+                            if let dur = mediaDuration {
+                                viewModel.autoExtendDuration(forElementEnd: dur)
                             }
                         }
                     }
@@ -1091,8 +1113,7 @@ public struct StoryComposerView: View {
                 }
             }
             await MainActor.run {
-                fgPhotoItem = nil
-                fgVideoItem = nil
+                fgMediaItem = nil
             }
         }
     }
@@ -1101,6 +1122,12 @@ public struct StoryComposerView: View {
         guard let url = confirmedMediaAudioURL else { return }
         Task {
             let samples = (try? await WaveformGenerator.shared.generateSamples(from: url)) ?? []
+            let asset = AVURLAsset(url: url)
+            var mediaDuration: Float?
+            if let cmDur = try? await asset.load(.duration) {
+                let secs = CMTimeGetSeconds(cmDur)
+                if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
+            }
             await MainActor.run {
                 if let obj = viewModel.addAudioObject() {
                     viewModel.loadedAudioURLs[obj.id] = url
@@ -1109,6 +1136,9 @@ public struct StoryComposerView: View {
                     if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == obj.id }) {
                         effects.audioPlayerObjects?[idx].waveformSamples = samples
                         viewModel.currentEffects = effects
+                    }
+                    if let dur = mediaDuration {
+                        viewModel.autoExtendDuration(forElementEnd: dur)
                     }
                 }
                 confirmedMediaAudioURL = nil

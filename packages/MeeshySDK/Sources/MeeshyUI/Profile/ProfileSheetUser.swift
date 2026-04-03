@@ -64,6 +64,14 @@ public struct ProfileSheetUser: Identifiable, Equatable {
 
 extension ProfileSheetUser {
 
+    public static func from(idOrUsername value: String) -> ProfileSheetUser {
+        let isObjectId = value.count == 24 && value.allSatisfy(\.isHexDigit)
+        if isObjectId {
+            return ProfileSheetUser(userId: value, username: value)
+        }
+        return ProfileSheetUser(username: value)
+    }
+
     public static func from(message: MeeshyMessage) -> ProfileSheetUser {
         ProfileSheetUser(
             userId: message.senderUserId ?? message.senderId,
@@ -86,7 +94,8 @@ extension ProfileSheetUser {
     public static func from(feedPost: FeedPost) -> ProfileSheetUser {
         ProfileSheetUser(
             userId: feedPost.authorId.isEmpty ? nil : feedPost.authorId,
-            username: feedPost.author,
+            username: feedPost.authorUsername ?? feedPost.author,
+            displayName: feedPost.author,
             avatarURL: feedPost.authorAvatarURL,
             accentColor: feedPost.authorColor
         )
@@ -95,7 +104,8 @@ extension ProfileSheetUser {
     public static func from(feedComment: FeedComment) -> ProfileSheetUser {
         ProfileSheetUser(
             userId: feedComment.authorId.isEmpty ? nil : feedComment.authorId,
-            username: feedComment.author,
+            username: feedComment.authorUsername ?? feedComment.author,
+            displayName: feedComment.author,
             avatarURL: feedComment.authorAvatarURL,
             accentColor: feedComment.authorColor
         )

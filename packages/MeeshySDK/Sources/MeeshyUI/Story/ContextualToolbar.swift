@@ -34,7 +34,7 @@ struct ContextualToolbar: View {
                 if expandedGroup == .front {
                     HStack(spacing: 6) {
                         toolPill(.text, icon: "textformat", label: String(localized: "story.toolbar.text", defaultValue: "Texte", bundle: .module), badge: textCount)
-                        toolPill(.media, icon: "photo.on.rectangle", label: String(localized: "story.toolbar.media", defaultValue: "Media", bundle: .module), badge: fgMediaCount)
+                        toolPill(.media, icon: "photo.on.rectangle.angled", label: String(localized: "story.toolbar.media", defaultValue: "Media", bundle: .module), badge: fgMediaCount)
                         toolPill(.audio, icon: "waveform", label: String(localized: "story.toolbar.audio", defaultValue: "Audio", bundle: .module), badge: fgAudioCount)
                     }
                     .transition(.asymmetric(

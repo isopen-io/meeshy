@@ -45,10 +45,21 @@ export class ConversationHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
+      const userId = this.socketToUser.get(socket.id);
+
+      if (userId) {
+        const bannedParticipant = await this.prisma.participant.findFirst({
+          where: { conversationId: normalizedId, userId, bannedAt: { not: null } },
+          select: { id: true },
+        });
+        if (bannedParticipant) {
+          socket.emit(SERVER_EVENTS.ERROR, { message: 'Vous êtes banni de cette conversation' });
+          return;
+        }
+      }
+
       const room = ROOMS.conversation(normalizedId);
       socket.join(room);
-
-      const userId = this.socketToUser.get(socket.id);
       if (userId) {
         socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId: normalizedId,

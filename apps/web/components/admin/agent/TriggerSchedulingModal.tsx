@@ -263,11 +263,11 @@ export default memo(function TriggerSchedulingModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-7xl max-h-[90vh] flex flex-col overflow-hidden p-3 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-sm flex items-center gap-2">
-            <CalendarClock className="h-4 w-4 text-indigo-500" />
-            Planificateur — {conversationTitle}
+          <DialogTitle className="text-xs sm:text-sm flex items-center gap-2 min-w-0">
+            <CalendarClock className="h-4 w-4 text-indigo-500 shrink-0" />
+            <span className="truncate">Planificateur — {conversationTitle}</span>
           </DialogTitle>
         </DialogHeader>
 
@@ -304,9 +304,9 @@ export default memo(function TriggerSchedulingModal({
               <ScrollArea className="h-full">
                 <div className="space-y-6 p-1">
                   {/* Trigger controls */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                     {/* Immediate trigger */}
-                    <div className="p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
+                    <div className="col-span-2 sm:col-span-1 p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <Zap className="h-3 w-3 text-indigo-500" />
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Immediat</span>
@@ -324,7 +324,7 @@ export default memo(function TriggerSchedulingModal({
                     </div>
 
                     {/* Schedule at time */}
-                    <div className="p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
+                    <div className="p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <Clock className="h-3 w-3 text-indigo-500" />
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Heure fixe</span>
@@ -334,14 +334,14 @@ export default memo(function TriggerSchedulingModal({
                           type="time"
                           value={scheduleTime}
                           onChange={e => setScheduleTime(e.target.value)}
-                          className="h-8 text-xs flex-1"
+                          className="h-8 text-xs flex-1 min-w-0"
                         />
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={handleScheduleAtTime}
                           disabled={!scheduleTime || !!scheduledTimer}
-                          className="h-8 text-xs px-2"
+                          className="h-8 text-xs px-2 shrink-0"
                         >
                           OK
                         </Button>
@@ -349,7 +349,7 @@ export default memo(function TriggerSchedulingModal({
                     </div>
 
                     {/* Schedule in delay */}
-                    <div className="p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
+                    <div className="p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <Timer className="h-3 w-3 text-indigo-500" />
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Dans X temps</span>
@@ -361,7 +361,7 @@ export default memo(function TriggerSchedulingModal({
                           onChange={e => setDelayValue(Math.max(1, parseInt(e.target.value) || 1))}
                           min={1}
                           max={delayUnit === 'h' ? 24 : 1440}
-                          className="h-8 text-xs w-16"
+                          className="h-8 text-xs w-12 min-w-0"
                         />
                         <select
                           value={delayUnit}
@@ -376,7 +376,7 @@ export default memo(function TriggerSchedulingModal({
                           size="sm"
                           onClick={handleScheduleDelay}
                           disabled={!!scheduledTimer}
-                          className="h-8 text-xs px-2"
+                          className="h-8 text-xs px-2 shrink-0"
                         >
                           OK
                         </Button>
@@ -384,19 +384,19 @@ export default memo(function TriggerSchedulingModal({
                     </div>
 
                     {/* Change frequency */}
-                    <div className="p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
+                    <div className="p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <RotateCcw className="h-3 w-3 text-indigo-500" />
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Frequence</span>
                       </div>
                       <div className="flex gap-1.5 items-center">
-                        <div className="flex-1 flex gap-1 items-center">
+                        <div className="flex-1 flex gap-1 items-center min-w-0">
                           <Input
                             type="number"
                             value={freqHours}
                             onChange={e => setFreqHours(Math.max(0, Math.min(24, parseInt(e.target.value) || 0)))}
                             min={0} max={24}
-                            className="h-8 text-xs w-12"
+                            className="h-8 text-xs w-12 min-w-0"
                           />
                           <span className="text-[10px] text-gray-400">h</span>
                           <Input
@@ -404,7 +404,7 @@ export default memo(function TriggerSchedulingModal({
                             value={freqMinutes}
                             onChange={e => setFreqMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
                             min={0} max={59}
-                            className="h-8 text-xs w-12"
+                            className="h-8 text-xs w-12 min-w-0"
                           />
                           <span className="text-[10px] text-gray-400">m</span>
                         </div>
@@ -413,7 +413,7 @@ export default memo(function TriggerSchedulingModal({
                           size="sm"
                           onClick={handleSaveFrequency}
                           disabled={savingFreq}
-                          className="h-8 text-xs px-2"
+                          className="h-8 text-xs px-2 shrink-0"
                         >
                           {savingFreq ? <Loader2 className="h-3 w-3 animate-spin" /> : 'OK'}
                         </Button>
@@ -432,8 +432,8 @@ export default memo(function TriggerSchedulingModal({
                   {/* Timeline header */}
                   {schedule && timelineData && (
                     <>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-wrap">
                           <div className="flex items-center gap-1.5">
                             <Clock className="h-3.5 w-3.5 text-indigo-400" />
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -453,7 +453,7 @@ export default memo(function TriggerSchedulingModal({
                         </div>
 
                         {/* Zoom controls */}
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 shrink-0">
                           {([6, 12, 24] as const).map(h => (
                             <Button
                               key={h}
@@ -471,7 +471,7 @@ export default memo(function TriggerSchedulingModal({
                       {/* Interactive timeline bar */}
                       <div ref={containerRef} className="relative">
                         <div
-                          className="relative h-20 rounded-lg bg-slate-100 dark:bg-slate-800/80 overflow-hidden border border-slate-200 dark:border-slate-700/60 select-none"
+                          className="relative h-16 sm:h-20 lg:h-24 rounded-lg bg-slate-100 dark:bg-slate-800/80 overflow-hidden border border-slate-200 dark:border-slate-700/60 select-none"
                           onPointerMove={handlePointerMove}
                           onPointerUp={handlePointerUp}
                         >
@@ -570,7 +570,7 @@ export default memo(function TriggerSchedulingModal({
                       </div>
 
                       {/* Budget + Burst row */}
-                      <div className="grid gap-3 grid-cols-2">
+                      <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2">
                         {/* Budget meter */}
                         <div className="flex items-center gap-3">
                           <div className="flex-1 space-y-1">

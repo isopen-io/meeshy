@@ -91,10 +91,12 @@ public struct CreatePostRequest: Encodable {
 public struct CreateCommentRequest: Encodable {
     public let content: String
     public let parentId: String?
+    public let effectFlags: Int?
 
-    public init(content: String, parentId: String? = nil) {
+    public init(content: String, parentId: String? = nil, effectFlags: Int? = nil) {
         self.content = content
         self.parentId = parentId
+        self.effectFlags = effectFlags
     }
 }
 
@@ -126,17 +128,20 @@ public struct CreateStoryRequest: Encodable {
 
 // MARK: - Preference Requests
 
-public struct UpdateConversationPreferencesRequest: Encodable {
+public struct UpdateConversationPreferencesRequest: Encodable, Sendable {
     public var isPinned: Bool?
     public var isMuted: Bool?
     public var isArchived: Bool?
     public var categoryId: String?
     public var tags: [String]?
     public var reaction: String?
+    public var customName: String?
+    public var mentionsOnly: Bool?
 
-    public init(isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, tags: [String]? = nil, reaction: String? = nil) {
+    public init(isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, tags: [String]? = nil, reaction: String? = nil, customName: String? = nil, mentionsOnly: Bool? = nil) {
         self.isPinned = isPinned; self.isMuted = isMuted; self.isArchived = isArchived
         self.categoryId = categoryId; self.tags = tags; self.reaction = reaction
+        self.customName = customName; self.mentionsOnly = mentionsOnly
     }
 }
 

@@ -109,7 +109,10 @@ extension FeedPostCard {
         ZStack {
             let thumbUrl = media.thumbnailUrl ?? media.url ?? ""
             if !thumbUrl.isEmpty && (media.type == .image || media.type == .video) {
-                CachedAsyncImage(url: thumbUrl) {
+                ProgressiveCachedImage(
+                    thumbnailUrl: media.thumbnailUrl,
+                    fullUrl: media.url
+                ) {
                     Color(hex: media.thumbnailColor).shimmer()
                 }
                 .aspectRatio(contentMode: .fill)
@@ -200,14 +203,21 @@ extension FeedPostCard {
     }
 
     func imageMediaView(_ media: FeedMedia) -> some View {
-        let attachment = media.toMessageAttachment()
-        return ImageViewerView(
-            attachment: attachment,
-            context: .feedPost,
-            accentColor: accentColor
-        )
+        let aspectRatio: CGFloat? = {
+            guard let w = media.width, let h = media.height, w > 0, h > 0 else { return nil }
+            return CGFloat(w) / CGFloat(h)
+        }()
+        return ProgressiveCachedImage(
+            thumbnailUrl: media.thumbnailUrl,
+            fullUrl: media.url
+        ) {
+            Color(hex: media.thumbnailColor).shimmer()
+        }
+        .aspectRatio(aspectRatio, contentMode: .fill)
         .frame(maxWidth: .infinity, minHeight: 160, maxHeight: 280)
+        .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onTapGesture { openFullscreen(media) }
     }
 
     func videoMediaView(_ media: FeedMedia) -> some View {

@@ -111,7 +111,7 @@ export class PushNotificationService {
 
         const credentialsPath = path.resolve(config.firebaseCredentialsPath);
 
-        if (fs.existsSync(credentialsPath)) {
+        if (fs.existsSync(credentialsPath) && fs.statSync(credentialsPath).isFile()) {
           const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
 
           if (!admin.apps.length) {
@@ -123,7 +123,8 @@ export class PushNotificationService {
           this.firebaseAdmin = admin;
           console.log('[PUSH] Firebase Admin SDK initialized');
         } else {
-          console.warn(`[PUSH] Firebase credentials not found at ${credentialsPath}`);
+          const reason = fs.existsSync(credentialsPath) ? 'path is a directory, not a file' : 'file not found';
+          console.warn(`[PUSH] Firebase credentials invalid at ${credentialsPath}: ${reason}`);
         }
       } catch (error) {
         console.error('[PUSH] Failed to initialize Firebase:', error);

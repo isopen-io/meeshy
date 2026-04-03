@@ -56,6 +56,7 @@ public struct APIPostComment: Decodable, Sendable {
     public let translations: [String: APIPostTranslationEntry]?
     public let likeCount: Int?
     public let replyCount: Int?
+    public let effectFlags: Int?
     public let createdAt: Date
     public let author: APIAuthor
 }
@@ -96,6 +97,7 @@ public struct APIPost: Decodable, Sendable {
     public let storyEffects: StoryEffects?
     public let translations: [String: APIPostTranslationEntry]?
     public let isLikedByMe: Bool?
+    public let mentionedUsers: [MentionedUser]?
 }
 
 public struct APIPostViewer: Decodable, Sendable {
@@ -174,11 +176,15 @@ extension APIPost {
             let commentTranslatedContent: String? = Self.resolveTranslation(
                 translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
             )
+            if let username = c.author.username {
+                UserDisplayNameCache.shared.track(username: username, displayName: c.author.name)
+            }
             return FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorUsername: c.author.username,
                         authorAvatarURL: c.author.avatar,
                         content: c.content,
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                        parentId: c.parentId,
+                        parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent)
         }
 
@@ -198,7 +204,15 @@ extension APIPost {
             translations: translations, originalLanguage: originalLanguage, preferredLanguages: langs
         )
 
+        if let mentionedUsers {
+            UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
+        }
+        if let username = author.username {
+            UserDisplayNameCache.shared.track(username: username, displayName: author.name)
+        }
+
         var feedPost = FeedPost(id: id, author: author.name, authorId: author.id,
+                        authorUsername: author.username,
                         authorAvatarURL: author.avatar,
                         type: type, content: content ?? "",
                         timestamp: createdAt, likes: likeCount ?? 0,

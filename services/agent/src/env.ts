@@ -22,18 +22,11 @@ const envSchema = z.object({
   AGENT_DEFAULT_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(600).default(300),
   AGENT_DEFAULT_COOLDOWN_SECONDS: z.coerce.number().int().min(5).max(300).default(60),
 }).superRefine((data, ctx) => {
-  if (data.LLM_PROVIDER === 'openai' && !data.OPENAI_API_KEY) {
+  if (!data.OPENAI_API_KEY && !data.ANTHROPIC_API_KEY) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['OPENAI_API_KEY'],
-      message: 'OPENAI_API_KEY is required when LLM_PROVIDER=openai',
-    });
-  }
-  if (data.LLM_PROVIDER === 'anthropic' && !data.ANTHROPIC_API_KEY) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['ANTHROPIC_API_KEY'],
-      message: 'ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic',
+      message: 'At least one API key (OPENAI_API_KEY or ANTHROPIC_API_KEY) is required',
     });
   }
 });

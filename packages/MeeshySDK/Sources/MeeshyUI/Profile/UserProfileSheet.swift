@@ -28,7 +28,11 @@ public struct UserProfileSheet: View {
     }
 
     private var isCurrentUser: Bool {
-        user.userId == currentUserId
+        guard !currentUserId.isEmpty else { return false }
+        if user.userId == currentUserId { return true }
+        if let currentUsername = AuthManager.shared.currentUser?.username,
+           user.username == currentUsername { return true }
+        return false
     }
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -332,9 +336,10 @@ public struct UserProfileSheet: View {
     // MARK: - Auto-loading
 
     private func loadDataIfNeeded() async {
-        guard let userId = user.userId else { return }
+        let identifier = user.userId ?? user.username
+        guard !identifier.isEmpty else { return }
 
-        let cacheResult = await CacheCoordinator.shared.profiles.load(for: userId)
+        let cacheResult = await CacheCoordinator.shared.profiles.load(for: identifier)
 
         switch cacheResult {
         case .fresh(let cached, _):
@@ -342,19 +347,21 @@ public struct UserProfileSheet: View {
             return
         case .stale(let cached, _):
             if let profile = cached.first { internalFullUser = profile }
-            await fetchAndCacheProfile(userId)
+            await fetchAndCacheProfile(identifier)
         case .expired, .empty:
             internalIsLoading = internalFullUser == nil
-            await fetchAndCacheProfile(userId)
+            await fetchAndCacheProfile(identifier)
         }
     }
 
-    private func fetchAndCacheProfile(_ userId: String) async {
+    private func fetchAndCacheProfile(_ idOrUsername: String) async {
         defer { internalIsLoading = false }
         do {
-            let fetchedUser = try await UserService.shared.getProfile(idOrUsername: userId)
+            let fetchedUser = try await UserService.shared.getProfile(idOrUsername: idOrUsername)
             internalFullUser = fetchedUser
-            await CacheCoordinator.shared.profiles.save([fetchedUser], for: userId)
+            UserDisplayNameCache.shared.trackFromUser(fetchedUser)
+            let cacheKey = fetchedUser.id ?? idOrUsername
+            await CacheCoordinator.shared.profiles.save([fetchedUser], for: cacheKey)
         } catch let error as APIError {
             if case .serverError(403, _) = error {
                 isBlockedByTarget = true
@@ -362,8 +369,12 @@ public struct UserProfileSheet: View {
         } catch {}
     }
 
+    private var resolvedUserId: String? {
+        user.userId ?? internalFullUser?.id
+    }
+
     private func loadStatsIfNeeded() async {
-        guard let userId = user.userId else { return }
+        guard let userId = resolvedUserId else { return }
         internalIsLoadingStats = true
         do {
             let fetchedStats = try await UserService.shared.getUserStats(userId: userId)
@@ -373,7 +384,7 @@ public struct UserProfileSheet: View {
     }
 
     private func loadConversationsIfNeeded() async {
-        guard let userId = user.userId else { return }
+        guard let userId = resolvedUserId else { return }
         internalIsLoadingConversations = true
         do {
             let apiConversations = try await ConversationService.shared.listSharedWith(userId: userId)
@@ -385,13 +396,13 @@ public struct UserProfileSheet: View {
     // MARK: - State Resolution
 
     private func resolveInitialState() async {
-        guard let userId = user.userId, !userId.isEmpty, userId != currentUserId else { return }
+        guard let userId = resolvedUserId, !userId.isEmpty, userId != currentUserId else { return }
         isBlocked = BlockService.shared.isBlocked(userId: userId)
         resolveConnectionStatus()
     }
 
     private func resolveConnectionStatus() {
-        guard let userId = user.userId, !userId.isEmpty else { return }
+        guard let userId = resolvedUserId, !userId.isEmpty else { return }
         let status = FriendshipCache.shared.status(for: userId)
         switch status {
         case .friend:
@@ -420,7 +431,7 @@ public struct UserProfileSheet: View {
     // MARK: - Connection Actions
 
     private func sendConnectionRequest() async {
-        guard let userId = user.userId, !userId.isEmpty else { return }
+        guard let userId = resolvedUserId, !userId.isEmpty else { return }
         do {
             let request = try await FriendService.shared.sendFriendRequest(receiverId: userId)
             FriendshipCache.shared.didSendRequest(to: userId, requestId: request.id)
@@ -435,7 +446,7 @@ public struct UserProfileSheet: View {
     }
 
     private func cancelRequest() async {
-        guard let requestId = pendingRequestId, let userId = user.userId else { return }
+        guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
         FriendshipCache.shared.didCancelRequest(to: userId)
         pendingRequestId = nil
         connectionStatus = .none
@@ -458,7 +469,7 @@ public struct UserProfileSheet: View {
     }
 
     private func acceptRequest() async {
-        guard let requestId = pendingRequestId, let userId = user.userId else { return }
+        guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
         FriendshipCache.shared.didAcceptRequest(from: userId)
         connectionStatus = .connected
         pendingRequestId = nil
@@ -475,7 +486,7 @@ public struct UserProfileSheet: View {
     }
 
     private func declineRequest() async {
-        guard let requestId = pendingRequestId, let userId = user.userId else { return }
+        guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
         FriendshipCache.shared.didRejectRequest(from: userId)
         connectionStatus = .none
         pendingRequestId = nil
@@ -494,7 +505,7 @@ public struct UserProfileSheet: View {
     // MARK: - Block Actions
 
     private func blockUser() async {
-        guard let userId = user.userId, !userId.isEmpty else { return }
+        guard let userId = resolvedUserId, !userId.isEmpty else { return }
         do {
             try await BlockService.shared.blockUser(userId: userId)
             isBlocked = true
@@ -506,7 +517,7 @@ public struct UserProfileSheet: View {
     }
 
     private func unblockUser() async {
-        guard let userId = user.userId, !userId.isEmpty else { return }
+        guard let userId = resolvedUserId, !userId.isEmpty else { return }
         do {
             try await BlockService.shared.unblockUser(userId: userId)
             isBlocked = false

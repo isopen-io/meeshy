@@ -237,6 +237,43 @@ public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
     public let participant: ParticipantRoleUpdatedParticipantInfo
 }
 
+public struct SocketEventUser: Decodable, Sendable {
+    public let id: String
+}
+
+public struct ConversationUpdatedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let title: String?
+    public let description: String?
+    public let avatar: String?
+    public let banner: String?
+    public let defaultWriteRole: String?
+    public let isAnnouncementChannel: Bool?
+    public let slowModeSeconds: Int?
+    public let autoTranslateEnabled: Bool?
+    public let updatedBy: SocketEventUser
+    public let updatedAt: String
+}
+
+public struct ParticipantLeftEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+    public let displayName: String
+    public let leftAt: String
+}
+
+public struct ParticipantBannedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+    public let bannedBy: SocketEventUser
+    public let bannedAt: String
+}
+
+public struct ParticipantUnbannedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+}
+
 public struct MessageConsumedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
@@ -415,6 +452,10 @@ public protocol MessageSocketProviding: Sendable {
     var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
+    var conversationUpdated: PassthroughSubject<ConversationUpdatedEvent, Never> { get }
+    var participantSelfLeft: PassthroughSubject<ParticipantLeftEvent, Never> { get }
+    var participantBanned: PassthroughSubject<ParticipantBannedEvent, Never> { get }
+    var participantUnbanned: PassthroughSubject<ParticipantUnbannedEvent, Never> { get }
     var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
     var conversationStatsReceived: PassthroughSubject<ConversationStatsEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
@@ -434,6 +475,7 @@ public protocol MessageSocketProviding: Sendable {
     var notificationCounts: PassthroughSubject<NotificationCountsEvent, Never> { get }
     var conversationOnlineStats: PassthroughSubject<ConversationOnlineStatsEvent, Never> { get }
     var callOfferReceived: PassthroughSubject<CallOfferData, Never> { get }
+    var callSignalOfferReceived: PassthroughSubject<CallAnswerData, Never> { get }
     var callAnswerReceived: PassthroughSubject<CallAnswerData, Never> { get }
     var callICECandidateReceived: PassthroughSubject<CallICECandidateData, Never> { get }
     var callEnded: PassthroughSubject<CallEndData, Never> { get }
@@ -502,6 +544,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — participant role
     public let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
 
+    // Combine publishers — conversation & participant lifecycle
+    public let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
+    public let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
+    public let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
+    public let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
+
     // Combine publishers — user preferences
     public let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
 
@@ -540,6 +588,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — call signaling
     public let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
+    public let callSignalOfferReceived = PassthroughSubject<CallAnswerData, Never>()
     public let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
     public let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
     public let callEnded = PassthroughSubject<CallEndData, Never>()
@@ -596,6 +645,21 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         }
     }
 
+    // MARK: - JWT Helpers
+
+    private static func isJWTExpired(_ token: String) -> Bool {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return true }
+        var base64 = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while base64.count % 4 != 0 { base64.append("=") }
+        guard let data = Data(base64Encoded: base64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let exp = json["exp"] as? TimeInterval else { return true }
+        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < Date()
+    }
+
     // MARK: - Connection
 
     public func connect() {
@@ -603,6 +667,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         guard let token = APIClient.shared.authToken else {
             Logger.socket.warning("No auth token, skipping connect")
+            return
+        }
+
+        let tokenExpired = Self.isJWTExpired(token)
+        if tokenExpired {
+            Logger.socket.warning("MessageSocket: JWT expired, triggering refresh instead of connecting")
+            Task { @MainActor in
+                AuthManager.shared.handleUnauthorized()
+            }
             return
         }
 
@@ -848,8 +921,17 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
         }
 
-        socket.on(clientEvent: .error) { _, args in
-            Logger.socket.error("MessageSocket error: \(args)")
+        socket.on(clientEvent: .error) { [weak self] data, _ in
+            Logger.socket.error("MessageSocket error: \(data)")
+            let errorStr = data.compactMap { "\($0)" }.joined(separator: " ")
+            if errorStr.contains("token") || errorStr.contains("auth") || errorStr.contains("JWT") || errorStr.contains("expired") || errorStr.contains("401") {
+                Logger.socket.warning("MessageSocket auth error — stopping reconnection")
+                self?.manager?.reconnects = false
+                self?.disconnect()
+                Task { @MainActor in
+                    AuthManager.shared.handleUnauthorized()
+                }
+            }
         }
 
         // --- Message events ---
@@ -1014,6 +1096,34 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        socket.on("conversation:updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationUpdatedEvent.self, from: data) { [weak self] event in
+                self?.conversationUpdated.send(event)
+            }
+        }
+
+        socket.on("conversation:participant-left") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantLeftEvent.self, from: data) { [weak self] event in
+                self?.participantSelfLeft.send(event)
+            }
+        }
+
+        socket.on("conversation:participant-banned") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantBannedEvent.self, from: data) { [weak self] event in
+                self?.participantBanned.send(event)
+            }
+        }
+
+        socket.on("conversation:participant-unbanned") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantUnbannedEvent.self, from: data) { [weak self] event in
+                self?.participantUnbanned.send(event)
+            }
+        }
+
         socket.on("user:preferences-updated") { [weak self] data, _ in
             guard let self else { return }
             self.decode(UserPreferencesUpdatedEvent.self, from: data) { [weak self] event in
@@ -1129,6 +1239,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                   let signalType = signalDict["type"] as? String else { return }
 
             switch signalType {
+            case "offer":
+                self.decode(CallAnswerData.self, from: data) { [weak self] event in
+                    self?.callSignalOfferReceived.send(event)
+                }
             case "answer":
                 self.decode(CallAnswerData.self, from: data) { [weak self] event in
                     self?.callAnswerReceived.send(event)

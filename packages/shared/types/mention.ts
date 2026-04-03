@@ -4,6 +4,18 @@
  */
 
 /**
+ * Utilisateur mentionné résolu par le serveur.
+ * Inclus dans les réponses API (messages, posts, comments) pour permettre
+ * au client de résoudre @username → displayName sans requête supplémentaire.
+ */
+export interface MentionedUser {
+  readonly userId: string;
+  readonly username: string;
+  readonly displayName: string | null;
+  readonly avatar: string | null;
+}
+
+/**
  * Suggestion d'utilisateur pour l'autocomplete de mention
  */
 export interface MentionSuggestion {

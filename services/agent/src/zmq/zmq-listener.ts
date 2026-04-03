@@ -32,8 +32,12 @@ export class ZmqAgentListener {
     console.log('[ZMQ-Agent] Listening for events...');
 
     let messageCount = 0;
+    let heartbeatTick = 0;
     const heartbeat = setInterval(() => {
-      console.log(`[ZMQ-Agent] Heartbeat: loop alive, messages received=${messageCount}, running=${this.running}`);
+      heartbeatTick++;
+      if (messageCount > 0 || heartbeatTick % 10 === 0) {
+        console.log(`[ZMQ-Agent] Heartbeat: loop alive, messages received=${messageCount}, running=${this.running}`);
+      }
     }, 30000);
 
     try {

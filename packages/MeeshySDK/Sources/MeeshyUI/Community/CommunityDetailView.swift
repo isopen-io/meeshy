@@ -162,10 +162,19 @@ public struct CommunityDetailView: View {
 
             if viewModel.isAdmin {
                 Menu {
+<<<<<<< HEAD
                     Button {
                         showSettings = true
                     } label: {
                         Label(String(localized: "community.detail.menu.settings", defaultValue: "Reglages", bundle: .module), systemImage: "gearshape.fill")
+=======
+                    if viewModel.isCreator {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Label("Reglages", systemImage: "gearshape.fill")
+                        }
+>>>>>>> origin/main
                     }
 
                     if !viewModel.isCreator {
@@ -375,7 +384,13 @@ public struct CommunityDetailView: View {
                     actionButton(icon: "plus.bubble.fill", title: String(localized: "community.detail.action.channel", defaultValue: "Channel", bundle: .module)) {
                         showAddChannel = true
                     }
+<<<<<<< HEAD
                     actionButton(icon: "gearshape.fill", title: String(localized: "community.detail.action.settings", defaultValue: "Reglages", bundle: .module)) {
+=======
+                }
+                if viewModel.isCreator {
+                    actionButton(icon: "gearshape.fill", title: "Reglages") {
+>>>>>>> origin/main
                         showSettings = true
                     }
                 } else if !viewModel.isMember {

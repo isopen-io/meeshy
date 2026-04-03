@@ -6,6 +6,9 @@ import { registerMessagesAdvancedRoutes } from './messages-advanced';
 import { registerParticipantsRoutes } from './participants';
 import { registerSharingRoutes } from './sharing';
 import { registerSearchRoutes } from './search';
+import { registerLeaveRoutes } from './leave';
+import { registerBanRoutes } from './ban';
+import { registerStatsRoutes } from './stats';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 
 /**
@@ -36,4 +39,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   registerParticipantsRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerSharingRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerSearchRoutes(fastify, prisma, requiredAuth);
+  registerLeaveRoutes(fastify, prisma, optionalAuth, requiredAuth);
+  registerBanRoutes(fastify, prisma, optionalAuth, requiredAuth);
+  registerStatsRoutes(fastify, prisma, requiredAuth);
 }

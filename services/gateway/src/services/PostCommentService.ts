@@ -11,7 +11,7 @@ const authorSelect = {
 export class PostCommentService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addComment(postId: string, authorId: string, content: string, parentId?: string) {
+  async addComment(postId: string, authorId: string, content: string, parentId?: string, effectFlags?: number) {
     // Verify post exists
     const post = await this.prisma.post.findFirst({
       where: { id: postId, isDeleted: false },
@@ -32,6 +32,7 @@ export class PostCommentService {
         authorId,
         content,
         parentId: parentId ?? null,
+        effectFlags: effectFlags ?? 0,
       },
       select: {
         id: true,
@@ -40,6 +41,7 @@ export class PostCommentService {
         translations: true,
         likeCount: true,
         replyCount: true,
+        effectFlags: true,
         parentId: true,
         createdAt: true,
         author: { select: authorSelect },
@@ -87,6 +89,7 @@ export class PostCommentService {
         translations: true,
         likeCount: true,
         replyCount: true,
+        effectFlags: true,
         parentId: true,
         createdAt: true,
         author: { select: authorSelect },
@@ -128,6 +131,7 @@ export class PostCommentService {
         translations: true,
         likeCount: true,
         replyCount: true,
+        effectFlags: true,
         parentId: true,
         createdAt: true,
         author: { select: authorSelect },

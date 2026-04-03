@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import MeeshySDK
 
 // MARK: - MessageTextRenderer
 
@@ -300,7 +301,9 @@ public enum MessageTextRenderer {
                 result.append(attr)
 
             case .mentionLink(let display, let url, let username):
-                let resolvedDisplay = mentionDisplayNames?[username].map { "@\($0)" } ?? display
+                let resolvedDisplay = mentionDisplayNames?[username].map { "@\($0)" }
+                    ?? UserDisplayNameCache.shared[username].map { "@\($0)" }
+                    ?? display
                 var attr = AttributedString(resolvedDisplay)
                 attr.link = url
                 attr.font = .system(size: fontSize, weight: .semibold)
