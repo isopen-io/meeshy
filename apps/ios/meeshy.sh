@@ -231,11 +231,8 @@ do_device_deploy_only() {
     local ncpu
     ncpu=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-    # Strip restricted capabilities upfront — physical device provisioning profiles
-    # never include Associated Domains or Push Notifications on a personal/free account.
-    # Stripping first avoids a guaranteed-to-fail first attempt.
-    strip_entitlements
-    trap restore_entitlements EXIT
+    # NOTE: Entitlement stripping removed — paid Apple Developer account now active.
+    # Associated Domains, Push Notifications, etc. are fully supported.
 
     log "Building for ${BOLD}$PHYSICAL_DEVICE_NAME${NC}..."
 
@@ -256,10 +253,6 @@ do_device_deploy_only() {
         build >"$build_log" 2>&1
     local build_rc=$?
     set -e
-
-    # Restore entitlements IMMEDIATELY after build, before anything else
-    restore_entitlements
-    trap - EXIT
 
     if [ "$build_rc" -ne 0 ]; then
         err "Build FAILED"
@@ -296,15 +289,6 @@ do_device_deploy_only() {
     set -e
     ok "Done! App deployed to ${BOLD}$PHYSICAL_DEVICE_NAME${NC}"
 
-    # ── Clean device build artifacts ──
-    # Remove only the .app and .xcent signed with stripped entitlements.
-    # Keep build.db (shared with simulator builds) and all .o intermediates.
-    # Deleting build.db would force a full rebuild and triggers Xcode's
-    # "entitlements modified during build" error on the next simulator build.
-    log "Cleaning device build artifacts (keeping .o intermediates and build.db)..."
-    rm -rf "$device_app_path" 2>/dev/null || true
-    rm -f "$DERIVED_DATA/Intermediates.noindex/Meeshy.build/$CONFIGURATION-iphoneos/Meeshy.build/Meeshy.app.xcent" 2>/dev/null || true
-    ok "Ready for next deploy"
 }
 
 # ─── Simulator Detection ────────────────────────────────────────────────────
