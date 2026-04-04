@@ -443,11 +443,66 @@ struct ConversationInfoSheet: View {
 
     // MARK: - Members Section
 
+    @State private var memberSearchQuery: String = ""
+
+    private var filteredMembers: [PaginatedParticipant] {
+        let q = memberSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return participants }
+        return participants.filter { p in
+            p.name.lowercased().contains(q) ||
+            (p.username?.lowercased().contains(q) ?? false)
+        }
+    }
+
     private var membersSection: some View {
         VStack(spacing: 0) {
             if conversation.type != .direct, canManageMembers {
                 manageMembersButton
             }
+
+            // Member count
+            HStack {
+                Text("\(participants.count) membre\(participants.count > 1 ? "s" : "")")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.textMuted)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+
+            // Search field
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                TextField("Rechercher un membre...", text: $memberSearchQuery)
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textPrimary)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                if !memberSearchQuery.isEmpty {
+                    Button {
+                        memberSearchQuery = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(theme.textMuted.opacity(0.12), lineWidth: 1)
+            )
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
 
             if isLoadingParticipants {
                 VStack(spacing: 12) {
@@ -457,11 +512,11 @@ struct ConversationInfoSheet: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
-            } else if participants.isEmpty {
-                emptyState(icon: "person.2.slash", text: "Aucun membre")
+            } else if filteredMembers.isEmpty {
+                emptyState(icon: "person.2.slash", text: memberSearchQuery.isEmpty ? "Aucun membre" : "Aucun resultat")
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(participants) { participant in
+                    ForEach(filteredMembers) { participant in
                         memberRow(participant)
                             .onAppear {
                                 if participant.id == participants.last?.id {
@@ -486,7 +541,7 @@ struct ConversationInfoSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "person.2.badge.gearshape")
                     .font(.system(size: 13, weight: .semibold))
-                Text("Gerer les membres")
+                Text(String(localized: "conversation.info.manage_members", defaultValue: "Gerer les membres", bundle: .main))
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 Image(systemName: "chevron.right")
@@ -503,7 +558,7 @@ struct ConversationInfoSheet: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
-        .accessibilityLabel("Gerer les membres du groupe")
+        .accessibilityLabel(String(localized: "conversation.info.manage_members.a11y", defaultValue: "Gerer les membres du groupe", bundle: .main))
     }
 
     private func memberRow(_ participant: PaginatedParticipant) -> some View {
@@ -553,7 +608,7 @@ struct ConversationInfoSheet: View {
 
             if let joinedAt = participant.joinedAt {
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text("Depuis")
+                    Text(String(localized: "conversation.info.member.since", defaultValue: "Depuis", bundle: .main))
                         .font(.system(size: 9, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     Text(shortDate(joinedAt))

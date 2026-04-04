@@ -33,6 +33,10 @@ public struct APIResponse<T: Decodable>: Decodable {
     public let success: Bool
     public let data: T
     public let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success, data, error
+    }
 }
 
 public struct SimpleAPIResponse: Decodable {
