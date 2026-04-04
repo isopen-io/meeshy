@@ -14,7 +14,7 @@ export async function analyticsRoutes(fastify: FastifyInstance, deps: AnalyticsD
   fastify.get('/api/agent/live/:conversationId', async (req) => {
     const { conversationId } = req.params as { conversationId: string };
 
-    const [summary, toneProfiles, messages, activity, analytics, summaryRecord, controlledUsers] = await Promise.all([
+    const [summary, toneProfiles, messages, activity, analytics, summaryRecord, controlledUsers, config] = await Promise.all([
       stateManager.getSummary(conversationId),
       stateManager.getToneProfiles(conversationId),
       stateManager.getMessages(conversationId),
@@ -22,6 +22,7 @@ export async function analyticsRoutes(fastify: FastifyInstance, deps: AnalyticsD
       persistence.getAnalytics(conversationId),
       persistence.getSummaryRecord(conversationId),
       persistence.getControlledUsers(conversationId),
+      persistence.getAgentConfig(conversationId),
     ]);
 
     return {
@@ -32,6 +33,8 @@ export async function analyticsRoutes(fastify: FastifyInstance, deps: AnalyticsD
         toneProfiles,
         cachedMessageCount: messages.length,
         activity,
+        isScanning: config?.isScanning ?? false,
+        currentNode: config?.currentNode ?? null,
         analytics: analytics
           ? {
               messagesSent: analytics.messagesSent,

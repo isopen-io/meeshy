@@ -64,4 +64,10 @@ export class AgentHttpClient {
       body: JSON.stringify({ content }),
     });
   }
+
+  async stopScan(conversationId: string): Promise<void> {
+    return this.request<void>(`/api/agent/config/${encodeURIComponent(conversationId)}/stop`, {
+      method: 'POST',
+    });
+  }
 }

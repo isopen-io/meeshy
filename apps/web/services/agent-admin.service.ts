@@ -46,6 +46,8 @@ export type AgentConfigData = {
   conversationId: string;
   conversation?: AgentConfigConversation;
   enabled: boolean;
+  isScanning?: boolean;
+  currentNode?: string | null;
   configuredBy: string;
   controlledUserIds: string[];
   manualUserIds: string[];
@@ -151,6 +153,9 @@ export type AgentGlobalConfigData = {
   id: string;
   systemPrompt: string;
   enabled: boolean;
+  globalScanEnabled: boolean;
+  globalScanMinInterval: number;
+  globalScanMaxInterval: number;
   defaultProvider: string;
   defaultModel: string;
   fallbackProvider: string | null;
@@ -160,12 +165,17 @@ export type AgentGlobalConfigData = {
   eligibleConversationTypes: string[];
   messageFreshnessHours: number;
   maxConversationsPerCycle: number;
+  weekdayMaxConversations?: number;
+  weekendMaxConversations?: number;
   updatedAt: string;
 };
 
 export type AgentGlobalConfigUpsert = {
   systemPrompt?: string;
   enabled?: boolean;
+  globalScanEnabled?: boolean;
+  globalScanMinInterval?: number;
+  globalScanMaxInterval?: number;
   defaultProvider?: string;
   defaultModel?: string;
   fallbackProvider?: string | null;
@@ -301,6 +311,8 @@ export type LiveStateData = {
   summary: string;
   toneProfiles: Record<string, ToneProfileEntry>;
   cachedMessageCount: number;
+  isScanning?: boolean;
+  currentNode?: string | null;
   analytics: AnalyticsData | null;
   summaryRecord: SummaryRecordData | null;
   controlledUsers: ControlledUserEntry[];
@@ -531,6 +543,11 @@ export const agentAdminService = {
   async triggerScan(conversationId: string): Promise<ApiResponse<TriggerResult>> {
     const response = await apiService.post(`/admin/agent/configs/${conversationId}/trigger`, {});
     return unwrapResponse<TriggerResult>(response);
+  },
+
+  async stopScan(conversationId: string): Promise<ApiResponse<void>> {
+    const response = await apiService.post(`/admin/agent/configs/${conversationId}/stop`, {});
+    return unwrapResponse<void>(response);
   },
 
   async getAgentMessages(conversationId: string, page = 1, limit = 20): Promise<ApiResponse<AgentMessageEntry[]>> {

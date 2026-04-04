@@ -74,6 +74,9 @@ const agentConfigSchema = z.object({
   eligibleConversationTypes: z.array(z.string()).optional(),
   messageFreshnessHours: z.number().int().min(1).max(168).optional(),
   maxConversationsPerCycle: z.number().int().min(0).optional(),
+  globalScanEnabled: z.boolean().optional(),
+  globalScanMinInterval: z.number().int().min(1).optional(),
+  globalScanMaxInterval: z.number().int().min(1).optional(),
 }).refine((data) => {
   if (data.minResponsesPerCycle !== undefined && data.maxResponsesPerCycle !== undefined) {
     return data.minResponsesPerCycle <= data.maxResponsesPerCycle;
@@ -390,6 +393,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           reactionBoostFactor: config?.reactionBoostFactor ?? 1.5,
           createdAt: config?.createdAt ?? null,
           updatedAt: config?.updatedAt ?? null,
+          isScanning: config?.isScanning ?? false,
+          currentNode: config?.currentNode ?? null,
           controlledUserIds: mergedUserIds,
           analytics: analytics
             ? {
@@ -981,7 +986,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const cache = getCacheStore();
 
-      const [profilesRaw, summaryRaw, messagesRaw, analytics, summaryRecord, roles] = await Promise.all([
+      const [profilesRaw, summaryRaw, messagesRaw, analytics, summaryRecord, roles, agentConfig] = await Promise.all([
         cache.get(`agent:profiles:${conversationId}`),
         cache.get(`agent:summary:${conversationId}`),
         cache.get(`agent:messages:${conversationId}`),
@@ -990,6 +995,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         fastify.prisma.agentUserRole.findMany({
           where: { conversationId },
           select: { userId: true, confidence: true, locked: true },
+        }),
+        fastify.prisma.agentConfig.findUnique({
+          where: { conversationId },
+          select: { isScanning: true, currentNode: true },
         }),
       ]);
 
@@ -1013,6 +1022,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           summary: summaryRaw ?? '',
           toneProfiles,
           cachedMessageCount: messages.length,
+          isScanning: agentConfig?.isScanning ?? false,
+          currentNode: agentConfig?.currentNode ?? null,
           analytics: analytics
             ? {
                 messagesSent: analytics.messagesSent,
@@ -1150,6 +1161,9 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     maxConversationsPerCycle: z.number().int().min(0).optional(),
     weekdayMaxConversations: z.number().int().min(1).max(500).optional(),
     weekendMaxConversations: z.number().int().min(1).max(500).optional(),
+    globalScanEnabled: z.boolean().optional(),
+    globalScanMinInterval: z.number().int().min(1).optional(),
+    globalScanMaxInterval: z.number().int().min(1).optional(),
   });
 
   // GET /configs/:conversationId/schedule
@@ -1226,6 +1240,36 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'Error fetching schedule:', error);
+      return sendInternalError(reply, 'Erreur serveur');
+    }
+  });
+
+  // POST /configs/:conversationId/stop
+  fastify.post('/configs/:conversationId/stop', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Stop an ongoing scan for a conversation.',
+      tags: ['admin-agent'],
+      summary: 'Stop scan',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const client = ensureAgentClient(reply);
+    if (!client) return;
+
+    try {
+      const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
+
+      await client.stopScan(conversationId);
+      return sendSuccess(reply, { conversationId, stopped: true });
+    } catch (error) {
+      if (error instanceof AgentUnavailableError) {
+        return sendError(reply, 502, 'Agent service unavailable');
+      }
+      logError(fastify.log, 'Error stopping scan:', error);
       return sendInternalError(reply, 'Erreur serveur');
     }
   });

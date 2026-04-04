@@ -570,6 +570,14 @@ export class MongoPersistence {
     return [...byUser.entries()].map(([userId, stats]) => ({ userId, ...stats }));
   }
 
+  async updateScanStatus(conversationId: string, isScanning: boolean, currentNode?: string | null) {
+    return this.prisma.agentConfig.upsert({
+      where: { conversationId },
+      create: { conversationId, isScanning, currentNode },
+      update: { isScanning, currentNode },
+    });
+  }
+
   async createScanLog(data: Record<string, unknown>) {
     return this.prisma.agentScanLog.create({ data: data as any });
   }

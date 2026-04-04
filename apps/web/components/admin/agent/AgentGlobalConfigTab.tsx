@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Save, Shield } from 'lucide-react';
+import { Loader2, Save, Shield, LayoutGrid } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type AgentGlobalConfigUpsert } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
@@ -41,6 +41,9 @@ export function AgentGlobalConfigTab() {
     maxConversationsPerCycle: 0,
     weekdayMaxConversations: 50,
     weekendMaxConversations: 100,
+    globalScanEnabled: false,
+    globalScanMinInterval: 60,
+    globalScanMaxInterval: 300,
   });
 
   useEffect(() => {
@@ -49,6 +52,9 @@ export function AgentGlobalConfigTab() {
         setForm({
           systemPrompt: res.data.systemPrompt,
           enabled: res.data.enabled,
+          globalScanEnabled: res.data.globalScanEnabled ?? false,
+          globalScanMinInterval: res.data.globalScanMinInterval ?? 60,
+          globalScanMaxInterval: res.data.globalScanMaxInterval ?? 300,
           defaultProvider: res.data.defaultProvider,
           defaultModel: res.data.defaultModel,
           fallbackProvider: res.data.fallbackProvider,
@@ -233,6 +239,48 @@ export function AgentGlobalConfigTab() {
                 onChange={e => updateField('maxConcurrentCalls', Math.max(1, Math.min(50, parseInt(e.target.value) || 5)))}
                 min={1}
                 max={50}
+                className="bg-white dark:bg-gray-800"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Global Planner */}
+        <div className="space-y-4 p-4 rounded-lg bg-indigo-50/30 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <LayoutGrid className="h-4 w-4 text-indigo-500" />
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Planificateur Global</h3>
+              <InfoIcon content="Mode séquentiel : l'agent traite les conversations une par une avec un délai aléatoire, au lieu de tout scanner en même temps. Réduit la charge et simule une activité humaine plus naturelle." />
+            </div>
+            <Switch
+              checked={form.globalScanEnabled ?? false}
+              onCheckedChange={v => updateField('globalScanEnabled', v)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <Label>Intervalle Min (sec)</Label>
+                <InfoIcon content="Délai minimum entre deux scans de conversations en mode séquentiel." />
+              </div>
+              <Input
+                type="number"
+                value={form.globalScanMinInterval ?? 60}
+                onChange={e => updateField('globalScanMinInterval', parseInt(e.target.value) || 60)}
+                className="bg-white dark:bg-gray-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <Label>Intervalle Max (sec)</Label>
+                <InfoIcon content="Délai maximum entre deux scans de conversations en mode séquentiel." />
+              </div>
+              <Input
+                type="number"
+                value={form.globalScanMaxInterval ?? 300}
+                onChange={e => updateField('globalScanMaxInterval', parseInt(e.target.value) || 300)}
                 className="bg-white dark:bg-gray-800"
               />
             </div>
