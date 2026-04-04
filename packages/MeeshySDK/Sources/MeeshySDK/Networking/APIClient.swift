@@ -61,15 +61,15 @@ public struct PaginatedAPIResponse<T: Decodable>: Decodable {
 
 public struct CursorPagination: Decodable, Sendable {
     public let nextCursor: String?
-    public let hasMore: Bool
-    public let limit: Int
+    public let hasMore: Bool?
+    public let limit: Int?
 }
 
 public struct OffsetPagination: Decodable, Sendable {
     public let total: Int?
-    public let hasMore: Bool
-    public let limit: Int
-    public let offset: Int
+    public let hasMore: Bool?
+    public let limit: Int?
+    public let offset: Int?
 }
 
 public struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {
