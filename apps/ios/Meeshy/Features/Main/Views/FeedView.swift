@@ -22,6 +22,11 @@ struct FeedView: View {
     @State private var showAudioComposer = false
     @State private var headerScrollOffset: CGFloat = 0
 
+    // Impression tracking
+    @State private var pendingImpressionIds = Set<String>()
+    @State private var recordedImpressionIds = Set<String>()
+    @State private var impressionTimer: Timer?
+
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
     @State var pendingMediaFiles: [String: URL] = [:]
@@ -371,6 +376,7 @@ struct FeedView: View {
                         feedPostCardView(for: post)
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
+                                trackImpression(postId: post.id)
                             }
                     }
 
@@ -692,6 +698,26 @@ struct FeedView: View {
                     quoteTargetPost = nil
                 }
             )
+        }
+    }
+    // MARK: - Impression Tracking
+
+    private func trackImpression(postId: String) {
+        guard !recordedImpressionIds.contains(postId) else { return }
+        pendingImpressionIds.insert(postId)
+        scheduleImpressionFlush()
+    }
+
+    private func scheduleImpressionFlush() {
+        impressionTimer?.invalidate()
+        let ids = pendingImpressionIds
+        impressionTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+            let batch = Array(ids)
+            Task { @MainActor in
+                recordedImpressionIds.formUnion(batch)
+                pendingImpressionIds.subtract(batch)
+                try? await PostService.shared.recordImpressions(postIds: batch)
+            }
         }
     }
 }

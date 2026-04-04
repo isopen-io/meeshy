@@ -24,6 +24,7 @@ public protocol PostServiceProviding: Sendable {
     func getUserPosts(userId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func getCommentReplies(postId: String, commentId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    func recordImpressions(postIds: [String], source: String) async throws
 }
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {
@@ -194,5 +195,16 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     public func getCommentReplies(postId: String, commentId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPostComment]> {
         try await api.paginatedRequest(endpoint: "/posts/\(postId)/comments/\(commentId)/replies", cursor: cursor, limit: limit)
+    }
+
+    // MARK: - Impression Tracking
+
+    public func recordImpressions(postIds: [String], source: String = "feed") async throws {
+        guard !postIds.isEmpty else { return }
+        struct BatchBody: Encodable { let postIds: [String]; let source: String }
+        let _: APIResponse<[String: Int]> = try await api.post(
+            endpoint: "/posts/impressions/batch",
+            body: BatchBody(postIds: postIds, source: source)
+        )
     }
 }

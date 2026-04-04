@@ -540,7 +540,9 @@ struct RootView: View {
 
         case .postLike, .legacyPostLike, .postComment, .legacyPostComment, .postRepost,
              .storyReaction, .statusReaction, .commentLike, .commentReply:
-            if let conversationId = data?.conversationId {
+            if let postId = notification.context?.postId ?? data?.postId {
+                router.push(.postDetail(postId))
+            } else if let conversationId = data?.conversationId {
                 navigateToConversationById(conversationId)
             }
 
