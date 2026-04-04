@@ -1,28 +1,28 @@
 {
   "sourceLanguage" : "en",
-  "version" : "1.0",
   "strings" : {
     "CFBundleDisplayName" : {
+      "comment" : "Bundle display name",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy"
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy"
           }
         },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
+        "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy"
@@ -36,30 +36,43 @@
         }
       }
     },
-    "NSCameraUsageDescription" : {
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy needs access to your camera to take photos and videos for messages, video calls, and AR experiences."
+            "state" : "new",
+            "value" : "Meeshy Dev"
           }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy a besoin d'accéder à votre caméra pour prendre des photos et vidéos pour les messages, les appels vidéo et les expériences AR."
-          }
-        },
+        }
+      }
+    },
+    "NSCameraUsageDescription" : {
+      "comment" : "Privacy - Camera Usage Description",
+      "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy benötigt Zugriff auf Ihre Kamera, um Fotos und Videos für Nachrichten, Videoanrufe und AR-Erlebnisse aufzunehmen."
           }
         },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy needs access to your camera to take photos and videos for messages, video calls, and AR experiences."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy necesita acceso a tu cámara para tomar fotos y videos para mensajes, videollamadas y experiencias AR."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy a besoin d'accéder à votre caméra pour prendre des photos et vidéos pour les messages, les appels vidéo et les expériences AR."
           }
         },
         "pt-BR" : {
@@ -71,29 +84,30 @@
       }
     },
     "NSContactsUsageDescription" : {
+      "comment" : "Privacy - Contacts Usage Description",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy needs access to your contacts to help you connect with friends on the platform."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy a besoin d'accéder à vos contacts pour vous aider à retrouver vos amis sur la plateforme."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy benötigt Zugriff auf Ihre Kontakte, um Ihnen zu helfen, Freunde auf der Plattform zu finden."
           }
         },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy needs access to your contacts to help you connect with friends on the platform."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy necesita acceso a tus contactos para ayudarte a conectar con amigos en la plataforma."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy a besoin d'accéder à vos contacts pour vous aider à retrouver vos amis sur la plateforme."
           }
         },
         "pt-BR" : {
@@ -105,29 +119,30 @@
       }
     },
     "NSFaceIDUsageDescription" : {
+      "comment" : "Privacy - Face ID Usage Description",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy uses Face ID to provide secure and convenient authentication."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy utilise Face ID pour fournir une authentification sécurisée et pratique."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy verwendet Face ID für eine sichere und bequeme Authentifizierung."
           }
         },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy uses Face ID to provide secure and convenient authentication."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy utiliza Face ID para proporcionar una autenticación segura y práctica."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utilise Face ID pour fournir une authentification sécurisée et pratique."
           }
         },
         "pt-BR" : {
@@ -139,29 +154,30 @@
       }
     },
     "NSLocationWhenInUseUsageDescription" : {
+      "comment" : "Privacy - Location When In Use Usage Description",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy uses your location to share your current location with contacts and find nearby friends."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy utilise votre position pour partager votre localisation avec vos contacts et trouver des amis à proximité."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy verwendet Ihren Standort, um ihn mit Kontakten zu teilen und Freunde in der Nähe zu finden."
           }
         },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy uses your location to share your current location with contacts and find nearby friends."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy utiliza tu ubicación para compartirla con tus contactos y encontrar amigos cercanos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utilise votre position pour partager votre localisation avec vos contacts et trouver des amis à proximité."
           }
         },
         "pt-BR" : {
@@ -173,29 +189,30 @@
       }
     },
     "NSMicrophoneUsageDescription" : {
+      "comment" : "Privacy - Microphone Usage Description",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy needs access to your microphone for voice messages, video calls, and audio recording."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy a besoin d'accéder à votre microphone pour les messages vocaux, les appels vidéo et l'enregistrement audio."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy benötigt Zugriff auf Ihr Mikrofon für Sprachnachrichten, Videoanrufe und Audioaufnahmen."
           }
         },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy needs access to your microphone for voice messages, video calls, and audio recording."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy necesita acceso a tu micrófono para mensajes de voz, videollamadas y grabación de audio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy a besoin d'accéder à votre microphone pour les messages vocaux, les appels vidéo et l'enregistrement audio."
           }
         },
         "pt-BR" : {
@@ -207,29 +224,30 @@
       }
     },
     "NSPhotoLibraryAddUsageDescription" : {
+      "comment" : "Privacy - Photo Library Additions Usage Description",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy needs permission to save photos and videos to your library."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy a besoin de l'autorisation pour enregistrer des photos et vidéos dans votre bibliothèque."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy benötigt die Erlaubnis, Fotos und Videos in Ihrer Bibliothek zu speichern."
           }
         },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy needs permission to save photos and videos to your library."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy necesita permiso para guardar fotos y videos en tu biblioteca."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy a besoin de l'autorisation pour enregistrer des photos et vidéos dans votre bibliothèque."
           }
         },
         "pt-BR" : {
@@ -241,29 +259,30 @@
       }
     },
     "NSPhotoLibraryUsageDescription" : {
+      "comment" : "Privacy - Photo Library Usage Description",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy needs access to your photo library to share photos and videos with your contacts."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy a besoin d'accéder à votre photothèque pour partager des photos et vidéos avec vos contacts."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy benötigt Zugriff auf Ihre Fotomediathek, um Fotos und Videos mit Ihren Kontakten zu teilen."
           }
         },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy needs access to your photo library to share photos and videos with your contacts."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy necesita acceso a tu biblioteca de fotos para compartir fotos y videos con tus contactos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy a besoin d'accéder à votre photothèque pour partager des photos et vidéos avec vos contacts."
           }
         },
         "pt-BR" : {
@@ -275,29 +294,30 @@
       }
     },
     "NSSpeechRecognitionUsageDescription" : {
+      "comment" : "Privacy - Speech Recognition Usage Description",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy uses on-device speech recognition for real-time voice translation and voice message transcription. Your voice data stays on your device for maximum privacy."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy utilise la reconnaissance vocale sur l'appareil pour la traduction vocale en temps réel et la transcription des messages vocaux. Vos données vocales restent sur votre appareil pour une confidentialité maximale."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy verwendet die geräteinterne Spracherkennung für Echtzeit-Sprachübersetzung und Transkription von Sprachnachrichten. Ihre Sprachdaten verbleiben auf Ihrem Gerät für maximale Privatsphäre."
           }
         },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy uses on-device speech recognition for real-time voice translation and voice message transcription. Your voice data stays on your device for maximum privacy."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy utiliza reconocimiento de voz en el dispositivo para traducción de voz en tiempo real y transcripción de mensajes de voz. Tus datos de voz permanecen en tu dispositivo para máxima privacidad."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utilise la reconnaissance vocale sur l'appareil pour la traduction vocale en temps réel et la transcription des messages vocaux. Vos données vocales restent sur votre appareil pour une confidentialité maximale."
           }
         },
         "pt-BR" : {
@@ -309,29 +329,30 @@
       }
     },
     "NSVoIPUsageDescription" : {
+      "comment" : "Privacy - VoIP Usage Description",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy uses VoIP to enable real-time voice and video calls with your contacts."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meeshy utilise la VoIP pour permettre les appels vocaux et vidéo en temps réel avec vos contacts."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy verwendet VoIP für Echtzeit-Sprach- und Videoanrufe mit Ihren Kontakten."
           }
         },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy uses VoIP to enable real-time voice and video calls with your contacts."
+          }
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy utiliza VoIP para permitir llamadas de voz y video en tiempo real con tus contactos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utilise la VoIP pour permettre les appels vocaux et vidéo en temps réel avec vos contacts."
           }
         },
         "pt-BR" : {
@@ -342,5 +363,6 @@
         }
       }
     }
-  }
+  },
+  "version" : "1.0"
 }

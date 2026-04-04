@@ -175,6 +175,8 @@ struct StoryViewerView: View {
         .onDisappear {
             timerCancellable?.cancel()
             StoryMediaCoordinator.shared.deactivate()
+            StoryMediaLoader.shared.clearThumbnailCache()
+            StoryMediaLoader.shared.clearPlayerCache()
         }
         .sheet(isPresented: $showViewersSheet, onDismiss: {
             resumeTimer()
@@ -1051,6 +1053,11 @@ struct StoryViewerView: View {
                                         Image(systemName: "arrow.2.squarepath")
                                             .font(.system(size: 10, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.6))
+                                        if let authorName = story.repostAuthorName {
+                                            Text("via @\(authorName)")
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundColor(.white.opacity(0.55))
+                                        }
                                     }
 
                                     if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {

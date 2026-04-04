@@ -4,7 +4,7 @@ import Foundation
 
 public protocol StatusServiceProviding: Sendable {
     func list(mode: StatusService.Mode, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
-    func create(moodEmoji: String, content: String?, visibility: String, visibilityUserIds: [String]?) async throws -> APIPost
+    func create(moodEmoji: String, content: String?, visibility: String, visibilityUserIds: [String]?, viaUsername: String?) async throws -> APIPost
     func delete(statusId: String) async throws
     func react(statusId: String, emoji: String) async throws
 }
@@ -33,8 +33,8 @@ public final class StatusService: StatusServiceProviding, @unchecked Sendable {
         try await api.paginatedRequest(endpoint: mode.endpoint, cursor: cursor, limit: limit)
     }
 
-    public func create(moodEmoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil) async throws -> APIPost {
-        let body = CreatePostRequest(content: content ?? "", type: "STATUS", visibility: visibility, moodEmoji: moodEmoji, visibilityUserIds: visibilityUserIds)
+    public func create(moodEmoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil) async throws -> APIPost {
+        let body = CreatePostRequest(content: content ?? "", type: "STATUS", visibility: visibility, moodEmoji: moodEmoji, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }

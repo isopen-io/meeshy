@@ -145,6 +145,12 @@ struct StatusBarView: View {
                     .multilineTextAlignment(.center)
             }
 
+            if let via = entry.viaUsername {
+                Text("via @\(via)")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textMuted)
+            }
+
             Text(entry.timeRemaining)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(theme.textMuted)

@@ -83,6 +83,7 @@ struct ConversationListView: View {
     @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
     @State private var selectedProfileUser: ProfileSheetUser? = nil
     @State private var headerScrollOffset: CGFloat = 0
+    @State private var lastScrollDirectionChange: Date = .distantPast
     
     // UI states
     @State var blockTargetConversation: Conversation? = nil
@@ -96,6 +97,12 @@ struct ConversationListView: View {
     // Widget preview state
     @State var showWidgetPreview = false
     @State private var showShareLinkSheet = false
+
+    // Invite sheet
+    @State var inviteSheetConversation: Conversation? = nil
+
+    // Status republication
+    @State private var republishStatusEntry: StatusEntry? = nil
 
     // Communities data
     @State var userCommunities: [MeeshyCommunity] = []
@@ -222,7 +229,7 @@ struct ConversationListView: View {
                     handleMoodBadgeTap(conversation, at: anchor)
                 },
                 onCreateShareLink: canCreateShareLink(for: conversation) ? {
-                    Task { await shareConversationLink(for: conversation) }
+                    inviteSheetConversation = conversation
                 } : nil,
                 isDark: theme.mode.isDark,
                 storyRingState: storyRingState(for: conversation),
@@ -459,7 +466,21 @@ struct ConversationListView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
+            .sheet(item: $inviteSheetConversation) { conversation in
+                InviteFriendsSheet(conversation: conversation)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
         .withStatusBubble()
+        .sheet(item: $republishStatusEntry) { entry in
+            StatusComposerView(
+                viewModel: statusViewModel,
+                initialEmoji: entry.moodEmoji,
+                initialText: entry.content,
+                viaUsername: entry.username
+            )
+            .presentationDetents([.medium])
+        }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
                 .presentationDetents([.medium])
@@ -504,7 +525,9 @@ struct ConversationListView: View {
             }
             .overlay {
                 if showStatusBubble, let status = selectedStatusEntry {
-                    StatusBubbleOverlay(status: status, anchorPoint: moodBadgeAnchor, isPresented: $showStatusBubble)
+                    StatusBubbleOverlay(status: status, anchorPoint: moodBadgeAnchor, isPresented: $showStatusBubble, onRepublish: { entry in
+                        republishStatusEntry = entry
+                    })
                         .zIndex(200)
                 }
             }
@@ -641,7 +664,11 @@ struct ConversationListView: View {
                 guard !isSearching, !showSearchOverlay else { return }
                 let scrollingDown = offset < -30
                 if scrollingDown != isScrollingDown {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = scrollingDown }
+                    // Throttle direction changes to avoid rapid toggling during bounce/overscroll
+                    let now = Date()
+                    guard now.timeIntervalSince(lastScrollDirectionChange) > 0.15 else { return }
+                    lastScrollDirectionChange = now
+                    isScrollingDown = scrollingDown
                 }
             }
             .scrollDismissesKeyboard(.interactively)
@@ -730,7 +757,7 @@ struct ConversationListView: View {
                 conversations: conversationViewModel.conversations.filter { canCreateShareLink(for: $0) },
                 onSelect: { conversation in
                     showShareLinkSheet = false
-                    Task { await shareConversationLink(for: conversation) }
+                    inviteSheetConversation = conversation
                 }
             )
         }

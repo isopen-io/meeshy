@@ -74,4 +74,5 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallToggleAudio(callId: String, enabled: Bool) {}
     func emitCallToggleVideo(callId: String, enabled: Bool) {}
     func emitCallEnd(callId: String) {}
+    func emitCallHeartbeat(callId: String) {}
 }

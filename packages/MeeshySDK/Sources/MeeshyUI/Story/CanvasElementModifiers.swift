@@ -35,13 +35,13 @@ struct CanvasContextMenu: ViewModifier {
                 Button {
                     viewModel.duplicateElement(id: elementId)
                 } label: {
-                    Label("Dupliquer", systemImage: "doc.on.doc")
+                    Label(String(localized: "story.canvas.duplicate", defaultValue: "Dupliquer", bundle: .module), systemImage: "doc.on.doc")
                 }
 
                 Button(role: .destructive) {
                     viewModel.deleteElement(id: elementId)
                 } label: {
-                    Label("Supprimer", systemImage: "trash")
+                    Label(String(localized: "story.canvas.delete", defaultValue: "Supprimer", bundle: .module), systemImage: "trash")
                 }
 
                 Divider()
@@ -49,25 +49,25 @@ struct CanvasContextMenu: ViewModifier {
                 Button {
                     viewModel.bringToFront(id: elementId)
                 } label: {
-                    Label("Mettre devant", systemImage: "square.3.layers.3d.top.filled")
+                    Label(String(localized: "story.canvas.bringToFront", defaultValue: "Mettre devant", bundle: .module), systemImage: "square.3.layers.3d.top.filled")
                 }
 
                 Button {
                     viewModel.sendToBack(id: elementId)
                 } label: {
-                    Label("Mettre derrière", systemImage: "square.3.layers.3d.bottom.filled")
+                    Label(String(localized: "story.canvas.sendToBack", defaultValue: "Mettre derriere", bundle: .module), systemImage: "square.3.layers.3d.bottom.filled")
                 }
 
-                if elementType == .video || elementType == .audio || elementType == .text {
-                    Divider()
-
-                    Button {
-                        viewModel.activeTool = .timeline
-                        viewModel.selectedElementId = elementId
-                    } label: {
-                        Label("Timing", systemImage: "clock")
-                    }
-                }
+                // DISABLED: timeline tool — deplace en long press canvas (futur)
+                // if elementType == .video || elementType == .audio || elementType == .text {
+                //     Divider()
+                //     Button {
+                //         viewModel.activeTool = .timeline
+                //         viewModel.selectedElementId = elementId
+                //     } label: {
+                //         Label("Timing", systemImage: "clock")
+                //     }
+                // }
             }
     }
 }

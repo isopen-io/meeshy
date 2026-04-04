@@ -12,13 +12,21 @@ struct CallView: View {
     @State private var pulseScale: CGFloat = 1.0
     @State private var showControls = true
     @State private var showTranscript = false
+    @State private var showEffectsToolbar = false
     @State private var localPreviewOffset: CGSize = .zero
     @State private var localPreviewPosition: CGPoint = CGPoint(x: UIScreen.main.bounds.width - 70, y: 100)
 
     var body: some View {
         ZStack {
-            // Background
-            callBackground
+            // Background: camera locale pour appels video, gradient pour audio
+            if callManager.isVideoEnabled {
+                CallVideoView(track: callManager.localVideoTrack, mirror: true, contentMode: .scaleAspectFill)
+                    .ignoresSafeArea()
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+            } else {
+                callBackground
+            }
 
             // Content based on state
             switch callManager.callState {
@@ -38,6 +46,15 @@ struct CallView: View {
                 connectingView
             case .idle:
                 EmptyView()
+            }
+
+            // Effects overlay — accessible dans tous les etats actifs (pas seulement connected)
+            if callManager.callState.isActive && !callManager.callState.isRinging {
+                CallEffectsOverlay(
+                    isExpanded: $showEffectsToolbar,
+                    isVideoEnabled: callManager.isVideoEnabled
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .ignoresSafeArea()
@@ -91,13 +108,14 @@ struct CallView: View {
             // Name
             Text(callManager.remoteUsername ?? "Inconnu")
                 .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                 .padding(.bottom, 8)
 
             // Status text
             Text("Appel en cours...")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundColor(.white.opacity(0.7))
                 .padding(.bottom, 8)
 
             // Call type badge
@@ -106,9 +124,14 @@ struct CallView: View {
 
             Spacer()
 
-            // End call button
-            endCallButton
-                .padding(.bottom, 80)
+            // Effects + End call row
+            HStack(spacing: 40) {
+                if callManager.isVideoEnabled {
+                    effectsToggleButton
+                }
+                endCallButton
+            }
+            .padding(.bottom, 80)
         }
     }
 
@@ -123,7 +146,8 @@ struct CallView: View {
 
             Text(callManager.remoteUsername ?? "Inconnu")
                 .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                 .padding(.bottom, 8)
 
             HStack(spacing: 8) {
@@ -131,14 +155,19 @@ struct CallView: View {
                     .tint(Color(hex: "08D9D6"))
                 Text("Connexion...")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(.white.opacity(0.7))
             }
             .padding(.bottom, 60)
 
             Spacer()
 
-            endCallButton
-                .padding(.bottom, 80)
+            HStack(spacing: 40) {
+                if callManager.isVideoEnabled {
+                    effectsToggleButton
+                }
+                endCallButton
+            }
+            .padding(.bottom, 80)
         }
     }
 
@@ -169,9 +198,10 @@ struct CallView: View {
                 draggableLocalPreview
             }
         }
-        .gesture(
+        .simultaneousGesture(
             DragGesture(minimumDistance: 50)
                 .onEnded { value in
+                    guard !showEffectsToolbar else { return }
                     if value.translation.height > 100 && callManager.isVideoEnabled {
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                             callManager.displayMode = .pip
@@ -215,42 +245,52 @@ struct CallView: View {
     }
 
     private var videoCallLayout: some View {
-        // Remote video placeholder (full screen)
-        RoundedRectangle(cornerRadius: 20)
-            .fill(Color.black.opacity(0.4))
-            .overlay(
-                VStack(spacing: 12) {
-                    Image(systemName: "video.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.white.opacity(0.3))
-                    Text("Video en attente...")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
+        ZStack {
+            // Remote video (full area)
+            if callManager.hasRemoteVideoTrack {
+                CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
+            } else {
+                Color.black.opacity(0.4)
+                    .overlay(
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .tint(.white.opacity(0.5))
+                            Text("Connexion video...")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white.opacity(0.4))
+                        }
+                    )
+            }
+
+            // Duration badge top-left
+            VStack {
+                HStack {
+                    Text(callManager.formattedDuration)
+                        .font(.system(size: 13, weight: .medium).monospacedDigit())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                        .padding(12)
+                    Spacer()
                 }
-            )
-            .frame(maxWidth: .infinity, maxHeight: 400)
-            .padding(.horizontal, 20)
+                Spacer()
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Draggable Local Preview
 
     private var draggableLocalPreview: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(Color.black.opacity(0.6))
+        CallVideoView(track: callManager.localVideoTrack, mirror: true, contentMode: .scaleAspectFill)
             .frame(width: 100, height: 140)
-            .overlay(
-                VStack(spacing: 4) {
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.white.opacity(0.4))
-                    Text("Vous")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.3))
-                }
-            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
             .position(localPreviewPosition)
@@ -331,67 +371,76 @@ struct CallView: View {
 
     // MARK: - Control Bar
 
+    private var hasActiveEffects: Bool {
+        callManager.activeAudioEffect != nil || callManager.videoFilters.config.isEnabled
+    }
+
     private var controlBar: some View {
-        HStack(spacing: 28) {
-            // Mute
-            callControlButton(
-                icon: callManager.isMuted ? "mic.slash.fill" : "mic.fill",
-                color: callManager.isMuted ? "FF2E63" : "FFFFFF",
-                bgColor: callManager.isMuted ? "FF2E63" : "FFFFFF",
-                isActive: callManager.isMuted,
-                label: "Micro"
-            ) {
-                callManager.toggleMute()
-            }
-
-            // Speaker
-            callControlButton(
-                icon: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
-                color: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
-                bgColor: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
-                isActive: callManager.isSpeaker,
-                label: "HP"
-            ) {
-                callManager.toggleSpeaker()
-            }
-
-            // Transcript toggle
-            callControlButton(
-                icon: showTranscript ? "captions.bubble.fill" : "captions.bubble",
-                color: showTranscript ? "A855F7" : "FFFFFF",
-                bgColor: showTranscript ? "A855F7" : "FFFFFF",
-                isActive: showTranscript,
-                label: "Texte"
-            ) {
-                showTranscript.toggle()
-            }
-
-            if callManager.isVideoEnabled {
-                // Camera flip
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 24) {
+                // Mute
                 callControlButton(
-                    icon: "camera.rotate.fill",
-                    color: "FFFFFF",
-                    bgColor: "FFFFFF",
-                    isActive: false,
-                    label: "Camera"
+                    icon: callManager.isMuted ? "mic.slash.fill" : "mic.fill",
+                    color: callManager.isMuted ? "FF2E63" : "FFFFFF",
+                    bgColor: callManager.isMuted ? "FF2E63" : "FFFFFF",
+                    isActive: callManager.isMuted,
+                    label: "Micro"
                 ) {
-                    callManager.switchCamera()
+                    callManager.toggleMute()
                 }
 
-                // Toggle video
+                // Speaker
                 callControlButton(
-                    icon: callManager.isVideoEnabled ? "video.fill" : "video.slash.fill",
-                    color: "A855F7",
-                    bgColor: "A855F7",
-                    isActive: false,
-                    label: "Video"
+                    icon: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
+                    color: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
+                    bgColor: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
+                    isActive: callManager.isSpeaker,
+                    label: "HP"
                 ) {
-                    callManager.toggleVideo()
+                    callManager.toggleSpeaker()
                 }
-            }
 
-            // End call
-            endCallButton
+                // Effects (Plus button)
+                callControlButton(
+                    icon: showEffectsToolbar ? "xmark" : "plus",
+                    color: hasActiveEffects ? "6366F1" : "FFFFFF",
+                    bgColor: hasActiveEffects ? "6366F1" : "FFFFFF",
+                    isActive: showEffectsToolbar || hasActiveEffects,
+                    label: "Effets"
+                ) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showEffectsToolbar.toggle()
+                    }
+                }
+
+                if callManager.isVideoEnabled {
+                    // Camera flip
+                    callControlButton(
+                        icon: "camera.rotate.fill",
+                        color: "FFFFFF",
+                        bgColor: "FFFFFF",
+                        isActive: false,
+                        label: "Camera"
+                    ) {
+                        callManager.switchCamera()
+                    }
+
+                    // Toggle video
+                    callControlButton(
+                        icon: callManager.isVideoEnabled ? "video.fill" : "video.slash.fill",
+                        color: "A855F7",
+                        bgColor: "A855F7",
+                        isActive: false,
+                        label: "Video"
+                    ) {
+                        callManager.toggleVideo()
+                    }
+                }
+
+                // End call
+                endCallButton
+            }
+            .padding(.horizontal, 16)
         }
     }
 
@@ -491,6 +540,35 @@ struct CallView: View {
         }
         .pressable()
         .accessibilityLabel(label)
+    }
+
+    private var effectsToggleButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showEffectsToolbar.toggle()
+            }
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(hasActiveEffects ? MeeshyColors.indigo500.opacity(0.2) : Color.white.opacity(0.1))
+                        .frame(width: 64, height: 64)
+                        .overlay(
+                            Circle()
+                                .stroke(hasActiveEffects ? MeeshyColors.indigo500.opacity(0.5) : Color.white.opacity(0.2), lineWidth: 1)
+                        )
+
+                    Image(systemName: showEffectsToolbar ? "xmark" : "camera.filters")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(0.9))
+                }
+                Text("Filtres")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+        }
+        .pressable()
+        .accessibilityLabel("Filtres video")
     }
 
     private var endCallButton: some View {

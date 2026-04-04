@@ -62,13 +62,13 @@ extension ConversationListView {
             Label(String(localized: "context.details", defaultValue: "Détails"), systemImage: "info.circle.fill")
         }
 
-        // Partager — créer un lien d'invitation si droits suffisants
+        // Inviter — ouvrir le sheet d'invitation si droits suffisants
         if canCreateShareLink(for: conversation) {
             Button {
                 HapticFeedback.medium()
-                Task { await shareConversationLink(for: conversation) }
+                inviteSheetConversation = conversation
             } label: {
-                Label(String(localized: "context.share", defaultValue: "Partager"), systemImage: "square.and.arrow.up")
+                Label(String(localized: "context.invite_friends", defaultValue: "Inviter mes amis"), systemImage: "person.badge.plus")
             }
         }
 

@@ -113,9 +113,9 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Set Status
 
-    func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil) async {
+    func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil) async {
         do {
-            let post = try await statusService.create(moodEmoji: emoji, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds)
+            let post = try await statusService.create(moodEmoji: emoji, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername)
 
             if let entry = post.toStatusEntry() {
                 myStatus = entry

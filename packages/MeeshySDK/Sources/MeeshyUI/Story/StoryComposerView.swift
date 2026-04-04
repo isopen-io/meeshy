@@ -252,10 +252,15 @@ public struct StoryComposerView: View {
             }
         }
         .statusBarHidden()
+        .onAppear {
+            viewModel.startMemoryObserver()
+        }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
             publishTask?.cancel()
             publishTask = nil
+            viewModel.stopMemoryObserver()
+            viewModel.cleanupTempFiles()
         }
         .onChange(of: bgPhotoItem) { _, item in loadBackgroundPhoto(from: item) }
         .onChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
@@ -565,21 +570,23 @@ public struct StoryComposerView: View {
             bgMediaPanel
         case .drawing:
             drawingPanel
-        case .bgAudio:
-            bgAudioPanel
+        // DISABLED: bgAudio — non fonctionnel
+        // case .bgAudio:
+        //     bgAudioPanel
         case .text:
             textPanel.padding(.bottom, 8)
         case .media:
             mediaPanel
         case .audio:
             fgAudioPanel
-        case .filter:
-            StoryFilterPicker(selectedFilter: $selectedFilter, previewImage: selectedImage)
-                .padding(.vertical, 12)
-        case .effects:
-            transitionPicker
-        case .timeline:
-            TimelinePanel(viewModel: viewModel)
+        // DISABLED: filter, effects, timeline — deplacees en menu contextuel par element
+        // case .filter:
+        //     StoryFilterPicker(selectedFilter: $selectedFilter, previewImage: selectedImage)
+        //         .padding(.vertical, 12)
+        // case .effects:
+        //     transitionPicker
+        // case .timeline:
+        //     TimelinePanel(viewModel: viewModel)
         case .none:
             EmptyView()
         }
@@ -792,105 +799,121 @@ public struct StoryComposerView: View {
     @ViewBuilder
     private func mediaElementList(placement: String) -> some View {
         let items = viewModel.currentEffects.mediaObjects?.filter { $0.placement == placement } ?? []
-        if !items.isEmpty {
-            VStack(spacing: 4) {
-                ForEach(items, id: \.id) { obj in
-                    let isSelected = viewModel.selectedElementId == obj.id
-                    HStack(spacing: 8) {
-                        if let img = viewModel.loadedImages[obj.id] {
-                            Image(uiImage: img)
-                                .resizable().scaledToFill()
-                                .frame(width: 32, height: 32)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                        } else {
-                            Image(systemName: obj.mediaType == "video" ? "video.fill" : "photo")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(MeeshyColors.indigo400)
-                                .frame(width: 32, height: 32)
-                                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
-                        }
-                        Text(obj.mediaType == "video" ? String(localized: "story.composer.videoLabel", defaultValue: "Video", bundle: .module) : String(localized: "story.composer.imageLabel", defaultValue: "Image", bundle: .module))
-                            .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                            .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
-                        Spacer()
-                        Button {
-                            viewModel.selectedElementId = obj.id
-                            viewModel.selectTool(.timeline)
-                        } label: {
-                            Image(systemName: "timeline.selection")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(MeeshyColors.indigo400)
-                                .frame(width: 28, height: 28)
-                                .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
-                        }
-                        Button {
-                            viewModel.deleteElement(id: obj.id)
-                            HapticFeedback.medium()
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(MeeshyColors.error)
-                                .frame(width: 28, height: 28)
-                        }
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 6)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
-                    .onTapGesture {
-                        viewModel.selectedElementId = obj.id
-                        viewModel.bringToFront(id: obj.id)
+        return Group {
+            if !items.isEmpty {
+                VStack(spacing: 4) {
+                    ForEach(items, id: \.id) { obj in
+                        mediaElementRow(obj: obj)
                     }
                 }
+                .padding(.horizontal, 12)
             }
-            .padding(.horizontal, 12)
+        }
+    }
+
+    private func mediaElementRow(obj: StoryMediaObject) -> some View {
+        let isSelected = viewModel.selectedElementId == obj.id
+        return HStack(spacing: 8) {
+            mediaElementThumbnail(obj: obj)
+            Text(obj.mediaType == "video" ? String(localized: "story.composer.videoLabel", defaultValue: "Video", bundle: .module) : String(localized: "story.composer.imageLabel", defaultValue: "Image", bundle: .module))
+                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
+            Spacer()
+            Button {
+                viewModel.selectedElementId = obj.id
+                viewModel.selectedElementId = obj.id
+            } label: {
+                Image(systemName: "timeline.selection")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.indigo400)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
+            }
+            Button {
+                viewModel.deleteElement(id: obj.id)
+                HapticFeedback.medium()
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(MeeshyColors.error)
+                    .frame(width: 28, height: 28)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
+        .onTapGesture {
+            viewModel.selectedElementId = obj.id
+            viewModel.bringToFront(id: obj.id)
         }
     }
 
     @ViewBuilder
+    private func mediaElementThumbnail(obj: StoryMediaObject) -> some View {
+        if let img = viewModel.loadedImages[obj.id] {
+            Image(uiImage: img)
+                .resizable().scaledToFill()
+                .frame(width: 32, height: 32)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        } else {
+            Image(systemName: obj.mediaType == "video" ? "video.fill" : "photo")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(MeeshyColors.indigo400)
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
+        }
+    }
+
     private func audioElementList(placement: String) -> some View {
         let items = viewModel.currentEffects.audioPlayerObjects?.filter { $0.placement == placement } ?? []
-        if !items.isEmpty {
-            VStack(spacing: 4) {
-                ForEach(items, id: \.id) { obj in
-                    let isSelected = viewModel.selectedElementId == obj.id
-                    HStack(spacing: 8) {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(MeeshyColors.indigo400)
-                            .frame(width: 32, height: 32)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
-                        Text(String(localized: "story.composer.audioLabel", defaultValue: "Audio", bundle: .module))
-                            .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                            .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
-                        Spacer()
-                        Button {
-                            viewModel.selectedElementId = obj.id
-                            viewModel.selectTool(.timeline)
-                        } label: {
-                            Image(systemName: "timeline.selection")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(MeeshyColors.indigo400)
-                                .frame(width: 28, height: 28)
-                                .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
-                        }
-                        Button {
-                            viewModel.deleteElement(id: obj.id)
-                            HapticFeedback.medium()
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(MeeshyColors.error)
-                                .frame(width: 28, height: 28)
-                        }
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 6)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
-                    .onTapGesture {
-                        viewModel.selectedElementId = obj.id
-                        viewModel.bringToFront(id: obj.id)
+        return Group {
+            if !items.isEmpty {
+                VStack(spacing: 4) {
+                    ForEach(items, id: \.id) { obj in
+                        audioElementRow(obj: obj)
                     }
                 }
+                .padding(.horizontal, 12)
             }
-            .padding(.horizontal, 12)
+        }
+    }
+
+    private func audioElementRow(obj: StoryAudioPlayerObject) -> some View {
+        let isSelected = viewModel.selectedElementId == obj.id
+        return HStack(spacing: 8) {
+            Image(systemName: "waveform")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(MeeshyColors.indigo400)
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
+            Text(String(localized: "story.composer.audioLabel", defaultValue: "Audio", bundle: .module))
+                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
+            Spacer()
+            Button {
+                viewModel.selectedElementId = obj.id
+                viewModel.selectedElementId = obj.id
+            } label: {
+                Image(systemName: "timeline.selection")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.indigo400)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
+            }
+            Button {
+                viewModel.deleteElement(id: obj.id)
+                HapticFeedback.medium()
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(MeeshyColors.error)
+                    .frame(width: 28, height: 28)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
+        .onTapGesture {
+            viewModel.selectedElementId = obj.id
+            viewModel.bringToFront(id: obj.id)
         }
     }
 
@@ -1052,8 +1075,8 @@ public struct StoryComposerView: View {
         isLoadingMedia = true
         Task {
             defer { isLoadingMedia = false }
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data) else { return }
+            // ImageIO hardware-accelerated downsample — never allocates full-res bitmap
+            guard let image = await StoryMediaLoader.shared.loadImage(from: item, maxDimension: 1080) else { return }
             selectedImage = image
             viewModel.hasBackgroundImage = true
             viewModel.setImage(image, for: viewModel.currentSlide.id)
@@ -1078,7 +1101,8 @@ public struct StoryComposerView: View {
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(objectId + "." + ext)
                 do {
                     try data.write(to: tempURL)
-                    let thumbnail = Self.generateVideoThumbnail(url: tempURL)
+                    // Async thumbnail extraction via StoryMediaLoader (cached, off main thread)
+                    let thumbnail = await StoryMediaLoader.shared.videoThumbnail(url: tempURL, maxDimension: 400)
                     let asset = AVURLAsset(url: tempURL)
                     var mediaDuration: Float?
                     if let cmDur = try? await asset.load(.duration) {
@@ -1104,8 +1128,9 @@ public struct StoryComposerView: View {
                     print("[StoryComposer] Video write error: \(error)")
                 }
             } else {
+                // ImageIO downsample for foreground images (max 1080px)
                 guard let data = try? await item.loadTransferable(type: Data.self),
-                      let image = UIImage(data: data) else { return }
+                      let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else { return }
                 await MainActor.run {
                     if let obj = viewModel.addMediaObject(type: "image") {
                         viewModel.loadedImages[obj.id] = image
@@ -1267,6 +1292,8 @@ public struct StoryComposerView: View {
     }
 
     // MARK: - Video Thumbnail
+    // DEPRECATED: Replaced by StoryMediaLoader.shared.videoThumbnail(url:) — async, cached, off main thread.
+    // Kept for backward compatibility with external callers.
 
     static func generateVideoThumbnail(url: URL) -> UIImage? {
         let asset = AVURLAsset(url: url)

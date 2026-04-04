@@ -510,6 +510,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallToggleAudio(callId: String, enabled: Bool)
     func emitCallToggleVideo(callId: String, enabled: Bool)
     func emitCallEnd(callId: String)
+    func emitCallHeartbeat(callId: String)
 }
 
 // MARK: - Message Socket Manager
@@ -860,6 +861,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitCallEnd(callId: String) {
         socket?.emit("call:end", ["callId": callId])
+    }
+
+    public func emitCallHeartbeat(callId: String) {
+        socket?.emit("call:heartbeat", ["callId": callId])
     }
 
     // MARK: - Event Handlers

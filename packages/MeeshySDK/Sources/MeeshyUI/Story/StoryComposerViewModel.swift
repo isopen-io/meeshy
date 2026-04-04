@@ -8,27 +8,29 @@ enum StoryToolMode: String, CaseIterable {
     // Fond
     case bgMedia
     case drawing
-    case bgAudio
+    // DISABLED: bgAudio — non fonctionnel, audio ambiance ne produit rien
+    // case bgAudio
     // Front
     case text
     case media
     case audio
-    // Plus
-    case filter
-    case effects
-    case timeline
+    // DISABLED: filter, effects, timeline — deplacees en menu contextuel par element
+    // case filter
+    // case effects
+    // case timeline
 
     var group: StoryToolGroup {
         switch self {
-        case .bgMedia, .drawing, .bgAudio: return .fond
+        case .bgMedia, .drawing: return .fond
         case .text, .media, .audio: return .front
-        case .filter, .effects, .timeline: return .plus
         }
     }
 }
 
 enum StoryToolGroup: String {
-    case fond, front, plus
+    case fond, front
+    // DISABLED: plus — outils integres contextuellement par element
+    // case plus
 }
 
 
@@ -427,6 +429,46 @@ final class StoryComposerViewModel {
     func deselectAll() {
         selectedElementId = nil
         activeTool = nil
+    }
+
+    // MARK: - Memory Pressure & Cleanup
+
+    private var memoryObserver: Any?
+
+    func startMemoryObserver() {
+        memoryObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            // Already on .main queue, no extra Task dispatch needed
+            self?.evictNonVisibleSlideMedia()
+        }
+    }
+
+    func stopMemoryObserver() {
+        if let observer = memoryObserver {
+            NotificationCenter.default.removeObserver(observer)
+            memoryObserver = nil
+        }
+    }
+
+    /// Evict background images for slides not currently visible to reduce memory.
+    /// Images will be reloaded from draft store when the slide is selected.
+    func evictNonVisibleSlideMedia() {
+        for (index, slide) in slides.enumerated() where index != currentSlideIndex {
+            slideImages.removeValue(forKey: slide.id)
+        }
+        StoryMediaLoader.shared.clearThumbnailCache()
+    }
+
+    /// Remove temp video/audio files written during this session.
+    func cleanupTempFiles() {
+        for (_, url) in loadedVideoURLs {
+            try? FileManager.default.removeItem(at: url)
+        }
+        for (_, url) in loadedAudioURLs {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     // MARK: - Slide Image Management

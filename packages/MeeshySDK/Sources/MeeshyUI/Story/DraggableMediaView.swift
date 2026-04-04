@@ -234,7 +234,7 @@ public struct DraggableMediaView: View {
     private var mediaContentBase: some View {
         ZStack {
             if let player = activePlayer {
-                VideoPlayer(player: player)
+                _InlineVideoLayer(player: player)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else if let image {
                 Image(uiImage: image)
@@ -250,7 +250,7 @@ public struct DraggableMediaView: View {
     private var mediaContent: some View {
         ZStack {
             if let player = activePlayer {
-                VideoPlayer(player: player)
+                _InlineVideoLayer(player: player)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else if let image {
                 Image(uiImage: image)
@@ -309,8 +309,10 @@ public struct DraggableMediaView: View {
 
     private func setupInternalPlayer(url: URL) {
         teardownInternalPlayer()
-        let player = AVPlayer(url: url)
+        // Try cached prerolled player first (zero-latency path)
+        let player = StoryMediaLoader.shared.cachedPlayer(for: url) ?? AVPlayer(url: url)
         player.isMuted = false
+        player.currentItem?.preferredForwardBufferDuration = 2.0
         internalPlayer = player
 
         let observer = NotificationCenter.default.addObserver(
@@ -336,4 +338,26 @@ public struct DraggableMediaView: View {
         internalPlayer = nil
         isPlaying = false
     }
+}
+
+// MARK: - Inline AVPlayerLayer (GPU-composited, replaces SwiftUI VideoPlayer)
+
+private struct _InlineVideoLayer: UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(context: Context) -> _InlinePlayerView {
+        let view = _InlinePlayerView()
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspectFill
+        return view
+    }
+
+    func updateUIView(_ uiView: _InlinePlayerView, context: Context) {
+        uiView.playerLayer.player = player
+    }
+}
+
+private class _InlinePlayerView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }

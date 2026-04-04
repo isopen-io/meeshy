@@ -5,6 +5,7 @@ struct StatusBubbleOverlay: View {
     let status: StatusEntry
     let anchorPoint: CGPoint
     @Binding var isPresented: Bool
+    var onRepublish: ((StatusEntry) -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var audioPlayer = AudioPlayerManager()
@@ -84,7 +85,7 @@ struct StatusBubbleOverlay: View {
     // MARK: - Bubble Content
 
     private var bubbleContent: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 6) {
             if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     audioPlayerRow(urlString: audioUrl)
@@ -105,6 +106,30 @@ struct StatusBubbleOverlay: View {
                     Text(status.timeAgo)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(theme.textMuted)
+                }
+            }
+
+            // "via @username" for republished statuses
+            if let via = status.viaUsername {
+                Text("via @\(via)")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textMuted)
+            }
+
+            // Republish button (only for other users' statuses)
+            if onRepublish != nil {
+                Divider().opacity(0.3)
+                Button {
+                    dismiss()
+                    onRepublish?(status)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.2.squarepath")
+                            .font(.system(size: 11))
+                        Text("Republier")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(MeeshyColors.indigo400)
                 }
             }
         }

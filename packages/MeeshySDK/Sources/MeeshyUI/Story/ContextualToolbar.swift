@@ -3,114 +3,100 @@ import MeeshySDK
 
 // MARK: - Contextual Toolbar
 
-/// Collapsible group toolbar: FOND / FRONT / PLUS flat labels.
-/// Tap a group to expand its tool pills to the right. Only one group open at a time.
-/// Collapsing a group deactivates any active tool in that group.
-/// Group labels are flat text (no background) when collapsed — distinct from tool pills.
+/// Full-width segmented toggle: FOND / FRONT.
+/// Selecting a segment reveals its tool pills below. Always visible, no tap-to-expand.
 struct ContextualToolbar: View {
     @Bindable var viewModel: StoryComposerViewModel
     @Environment(\.theme) private var theme
-    @State private var expandedGroup: StoryToolGroup?
+    @State private var selectedGroup: StoryToolGroup = .fond
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                groupLabel(.fond, label: "FOND")
+        VStack(spacing: 10) {
+            // Segmented toggle
+            segmentedToggle
 
-                if expandedGroup == .fond {
-                    HStack(spacing: 6) {
-                        toolPill(.bgMedia, icon: "photo.fill", label: String(localized: "story.toolbar.background", defaultValue: "Fond", bundle: .module), badge: bgMediaCount)
-                        toolPill(.drawing, icon: "pencil.tip", label: String(localized: "story.toolbar.drawing", defaultValue: "Dessin", bundle: .module), badge: hasDrawing ? 1 : 0)
-                        toolPill(.bgAudio, icon: "music.note", label: String(localized: "story.toolbar.ambiance", defaultValue: "Ambiance", bundle: .module), badge: hasBgAudio ? 1 : 0)
-                    }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                }
-
-                groupLabel(.front, label: "FRONT")
-
-                if expandedGroup == .front {
-                    HStack(spacing: 6) {
-                        toolPill(.text, icon: "textformat", label: String(localized: "story.toolbar.text", defaultValue: "Texte", bundle: .module), badge: textCount)
-                        toolPill(.media, icon: "photo.on.rectangle.angled", label: String(localized: "story.toolbar.media", defaultValue: "Media", bundle: .module), badge: fgMediaCount)
-                        toolPill(.audio, icon: "waveform", label: String(localized: "story.toolbar.audio", defaultValue: "Audio", bundle: .module), badge: fgAudioCount)
-                    }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                }
-
-                groupLabel(.plus, label: "PLUS")
-
-                if expandedGroup == .plus {
-                    HStack(spacing: 6) {
-                        toolPill(.filter, icon: "camera.filters", label: String(localized: "story.toolbar.filter", defaultValue: "Filtre", bundle: .module), badge: hasFilter ? 1 : 0)
-                        toolPill(.effects, icon: "sparkles", label: String(localized: "story.toolbar.effects", defaultValue: "Effets", bundle: .module), badge: hasEffects ? 1 : 0)
-                        toolPill(.timeline, icon: "timeline.selection", label: String(localized: "story.toolbar.timeline", defaultValue: "Timeline", bundle: .module), badge: 0)
-                    }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            // Tool pills for active group
+            toolPills
         }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
         .onChange(of: viewModel.activeTool) { _, newTool in
             guard let tool = newTool else { return }
-            if expandedGroup != tool.group {
+            if selectedGroup != tool.group {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    expandedGroup = tool.group
+                    selectedGroup = tool.group
                 }
             }
         }
     }
 
-    // MARK: - Group Label (flat style)
+    // MARK: - Segmented Toggle
 
-    @ViewBuilder
-    private func groupLabel(_ group: StoryToolGroup, label: String) -> some View {
-        let isExpanded = expandedGroup == group
-        let hasContent = groupTotalBadge(group) > 0
+    private var segmentedToggle: some View {
+        HStack(spacing: 0) {
+            segmentButton(.fond, label: "FOND")
+            segmentButton(.front, label: "FRONT")
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(.ultraThinMaterial)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
 
-        Button {
+    private func segmentButton(_ group: StoryToolGroup, label: String) -> some View {
+        let isSelected = selectedGroup == group
+
+        return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                if expandedGroup == group {
-                    expandedGroup = nil
-                    if viewModel.activeTool?.group == group {
-                        viewModel.activeTool = nil
-                    }
-                } else {
-                    expandedGroup = group
+                selectedGroup = group
+                if viewModel.activeTool?.group != group {
+                    viewModel.activeTool = nil
                 }
             }
         } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: 6) {
                 Text(label)
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
-                if isExpanded {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 7, weight: .bold))
-                        .transition(.scale.combined(with: .opacity))
+                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+
+                if groupBadge(group) > 0 {
+                    Text("\(groupBadge(group))")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(isSelected ? Color.white.opacity(0.3) : MeeshyColors.indigo400)
+                        .clipShape(Circle())
                 }
             }
-            .foregroundStyle(isExpanded ? MeeshyColors.brandPrimary : theme.textMuted)
-            .padding(.horizontal, isExpanded ? 0 : 2)
-            .overlay(alignment: .topTrailing) {
-                if !isExpanded, hasContent {
-                    Circle()
-                        .fill(MeeshyColors.indigo400)
-                        .frame(width: 6, height: 6)
-                        .offset(x: 6, y: -4)
-                }
-            }
+            .foregroundStyle(isSelected ? .white : theme.textMuted)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(
+                isSelected
+                    ? AnyShapeStyle(MeeshyColors.brandGradient)
+                    : AnyShapeStyle(Color.clear)
+            )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Tool Pills
+
+    private var toolPills: some View {
+        HStack(spacing: 8) {
+            switch selectedGroup {
+            case .fond:
+                toolPill(.bgMedia, icon: "photo.fill", label: String(localized: "story.toolbar.background", defaultValue: "Fond", bundle: .module), badge: bgMediaCount)
+                toolPill(.drawing, icon: "pencil.tip", label: String(localized: "story.toolbar.drawing", defaultValue: "Dessin", bundle: .module), badge: hasDrawing ? 1 : 0)
+                // DISABLED: bgAudio — non fonctionnel
+            case .front:
+                toolPill(.text, icon: "textformat", label: String(localized: "story.toolbar.text", defaultValue: "Texte", bundle: .module), badge: textCount)
+                toolPill(.media, icon: "photo.on.rectangle.angled", label: String(localized: "story.toolbar.media", defaultValue: "Media", bundle: .module), badge: fgMediaCount)
+                toolPill(.audio, icon: "waveform", label: String(localized: "story.toolbar.audio", defaultValue: "Audio", bundle: .module), badge: fgAudioCount)
+            }
+        }
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selectedGroup)
     }
 
     // MARK: - Tool Pill
@@ -174,16 +160,14 @@ struct ContextualToolbar: View {
             .clipShape(Circle())
     }
 
-    // MARK: - Group Total Badge
+    // MARK: - Group Badge
 
-    private func groupTotalBadge(_ group: StoryToolGroup) -> Int {
+    private func groupBadge(_ group: StoryToolGroup) -> Int {
         switch group {
         case .fond:
-            return bgMediaCount + (hasDrawing ? 1 : 0) + (hasBgAudio ? 1 : 0)
+            return bgMediaCount + (hasDrawing ? 1 : 0)
         case .front:
             return textCount + fgMediaCount + fgAudioCount
-        case .plus:
-            return (hasFilter ? 1 : 0) + (hasEffects ? 1 : 0)
         }
     }
 
@@ -213,19 +197,6 @@ struct ContextualToolbar: View {
 
     private var hasDrawing: Bool {
         viewModel.drawingData != nil
-    }
-
-    private var hasBgAudio: Bool {
-        viewModel.currentEffects.backgroundAudioId != nil ||
-        viewModel.currentEffects.audioPlayerObjects?.contains(where: { $0.placement == "background" }) == true
-    }
-
-    private var hasFilter: Bool {
-        viewModel.currentEffects.filter != nil
-    }
-
-    private var hasEffects: Bool {
-        viewModel.currentEffects.opening != nil || viewModel.currentEffects.closing != nil
     }
 
     // MARK: - Disabled State

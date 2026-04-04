@@ -23,6 +23,11 @@ enum CallState: Equatable {
         default: return true
         }
     }
+
+    var isRinging: Bool {
+        if case .ringing = self { return true }
+        return false
+    }
 }
 
 // MARK: - Call Manager
@@ -44,6 +49,9 @@ final class CallManager: ObservableObject {
     @Published private(set) var currentCallId: String?
     @Published private(set) var connectionQuality: PeerConnectionState = .new
     @Published var displayMode: CallDisplayMode = .fullScreen
+    @Published private(set) var activeAudioEffect: AudioEffectConfig?
+    @Published private(set) var hasLocalVideoTrack = false
+    @Published private(set) var hasRemoteVideoTrack = false
     @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool)?
 
     // MARK: - Internal
@@ -313,8 +321,16 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("Call answered with buffered SDP offer: \(callId)")
             }
         } else {
-            // SDP offer not yet received — wait for it via handleSignalOffer
+            // SDP offer not yet received — wait for it via handleSignalOffer with 30s timeout
             Logger.calls.info("Call answered but SDP offer not yet received, waiting: \(callId)")
+            signalOfferCancellable?.cancel()
+            signalOfferCancellable = nil
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(30))
+                guard let self, case .connecting = self.callState, self.currentCallId == callId else { return }
+                Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
+                self.endCallInternal(reason: .failed("Timeout: pas de reponse"))
+            }
         }
 
         HapticFeedback.success()
@@ -409,6 +425,25 @@ final class CallManager: ObservableObject {
     }
 
     var videoFilters: VideoFilterPipeline { webRTCService.videoFilters }
+    var localVideoTrack: Any? { webRTCService.localVideoTrack }
+    var remoteVideoTrack: Any? { webRTCService.remoteVideoTrack }
+
+    // MARK: - Audio Effects
+
+    func setAudioEffect(_ effect: AudioEffectConfig?) {
+        webRTCService.setAudioEffect(effect)
+        activeAudioEffect = effect
+        HapticFeedback.light()
+    }
+
+    func updateAudioEffectParams(_ config: AudioEffectConfig) {
+        webRTCService.updateAudioEffectParams(config)
+        activeAudioEffect = config
+    }
+
+    func clearAudioEffect() {
+        setAudioEffect(nil)
+    }
 
     // MARK: - Call Waiting (§11.15)
 
@@ -515,10 +550,12 @@ final class CallManager: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, let callId = self.currentCallId else { return }
+                let fromId = AuthManager.shared.currentUser?.id ?? ""
+                let remoteId = self.remoteUserId ?? ""
                 MessageSocketManager.shared.emitCallSignal(
                     callId: callId,
                     type: "heartbeat",
-                    payload: [:]
+                    payload: ["from": fromId, "to": remoteId]
                 )
                 Logger.calls.debug("Heartbeat sent for call: \(callId)")
             }
@@ -553,11 +590,12 @@ final class CallManager: ObservableObject {
                 guard let self else { return }
                 let isCapturing = UIScreen.main.isCaptured
                 Logger.calls.info("Screen capture state changed: \(isCapturing)")
-                if let callId = self.currentCallId {
+                if let callId = self.currentCallId, let remoteId = self.remoteUserId {
+                    let fromId = AuthManager.shared.currentUser?.id ?? ""
                     MessageSocketManager.shared.emitCallSignal(
                         callId: callId,
                         type: "screen-capture-detected",
-                        payload: ["isCapturing": isCapturing ? "true" : "false"]
+                        payload: ["isCapturing": isCapturing ? "true" : "false", "from": fromId, "to": remoteId]
                     )
                 }
             }
@@ -580,11 +618,12 @@ final class CallManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, let callId = self.currentCallId else { return }
+                guard let self, let callId = self.currentCallId, let remoteId = self.remoteUserId else { return }
+                let fromId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallSignal(
                     callId: callId,
                     type: "backgrounded",
-                    payload: [:]
+                    payload: ["from": fromId, "to": remoteId]
                 )
                 Logger.calls.info("Call backgrounded — notified server for extended heartbeat timeout")
             }
@@ -596,11 +635,12 @@ final class CallManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, let callId = self.currentCallId else { return }
+                guard let self, let callId = self.currentCallId, let remoteId = self.remoteUserId else { return }
+                let fromId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallSignal(
                     callId: callId,
                     type: "foregrounded",
-                    payload: [:]
+                    payload: ["from": fromId, "to": remoteId]
                 )
                 Logger.calls.info("Call foregrounded — resumed normal heartbeat timeout")
             }
@@ -669,6 +709,8 @@ final class CallManager: ObservableObject {
         signalOfferCancellable = nil
         pendingRemoteOffer = nil
         thermalMonitor.stopMonitoring()
+        activeAudioEffect = nil
+        hasRemoteVideoTrack = false
         callStartDate = nil
         reconnectAttempt = 0
         webRTCService.close()
@@ -775,27 +817,29 @@ final class CallManager: ObservableObject {
 
     // MARK: - Socket Emit Helpers
 
-    private nonisolated func emitCallOffer(callId: String, toUserId: String, isVideo: Bool, sdp: SessionDescription) {
+    private func emitCallOffer(callId: String, toUserId: String, isVideo: Bool, sdp: SessionDescription) {
+        let fromUserId = AuthManager.shared.currentUser?.id ?? ""
         MessageSocketManager.shared.emitCallSignal(
             callId: callId,
             type: "offer",
-            payload: ["sdp": sdp.sdp, "to": toUserId]
+            payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId]
         )
     }
 
-    private nonisolated func emitCallAnswer(callId: String, toUserId: String, sdp: SessionDescription) {
+    private func emitCallAnswer(callId: String, toUserId: String, sdp: SessionDescription) {
+        let fromUserId = AuthManager.shared.currentUser?.id ?? ""
         MessageSocketManager.shared.emitCallSignal(
             callId: callId,
             type: "answer",
-            payload: ["sdp": sdp.sdp, "to": toUserId]
+            payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId]
         )
     }
 
-    private nonisolated func emitCallReject(callId: String, toUserId: String) {
+    private func emitCallReject(callId: String, toUserId: String) {
         MessageSocketManager.shared.emitCallLeave(callId: callId)
     }
 
-    private nonisolated func emitCallEnd(callId: String, toUserId: String) {
+    private func emitCallEnd(callId: String, toUserId: String) {
         MessageSocketManager.shared.emitCallEnd(callId: callId)
     }
 
@@ -816,7 +860,9 @@ extension CallManager: ThermalStateMonitorDelegate {
             guard let self, self.callState == .connected else { return }
             if state == .critical {
                 self.webRTCService.videoFilterPipeline.reset()
-                Logger.calls.warning("Thermal critical — disabled all video filters")
+                self.activeAudioEffect = nil
+                self.webRTCService.setAudioEffect(nil)
+                Logger.calls.warning("Thermal critical — disabled all filters (video + audio)")
                 if self.isVideoEnabled {
                     self.isVideoEnabled = false
                     self.webRTCService.enableVideo(false)
@@ -837,10 +883,12 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCService(_ service: WebRTCService, didGenerateCandidate candidate: IceCandidate) {
         Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
+            let fromUserId = AuthManager.shared.currentUser?.id ?? ""
             var payload: [String: String] = [
                 "candidate": candidate.candidate,
                 "sdpMLineIndex": String(candidate.sdpMLineIndex),
-                "to": userId
+                "to": userId,
+                "from": fromUserId
             ]
             if let sdpMid = candidate.sdpMid {
                 payload["sdpMid"] = sdpMid
@@ -904,6 +952,13 @@ extension CallManager: WebRTCServiceDelegate {
                 translatedLanguage: message.translatedLanguage
             )
             self.transcriptionService.receiveRemoteSegment(segment)
+        }
+    }
+
+    nonisolated func webRTCService(_ service: WebRTCService, didReceiveRemoteVideoTrack track: Any) {
+        Task { @MainActor [weak self] in
+            self?.hasRemoteVideoTrack = true
+            Logger.calls.info("Remote video track received in CallManager")
         }
     }
 

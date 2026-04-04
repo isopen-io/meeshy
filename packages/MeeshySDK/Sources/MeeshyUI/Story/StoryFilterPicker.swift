@@ -143,9 +143,15 @@ public struct StoryFilterPicker: View {
 
 public struct StoryFilterProcessor {
     private static let context = CIContext()
+    nonisolated(unsafe) private static let cache = NSCache<NSString, UIImage>()
 
-    public static func apply(_ filter: StoryFilter?, to image: UIImage) -> UIImage {
+    public static func apply(_ filter: StoryFilter?, to image: UIImage, imageId: String? = nil) -> UIImage {
         guard let filter = filter, let ciImage = CIImage(image: image) else { return image }
+
+        // Cache lookup — use caller-provided imageId (slide ID) or fallback to dimensions
+        let id = imageId ?? "\(Int(image.size.width))x\(Int(image.size.height))_\(image.cgImage?.bytesPerRow ?? 0)"
+        let cacheKey = "\(id)_\(filter.rawValue)" as NSString
+        if let cached = cache.object(forKey: cacheKey) { return cached }
 
         let output: CIImage?
         switch filter {
@@ -177,6 +183,8 @@ public struct StoryFilterProcessor {
               let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else {
             return image
         }
-        return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+        let result = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+        cache.setObject(result, forKey: cacheKey)
+        return result
     }
 }

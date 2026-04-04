@@ -57,7 +57,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
             where: {
               sender: { userId },
               deletedAt: null,
-              translations: { not: { equals: null } },
+              NOT: [{ translations: null }],
             },
           }),
           fastify.prisma.friendRequest.count({
@@ -224,7 +224,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
             where: {
               sender: { userId },
               deletedAt: null,
-              translations: { not: { equals: null } },
+              NOT: [{ translations: null }],
             },
           }),
           fastify.prisma.friendRequest.count({

@@ -28,6 +28,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         peerConnection?.connectionState == .connected
     }
 
+    var localVideoTrack: Any? { localVideoTrack_ }
+    var remoteVideoTrack: Any? { remoteVideoTrack_ }
+
     override init() {
         let effectsService = CallAudioEffectsService()
         self._audioEffectsService = effectsService
@@ -259,7 +262,43 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     }
 
     func getStats() async -> CallStats? {
-        nil
+        guard let pc = peerConnection else { return nil }
+        return await withCheckedContinuation { continuation in
+            pc.statistics { report in
+                var rtt: Double = 0
+                var packetsLost: Int = 0
+                var bandwidth: Int = 0
+                var codec: String?
+
+                for (_, stats) in report.statistics {
+                    if stats.type == "candidate-pair", let values = stats.values as? [String: NSObject] {
+                        if let rttValue = values["currentRoundTripTime"] as? NSNumber {
+                            rtt = rttValue.doubleValue * 1000
+                        }
+                    }
+                    if stats.type == "inbound-rtp", let values = stats.values as? [String: NSObject] {
+                        if let lost = values["packetsLost"] as? NSNumber {
+                            packetsLost = lost.intValue
+                        }
+                        if let codecId = values["codecId"] as? String {
+                            codec = codecId
+                        }
+                    }
+                    if stats.type == "outbound-rtp", let values = stats.values as? [String: NSObject] {
+                        if let bytesSent = values["bytesSent"] as? NSNumber {
+                            bandwidth = bytesSent.intValue
+                        }
+                    }
+                }
+
+                continuation.resume(returning: CallStats(
+                    roundTripTimeMs: rtt,
+                    packetsLost: packetsLost,
+                    bandwidth: bandwidth,
+                    codec: codec
+                ))
+            }
+        }
     }
 
     // MARK: - DataChannel
@@ -621,6 +660,8 @@ extension P2PWebRTCClient: RTCDataChannelDelegate {
 final class P2PWebRTCClient: WebRTCClientProviding {
     weak var delegate: (any WebRTCClientDelegate)?
     var isConnected: Bool { false }
+    var localVideoTrack: Any? { nil }
+    var remoteVideoTrack: Any? { nil }
 
     func configure(iceServers: [IceServer]) throws {
         Logger.webrtc.warning("WebRTC framework not available - calls are disabled")

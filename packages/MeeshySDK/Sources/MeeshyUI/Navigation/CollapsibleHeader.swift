@@ -147,6 +147,7 @@ public struct CollapsibleHeader<TitleContent: View, TrailingContent: View>: View
                     )
                 )
                 .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
         )
     }
 

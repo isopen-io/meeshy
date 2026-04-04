@@ -624,6 +624,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public let createdAt: Date
     public let expiresAt: Date?
     public let repostOfId: String?
+    public let repostAuthorName: String?
     public var isViewed: Bool
     public let translations: [StoryTranslation]?
     public let backgroundAudio: StoryBackgroundAudioEntry?
@@ -647,10 +648,11 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     }
 
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,
-                createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil, isViewed: Bool = false,
-                translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil) {
+                createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil, repostAuthorName: String? = nil,
+                isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
-        self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId; self.isViewed = isViewed
+        self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
+        self.repostAuthorName = repostAuthorName; self.isViewed = isViewed
         self.translations = translations; self.backgroundAudio = backgroundAudio
     }
 }
@@ -688,6 +690,7 @@ public struct StatusEntry: Identifiable {
     public let expiresAt: Date?
     public var visibility: String?
     public var reactionSummary: [String: Int]?
+    public let viaUsername: String?
 
     public var timeRemaining: String {
         guard let expires = expiresAt else { return "" }
@@ -711,11 +714,12 @@ public struct StatusEntry: Identifiable {
 
     public init(id: String, userId: String, username: String, avatarColor: String, moodEmoji: String,
                 content: String? = nil, audioUrl: String? = nil, createdAt: Date = Date(),
-                expiresAt: Date? = nil, visibility: String? = nil, reactionSummary: [String: Int]? = nil) {
+                expiresAt: Date? = nil, visibility: String? = nil, reactionSummary: [String: Int]? = nil,
+                viaUsername: String? = nil) {
         self.id = id; self.userId = userId; self.username = username; self.avatarColor = avatarColor
         self.moodEmoji = moodEmoji; self.content = content; self.audioUrl = audioUrl
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.visibility = visibility
-        self.reactionSummary = reactionSummary
+        self.reactionSummary = reactionSummary; self.viaUsername = viaUsername
     }
 }
 
@@ -739,7 +743,9 @@ extension Array where Element == APIPost {
             let item = StoryItem(id: post.id, content: post.content, media: media,
                                  storyEffects: post.storyEffects,
                                  createdAt: post.createdAt, expiresAt: effectiveExpiresAt,
-                                 repostOfId: post.repostOf?.id, isViewed: false,
+                                 repostOfId: post.repostOf?.id,
+                                 repostAuthorName: post.repostOf?.author.name,
+                                 isViewed: false,
                                  translations: storyTranslations)
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing
@@ -771,7 +777,8 @@ extension APIPost {
         guard (type ?? "").uppercased() == "STATUS", let emoji = moodEmoji else { return nil }
         return StatusEntry(id: id, userId: author.id, username: author.name,
                            avatarColor: DynamicColorGenerator.colorForName(author.name),
-                           moodEmoji: emoji, content: content, audioUrl: audioUrl, createdAt: createdAt)
+                           moodEmoji: emoji, content: content, audioUrl: audioUrl, createdAt: createdAt,
+                           expiresAt: expiresAt, viaUsername: viaUsername)
     }
 }
 

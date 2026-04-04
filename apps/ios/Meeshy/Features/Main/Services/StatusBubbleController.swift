@@ -10,6 +10,7 @@ final class StatusBubbleController: ObservableObject {
 
     @Published var currentEntry: StatusEntry?
     @Published var anchor: CGPoint = .zero
+    var onRepublish: ((StatusEntry) -> Void)?
 
     func show(entry: StatusEntry, anchor: CGPoint) {
         currentEntry = entry
@@ -40,7 +41,10 @@ private struct StatusBubbleOverlayModifier: ViewModifier {
                 StatusBubbleOverlay(
                     status: entry,
                     anchorPoint: controller.anchor,
-                    isPresented: controller.isPresented
+                    isPresented: controller.isPresented,
+                    onRepublish: entry.userId != AuthManager.shared.currentUser?.id
+                        ? controller.onRepublish
+                        : nil
                 )
                 .zIndex(200)
             }

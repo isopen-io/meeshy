@@ -808,8 +808,14 @@ extension StoryViewerView {
         let uniqueURLs = Array(Set(urls))
         return Task {
             let images = await CacheCoordinator.shared.images
-            for url in uniqueURLs {
-                _ = try? await images.data(for: url)
+            for urlString in uniqueURLs {
+                // Prefetch images via cache
+                _ = try? await images.data(for: urlString)
+                // Preroll video players for zero-latency playback
+                if let url = URL(string: urlString),
+                   story.media.first(where: { $0.url == urlString })?.type == .video {
+                    await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
+                }
             }
         }
     }

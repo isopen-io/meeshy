@@ -10,6 +10,7 @@ protocol WebRTCServiceDelegate: AnyObject {
     func webRTCServiceDidConnect(_ service: WebRTCService)
     func webRTCServiceDidDisconnect(_ service: WebRTCService)
     func webRTCService(_ service: WebRTCService, didChangeQualityLevel level: VideoQualityLevel, from previous: VideoQualityLevel)
+    func webRTCService(_ service: WebRTCService, didReceiveRemoteVideoTrack track: Any)
     func webRTCService(_ service: WebRTCService, didReceiveTranscriptionData data: Data)
 }
 
@@ -22,6 +23,8 @@ final class WebRTCService: @unchecked Sendable {
     var videoFilters: VideoFilterPipeline { videoFilterPipeline }
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { client.audioEffectsService }
+    var localVideoTrack: Any? { client.localVideoTrack }
+    var remoteVideoTrack: Any? { client.remoteVideoTrack }
 
     private let client: any WebRTCClientProviding
     private var iceCandidateBuffer: [IceCandidate] = []
@@ -299,6 +302,7 @@ extension WebRTCService: WebRTCClientDelegate {
 
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: Any) {
         Logger.webrtc.info("Remote video track received")
+        delegate?.webRTCService(self, didReceiveRemoteVideoTrack: track)
     }
 
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: Any) {

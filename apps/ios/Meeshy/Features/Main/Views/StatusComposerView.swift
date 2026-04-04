@@ -28,6 +28,10 @@ enum StatusVisibility: String, CaseIterable {
 
 struct StatusComposerView: View {
     @ObservedObject var viewModel: StatusViewModel
+    var initialEmoji: String? = nil
+    var initialText: String? = nil
+    var viaUsername: String? = nil
+
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -37,6 +41,7 @@ struct StatusComposerView: View {
     @AppStorage("lastStatusVisibility") private var lastVisibility: String = "PUBLIC"
     @State private var selectedVisibility: StatusVisibility = .public
     @State private var selectedUserIds: [String] = []
+    @State private var didApplyInitialValues = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
@@ -46,6 +51,24 @@ struct StatusComposerView: View {
                 theme.backgroundGradient.ignoresSafeArea()
 
                 VStack(spacing: 24) {
+                    // Republication header
+                    if let via = viaUsername {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.2.squarepath")
+                                .font(.system(size: 12))
+                                .foregroundColor(MeeshyColors.indigo400)
+                            Text("Status de @\(via)")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(theme.textSecondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(MeeshyColors.indigo500.opacity(0.1))
+                        )
+                    }
+
                     // Emoji Grid
                     emojiGrid
 
@@ -67,7 +90,7 @@ struct StatusComposerView: View {
                 }
                 .padding(20)
             }
-            .navigationTitle("Status")
+            .navigationTitle(viaUsername != nil ? "Republier un status" : "Status")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -76,6 +99,12 @@ struct StatusComposerView: View {
                     }
                     .foregroundColor(theme.textSecondary)
                 }
+            }
+            .onAppear {
+                guard !didApplyInitialValues else { return }
+                didApplyInitialValues = true
+                if let emoji = initialEmoji { selectedEmoji = emoji }
+                if let text = initialText { statusText = text }
             }
         }
     }
@@ -231,7 +260,8 @@ struct StatusComposerView: View {
                     emoji: emoji,
                     content: statusText.isEmpty ? nil : statusText,
                     visibility: selectedVisibility.rawValue,
-                    visibilityUserIds: (selectedVisibility == .except || selectedVisibility == .only) ? selectedUserIds : nil
+                    visibilityUserIds: (selectedVisibility == .except || selectedVisibility == .only) ? selectedUserIds : nil,
+                    viaUsername: viaUsername
                 )
                 isPublishing = false
                 dismiss()

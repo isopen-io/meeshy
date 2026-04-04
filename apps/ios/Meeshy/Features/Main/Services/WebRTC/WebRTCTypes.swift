@@ -67,6 +67,8 @@ struct CallStats: Sendable {
 protocol WebRTCClientProviding: AnyObject {
     var delegate: (any WebRTCClientDelegate)? { get set }
     var isConnected: Bool { get }
+    var localVideoTrack: Any? { get }
+    var remoteVideoTrack: Any? { get }
 
     func configure(iceServers: [IceServer]) throws
     func createOffer() async throws -> SessionDescription

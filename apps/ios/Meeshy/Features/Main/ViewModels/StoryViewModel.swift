@@ -3,6 +3,7 @@ import SwiftUI
 import Combine
 import os
 import MeeshySDK
+import MeeshyUI
 
 @MainActor
 class StoryViewModel: ObservableObject {
@@ -65,9 +66,11 @@ class StoryViewModel: ObservableObject {
         switch cached {
         case .fresh(let data, _):
             storyGroups = data
+            prefetchAllStoryMedia(data)
             return
         case .stale(let data, _):
             storyGroups = data
+            prefetchAllStoryMedia(data)
             Task { [weak self] in await self?.fetchStoriesFromNetwork() }
             return
         case .expired, .empty:
@@ -87,9 +90,63 @@ class StoryViewModel: ObservableObject {
                 let groups = response.data.toStoryGroups()
                 storyGroups = groups
                 await CacheCoordinator.shared.stories.save(groups, for: "recent_tray")
+                // Preload all media in background — zero latency when user opens a story
+                prefetchAllStoryMedia(groups)
             }
         } catch {
             Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Background Prefetch (triggered on story load)
+
+    /// Prefetch all media for all story groups in the background.
+    /// Downloads images to disk cache and prerolls video players for the first 3 groups.
+    /// This runs at low priority to avoid competing with foreground work.
+    private func prefetchAllStoryMedia(_ groups: [StoryGroup]) {
+        Task(priority: .utility) {
+            let imageCache = await CacheCoordinator.shared.images
+
+            for (groupIndex, group) in groups.enumerated() {
+                for story in group.stories {
+                    // Collect all media URLs from the story
+                    var urls: [String] = story.media.compactMap(\.url)
+
+                    if let mediaObjs = story.storyEffects?.mediaObjects {
+                        for obj in mediaObjs {
+                            if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
+                                urls.append(urlStr)
+                            }
+                        }
+                    }
+
+                    if let audioObjs = story.storyEffects?.audioPlayerObjects {
+                        for obj in audioObjs {
+                            if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
+                                urls.append(urlStr)
+                            }
+                        }
+                    }
+
+                    if let bgAudioId = story.storyEffects?.backgroundAudioId {
+                        if let urlStr = story.media.first(where: { $0.id == bgAudioId })?.url {
+                            urls.append(urlStr)
+                        }
+                    }
+
+                    // Download all media to disk cache
+                    for urlString in Set(urls) {
+                        _ = try? await imageCache.data(for: urlString)
+
+                        // Preroll video players for first 3 groups only (memory budget)
+                        if groupIndex < 3,
+                           let url = URL(string: urlString),
+                           story.media.first(where: { $0.url == urlString })?.type == .video {
+                            await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
+                        }
+                    }
+                }
+            }
         }
     }
 
