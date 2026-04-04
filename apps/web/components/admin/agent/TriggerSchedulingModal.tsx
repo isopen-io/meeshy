@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  Zap, Loader2, Clock, PauseCircle, AlertTriangle, Timer, CalendarClock, RotateCcw, X, History, BarChart3,
+  Zap, Loader2, Clock, PauseCircle, AlertTriangle, Timer, CalendarClock, RotateCcw, X, History, BarChart3, Square,
 } from 'lucide-react';
 import {
   agentAdminService,
@@ -344,7 +344,7 @@ export default memo(function TriggerSchedulingModal({
                         disabled={triggering}
                         className={`w-full h-8 text-xs gap-1.5 ${!isScanning ? 'border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50' : ''}`}
                       >
-                        {triggering ? <Loader2 className="h-3 w-3 animate-spin" /> : (isScanning ? <PauseCircle className="h-3 w-3" /> : <Zap className="h-3 w-3" />)}
+                        {triggering ? <Loader2 className="h-3 w-3 animate-spin" /> : (isScanning ? <Square className="h-2.5 w-2.5 fill-current" /> : <Zap className="h-3 w-3" />)}
                         {isScanning ? 'STOP!' : 'Declencher maintenant'}
                       </Button>
                     </div>

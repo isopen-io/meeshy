@@ -165,6 +165,8 @@ export type AgentGlobalConfigData = {
   eligibleConversationTypes: string[];
   messageFreshnessHours: number;
   maxConversationsPerCycle: number;
+  weekdayMaxConversations?: number;
+  weekendMaxConversations?: number;
   updatedAt: string;
 };
 

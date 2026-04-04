@@ -63,8 +63,8 @@ export function AgentConversationsTab() {
   const [messagesModalConfig, setMessagesModalConfig] = useState<AgentConfigData | null>(null);
   const limit = 20;
 
-  const fetchConfigs = useCallback(async () => {
-    setLoading(true);
+  const fetchConfigs = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const response = await agentAdminService.getConfigs(page, limit, debouncedSearch);
       if (response.success && response.data) {
@@ -73,13 +73,17 @@ export function AgentConversationsTab() {
         setHasMore(response.pagination?.hasMore ?? false);
       }
     } catch {
-      toast.error('Erreur lors du chargement des configurations');
+      if (!isSilent) toast.error('Erreur lors du chargement des configurations');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [page, limit, debouncedSearch]);
 
-  useEffect(() => { fetchConfigs(); }, [fetchConfigs]);
+  useEffect(() => {
+    fetchConfigs();
+    const interval = setInterval(() => fetchConfigs(true), 10000);
+    return () => clearInterval(interval);
+  }, [fetchConfigs]);
 
   const handleToggle = async (config: AgentConfigData) => {
     try {
@@ -113,7 +117,7 @@ export function AgentConversationsTab() {
         await agentAdminService.triggerScan(config.conversationId);
         toast.success('Scan déclenché');
       }
-      fetchConfigs();
+      setTimeout(() => fetchConfigs(true), 1000);
     } catch {
       toast.error('Erreur lors du déclenchement');
     }
@@ -135,7 +139,7 @@ export function AgentConversationsTab() {
     fetchConfigs();
   };
 
-  if (loading) {
+  if (loading && configs.length === 0) {
     return (
       <Card>
         <CardContent className="p-6 space-y-4">
@@ -220,7 +224,7 @@ export function AgentConversationsTab() {
                     {/* Mobile: compact row / Desktop: individual columns */}
                     <div className="flex items-center gap-2 lg:contents flex-wrap">
                       {/* Status */}
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-2 min-w-[80px]">
                         <Button
                           size="sm"
                           variant={config.isScanning ? 'destructive' : 'default'}
@@ -230,7 +234,7 @@ export function AgentConversationsTab() {
                           {config.isScanning ? (
                             <>
                               <Square className="h-3 w-3 fill-current" />
-                              <span className="text-[8px] font-bold">STOP!</span>
+                              <span className="text-[8px] font-bold tracking-tighter">STOP!</span>
                             </>
                           ) : (
                             <>
@@ -248,6 +252,11 @@ export function AgentConversationsTab() {
                             {config.enabled ? 'Actif' : 'Off'}
                           </Badge>
                         </div>
+                        {config.currentNode && (
+                          <Badge variant="outline" className="text-[8px] h-3 px-1 border-red-200 text-red-500 animate-pulse truncate max-w-[80px] justify-center">
+                            {config.currentNode}
+                          </Badge>
+                        )}
                       </div>
 
                       {/* Triggers */}

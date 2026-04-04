@@ -45,12 +45,12 @@ export default memo(function AgentMessagesModal({
   const [total, setTotal] = useState(0);
   const limit = 20;
 
-  const fetchMessages = useCallback(async (isLoadMore = false) => {
+  const fetchMessages = useCallback(async (targetPage: number, isLoadMore = false) => {
     if (isLoadMore) setLoadingMore(true);
     else setLoading(true);
 
     try {
-      const res = await agentAdminService.getAgentMessages(conversationId, page, limit);
+      const res = await agentAdminService.getAgentMessages(conversationId, targetPage, limit);
       if (res.success && res.data) {
         if (isLoadMore) {
           setMessages(prev => [...prev, ...(res.data || [])]);
@@ -65,33 +65,24 @@ export default memo(function AgentMessagesModal({
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [conversationId, page]);
+  }, [conversationId]);
 
   useEffect(() => {
     if (open) {
       setPage(1);
+      fetchMessages(1, false);
     }
-  }, [open]);
-
-  useEffect(() => {
-    if (open) {
-      fetchMessages(page > 1);
-    }
-  }, [open, page]);
+  }, [open, fetchMessages]);
 
   const hasMore = page * limit < total;
 
   const handleLoadMore = () => {
     if (hasMore && !loadingMore) {
-      setPage(p => p + 1);
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchMessages(nextPage, true);
     }
   };
-
-  useEffect(() => {
-    if (page > 1) {
-      fetchMessages(true);
-    }
-  }, [page]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -183,22 +174,6 @@ export default memo(function AgentMessagesModal({
             </div>
           </ScrollArea>
         )}
-
-        {total > limit ? (
-          <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700 shrink-0">
-            <span className="text-[10px] text-gray-400 tabular-nums">
-              {(page - 1) * limit + 1}-{Math.min(page * limit, total)} / {total}
-            </span>
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                <ChevronLeft className="h-3 w-3" />
-              </Button>
-              <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={!hasMore} onClick={() => setPage(p => p + 1)}>
-                <ChevronRight className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-        ) : null}
       </DialogContent>
     </Dialog>
   );
