@@ -104,7 +104,6 @@ struct ConversationPreferencesTab: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 200)
             } else {
-                membersSection
                 displaySection
                 organizationSection
                 notificationsSection
@@ -123,7 +122,7 @@ struct ConversationPreferencesTab: View {
         .padding(.top, 16)
         .padding(.bottom, 32)
         .task { await loadPreferences() }
-        .onAppear { setupDebounce(); setupMemberSearchDebounce() }
+        .onAppear { setupDebounce() }
         .confirmationDialog(
             isArchived ? "Désarchiver la conversation ?" : "Archiver la conversation ?",
             isPresented: $showArchiveConfirm,
@@ -379,14 +378,24 @@ struct ConversationPreferencesTab: View {
 
     private var displaySection: some View {
         settingsSection(title: "Mon affichage", icon: "paintbrush.fill", color: "A855F7") {
-            settingsRow(icon: "pencil", iconColor: "A855F7", title: "Nom personnalisé") {
-                HStack(spacing: 6) {
-                    TextField("Nom personnalisé...", text: $customName)
-                        .textFieldStyle(.plain)
+            // Nom personnalisé — label above, field below
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: "pencil")
                         .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(hex: "A855F7"))
+                        .frame(width: 28, height: 28)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "A855F7").opacity(0.12)))
+                    Text("Nom personnalisé")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textSecondary)
+                }
+
+                HStack(spacing: 6) {
+                    TextField("Donner un surnom à cette conversation...", text: $customName)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundColor(theme.textPrimary)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 160)
                         .onChange(of: customName) { _, newValue in
                             customNameSubject.send(newValue)
                         }
@@ -402,8 +411,22 @@ struct ConversationPreferencesTab: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(theme.textMuted.opacity(0.15), lineWidth: 1)
+                )
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
             Divider().padding(.leading, 54).opacity(0.3)
+
+            // Réaction — tap to open emoji picker
             Button {
                 showEmojiPicker = true
             } label: {
@@ -438,9 +461,27 @@ struct ConversationPreferencesTab: View {
         }
     }
 
+    @State private var categoryInput: String = ""
+    @State private var tagInput: String = ""
+    @State private var existingCategories: [String] = []
+    @State private var existingTags: [String] = []
+
+    private var filteredCategories: [String] {
+        let q = categoryInput.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return existingCategories }
+        return existingCategories.filter { $0.lowercased().contains(q) }
+    }
+
+    private var filteredExistingTags: [String] {
+        let q = tagInput.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return [] }
+        return existingTags.filter { $0.lowercased().contains(q) && !tags.contains($0) }
+    }
+
     private var organizationSection: some View {
         settingsSection(title: "Organisation", icon: "folder.fill", color: "3B82F6") {
-            settingsRow(icon: "pin.fill", iconColor: "3B82F6", title: "Épingler") {
+            // Pin toggle
+            settingsRow(icon: "pin.fill", iconColor: "3B82F6", title: "Epingler") {
                 Toggle("", isOn: $isPinned)
                     .labelsHidden()
                     .tint(Color(hex: "3B82F6"))
@@ -448,43 +489,253 @@ struct ConversationPreferencesTab: View {
                         Task { await save(UpdateConversationPreferencesRequest(isPinned: newValue)) }
                     }
             }
+
             Divider().padding(.leading, 54).opacity(0.3)
-            settingsRow(icon: "square.grid.2x2.fill", iconColor: "3B82F6", title: "Catégorie") {
-                HStack(spacing: 4) {
-                    Text(categoryId == nil ? "Aucune" : "...")
-                        .font(.system(size: 14))
-                        .foregroundColor(theme.textMuted)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+
+            // Catégorie — label above, field with autocomplete below
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.grid.2x2.fill")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(hex: "3B82F6"))
+                        .frame(width: 28, height: 28)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "3B82F6").opacity(0.12)))
+                    Text("Categorie")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textSecondary)
+                }
+
+                HStack(spacing: 6) {
+                    TextField("Choisir ou creer une categorie...", text: $categoryInput)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                        .autocorrectionDisabled()
+                        .onSubmit { selectCategory(categoryInput) }
+                    if !categoryInput.isEmpty {
+                        Button {
+                            categoryInput = ""
+                            categoryId = nil
+                            Task { await save(UpdateConversationPreferencesRequest(categoryId: nil)) }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(theme.textMuted.opacity(0.15), lineWidth: 1)
+                )
+
+                // Autocomplete suggestions
+                if !categoryInput.isEmpty && !filteredCategories.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(filteredCategories, id: \.self) { cat in
+                            Button {
+                                selectCategory(cat)
+                            } label: {
+                                HStack {
+                                    Text(cat)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "arrow.turn.down.left")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(theme.textMuted)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.white)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(theme.textMuted.opacity(0.12), lineWidth: 1)
+                    )
+                }
+
+                // "Créer" option if input doesn't match any existing
+                if !categoryInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                   !existingCategories.contains(where: { $0.lowercased() == categoryInput.lowercased() }) {
+                    Button {
+                        selectCategory(categoryInput.trimmingCharacters(in: .whitespacesAndNewlines))
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(hex: "3B82F6"))
+                            Text("Creer \"\(categoryInput.trimmingCharacters(in: .whitespacesAndNewlines))\"")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Color(hex: "3B82F6"))
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
             Divider().padding(.leading, 54).opacity(0.3)
-            tagsRow
+
+            // Tags — label above, field with autocomplete below, chips
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: "tag.fill")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(hex: "3B82F6"))
+                        .frame(width: 28, height: 28)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "3B82F6").opacity(0.12)))
+                    Text("Tags")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textSecondary)
+                }
+
+                // Existing tags as chips
+                if !tags.isEmpty {
+                    FlowLayout(spacing: 6) {
+                        ForEach(tags, id: \.self) { tag in
+                            HStack(spacing: 4) {
+                                Text(tag)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Color(hex: "3B82F6"))
+                                Button {
+                                    tags.removeAll { $0 == tag }
+                                    Task { await save(UpdateConversationPreferencesRequest(tags: tags)) }
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundColor(Color(hex: "3B82F6").opacity(0.6))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule().fill(Color(hex: "3B82F6").opacity(theme.mode.isDark ? 0.15 : 0.1))
+                            )
+                        }
+                    }
+                }
+
+                // Tag input field
+                HStack(spacing: 6) {
+                    TextField("Ajouter un tag...", text: $tagInput)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                        .autocorrectionDisabled()
+                        .onSubmit { addTag(tagInput) }
+                    if !tagInput.isEmpty {
+                        Button {
+                            tagInput = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(theme.textMuted.opacity(0.15), lineWidth: 1)
+                )
+
+                // Autocomplete tag suggestions
+                if !tagInput.isEmpty && !filteredExistingTags.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(filteredExistingTags.prefix(5), id: \.self) { tag in
+                            Button {
+                                addTag(tag)
+                            } label: {
+                                HStack {
+                                    Text(tag)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "arrow.turn.down.left")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(theme.textMuted)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.white)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(theme.textMuted.opacity(0.12), lineWidth: 1)
+                    )
+                }
+
+                // "Créer" tag option
+                if !tagInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                   !tags.contains(where: { $0.lowercased() == tagInput.lowercased() }) &&
+                   !existingTags.contains(where: { $0.lowercased() == tagInput.lowercased() }) {
+                    Button {
+                        addTag(tagInput.trimmingCharacters(in: .whitespacesAndNewlines))
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(hex: "3B82F6"))
+                            Text("Creer \"\(tagInput.trimmingCharacters(in: .whitespacesAndNewlines))\"")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Color(hex: "3B82F6"))
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
     }
 
-    private var tagsRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
-                Image(systemName: "tag.fill")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(Color(hex: "3B82F6"))
-                    .frame(width: 28, height: 28)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "3B82F6").opacity(0.12)))
-                Text("Tags")
-                    .font(.system(size: 15))
-                    .foregroundColor(theme.textPrimary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 10)
-
-            TagInputView(tags: $tags) {
-                Task { await save(UpdateConversationPreferencesRequest(tags: tags)) }
-            }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 10)
+    private func selectCategory(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        categoryInput = trimmed
+        if !existingCategories.contains(trimmed) {
+            existingCategories.append(trimmed)
         }
+        Task { await save(UpdateConversationPreferencesRequest(categoryId: trimmed)) }
+    }
+
+    private func addTag(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !tags.contains(trimmed) else { return }
+        tags.append(trimmed)
+        tagInput = ""
+        if !existingTags.contains(trimmed) {
+            existingTags.append(trimmed)
+        }
+        Task { await save(UpdateConversationPreferencesRequest(tags: tags)) }
     }
 
     private var notificationsSection: some View {
@@ -689,6 +940,9 @@ struct ConversationPreferencesTab: View {
             reaction = prefs.reaction ?? ""
             tags = prefs.tags ?? []
             categoryId = prefs.categoryId
+            categoryInput = prefs.categoryId ?? ""
+            // Load existing categories/tags from other conversations for autocomplete
+            await loadExistingCategoriesAndTags()
         } catch {
             errorMessage = "Impossible de charger les préférences."
         }
@@ -703,6 +957,24 @@ struct ConversationPreferencesTab: View {
             errorMessage = nil
         } catch {
             errorMessage = "Erreur lors de la sauvegarde."
+        }
+    }
+
+    private func loadExistingCategoriesAndTags() async {
+        do {
+            let allPrefs: APIResponse<[APIConversationPreferences]> = try await APIClient.shared.request(
+                endpoint: "/conversations/preferences/all"
+            )
+            var cats = Set<String>()
+            var allTags = Set<String>()
+            for p in allPrefs.data {
+                if let c = p.categoryId, !c.isEmpty { cats.insert(c) }
+                for t in p.tags ?? [] { allTags.insert(t) }
+            }
+            existingCategories = Array(cats).sorted()
+            existingTags = Array(allTags).sorted()
+        } catch {
+            // Non-critical — autocomplete simply won't suggest existing values
         }
     }
 
