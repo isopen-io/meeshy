@@ -373,8 +373,9 @@ class ConversationListViewModel: ObservableObject {
             isLoading = false
         }
 
-        // Précharger les stories en arrière-plan (optimisé)
+        // Précharger en arrière-plan
         prefetchRecentStories()
+        prefetchTopConversationMessages()
 
         await categoriesTask
     }
@@ -626,6 +627,43 @@ class ConversationListViewModel: ObservableObject {
             await withTaskGroup(of: Void.self) { group in
                 for apiConversation in toFetch {
                     let conversationId = apiConversation.id
+                    let cached = await CacheCoordinator.shared.messages.load(for: conversationId).value ?? []
+                    if !cached.isEmpty { continue }
+
+                    group.addTask {
+                        do {
+                            let response = try await messageService.list(
+                                conversationId: conversationId,
+                                offset: 0,
+                                limit: 20,
+                                includeReplies: true
+                            )
+                            if response.success {
+                                let messages = response.data.reversed().map {
+                                    $0.toMessage(currentUserId: userId, currentUsername: username)
+                                }
+                                await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
+                            }
+                        } catch { }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Message Prefetch
+
+    /// Précharge les messages des top 20 conversations qui n'ont pas encore de cache.
+    private func prefetchTopConversationMessages() {
+        let topConversations = Array(conversations.prefix(20))
+        let messageService = self.messageService
+        let userId = AuthManager.shared.currentUser?.id ?? ""
+        let username = AuthManager.shared.currentUser?.username
+
+        Task.detached(priority: .utility) {
+            await withTaskGroup(of: Void.self) { group in
+                for conversation in topConversations {
+                    let conversationId = conversation.id
                     let cached = await CacheCoordinator.shared.messages.load(for: conversationId).value ?? []
                     if !cached.isEmpty { continue }
 

@@ -15,7 +15,7 @@ public struct FriendRequest: Decodable, Identifiable {
     public let updatedAt: Date?
 }
 
-public struct FriendRequestUser: Decodable {
+public struct FriendRequestUser: Codable, CacheIdentifiable {
     public let id: String
     public let username: String
     public let firstName: String?

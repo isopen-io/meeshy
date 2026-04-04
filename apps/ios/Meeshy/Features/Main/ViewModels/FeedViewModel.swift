@@ -48,7 +48,6 @@ class FeedViewModel: ObservableObject {
 
     func loadFeed() async {
         guard !isLoading else { return }
-        isLoading = true
         error = nil
 
         let cacheResult = await CacheCoordinator.shared.feed.load(for: "main-feed")
@@ -56,13 +55,11 @@ class FeedViewModel: ObservableObject {
         switch cacheResult {
         case .fresh(let cachedPosts, _):
             posts = cachedPosts
-            isLoading = false
             hasLoaded = true
             return
 
         case .stale(let cachedPosts, _):
             posts = cachedPosts
-            isLoading = false
             hasLoaded = true
             Task {
                 await fetchFeedFromNetwork(showLoading: false)
@@ -73,7 +70,7 @@ class FeedViewModel: ObservableObject {
             break
         }
 
-        await fetchFeedFromNetwork(showLoading: true)
+        await fetchFeedFromNetwork(showLoading: posts.isEmpty)
     }
 
     private func fetchFeedFromNetwork(showLoading: Bool) async {

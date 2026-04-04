@@ -146,6 +146,7 @@ final class CallManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             await webRTCService.startLocalMedia(isVideo: isVideo)
+            if isVideo { self.hasLocalVideoTrack = true }
             Logger.calls.info("Outgoing call initiated: \(callId) to \(username), waiting for participant joined")
         }
 
@@ -198,6 +199,7 @@ final class CallManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             await self.webRTCService.startLocalMedia(isVideo: isVideo)
+            if isVideo { self.hasLocalVideoTrack = true }
             MessageSocketManager.shared.emitCallJoin(callId: callId)
             Logger.calls.info("VoIP push — auto-joined room, awaiting SDP offer: \(callId)")
         }
@@ -248,6 +250,7 @@ final class CallManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             await self.webRTCService.startLocalMedia(isVideo: isVideo)
+            if isVideo { self.hasLocalVideoTrack = true }
             MessageSocketManager.shared.emitCallJoin(callId: callId)
             Logger.calls.info("Incoming call — auto-joined room, awaiting SDP offer: \(callId)")
         }
@@ -710,6 +713,7 @@ final class CallManager: ObservableObject {
         pendingRemoteOffer = nil
         thermalMonitor.stopMonitoring()
         activeAudioEffect = nil
+        hasLocalVideoTrack = false
         hasRemoteVideoTrack = false
         callStartDate = nil
         reconnectAttempt = 0

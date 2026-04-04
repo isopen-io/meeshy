@@ -678,7 +678,7 @@ public struct StoryGroup: Identifiable, Codable, Sendable, CacheIdentifiable {
 }
 
 // MARK: - Status Entry
-public struct StatusEntry: Identifiable {
+public struct StatusEntry: Identifiable, Codable, CacheIdentifiable {
     public let id: String
     public let userId: String
     public let username: String

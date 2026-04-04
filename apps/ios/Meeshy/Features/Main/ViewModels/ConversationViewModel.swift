@@ -576,12 +576,16 @@ class ConversationViewModel: ObservableObject {
 
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
-        case .fresh(let data, _), .stale(let data, _):
+        case .fresh(let data, _):
+            messages = data
+
+        case .stale(let data, _):
             messages = data
             Task { [weak self] in
                 guard let self else { return }
                 await self.refreshMessagesFromAPI()
             }
+
         case .expired, .empty:
             await refreshMessagesFromAPI()
             let reloaded = await CacheCoordinator.shared.messages.load(for: conversationId)

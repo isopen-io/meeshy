@@ -141,6 +141,8 @@ public struct StoryComposerView: View {
     @State private var showDiscardAlert = false
     @State private var showRestoreDraftAlert = false
     @State private var isLoadingMedia = false
+    @State private var mediaLoadProgress: Double = 0
+    @State private var mediaLoadLabel: String = ""
     @State private var visibility: String = "PUBLIC"
 
     // MARK: - Transition effects (local until synced to effects)
@@ -208,9 +210,32 @@ public struct StoryComposerView: View {
             .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
             .overlay {
                 if isLoadingMedia {
-                    Color.black.opacity(0.3)
-                        .overlay(ProgressView().tint(.white).scaleEffect(1.2))
+                    Color.black.opacity(0.4)
+                        .overlay {
+                            VStack(spacing: 12) {
+                                ZStack {
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.2), lineWidth: 4)
+                                        .frame(width: 56, height: 56)
+                                    Circle()
+                                        .trim(from: 0, to: mediaLoadProgress)
+                                        .stroke(MeeshyColors.brandGradient, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                                        .frame(width: 56, height: 56)
+                                        .rotationEffect(.degrees(-90))
+                                        .animation(.easeInOut(duration: 0.3), value: mediaLoadProgress)
+                                    Text("\(Int(mediaLoadProgress * 100))%")
+                                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                                        .foregroundColor(.white)
+                                }
+                                if !mediaLoadLabel.isEmpty {
+                                    Text(mediaLoadLabel)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.8))
+                                }
+                            }
+                        }
                         .allowsHitTesting(false)
+                        .transition(.opacity)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -260,7 +285,8 @@ public struct StoryComposerView: View {
             publishTask?.cancel()
             publishTask = nil
             viewModel.stopMemoryObserver()
-            viewModel.cleanupTempFiles()
+            // Do NOT cleanup temp files here — background upload may still need them.
+            // Cleanup happens after upload completes in StoryViewModel.launchUploadTask.
         }
         .onChange(of: bgPhotoItem) { _, item in loadBackgroundPhoto(from: item) }
         .onChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
@@ -1073,10 +1099,18 @@ public struct StoryComposerView: View {
     private func loadBackgroundPhoto(from item: PhotosPickerItem?) {
         guard let item else { return }
         isLoadingMedia = true
+        mediaLoadProgress = 0
+        mediaLoadLabel = String(localized: "story.composer.loadingBackground", defaultValue: "Chargement de l'image...", bundle: .module)
         Task {
-            defer { isLoadingMedia = false }
+            defer {
+                isLoadingMedia = false
+                mediaLoadProgress = 0
+                mediaLoadLabel = ""
+            }
+            mediaLoadProgress = 0.3
             // ImageIO hardware-accelerated downsample — never allocates full-res bitmap
             guard let image = await StoryMediaLoader.shared.loadImage(from: item, maxDimension: 1080) else { return }
+            mediaLoadProgress = 1.0
             selectedImage = image
             viewModel.hasBackgroundImage = true
             viewModel.setImage(image, for: viewModel.currentSlide.id)

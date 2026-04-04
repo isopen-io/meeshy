@@ -66,8 +66,10 @@ final class UserProfileViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             let user = try await UserService.shared.getProfile(idOrUsername: idOrUsername)
-            let cacheKey = user.id
-            await CacheCoordinator.shared.profiles.save([user], for: cacheKey)
+            await CacheCoordinator.shared.profiles.save([user], for: user.id)
+            if idOrUsername != user.id {
+                await CacheCoordinator.shared.profiles.save([user], for: idOrUsername)
+            }
             fullUser = user
             hydrateProfileUserIfNeeded(from: user)
         } catch let APIError.serverError(code, _) where code == 403 {

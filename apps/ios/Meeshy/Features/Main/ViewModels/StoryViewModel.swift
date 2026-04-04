@@ -452,6 +452,8 @@ class StoryViewModel: ObservableObject {
                     activeUpload?.phase = .uploading
                 }
 
+                // Upload complete — cleanup temp files now
+                cleanupUploadTempFiles(upload)
                 activeUpload = nil
                 uploadTask = nil
                 HapticFeedback.success()
@@ -460,6 +462,7 @@ class StoryViewModel: ObservableObject {
                 if !Task.isCancelled {
                     activeUpload?.phase = .failed(error.localizedDescription)
                     ToastManager.shared.showError("Echec de la publication de la story")
+                    // Don't cleanup temp files on failure — retry may need them
                 }
             }
         }
@@ -473,9 +476,19 @@ class StoryViewModel: ObservableObject {
     }
 
     func cancelUpload() {
+        if let upload = activeUpload {
+            cleanupUploadTempFiles(upload)
+        }
         uploadTask?.cancel()
         uploadTask = nil
         activeUpload = nil
+    }
+
+    /// Cleanup temp video/audio files after upload completes.
+    private func cleanupUploadTempFiles(_ upload: StoryUploadState) {
+        for (_, url) in upload.loadedVideoURLs {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     // MARK: - Delete Story

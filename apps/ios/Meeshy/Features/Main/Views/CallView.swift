@@ -19,10 +19,10 @@ struct CallView: View {
     var body: some View {
         ZStack {
             // Background: camera locale pour appels video, gradient pour audio
-            if callManager.isVideoEnabled {
+            if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
                 CallVideoView(track: callManager.localVideoTrack, mirror: true, contentMode: .scaleAspectFill)
                     .ignoresSafeArea()
-                Color.black.opacity(0.3)
+                Color.black.opacity(0.25)
                     .ignoresSafeArea()
             } else {
                 callBackground
@@ -193,8 +193,8 @@ struct CallView: View {
             // Transcript overlay
             transcriptOverlay
 
-            // Draggable local preview (video only)
-            if callManager.isVideoEnabled {
+            // Draggable local preview (video only, when connected with remote video)
+            if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
                 draggableLocalPreview
             }
         }

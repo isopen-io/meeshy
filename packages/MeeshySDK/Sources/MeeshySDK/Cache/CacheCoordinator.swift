@@ -20,6 +20,8 @@ public actor CacheCoordinator {
     public let shareLinks: GRDBCacheStore<String, MyShareLink>
     public let trackingLinks: GRDBCacheStore<String, TrackingLink>
     public let communityLinks: GRDBCacheStore<String, CommunityLink>
+    public let statuses: GRDBCacheStore<String, StatusEntry>
+    public let friends: GRDBCacheStore<String, FriendRequestUser>
 
     public let images: DiskCacheStore
     public let audio: DiskCacheStore
@@ -72,6 +74,8 @@ public actor CacheCoordinator {
         self.shareLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "slinks")
         self.trackingLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "tlinks")
         self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
+        self.statuses = GRDBCacheStore(policy: .statuses, db: db, namespace: "statuses")
+        self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
 
         self.images = DiskCacheStore(policy: .mediaImages)
         self.audio = DiskCacheStore(policy: .mediaAudio)

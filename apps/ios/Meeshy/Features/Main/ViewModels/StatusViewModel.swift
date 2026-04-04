@@ -42,8 +42,34 @@ class StatusViewModel: ObservableObject {
 
     func loadStatuses() async {
         guard !isLoading else { return }
-        isLoading = true
         error = nil
+
+        let cacheKey = "statuses_\(mode)"
+        let cached = await CacheCoordinator.shared.statuses.load(for: cacheKey)
+
+        switch cached {
+        case .fresh(let data, _):
+            statuses = data
+            if mode == .friends { myStatus = statuses.first }
+            return
+
+        case .stale(let data, _):
+            statuses = data
+            if mode == .friends { myStatus = statuses.first }
+            Task { [weak self] in
+                await self?.fetchStatusesFromNetwork(cacheKey: cacheKey)
+            }
+            return
+
+        case .expired, .empty:
+            isLoading = statuses.isEmpty
+        }
+
+        await fetchStatusesFromNetwork(cacheKey: cacheKey)
+        isLoading = false
+    }
+
+    private func fetchStatusesFromNetwork(cacheKey: String) async {
         nextCursor = nil
         hasMore = true
 
@@ -51,26 +77,22 @@ class StatusViewModel: ObservableObject {
             let response = try await statusService.list(mode: mode, cursor: nil, limit: 20)
 
             if response.success {
-                statuses = response.data.compactMap { $0.toStatusEntry() }
+                let entries = response.data.compactMap { $0.toStatusEntry() }
+                statuses = entries
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
-                if mode == .friends {
-                    myStatus = statuses.first
-                }
+                if mode == .friends { myStatus = statuses.first }
+                await CacheCoordinator.shared.statuses.save(entries, for: cacheKey)
             } else {
                 if statuses.isEmpty {
-                    statuses = []
+                    error = String(localized: "Impossible de charger les statuts", defaultValue: "Impossible de charger les statuts")
                 }
-                error = String(localized: "Impossible de charger les statuts", defaultValue: "Impossible de charger les statuts")
             }
         } catch {
             if statuses.isEmpty {
-                self.statuses = []
+                self.error = error.localizedDescription
             }
-            self.error = error.localizedDescription
         }
-
-        isLoading = false
     }
 
     // MARK: - Load More (infinite scroll)
@@ -106,6 +128,8 @@ class StatusViewModel: ObservableObject {
     // MARK: - Refresh
 
     func refresh() async {
+        let cacheKey = "statuses_\(mode)"
+        await CacheCoordinator.shared.statuses.invalidate(for: cacheKey)
         nextCursor = nil
         hasMore = true
         await loadStatuses()
@@ -120,21 +144,10 @@ class StatusViewModel: ObservableObject {
             if let entry = post.toStatusEntry() {
                 myStatus = entry
                 statuses.insert(entry, at: 0)
+                await saveCacheSnapshot()
             }
         } catch {
-            let entry = StatusEntry(
-                id: UUID().uuidString,
-                userId: "me",
-                username: "Moi",
-                avatarColor: "FF2E63",
-                moodEmoji: emoji,
-                content: content,
-                audioUrl: nil,
-                createdAt: Date(),
-                expiresAt: Date().addingTimeInterval(3600)
-            )
-            myStatus = entry
-            statuses.insert(entry, at: 0)
+            ToastManager.shared.showError("Erreur lors de la publication du statut")
         }
     }
 
@@ -150,11 +163,17 @@ class StatusViewModel: ObservableObject {
 
         do {
             try await statusService.delete(statusId: status.id)
+            await saveCacheSnapshot()
         } catch {
             statuses = snapshot
             myStatus = previousStatus
             ToastManager.shared.showError("Erreur lors de la suppression du statut")
         }
+    }
+
+    private func saveCacheSnapshot() async {
+        let cacheKey = "statuses_\(mode)"
+        await CacheCoordinator.shared.statuses.save(statuses, for: cacheKey)
     }
 
     // MARK: - Current User Info (for preview)

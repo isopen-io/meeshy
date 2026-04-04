@@ -104,7 +104,8 @@ struct StoryVideoPlayerView: View {
             }
         }
 
-        if preroll {
+        if preroll, item.status == .readyToPlay {
+            // Only preroll if already ready — otherwise the KVO observer handles it
             queuePlayer.preroll(atRate: 1.0) { finished in
                 guard finished else { return }
                 Task { @MainActor in

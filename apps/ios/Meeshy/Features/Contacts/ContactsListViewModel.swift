@@ -46,7 +46,31 @@ final class ContactsListViewModel: ObservableObject {
     // MARK: - Load Friends
 
     func loadFriends() async {
-        loadState = .loading
+        let cacheKey = "friends_list"
+        let cached = await CacheCoordinator.shared.friends.load(for: cacheKey)
+
+        switch cached {
+        case .fresh(let data, _):
+            friends = data
+            loadState = .loaded
+            return
+
+        case .stale(let data, _):
+            friends = data
+            loadState = .loaded
+            Task { [weak self] in
+                await self?.fetchFriendsFromNetwork(cacheKey: cacheKey)
+            }
+            return
+
+        case .expired, .empty:
+            loadState = friends.isEmpty ? .loading : .loaded
+        }
+
+        await fetchFriendsFromNetwork(cacheKey: cacheKey)
+    }
+
+    private func fetchFriendsFromNetwork(cacheKey: String) async {
         do {
             async let receivedResponse = friendService.receivedRequests(offset: 0, limit: 100)
             async let sentResponse = friendService.sentRequests(offset: 0, limit: 100)
@@ -81,8 +105,11 @@ final class ContactsListViewModel: ObservableObject {
             }
 
             loadState = .loaded
+            await CacheCoordinator.shared.friends.save(friends, for: cacheKey)
         } catch {
-            loadState = .error("Erreur lors du chargement")
+            if friends.isEmpty {
+                loadState = .error("Erreur lors du chargement")
+            }
         }
     }
 

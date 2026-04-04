@@ -100,9 +100,28 @@ public final class StoryMediaLoader {
 
     /// Create an AVPlayer with preroll — ready for instant playback.
     /// Must run on MainActor since AVPlayer is not thread-safe.
+    /// Waits for .readyToPlay status before calling preroll (required by AVPlayer).
     public func preloadVideoPlayer(url: URL) async -> AVPlayer {
         let player = AVPlayer(url: url)
         player.currentItem?.preferredForwardBufferDuration = 2.0
+
+        // Wait for readyToPlay before prerolling — preroll crashes if called too early
+        if let item = player.currentItem, item.status != .readyToPlay {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                var observer: NSKeyValueObservation?
+                observer = item.observe(\.status, options: [.new]) { item, _ in
+                    if item.status == .readyToPlay || item.status == .failed {
+                        observer?.invalidate()
+                        observer = nil
+                        continuation.resume()
+                    }
+                }
+            }
+        }
+
+        // Only preroll if player is ready (skip if failed)
+        guard player.currentItem?.status == .readyToPlay else { return player }
+
         await withCheckedContinuation { continuation in
             player.preroll(atRate: 1.0) { _ in
                 continuation.resume()
