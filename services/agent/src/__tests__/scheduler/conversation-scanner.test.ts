@@ -70,6 +70,7 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     updateAnalytics: jest.fn().mockResolvedValue(undefined),
     upsertUserRole: jest.fn().mockResolvedValue(undefined),
     createScanLog: jest.fn().mockResolvedValue(undefined),
+    updateScanStatus: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   } as any;
 }

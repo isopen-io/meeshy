@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
-import { Settings, Trash2, ChevronLeft, ChevronRight, Plus, Search as SearchIcon, MessageSquare, Clock } from 'lucide-react';
+import { Settings, Trash2, ChevronLeft, ChevronRight, Plus, Search as SearchIcon, MessageSquare, Clock, Play, Square } from 'lucide-react';
 import { agentAdminService, type AgentConfigData } from '@/services/agent-admin.service';
 import { AgentConfigDialog } from './AgentConfigDialog';
 import { UserDisplay } from './UserDisplay';
@@ -63,8 +63,8 @@ export function AgentConversationsTab() {
   const [messagesModalConfig, setMessagesModalConfig] = useState<AgentConfigData | null>(null);
   const limit = 20;
 
-  const fetchConfigs = useCallback(async () => {
-    setLoading(true);
+  const fetchConfigs = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const response = await agentAdminService.getConfigs(page, limit, debouncedSearch);
       if (response.success && response.data) {
@@ -73,13 +73,17 @@ export function AgentConversationsTab() {
         setHasMore(response.pagination?.hasMore ?? false);
       }
     } catch {
-      toast.error('Erreur lors du chargement des configurations');
+      if (!isSilent) toast.error('Erreur lors du chargement des configurations');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
-  }, [page]);
+  }, [page, limit, debouncedSearch]);
 
-  useEffect(() => { fetchConfigs(); }, [fetchConfigs, debouncedSearch]);
+  useEffect(() => {
+    fetchConfigs();
+    const interval = setInterval(() => fetchConfigs(true), 10000);
+    return () => clearInterval(interval);
+  }, [fetchConfigs]);
 
   const handleToggle = async (config: AgentConfigData) => {
     try {
@@ -104,6 +108,21 @@ export function AgentConversationsTab() {
     }
   };
 
+  const handleTrigger = async (config: AgentConfigData) => {
+    try {
+      if (config.isScanning) {
+        await agentAdminService.stopScan(config.conversationId);
+        toast.success('Interruption demandée');
+      } else {
+        await agentAdminService.triggerScan(config.conversationId);
+        toast.success('Scan déclenché');
+      }
+      setTimeout(() => fetchConfigs(true), 1000);
+    } catch {
+      toast.error('Erreur lors du déclenchement');
+    }
+  };
+
   const handleEdit = (config: AgentConfigData) => {
     setSelectedConfig(config);
     setDialogOpen(true);
@@ -120,7 +139,7 @@ export function AgentConversationsTab() {
     fetchConfigs();
   };
 
-  if (loading) {
+  if (loading && configs.length === 0) {
     return (
       <Card>
         <CardContent className="p-6 space-y-4">
@@ -205,14 +224,39 @@ export function AgentConversationsTab() {
                     {/* Mobile: compact row / Desktop: individual columns */}
                     <div className="flex items-center gap-2 lg:contents flex-wrap">
                       {/* Status */}
-                      <div className="flex items-center gap-1.5">
-                        <Switch
-                          checked={config.enabled}
-                          onCheckedChange={() => handleToggle(config)}
-                        />
-                        <Badge variant={config.enabled ? 'default' : 'secondary'} className="text-[10px]">
-                          {config.enabled ? 'Actif' : 'Off'}
-                        </Badge>
+                      <div className="flex flex-col gap-2 min-w-[80px]">
+                        <Button
+                          size="sm"
+                          variant={config.isScanning ? 'destructive' : 'default'}
+                          className={`h-10 w-full flex-col gap-0.5 px-2 ${config.isScanning ? 'animate-pulse' : ''}`}
+                          onClick={() => handleTrigger(config)}
+                        >
+                          {config.isScanning ? (
+                            <>
+                              <Square className="h-3 w-3 fill-current" />
+                              <span className="text-[8px] font-bold tracking-tighter">STOP!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-4 w-4 fill-current" />
+                              <span className="text-[8px] font-bold uppercase">Play</span>
+                            </>
+                          )}
+                        </Button>
+                        <div className="flex items-center gap-1.5 justify-center">
+                          <Switch
+                            checked={config.enabled}
+                            onCheckedChange={() => handleToggle(config)}
+                          />
+                          <Badge variant={config.enabled ? 'default' : 'secondary'} className="text-[10px]">
+                            {config.enabled ? 'Actif' : 'Off'}
+                          </Badge>
+                        </div>
+                        {config.currentNode && (
+                          <Badge variant="outline" className="text-[8px] h-3 px-1 border-red-200 text-red-500 animate-pulse truncate max-w-[80px] justify-center">
+                            {config.currentNode}
+                          </Badge>
+                        )}
                       </div>
 
                       {/* Triggers */}

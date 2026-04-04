@@ -47,9 +47,31 @@ const agentConfigSchema = z.object({
   eligibleConversationTypes: z.array(z.string()).optional(),
   maxConversationsPerCycle: z.number().optional(),
   messageFreshnessHours: z.number().optional(),
+  globalScanEnabled: z.boolean().optional(),
+  globalScanMinInterval: z.number().optional(),
+  globalScanMaxInterval: z.number().optional(),
 });
 
-export async function configRoutes(fastify: FastifyInstance, prisma: PrismaClient) {
+const globalConfigSchema = z.object({
+  systemPrompt: z.string().optional(),
+  enabled: z.boolean().optional(),
+  globalScanEnabled: z.boolean().optional(),
+  globalScanMinInterval: z.number().optional(),
+  globalScanMaxInterval: z.number().optional(),
+  defaultProvider: z.string().optional(),
+  defaultModel: z.string().optional(),
+  fallbackProvider: z.string().nullable().optional(),
+  fallbackModel: z.string().nullable().optional(),
+  globalDailyBudgetUsd: z.number().optional(),
+  maxConcurrentCalls: z.number().optional(),
+  eligibleConversationTypes: z.array(z.string()).optional(),
+  messageFreshnessHours: z.number().optional(),
+  maxConversationsPerCycle: z.number().optional(),
+  weekdayMaxConversations: z.number().optional(),
+  weekendMaxConversations: z.number().optional(),
+});
+
+export async function configRoutes(fastify: FastifyInstance, prisma: PrismaClient, redis: any) {
   fastify.get('/api/agent/config/:conversationId', async (req) => {
     const { conversationId } = req.params as { conversationId: string };
     const config = await prisma.agentConfig.findUnique({ where: { conversationId } });
@@ -74,6 +96,34 @@ export async function configRoutes(fastify: FastifyInstance, prisma: PrismaClien
     const { conversationId } = req.params as { conversationId: string };
     await prisma.agentConfig.delete({ where: { conversationId } });
     return { success: true };
+  });
+
+  fastify.post('/api/agent/config/:conversationId/stop', async (req) => {
+    const { conversationId } = req.params as { conversationId: string };
+    await redis.set(`agent:scan-stop:${conversationId}`, '1', 'EX', 60);
+    return { success: true };
+  });
+
+  fastify.get('/api/agent/global-config', async () => {
+    const config = await prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+    return { success: true, data: config };
+  });
+
+  fastify.put('/api/agent/global-config', async (req) => {
+    const body = globalConfigSchema.parse(req.body);
+    const existing = await prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+    const data = Object.fromEntries(
+      Object.entries(body).filter(([, v]) => v !== undefined),
+    );
+    if (existing) {
+      const updated = await prisma.agentGlobalConfig.update({
+        where: { id: existing.id },
+        data,
+      });
+      return { success: true, data: updated };
+    }
+    const created = await prisma.agentGlobalConfig.create({ data: data as any });
+    return { success: true, data: created };
   });
 
   fastify.get('/api/agent/analytics/:conversationId', async (req) => {

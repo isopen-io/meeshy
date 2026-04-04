@@ -40,30 +40,49 @@ export default memo(function AgentMessagesModal({
 }: AgentMessagesModalProps) {
   const [messages, setMessages] = useState<AgentMessageEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 20;
 
-  const fetchMessages = useCallback(async () => {
-    setLoading(true);
+  const fetchMessages = useCallback(async (targetPage: number, isLoadMore = false) => {
+    if (isLoadMore) setLoadingMore(true);
+    else setLoading(true);
+
     try {
-      const res = await agentAdminService.getAgentMessages(conversationId, page, limit);
+      const res = await agentAdminService.getAgentMessages(conversationId, targetPage, limit);
       if (res.success && res.data) {
-        setMessages(res.data);
+        if (isLoadMore) {
+          setMessages(prev => [...prev, ...(res.data || [])]);
+        } else {
+          setMessages(res.data);
+        }
         setTotal(res.pagination?.total ?? 0);
       }
     } catch {
       // silent
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [conversationId, page]);
+  }, [conversationId]);
 
   useEffect(() => {
-    if (open) fetchMessages();
+    if (open) {
+      setPage(1);
+      fetchMessages(1, false);
+    }
   }, [open, fetchMessages]);
 
   const hasMore = page * limit < total;
+
+  const handleLoadMore = () => {
+    if (hasMore && !loadingMore) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchMessages(nextPage, true);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -137,25 +156,24 @@ export default memo(function AgentMessagesModal({
                   </div>
                 </div>
               ))}
+
+              {hasMore && (
+                <div className="py-4 flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="text-xs gap-2"
+                  >
+                    {loadingMore ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronRight className="h-3 w-3 rotate-90" />}
+                    Charger la suite
+                  </Button>
+                </div>
+              )}
             </div>
           </ScrollArea>
         )}
-
-        {total > limit ? (
-          <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700 shrink-0">
-            <span className="text-[10px] text-gray-400 tabular-nums">
-              {(page - 1) * limit + 1}-{Math.min(page * limit, total)} / {total}
-            </span>
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                <ChevronLeft className="h-3 w-3" />
-              </Button>
-              <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={!hasMore} onClick={() => setPage(p => p + 1)}>
-                <ChevronRight className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-        ) : null}
       </DialogContent>
     </Dialog>
   );

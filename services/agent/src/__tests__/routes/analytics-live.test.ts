@@ -27,6 +27,7 @@ function makeStubs(overrides: {
   analyticsRecord?: unknown;
   summaryRecord?: unknown;
   controlledUsers?: unknown[];
+  agentConfig?: unknown;
 } = {}) {
   return {
     stateManager: {
@@ -40,6 +41,7 @@ function makeStubs(overrides: {
       getAnalytics: jest.fn().mockResolvedValue(overrides.analyticsRecord ?? null),
       getSummaryRecord: jest.fn().mockResolvedValue(overrides.summaryRecord ?? null),
       getControlledUsers: jest.fn().mockResolvedValue(overrides.controlledUsers ?? []),
+      getAgentConfig: jest.fn().mockResolvedValue(overrides.agentConfig ?? null),
     } as any,
   };
 }
