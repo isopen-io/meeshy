@@ -294,6 +294,7 @@ struct FeedView: View {
             },
             onTapPost: { post in
                 router.push(.postDetail(post.id, post))
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
             },
             onTapRepost: { repostId in
                 router.push(.postDetail(repostId))

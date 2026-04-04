@@ -191,6 +191,8 @@ struct PostDetailView: View {
             }
             await viewModel.loadComments(postId)
             viewModel.subscribeToSocket(postId)
+            // Record view when post detail is opened
+            try? await PostService.shared.viewPost(postId: postId, duration: nil)
         }
         .sheet(isPresented: $showTranslationSheet) {
             if let post = displayPost {
@@ -377,6 +379,9 @@ struct PostDetailView: View {
                 if truncation.isTruncated {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         isTextExpanded.toggle()
+                    }
+                    if isTextExpanded {
+                        Task { try? await PostService.shared.viewPost(postId: postId, duration: nil) }
                     }
                 }
             }
