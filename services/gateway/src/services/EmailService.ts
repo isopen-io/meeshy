@@ -861,13 +861,46 @@ export class EmailService {
     return this.sendEmail({ to: data.to, subject: t.passwordChanged.subject, html, text, trackingType: 'password_changed', trackingLang: data.language });
   }
 
+  private getAlertTypeLabel(alertType: string, language: string): { label: string; description: string; icon: string; isInfo: boolean } {
+    const labels: Record<string, Record<string, { label: string; description: string; icon: string; isInfo: boolean }>> = {
+      fr: {
+        login_new_device: { label: 'Nouvelle connexion detectee', description: 'Une connexion a ete effectuee depuis un nouvel appareil ou navigateur.', icon: '🔐', isInfo: true },
+        password_changed: { label: 'Mot de passe modifie', description: 'Votre mot de passe a ete change avec succes.', icon: '🔑', isInfo: true },
+        two_factor_enabled: { label: 'Double authentification activee', description: 'La verification en deux etapes a ete activee sur votre compte.', icon: '🛡️', isInfo: true },
+        two_factor_disabled: { label: 'Double authentification desactivee', description: 'La verification en deux etapes a ete desactivee sur votre compte.', icon: '⚠️', isInfo: false },
+        suspicious_activity: { label: 'Activite suspecte', description: 'Nous avons detecte une activite inhabituelle sur votre compte.', icon: '🚨', isInfo: false },
+      },
+      en: {
+        login_new_device: { label: 'New login detected', description: 'A login was made from a new device or browser.', icon: '🔐', isInfo: true },
+        password_changed: { label: 'Password changed', description: 'Your password was changed successfully.', icon: '🔑', isInfo: true },
+        two_factor_enabled: { label: 'Two-factor authentication enabled', description: 'Two-step verification has been enabled on your account.', icon: '🛡️', isInfo: true },
+        two_factor_disabled: { label: 'Two-factor authentication disabled', description: 'Two-step verification has been disabled on your account.', icon: '⚠️', isInfo: false },
+        suspicious_activity: { label: 'Suspicious activity', description: 'We detected unusual activity on your account.', icon: '🚨', isInfo: false },
+      },
+    };
+    const lang = labels[language] ? language : 'fr';
+    return labels[lang][alertType] ?? labels[lang]['login_new_device'];
+  }
+
   async sendSecurityAlertEmail(data: SecurityAlertEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
+    const alert = this.getAlertTypeLabel(data.alertType, data.language);
+    const details = data.details && data.details.length > 0 ? data.details : alert.description;
+    const headerBg = alert.isInfo ? 'background:linear-gradient(135deg,#6366F1 0%,#4338CA 100%)' : 'background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)';
+    const headerTitle = alert.isInfo ? `${alert.icon} ${alert.label}` : `🚨 ${t.securityAlert.title}`;
+    const subject = alert.isInfo ? `${alert.label} - Meeshy` : t.securityAlert.subject;
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)"><h1>🚨 ${t.securityAlert.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><div class="warning"><strong>${data.alertType}</strong><br>${data.details}</div><p><strong>${t.securityAlert.actions}</strong></p><ul><li>${t.securityAlert.action1}</li><li>${t.securityAlert.action2}</li><li>${t.securityAlert.action3}</li></ul><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `🚨 ${t.securityAlert.title}\n\n${t.common.greeting} ${data.name},\n\n${data.alertType}\n${data.details}\n\n${t.securityAlert.actions}\n- ${t.securityAlert.action1}\n- ${t.securityAlert.action2}\n- ${t.securityAlert.action3}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
+    const actionsHtml = alert.isInfo
+      ? ''
+      : `<p><strong>${t.securityAlert.actions}</strong></p><ul><li>${t.securityAlert.action1}</li><li>${t.securityAlert.action2}</li><li>${t.securityAlert.action3}</li></ul>`;
+    const actionsText = alert.isInfo
+      ? ''
+      : `\n\n${t.securityAlert.actions}\n- ${t.securityAlert.action1}\n- ${t.securityAlert.action2}\n- ${t.securityAlert.action3}`;
 
-    return this.sendEmail({ to: data.to, subject: t.securityAlert.subject, html, text, trackingType: 'security_alert', trackingLang: data.language });
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="${headerBg}"><h1>${headerTitle}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><div class="${alert.isInfo ? 'info' : 'warning'}"><strong>${alert.label}</strong><br>${details}</div>${actionsHtml}<p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${alert.icon} ${alert.label}\n\n${t.common.greeting} ${data.name},\n\n${details}${actionsText}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
+
+    return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'security_alert', trackingLang: data.language });
   }
 
   async sendEmailChangeVerification(data: EmailChangeVerificationData): Promise<EmailResult> {
