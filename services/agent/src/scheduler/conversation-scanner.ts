@@ -553,8 +553,8 @@ export class ConversationScanner {
     console.log(`[Scanner] Processing conv=${conversationId} activity=${activity.activityScore.toFixed(2)} msgs=${effectiveMessages.length} users=${controlledUsers.length} lastUser=${lastAgentUserId ?? 'none'} recentTopics=${recentTopicCategories.length}`);
 
     let result: Record<string, unknown>;
+    const stopFlagKey = `agent:scan-stop:${conversationId}`;
     try {
-      const stopFlagKey = `agent:scan-stop:${conversationId}`;
       const onNodeStart = async (node: string) => {
         const stopped = await this.redis.get(stopFlagKey);
         if (stopped) {
@@ -604,9 +604,10 @@ export class ConversationScanner {
         engagementData,
       }, {
         callbacks: [{
-          handleGraphNodeStart: async (node: any) => {
-            if (node && typeof node === 'object' && node.id) {
-              await onNodeStart(node.id);
+          handleChainStart: async (_chain: any, _inputs: any, _runId: string, _parentRunId?: string, _tags?: string[], metadata?: Record<string, any>) => {
+            const nodeName = metadata?.langgraph_node;
+            if (nodeName) {
+              await onNodeStart(nodeName);
             }
           },
         }],
@@ -620,7 +621,7 @@ export class ConversationScanner {
         this.persistence.createScanLog(tracer.finalize()).catch(err =>
           console.error(`[Scanner] Error persisting scan log:`, err)),
         this.persistence.updateScanStatus(conversationId, false, null),
-        this.redis.del(`agent:scan-stop:${conversationId}`),
+        this.redis.del(stopFlagKey),
       ]);
       this.tracerRef.current = null;
       return false;
