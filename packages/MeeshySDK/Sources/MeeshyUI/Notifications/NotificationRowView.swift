@@ -143,6 +143,9 @@ public struct NotificationRowView: View {
         case .incomingCall, .callEnded, .legacyCallIncoming:
             return "Appel entrant"
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
+            if let content = notification.content, !content.isEmpty {
+                return content
+            }
             return "A aime votre publication"
         case .postComment, .commentReply, .legacyPostComment:
             return "A commente votre publication"

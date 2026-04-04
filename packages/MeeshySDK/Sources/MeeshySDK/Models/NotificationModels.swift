@@ -269,6 +269,7 @@ public struct NotificationMetadata: Codable, Sendable {
     public let commentId: String?
     public let commentPreview: String?
     public let emoji: String?
+    public let postType: String?
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -281,11 +282,12 @@ public struct NotificationMetadata: Codable, Sendable {
         commentId = try container.decodeIfPresent(String.self, forKey: .commentId)
         commentPreview = try container.decodeIfPresent(String.self, forKey: .commentPreview)
         emoji = try container.decodeIfPresent(String.self, forKey: .emoji)
+        postType = try container.decodeIfPresent(String.self, forKey: .postType)
     }
 
     private enum CodingKeys: String, CodingKey {
         case messagePreview, action, reactionEmoji, callType, memberCount
-        case postId, commentId, commentPreview, emoji
+        case postId, commentId, commentPreview, emoji, postType
     }
 }
 
@@ -373,7 +375,20 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
         case .incomingCall, .callEnded, .legacyCallIncoming:
             return "Appel de \(actorName)"
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
-            return "\(actorName) a aime votre publication"
+            if let content, !content.isEmpty {
+                return "\(actorName) \(content)"
+            }
+            let emoji = metadata?.emoji ?? metadata?.reactionEmoji
+            let typeLabel: String = {
+                if notificationType == .storyReaction || metadata?.postType == "STORY" { return "story" }
+                if notificationType == .statusReaction || metadata?.postType == "STATUS" { return "statut" }
+                if notificationType == .commentLike { return "commentaire" }
+                return "publication"
+            }()
+            if let emoji {
+                return "\(actorName) a reagi \(emoji) a votre \(typeLabel)"
+            }
+            return "\(actorName) a aime votre \(typeLabel)"
         case .postComment, .commentReply, .legacyPostComment:
             return "\(actorName) a commente votre publication"
         case .postRepost:

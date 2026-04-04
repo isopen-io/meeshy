@@ -173,6 +173,92 @@ export function registerInteractionRoutes(
     }
   });
 
+  // POST /posts/:postId/impression — Track a feed impression
+  fastify.post('/posts/:postId/impression', {
+    schema: {
+      params: { type: 'object', required: ['postId'], properties: { postId: { type: 'string' } } },
+      body: {
+        type: 'object',
+        properties: {
+          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification'] }
+        }
+      }
+    },
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return reply.status(401).send({ success: false, error: 'Authentication required' });
+      }
+
+      const { postId } = request.params;
+      const source = (request.body as any)?.source ?? 'feed';
+
+      await prisma.postImpression.create({
+        data: { postId, userId: authContext.registeredUser.id, source }
+      });
+
+      await prisma.post.update({
+        where: { id: postId },
+        data: { impressionCount: { increment: 1 } }
+      });
+
+      return sendSuccess(reply, { recorded: true });
+    } catch (error) {
+      fastify.log.error(`[POST /posts/:postId/impression] Error: ${error}`);
+      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // POST /posts/impressions/batch — Track multiple feed impressions at once
+  fastify.post('/posts/impressions/batch', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['postIds'],
+        properties: {
+          postIds: { type: 'array', items: { type: 'string' } },
+          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification'] }
+        }
+      }
+    },
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return reply.status(401).send({ success: false, error: 'Authentication required' });
+      }
+
+      const { postIds, source = 'feed' } = request.body as any;
+
+      if (!Array.isArray(postIds) || postIds.length === 0) {
+        return sendSuccess(reply, { recorded: 0 });
+      }
+
+      const capped = postIds.slice(0, 50);
+
+      await prisma.postImpression.createMany({
+        data: capped.map((postId: string) => ({
+          postId,
+          userId: authContext.registeredUser!.id,
+          source
+        }))
+      });
+
+      await prisma.post.updateMany({
+        where: { id: { in: capped } },
+        data: { impressionCount: { increment: 1 } }
+      });
+
+      return sendSuccess(reply, { recorded: capped.length });
+    } catch (error) {
+      fastify.log.error(`[POST /posts/impressions/batch] Error: ${error}`);
+      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   // POST /posts/:postId/share — Track a share
   fastify.post('/posts/:postId/share', {
     preValidation: [requiredAuth],

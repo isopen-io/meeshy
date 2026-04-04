@@ -270,6 +270,7 @@ model User {
   posts             Post[]           @relation("UserPosts")
   postComments      PostComment[]    @relation("UserPostComments")
   postViews         PostView[]       @relation("UserPostViews")
+  postImpressions   PostImpression[] @relation("UserPostImpressions")
   postBookmarks     PostBookmark[]   @relation("UserPostBookmarks")
 
   // Story audio library
@@ -2668,12 +2669,13 @@ model Post {
   // ============================================
   // COMPTEURS DÉNORMALISÉS
   // ============================================
-  likeCount     Int @default(0)
-  commentCount  Int @default(0)
-  repostCount   Int @default(0)
-  viewCount     Int @default(0)
-  bookmarkCount Int @default(0)
-  shareCount    Int @default(0)
+  likeCount       Int @default(0)
+  commentCount    Int @default(0)
+  repostCount     Int @default(0)
+  viewCount       Int @default(0)
+  impressionCount Int @default(0)
+  bookmarkCount   Int @default(0)
+  shareCount      Int @default(0)
 
   // ============================================
   // FLAGS
@@ -2695,8 +2697,9 @@ model Post {
   reposts   Post[]     @relation("PostReposts")
   media     PostMedia[]
   comments  PostComment[]
-  views     PostView[]
-  bookmarks PostBookmark[]
+  views       PostView[]
+  impressions PostImpression[]
+  bookmarks   PostBookmark[]
 
   @@index([authorId, type, createdAt])
   @@index([communityId, type, createdAt])
@@ -2860,6 +2863,24 @@ model PostView {
   @@unique([postId, userId])
   @@index([postId])
   @@index([userId])
+}
+
+/// Impression = le post est apparu dans le scroll area (pas nécessairement ouvert/lu)
+/// Contrairement à PostView, PAS unique par user:post — un utilisateur peut voir le même post plusieurs fois
+model PostImpression {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId    String   @db.ObjectId
+  userId    String   @db.ObjectId
+  source    String   @default("feed")
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("UserPostImpressions", fields: [userId], references: [id])
+
+  @@index([postId])
+  @@index([userId])
+  @@index([postId, userId])
+  @@index([createdAt])
 }
 
 /// Bookmark/sauvegarde d'un post

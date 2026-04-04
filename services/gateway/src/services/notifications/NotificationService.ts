@@ -981,7 +981,7 @@ export class NotificationService {
       userId: params.postAuthorId,
       type,
       priority: 'normal',
-      content: `A réagi ${params.emoji} à ton ${params.postType === 'STORY' ? 'story' : params.postType === 'STATUS' ? 'statut' : 'post'}`,
+      content: `a réagi ${params.emoji} à votre ${params.postType === 'STORY' ? 'story' : params.postType === 'STATUS' ? 'statut' : 'publication'}`,
 
       actor: {
         id: params.actorId,
