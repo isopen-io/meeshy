@@ -1049,10 +1049,7 @@ struct ConversationInfoSheet: View {
     private func tabCountLabel(for tab: InfoTab) -> String? {
         switch tab {
         case .members:
-            if totalParticipants > participants.count {
-                return "\(participants.count)/\(totalParticipants)"
-            }
-            return participants.count > 0 ? "\(participants.count)" : nil
+            return nil
         case .media:
             return mediaAttachments.count > 0 ? "\(mediaAttachments.count)" : nil
         case .plus:
