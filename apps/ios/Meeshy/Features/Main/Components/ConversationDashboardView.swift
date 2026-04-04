@@ -40,8 +40,10 @@ struct ConversationDashboardView: View {
             }
             statsRingsSection
                 .staggerIn(sectionsAppeared, index: 1)
-            activityChartSection
-                .staggerIn(sectionsAppeared, index: 2)
+            if !activityData.isEmpty {
+                activityChartSection
+                    .staggerIn(sectionsAppeared, index: 2)
+            }
             if let analysis = agentAnalysis, !analysis.participantProfiles.isEmpty {
                 agentParticipantProfilesSection(analysis.participantProfiles)
                     .staggerIn(sectionsAppeared, index: 3)
@@ -50,10 +52,14 @@ struct ConversationDashboardView: View {
                 participantBreakdownSection
                     .staggerIn(sectionsAppeared, index: 4)
             }
-            sentimentSection
-                .staggerIn(sectionsAppeared, index: 5)
-            contentTypesSection
-                .staggerIn(sectionsAppeared, index: 6)
+            if sentimentAnalysis.total > 0 {
+                sentimentSection
+                    .staggerIn(sectionsAppeared, index: 5)
+            }
+            if !contentTypeStats.isEmpty {
+                contentTypesSection
+                    .staggerIn(sectionsAppeared, index: 6)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
@@ -214,8 +220,7 @@ struct ConversationDashboardView: View {
 
             let maxMsg = max(effectiveTotalMessages, 1)
             let maxWords = max(effectiveTotalWords, 1)
-            let maxChars = max(effectiveTotalCharacters, 1)
-            let mediaMax = max(max(effectiveImageCount, max(effectiveAudioCount, effectiveVideoCount)), 1)
+            let mediaMax = max(max(effectiveImageCount, max(effectiveAudioCount, max(effectiveVideoCount, max(effectiveLinkCount, effectiveDocCount)))), 1)
 
             HStack(spacing: 16) {
                 StatRing(
@@ -237,18 +242,6 @@ struct ConversationDashboardView: View {
                     animated: ringsAnimated
                 )
                 StatRing(
-                    value: effectiveTotalCharacters,
-                    maxValue: maxChars,
-                    label: "Caracteres",
-                    accent: accent,
-                    textColor: theme.textPrimary,
-                    mutedColor: theme.textMuted,
-                    animated: ringsAnimated
-                )
-            }
-
-            HStack(spacing: 16) {
-                StatRing(
                     value: effectiveImageCount,
                     maxValue: mediaMax,
                     label: "Photos",
@@ -257,6 +250,9 @@ struct ConversationDashboardView: View {
                     mutedColor: theme.textMuted,
                     animated: ringsAnimated
                 )
+            }
+
+            HStack(spacing: 16) {
                 StatRing(
                     value: effectiveAudioCount,
                     maxValue: mediaMax,
@@ -275,6 +271,31 @@ struct ConversationDashboardView: View {
                     mutedColor: theme.textMuted,
                     animated: ringsAnimated
                 )
+                StatRing(
+                    value: effectiveLinkCount,
+                    maxValue: mediaMax,
+                    label: "Liens",
+                    accent: accent,
+                    textColor: theme.textPrimary,
+                    mutedColor: theme.textMuted,
+                    animated: ringsAnimated
+                )
+            }
+
+            if effectiveDocCount > 0 {
+                HStack(spacing: 16) {
+                    StatRing(
+                        value: effectiveDocCount,
+                        maxValue: mediaMax,
+                        label: "Documents",
+                        accent: accent,
+                        textColor: theme.textPrimary,
+                        mutedColor: theme.textMuted,
+                        animated: ringsAnimated
+                    )
+                    Spacer()
+                    Spacer()
+                }
             }
         }
     }
@@ -884,10 +905,6 @@ struct ConversationDashboardView: View {
         }
     }
 
-    private var totalCharacters: Int {
-        messages.reduce(0) { $0 + $1.content.count }
-    }
-
     private var imageCount: Int {
         messages.reduce(0) { total, msg in
             total + msg.attachments.filter { $0.type == .image }.count
@@ -910,10 +927,11 @@ struct ConversationDashboardView: View {
 
     private var effectiveTotalMessages: Int { serverStats?.totalMessages ?? messages.count }
     private var effectiveTotalWords: Int { serverStats?.totalWords ?? totalWords }
-    private var effectiveTotalCharacters: Int { serverStats?.totalCharacters ?? totalCharacters }
     private var effectiveImageCount: Int { serverStats?.contentTypes.image ?? imageCount }
     private var effectiveAudioCount: Int { serverStats?.contentTypes.audio ?? audioCount }
     private var effectiveVideoCount: Int { serverStats?.contentTypes.video ?? videoCount }
+    private var effectiveLinkCount: Int { serverStats?.contentTypes.location ?? 0 }
+    private var effectiveDocCount: Int { serverStats?.contentTypes.file ?? 0 }
 
     // MARK: - Activity Data
 

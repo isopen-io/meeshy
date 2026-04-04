@@ -41,8 +41,8 @@ struct ConversationInfoSheet: View {
     enum InfoTab: String, CaseIterable {
         case members = "Membres"
         case media = "Medias"
-        case plus = "Plus"
-        case preferences = "Préf"
+        case plus = "Stats"
+        case preferences = "Options"
     }
 
     private var accent: Color { Color(hex: accentColor) }
