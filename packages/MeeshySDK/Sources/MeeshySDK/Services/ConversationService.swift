@@ -147,9 +147,9 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             slowModeSeconds: slowModeSeconds,
             autoTranslateEnabled: autoTranslateEnabled
         )
-        let response: APIResponse<APIConversation> = try await api.put(
+        let response: APIResponse<UpdateConversationResponse> = try await api.put(
             endpoint: "/conversations/\(conversationId)", body: body)
-        return response.data
+        return response.data.toAPIConversation()
     }
 
     public func leave(conversationId: String) async throws {

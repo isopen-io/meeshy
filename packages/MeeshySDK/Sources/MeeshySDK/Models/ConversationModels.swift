@@ -109,6 +109,67 @@ public struct APIConversation: Decodable, Sendable {
     public let currentUserRole: String?
     public let currentUserJoinedAt: Date?
     public let createdAt: Date
+
+    public init(
+        id: String, type: String, identifier: String? = nil, title: String? = nil,
+        description: String? = nil, avatar: String? = nil, banner: String? = nil,
+        communityId: String? = nil, isActive: Bool? = nil, memberCount: Int? = nil,
+        isAnnouncementChannel: Bool? = nil, defaultWriteRole: String? = nil,
+        slowModeSeconds: Int? = nil, autoTranslateEnabled: Bool? = nil,
+        lastMessageAt: Date? = nil, participants: [APIParticipant]? = nil,
+        lastMessage: APIConversationLastMessage? = nil, recentMessages: [APIConversationLastMessage]? = nil,
+        userPreferences: [APIConversationPreferences]? = nil, unreadCount: Int? = nil,
+        updatedAt: Date? = nil, encryptionMode: String? = nil,
+        currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil,
+        createdAt: Date
+    ) {
+        self.id = id; self.type = type; self.identifier = identifier; self.title = title
+        self.description = description; self.avatar = avatar; self.banner = banner
+        self.communityId = communityId; self.isActive = isActive; self.memberCount = memberCount
+        self.isAnnouncementChannel = isAnnouncementChannel; self.defaultWriteRole = defaultWriteRole
+        self.slowModeSeconds = slowModeSeconds; self.autoTranslateEnabled = autoTranslateEnabled
+        self.lastMessageAt = lastMessageAt; self.participants = participants
+        self.lastMessage = lastMessage; self.recentMessages = recentMessages
+        self.userPreferences = userPreferences; self.unreadCount = unreadCount
+        self.updatedAt = updatedAt; self.encryptionMode = encryptionMode
+        self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt
+        self.createdAt = createdAt
+    }
+}
+
+// MARK: - Update Conversation Response (PUT — lighter than full APIConversation)
+
+public struct UpdateConversationResponse: Decodable, Sendable {
+    public let id: String
+    public let type: String
+    public let identifier: String?
+    public let title: String?
+    public let description: String?
+    public let avatar: String?
+    public let banner: String?
+    public let communityId: String?
+    public let isActive: Bool?
+    public let isAnnouncementChannel: Bool?
+    public let defaultWriteRole: String?
+    public let slowModeSeconds: Int?
+    public let autoTranslateEnabled: Bool?
+    public let updatedAt: Date?
+    public let createdAt: Date
+
+    public func toAPIConversation() -> APIConversation {
+        APIConversation(
+            id: id, type: type, identifier: identifier, title: title,
+            description: description, avatar: avatar, banner: banner,
+            communityId: communityId, isActive: isActive,
+            memberCount: nil, isAnnouncementChannel: isAnnouncementChannel,
+            defaultWriteRole: defaultWriteRole, slowModeSeconds: slowModeSeconds,
+            autoTranslateEnabled: autoTranslateEnabled, lastMessageAt: nil,
+            participants: nil, lastMessage: nil, recentMessages: nil,
+            userPreferences: nil, unreadCount: nil, updatedAt: updatedAt,
+            encryptionMode: nil, currentUserRole: nil, currentUserJoinedAt: nil,
+            createdAt: createdAt
+        )
+    }
 }
 
 extension APIConversation {
