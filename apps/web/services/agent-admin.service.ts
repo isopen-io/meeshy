@@ -89,6 +89,10 @@ export type AgentConfigData = {
   prioritizeTaggedUsers: boolean;
   prioritizeRepliedUsers: boolean;
   reactionBoostFactor: number;
+  minDelayMinutes: number;
+  maxDelayMinutes: number;
+  spreadOverDayEnabled: boolean;
+  maxMessagesPerUserPer10Min: number;
   analytics: AnalyticsData | null;
   createdAt: string;
   updatedAt: string;
@@ -135,6 +139,10 @@ export type AgentConfigUpsert = {
   prioritizeTaggedUsers?: boolean;
   prioritizeRepliedUsers?: boolean;
   reactionBoostFactor?: number;
+  minDelayMinutes?: number;
+  maxDelayMinutes?: number;
+  spreadOverDayEnabled?: boolean;
+  maxMessagesPerUserPer10Min?: number;
 };
 
 export type DeliveryItemAction =

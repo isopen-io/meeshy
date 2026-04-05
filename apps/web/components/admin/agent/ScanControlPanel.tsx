@@ -81,6 +81,10 @@ export default memo(function ScanControlPanel() {
           weekendMaxUsers: res.data.weekendMaxUsers,
           inactivityThresholdHours: res.data.inactivityThresholdHours,
           inactivityDaysThreshold: res.data.inactivityDaysThreshold,
+          minDelayMinutes: res.data.minDelayMinutes ?? 1,
+          maxDelayMinutes: res.data.maxDelayMinutes ?? 360,
+          spreadOverDayEnabled: res.data.spreadOverDayEnabled ?? true,
+          maxMessagesPerUserPer10Min: res.data.maxMessagesPerUserPer10Min ?? 4,
         });
       }
     } catch {
@@ -324,6 +328,52 @@ export default memo(function ScanControlPanel() {
                         </div>
                       </div>
                     ) : null}
+                  </div>
+
+                  {/* Distribution temporelle */}
+                  <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                    <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider flex items-center gap-1.5">
+                      <Clock className="h-3 w-3" /> Distribution temporelle
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">Delai minimum (minutes)</Label>
+                        <Input
+                          type="number"
+                          value={convForm.minDelayMinutes ?? 1}
+                          onChange={e => updateConv('minDelayMinutes', Math.max(1, Math.min(1440, parseInt(e.target.value) || 1)))}
+                          min={1}
+                          max={1440}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">Delai maximum (minutes)</Label>
+                        <Input
+                          type="number"
+                          value={convForm.maxDelayMinutes ?? 360}
+                          onChange={e => updateConv('maxDelayMinutes', Math.max(1, Math.min(1440, parseInt(e.target.value) || 360)))}
+                          min={1}
+                          max={1440}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px]">Etaler les actions sur la journee</Label>
+                      <Switch
+                        checked={convForm.spreadOverDayEnabled ?? true}
+                        onCheckedChange={v => updateConv('spreadOverDayEnabled', v)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Max messages par utilisateur / 10min</Label>
+                      <Input
+                        type="number"
+                        value={convForm.maxMessagesPerUserPer10Min ?? 4}
+                        onChange={e => updateConv('maxMessagesPerUserPer10Min', Math.max(1, Math.min(20, parseInt(e.target.value) || 4)))}
+                        min={1}
+                        max={20}
+                      />
+                    </div>
                   </div>
 
                   {/* Scope par cycle */}
