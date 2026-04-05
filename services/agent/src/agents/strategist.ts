@@ -1,7 +1,9 @@
+import crypto from 'node:crypto';
 import type { ConversationState, InterventionPlan, InterventionDirective, ReactionDirective, ControlledUser } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 import { getArchetype } from '@meeshy/shared/agent/archetypes';
+import { resolveDelaySeconds } from '../delivery/delay-resolver';
 
 const STRATEGIST_SYSTEM_PROMPT = `Tu es l'orchestrateur d'une communaute de messagerie. Analyse cette conversation et decide quelles interventions sont naturelles.
 
@@ -44,20 +46,27 @@ DECIDE:
    - type: "message" ou "reaction"
    - Si message: asUserId, topic (sujet a aborder), replyToMessageId (OBLIGATOIRE sauf conversation morte), mentionUsernames (liste @username)
    - Si reaction: asUserId, targetMessageId, emoji
-   - delaySeconds: delai relatif pour echelonner (messages: 30-180s, reactions: 5-30s)
+   - delayCategory: "immediate" (reponse directe), "short" (10-60min), "medium" (1-6h, contribution spontanee), "long" (6-24h, sujet de fond)
+   - topicCategory: categorie courte du sujet (ex: "sport", "politique", "meteo", "humour", "tech", "culture")
 4. Les interventions doivent etre NATURELLES et VARIEES
 5. Ne fais PAS intervenir le meme utilisateur plus de 2 fois
 6. Les reactions doivent utiliser des emojis courants et pertinents au message cible
 7. Choisis les utilisateurs dont le profil et les sujets d'expertise correspondent au debat EN COURS
-8. Pour chaque intervention "message", indique "needsWebSearch": true/false
-   - true si le sujet requiert des informations actuelles ou factuelles
-   - false pour conversation sociale, opinions, sujets generaux
+8. Pour chaque intervention "message", indique "needsWebSearch": true/false et "searchHint": string|null
+   - needsWebSearch: true si la reponse serait enrichie par des informations recentes, des faits verifiables, ou du contexte externe
+   - searchHint: si needsWebSearch est true, une requete de recherche suggeree (ex: "resultats ligue 1 avril 2026")
+   - false pour conversations purement sociales ou emotionnelles
 
 HISTORIQUE DES INTERVENTIONS RECENTES (NE PAS REPETER):
 {agentHistory}
 
 SUJETS RECEMMENT ABORDES PAR LES AGENTS (INTERDITS - trouver un angle COMPLETEMENT different):
 {recentTopicCategories}
+
+ACTIONS DEJA PROGRAMMEES (NE PAS CREER DE DOUBLONS):
+{scheduledActions}
+- Si une action est deja programmee pour un utilisateur sur un sujet, NE PAS creer une nouvelle action sur le meme sujet
+- Privilegier des sujets DIFFERENTS de ceux deja programmes
 
 REGLES ANTI-REPETITION:
 - Ne propose JAMAIS un sujet, une idee ou une information deja aborde dans les messages recents ou l'historique des interventions.
@@ -96,6 +105,12 @@ MODE BURST (si actif):
 - Les interventions doivent former un echange naturel (question/reponse, reactions)
 - Utilise au moins 2 utilisateurs differents dans le burst
 
+STRATEGIE DE DISTRIBUTION TEMPORELLE:
+- Produis un MIX de delayCategory: pas uniquement "immediate"
+- Si la conversation est active (score > 0.4): majorite "immediate"/"short"
+- Si la conversation est calme (score <= 0.4): majorite "medium"/"long" pour simuler un retour naturel
+- Assure au moins 1 action "medium" ou "long" si le budget le permet, pour garantir de l'activite future
+
 IMPORTANT:
 - Analyse semantique pure. Fonctionne en TOUTES langues.
 - Ne reponds PAS si l'activite est deja suffisante (score > 0.7)
@@ -112,17 +127,20 @@ REPONSE JSON STRICTE (aucun texte autour):
       "type": "message",
       "asUserId": "string",
       "topic": "string",
+      "topicCategory": "string",
       "replyToMessageId": "string | null",
       "mentionUsernames": ["string"],
-      "delaySeconds": number,
-      "needsWebSearch": boolean
+      "delayCategory": "immediate | short | medium | long",
+      "needsWebSearch": boolean,
+      "searchHint": "string | null"
     },
     {
       "type": "reaction",
       "asUserId": "string",
       "targetMessageId": "string",
       "emoji": "string",
-      "delaySeconds": number
+      "delayCategory": "immediate | short | medium | long",
+      "topicCategory": "string"
     }
   ]
 }`;
@@ -226,6 +244,11 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     .replace('{agentInstructions}', instructionsText)
     .replace('{agentHistory}', historyText + bannedTopicsText)
     .replace('{recentTopicCategories}', recentTopicsText)
+    .replace('{scheduledActions}', (state.scheduledActions ?? []).length > 0
+      ? state.scheduledActions.map(sa =>
+        `- ${sa.userId} : "${sa.topicCategory}" dans ${Math.round((sa.scheduledAt - Date.now()) / 60_000)}min (${sa.type})`
+      ).join('\n')
+      : 'Aucune action programmee')
     .replace('{engagementData}', engagementText)
     .replace('{inactiveUsers}', inactiveUsersText)
     .replace('{participants}', participantsText)
@@ -330,14 +353,27 @@ function validateInterventions(
       const isInterpelle = Boolean(item.replyToMessageId) || (Array.isArray(item.mentionUsernames) && item.mentionUsernames.length > 0);
       const limits = calculateWordLimits(user, isInterpelle, state);
 
+      const delayCategory = (['immediate', 'short', 'medium', 'long'].includes(String(item.delayCategory))
+        ? String(item.delayCategory)
+        : 'immediate') as 'immediate' | 'short' | 'medium' | 'long';
+      const delaySeconds = resolveDelaySeconds(delayCategory, {
+        minDelayMinutes: state.minDelayMinutes ?? 1,
+        maxDelayMinutes: state.maxDelayMinutes ?? 360,
+      });
+      const topicCategory = String(item.topicCategory ?? item.topic ?? 'general').toLowerCase().slice(0, 50);
+      const topicHash = crypto.createHash('md5').update(String(item.topic ?? '')).digest('hex').slice(0, 8);
+
       validated.push({
         type: 'message',
         asUserId: userId,
         topic: String(item.topic ?? ''),
+        topicCategory,
         replyToMessageId: item.replyToMessageId ? String(item.replyToMessageId) : undefined,
         mentionUsernames: Array.isArray(item.mentionUsernames) ? item.mentionUsernames.map(String) : [],
-        delaySeconds: Math.round(Math.max(30, Math.min(180, Number(item.delaySeconds) || 60)) * (0.85 + Math.random() * 0.3)),
+        delaySeconds,
+        delayCategory,
         needsWebSearch: Boolean(item.needsWebSearch),
+        searchHint: typeof item.searchHint === 'string' ? item.searchHint : undefined,
         minWords: limits.minWords,
         maxWords: limits.maxWords,
       });
@@ -347,12 +383,21 @@ function validateInterventions(
       const targetId = String(item.targetMessageId ?? '');
       if (!messageIds.has(targetId)) continue;
 
+      const rxnDelayCategory = (['immediate', 'short', 'medium', 'long'].includes(String(item.delayCategory))
+        ? String(item.delayCategory)
+        : 'immediate') as 'immediate' | 'short' | 'medium' | 'long';
+
       validated.push({
         type: 'reaction',
         asUserId: userId,
         targetMessageId: targetId,
         emoji: String(item.emoji ?? '👍'),
-        delaySeconds: Math.round(Math.max(5, Math.min(30, Number(item.delaySeconds) || 10)) * (0.8 + Math.random() * 0.4)),
+        delaySeconds: Math.round(Math.max(5, Math.min(120, resolveDelaySeconds(rxnDelayCategory, {
+          minDelayMinutes: 0,
+          maxDelayMinutes: 2,
+        })))),
+        delayCategory: rxnDelayCategory,
+        topicCategory: 'reaction',
       });
       reactionCount++;
       userActionCounts.set(userId, currentCount + 1);
@@ -438,6 +483,8 @@ function ensureMinimumReactions(
         targetMessageId: targetMsg.id,
         emoji,
         delaySeconds: Math.round((10 + Math.random() * 50) * (0.8 + Math.random() * 0.4)),
+        delayCategory: 'immediate' as const,
+        topicCategory: 'reaction',
       });
       alreadyReactedTo.add(`${userId}:${targetMsg.id}`);
       totalReactions++;
@@ -469,6 +516,8 @@ function ensureMinimumReactions(
         targetMessageId: targetMsg.id,
         emoji,
         delaySeconds: Math.round((3 + Math.random() * 12) * (0.8 + Math.random() * 0.4)),
+        delayCategory: 'immediate' as const,
+        topicCategory: 'reaction',
       });
       alreadyReactedTo.add(`${user.userId}:${targetMsg.id}`);
       totalReactions++;
@@ -522,6 +571,8 @@ function generateLurkerReactions(
         targetMessageId: targetMsg.id,
         emoji,
         delaySeconds: Math.round((3 + Math.random() * 12) * (0.8 + Math.random() * 0.4)),
+        delayCategory: 'immediate' as const,
+        topicCategory: 'reaction',
       });
       alreadyReactedTo.add(`${user.userId}:${targetMsg.id}`);
       totalReactions++;
