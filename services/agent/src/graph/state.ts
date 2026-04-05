@@ -70,6 +70,9 @@ export type PendingMessage = {
   replyToId?: string;
   mentionedUsernames: string[];
   delaySeconds: number;
+  delayCategory: 'immediate' | 'short' | 'medium' | 'long';
+  topicCategory: string;
+  topicHash: string;
   messageSource: 'agent';
 };
 
@@ -79,6 +82,9 @@ export type PendingReaction = {
   targetMessageId: string;
   emoji: string;
   delaySeconds: number;
+  delayCategory: 'immediate' | 'short' | 'medium' | 'long';
+  topicCategory: string;
+  topicHash: string;
   minWords?: never;
   maxWords?: never;
 };
@@ -92,7 +98,10 @@ export type MessageDirective = {
   replyToMessageId?: string;
   mentionUsernames: string[];
   delaySeconds: number;
+  delayCategory: 'immediate' | 'short' | 'medium' | 'long';
+  topicCategory: string;
   needsWebSearch?: boolean;
+  searchHint?: string;
   minWords?: number;
   maxWords?: number;
 };
@@ -103,6 +112,8 @@ export type ReactionDirective = {
   targetMessageId: string;
   emoji: string;
   delaySeconds: number;
+  delayCategory: 'immediate' | 'short' | 'medium' | 'long';
+  topicCategory: string;
 };
 
 export type InterventionDirective = MessageDirective | ReactionDirective;
@@ -118,6 +129,13 @@ export type InterventionPlan = {
   shouldIntervene: boolean;
   reason: string;
   interventions: InterventionDirective[];
+};
+
+export type ScheduledActionSummary = {
+  userId: string;
+  topicCategory: string;
+  scheduledAt: number;
+  type: 'message' | 'reaction';
 };
 
 export const ConversationStateAnnotation = Annotation.Root({
@@ -275,6 +293,26 @@ export const ConversationStateAnnotation = Annotation.Root({
   engagementData: Annotation<Array<{ userId: string; repliesReceived: number; reactionsReceived: number }>>({
     reducer: (_current, update) => update,
     default: () => [],
+  }),
+  scheduledActions: Annotation<ScheduledActionSummary[]>({
+    reducer: (_current, update) => update,
+    default: () => [],
+  }),
+  minDelayMinutes: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 1,
+  }),
+  maxDelayMinutes: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 360,
+  }),
+  spreadOverDayEnabled: Annotation<boolean>({
+    reducer: (_current, update) => update,
+    default: () => true,
+  }),
+  maxMessagesPerUserPer10Min: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 4,
   }),
 });
 
