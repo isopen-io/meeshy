@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { LlmProvider } from '../llm/types';
 import type { PendingMessage, MessageEntry, ControlledUser, AgentHistoryEntry } from '../graph/state';
-import type { DeliveryQueue } from '../delivery/delivery-queue';
+import type { RedisDeliveryQueue } from '../delivery/redis-delivery-queue';
 import { calculateResponseDelay } from './timing-calculator';
 import type { InterpellationType } from './interpellation-detector';
 import { runDeterministicChecks, isGreeting, hasRecentGreeting, AI_REVEAL_PATTERNS } from '../agents/quality-gate';
@@ -56,7 +56,7 @@ export class ReactiveHandler {
     private readonly llm: LlmProvider,
     private readonly persistence: Persistence,
     private readonly stateManager: StateManager,
-    private readonly deliveryQueue: DeliveryQueue,
+    private readonly deliveryQueue: RedisDeliveryQueue,
   ) {}
 
   async handleInterpellation(input: InterpellationInput): Promise<void> {
@@ -169,18 +169,15 @@ export class ReactiveHandler {
       }
 
       for (const action of actions) {
-        const scheduled = this.deliveryQueue.getScheduledForUser(input.conversationId, action.asUserId);
+        const scheduled = await this.deliveryQueue.getScheduledForUser(input.conversationId, action.asUserId);
         if (scheduled.length > 0) {
-          const reactiveDelay = action.delaySeconds;
-          this.deliveryQueue.rescheduleForUser(
-            input.conversationId,
-            action.asUserId,
-            reactiveDelay + 15,
-          );
+          console.log(`[ReactiveHandler] ${scheduled.length} existing scheduled actions for user=${action.asUserId} in conv=${input.conversationId} — new reactive action will be rate-limited by RedisDeliveryQueue`);
         }
       }
 
-      this.deliveryQueue.enqueue(input.conversationId, actions);
+      for (const action of actions) {
+        await this.deliveryQueue.enqueue(input.conversationId, action);
+      }
 
       const currentHistory = await this.stateManager.getAgentHistory(input.conversationId);
       const newEntries: AgentHistoryEntry[] = actions.map((a) => ({

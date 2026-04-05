@@ -1,18 +1,18 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import type { DeliveryQueue } from '../delivery/delivery-queue';
+import type { RedisDeliveryQueue } from '../delivery/redis-delivery-queue';
 
 const editBodySchema = z.object({
   content: z.string().min(1).max(5000),
 });
 
-export async function deliveryRoutes(fastify: FastifyInstance, deliveryQueue: DeliveryQueue) {
+export async function deliveryRoutes(fastify: FastifyInstance, deliveryQueue: RedisDeliveryQueue) {
   fastify.get('/api/agent/delivery-queue', async (req: FastifyRequest) => {
     const { conversationId } = req.query as { conversationId?: string };
 
     const items = conversationId
-      ? deliveryQueue.getByConversation(conversationId)
-      : deliveryQueue.getAll();
+      ? await deliveryQueue.getByConversation(conversationId)
+      : await deliveryQueue.getAll();
 
     return { success: true, data: items };
   });
@@ -20,7 +20,7 @@ export async function deliveryRoutes(fastify: FastifyInstance, deliveryQueue: De
   fastify.delete('/api/agent/delivery-queue/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const deleted = deliveryQueue.deleteById(id);
+    const deleted = await deliveryQueue.deleteById(id);
     if (!deleted) {
       return reply.status(404).send({
         success: false,
@@ -42,7 +42,7 @@ export async function deliveryRoutes(fastify: FastifyInstance, deliveryQueue: De
       });
     }
 
-    const updated = deliveryQueue.editMessageById(id, parsed.data.content);
+    const updated = await deliveryQueue.editMessageById(id, parsed.data.content);
     if (!updated) {
       return reply.status(404).send({
         success: false,

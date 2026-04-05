@@ -10,7 +10,7 @@ import { ZmqAgentPublisher } from './zmq/zmq-publisher';
 import { RedisStateManager } from './memory/redis-state';
 import { MongoPersistence } from './memory/mongo-persistence';
 import { ConversationScanner } from './scheduler/conversation-scanner';
-import { DeliveryQueue } from './delivery/delivery-queue';
+import { RedisDeliveryQueue } from './delivery/redis-delivery-queue';
 import { ConfigCache } from './config/config-cache';
 import { DailyBudgetManager } from './scheduler/daily-budget';
 import type { AgentNewMessage } from './zmq/types';
@@ -92,7 +92,10 @@ async function start() {
 
   server.register((instance) => analyticsRoutes(instance, { stateManager, persistence }));
 
-  const deliveryQueue = new DeliveryQueue(zmqPublisher, persistence, stateManager);
+  const deliveryQueue = new RedisDeliveryQueue(redis, zmqPublisher, persistence, {
+    maxMessagesPerUserPer10Min: 4,
+  }, stateManager);
+  deliveryQueue.startPolling(10_000);
   server.register((instance) => deliveryRoutes(instance, deliveryQueue));
   const reactiveHandler = new ReactiveHandler(llm, persistence, stateManager, deliveryQueue);
   const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager, tracerRef);
@@ -192,7 +195,7 @@ async function start() {
   });
 
   server.get('/debug/scanner-status', async () => ({
-    pendingDeliveries: deliveryQueue.pendingCount,
+    pendingDeliveries: await deliveryQueue.pendingCount,
     uptime: process.uptime(),
   }));
 
@@ -224,7 +227,7 @@ async function start() {
     server.log.info('Shutting down agent service...');
     scanner.stop();
     clearInterval(snapshotInterval);
-    deliveryQueue.clearAll();
+    deliveryQueue.stopPolling();
     await configCache.stopListening();
     await zmqListener.close();
     await zmqPublisher.close();

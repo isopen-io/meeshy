@@ -37,6 +37,10 @@ export type EligibleConversation = {
   prioritizeTaggedUsers: boolean;
   prioritizeRepliedUsers: boolean;
   reactionBoostFactor: number;
+  minDelayMinutes: number;
+  maxDelayMinutes: number;
+  spreadOverDayEnabled: boolean;
+  maxMessagesPerUserPer10Min: number;
 };
 
 export async function findEligibleConversations(
@@ -87,6 +91,10 @@ export async function findEligibleConversations(
       prioritizeTaggedUsers: config?.prioritizeTaggedUsers ?? true,
       prioritizeRepliedUsers: config?.prioritizeRepliedUsers ?? true,
       reactionBoostFactor: Math.max(1, config?.reactionBoostFactor ?? 1.5),
+      minDelayMinutes: Math.max(0, (config as any)?.minDelayMinutes ?? 1),
+      maxDelayMinutes: Math.max(1, (config as any)?.maxDelayMinutes ?? 360),
+      spreadOverDayEnabled: (config as any)?.spreadOverDayEnabled ?? true,
+      maxMessagesPerUserPer10Min: Math.max(1, (config as any)?.maxMessagesPerUserPer10Min ?? 4),
     };
   });
 }

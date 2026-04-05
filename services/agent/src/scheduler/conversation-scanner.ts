@@ -1,7 +1,7 @@
 import type Redis from 'ioredis';
 import type { MongoPersistence } from '../memory/mongo-persistence';
 import type { RedisStateManager } from '../memory/redis-state';
-import type { DeliveryQueue } from '../delivery/delivery-queue';
+import type { RedisDeliveryQueue } from '../delivery/redis-delivery-queue';
 import type { ConfigCache } from '../config/config-cache';
 import type { DailyBudgetManager } from './daily-budget';
 import type { PendingMessage, ToneProfile } from '../graph/state';
@@ -39,7 +39,7 @@ export class ConversationScanner {
     private graph: CompiledGraph,
     private persistence: MongoPersistence,
     private stateManager: RedisStateManager,
-    private deliveryQueue: DeliveryQueue,
+    private deliveryQueue: RedisDeliveryQueue,
     private redis: Redis,
     private configCache: ConfigCache,
     private budgetManager: DailyBudgetManager,
@@ -142,6 +142,10 @@ export class ConversationScanner {
       prioritizeTaggedUsers: config?.prioritizeTaggedUsers ?? true,
       prioritizeRepliedUsers: config?.prioritizeRepliedUsers ?? true,
       reactionBoostFactor: config?.reactionBoostFactor ?? 1.5,
+      minDelayMinutes: config?.minDelayMinutes ?? 1,
+      maxDelayMinutes: config?.maxDelayMinutes ?? 360,
+      spreadOverDayEnabled: config?.spreadOverDayEnabled ?? true,
+      maxMessagesPerUserPer10Min: config?.maxMessagesPerUserPer10Min ?? 4,
     };
     await this.processConversation(conv, 'manual');
     await this.redis.set(`agent:last-scan:${conversationId}`, String(Date.now()), 'EX', 86400);
@@ -312,6 +316,8 @@ export class ConversationScanner {
         return [];
       }),
     ]);
+
+    const scheduledActions = await this.deliveryQueue.getScheduledTopicsForConversation(conversationId);
 
     let controlledUsers = manualControlledUsers.map((u) => {
       const cachedProfile = toneProfiles[u.userId];
@@ -552,6 +558,18 @@ export class ConversationScanner {
 
     console.log(`[Scanner] Processing conv=${conversationId} activity=${activity.activityScore.toFixed(2)} msgs=${effectiveMessages.length} users=${controlledUsers.length} lastUser=${lastAgentUserId ?? 'none'} recentTopics=${recentTopicCategories.length}`);
 
+    if (scheduledActions.length >= effectiveBudgetRemaining && effectiveBudgetRemaining > 0) {
+      console.log(`[Scanner] Skipping conv=${conversationId}: ${scheduledActions.length} actions already scheduled (budget: ${effectiveBudgetRemaining})`);
+      tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
+      await Promise.all([
+        this.persistence.createScanLog(tracer.finalize()).catch(err =>
+          console.error(`[Scanner] Error persisting scan log:`, err)),
+        this.persistence.updateScanStatus(conversationId, false, null),
+      ]);
+      this.tracerRef.current = null;
+      return false;
+    }
+
     let result: Record<string, unknown>;
     const stopFlagKey = `agent:scan-stop:${conversationId}`;
     try {
@@ -602,6 +620,11 @@ export class ConversationScanner {
         lastAgentUserId,
         recentTopicCategories,
         engagementData,
+        scheduledActions,
+        minDelayMinutes: conv.minDelayMinutes,
+        maxDelayMinutes: conv.maxDelayMinutes,
+        spreadOverDayEnabled: conv.spreadOverDayEnabled,
+        maxMessagesPerUserPer10Min: conv.maxMessagesPerUserPer10Min,
       }, {
         callbacks: [{
           handleChainStart: async (_chain: any, _inputs: any, _runId: string, _parentRunId?: string, _tags?: string[], metadata?: Record<string, any>) => {
@@ -687,7 +710,9 @@ export class ConversationScanner {
 
     const pendingActions = (result.pendingActions ?? []) as Array<{ type: string; content?: string }>;
     if (pendingActions.length > 0) {
-      this.deliveryQueue.enqueue(conversationId, pendingActions as any);
+      for (const action of pendingActions) {
+        await this.deliveryQueue.enqueue(conversationId, action as any);
+      }
       console.log(`[Scanner] Enqueued ${pendingActions.length} actions for conv=${conversationId}`);
 
       const messageActions = pendingActions.filter((a): a is PendingMessage => a.type === 'message');
