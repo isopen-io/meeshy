@@ -189,7 +189,9 @@ public struct MeeshyImageEditorView: View {
 
     private func cropImagePreview(geometry: GeometryProxy) -> some View {
         let availableHeight = geometry.size.height - 340
-        let size = CGSize(width: geometry.size.width - 32, height: max(availableHeight, 200))
+        let width = max(geometry.size.width - 32, 100)
+        let height = max(availableHeight, 200)
+        let size = CGSize(width: width, height: height)
         let displayRect = calculateDisplayRect(for: croppedImage, in: size)
 
         return ZStack {
@@ -214,11 +216,16 @@ public struct MeeshyImageEditorView: View {
                 adjustCropForRatio(selectedCropRatio.aspectRatio, displayRect: displayRect)
             }
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: max(size.width, 1), height: max(size.height, 1))
         .padding(.horizontal, 16)
     }
 
     private func calculateDisplayRect(for img: UIImage, in size: CGSize) -> CGRect {
+        guard img.size.width > 0, img.size.height > 0, size.width > 0, size.height > 0 else {
+            // Return a minimal valid rect if dimensions are invalid
+            return CGRect(x: 0, y: 0, width: 100, height: 100)
+        }
+        
         let imageAspect = img.size.width / img.size.height
         let containerAspect = size.width / size.height
 
@@ -227,6 +234,12 @@ public struct MeeshyImageEditorView: View {
             displaySize = CGSize(width: size.width, height: size.width / imageAspect)
         } else {
             displaySize = CGSize(width: size.height * imageAspect, height: size.height)
+        }
+
+        // Ensure displaySize is valid
+        guard displaySize.width > 0, displaySize.height > 0, 
+              displaySize.width.isFinite, displaySize.height.isFinite else {
+            return CGRect(x: 0, y: 0, width: 100, height: 100)
         }
 
         return CGRect(

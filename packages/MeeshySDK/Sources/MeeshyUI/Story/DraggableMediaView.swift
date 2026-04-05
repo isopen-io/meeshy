@@ -245,7 +245,7 @@ public struct DraggableMediaView: View {
         }
     }
 
-    // MARK: - Media content (with video overlay — used in non-editing/reader mode)
+    // MARK: - Media content (reader mode — no controls, video plays automatically)
 
     private var mediaContent: some View {
         ZStack {
@@ -257,10 +257,6 @@ public struct DraggableMediaView: View {
                     .resizable()
                     .scaledToFill()
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-
-            if isVideoElement, activePlayer != nil {
-                videoPlayPauseOverlay
             }
         }
     }
@@ -324,9 +320,15 @@ public struct DraggableMediaView: View {
             player.play()
         }
         loopObserver = observer as AnyObject
-        // Do NOT autoplay in composer — user must tap play explicitly.
-        player.pause()
-        isPlaying = false
+        if isEditing {
+            // In composer: user must tap play explicitly
+            player.pause()
+            isPlaying = false
+        } else {
+            // In reader/viewer: autoplay immediately
+            player.play()
+            isPlaying = true
+        }
     }
 
     private func teardownInternalPlayer() {

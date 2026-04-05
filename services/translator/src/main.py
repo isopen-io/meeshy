@@ -107,18 +107,23 @@ except ImportError as e:
     pass  # Will be logged later
 
 # Configuration du logging
-# Production: WARNING (seulement les avertissements et erreurs)
-# Development: INFO (toutes les infos)
-log_level = logging.WARNING if os.getenv('NODE_ENV') == 'production' else logging.INFO
+# Configurable via LOG_LEVEL env var (default: INFO en dev, INFO en prod pour visibilite startup)
+log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
 
 logging.basicConfig(
     level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('translator.log', mode='w')  # Mode 'w' pour écraser le fichier
+        logging.FileHandler('translator.log', mode='w')
     ]
 )
+
+# Reduire le bruit des libs externes en production
+if os.getenv('NODE_ENV') == 'production':
+    for noisy in ['urllib3', 'httpx', 'httpcore', 'transformers', 'torch', 'diffusers', 'huggingface_hub']:
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 

@@ -70,7 +70,7 @@ public struct Achievement: Codable, Identifiable, Sendable {
 
 // MARK: - Timeline Point
 
-public struct TimelinePoint: Codable, Identifiable, Sendable {
+public struct TimelinePoint: Codable, Identifiable, CacheIdentifiable {
     public var id: String { date }
     public let date: String
     public let messages: Int

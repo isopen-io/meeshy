@@ -730,7 +730,7 @@ class ConversationViewModel: ObservableObject {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
 
-        // Offline: enqueue for later delivery instead of failing
+        // Offline: enqueue for later delivery + show optimistic message
         if NetworkMonitor.shared.isOffline {
             let queueItem = OfflineQueueItem(
                 conversationId: conversationId,
@@ -741,6 +741,24 @@ class ConversationViewModel: ObservableObject {
                 attachmentIds: attachmentIds
             )
             Task { await OfflineQueue.shared.enqueue(queueItem) }
+
+            let offlineMessage = Message(
+                id: "offline_\(queueItem.id)",
+                conversationId: conversationId,
+                senderId: currentUserId,
+                content: text,
+                messageType: .text,
+                replyToId: replyToId,
+                forwardedFromId: forwardedFromId,
+                forwardedFromConversationId: forwardedFromConversationId,
+                createdAt: Date(),
+                updatedAt: Date(),
+                deliveryStatus: .sending,
+                isMe: true
+            )
+            messages.append(offlineMessage)
+            newMessageAppended += 1
+
             Logger.messages.info("Message enqueued for offline delivery")
             return true
         }
@@ -962,19 +980,26 @@ class ConversationViewModel: ObservableObject {
         let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == participantId }
 
         if alreadyReacted {
-            // Optimistic remove
+            let snapshot = messages[idx].reactions
             messages[idx].reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
-            // API call
-            Task {
-                try? await reactionService.remove(messageId: messageId, emoji: emoji)
+            Task { [weak self] in
+                do {
+                    try await self?.reactionService.remove(messageId: messageId, emoji: emoji)
+                } catch {
+                    guard let self, let currentIdx = self.messageIndex(for: messageId) else { return }
+                    self.messages[currentIdx].reactions = snapshot
+                }
             }
         } else {
-            // Optimistic add
             let reaction = Reaction(messageId: messageId, participantId: participantId, emoji: emoji)
             messages[idx].reactions.append(reaction)
-            // API call
-            Task {
-                try? await reactionService.add(messageId: messageId, emoji: emoji)
+            Task { [weak self] in
+                do {
+                    try await self?.reactionService.add(messageId: messageId, emoji: emoji)
+                } catch {
+                    guard let self, let currentIdx = self.messageIndex(for: messageId) else { return }
+                    self.messages[currentIdx].reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
+                }
             }
         }
 

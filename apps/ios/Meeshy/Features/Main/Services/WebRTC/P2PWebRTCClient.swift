@@ -126,9 +126,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         let fps = targetFrameRate(for: format)
-        capturer.startCapture(with: frontCamera, format: format, fps: fps) { error in
-            if let error { Logger.webrtc.error("Camera start failed: \(error.localizedDescription)") }
-        }
+        try await capturer.startCapture(with: frontCamera, format: format, fps: fps)
         Logger.webrtc.info("Local audio + video tracks started (front camera, \(fps)fps)")
     }
 
@@ -253,11 +251,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             throw WebRTCError.noCameraFormatAvailable
         }
 
-        capturer.stopCapture { }
+        await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
-        capturer.startCapture(with: camera, format: selectedFormat, fps: fps) { error in
-            if let error { Logger.webrtc.error("Camera switch failed: \(error.localizedDescription)") }
-        }
+        try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
         Logger.webrtc.info("Switched to \(self.usingFrontCamera ? "front" : "back") camera")
     }
 

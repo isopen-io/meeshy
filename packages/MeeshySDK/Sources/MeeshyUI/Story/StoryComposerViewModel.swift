@@ -413,6 +413,33 @@ final class StoryComposerViewModel {
         zIndexMap[id] = 0
     }
 
+    // MARK: - Placement Toggle (fond <-> front)
+
+    func isMediaBackground(id: String) -> Bool {
+        currentEffects.mediaObjects?.first(where: { $0.id == id })?.placement == "background"
+    }
+
+    func toggleMediaPlacement(id: String) {
+        var effects = currentEffects
+        guard var medias = effects.mediaObjects,
+              let idx = medias.firstIndex(where: { $0.id == id }) else { return }
+
+        let current = medias[idx].placement
+        medias[idx].placement = current == "background" ? "foreground" : "background"
+
+        // Reset position to center when moving to foreground
+        if medias[idx].placement == "foreground" {
+            let center = viewportCenter()
+            medias[idx].x = center.x
+            medias[idx].y = center.y
+            medias[idx].scale = 1.0
+            medias[idx].rotation = 0
+        }
+
+        effects.mediaObjects = medias
+        currentEffects = effects
+    }
+
     // MARK: - Tool Actions
 
     func selectTool(_ tool: StoryToolMode?) {

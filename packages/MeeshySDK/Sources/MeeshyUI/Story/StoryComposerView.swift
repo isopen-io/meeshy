@@ -332,6 +332,11 @@ public struct StoryComposerView: View {
             }
             .presentationDetents([.medium])
         }
+        .sheet(isPresented: $viewModel.isTimelineVisible) {
+            TimelinePanel(viewModel: viewModel)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .fullScreenCover(item: Binding(
             get: { editingBgImage.map { PendingImageWrapper(image: $0) } },
             set: { if $0 == nil { editingBgImage = nil } }
@@ -847,7 +852,7 @@ public struct StoryComposerView: View {
             Spacer()
             Button {
                 viewModel.selectedElementId = obj.id
-                viewModel.selectedElementId = obj.id
+                viewModel.isTimelineVisible = true
             } label: {
                 Image(systemName: "timeline.selection")
                     .font(.system(size: 10, weight: .semibold))
@@ -917,7 +922,7 @@ public struct StoryComposerView: View {
             Spacer()
             Button {
                 viewModel.selectedElementId = obj.id
-                viewModel.selectedElementId = obj.id
+                viewModel.isTimelineVisible = true
             } label: {
                 Image(systemName: "timeline.selection")
                     .font(.system(size: 10, weight: .semibold))

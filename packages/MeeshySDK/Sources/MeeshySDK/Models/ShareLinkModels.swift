@@ -169,14 +169,30 @@ public struct CreateShareLinkRequest: Encodable {
 
 // MARK: - Create Share Link Response
 
-public struct CreatedShareLink: Decodable {
+/// Gateway returns: { data: { linkId, conversationId, shareLink: { id, linkId, name, ... } } }
+/// This wrapper matches the actual API shape.
+struct CreateShareLinkResponse: Decodable {
+    let linkId: String
+    let conversationId: String
+    let shareLink: ShareLinkDetail
+
+    struct ShareLinkDetail: Decodable {
+        let id: String
+        let linkId: String
+        let name: String?
+        let description: String?
+        let expiresAt: Date?
+        let isActive: Bool
+    }
+}
+
+public struct CreatedShareLink {
     public let id: String
     public let linkId: String
     public let identifier: String?
     public let conversationId: String
     public let name: String?
     public let isActive: Bool
-    public let createdAt: Date
 }
 
 // MARK: - User's Own Links (authenticated)

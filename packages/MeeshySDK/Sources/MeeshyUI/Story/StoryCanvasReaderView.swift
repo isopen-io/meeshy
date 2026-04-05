@@ -141,9 +141,8 @@ public struct StoryCanvasReaderView: View {
             } else if bgMedia.mediaType == "video" {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId),
                    let url = MeeshyConfig.resolveMediaURL(urlStr) {
-                    let player = state.ensureBackgroundVideoPlayer(url: url)
-                    VideoPlayer(player: player)
-                        .disabled(true)
+                    let player = state.ensureBackgroundVideoPlayer(url: url, muted: true)
+                    BareVideoLayer(player: player)
                         .scaleEffect(bgTransformScale)
                         .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
                         .rotationEffect(.degrees(bgTransformRotation))
@@ -161,11 +160,13 @@ public struct StoryCanvasReaderView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
         } else if let legacyMedia = story.media.first,
-                  let urlStr = legacyMedia.url {
+                  let urlStr = legacyMedia.url,
+                  (story.storyEffects?.mediaObjects ?? []).isEmpty {
+            // Legacy path: only for stories that predate the canvas system (no mediaObjects at all).
+            // If mediaObjects exist, videos are rendered via foregroundMediaLayer — skip here to avoid duplication.
             if legacyMedia.type == .video, let url = MeeshyConfig.resolveMediaURL(urlStr) {
                 let player = state.ensureBackgroundVideoPlayer(url: url)
-                VideoPlayer(player: player)
-                    .disabled(true)
+                BareVideoLayer(player: player)
                     .scaleEffect(bgTransformScale)
                     .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
                     .rotationEffect(.degrees(bgTransformRotation))
@@ -781,30 +782,16 @@ private final class ReaderState: ObservableObject {
         guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
         let videoObjects = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "video" }
         for media in videoObjects {
-            // Asset precharge localement (mode preview) -- priorite sur le reseau.
             if let preloaded = preloadedVideoURLs[media.id] {
                 registerPendingVideoStart(media: media, url: preloaded)
             } else if let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url,
                       let resolved = MeeshyConfig.resolveMediaURL(urlString) {
-                // Telecharger via CacheCoordinator pour contourner les erreurs de Content-Type serveur,
-                // puis jouer depuis un fichier local temporaire.
-                Task {
-                    do {
-                        let data = try await CacheCoordinator.shared.video.data(for: resolved.absoluteString)
-                        let ext = resolved.pathExtension.isEmpty ? "mov" : resolved.pathExtension
-                        let tempURL = FileManager.default.temporaryDirectory
-                            .appendingPathComponent("story_video_\(media.id).\(ext)")
-                        try data.write(to: tempURL, options: .atomic)
-                        await MainActor.run {
-                            self.registerPendingVideoStart(media: media, url: tempURL)
-                        }
-                    } catch {
-                        NSLog("[StoryReader] Failed to download video for %@: %@", media.id, error.localizedDescription)
-                        // Fallback : essayer directement avec l'URL reseau
-                        await MainActor.run {
-                            self.registerPendingVideoStart(media: media, url: resolved)
-                        }
-                    }
+                // Use prerolled cached player if available (prefetched by StoryViewerView)
+                if let cachedPlayer = StoryMediaLoader.shared.cachedPlayer(for: resolved) {
+                    registerPendingVideoStartWithPlayer(media: media, player: cachedPlayer)
+                } else {
+                    // Stream directly — AVPlayer handles HTTP streaming natively with buffering
+                    registerPendingVideoStart(media: media, url: resolved)
                 }
             }
         }
@@ -813,11 +800,64 @@ private final class ReaderState: ObservableObject {
     private func registerPendingVideoStart(media: StoryMediaObject, url: URL) {
         let startOffset = TimeInterval(media.startTime ?? 0)
         if currentTime >= startOffset {
-            // Already past start time, start immediately
             createAndStartVideoPlayer(for: media, url: url)
         } else {
-            // Register for deferred start via playback timer
             pendingVideoStarts[media.id] = (url: url, media: media)
+        }
+    }
+
+    private func registerPendingVideoStartWithPlayer(media: StoryMediaObject, player: AVPlayer) {
+        let startOffset = TimeInterval(media.startTime ?? 0)
+        if currentTime >= startOffset {
+            injectPrerolledVideoPlayer(for: media, player: player)
+        } else {
+            // For deferred starts with prerolled players, store the URL and start fresh when needed
+            if let urlAsset = player.currentItem?.asset as? AVURLAsset {
+                pendingVideoStarts[media.id] = (url: urlAsset.url, media: media)
+            }
+        }
+    }
+
+    private func injectPrerolledVideoPlayer(for media: StoryMediaObject, player: AVPlayer) {
+        guard !startedForegroundVideos.contains(media.id) else { return }
+        startedForegroundVideos.insert(media.id)
+
+        player.isMuted = false
+        let targetVolume = media.volume
+        let hasFadeIn = (media.fadeIn ?? 0) > 0
+        player.volume = hasFadeIn ? 0.0 : targetVolume
+        foregroundVideoPlayers[media.id] = player
+
+        let shouldLoop = media.loop ?? true
+        let obs = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { [weak player] _ in
+            guard shouldLoop else { return }
+            player?.seek(to: .zero)
+            player?.play()
+        }
+        foregroundLoopObservers[media.id] = obs
+
+        player.play()
+
+        let fadeInDuration = TimeInterval(media.fadeIn ?? 0)
+        if fadeInDuration > 0 {
+            fadeVolume(player: player, from: 0.0, to: targetVolume, duration: fadeInDuration)
+        }
+
+        if let dur = media.duration, !(media.loop ?? false) {
+            let stopDelay = TimeInterval(dur)
+            let fadeOutDur = TimeInterval(media.fadeOut ?? 0)
+            let fadeOutStart = max(0, stopDelay - fadeOutDur)
+            if fadeOutDur > 0 {
+                foregroundStopTimers[media.id]?.invalidate()
+                foregroundStopTimers[media.id] = Timer.scheduledTimer(withTimeInterval: fadeOutStart, repeats: false) { [weak self, weak player] _ in
+                    guard let player else { return }
+                    self?.fadeVolume(player: player, from: player.volume, to: 0.0, duration: fadeOutDur)
+                }
+            }
         }
     }
 
@@ -965,12 +1005,18 @@ private final class ReaderState: ObservableObject {
 
     // MARK: Background video (stored to avoid re-creation on every render)
 
-    func ensureBackgroundVideoPlayer(url: URL) -> AVPlayer {
+    func ensureBackgroundVideoPlayer(url: URL, muted: Bool = false) -> AVPlayer {
         if let existing = backgroundVideoPlayer {
             return existing
         }
-        let player = AVPlayer(url: url)
-        player.isMuted = true
+        // Try prerolled cached player first for instant playback
+        let player: AVPlayer
+        if let cached = StoryMediaLoader.shared.cachedPlayer(for: url) {
+            player = cached
+        } else {
+            player = AVPlayer(url: url)
+        }
+        player.isMuted = muted
         player.play()
         backgroundVideoPlayer = player
         return player
@@ -1013,4 +1059,26 @@ private func storyFont(for style: StoryTextStyle?, size: CGFloat) -> Font {
     case .classic:     return .custom("Georgia", size: size)
     case .none:        return .system(size: size, weight: .semibold)
     }
+}
+
+// MARK: - Bare AVPlayerLayer view (no controls, no chrome — for background videos)
+
+private struct BareVideoLayer: UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(context: Context) -> BarePlayerView {
+        let view = BarePlayerView()
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspectFill
+        return view
+    }
+
+    func updateUIView(_ uiView: BarePlayerView, context: Context) {
+        uiView.playerLayer.player = player
+    }
+}
+
+private class BarePlayerView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }

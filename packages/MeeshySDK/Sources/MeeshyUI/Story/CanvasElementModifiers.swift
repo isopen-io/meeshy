@@ -58,16 +58,33 @@ struct CanvasContextMenu: ViewModifier {
                     Label(String(localized: "story.canvas.sendToBack", defaultValue: "Mettre derriere", bundle: .module), systemImage: "square.3.layers.3d.bottom.filled")
                 }
 
-                // DISABLED: timeline tool — deplace en long press canvas (futur)
-                // if elementType == .video || elementType == .audio || elementType == .text {
-                //     Divider()
-                //     Button {
-                //         viewModel.activeTool = .timeline
-                //         viewModel.selectedElementId = elementId
-                //     } label: {
-                //         Label("Timing", systemImage: "clock")
-                //     }
-                // }
+                if elementType == .image || elementType == .video {
+                    Divider()
+
+                    let isBackground = viewModel.isMediaBackground(id: elementId)
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            viewModel.toggleMediaPlacement(id: elementId)
+                        }
+                    } label: {
+                        Label(
+                            isBackground
+                                ? String(localized: "story.canvas.moveToFront", defaultValue: "Mettre au premier plan", bundle: .module)
+                                : String(localized: "story.canvas.moveToBack", defaultValue: "Mettre en fond", bundle: .module),
+                            systemImage: isBackground ? "square.on.square" : "rectangle.on.rectangle.angled"
+                        )
+                    }
+                }
+
+                if elementType == .video || elementType == .audio || elementType == .text {
+                    Divider()
+                    Button {
+                        viewModel.isTimelineVisible = true
+                        viewModel.selectedElementId = elementId
+                    } label: {
+                        Label(String(localized: "story.canvas.timing", defaultValue: "Timing", bundle: .module), systemImage: "clock")
+                    }
+                }
             }
     }
 }

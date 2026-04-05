@@ -13958,6 +13958,17 @@
         }
       }
     },
+    "story.composer.loadingBackground" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Chargement de l'image..."
+          }
+        }
+      }
+    },
     "story.composer.media" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {

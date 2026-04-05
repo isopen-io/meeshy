@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 /// Coordinates story audio/video with the rest of the app.
 ///
@@ -24,6 +25,12 @@ public final class StoryMediaCoordinator: StoppablePlayer {
             isRegistered = true
         }
         PlaybackCoordinator.shared.willStartPlaying(external: self)
+
+        // Ensure audio plays through speakers (not just ringer) regardless of silent switch
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
     }
 
     /// Release exclusive audio (story dismissed). Triggers stop handler for cleanup.

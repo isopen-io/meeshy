@@ -101,6 +101,11 @@ public final class AppDatabase: @unchecked Sendable {
             try db.create(index: "idx_cache_entries_key", on: "cache_entries", columns: ["key"])
         }
 
+        migrator.registerMigration("v4_drop_legacy_tables") { db in
+            try db.drop(table: "conversations")
+            try db.drop(table: "messages")
+        }
+
         try migrator.migrate(writer)
     }
 }

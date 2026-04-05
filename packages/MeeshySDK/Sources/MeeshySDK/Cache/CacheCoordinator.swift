@@ -22,6 +22,7 @@ public actor CacheCoordinator {
     public let communityLinks: GRDBCacheStore<String, CommunityLink>
     public let statuses: GRDBCacheStore<String, StatusEntry>
     public let friends: GRDBCacheStore<String, FriendRequestUser>
+    public let timeline: GRDBCacheStore<String, TimelinePoint>
 
     public let images: DiskCacheStore
     public let audio: DiskCacheStore
@@ -30,9 +31,14 @@ public actor CacheCoordinator {
 
     // MARK: - In-Memory Translation/Transcription/Audio Caches (keyed by messageId)
 
+    private static let maxTranslationCacheEntries = 500
+
     private var translationCache: [String: [TranslationData]] = [:]
+    private var translationInsertionOrder: [String] = []
     private var transcriptionCache: [String: TranscriptionReadyEvent] = [:]
+    private var transcriptionInsertionOrder: [String] = []
     private var audioTranslationCache: [String: [AudioTranslationEvent]] = [:]
+    private var audioTranslationInsertionOrder: [String] = []
 
     public func cachedTranslations(for messageId: String) -> [TranslationData]? {
         translationCache[messageId]
@@ -76,6 +82,7 @@ public actor CacheCoordinator {
         self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
         self.statuses = GRDBCacheStore(policy: .statuses, db: db, namespace: "statuses")
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
+        self.timeline = GRDBCacheStore(policy: .userStats, db: db, namespace: "timeline")
 
         self.images = DiskCacheStore(policy: .mediaImages)
         self.audio = DiskCacheStore(policy: .mediaAudio)
@@ -108,6 +115,7 @@ public actor CacheCoordinator {
     public func cacheTranslation(_ event: TranslationEvent) {
         let msgId = event.messageId
         var existing = translationCache[msgId] ?? []
+        let isNew = translationCache[msgId] == nil
         for translation in event.translations {
             if let idx = existing.firstIndex(where: { $0.targetLanguage == translation.targetLanguage }) {
                 existing[idx] = translation
@@ -116,21 +124,56 @@ public actor CacheCoordinator {
             }
         }
         translationCache[msgId] = existing
+        if isNew {
+            translationInsertionOrder.append(msgId)
+            evictTranslationCacheIfNeeded()
+        }
     }
 
     public func cacheTranscription(_ event: TranscriptionReadyEvent) {
+        let isNew = transcriptionCache[event.messageId] == nil
         transcriptionCache[event.messageId] = event
+        if isNew {
+            transcriptionInsertionOrder.append(event.messageId)
+            evictTranscriptionCacheIfNeeded()
+        }
     }
 
     public func cacheAudioTranslation(_ event: AudioTranslationEvent) {
         let msgId = event.messageId
         var existing = audioTranslationCache[msgId] ?? []
+        let isNew = audioTranslationCache[msgId] == nil
         if let idx = existing.firstIndex(where: { $0.translatedAudio.targetLanguage == event.translatedAudio.targetLanguage }) {
             existing[idx] = event
         } else {
             existing.append(event)
         }
         audioTranslationCache[msgId] = existing
+        if isNew {
+            audioTranslationInsertionOrder.append(msgId)
+            evictAudioTranslationCacheIfNeeded()
+        }
+    }
+
+    private func evictTranslationCacheIfNeeded() {
+        while translationCache.count > Self.maxTranslationCacheEntries, let oldest = translationInsertionOrder.first {
+            translationInsertionOrder.removeFirst()
+            translationCache.removeValue(forKey: oldest)
+        }
+    }
+
+    private func evictTranscriptionCacheIfNeeded() {
+        while transcriptionCache.count > Self.maxTranslationCacheEntries, let oldest = transcriptionInsertionOrder.first {
+            transcriptionInsertionOrder.removeFirst()
+            transcriptionCache.removeValue(forKey: oldest)
+        }
+    }
+
+    private func evictAudioTranslationCacheIfNeeded() {
+        while audioTranslationCache.count > Self.maxTranslationCacheEntries, let oldest = audioTranslationInsertionOrder.first {
+            audioTranslationInsertionOrder.removeFirst()
+            audioTranslationCache.removeValue(forKey: oldest)
+        }
     }
 
     // MARK: - Lifecycle
@@ -186,8 +229,11 @@ public actor CacheCoordinator {
         await thumbnails.evictExpired()
 
         translationCache.removeAll()
+        translationInsertionOrder.removeAll()
         transcriptionCache.removeAll()
+        transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
+        audioTranslationInsertionOrder.removeAll()
 
         logger.info("Memory pressure — flushed dirty keys, evicted L1 caches and expired media")
     }
@@ -243,8 +289,11 @@ public actor CacheCoordinator {
         await thumbnails.invalidateAll()
         await UserColorCache.shared.invalidateAll()
         translationCache.removeAll()
+        translationInsertionOrder.removeAll()
         transcriptionCache.removeAll()
+        transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
+        audioTranslationInsertionOrder.removeAll()
         UserDefaults.standard.removeObject(forKey: Self.translationCacheKey)
         UserDefaults.standard.removeObject(forKey: Self.transcriptionCacheKey)
         UserDefaults.standard.removeObject(forKey: Self.audioTranslationCacheKey)

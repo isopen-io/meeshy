@@ -588,24 +588,48 @@ extension StoryViewerView {
             return
         }
 
-        // Durées des médias foreground (vidéo + audio) depuis FeedMedia.duration
+        // Durées des médias foreground (vidéo + audio) — startTime + duration = end time
         if let mediaObjects = effects?.mediaObjects {
             for obj in mediaObjects where obj.placement == "foreground" {
+                let startOffset = Double(obj.startTime ?? 0)
                 if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
                    let dur = feedMedia.duration, dur > 0 {
-                    maxDuration = max(maxDuration, Double(dur))
+                    maxDuration = max(maxDuration, startOffset + Double(dur))
+                } else if let objDur = obj.duration {
+                    maxDuration = max(maxDuration, startOffset + Double(objDur))
                 }
             }
         }
 
-        // Durées des audio players foreground
+        // Durées des audio players foreground — startTime + duration = end time
         if let audioObjects = effects?.audioPlayerObjects {
             for obj in audioObjects where obj.placement == "foreground" {
+                let startOffset = Double(obj.startTime ?? 0)
                 if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
                    let dur = feedMedia.duration, dur > 0 {
-                    maxDuration = max(maxDuration, Double(dur))
+                    maxDuration = max(maxDuration, startOffset + Double(dur))
+                } else if let objDur = obj.duration {
+                    maxDuration = max(maxDuration, startOffset + Double(objDur))
                 }
             }
+        }
+
+        // Durées des text objects — startTime + displayDuration
+        if let textObjects = effects?.textObjects {
+            for obj in textObjects {
+                let startOffset = Double(obj.startTime ?? 0)
+                if let displayDur = obj.displayDuration {
+                    maxDuration = max(maxDuration, startOffset + Double(displayDur))
+                }
+            }
+        }
+
+        // Legacy background video duration (when no canvas mediaObjects)
+        if (effects?.mediaObjects ?? []).isEmpty,
+           let legacyMedia = story.media.first,
+           legacyMedia.type == .video,
+           let dur = legacyMedia.duration, dur > 0 {
+            maxDuration = max(maxDuration, Double(dur))
         }
 
         // Audio de fond (trimé ou complet)

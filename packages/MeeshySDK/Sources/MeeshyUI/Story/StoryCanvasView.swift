@@ -209,7 +209,49 @@ struct StoryCanvasView: View {
 
     @ViewBuilder
     private var backgroundMediaLayer: some View {
-        if let image = filteredImage ?? selectedImage {
+        // 1. StoryMediaObject elements with placement == "background" (image or video)
+        ForEach(mediaObjects.filter({ $0.placement == "background" }), id: \.id) { obj in
+            if obj.mediaType == "image", let image = viewModel.loadedImages[obj.id] {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .scaleEffect(imageScale * pinchDelta)
+                    .rotationEffect(imageRotation + rotationDelta)
+                    .offset(
+                        x: imageOffset.width + dragDelta.width,
+                        y: imageOffset.height + dragDelta.height
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .allowsHitTesting(!isDrawingActive && !isFrontToolActive)
+                    .gesture(isDrawingActive || isFrontToolActive ? nil : backgroundImageGesture)
+                    .canvasContextMenu(
+                        elementId: obj.id,
+                        elementType: .image,
+                        viewModel: viewModel
+                    )
+            } else if obj.mediaType == "video", let videoURL = viewModel.loadedVideoURLs[obj.id] {
+                DraggableMediaView(
+                    mediaObject: mediaObjectBinding(for: obj.id),
+                    image: nil,
+                    videoURL: videoURL,
+                    isEditing: true,
+                    onDragEnd: {},
+                    onTapToFront: {}
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .canvasContextMenu(
+                    elementId: obj.id,
+                    elementType: .video,
+                    viewModel: viewModel
+                )
+            }
+        }
+
+        // 2. Classic selectedImage (flat background, no StoryMediaObject)
+        if mediaObjects.filter({ $0.placement == "background" }).isEmpty,
+           let image = filteredImage ?? selectedImage {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
@@ -358,11 +400,6 @@ struct StoryCanvasView: View {
                     }
                 )
                 .opacity(elementOpacity(startTime: obj.startTime, duration: obj.duration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
-                .overlay(alignment: .bottomLeading) {
-                    if obj.mediaType == "video" {
-                        videoPlayBadge
-                    }
-                }
                 .selectionGlow(viewModel.selectedElementId == obj.id)
                 .overlay(alignment: .topTrailing) {
                     if viewModel.selectedElementId == obj.id {
@@ -388,7 +425,7 @@ struct StoryCanvasView: View {
                     elementType: obj.mediaType == "video" ? .video : .image,
                     viewModel: viewModel
                 )
-                .highPriorityGesture(
+                .gesture(
                     TapGesture(count: 2).onEnded {
                         viewModel.selectedElementId = obj.id
                         onEditMedia?(obj.id)
@@ -425,18 +462,6 @@ struct StoryCanvasView: View {
                 .zIndex(Double(viewModel.zIndex(for: obj.id)))
             }
         }
-    }
-
-    // MARK: - Video Play Badge
-
-    private var videoPlayBadge: some View {
-        Image(systemName: "play.fill")
-            .font(.system(size: 10, weight: .bold))
-            .foregroundColor(.white)
-            .padding(6)
-            .background(Circle().fill(Color.black.opacity(0.5)))
-            .padding(8)
-            .allowsHitTesting(false)
     }
 
     // MARK: - Bindings into ViewModel arrays

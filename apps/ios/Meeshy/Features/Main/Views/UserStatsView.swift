@@ -181,7 +181,17 @@ final class UserStatsViewModel: ObservableObject {
 
     func load() async {
         let userId = AuthManager.shared.currentUser?.id ?? ""
+
+        // Load stats from cache
         let cacheResult = await CacheCoordinator.shared.stats.load(for: userId)
+
+        // Load timeline from cache
+        let timelineCacheKey = "timeline_\(userId)"
+        let timelineCached = await CacheCoordinator.shared.timeline.load(for: timelineCacheKey)
+        if let cachedTimeline = timelineCached.value, !cachedTimeline.isEmpty {
+            timeline = cachedTimeline
+        }
+
         switch cacheResult {
         case .fresh(let cached, _):
             stats = cached.first
@@ -202,6 +212,7 @@ final class UserStatsViewModel: ObservableObject {
             stats = s
             timeline = t
             await CacheCoordinator.shared.stats.save([s], for: userId)
+            await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)")
         } catch {}
         isLoading = false
     }

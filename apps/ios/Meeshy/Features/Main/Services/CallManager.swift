@@ -332,7 +332,7 @@ final class CallManager: ObservableObject {
                 try? await Task.sleep(for: .seconds(30))
                 guard let self, case .connecting = self.callState, self.currentCallId == callId else { return }
                 Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
-                self.endCallInternal(reason: .failed("Timeout: pas de reponse"))
+                self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
         }
 

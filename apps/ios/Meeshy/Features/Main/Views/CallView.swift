@@ -622,12 +622,12 @@ struct CallView: View {
 
     private func endReasonText(_ reason: CallEndReason) -> String {
         switch reason {
-        case .local: return "Appel termine"
-        case .remote: return "Appel termine"
-        case .rejected: return "Appel refuse"
-        case .missed: return "Appel manque"
-        case .connectionLost: return "Connexion perdue"
-        case .failed(let msg): return "Echec: \(msg)"
+        case .local: return String(localized: "call.ended.local")
+        case .remote: return String(localized: "call.ended.remote")
+        case .rejected: return String(localized: "call.ended.rejected")
+        case .missed: return String(localized: "call.ended.missed")
+        case .connectionLost: return String(localized: "call.ended.connectionLost")
+        case .failed(let msg): return String(localized: "call.ended.failed \(msg)")
         }
     }
 }

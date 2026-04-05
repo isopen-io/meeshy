@@ -55,11 +55,19 @@ public final class ShareLinkService: @unchecked Sendable {
     // MARK: - Create Share Link (authenticated)
 
     public func createShareLink(request: CreateShareLinkRequest) async throws -> CreatedShareLink {
-        let response: APIResponse<CreatedShareLink> = try await api.post(
+        let response: APIResponse<CreateShareLinkResponse> = try await api.post(
             endpoint: "/links",
             body: request
         )
-        return response.data
+        let raw = response.data
+        return CreatedShareLink(
+            id: raw.shareLink.id,
+            linkId: raw.linkId,
+            identifier: nil,
+            conversationId: raw.conversationId,
+            name: raw.shareLink.name,
+            isActive: raw.shareLink.isActive
+        )
     }
 
     // MARK: - Toggle Link Active/Inactive (authenticated)
