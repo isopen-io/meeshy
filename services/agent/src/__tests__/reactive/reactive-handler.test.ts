@@ -63,9 +63,8 @@ function makeStateManager(messages: MessageEntry[] = []) {
 
 function makeDeliveryQueue() {
   return {
-    enqueue: jest.fn(),
-    getScheduledForUser: jest.fn().mockReturnValue([]),
-    rescheduleForUser: jest.fn().mockReturnValue(0),
+    enqueue: jest.fn().mockResolvedValue('mock-id'),
+    getScheduledForUser: jest.fn().mockResolvedValue([]),
   } as any;
 }
 
@@ -95,10 +94,9 @@ describe('ReactiveHandler', () => {
 
     expect(llm.chat).toHaveBeenCalledTimes(2);
     expect(queue.enqueue).toHaveBeenCalledTimes(1);
-    const enqueuedActions = queue.enqueue.mock.calls[0][1];
-    expect(enqueuedActions).toHaveLength(1);
-    expect(enqueuedActions[0].content).toBe('React est vraiment top pour les interfaces');
-    expect(enqueuedActions[0].replyToId).toBe('msg-trigger');
+    const enqueuedAction = queue.enqueue.mock.calls[0][1];
+    expect(enqueuedAction.content).toBe('React est vraiment top pour les interfaces');
+    expect(enqueuedAction.replyToId).toBe('msg-trigger');
   });
 
   it('forces replyToId to trigger message ID on reply interpellation', async () => {
@@ -125,8 +123,8 @@ describe('ReactiveHandler', () => {
     });
 
     expect(queue.enqueue).toHaveBeenCalledTimes(1);
-    const actions = queue.enqueue.mock.calls[0][1];
-    expect(actions[0].replyToId).toBe('reply-msg-42');
+    const action = queue.enqueue.mock.calls[0][1];
+    expect(action.replyToId).toBe('reply-msg-42');
   });
 
   it('skips when triage says shouldRespond=false', async () => {
@@ -148,7 +146,7 @@ describe('ReactiveHandler', () => {
     expect(queue.enqueue).not.toHaveBeenCalled();
   });
 
-  it('reschedules existing queued messages when user has pending items', async () => {
+  it('logs existing queued messages when user has pending items and still enqueues', async () => {
     const triageResponse = JSON.stringify({
       shouldRespond: true,
       responses: [{ asUserId: 'bot-alice', urgency: 'high', isGreeting: false,
@@ -160,7 +158,7 @@ describe('ReactiveHandler', () => {
     });
     const llm = makeLlm([triageResponse, genResponse]);
     const queue = makeDeliveryQueue();
-    queue.getScheduledForUser.mockReturnValue([{ action: { type: 'message' }, conversationId: 'conv1' }]);
+    queue.getScheduledForUser.mockResolvedValue([{ action: { type: 'message' }, conversationId: 'conv1' }]);
     const handler = new ReactiveHandler(llm, makePersistence(), makeStateManager(), queue);
 
     await handler.handleInterpellation({
@@ -172,7 +170,6 @@ describe('ReactiveHandler', () => {
       interpellationType: 'mention',
     });
 
-    expect(queue.rescheduleForUser).toHaveBeenCalled();
     expect(queue.enqueue).toHaveBeenCalledTimes(1);
   });
 

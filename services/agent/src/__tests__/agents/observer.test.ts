@@ -73,6 +73,11 @@ const baseState = {
   lastAgentUserId: null,
   recentTopicCategories: [],
   engagementData: [],
+  scheduledActions: [],
+  minDelayMinutes: 1,
+  maxDelayMinutes: 360,
+  spreadOverDayEnabled: true,
+  maxMessagesPerUserPer10Min: 4,
 };
 
 describe('Observer Agent', () => {

@@ -15,14 +15,18 @@ function makePersistence(recentCount = 0) {
 function makeMessage(overrides: Partial<PendingMessage> = {}): PendingMessage {
   return {
     type: 'message', asUserId: 'bot1', content: 'Bonjour !', originalLanguage: 'fr',
-    mentionedUsernames: [], delaySeconds: 0, messageSource: 'agent',
+    mentionedUsernames: [], delaySeconds: 0, delayCategory: 'immediate',
+    topicCategory: 'general', topicHash: 'abc12345',
+    messageSource: 'agent',
     ...overrides,
   };
 }
 
 function makeReaction(overrides: Partial<PendingReaction> = {}): PendingReaction {
   return {
-    type: 'reaction', asUserId: 'bot1', targetMessageId: 'm1', emoji: '👍', delaySeconds: 0,
+    type: 'reaction', asUserId: 'bot1', targetMessageId: 'm1', emoji: '👍',
+    delaySeconds: 0, delayCategory: 'immediate',
+    topicCategory: 'reaction', topicHash: 'rxn12345',
     ...overrides,
   };
 }

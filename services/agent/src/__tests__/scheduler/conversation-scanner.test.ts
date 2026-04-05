@@ -99,7 +99,7 @@ function makeRedis() {
 }
 
 function makeDeliveryQueue() {
-  return { enqueue: jest.fn() } as any;
+  return { enqueue: jest.fn().mockResolvedValue('mock-id'), getScheduledTopicsForConversation: jest.fn().mockResolvedValue([]) } as any;
 }
 
 function makeConfigCache() {
@@ -121,7 +121,8 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
   it('calls persistence.updateAnalytics after graph produces message actions', async () => {
     const pendingMessage = {
       type: 'message' as const, asUserId: 'bot1', content: 'Salut tout le monde',
-      originalLanguage: 'fr', mentionedUsernames: [], delaySeconds: 10, messageSource: 'agent' as const,
+      originalLanguage: 'fr', mentionedUsernames: [], delaySeconds: 10, delayCategory: 'short' as const,
+      topicCategory: 'general', topicHash: 'abc12345', messageSource: 'agent' as const,
     };
     const graph = {
       invoke: jest.fn().mockResolvedValue({
@@ -147,7 +148,7 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
       invoke: jest.fn().mockResolvedValue({
         summary: '', toneProfiles: {},
         controlledUsers: [makeControlledUser()],
-        pendingActions: [{ type: 'reaction', asUserId: 'bot1', targetMessageId: 'm1', emoji: '👍', delaySeconds: 5 }],
+        pendingActions: [{ type: 'reaction', asUserId: 'bot1', targetMessageId: 'm1', emoji: '👍', delaySeconds: 5, delayCategory: 'immediate' as const, topicCategory: 'reaction', topicHash: 'rxn12345' }],
       }),
     };
     const persistence = makePersistence();
@@ -176,7 +177,8 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
   it('computes avgConfidence as average across all controlled users', async () => {
     const pendingMessage = {
       type: 'message' as const, asUserId: 'bot1', content: 'Un message',
-      originalLanguage: 'fr', mentionedUsernames: [], delaySeconds: 5, messageSource: 'agent' as const,
+      originalLanguage: 'fr', mentionedUsernames: [], delaySeconds: 5, delayCategory: 'immediate' as const,
+      topicCategory: 'general', topicHash: 'abc12345', messageSource: 'agent' as const,
     };
     const graph = {
       invoke: jest.fn().mockResolvedValue({
@@ -195,8 +197,8 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
 
   it('counts words correctly across multiple message actions', async () => {
     const messages = [
-      { type: 'message' as const, asUserId: 'bot1', content: 'Hello world', originalLanguage: 'fr', mentionedUsernames: [], delaySeconds: 5, messageSource: 'agent' as const },
-      { type: 'message' as const, asUserId: 'bot1', content: 'Au revoir tout le monde', originalLanguage: 'fr', mentionedUsernames: [], delaySeconds: 10, messageSource: 'agent' as const },
+      { type: 'message' as const, asUserId: 'bot1', content: 'Hello world', originalLanguage: 'fr', mentionedUsernames: [], delaySeconds: 5, delayCategory: 'immediate' as const, topicCategory: 'general', topicHash: 'hash1', messageSource: 'agent' as const },
+      { type: 'message' as const, asUserId: 'bot1', content: 'Au revoir tout le monde', originalLanguage: 'fr', mentionedUsernames: [], delaySeconds: 10, delayCategory: 'short' as const, topicCategory: 'farewell', topicHash: 'hash2', messageSource: 'agent' as const },
     ];
     const graph = {
       invoke: jest.fn().mockResolvedValue({

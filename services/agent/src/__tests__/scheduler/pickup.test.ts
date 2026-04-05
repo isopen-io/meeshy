@@ -106,7 +106,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
       graph,
       persistence,
       makeStateManager(),
-      { enqueue: jest.fn() } as any,
+      { enqueue: jest.fn().mockResolvedValue('mock-id'), getScheduledTopicsForConversation: jest.fn().mockResolvedValue([]) } as any,
       makeRedis(),
       { getConfig: jest.fn().mockResolvedValue(null), getGlobalConfig: jest.fn().mockResolvedValue(null) } as any,
       {
@@ -140,7 +140,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
       graph,
       persistence,
       makeStateManager(),
-      { enqueue: jest.fn() } as any,
+      { enqueue: jest.fn().mockResolvedValue('mock-id'), getScheduledTopicsForConversation: jest.fn().mockResolvedValue([]) } as any,
       makeRedis(),
       { getConfig: jest.fn().mockResolvedValue(null), getGlobalConfig: jest.fn().mockResolvedValue(null) } as any,
       {
@@ -174,7 +174,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
       graph,
       persistence,
       makeStateManager(),
-      { enqueue: jest.fn() } as any,
+      { enqueue: jest.fn().mockResolvedValue('mock-id'), getScheduledTopicsForConversation: jest.fn().mockResolvedValue([]) } as any,
       makeRedis(),
       { getConfig: jest.fn().mockResolvedValue(null), getGlobalConfig: jest.fn().mockResolvedValue(null) } as any,
       {
@@ -212,7 +212,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
       graph,
       persistence,
       makeStateManager(),
-      { enqueue: jest.fn() } as any,
+      { enqueue: jest.fn().mockResolvedValue('mock-id'), getScheduledTopicsForConversation: jest.fn().mockResolvedValue([]) } as any,
       makeRedis(),
       { getConfig: jest.fn().mockResolvedValue(null), getGlobalConfig: jest.fn().mockResolvedValue(null) } as any,
       {
@@ -251,7 +251,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
       graph,
       persistence,
       makeStateManager(),
-      { enqueue: jest.fn() } as any,
+      { enqueue: jest.fn().mockResolvedValue('mock-id'), getScheduledTopicsForConversation: jest.fn().mockResolvedValue([]) } as any,
       makeRedis(),
       { getConfig: jest.fn().mockResolvedValue(null), getGlobalConfig: jest.fn().mockResolvedValue(null) } as any,
       {
@@ -278,7 +278,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
       getAgentConfig: jest.fn().mockResolvedValue({ autoPickupEnabled: false, maxControlledUsers: 5 }),
     });
 
-    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), { enqueue: jest.fn() } as any, makeRedis(), { getConfig: jest.fn().mockResolvedValue(null), getGlobalConfig: jest.fn().mockResolvedValue(null) } as any, {
+    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), { enqueue: jest.fn().mockResolvedValue('mock-id'), getScheduledTopicsForConversation: jest.fn().mockResolvedValue([]) } as any, makeRedis(), { getConfig: jest.fn().mockResolvedValue(null), getGlobalConfig: jest.fn().mockResolvedValue(null) } as any, {
       canSendMessage: jest.fn().mockResolvedValue({ allowed: true, remaining: 10 }),
       canBurst: jest.fn().mockResolvedValue({ allowed: true }),
       canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),

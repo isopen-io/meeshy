@@ -42,6 +42,11 @@ function makeState(partial: Partial<ConversationState>): ConversationState {
     lastAgentUserId: null,
     recentTopicCategories: [],
     engagementData: [],
+    scheduledActions: [],
+    minDelayMinutes: 1,
+    maxDelayMinutes: 360,
+    spreadOverDayEnabled: true,
+    maxMessagesPerUserPer10Min: 4,
     ...partial,
   };
 }
@@ -96,6 +101,9 @@ const goodMessage: PendingMessage = {
   originalLanguage: 'fr',
   mentionedUsernames: [],
   delaySeconds: 30,
+  delayCategory: 'short',
+  topicCategory: 'greeting',
+  topicHash: 'good12345',
   messageSource: 'agent',
 };
 
@@ -106,6 +114,9 @@ const badMessage: PendingMessage = {
   originalLanguage: 'fr',
   mentionedUsernames: [],
   delaySeconds: 30,
+  delayCategory: 'short',
+  topicCategory: 'general',
+  topicHash: 'bad12345',
   messageSource: 'agent',
 };
 
@@ -115,6 +126,9 @@ const reaction: PendingReaction = {
   targetMessageId: 'm1',
   emoji: '👍',
   delaySeconds: 5,
+  delayCategory: 'immediate',
+  topicCategory: 'reaction',
+  topicHash: 'rxn12345',
 };
 
 describe('Quality Gate', () => {

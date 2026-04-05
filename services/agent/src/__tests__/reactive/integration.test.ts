@@ -42,9 +42,8 @@ describe('Reactive Integration', () => {
       };
 
       const queue = {
-        enqueue: jest.fn(),
-        getScheduledForUser: jest.fn().mockReturnValue([]),
-        rescheduleForUser: jest.fn().mockReturnValue(0),
+        enqueue: jest.fn().mockResolvedValue('mock-id'),
+        getScheduledForUser: jest.fn().mockResolvedValue([]),
       } as any;
       const persistence = {
         getControlledUsers: jest.fn().mockResolvedValue([makeControlledUser()]),
@@ -73,14 +72,13 @@ describe('Reactive Integration', () => {
       expect(llm.chat).toHaveBeenCalledTimes(2);
       // Verify enqueue
       expect(queue.enqueue).toHaveBeenCalledTimes(1);
-      const [convId, actions] = queue.enqueue.mock.calls[0];
+      const [convId, action] = queue.enqueue.mock.calls[0];
       expect(convId).toBe('conv-integration');
-      expect(actions).toHaveLength(1);
-      expect(actions[0].type).toBe('message');
-      expect(actions[0].content).toBe('React est top pour ca');
-      expect(actions[0].asUserId).toBe('bot-alice');
+      expect(action.type).toBe('message');
+      expect(action.content).toBe('React est top pour ca');
+      expect(action.asUserId).toBe('bot-alice');
       // Verify timing is reasonable (> 0 seconds)
-      expect(actions[0].delaySeconds).toBeGreaterThan(0);
+      expect(action.delaySeconds).toBeGreaterThan(0);
       // Verify history was saved
       expect(stateManager.setAgentHistory).toHaveBeenCalledWith('conv-integration', expect.any(Array));
     });
@@ -155,9 +153,8 @@ describe('Reactive Integration', () => {
       };
 
       const queue = {
-        enqueue: jest.fn(),
-        getScheduledForUser: jest.fn().mockReturnValue([{ action: { type: 'message' } }]),
-        rescheduleForUser: jest.fn().mockReturnValue(1),
+        enqueue: jest.fn().mockResolvedValue('mock-id'),
+        getScheduledForUser: jest.fn().mockResolvedValue([{ action: { type: 'message' } }]),
       } as any;
       const persistence = { getControlledUsers: jest.fn().mockResolvedValue([makeControlledUser()]) } as any;
       const stateManager = {
@@ -178,7 +175,6 @@ describe('Reactive Integration', () => {
         interpellationType: 'mention',
       });
 
-      expect(queue.rescheduleForUser).toHaveBeenCalledWith('conv-conflict', 'bot-alice', expect.any(Number));
       expect(queue.enqueue).toHaveBeenCalledTimes(1);
     });
   });
