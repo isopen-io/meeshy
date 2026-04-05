@@ -124,7 +124,7 @@ export class ConversationScanner {
       excludedRoles: config?.excludedRoles ?? [],
       excludedUserIds: config?.excludedUserIds ?? [],
       agentInstructions: config?.agentInstructions ?? null,
-      webSearchEnabled: config?.webSearchEnabled ?? false,
+      webSearchEnabled: config?.webSearchEnabled ?? true,
       minWordsPerMessage: config?.minWordsPerMessage ?? 3,
       maxWordsPerMessage: config?.maxWordsPerMessage ?? 400,
       generationTemperature: config?.generationTemperature ?? 0.8,

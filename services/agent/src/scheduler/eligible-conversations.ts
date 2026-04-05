@@ -73,7 +73,7 @@ export async function findEligibleConversations(
       excludedRoles: config?.excludedRoles ?? [],
       excludedUserIds: config?.excludedUserIds ?? [],
       agentInstructions: config?.agentInstructions ?? null,
-      webSearchEnabled: config?.webSearchEnabled ?? false,
+      webSearchEnabled: config?.webSearchEnabled ?? true,
       minWordsPerMessage: Math.max(1, config?.minWordsPerMessage ?? 3),
       maxWordsPerMessage: Math.max(10, Math.min(config?.maxWordsPerMessage ?? 400, 2000)),
       generationTemperature: Math.max(0, Math.min(config?.generationTemperature ?? 0.8, 2.0)),
@@ -91,10 +91,10 @@ export async function findEligibleConversations(
       prioritizeTaggedUsers: config?.prioritizeTaggedUsers ?? true,
       prioritizeRepliedUsers: config?.prioritizeRepliedUsers ?? true,
       reactionBoostFactor: Math.max(1, config?.reactionBoostFactor ?? 1.5),
-      minDelayMinutes: Math.max(0, (config as any)?.minDelayMinutes ?? 1),
-      maxDelayMinutes: Math.max(1, (config as any)?.maxDelayMinutes ?? 360),
-      spreadOverDayEnabled: (config as any)?.spreadOverDayEnabled ?? true,
-      maxMessagesPerUserPer10Min: Math.max(1, (config as any)?.maxMessagesPerUserPer10Min ?? 4),
+      minDelayMinutes: Math.max(0, config?.minDelayMinutes ?? 1),
+      maxDelayMinutes: Math.max(1, config?.maxDelayMinutes ?? 360),
+      spreadOverDayEnabled: config?.spreadOverDayEnabled ?? true,
+      maxMessagesPerUserPer10Min: Math.max(1, config?.maxMessagesPerUserPer10Min ?? 4),
     };
   });
 }

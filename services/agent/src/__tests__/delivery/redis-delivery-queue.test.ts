@@ -42,7 +42,7 @@ function createMockRedis() {
       ss.set(member, score);
       return isNew ? 1 : 0;
     },
-    async zrangebyscore(key: string, min: number | string, max: number | string): Promise<string[]> {
+    async zrangebyscore(key: string, min: number | string, max: number | string, ...args: unknown[]): Promise<string[]> {
       const ss = getSortedSet(key);
       const minVal = min === '-inf' ? -Infinity : Number(min);
       const maxVal = max === '+inf' ? Infinity : Number(max);
@@ -53,7 +53,14 @@ function createMockRedis() {
         }
       }
       results.sort((a, b) => a[1] - b[1]);
-      return results.map(([member]) => member);
+      let items = results.map(([member]) => member);
+      const limitIdx = args.indexOf('LIMIT');
+      if (limitIdx !== -1) {
+        const offset = Number(args[limitIdx + 1]);
+        const count = Number(args[limitIdx + 2]);
+        items = items.slice(offset, offset + count);
+      }
+      return items;
     },
     async zrem(key: string, ...members: string[]): Promise<number> {
       const ss = getSortedSet(key);
@@ -95,6 +102,70 @@ function createMockRedis() {
     },
     async expire(_key: string, _seconds: number): Promise<number> {
       return 1;
+    },
+
+    multi() {
+      const ops: Array<() => Promise<unknown>> = [];
+      const chainable = {
+        set(key: string, value: string, ..._args: unknown[]) {
+          ops.push(async () => { store.set(key, value); return 'OK'; });
+          return chainable;
+        },
+        zadd(key: string, score: number, member: string) {
+          ops.push(async () => { getSortedSet(key).set(member, score); return 1; });
+          return chainable;
+        },
+        sadd(key: string, ...members: string[]) {
+          ops.push(async () => {
+            const s = getSet(key);
+            let count = 0;
+            for (const m of members) { if (!s.has(m)) { s.add(m); count++; } }
+            return count;
+          });
+          return chainable;
+        },
+        expire(_key: string, _seconds: number) {
+          ops.push(async () => 1);
+          return chainable;
+        },
+        zrem(key: string, ...members: string[]) {
+          ops.push(async () => {
+            const ss = getSortedSet(key);
+            let count = 0;
+            for (const m of members) { if (ss.delete(m)) count++; }
+            return count;
+          });
+          return chainable;
+        },
+        del(...keys: string[]) {
+          ops.push(async () => {
+            let count = 0;
+            for (const k of keys) { if (store.delete(k)) count++; }
+            return count;
+          });
+          return chainable;
+        },
+        srem(key: string, ...members: string[]) {
+          ops.push(async () => {
+            const s = getSet(key);
+            let count = 0;
+            for (const m of members) { if (s.delete(m)) count++; }
+            return count;
+          });
+          return chainable;
+        },
+        async runAll() {
+          const results: Array<[Error | null, unknown]> = [];
+          for (const op of ops) {
+            const result = await op();
+            results.push([null, result]);
+          }
+          return results;
+        },
+      };
+      // ioredis multi().exec() pattern
+      (chainable as any).exec = chainable.runAll;
+      return chainable;
     },
   };
 }

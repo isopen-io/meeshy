@@ -17,6 +17,7 @@ export type RedisDeliveryItem = {
   conversationId: string;
   scheduledAt: number;
   mergeCount: number;
+  mergedTopics?: string[];
 };
 
 export type SerializedDeliveryItem = {
@@ -45,8 +46,7 @@ function conversationGap(action: PendingAction): number {
 }
 
 function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return new Date().toISOString().slice(0, 10);
 }
 
 type RedisDeliveryConfig = {
@@ -78,7 +78,7 @@ export class RedisDeliveryQueue {
 
     const topicConflictId = await this.findTopicConflict(conversationId, action);
     if (topicConflictId) {
-      await this.mergeIntoExisting(topicConflictId);
+      await this.mergeIntoExisting(topicConflictId, action);
       return topicConflictId;
     }
 
@@ -97,10 +97,13 @@ export class RedisDeliveryQueue {
     };
 
     const payload = JSON.stringify(item);
-    await this.redis.set(this.itemKey(id), payload, 'EX', ITEM_TTL_SECONDS);
-    await this.redis.zadd(SORTED_SET_KEY, scheduledAt, id);
-    await this.redis.sadd(this.userIndexKey(conversationId, action.asUserId), id);
-    await this.redis.expire(this.userIndexKey(conversationId, action.asUserId), ITEM_TTL_SECONDS);
+    const uKey = this.userIndexKey(conversationId, action.asUserId);
+    const pipeline = this.redis.multi();
+    pipeline.set(this.itemKey(id), payload, 'EX', ITEM_TTL_SECONDS);
+    pipeline.zadd(SORTED_SET_KEY, scheduledAt, id);
+    pipeline.sadd(uKey, id);
+    pipeline.expire(uKey, ITEM_TTL_SECONDS);
+    await pipeline.exec();
 
     return id;
   }
@@ -123,10 +126,12 @@ export class RedisDeliveryQueue {
     return null;
   }
 
-  private async mergeIntoExisting(id: string): Promise<void> {
+  private async mergeIntoExisting(id: string, action: PendingAction): Promise<void> {
     const raw = await this.redis.get(this.itemKey(id));
     if (!raw) return;
     const item: RedisDeliveryItem = JSON.parse(raw);
+    if (!item.mergedTopics) item.mergedTopics = [];
+    item.mergedTopics.push(action.type === 'message' ? (action as PendingMessage).content : '');
     item.mergeCount += 1;
     await this.redis.set(this.itemKey(id), JSON.stringify(item), 'EX', ITEM_TTL_SECONDS);
   }
@@ -150,7 +155,7 @@ export class RedisDeliveryQueue {
     let safeSlotFound = false;
 
     while (!safeSlotFound) {
-      const inWindow = sorted.filter((t) => t >= candidate - windowMs && t <= candidate + windowMs);
+      const inWindow = sorted.filter((t) => t >= candidate && t <= candidate + windowMs);
       if (inWindow.length < max) {
         safeSlotFound = true;
       } else {
@@ -186,7 +191,7 @@ export class RedisDeliveryQueue {
 
   async poll(): Promise<number> {
     const now = Date.now();
-    const readyIds = await this.redis.zrangebyscore(SORTED_SET_KEY, 0, now);
+    const readyIds = await this.redis.zrangebyscore(SORTED_SET_KEY, 0, now, 'LIMIT', 0, 10);
     let delivered = 0;
 
     for (const id of readyIds) {
@@ -264,9 +269,11 @@ export class RedisDeliveryQueue {
   }
 
   private async removeItem(id: string, conversationId: string, userId: string): Promise<void> {
-    await this.redis.zrem(SORTED_SET_KEY, id);
-    await this.redis.del(this.itemKey(id));
-    await this.redis.srem(this.userIndexKey(conversationId, userId), id);
+    const pipeline = this.redis.multi();
+    pipeline.zrem(SORTED_SET_KEY, id);
+    pipeline.del(this.itemKey(id));
+    pipeline.srem(this.userIndexKey(conversationId, userId), id);
+    await pipeline.exec();
   }
 
   startPolling(intervalMs = 10_000): void {

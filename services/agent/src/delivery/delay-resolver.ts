@@ -18,11 +18,17 @@ function jitter(value: number, percent = 0.2): number {
 
 export function resolveDelaySeconds(
   category: DelayCategory,
-  config: DelayConfig,
+  config: DelayConfig & { spreadOverDayEnabled?: boolean; actionIndex?: number; totalActions?: number },
 ): number {
   const minS = config.minDelayMinutes * 60;
   const maxS = config.maxDelayMinutes * 60;
   const range = maxS - minS;
+
+  if (config.spreadOverDayEnabled && config.actionIndex !== undefined && config.totalActions && config.totalActions > 1) {
+    const slotFraction = config.actionIndex / (config.totalActions - 1);
+    const base = minS + range * slotFraction;
+    return Math.round(jitter(base, 0.15));
+  }
 
   const [lo, hi] = CATEGORY_RANGES[category];
   const lower = minS + range * lo;

@@ -201,7 +201,7 @@ export const ConversationStateAnnotation = Annotation.Root({
   }),
   webSearchEnabled: Annotation<boolean>({
     reducer: (_current, update) => update,
-    default: () => false,
+    default: () => true,
   }),
   minWordsPerMessage: Annotation<number>({
     reducer: (_current, update) => update,
