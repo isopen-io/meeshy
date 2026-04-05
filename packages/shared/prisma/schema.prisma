@@ -3044,7 +3044,7 @@ model AgentConfig {
   /// Delay distribution: maximum delay in minutes before sending
   maxDelayMinutes          Int?
   /// Spread messages evenly over the day instead of bursts
-  spreadOverDayEnabled     Boolean  @default(false)
+  spreadOverDayEnabled     Boolean  @default(true)
   /// Max messages per user per 10-minute window
   maxMessagesPerUserPer10Min Int?
 

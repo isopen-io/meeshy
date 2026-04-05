@@ -711,7 +711,9 @@ export class ConversationScanner {
     const pendingActions = (result.pendingActions ?? []) as Array<{ type: string; content?: string }>;
     if (pendingActions.length > 0) {
       for (const action of pendingActions) {
-        await this.deliveryQueue.enqueue(conversationId, action as any);
+        await this.deliveryQueue.enqueue(conversationId, action as any, {
+          maxMessagesPerUserPer10Min: conv.maxMessagesPerUserPer10Min,
+        });
       }
       console.log(`[Scanner] Enqueued ${pendingActions.length} actions for conv=${conversationId}`);
 

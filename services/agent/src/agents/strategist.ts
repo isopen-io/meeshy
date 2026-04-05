@@ -356,9 +356,14 @@ function validateInterventions(
       const delayCategory = (['immediate', 'short', 'medium', 'long'].includes(String(item.delayCategory))
         ? String(item.delayCategory)
         : 'immediate') as 'immediate' | 'short' | 'medium' | 'long';
+      const messageIndex = validated.filter(v => v.type === 'message').length;
+      const totalPlannedMessages = interventions.filter((raw: any) => raw?.type === 'message').length;
       const delaySeconds = resolveDelaySeconds(delayCategory, {
         minDelayMinutes: state.minDelayMinutes ?? 1,
         maxDelayMinutes: state.maxDelayMinutes ?? 360,
+        spreadOverDayEnabled: state.spreadOverDayEnabled ?? true,
+        actionIndex: messageIndex,
+        totalActions: totalPlannedMessages,
       });
       const topicCategory = String(item.topicCategory ?? item.topic ?? 'general').toLowerCase().slice(0, 50);
       const topicHash = crypto.createHash('md5').update(String(item.topic ?? '')).digest('hex').slice(0, 8);

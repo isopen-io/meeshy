@@ -402,7 +402,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           reactionBoostFactor: config?.reactionBoostFactor ?? 1.5,
           minDelayMinutes: config?.minDelayMinutes ?? null,
           maxDelayMinutes: config?.maxDelayMinutes ?? null,
-          spreadOverDayEnabled: config?.spreadOverDayEnabled ?? false,
+          spreadOverDayEnabled: config?.spreadOverDayEnabled ?? true,
           maxMessagesPerUserPer10Min: config?.maxMessagesPerUserPer10Min ?? null,
           createdAt: config?.createdAt ?? null,
           updatedAt: config?.updatedAt ?? null,
@@ -1253,7 +1253,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         delay: {
           minDelayMinutes: config.minDelayMinutes ?? null,
           maxDelayMinutes: config.maxDelayMinutes ?? null,
-          spreadOverDayEnabled: config.spreadOverDayEnabled ?? false,
+          spreadOverDayEnabled: config.spreadOverDayEnabled ?? true,
           maxMessagesPerUserPer10Min: config.maxMessagesPerUserPer10Min ?? null,
         },
       });

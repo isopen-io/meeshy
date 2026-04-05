@@ -72,7 +72,7 @@ export class RedisDeliveryQueue {
     return `${ITEM_PREFIX}${id}`;
   }
 
-  async enqueue(conversationId: string, action: PendingAction): Promise<string> {
+  async enqueue(conversationId: string, action: PendingAction, config?: { maxMessagesPerUserPer10Min?: number }): Promise<string> {
     const now = Date.now();
     let scheduledAt = now + action.delaySeconds * 1000;
 
@@ -83,7 +83,7 @@ export class RedisDeliveryQueue {
     }
 
     if (action.type === 'message') {
-      scheduledAt = await this.applyRateLimit(conversationId, action.asUserId, scheduledAt);
+      scheduledAt = await this.applyRateLimit(conversationId, action.asUserId, scheduledAt, config);
       scheduledAt = await this.applyTempoMinimum(conversationId, action, scheduledAt);
     }
 
@@ -136,9 +136,9 @@ export class RedisDeliveryQueue {
     await this.redis.set(this.itemKey(id), JSON.stringify(item), 'EX', ITEM_TTL_SECONDS);
   }
 
-  private async applyRateLimit(conversationId: string, userId: string, scheduledAt: number): Promise<number> {
+  private async applyRateLimit(conversationId: string, userId: string, scheduledAt: number, config?: { maxMessagesPerUserPer10Min?: number }): Promise<number> {
     const windowMs = 10 * 60 * 1000;
-    const max = this.config.maxMessagesPerUserPer10Min;
+    const max = config?.maxMessagesPerUserPer10Min ?? this.config.maxMessagesPerUserPer10Min;
     const userIds = await this.redis.smembers(this.userIndexKey(conversationId, userId));
 
     const scheduledTimes: number[] = [];
