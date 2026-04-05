@@ -8,6 +8,11 @@ public class AudioPlayerManager: ObservableObject {
     @Published public var progress: Double = 0 // 0-1
     @Published public var duration: TimeInterval = 0
 
+    /// Called before playback starts — hook this to PlaybackCoordinator in the app layer.
+    public var onWillPlay: (() -> Void)?
+    /// Called when stop() is invoked — hook this to allow external stop coordination.
+    public var onDidStop: (() -> Void)?
+
     private var localPlayer: AVAudioPlayer?
     private var streamPlayer: AVPlayer?
     private var timer: Timer?
@@ -23,6 +28,8 @@ public class AudioPlayerManager: ObservableObject {
         stop()
 
         guard !urlString.isEmpty else { return }
+
+        onWillPlay?()
 
         // Configure audio session for background playback
         do {
@@ -117,6 +124,7 @@ public class AudioPlayerManager: ObservableObject {
 
     public func playLocalFile(url: URL) {
         stop()
+        onWillPlay?()
 
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
@@ -145,11 +153,13 @@ public class AudioPlayerManager: ObservableObject {
 
         timer?.invalidate()
         timer = nil
+        let wasPlaying = isPlaying
         isPlaying = false
         progress = 0
         duration = 0
         loadTask?.cancel()
         loadTask = nil
+        if wasPlaying { onDidStop?() }
     }
 
     public func togglePlayPause() {
@@ -159,6 +169,7 @@ public class AudioPlayerManager: ObservableObject {
                 isPlaying = false
                 timer?.invalidate()
             } else {
+                onWillPlay?()
                 localPlayer.play()
                 isPlaying = true
                 startLocalProgressTimer()
@@ -167,6 +178,7 @@ public class AudioPlayerManager: ObservableObject {
             if isPlaying {
                 streamPlayer.pause()
             } else {
+                onWillPlay?()
                 streamPlayer.play()
             }
             // isPlaying updated by rate observer

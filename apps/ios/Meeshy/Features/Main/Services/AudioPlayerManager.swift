@@ -30,9 +30,10 @@ class AudioPlayerManager: ObservableObject, StoppablePlayer {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {}
 
+        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
         loadTask = Task {
             do {
-                let data = try await CacheCoordinator.shared.audio.data(for: urlString)
+                let data = try await CacheCoordinator.shared.audio.data(for: resolved)
                 guard !Task.isCancelled else { return }
                 playData(data)
             } catch {}

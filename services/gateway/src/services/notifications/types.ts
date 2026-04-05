@@ -53,6 +53,8 @@ export interface NotificationEventData {
   conversationId?: string;
   messageId?: string;
   callSessionId?: string;
+  postId?: string;
+  postType?: string;
   data?: any;
 }
 

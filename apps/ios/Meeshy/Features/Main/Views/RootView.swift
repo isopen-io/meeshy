@@ -369,10 +369,18 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("pushNavigateToRoute"))) { notification in
             guard let routeName = notification.object as? String else { return }
-            switch routeName {
-            case "userStats": router.push(.userStats)
-            case "affiliate": router.push(.affiliate)
-            default: break
+            if routeName.hasPrefix("postDetail:") {
+                let postId = String(routeName.dropFirst("postDetail:".count))
+                router.push(.postDetail(postId))
+            } else if routeName.hasPrefix("storyDetail:") {
+                let postId = String(routeName.dropFirst("storyDetail:".count))
+                router.push(.postDetail(postId))
+            } else {
+                switch routeName {
+                case "userStats": router.push(.userStats)
+                case "affiliate": router.push(.affiliate)
+                default: break
+                }
             }
         }
         .onOpenURL { url in
@@ -577,11 +585,18 @@ struct RootView: View {
             }
 
         case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
-            if let username = event.senderUsername {
+            if let senderId = event.senderId, let username = event.senderUsername {
                 router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: event.userId,
+                    userId: senderId,
                     username: username
                 )
+            }
+
+        case .postLike, .legacyPostLike, .postComment, .legacyPostComment,
+             .postRepost, .commentLike, .commentReply,
+             .storyReaction, .statusReaction:
+            if let postId = event.postId {
+                router.push(.postDetail(postId))
             }
 
         default:

@@ -216,8 +216,20 @@ struct MeeshyApp: App {
             )
             pushManager.clearPendingNotification()
 
+        case .postLike, .legacyPostLike, .postComment, .legacyPostComment,
+             .postRepost, .commentLike, .commentReply,
+             .storyReaction, .statusReaction:
+            if let postId = payload.postId {
+                let route = payload.postType == "STORY" ? "storyDetail:\(postId)" : "postDetail:\(postId)"
+                NotificationCenter.default.post(
+                    name: Notification.Name("pushNavigateToRoute"),
+                    object: route
+                )
+            }
+            pushManager.clearPendingNotification()
+
         default:
-            guard let conversationId = payload.conversationId else {
+            guard let conversationId = payload.conversationId, !conversationId.isEmpty else {
                 pushManager.clearPendingNotification()
                 return
             }

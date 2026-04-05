@@ -279,6 +279,8 @@ export class NotificationService {
                   type: params.type,
                   conversationId: params.context.conversationId || '',
                   messageId: params.context.messageId || '',
+                  postId: params.context.postId || '',
+                  postType: params.metadata?.postType || '',
                 },
               },
             }).catch(err => {

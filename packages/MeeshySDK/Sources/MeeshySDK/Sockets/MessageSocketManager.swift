@@ -384,20 +384,52 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     public let id: String
     public let userId: String
     public let type: String
-    public let title: String
+    public let title: String?
     public let content: String
     public let priority: String?
     public let isRead: Bool?
-    public let senderUsername: String?
-    public let senderDisplayName: String?
-    public let senderAvatar: String?
-    public let messagePreview: String?
-    public let conversationId: String?
-    public let messageId: String?
+
+    // Gateway sends nested objects — decoded into typed structs
+    public let actor: SocketNotificationActor?
+    public let context: SocketNotificationContext?
+    public let metadata: SocketNotificationMetadata?
+
+    // Computed accessors: resolve from nested structs (gateway format)
+    public var senderUsername: String? { actor?.username }
+    public var senderDisplayName: String? { actor?.displayName }
+    public var senderAvatar: String? { actor?.avatar }
+    public var senderId: String? { actor?.id }
+    public var conversationId: String? { context?.conversationId }
+    public var messageId: String? { context?.messageId }
+    public var postId: String? { context?.postId ?? metadata?.postId }
+    public var postType: String? { metadata?.postType }
+    public var messagePreview: String? { metadata?.commentPreview }
 
     public var notificationType: MeeshyNotificationType {
         MeeshyNotificationType(rawValue: type) ?? .system
     }
+}
+
+public struct SocketNotificationActor: Decodable, Sendable {
+    public let id: String?
+    public let username: String?
+    public let displayName: String?
+    public let avatar: String?
+}
+
+public struct SocketNotificationContext: Decodable, Sendable {
+    public let conversationId: String?
+    public let messageId: String?
+    public let postId: String?
+    public let commentId: String?
+    public let friendRequestId: String?
+}
+
+public struct SocketNotificationMetadata: Decodable, Sendable {
+    public let postId: String?
+    public let postType: String?
+    public let commentPreview: String?
+    public let emoji: String?
 }
 
 public struct NotificationReadEvent: Decodable, Sendable {

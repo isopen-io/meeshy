@@ -39,8 +39,8 @@ public final class SharedAVPlayerManager: ObservableObject {
         guard let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
         let resolved = url.absoluteString
 
-        // Audio session for PIP + background playback
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        // Audio session for playback (unified .default mode across all components)
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         try? AVAudioSession.sharedInstance().setActive(true)
 
         activeURL = urlString

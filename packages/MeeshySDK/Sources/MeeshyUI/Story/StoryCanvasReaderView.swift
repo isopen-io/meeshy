@@ -62,11 +62,7 @@ public struct StoryCanvasReaderView: View {
             await state.loadForegroundImages(story: story, preloadedImages: preloadedImages)
         }
         .onAppear {
-            // Configure AVAudioSession FIRST — before any AVPlayer creation
-            // Without this, players created below may not route audio to speakers
-            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            try? AVAudioSession.sharedInstance().setActive(true)
-
+            // StoryMediaCoordinator.activate() configures AVAudioSession
             StoryMediaCoordinator.shared.activate { [weak state] in
                 state?.stopAllMedia()
             }
@@ -631,19 +627,34 @@ private final class ReaderState: ObservableObject {
     func loadForegroundImages(story: StoryItem, preloadedImages: [String: UIImage] = [:]) async {
         guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
         let foregroundImages = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "image" }
+
+        // Phase 1: Synchronous — populate from preloaded + disk cache (instant)
+        var needsNetworkLoad: [(id: String, resolved: String)] = []
         for media in foregroundImages {
             if let img = preloadedImages[media.id] {
                 loadedImages[media.id] = img
                 continue
             }
-            guard let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url else { continue }
-            guard let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString else { continue }
+            guard let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url,
+                  let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString else { continue }
             if let cached = DiskCacheStore.cachedImage(for: resolved) {
                 loadedImages[media.id] = cached
-                continue
+            } else {
+                needsNetworkLoad.append((id: media.id, resolved: resolved))
             }
-            if let img = await CacheCoordinator.shared.images.image(for: resolved) {
-                loadedImages[media.id] = img
+        }
+
+        // Phase 2: Parallel network loads for images not in cache
+        guard !needsNetworkLoad.isEmpty else { return }
+        await withTaskGroup(of: (String, UIImage?).self) { group in
+            for item in needsNetworkLoad {
+                group.addTask {
+                    let img = await CacheCoordinator.shared.images.image(for: item.resolved)
+                    return (item.id, img)
+                }
+            }
+            for await (id, img) in group {
+                if let img { loadedImages[id] = img }
             }
         }
     }
@@ -661,7 +672,15 @@ private final class ReaderState: ObservableObject {
         let userVolume = effects.backgroundAudioVolume ?? 0.5
         targetBackgroundVolume = userVolume
 
-        let player = AVPlayer(url: url)
+        // Cache-first: use prerolled player or local disk file before network stream
+        let player: AVPlayer
+        if let cached = StoryMediaLoader.shared.cachedPlayer(for: url) {
+            player = cached
+        } else if let localURL = CacheCoordinator.audioLocalFileURL(for: url.absoluteString) {
+            player = AVPlayer(url: localURL)
+        } else {
+            player = AVPlayer(url: url)
+        }
         player.volume = userVolume * 0.2  // Demarrer a 20% du volume cible
         backgroundPlayer = player
 
