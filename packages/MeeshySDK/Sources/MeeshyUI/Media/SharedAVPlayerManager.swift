@@ -37,16 +37,36 @@ public final class SharedAVPlayerManager: ObservableObject {
         cleanup()
 
         guard let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
+        let resolved = url.absoluteString
 
         // Audio session for PIP + background playback
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
 
         activeURL = urlString
+
+        // 1. Check prerolled player cache (instant playback — already buffered)
+        if let cached = StoryMediaLoader.shared.cachedPlayer(for: url) {
+            player = cached
+            setupObservers(for: cached)
+            return
+        }
+
+        // 2. Check video disk cache (play from local file — no network)
+        let localURL = CacheCoordinator.videoLocalFileURL(for: resolved)
+        if let localURL {
+            let newPlayer = AVPlayer(url: localURL)
+            player = newPlayer
+            setupObservers(for: newPlayer)
+            return
+        }
+
+        // 3. Fallback: stream from network + cache in background
         let newPlayer = AVPlayer(url: url)
         player = newPlayer
-
         setupObservers(for: newPlayer)
+
+        Task { _ = try? await CacheCoordinator.shared.video.data(for: resolved) }
     }
 
     // MARK: - Playback Controls

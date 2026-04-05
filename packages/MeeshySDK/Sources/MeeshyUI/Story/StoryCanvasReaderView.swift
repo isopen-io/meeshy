@@ -62,14 +62,20 @@ public struct StoryCanvasReaderView: View {
             await state.loadForegroundImages(story: story, preloadedImages: preloadedImages)
         }
         .onAppear {
+            // Configure AVAudioSession FIRST — before any AVPlayer creation
+            // Without this, players created below may not route audio to speakers
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try? AVAudioSession.sharedInstance().setActive(true)
+
             StoryMediaCoordinator.shared.activate { [weak state] in
                 state?.stopAllMedia()
             }
             state.startPlaybackTimer()
+            state.startMuteObservers()
             state.startBackgroundAudio(
                 effects: story.storyEffects,
                 story: story,
-                userLang: preferredLanguage ?? Locale.current.language.languageCode?.identifier ?? "en"
+                userLang: preferredLanguage ?? "fr"
             )
             state.startForegroundVideos(story: story, preloadedVideoURLs: preloadedVideoURLs)
             state.startForegroundAudios(story: story, preloadedAudioURLs: preloadedAudioURLs)
@@ -77,7 +83,9 @@ public struct StoryCanvasReaderView: View {
         }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
+            state.stopMuteObservers()
             state.stopAllMedia()
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
     }
 
@@ -291,7 +299,7 @@ public struct StoryCanvasReaderView: View {
 
     @ViewBuilder
     private func textObjectsLayer(size: CGSize) -> some View {
-        let lang = preferredLanguage ?? Locale.current.language.languageCode?.identifier ?? "en"
+        let lang = preferredLanguage ?? "fr"
         let time = state.currentTime
         ForEach(state.textObjects) { obj in
             let opacity = state.textObjectOpacity(for: obj, at: time)
@@ -443,6 +451,8 @@ private final class ReaderState: ObservableObject {
     private var foregroundAudioPlayers: [String: AVPlayer] = [:]
     private var foregroundAudioObservers: [String: NSObjectProtocol] = [:]
     private var foregroundAudioStopTimers: [String: Timer] = [:]
+    /// KVO observers for player readyToPlay — must be stored to avoid premature dealloc
+    private var readyObservers: [String: NSKeyValueObservation] = [:]
     private var cancellables = Set<AnyCancellable>()
     private var fadeTimer: Timer?
     private var playbackTimer: Timer?
@@ -477,12 +487,18 @@ private final class ReaderState: ObservableObject {
 
     // MARK: Playback timer (drives element timing)
 
+    private var playbackStartDate: Date?
+
     func startPlaybackTimer() {
         currentTime = 0
+        playbackStartDate = Date()
         playbackTimer?.invalidate()
+        // Use wall-clock elapsed time instead of accumulating +0.05 per tick.
+        // Timer.scheduledTimer is not guaranteed to fire at exact intervals —
+        // accumulating 0.05 causes 0.5-1.5s drift over a 30s story.
         playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.currentTime += 0.05
+            guard let self, let start = self.playbackStartDate else { return }
+            self.currentTime = Date().timeIntervalSince(start)
             self.checkPendingVideoStarts()
             self.checkPendingAudioStarts()
         }
@@ -673,6 +689,41 @@ private final class ReaderState: ObservableObject {
         }
     }
 
+    // MARK: - Mute/Unmute All Media
+
+    private var muteObserver: Any?
+    private var unmuteObserver: Any?
+
+    func startMuteObservers() {
+        muteObserver = NotificationCenter.default.addObserver(
+            forName: .storyComposerMuteCanvas, object: nil, queue: .main
+        ) { [weak self] _ in self?.muteAllMedia() }
+        unmuteObserver = NotificationCenter.default.addObserver(
+            forName: .storyComposerUnmuteCanvas, object: nil, queue: .main
+        ) { [weak self] _ in self?.unmuteAllMedia() }
+    }
+
+    func stopMuteObservers() {
+        if let obs = muteObserver { NotificationCenter.default.removeObserver(obs) }
+        if let obs = unmuteObserver { NotificationCenter.default.removeObserver(obs) }
+        muteObserver = nil
+        unmuteObserver = nil
+    }
+
+    private func muteAllMedia() {
+        backgroundPlayer?.isMuted = true
+        backgroundVideoPlayer?.isMuted = true
+        for (_, player) in foregroundVideoPlayers { player.isMuted = true }
+        for (_, player) in foregroundAudioPlayers { player.isMuted = true }
+    }
+
+    private func unmuteAllMedia() {
+        backgroundPlayer?.isMuted = false
+        backgroundVideoPlayer?.isMuted = false
+        for (_, player) in foregroundVideoPlayers { player.isMuted = false }
+        for (_, player) in foregroundAudioPlayers { player.isMuted = false }
+    }
+
     func stopAllMedia() {
         stopPlaybackTimer()
         fadeTimer?.invalidate()
@@ -699,6 +750,8 @@ private final class ReaderState: ObservableObject {
         }
         foregroundVideoPlayers = [:]
         foregroundLoopObservers = [:]
+        for (_, obs) in readyObservers { obs.invalidate() }
+        readyObservers = [:]
         for (_, timer) in foregroundStopTimers { timer.invalidate() }
         foregroundStopTimers = [:]
         for (id, player) in foregroundAudioPlayers {
@@ -875,13 +928,14 @@ private final class ReaderState: ObservableObject {
         guard !startedForegroundVideos.contains(media.id) else { return }
         startedForegroundVideos.insert(media.id)
 
-        let player = AVPlayer(url: url)
+        // Use cached prerolled player if available, otherwise create fresh
+        let player = StoryMediaLoader.shared.cachedPlayer(for: url) ?? AVPlayer(url: url)
         player.isMuted = false
+        player.currentItem?.preferredForwardBufferDuration = 2.0
         let targetVolume = media.volume
         let hasFadeIn = (media.fadeIn ?? 0) > 0
 
-        // Start at reduced volume if fade-in configured, otherwise start low for smooth ramp
-        player.volume = hasFadeIn ? 0.0 : 0.2
+        player.volume = hasFadeIn ? 0.0 : targetVolume
         foregroundVideoPlayers[media.id] = player
 
         let shouldLoop = media.loop ?? true
@@ -896,14 +950,26 @@ private final class ReaderState: ObservableObject {
         }
         foregroundLoopObservers[media.id] = obs
 
-        player.play()
+        // Wait for readyToPlay before playing to avoid blank frame
+        let mediaId = media.id
+        if player.currentItem?.status == .readyToPlay {
+            player.play()
+        } else {
+            readyObservers[mediaId]?.invalidate()
+            readyObservers[mediaId] = player.currentItem?.observe(\.status, options: [.new]) { [weak self, weak player] item, _ in
+                guard item.status == .readyToPlay || item.status == .failed else { return }
+                // KVO fires on background thread — dispatch to main for @MainActor safety
+                DispatchQueue.main.async {
+                    self?.readyObservers.removeValue(forKey: mediaId)?.invalidate()
+                    if item.status == .readyToPlay { player?.play() }
+                }
+            }
+        }
 
-        // Volume fade-in
+        // Volume fade-in (only if explicitly configured)
         let fadeInDuration = TimeInterval(media.fadeIn ?? 0)
         if fadeInDuration > 0 {
             fadeVolume(player: player, from: 0.0, to: targetVolume, duration: fadeInDuration)
-        } else {
-            fadeVolume(player: player, from: 0.2, to: targetVolume, duration: 1.0)
         }
 
         // Schedule stop + fade-out if duration is set and not looping
@@ -960,7 +1026,9 @@ private final class ReaderState: ObservableObject {
         guard !startedForegroundAudios.contains(audio.id) else { return }
         startedForegroundAudios.insert(audio.id)
 
-        let player = AVPlayer(url: url)
+        // Use cached prerolled player if available, otherwise create fresh
+        let player = StoryMediaLoader.shared.cachedPlayer(for: url) ?? AVPlayer(url: url)
+        player.currentItem?.preferredForwardBufferDuration = 2.0
         let targetVolume = audio.volume
         let hasFadeIn = (audio.fadeIn ?? 0) > 0
 
@@ -979,7 +1047,21 @@ private final class ReaderState: ObservableObject {
         }
         foregroundAudioObservers[audio.id] = obs
 
-        player.play()
+        // Wait for readyToPlay before playing
+        let audioId = audio.id
+        if player.currentItem?.status == .readyToPlay {
+            player.play()
+        } else {
+            readyObservers[audioId]?.invalidate()
+            readyObservers[audioId] = player.currentItem?.observe(\.status, options: [.new]) { [weak self, weak player] item, _ in
+                guard item.status == .readyToPlay || item.status == .failed else { return }
+                // KVO fires on background thread — dispatch to main for @MainActor safety
+                DispatchQueue.main.async {
+                    self?.readyObservers.removeValue(forKey: audioId)?.invalidate()
+                    if item.status == .readyToPlay { player?.play() }
+                }
+            }
+        }
 
         // Volume fade-in
         let fadeInDuration = TimeInterval(audio.fadeIn ?? 0)

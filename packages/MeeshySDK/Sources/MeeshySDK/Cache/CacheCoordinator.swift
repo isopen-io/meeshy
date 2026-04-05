@@ -29,6 +29,23 @@ public actor CacheCoordinator {
     public let video: DiskCacheStore
     public let thumbnails: DiskCacheStore
 
+    // MARK: - Synchronous Media Cache Access (nonisolated — no actor hop)
+
+    /// Check video disk cache synchronously. Returns local file URL if cached.
+    nonisolated public static func videoLocalFileURL(for urlString: String) -> URL? {
+        shared.video.cachedFileURL(for: urlString)
+    }
+
+    /// Check audio disk cache synchronously. Returns local file URL if cached.
+    nonisolated public static func audioLocalFileURL(for urlString: String) -> URL? {
+        shared.audio.cachedFileURL(for: urlString)
+    }
+
+    /// Check image disk cache synchronously. Returns cached UIImage if available.
+    nonisolated public static func cachedImage(for urlString: String) -> UIImage? {
+        DiskCacheStore.cachedImage(for: urlString)
+    }
+
     // MARK: - In-Memory Translation/Transcription/Audio Caches (keyed by messageId)
 
     private static let maxTranslationCacheEntries = 500

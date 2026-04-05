@@ -190,11 +190,6 @@ public struct InlineVideoPlayerView: View {
         manager.play()
         scheduleControlsHide()
         HapticFeedback.light()
-
-        // Download full video to cache in background
-        if let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-            Task { _ = try? await CacheCoordinator.shared.video.data(for: resolved) }
-        }
     }
 
     private func toggleControls() {

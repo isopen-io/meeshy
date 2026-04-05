@@ -134,15 +134,21 @@ class StoryViewModel: ObservableObject {
                         }
                     }
 
-                    // Download all media to disk cache
+                    // Download all media to disk cache + populate UIImage NSCache
                     for urlString in Set(urls) {
-                        _ = try? await imageCache.data(for: urlString)
+                        let mediaType = story.media.first(where: { $0.url == urlString })?.type
 
-                        // Preroll video players for first 3 groups only (memory budget)
-                        if groupIndex < 3,
-                           let url = URL(string: urlString),
-                           story.media.first(where: { $0.url == urlString })?.type == .video {
-                            await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
+                        if mediaType == .video || mediaType == .audio {
+                            // Video/Audio: download raw data to disk + preroll player for first 3 groups
+                            _ = try? await imageCache.data(for: urlString)
+                            if groupIndex < 3, let url = URL(string: urlString) {
+                                await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
+                            }
+                        } else {
+                            // Image: use image(for:) which downloads AND populates
+                            // the static UIImage NSCache — so DiskCacheStore.cachedImage(for:)
+                            // returns the image instantly when the viewer renders
+                            _ = await imageCache.image(for: urlString)
                         }
                     }
                 }

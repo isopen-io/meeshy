@@ -119,13 +119,18 @@ struct StoryCanvasView: View {
                 // Layer 0: Background color / gradient
                 backgroundLayer
 
-                // Layer 1: Background image/video (gesture-manipulable)
+                // Layer 1: Classic background image (gesture-manipulable)
                 backgroundMediaLayer
 
-                // Layer 2: Drawing overlay (PKCanvasView — UIKit via UIViewRepresentable)
+                // Layer 2: Unified media layer — single ForEach over ALL media objects
+                // Background elements render full-bleed at zIndex(-1), foreground at their zIndex.
+                // Single identity domain = no AVPlayer destruction on placement toggle.
+                foregroundMediaLayer(interactive: !isFondToolActive && !isDrawingActive)
+
+                // Layer 3: Drawing overlay (PKCanvasView — UIKit via UIViewRepresentable)
                 drawingLayer
 
-                // Layers 3-N: Front elements (text, stickers, media, audio)
+                // Layers 4-N: Front elements (text, stickers, audio)
                 // Explicit zIndex ensures SwiftUI front content renders above
                 // UIKit-backed drawing layer (UIViewRepresentable can break ZStack order).
                 frontElementsGroup(canvasSize: geo.size)
@@ -205,52 +210,13 @@ struct StoryCanvasView: View {
         }
     }
 
-    // MARK: - Background Media Layer (pinch + drag + rotate)
+    // MARK: - Background Media Layer (classic selectedImage only)
 
     @ViewBuilder
     private var backgroundMediaLayer: some View {
-        // 1. StoryMediaObject elements with placement == "background" (image or video)
-        ForEach(mediaObjects.filter({ $0.placement == "background" }), id: \.id) { obj in
-            if obj.mediaType == "image", let image = viewModel.loadedImages[obj.id] {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .scaleEffect(imageScale * pinchDelta)
-                    .rotationEffect(imageRotation + rotationDelta)
-                    .offset(
-                        x: imageOffset.width + dragDelta.width,
-                        y: imageOffset.height + dragDelta.height
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .allowsHitTesting(!isDrawingActive && !isFrontToolActive)
-                    .gesture(isDrawingActive || isFrontToolActive ? nil : backgroundImageGesture)
-                    .canvasContextMenu(
-                        elementId: obj.id,
-                        elementType: .image,
-                        viewModel: viewModel
-                    )
-            } else if obj.mediaType == "video", let videoURL = viewModel.loadedVideoURLs[obj.id] {
-                DraggableMediaView(
-                    mediaObject: mediaObjectBinding(for: obj.id),
-                    image: nil,
-                    videoURL: videoURL,
-                    isEditing: true,
-                    onDragEnd: {},
-                    onTapToFront: {}
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-                .canvasContextMenu(
-                    elementId: obj.id,
-                    elementType: .video,
-                    viewModel: viewModel
-                )
-            }
-        }
-
-        // 2. Classic selectedImage (flat background, no StoryMediaObject)
-        if mediaObjects.filter({ $0.placement == "background" }).isEmpty,
+        // Classic selectedImage (flat background — from bgMedia panel picker)
+        // Only shown when no StoryMediaObject has placement == "background"
+        if !mediaObjects.contains(where: { $0.placement == "background" }),
            let image = filteredImage ?? selectedImage {
             Image(uiImage: image)
                 .resizable()
@@ -320,7 +286,6 @@ struct StoryCanvasView: View {
         ZStack {
             textObjectsLayer(interactive: interactive)
             stickerLayer(canvasSize: canvasSize, interactive: interactive)
-            foregroundMediaLayer(interactive: interactive)
             foregroundAudioLayer(interactive: interactive)
         }
         .opacity(dimmed ? 0.4 : 1.0)
@@ -381,59 +346,111 @@ struct StoryCanvasView: View {
         }
     }
 
-    // MARK: - Foreground Media Layer
+    // MARK: - Unified Media Layer (single ForEach — preserves AVPlayer across placement changes)
 
     @ViewBuilder
     private func foregroundMediaLayer(interactive: Bool) -> some View {
-        ForEach(mediaObjects.filter({ $0.placement == "foreground" }), id: \.id) { obj in
+        // Single ForEach over ALL media objects — SwiftUI tracks identity by stable id,
+        // so toggling placement between "background" and "foreground" does NOT destroy/recreate
+        // the view (and its AVPlayer). Rendering style is conditional on placement.
+        ForEach(mediaObjects, id: \.id) { obj in
+            let isBg = obj.placement == "background"
+
             if isElementVisible(startTime: obj.startTime, duration: obj.duration) {
-                DraggableMediaView(
-                    mediaObject: mediaObjectBinding(for: obj.id),
-                    image: viewModel.loadedImages[obj.id],
-                    videoURL: viewModel.loadedVideoURLs[obj.id],
-                    isEditing: interactive,
-                    onDragEnd: {},
-                    onTapToFront: {
-                        viewModel.selectedElementId = obj.id
-                        viewModel.bringToFront(id: obj.id)
-                        HapticFeedback.light()
-                    }
-                )
-                .opacity(elementOpacity(startTime: obj.startTime, duration: obj.duration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
-                .selectionGlow(viewModel.selectedElementId == obj.id)
-                .overlay(alignment: .topTrailing) {
-                    if viewModel.selectedElementId == obj.id {
-                        Button {
-                            onEditMedia?(obj.id)
-                        } label: {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 28, height: 28)
-                                .background(
-                                    Circle()
-                                        .fill(MeeshyColors.brandGradient)
-                                        .shadow(color: .black.opacity(0.3), radius: 3)
-                                )
-                        }
-                        .offset(x: 6, y: -6)
-                        .transition(.scale.combined(with: .opacity))
-                    }
+                if isBg {
+                    // Background rendering: full-bleed, behind everything, with bg gestures
+                    backgroundMediaElement(obj: obj)
+                } else {
+                    // Foreground rendering: positioned, draggable, with edit overlays
+                    foregroundMediaElement(obj: obj, interactive: interactive)
                 }
-                .canvasContextMenu(
-                    elementId: obj.id,
-                    elementType: obj.mediaType == "video" ? .video : .image,
-                    viewModel: viewModel
-                )
-                .gesture(
-                    TapGesture(count: 2).onEnded {
-                        viewModel.selectedElementId = obj.id
-                        onEditMedia?(obj.id)
-                    }
-                )
-                .zIndex(Double(viewModel.zIndex(for: obj.id)))
             }
         }
+    }
+
+    @ViewBuilder
+    private func backgroundMediaElement(obj: StoryMediaObject) -> some View {
+        Group {
+            if obj.mediaType == "image", let image = viewModel.loadedImages[obj.id] {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .scaleEffect(imageScale * pinchDelta)
+                    .rotationEffect(imageRotation + rotationDelta)
+                    .offset(
+                        x: imageOffset.width + dragDelta.width,
+                        y: imageOffset.height + dragDelta.height
+                    )
+                    .allowsHitTesting(!isDrawingActive && !isFrontToolActive)
+                    .gesture(isDrawingActive || isFrontToolActive ? nil : backgroundImageGesture)
+            } else if obj.mediaType == "video" {
+                DraggableMediaView(
+                    mediaObject: mediaObjectBinding(for: obj.id),
+                    image: nil,
+                    videoURL: viewModel.loadedVideoURLs[obj.id],
+                    isEditing: true,
+                    onDragEnd: {},
+                    onTapToFront: {}
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .canvasContextMenu(
+            elementId: obj.id,
+            elementType: obj.mediaType == "video" ? .video : .image,
+            viewModel: viewModel
+        )
+        .zIndex(-1)
+    }
+
+    @ViewBuilder
+    private func foregroundMediaElement(obj: StoryMediaObject, interactive: Bool) -> some View {
+        DraggableMediaView(
+            mediaObject: mediaObjectBinding(for: obj.id),
+            image: viewModel.loadedImages[obj.id],
+            videoURL: viewModel.loadedVideoURLs[obj.id],
+            isEditing: interactive,
+            onDragEnd: {},
+            onTapToFront: {
+                viewModel.selectedElementId = obj.id
+                viewModel.bringToFront(id: obj.id)
+                HapticFeedback.light()
+            }
+        )
+        .opacity(elementOpacity(startTime: obj.startTime, duration: obj.duration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
+        .selectionGlow(viewModel.selectedElementId == obj.id)
+        .overlay(alignment: .topTrailing) {
+            if viewModel.selectedElementId == obj.id {
+                Button {
+                    onEditMedia?(obj.id)
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(MeeshyColors.brandGradient)
+                                .shadow(color: .black.opacity(0.3), radius: 3)
+                        )
+                }
+                .offset(x: 6, y: -6)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .canvasContextMenu(
+            elementId: obj.id,
+            elementType: obj.mediaType == "video" ? .video : .image,
+            viewModel: viewModel
+        )
+        .gesture(
+            TapGesture(count: 2).onEnded {
+                viewModel.selectedElementId = obj.id
+                onEditMedia?(obj.id)
+            }
+        )
+        .zIndex(Double(viewModel.zIndex(for: obj.id)))
     }
 
     // MARK: - Foreground Audio Layer
@@ -455,10 +472,10 @@ struct StoryCanvasView: View {
                     elementType: .audio,
                     viewModel: viewModel
                 )
-                .simultaneousGesture(TapGesture().onEnded {
+                .gesture(interactive ? TapGesture().onEnded {
                     viewModel.selectedElementId = obj.id
                     viewModel.bringToFront(id: obj.id)
-                })
+                } : nil)
                 .zIndex(Double(viewModel.zIndex(for: obj.id)))
             }
         }

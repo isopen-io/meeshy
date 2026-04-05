@@ -78,6 +78,8 @@ public struct StoryComposerView: View {
 
     @State private var showAudioDocumentPicker = false
     @State private var showVoiceRecorderSheet = false
+    @State private var showFilterSheet = false
+    @State private var showTransitionSheet = false
     @State private var audioEditorItem: AudioEditorItemWrapper?
     @State private var mediaAudioEditorItem: AudioEditorItemWrapper?
     @State private var confirmedMediaAudioURL: URL?
@@ -337,6 +339,34 @@ public struct StoryComposerView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showFilterSheet) {
+            NavigationStack {
+                StoryFilterPicker(selectedFilter: $selectedFilter, previewImage: selectedImage)
+                    .navigationTitle(String(localized: "story.composer.filter", defaultValue: "Filtre", bundle: .module))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(String(localized: "story.composer.done", defaultValue: "OK", bundle: .module)) { showFilterSheet = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showTransitionSheet) {
+            NavigationStack {
+                transitionPicker
+                    .navigationTitle(String(localized: "story.composer.transitions", defaultValue: "Transitions", bundle: .module))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(String(localized: "story.composer.done", defaultValue: "OK", bundle: .module)) { showTransitionSheet = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
         .fullScreenCover(item: Binding(
             get: { editingBgImage.map { PendingImageWrapper(image: $0) } },
             set: { if $0 == nil { editingBgImage = nil } }
@@ -465,6 +495,28 @@ public struct StoryComposerView: View {
 
     private var overflowMenu: some View {
         Menu {
+            // Slide tools
+            Button { showFilterSheet = true } label: {
+                Label(
+                    String(localized: "story.composer.filter", defaultValue: "Filtre", bundle: .module),
+                    systemImage: selectedFilter != nil ? "camera.filters" : "camera.filters"
+                )
+            }
+            Button { showTransitionSheet = true } label: {
+                Label(
+                    String(localized: "story.composer.transitions", defaultValue: "Transitions", bundle: .module),
+                    systemImage: "rectangle.2.swap"
+                )
+            }
+            Button { viewModel.isTimelineVisible = true } label: {
+                Label(
+                    String(localized: "story.composer.timeline", defaultValue: "Timeline", bundle: .module),
+                    systemImage: "clock"
+                )
+            }
+
+            Divider()
+
             Button { saveDraft() } label: {
                 Label(String(localized: "story.composer.saveDraft", defaultValue: "Sauvegarder le brouillon", bundle: .module), systemImage: "square.and.arrow.down")
             }
@@ -632,11 +684,13 @@ public struct StoryComposerView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white.opacity(0.6))
                 Spacer()
-                PhotosPicker(selection: $bgPhotoItem, matching: .images) {
+                PhotosPicker(selection: $bgPhotoItem, matching: .any(of: [.images, .videos])) {
                     HStack(spacing: 4) {
                         Image(systemName: selectedImage != nil ? "photo.fill" : "photo.on.rectangle")
                             .font(.system(size: 12, weight: .medium))
-                        Text(selectedImage != nil ? String(localized: "story.composer.changePhoto", defaultValue: "Changer photo", bundle: .module) : String(localized: "story.composer.photo", defaultValue: "Photo", bundle: .module))
+                        Text(selectedImage != nil
+                            ? String(localized: "story.composer.changeMedia", defaultValue: "Changer", bundle: .module)
+                            : String(localized: "story.composer.photoOrVideo", defaultValue: "Photo/Video", bundle: .module))
                             .font(.system(size: 11, weight: .medium))
                     }
                     .foregroundColor(selectedImage != nil ? MeeshyColors.brandPrimary : .white.opacity(0.7))
@@ -1103,22 +1157,72 @@ public struct StoryComposerView: View {
 
     private func loadBackgroundPhoto(from item: PhotosPickerItem?) {
         guard let item else { return }
+        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
+
         isLoadingMedia = true
         mediaLoadProgress = 0
-        mediaLoadLabel = String(localized: "story.composer.loadingBackground", defaultValue: "Chargement de l'image...", bundle: .module)
+        mediaLoadLabel = isVideo
+            ? String(localized: "story.composer.loadingVideo", defaultValue: "Chargement de la video...", bundle: .module)
+            : String(localized: "story.composer.loadingBackground", defaultValue: "Chargement de l'image...", bundle: .module)
+
         Task {
             defer {
                 isLoadingMedia = false
                 mediaLoadProgress = 0
                 mediaLoadLabel = ""
             }
-            mediaLoadProgress = 0.3
-            // ImageIO hardware-accelerated downsample — never allocates full-res bitmap
-            guard let image = await StoryMediaLoader.shared.loadImage(from: item, maxDimension: 1080) else { return }
-            mediaLoadProgress = 1.0
-            selectedImage = image
-            viewModel.hasBackgroundImage = true
-            viewModel.setImage(image, for: viewModel.currentSlide.id)
+
+            if isVideo {
+                // Background VIDEO — write to temp, extract thumbnail, add as background media object
+                guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                mediaLoadProgress = 0.3
+
+                let objectId = UUID().uuidString
+                let ext = item.supportedContentTypes
+                    .first { $0.conforms(to: .audiovisualContent) }?
+                    .preferredFilenameExtension ?? "mp4"
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("bg_\(objectId).\(ext)")
+                do {
+                    try data.write(to: tempURL)
+                } catch { return }
+                mediaLoadProgress = 0.6
+
+                let thumbnail = await StoryMediaLoader.shared.videoThumbnail(url: tempURL, maxDimension: 1080)
+                mediaLoadProgress = 0.8
+
+                // Use thumbnail as preview image
+                if let thumbnail { selectedImage = thumbnail }
+                viewModel.hasBackgroundImage = true
+                viewModel.loadedVideoURLs[objectId] = tempURL
+                if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
+
+                // Add as background media object in effects
+                if let obj = viewModel.addMediaObject(type: "video", placement: "background") {
+                    viewModel.loadedVideoURLs[obj.id] = tempURL
+                    if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
+                    if obj.id != objectId {
+                        viewModel.loadedVideoURLs.removeValue(forKey: objectId)
+                        viewModel.loadedImages.removeValue(forKey: objectId)
+                    }
+                    // Auto-extend slide duration to video length
+                    let asset = AVURLAsset(url: tempURL)
+                    if let cmDur = try? await asset.load(.duration) {
+                        let secs = CMTimeGetSeconds(cmDur)
+                        if secs > 0, secs.isFinite {
+                            viewModel.autoExtendDuration(forElementEnd: Float(secs))
+                        }
+                    }
+                }
+                mediaLoadProgress = 1.0
+            } else {
+                // Background IMAGE — downsample via ImageIO
+                mediaLoadProgress = 0.3
+                guard let image = await StoryMediaLoader.shared.loadImage(from: item, maxDimension: 1080) else { return }
+                mediaLoadProgress = 1.0
+                selectedImage = image
+                viewModel.hasBackgroundImage = true
+                viewModel.setImage(image, for: viewModel.currentSlide.id)
+            }
         }
     }
 

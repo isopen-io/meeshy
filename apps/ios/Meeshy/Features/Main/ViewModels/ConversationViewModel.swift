@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import UIKit
 import MeeshySDK
+import MeeshyUI
 import os
 
 // MARK: - Real-time Translation Type (text translations, not in SDK)
@@ -606,6 +607,9 @@ class ConversationViewModel: ObservableObject {
         // Mark conversation as read (fire-and-forget)
         markAsRead()
 
+        // Prefetch media for visible messages
+        prefetchRecentMedia()
+
         isLoadingInitial = false
     }
 
@@ -624,6 +628,71 @@ class ConversationViewModel: ObservableObject {
             await CacheCoordinator.shared.messages.save(messages, for: conversationId)
         } catch {
             // Silent refresh failure — cached data is already displayed
+        }
+    }
+
+    // MARK: - Media Prefetch
+
+    private var mediaPrefetchTask: Task<Void, Never>?
+
+    /// Prefetch media for the most recent messages with attachments.
+    /// Downloads images/thumbnails to disk cache and audio to audio cache
+    /// so they display instantly when the user scrolls to them.
+    func prefetchRecentMedia() {
+        mediaPrefetchTask?.cancel()
+        mediaPrefetchTask = Task(priority: .utility) {
+            let recentWithMedia = messages.suffix(30).filter { !$0.attachments.isEmpty }
+            guard !recentWithMedia.isEmpty else { return }
+
+            let imageStore = await CacheCoordinator.shared.images
+            var hasPrerolledVideo = false
+
+            for message in recentWithMedia {
+                guard !Task.isCancelled else { return }
+
+                for attachment in message.attachments {
+                    guard !Task.isCancelled else { return }
+
+                    switch attachment.type {
+                    case .image:
+                        // Thumbnail first, then full image
+                        if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
+                           let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
+                            _ = await imageStore.image(for: resolved)
+                        }
+                        if !attachment.fileUrl.isEmpty,
+                           let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
+                            _ = await imageStore.image(for: resolved)
+                        }
+
+                    case .video:
+                        // Thumbnail — always prefetch
+                        if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
+                           let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
+                            _ = await imageStore.image(for: resolved)
+                        } else if !attachment.fileUrl.isEmpty,
+                                  let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
+                            _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved)
+                        }
+                        // Preroll first video for instant playback
+                        if !hasPrerolledVideo, !attachment.fileUrl.isEmpty,
+                           let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
+                            hasPrerolledVideo = true
+                            await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
+                        }
+
+                    case .audio:
+                        // Prefetch audio data for instant playback
+                        if !attachment.fileUrl.isEmpty,
+                           let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
+                            _ = try? await CacheCoordinator.shared.audio.data(for: resolved)
+                        }
+
+                    default:
+                        break
+                    }
+                }
+            }
         }
     }
 
@@ -646,6 +715,7 @@ class ConversationViewModel: ObservableObject {
                         let newFromCache = data.filter { !currentIds.contains($0.id) }
                         guard !newFromCache.isEmpty else { break }
                         self.messages = (self.messages + newFromCache).sorted { $0.createdAt < $1.createdAt }
+                        self.prefetchRecentMedia()
                     case .expired, .empty:
                         break
                     }
@@ -679,6 +749,7 @@ class ConversationViewModel: ObservableObject {
             let previousCount = messages.count
             messages = data
             hasOlderMessages = data.count > previousCount
+            prefetchRecentMedia()
         }
 
         isLoadingOlder = false

@@ -102,19 +102,30 @@ public final class StoryMediaLoader {
     /// Must run on MainActor since AVPlayer is not thread-safe.
     /// Waits for .readyToPlay status before calling preroll (required by AVPlayer).
     public func preloadVideoPlayer(url: URL) async -> AVPlayer {
-        let player = AVPlayer(url: url)
-        player.currentItem?.preferredForwardBufferDuration = 2.0
+        let item = AVPlayerItem(url: url)
+        item.preferredForwardBufferDuration = 2.0
+        let player = AVQueuePlayer(playerItem: item)
 
         // Wait for readyToPlay before prerolling — preroll crashes if called too early
-        if let item = player.currentItem, item.status != .readyToPlay {
+        // Uses a timeout to avoid hanging the prefetch pipeline on bad URLs
+        // Both KVO callback and timeout dispatch to main to avoid race on resumed flag
+        if item.status != .readyToPlay {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                var observer: NSKeyValueObservation?
-                observer = item.observe(\.status, options: [.new]) { item, _ in
-                    if item.status == .readyToPlay || item.status == .failed {
-                        observer?.invalidate()
-                        observer = nil
+                var resumed = false
+                let observation = item.observe(\.status, options: [.new]) { item, _ in
+                    guard item.status == .readyToPlay || item.status == .failed else { return }
+                    DispatchQueue.main.async {
+                        guard !resumed else { return }
+                        resumed = true
                         continuation.resume()
                     }
+                }
+                // Timeout after 5 seconds to avoid hanging on bad URLs
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    observation.invalidate()
+                    guard !resumed else { return }
+                    resumed = true
+                    continuation.resume()
                 }
             }
         }
@@ -130,11 +141,13 @@ public final class StoryMediaLoader {
         return player
     }
 
-    // MARK: - Player Cache
+    // MARK: - Player Cache (FIFO ordered)
 
     /// Cache prerolled players by URL so they survive between prefetch and display.
     private var playerCache: [String: AVPlayer] = [:]
-    private let maxCachedPlayers = 3
+    /// Insertion order for FIFO eviction (Dictionary has no guaranteed order).
+    private var playerCacheOrder: [String] = []
+    private let maxCachedPlayers = 6
 
     /// Preroll and cache a player for later retrieval via `cachedPlayer(for:)`.
     public func preloadAndCachePlayer(url: URL) async {
@@ -142,22 +155,22 @@ public final class StoryMediaLoader {
         guard playerCache[key] == nil else { return }
         let player = await preloadVideoPlayer(url: url)
         playerCache[key] = player
-        // Enforce limit — evict oldest (first inserted)
-        if playerCache.count > maxCachedPlayers {
-            let keysToRemove = Array(playerCache.keys.prefix(playerCache.count - maxCachedPlayers))
-            for k in keysToRemove {
-                playerCache[k]?.pause()
-                playerCache[k]?.replaceCurrentItem(with: nil)
-                playerCache.removeValue(forKey: k)
-            }
+        playerCacheOrder.append(key)
+        // Enforce limit — evict oldest first (FIFO)
+        while playerCache.count > maxCachedPlayers, !playerCacheOrder.isEmpty {
+            let oldest = playerCacheOrder.removeFirst()
+            playerCache[oldest]?.pause()
+            playerCache[oldest]?.replaceCurrentItem(with: nil)
+            playerCache.removeValue(forKey: oldest)
         }
     }
 
-    /// Retrieve a prerolled player from cache (removes it — single use).
+    /// Retrieve a prerolled player from cache (removes it — AVPlayer cannot be shared).
     public func cachedPlayer(for url: URL) -> AVPlayer? {
         let key = url.absoluteString
         guard let player = playerCache[key] else { return nil }
         playerCache.removeValue(forKey: key)
+        playerCacheOrder.removeAll { $0 == key }
         return player
     }
 
@@ -168,6 +181,7 @@ public final class StoryMediaLoader {
             player.replaceCurrentItem(with: nil)
         }
         playerCache.removeAll()
+        playerCacheOrder.removeAll()
     }
 
     // MARK: - Cache Management

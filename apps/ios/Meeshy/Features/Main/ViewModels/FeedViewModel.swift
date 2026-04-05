@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 @MainActor
 class FeedViewModel: ObservableObject {
@@ -56,11 +57,13 @@ class FeedViewModel: ObservableObject {
         case .fresh(let cachedPosts, _):
             posts = cachedPosts
             hasLoaded = true
+            prefetchMedia(around: 0)
             return
 
         case .stale(let cachedPosts, _):
             posts = cachedPosts
             hasLoaded = true
+            prefetchMedia(around: 0)
             Task {
                 await fetchFeedFromNetwork(showLoading: false)
             }
@@ -90,6 +93,7 @@ class FeedViewModel: ObservableObject {
                 posts = fetched
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
+                prefetchMedia(around: 0)
 
                 Task.detached(priority: .utility) { [fetched] in
                     await CacheCoordinator.shared.feed.save(fetched, for: "main-feed")
@@ -143,6 +147,8 @@ class FeedViewModel: ObservableObject {
 
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
+
+                prefetchMedia(around: posts.count - uniqueNew.count)
             }
         } catch {
             // Silently fail on load more -- user can scroll again
@@ -510,6 +516,74 @@ class FeedViewModel: ObservableObject {
     func unsubscribeFromSocketEvents() {
         cancellables.removeAll()
         socialSocket.unsubscribeFeed()
+    }
+
+    // MARK: - Media Prefetch
+
+    private var prefetchTask: Task<Void, Never>?
+
+    /// Prefetch media for posts in the visible window + next 5.
+    /// Called after initial load, load-more, and scroll position changes.
+    func prefetchMedia(around index: Int) {
+        prefetchTask?.cancel()
+        prefetchTask = Task(priority: .utility) {
+            let start = max(0, index - 2)
+            let end = min(posts.count, index + 7)
+            guard start < end else { return }
+
+            let imageStore = await CacheCoordinator.shared.images
+            let thumbStore = await CacheCoordinator.shared.thumbnails
+            var hasPrerolledVideo = false
+
+            for post in posts[start..<end] {
+                guard !Task.isCancelled else { return }
+
+                for media in post.media {
+                    guard !Task.isCancelled else { return }
+
+                    switch media.type {
+                    case .image:
+                        // Thumbnail first (fast), then full image
+                        if let thumbUrl = media.thumbnailUrl,
+                           let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
+                            _ = await imageStore.image(for: resolved)
+                        }
+                        if let url = media.url,
+                           let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString {
+                            _ = await imageStore.image(for: resolved)
+                        }
+
+                    case .video:
+                        // Video thumbnail — always prefetch
+                        if let thumbUrl = media.thumbnailUrl,
+                           let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
+                            _ = await imageStore.image(for: resolved)
+                        } else if let url = media.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
+                            // Extract thumbnail from first 1MB if no server thumbnail
+                            let thumbKey = "thumb:\(resolved.absoluteString)"
+                            if thumbStore.cachedData(for: thumbKey) == nil {
+                                _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved)
+                            }
+                        }
+                        // Preroll first video in window for instant playback
+                        if !hasPrerolledVideo, let url = media.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
+                            hasPrerolledVideo = true
+                            await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
+                        }
+
+                    case .audio:
+                        // Prefetch audio data to disk for instant playback
+                        if let url = media.url,
+                           let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString {
+                            _ = try? await CacheCoordinator.shared.audio.data(for: resolved)
+                        }
+
+                    default:
+                        break
+                    }
+                }
+            }
+        }
     }
 
     private func debouncedCacheSave() {

@@ -131,6 +131,14 @@ public actor DiskCacheStore: ReadableCacheStore {
         return memoryCache.object(forKey: fileKey as NSString)?.value
     }
 
+    /// Synchronous local file URL check — no actor hop needed.
+    /// Returns the file URL if it exists on disk, nil otherwise.
+    nonisolated public func cachedFileURL(for key: String) -> URL? {
+        let fileKey = Self.fileKey(for: key)
+        let filePath = baseDirectory.appendingPathComponent(fileKey)
+        return FileManager.default.fileExists(atPath: filePath.path) ? filePath : nil
+    }
+
     public func isCached(_ key: String) -> Bool {
         let fileKey = Self.fileKey(for: key)
         if memoryCache.object(forKey: fileKey as NSString) != nil { return true }
@@ -140,11 +148,36 @@ public actor DiskCacheStore: ReadableCacheStore {
     // MARK: - MediaCaching-Compatible API
 
     public func data(for urlString: String) async throws -> Data {
+        // 1. Check cache (memory + disk)
         let result = await load(for: urlString)
-        guard let data = result.value?.first else {
+        if let data = result.value?.first { return data }
+
+        // 2. Deduplicate in-flight downloads for same URL
+        let fileKey = Self.fileKey(for: urlString)
+        if let existing = inFlightTasks[fileKey] {
+            return try await existing.value
+        }
+
+        // 3. Download from network and cache
+        guard let url = URL(string: urlString),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else {
             throw DiskCacheError.notCached(urlString)
         }
-        return data
+
+        let task = Task<Data, Error> {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                throw DiskCacheError.notCached(urlString)
+            }
+            await save(data, for: urlString)
+            return data
+        }
+
+        inFlightTasks[fileKey] = task
+        defer { inFlightTasks[fileKey] = nil }
+        return try await task.value
     }
 
     public func localFileURLOrThrow(for urlString: String) async throws -> URL {

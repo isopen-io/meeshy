@@ -29,6 +29,7 @@ struct StoryViewerView: View {
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
+    @State var isGlobalMuted = false // internal for cross-file extension access
     /// True when user is actively engaging with the composer (focused, recording, emoji panel, etc.)
     @State var isComposerEngaged = false // internal for cross-file extension access
     /// True when composer has pending content (text, attachments, or recording)
@@ -528,7 +529,30 @@ struct StoryViewerView: View {
                 }
             }
 
-            // 4. Translate — brand cyan when active
+            // 4. Mute/Unmute — toggles all audio in current story
+            // Uses .highPriorityGesture ONLY (not button action) to ensure
+            // the tap is captured before the parent drag gesture, and fires exactly once.
+            storyActionButton(
+                icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                label: isGlobalMuted ? "Mute" : "Son",
+                isActive: !isGlobalMuted,
+                activeColor: MeeshyColors.indigo400,
+                activeGlow: isGlobalMuted ? nil : MeeshyColors.indigo400
+            ) {
+                // Action handled by .highPriorityGesture below
+            }
+            .highPriorityGesture(
+                TapGesture().onEnded {
+                    HapticFeedback.light()
+                    isGlobalMuted.toggle()
+                    NotificationCenter.default.post(
+                        name: isGlobalMuted ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
+                        object: nil
+                    )
+                }
+            )
+
+            // 5. Translate — brand cyan when active
             if !isOwnStory {
                 storyActionButton(
                     icon: "textformat.abc",
