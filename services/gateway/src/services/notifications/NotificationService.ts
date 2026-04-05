@@ -280,7 +280,7 @@ export class NotificationService {
                   conversationId: params.context.conversationId || '',
                   messageId: params.context.messageId || '',
                   postId: params.context.postId || '',
-                  postType: params.metadata?.postType || '',
+                  postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
                 },
               },
             }).catch(err => {
