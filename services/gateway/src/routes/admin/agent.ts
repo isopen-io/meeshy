@@ -77,6 +77,10 @@ const agentConfigSchema = z.object({
   globalScanEnabled: z.boolean().optional(),
   globalScanMinInterval: z.number().int().min(1).optional(),
   globalScanMaxInterval: z.number().int().min(1).optional(),
+  minDelayMinutes: z.number().int().min(1).max(1440).optional(),
+  maxDelayMinutes: z.number().int().min(1).max(1440).optional(),
+  spreadOverDayEnabled: z.boolean().optional(),
+  maxMessagesPerUserPer10Min: z.number().int().min(1).max(20).optional(),
 }).refine((data) => {
   if (data.minResponsesPerCycle !== undefined && data.maxResponsesPerCycle !== undefined) {
     return data.minResponsesPerCycle <= data.maxResponsesPerCycle;
@@ -87,7 +91,12 @@ const agentConfigSchema = z.object({
     return data.minWordsPerMessage <= data.maxWordsPerMessage;
   }
   return true;
-}, { message: 'minWordsPerMessage doit être <= maxWordsPerMessage' });
+}, { message: 'minWordsPerMessage doit être <= maxWordsPerMessage' }).refine((data) => {
+  if (data.minDelayMinutes !== undefined && data.maxDelayMinutes !== undefined) {
+    return data.minDelayMinutes <= data.maxDelayMinutes;
+  }
+  return true;
+}, { message: 'minDelayMinutes doit être <= maxDelayMinutes' });
 
 const llmConfigSchema = z.object({
   provider: z.enum(['openai', 'anthropic']).optional(),
@@ -372,7 +381,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           reactionsEnabled: config?.reactionsEnabled ?? true,
           maxReactionsPerCycle: config?.maxReactionsPerCycle ?? 8,
           agentInstructions: config?.agentInstructions ?? null,
-          webSearchEnabled: config?.webSearchEnabled ?? false,
+          webSearchEnabled: config?.webSearchEnabled ?? true,
           minWordsPerMessage: config?.minWordsPerMessage ?? 3,
           maxWordsPerMessage: config?.maxWordsPerMessage ?? 400,
           minHistoricalMessages: config?.minHistoricalMessages ?? 0,
@@ -391,6 +400,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           prioritizeTaggedUsers: config?.prioritizeTaggedUsers ?? true,
           prioritizeRepliedUsers: config?.prioritizeRepliedUsers ?? true,
           reactionBoostFactor: config?.reactionBoostFactor ?? 1.5,
+          minDelayMinutes: config?.minDelayMinutes ?? null,
+          maxDelayMinutes: config?.maxDelayMinutes ?? null,
+          spreadOverDayEnabled: config?.spreadOverDayEnabled ?? false,
+          maxMessagesPerUserPer10Min: config?.maxMessagesPerUserPer10Min ?? null,
           createdAt: config?.createdAt ?? null,
           updatedAt: config?.updatedAt ?? null,
           isScanning: config?.isScanning ?? false,
@@ -1236,6 +1249,12 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           cooldownEndsAt: burstCooldownEndsAt,
           cooldownActive: burstCooldownEndsAt > now,
           quietIntervalMinutes: config.quietIntervalMinutes ?? 90,
+        },
+        delay: {
+          minDelayMinutes: config.minDelayMinutes ?? null,
+          maxDelayMinutes: config.maxDelayMinutes ?? null,
+          spreadOverDayEnabled: config.spreadOverDayEnabled ?? false,
+          maxMessagesPerUserPer10Min: config.maxMessagesPerUserPer10Min ?? null,
         },
       });
     } catch (error) {

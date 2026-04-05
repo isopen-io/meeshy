@@ -2999,7 +2999,7 @@ model AgentConfig {
   maxReactionsPerCycle     Int      @default(8)
 
   agentInstructions        String?
-  webSearchEnabled         Boolean  @default(false)
+  webSearchEnabled         Boolean  @default(true)
 
   /// Minimum words per generated message
   minWordsPerMessage       Int      @default(3)
@@ -3038,6 +3038,15 @@ model AgentConfig {
   maxConversationsPerCycle  Int      @default(0)
   /// Only scan conversations with messages newer than this (hours)
   messageFreshnessHours     Int      @default(22)
+
+  /// Delay distribution: minimum delay in minutes before sending
+  minDelayMinutes          Int?
+  /// Delay distribution: maximum delay in minutes before sending
+  maxDelayMinutes          Int?
+  /// Spread messages evenly over the day instead of bursts
+  spreadOverDayEnabled     Boolean  @default(false)
+  /// Max messages per user per 10-minute window
+  maxMessagesPerUserPer10Min Int?
 
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
