@@ -3,6 +3,7 @@ import AVFoundation
 import PhotosUI
 import SwiftUI
 import ImageIO
+import MeeshySDK
 
 // MARK: - Story Media Loader
 
@@ -13,7 +14,12 @@ public final class StoryMediaLoader {
     public static let shared = StoryMediaLoader()
     private init() {}
 
-    private let thumbnailCache = NSCache<NSString, UIImage>()
+    private let thumbnailCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 100
+        cache.totalCostLimit = 30 * 1024 * 1024
+        return cache
+    }()
 
     // MARK: - Image Loading (PhotosPickerItem)
 
@@ -79,6 +85,11 @@ public final class StoryMediaLoader {
 
         if let thumbnail {
             thumbnailCache.setObject(thumbnail, forKey: cacheKey)
+            // Persist to disk cache so VideoThumbnailView finds it
+            if let jpegData = thumbnail.jpegData(compressionQuality: 0.7) {
+                let diskKey = "thumb:\(url.absoluteString)"
+                await CacheCoordinator.shared.thumbnails.store(jpegData, for: diskKey)
+            }
         }
         return thumbnail
     }

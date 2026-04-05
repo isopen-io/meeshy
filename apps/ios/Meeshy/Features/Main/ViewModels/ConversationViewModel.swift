@@ -634,63 +634,72 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Media Prefetch
 
     private var mediaPrefetchTask: Task<Void, Never>?
+    private var mediaPrefetchDebounce: Task<Void, Never>?
 
     /// Prefetch media for the most recent messages with attachments.
-    /// Downloads images/thumbnails to disk cache and audio to audio cache
-    /// so they display instantly when the user scrolls to them.
+    /// Debounced to avoid thrashing from rapid socket updates.
     func prefetchRecentMedia() {
+        mediaPrefetchDebounce?.cancel()
+        mediaPrefetchDebounce = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            executePrefetchRecentMedia()
+        }
+    }
+
+    private func executePrefetchRecentMedia() {
         mediaPrefetchTask?.cancel()
+        let snapshot = Array(messages.suffix(30).filter { !$0.attachments.isEmpty })
         mediaPrefetchTask = Task(priority: .utility) {
-            let recentWithMedia = messages.suffix(30).filter { !$0.attachments.isEmpty }
-            guard !recentWithMedia.isEmpty else { return }
+            guard !snapshot.isEmpty else { return }
 
             let imageStore = await CacheCoordinator.shared.images
-            var hasPrerolledVideo = false
 
-            for message in recentWithMedia {
-                guard !Task.isCancelled else { return }
+            // Parallel prefetch: images/thumbnails/audio in TaskGroup
+            await withTaskGroup(of: Void.self) { group in
+                for message in snapshot {
+                    for attachment in message.attachments {
+                        guard !Task.isCancelled else { return }
 
-                for attachment in message.attachments {
-                    guard !Task.isCancelled else { return }
+                        switch attachment.type {
+                        case .image:
+                            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
+                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
+                                group.addTask { _ = await imageStore.image(for: resolved) }
+                            }
+                            if !attachment.fileUrl.isEmpty,
+                               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
+                                group.addTask { _ = await imageStore.image(for: resolved) }
+                            }
 
-                    switch attachment.type {
-                    case .image:
-                        // Thumbnail first, then full image
-                        if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
-                           let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                            _ = await imageStore.image(for: resolved)
+                        case .video:
+                            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
+                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
+                                group.addTask { _ = await imageStore.image(for: resolved) }
+                            } else if !attachment.fileUrl.isEmpty,
+                                      let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
+                                group.addTask { _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved) }
+                            }
+
+                        case .audio:
+                            if !attachment.fileUrl.isEmpty,
+                               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
+                                group.addTask { _ = try? await CacheCoordinator.shared.audio.data(for: resolved) }
+                            }
+
+                        default:
+                            break
                         }
-                        if !attachment.fileUrl.isEmpty,
-                           let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                            _ = await imageStore.image(for: resolved)
-                        }
-
-                    case .video:
-                        // Thumbnail — always prefetch
-                        if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
-                           let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                            _ = await imageStore.image(for: resolved)
-                        } else if !attachment.fileUrl.isEmpty,
-                                  let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
-                            _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved)
-                        }
-                        // Preroll first video for instant playback
-                        if !hasPrerolledVideo, !attachment.fileUrl.isEmpty,
-                           let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
-                            hasPrerolledVideo = true
-                            await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
-                        }
-
-                    case .audio:
-                        // Prefetch audio data for instant playback
-                        if !attachment.fileUrl.isEmpty,
-                           let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                            _ = try? await CacheCoordinator.shared.audio.data(for: resolved)
-                        }
-
-                    default:
-                        break
                     }
+                }
+            }
+
+            // Video preroll: fire-and-forget, non-blocking
+            if let firstVideoAtt = snapshot.flatMap(\.attachments).first(where: { $0.type == .video }),
+               !firstVideoAtt.fileUrl.isEmpty,
+               let resolved = MeeshyConfig.resolveMediaURL(firstVideoAtt.fileUrl) {
+                Task(priority: .utility) {
+                    await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
                 }
             }
         }

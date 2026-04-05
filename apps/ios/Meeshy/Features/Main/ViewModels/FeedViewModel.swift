@@ -521,66 +521,78 @@ class FeedViewModel: ObservableObject {
     // MARK: - Media Prefetch
 
     private var prefetchTask: Task<Void, Never>?
+    private var prefetchDebounceTask: Task<Void, Never>?
+    private var lastPrefetchIndex: Int = -1
+
+    /// Debounced entry point from scroll — avoids task thrashing during fast scroll.
+    func prefetchMediaForPost(_ postId: String) {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        guard abs(index - lastPrefetchIndex) >= 2 else { return }
+        lastPrefetchIndex = index
+        prefetchDebounceTask?.cancel()
+        prefetchDebounceTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            prefetchMedia(around: index)
+        }
+    }
 
     /// Prefetch media for posts in the visible window + next 5.
-    /// Called after initial load, load-more, and scroll position changes.
     func prefetchMedia(around index: Int) {
         prefetchTask?.cancel()
+        let slice = Array(posts[max(0, index - 2)..<min(posts.count, index + 7)])
         prefetchTask = Task(priority: .utility) {
-            let start = max(0, index - 2)
-            let end = min(posts.count, index + 7)
-            guard start < end else { return }
+            guard !slice.isEmpty else { return }
 
             let imageStore = await CacheCoordinator.shared.images
             let thumbStore = await CacheCoordinator.shared.thumbnails
-            var hasPrerolledVideo = false
 
-            for post in posts[start..<end] {
-                guard !Task.isCancelled else { return }
+            // Parallel prefetch: images/thumbnails in TaskGroup, video preroll separate
+            await withTaskGroup(of: Void.self) { group in
+                for post in slice {
+                    for media in post.media {
+                        guard !Task.isCancelled else { return }
 
-                for media in post.media {
-                    guard !Task.isCancelled else { return }
-
-                    switch media.type {
-                    case .image:
-                        // Thumbnail first (fast), then full image
-                        if let thumbUrl = media.thumbnailUrl,
-                           let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                            _ = await imageStore.image(for: resolved)
-                        }
-                        if let url = media.url,
-                           let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString {
-                            _ = await imageStore.image(for: resolved)
-                        }
-
-                    case .video:
-                        // Video thumbnail — always prefetch
-                        if let thumbUrl = media.thumbnailUrl,
-                           let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                            _ = await imageStore.image(for: resolved)
-                        } else if let url = media.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
-                            // Extract thumbnail from first 1MB if no server thumbnail
-                            let thumbKey = "thumb:\(resolved.absoluteString)"
-                            if thumbStore.cachedData(for: thumbKey) == nil {
-                                _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved)
+                        switch media.type {
+                        case .image:
+                            if let thumbUrl = media.thumbnailUrl,
+                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
+                                group.addTask { _ = await imageStore.image(for: resolved) }
                             }
-                        }
-                        // Preroll first video in window for instant playback
-                        if !hasPrerolledVideo, let url = media.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
-                            hasPrerolledVideo = true
-                            await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
-                        }
+                            if let url = media.url,
+                               let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString {
+                                group.addTask { _ = await imageStore.image(for: resolved) }
+                            }
 
-                    case .audio:
-                        // Prefetch audio data to disk for instant playback
-                        if let url = media.url,
-                           let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString {
-                            _ = try? await CacheCoordinator.shared.audio.data(for: resolved)
-                        }
+                        case .video:
+                            if let thumbUrl = media.thumbnailUrl,
+                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
+                                group.addTask { _ = await imageStore.image(for: resolved) }
+                            } else if let url = media.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
+                                let thumbKey = "thumb:\(resolved.absoluteString)"
+                                if thumbStore.cachedData(for: thumbKey) == nil {
+                                    group.addTask { _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved) }
+                                }
+                            }
 
-                    default:
-                        break
+                        case .audio:
+                            if let url = media.url,
+                               let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString {
+                                group.addTask { _ = try? await CacheCoordinator.shared.audio.data(for: resolved) }
+                            }
+
+                        default:
+                            break
+                        }
                     }
+                }
+            }
+
+            // Video preroll: separate from main group — non-blocking, fire-and-forget
+            if let firstVideo = slice.flatMap(\.media).first(where: { $0.type == .video }),
+               let url = firstVideo.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
+                Task(priority: .utility) {
+                    await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
                 }
             }
         }

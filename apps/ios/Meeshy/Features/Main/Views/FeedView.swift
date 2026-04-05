@@ -373,11 +373,11 @@ struct FeedView: View {
                     }
 
                     // Posts with infinite scroll
-                    ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
+                    ForEach(posts) { post in
                         feedPostCardView(for: post)
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
-                                viewModel.prefetchMedia(around: index)
+                                viewModel.prefetchMediaForPost(post.id)
                                 trackImpression(postId: post.id)
                             }
                     }
