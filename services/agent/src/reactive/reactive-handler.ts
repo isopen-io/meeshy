@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { LlmProvider } from '../llm/types';
 import type { PendingMessage, MessageEntry, ControlledUser, AgentHistoryEntry } from '../graph/state';
 import type { DeliveryQueue } from '../delivery/delivery-queue';
@@ -151,6 +152,7 @@ export class ReactiveHandler {
           cumulativeDelayMs += typingGap;
         }
 
+        const delaySeconds = Math.round(cumulativeDelayMs / 1000);
         actions.push({
           type: 'message' as const,
           asUserId: msg.asUserId,
@@ -158,7 +160,10 @@ export class ReactiveHandler {
           originalLanguage: targetUser.systemLanguage,
           replyToId: i === 0 ? input.triggerMessage.id : undefined,
           mentionedUsernames: [],
-          delaySeconds: Math.round(cumulativeDelayMs / 1000),
+          delaySeconds,
+          delayCategory: delaySeconds <= 5 ? 'immediate' : delaySeconds <= 30 ? 'short' : delaySeconds <= 120 ? 'medium' : 'long',
+          topicCategory: 'reactive-reply',
+          topicHash: crypto.createHash('md5').update(msg.content).digest('hex').slice(0, 8),
           messageSource: 'agent' as const,
         });
       }

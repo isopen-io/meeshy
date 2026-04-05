@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { ConversationState, PendingAction, PendingMessage, PendingReaction, MessageDirective, ReactionDirective } from '../graph/state';
 import type { LlmProvider, LlmTool } from '../llm/types';
 
@@ -172,8 +173,7 @@ async function generateMessage(
     minWords, maxWords, isNewTopic, replyToSenderName,
   );
 
-  const useWebSearch = Boolean(directive.needsWebSearch && state.webSearchEnabled);
-  const tools: LlmTool[] | undefined = useWebSearch
+  const tools: LlmTool[] | undefined = state.webSearchEnabled
     ? [{ type: 'web_search_preview', search_context_size: 'medium' }] : undefined;
 
   try {
@@ -181,10 +181,16 @@ async function generateMessage(
       systemPrompt,
       messages: [{
         role: 'user',
-        content: `Conversation recente:\n${conversationContext}\n\nReponds en tant que ${user.displayName} sur le sujet: ${directive.topic}`,
+        content: `Conversation recente:\n${conversationContext}\n\nReponds en tant que ${user.displayName} sur le sujet: ${directive.topic}${
+  directive.needsWebSearch && directive.searchHint
+    ? `\n\nUtilise la recherche web pour enrichir ta reponse. Requete suggeree: "${directive.searchHint}"`
+    : directive.needsWebSearch
+      ? '\n\nDes informations recentes seraient utiles — utilise la recherche web si pertinent.'
+      : ''
+}`,
       }],
       temperature,
-      maxTokens: useWebSearch ? Math.max(maxTokens, 512) : maxTokens,
+      maxTokens: state.webSearchEnabled ? Math.max(maxTokens, 512) : maxTokens,
       tools,
     });
 
@@ -199,6 +205,9 @@ async function generateMessage(
       replyToId: directive.replyToMessageId,
       mentionedUsernames: directive.mentionUsernames,
       delaySeconds: directive.delaySeconds,
+      delayCategory: directive.delayCategory,
+      topicCategory: directive.topicCategory,
+      topicHash: crypto.createHash('md5').update(content).digest('hex').slice(0, 8),
       messageSource: 'agent',
     };
   } catch (error) {
@@ -214,6 +223,9 @@ function buildReaction(directive: ReactionDirective): PendingReaction {
     targetMessageId: directive.targetMessageId,
     emoji: directive.emoji,
     delaySeconds: directive.delaySeconds,
+    delayCategory: directive.delayCategory,
+    topicCategory: directive.topicCategory,
+    topicHash: crypto.createHash('md5').update(directive.targetMessageId + directive.emoji).digest('hex').slice(0, 8),
   };
 }
 
