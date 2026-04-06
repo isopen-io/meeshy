@@ -21,6 +21,7 @@ public struct APIPostMedia: Decodable, Sendable {
     public let width: Int?
     public let height: Int?
     public let thumbnailUrl: String?
+    public let thumbHash: String?
     public let duration: Int?
     public let order: Int?
     public let caption: String?
@@ -163,7 +164,7 @@ extension APIPost {
             }
             return FeedMedia(
                 id: m.id, type: m.mediaType, url: m.fileUrl,
-                thumbnailUrl: m.thumbnailUrl,
+                thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
                 thumbnailColor: thumbnailColorForMime(m.mimeType),
                 width: m.width, height: m.height,
                 duration: m.duration.map { $0 / 1000 },

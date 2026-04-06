@@ -90,6 +90,10 @@ struct StoryViewerView: View {
     @State var horizontalDrag: CGFloat = 0 // internal for cross-file extension access
     @State var gestureAxis: Int = 0 // internal for cross-file extension access  // 0=undecided, 1=horizontal, 2=vertical
     @State var showViewersSheet = false
+    @State var showCommentsOverlay = false
+    @State var storyComments: [FeedComment] = []
+    @State var isLoadingComments = false
+    @State var storyCommentCount: Int = 0
 
     private var screenH: CGFloat { UIScreen.main.bounds.height }
 
@@ -369,6 +373,13 @@ struct StoryViewerView: View {
                     .accessibilityHidden(true)
             }
 
+            // === Layer 10: Live comments overlay (Instagram-style) ===
+            if showCommentsOverlay {
+                storyCommentsOverlay
+                    .transition(.opacity)
+                    .allowsHitTesting(true)
+            }
+
             // Bottom area: composer + emoji panel / keyboard space
             VStack(spacing: 0) {
                 Spacer()
@@ -552,7 +563,26 @@ struct StoryViewerView: View {
                 }
             )
 
-            // 5. Translate — brand cyan when active
+            // 5. Comments toggle
+            if storyCommentCount > 0 {
+                storyActionButton(
+                    icon: "bubble.left.fill",
+                    label: "\(storyCommentCount)",
+                    isActive: showCommentsOverlay,
+                    activeColor: MeeshyColors.indigo400,
+                    activeGlow: showCommentsOverlay ? MeeshyColors.indigo400 : nil
+                ) {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showCommentsOverlay.toggle()
+                    }
+                    if showCommentsOverlay && storyComments.isEmpty {
+                        loadStoryComments()
+                    }
+                }
+            }
+
+            // 6. Translate — brand cyan when active
             if !isOwnStory {
                 storyActionButton(
                     icon: "textformat.abc",

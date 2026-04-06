@@ -267,6 +267,6 @@ final class CallAudioEffectsServiceTests: XCTestCase {
         let sut = makeSUT()
         try sut.setEffect(.demonVoice(DemonVoiceParams(pitch: -10, distortion: 50, reverb: 50)))
         let timePitch = sut.activeNodeChain.first(where: { $0 is AVAudioUnitTimePitch }) as? AVAudioUnitTimePitch
-        XCTAssertEqual(timePitch?.pitch, -10 * 100, accuracy: 0.01)
+        XCTAssertEqual(Float(timePitch?.pitch ?? 0), Float(-10 * 100), accuracy: 0.01)
     }
 }

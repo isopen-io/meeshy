@@ -72,6 +72,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let fileSize: Int?
     public let fileUrl: String?
     public let thumbnailUrl: String?
+    public let thumbHash: String?
     public let width: Int?
     public let height: Int?
     public let duration: Int?
@@ -318,7 +319,7 @@ extension APIMessage {
                 id: apiAtt.id, fileName: apiAtt.fileName ?? "", originalName: apiAtt.originalName ?? "",
                 mimeType: apiAtt.mimeType ?? "application/octet-stream", fileSize: apiAtt.fileSize ?? 0,
                 fileUrl: apiAtt.fileUrl ?? "", width: apiAtt.width, height: apiAtt.height,
-                thumbnailUrl: apiAtt.thumbnailUrl, duration: apiAtt.duration, uploadedBy: senderId,
+                thumbnailUrl: apiAtt.thumbnailUrl, thumbHash: apiAtt.thumbHash, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
                 thumbnailColor: thumbnailColor
             )

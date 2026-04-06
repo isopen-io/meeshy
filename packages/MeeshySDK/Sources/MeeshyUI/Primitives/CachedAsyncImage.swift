@@ -202,20 +202,26 @@ public struct CachedBannerImage: View {
 }
 
 public struct ProgressiveCachedImage<Placeholder: View>: View {
+    public let thumbHash: String?
     public let thumbnailUrl: String?
     public let fullUrl: String?
     public let placeholder: () -> Placeholder
 
+    @State private var thumbHashImage: UIImage?
     @State private var thumbnailImage: UIImage?
     @State private var fullImage: UIImage?
     public init(
+        thumbHash: String? = nil,
         thumbnailUrl: String?,
         fullUrl: String?,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
+        self.thumbHash = thumbHash
         self.thumbnailUrl = thumbnailUrl
         self.fullUrl = fullUrl
         self.placeholder = placeholder
+
+        // Tier 2: check disk cache for full image (sync, instant)
         let cachedFull: UIImage?
         if let fullUrl, !fullUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
@@ -225,9 +231,15 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         }
         _fullImage = State(initialValue: cachedFull)
 
+        // Tier 1: check disk cache for thumbnail (only if full not cached)
         if cachedFull == nil, let thumbnailUrl, !thumbnailUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
             _thumbnailImage = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
+        }
+
+        // Tier 0: decode ThumbHash instantly (< 0.1ms, always available if provided)
+        if cachedFull == nil, let thumbHash, !thumbHash.isEmpty {
+            _thumbHashImage = State(initialValue: UIImage.fromThumbHash(thumbHash))
         }
     }
 
@@ -240,6 +252,11 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
             } else if let thumbnailImage {
                 Image(uiImage: thumbnailImage)
                     .resizable()
+                    .transition(.opacity)
+            } else if let thumbHashImage {
+                Image(uiImage: thumbHashImage)
+                    .resizable()
+                    .interpolation(.low)
                     .transition(.opacity)
             } else {
                 placeholder()

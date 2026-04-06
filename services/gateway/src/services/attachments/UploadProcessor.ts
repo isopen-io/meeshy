@@ -330,6 +330,13 @@ export class UploadProcessor {
     }
     metadata.thumbnailGenerated = !!thumbnailPath;
 
+    // ThumbHash: backend fallback — skip if client already computed it
+    let thumbHash: string | null = providedMetadata?.thumbHash ?? null;
+    if (!thumbHash) {
+      const { ThumbHashGenerator } = await import('./ThumbHashGenerator.js');
+      thumbHash = await ThumbHashGenerator.generate(filePath, file.mimeType);
+    }
+
     const fileUrl = this.getAttachmentPath(filePath);
     const thumbnailUrl = thumbnailPath ? this.getAttachmentPath(thumbnailPath) : undefined;
     const finalMessageId = messageId || null;
@@ -349,6 +356,7 @@ export class UploadProcessor {
         fileUrl: fileUrl,
         thumbnailPath: thumbnailPath || undefined,
         thumbnailUrl: thumbnailUrl,
+        thumbHash: thumbHash || undefined,
         width: metadata.width,
         height: metadata.height,
         duration: metadata.duration,

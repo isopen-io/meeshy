@@ -434,6 +434,8 @@ public struct StoryEffects: Codable, Sendable {
     public var mediaObjects: [StoryMediaObject]?
     public var audioPlayerObjects: [StoryAudioPlayerObject]?
     public var backgroundAudioVariants: [StoryAudioVariant]?
+    /// ThumbHash of the composite canvas screenshot (computed client-side at publish time)
+    public var thumbHash: String?
 
     // Transform appliqué à l'image/vidéo de fond (scale, offset, rotation)
     public var backgroundTransform: StoryBackgroundTransform?

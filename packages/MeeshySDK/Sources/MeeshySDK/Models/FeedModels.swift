@@ -24,6 +24,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     public let type: FeedMediaType
     public let url: String?
     public let thumbnailUrl: String?
+    public let thumbHash: String?
     public let thumbnailColor: String
     public var width: Int?
     public var height: Int?
@@ -37,13 +38,13 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     public var transcription: MessageTranscription?
 
     public init(id: String = UUID().uuidString, type: FeedMediaType, url: String? = nil,
-                thumbnailUrl: String? = nil,
+                thumbnailUrl: String? = nil, thumbHash: String? = nil,
                 thumbnailColor: String = "4ECDC4",
                 width: Int? = nil, height: Int? = nil, duration: Int? = nil,
                 fileName: String? = nil, fileSize: String? = nil, pageCount: Int? = nil,
                 locationName: String? = nil, latitude: Double? = nil, longitude: Double? = nil,
                 transcription: MessageTranscription? = nil) {
-        self.id = id; self.type = type; self.url = url; self.thumbnailUrl = thumbnailUrl; self.thumbnailColor = thumbnailColor
+        self.id = id; self.type = type; self.url = url; self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash; self.thumbnailColor = thumbnailColor
         self.width = width; self.height = height; self.duration = duration
         self.fileName = fileName; self.fileSize = fileSize; self.pageCount = pageCount
         self.locationName = locationName; self.latitude = latitude; self.longitude = longitude
@@ -94,6 +95,7 @@ extension FeedMedia {
             height: height,
             thumbnailPath: nil,
             thumbnailUrl: thumbnailUrl,
+            thumbHash: thumbHash,
             duration: duration.map { $0 * 1000 },
             latitude: latitude,
             longitude: longitude,

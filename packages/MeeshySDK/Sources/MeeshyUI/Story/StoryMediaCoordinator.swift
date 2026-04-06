@@ -28,7 +28,7 @@ public final class StoryMediaCoordinator: StoppablePlayer {
 
         // Ensure audio plays through speakers (not just ringer) regardless of silent switch
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {}
     }

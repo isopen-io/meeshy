@@ -110,6 +110,7 @@ extension FeedPostCard {
             let thumbUrl = media.thumbnailUrl ?? media.url ?? ""
             if !thumbUrl.isEmpty && (media.type == .image || media.type == .video) {
                 ProgressiveCachedImage(
+                    thumbHash: media.thumbHash,
                     thumbnailUrl: media.thumbnailUrl,
                     fullUrl: media.url
                 ) {
@@ -208,6 +209,7 @@ extension FeedPostCard {
             return CGFloat(w) / CGFloat(h)
         }()
         return ProgressiveCachedImage(
+            thumbHash: media.thumbHash,
             thumbnailUrl: media.thumbnailUrl,
             fullUrl: media.url
         ) {

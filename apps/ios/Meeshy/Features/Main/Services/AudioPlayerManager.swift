@@ -26,7 +26,7 @@ class AudioPlayerManager: ObservableObject, StoppablePlayer {
         PlaybackCoordinator.shared.willStartPlaying(external: self)
 
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {}
 
@@ -49,7 +49,7 @@ class AudioPlayerManager: ObservableObject, StoppablePlayer {
         PlaybackCoordinator.shared.willStartPlaying(external: self)
 
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {}
 
@@ -81,6 +81,7 @@ class AudioPlayerManager: ObservableObject, StoppablePlayer {
         progress = 0
         loadTask?.cancel()
         loadTask = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     func togglePlayPause() {
