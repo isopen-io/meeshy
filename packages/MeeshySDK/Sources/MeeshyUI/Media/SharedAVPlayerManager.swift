@@ -40,7 +40,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         let resolved = url.absoluteString
 
         // Audio session for playback (unified .default mode across all components)
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
 
         activeURL = urlString
@@ -115,6 +115,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         stopPip()
         cleanup()
         activeURL = ""
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     // MARK: - Picture-in-Picture

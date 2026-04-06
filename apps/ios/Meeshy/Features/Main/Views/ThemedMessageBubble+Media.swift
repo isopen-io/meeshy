@@ -173,7 +173,11 @@ extension ThemedMessageBubble {
         let urlStr = fullUrl ?? thumbUrl ?? ""
         Group {
             if !urlStr.isEmpty {
-                CachedAsyncImage(url: urlStr) {
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: thumbUrl,
+                    fullUrl: fullUrl
+                ) {
                     Color(hex: attachment.thumbnailColor).shimmer()
                 }
                 .aspectRatio(contentMode: .fill)

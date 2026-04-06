@@ -126,7 +126,7 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
 
         wait(for: [expectation], timeout: 1.0)
         XCTAssertNotNil(receivedBuffer)
-        XCTAssertEqual(receivedBuffer?.floatChannelData![0][0], originalFirstSample, accuracy: 0.001)
+        XCTAssertEqual(receivedBuffer?.floatChannelData![0][0] ?? 0, originalFirstSample, accuracy: 0.001)
     }
 
     // MARK: - Effects Service Integration

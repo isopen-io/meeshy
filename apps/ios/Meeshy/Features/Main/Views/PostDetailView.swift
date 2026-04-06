@@ -577,6 +577,7 @@ struct PostDetailView: View {
                 return CGFloat(w) / CGFloat(h)
             }()
             ProgressiveCachedImage(
+                thumbHash: media.thumbHash,
                 thumbnailUrl: media.thumbnailUrl,
                 fullUrl: media.url
             ) {
@@ -729,6 +730,7 @@ struct PostDetailView: View {
     private func detailGridCell(_ media: FeedMedia) -> some View {
         return ZStack {
             ProgressiveCachedImage(
+                thumbHash: media.thumbHash,
                 thumbnailUrl: media.thumbnailUrl,
                 fullUrl: media.url
             ) {

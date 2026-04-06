@@ -286,6 +286,7 @@ export const messageAttachmentSchema = {
     height: { type: 'number', nullable: true, description: 'Image height in pixels' },
     thumbnailPath: { type: 'string', nullable: true, description: 'Thumbnail file path' },
     thumbnailUrl: { type: 'string', nullable: true, description: 'Thumbnail URL' },
+    thumbHash: { type: 'string', nullable: true, description: 'ThumbHash base64 for instant placeholder (~33 chars)' },
 
     // Audio/Video metadata
     duration: { type: 'number', nullable: true, description: 'Duration in milliseconds' },

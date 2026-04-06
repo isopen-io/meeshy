@@ -107,7 +107,11 @@ class StoryViewModel: ObservableObject {
         Task(priority: .utility) {
             let imageCache = await CacheCoordinator.shared.images
 
-            for (groupIndex, group) in groups.enumerated() {
+            // Sliding window: only prefetch first 5 groups (not all 50)
+            // StoryViewerView.prefetchCurrentGroup() handles deeper prefetch on open
+            let groupsToPreload = groups.prefix(5)
+            for (groupIndex, group) in groupsToPreload.enumerated() {
+                guard !Task.isCancelled else { return }
                 for story in group.stories {
                     // Collect all media URLs from the story
                     var urls: [String] = story.media.compactMap(\.url)

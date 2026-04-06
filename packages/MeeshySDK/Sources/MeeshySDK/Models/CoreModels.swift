@@ -568,6 +568,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var height: Int?
     public var thumbnailPath: String?
     public var thumbnailUrl: String?
+    public var thumbHash: String?
     public var duration: Int?
     public var bitrate: Int?
     public var sampleRate: Int?
@@ -605,7 +606,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 title: String? = nil, alt: String? = nil, caption: String? = nil,
                 forwardedFromAttachmentId: String? = nil, isForwarded: Bool = false,
                 isViewOnce: Bool = false, maxViewOnceCount: Int? = nil, viewOnceCount: Int = 0, isBlurred: Bool = false,
-                width: Int? = nil, height: Int? = nil, thumbnailPath: String? = nil, thumbnailUrl: String? = nil,
+                width: Int? = nil, height: Int? = nil, thumbnailPath: String? = nil, thumbnailUrl: String? = nil, thumbHash: String? = nil,
                 duration: Int? = nil, bitrate: Int? = nil, sampleRate: Int? = nil, codec: String? = nil, channels: Int? = nil,
                 fps: Float? = nil, videoCodec: String? = nil, pageCount: Int? = nil, lineCount: Int? = nil,
                 uploadedBy: String = "", isAnonymous: Bool = false, createdAt: Date = Date(),
@@ -617,7 +618,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.forwardedFromAttachmentId = forwardedFromAttachmentId; self.isForwarded = isForwarded
         self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
         self.viewOnceCount = viewOnceCount; self.isBlurred = isBlurred
-        self.width = width; self.height = height; self.thumbnailPath = thumbnailPath; self.thumbnailUrl = thumbnailUrl
+        self.width = width; self.height = height; self.thumbnailPath = thumbnailPath; self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash
         self.duration = duration; self.bitrate = bitrate; self.sampleRate = sampleRate; self.codec = codec; self.channels = channels
         self.fps = fps; self.videoCodec = videoCodec; self.pageCount = pageCount; self.lineCount = lineCount
         self.uploadedBy = uploadedBy; self.isAnonymous = isAnonymous; self.createdAt = createdAt

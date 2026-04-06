@@ -689,6 +689,7 @@ model MessageAttachment {
   height        Int?
   thumbnailPath String? // Miniature générée pour images
   thumbnailUrl  String?
+  thumbHash     String?   // ThumbHash base64 (~33 chars) — placeholder image instantane
 
   // Métadonnées spécifiques audio/vidéo
   duration   Int? // Durée en MILLISECONDES (précision complète)

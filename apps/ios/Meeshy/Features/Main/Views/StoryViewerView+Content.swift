@@ -544,6 +544,8 @@ extension StoryViewerView {
         timerCancellable?.cancel()
         progress = 0
         hasFiredFadeOut = false
+        showCommentsOverlay = false
+        loadStoryCommentCount()
         updateStoryDuration()
         let duration = computedStoryDuration
         let interval: Double = 0.03
@@ -696,7 +698,21 @@ extension StoryViewerView {
     func sendComment(text: String) {
         guard !text.isEmpty, let story = currentStory else { return }
 
-        // Fire & forget comment
+        // Optimistic local insert
+        let currentUser = AuthManager.shared.currentUser
+        let optimisticComment = FeedComment(
+            id: "temp_\(UUID().uuidString)",
+            author: currentUser?.displayName ?? currentUser?.username ?? "Moi",
+            authorId: currentUser?.id ?? "",
+            authorUsername: currentUser?.username,
+            authorAvatarURL: currentUser?.avatar,
+            content: text,
+            originalLanguage: currentUser?.systemLanguage
+        )
+        storyComments.append(optimisticComment)
+        storyCommentCount += 1
+
+        // Send to API
         Task {
             let body: [String: String] = ["content": text]
             let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
@@ -705,7 +721,7 @@ extension StoryViewerView {
             )
         }
 
-        // Just dismiss composer and give feedback
+        // Dismiss composer and give feedback
         DispatchQueue.main.async {
             HapticFeedback.success()
             self.dismissComposer()
@@ -1035,6 +1051,213 @@ struct StoryViewersSheet: View {
                 }
                 self.isLoading = false
             }
+        }
+    }
+}
+
+// MARK: - Story Comments Overlay (live-chat style)
+
+extension StoryViewerView {
+
+    /// Instagram-style live comment overlay: scrolls up, fades out at mid-screen.
+    var storyCommentsOverlay: some View {
+        let userLang = AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr"
+
+        return VStack(spacing: 0) {
+            Spacer()
+
+            ZStack(alignment: .bottom) {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            ForEach(storyComments) { comment in
+                                storyCommentRow(comment: comment, userLang: userLang)
+                                    .id(comment.id)
+                            }
+
+                            if isLoadingComments {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                        .tint(.white.opacity(0.6))
+                                    Spacer()
+                                }
+                                .padding(.vertical, 8)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 20)
+                        .padding(.bottom, 8)
+                    }
+                    .frame(maxHeight: UIScreen.main.bounds.height * 0.4)
+                    .onChange(of: storyComments.count) { _, _ in
+                        if let last = storyComments.last {
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                proxy.scrollTo(last.id, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+                .mask(
+                    VStack(spacing: 0) {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black, location: 1)
+                            ],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                        .frame(height: 60)
+
+                        Color.black
+                    }
+                )
+            }
+        }
+        .padding(.bottom, 70)
+    }
+
+    func storyCommentRow(comment: FeedComment, userLang: String) -> some View {
+        let displayContent = comment.translatedContent ?? comment.content
+        let hasTranslation = comment.translatedContent != nil
+        let originalLang = comment.originalLanguage
+
+        return HStack(alignment: .top, spacing: 8) {
+            // Avatar
+            if let avatarURL = comment.authorAvatarURL,
+               let url = MeeshyConfig.resolveMediaURL(avatarURL) {
+                CachedAsyncImage(url: url.absoluteString) {
+                    commentAvatarPlaceholder(color: comment.authorColor)
+                }
+                .frame(width: 28, height: 28)
+                .clipShape(Circle())
+            } else {
+                commentAvatarPlaceholder(color: comment.authorColor)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                // Header: displayName · timestamp · flags · translate
+                HStack(spacing: 6) {
+                    Text(comment.author)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text("·")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.4))
+
+                    Text(comment.timestamp, style: .relative)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.4))
+
+                    if let lang = originalLang, lang != userLang {
+                        Text(commentFlagEmoji(for: lang))
+                            .font(.system(size: 10))
+                    }
+
+                    if hasTranslation {
+                        Image(systemName: "translate")
+                            .font(.system(size: 9))
+                            .foregroundColor(MeeshyColors.indigo400.opacity(0.7))
+                    }
+                }
+
+                // Comment text
+                Text(displayContent)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(4)
+                    .multilineTextAlignment(.leading)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.black.opacity(0.35))
+                .background(.ultraThinMaterial.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        )
+    }
+
+    func commentAvatarPlaceholder(color: String) -> some View {
+        Circle()
+            .fill(Color(hex: color))
+            .frame(width: 28, height: 28)
+    }
+
+    func commentFlagEmoji(for languageCode: String) -> String {
+        switch languageCode.prefix(2) {
+        case "fr": return "🇫🇷"
+        case "en": return "🇬🇧"
+        case "es": return "🇪🇸"
+        case "de": return "🇩🇪"
+        case "it": return "🇮🇹"
+        case "pt": return "🇵🇹"
+        case "ar": return "🇸🇦"
+        case "zh": return "🇨🇳"
+        case "ja": return "🇯🇵"
+        case "ko": return "🇰🇷"
+        case "ru": return "🇷🇺"
+        case "hi": return "🇮🇳"
+        case "tr": return "🇹🇷"
+        case "nl": return "🇳🇱"
+        default: return "🌐"
+        }
+    }
+
+    // MARK: - Load Comments
+
+    func loadStoryComments() {
+        guard let story = currentStory, !isLoadingComments else { return }
+        isLoadingComments = true
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+
+        Task {
+            do {
+                let response = try await PostService.shared.getComments(postId: story.id, limit: 50)
+                if response.success {
+                    let comments = response.data.map { c -> FeedComment in
+                        let translated: String? = {
+                            guard let dict = c.translations else { return nil }
+                            for lang in langs {
+                                if let entry = dict[lang] { return entry.text }
+                            }
+                            return nil
+                        }()
+                        return FeedComment(
+                            id: c.id, author: c.author.name, authorId: c.author.id,
+                            authorAvatarURL: c.author.avatar,
+                            content: c.content, timestamp: c.createdAt,
+                            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                            parentId: c.parentId,
+                            originalLanguage: c.originalLanguage, translatedContent: translated
+                        )
+                    }
+                    storyComments = comments
+                    storyCommentCount = comments.count
+                }
+            } catch {}
+            isLoadingComments = false
+        }
+    }
+
+    func loadStoryCommentCount() {
+        guard let story = currentStory else {
+            storyCommentCount = 0
+            storyComments = []
+            return
+        }
+
+        Task {
+            do {
+                let response = try await PostService.shared.getComments(postId: story.id, limit: 1)
+                if response.success {
+                    storyCommentCount = response.data.count
+                }
+            } catch {}
         }
     }
 }

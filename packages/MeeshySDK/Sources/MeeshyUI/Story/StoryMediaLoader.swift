@@ -115,7 +115,9 @@ public final class StoryMediaLoader {
     public func preloadVideoPlayer(url: URL) async -> AVPlayer {
         let item = AVPlayerItem(url: url)
         item.preferredForwardBufferDuration = 2.0
+        item.preferredPeakBitRate = 1_500_000 // 1.5 Mbps — fast start, good quality
         let player = AVQueuePlayer(playerItem: item)
+        player.automaticallyWaitsToMinimizeStalling = false
 
         // Wait for readyToPlay before prerolling — preroll crashes if called too early
         // Uses a timeout to avoid hanging the prefetch pipeline on bad URLs
