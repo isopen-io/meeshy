@@ -123,17 +123,19 @@ public final class StoryMediaLoader {
         if item.status != .readyToPlay {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 var resumed = false
-                let observation = item.observe(\.status, options: [.new]) { item, _ in
+                var observation: NSKeyValueObservation?
+                observation = item.observe(\.status, options: [.new]) { item, _ in
                     guard item.status == .readyToPlay || item.status == .failed else { return }
                     DispatchQueue.main.async {
                         guard !resumed else { return }
                         resumed = true
+                        observation?.invalidate()
                         continuation.resume()
                     }
                 }
                 // Timeout after 5 seconds to avoid hanging on bad URLs
                 DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                    observation.invalidate()
+                    observation?.invalidate()
                     guard !resumed else { return }
                     resumed = true
                     continuation.resume()

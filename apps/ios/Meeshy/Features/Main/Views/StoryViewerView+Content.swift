@@ -834,8 +834,8 @@ extension StoryViewerView {
             let imageStore = await CacheCoordinator.shared.images
             for urlString in uniqueURLs {
                 let mediaType = story.media.first(where: { $0.url == urlString })?.type
-                if mediaType == .video {
-                    // Video: download data + preroll player
+                if mediaType == .video || mediaType == .audio {
+                    // Video/Audio: download data to disk cache + preroll player
                     _ = try? await imageStore.data(for: urlString)
                     if let url = URL(string: urlString) {
                         await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)

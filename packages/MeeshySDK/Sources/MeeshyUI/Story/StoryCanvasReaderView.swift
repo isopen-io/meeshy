@@ -81,7 +81,8 @@ public struct StoryCanvasReaderView: View {
             StoryMediaCoordinator.shared.deactivate()
             state.stopMuteObservers()
             state.stopAllMedia()
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            // AVAudioSession deactivation handled by StoryMediaCoordinator.deactivate()
+            // — not here, to avoid interrupting audio during story cross-transitions
         }
     }
 
@@ -467,6 +468,14 @@ private final class ReaderState: ObservableObject {
     /// Observer token for storyAudioFadeOut notification (Issue 6: must be removed on cleanup).
     private var fadeOutObserver: NSObjectProtocol?
 
+    // MARK: - Audio Ducking State
+    /// Number of foreground audio/video players currently producing sound.
+    /// When > 0, background audio is ducked to 30% of target volume.
+    private var activeForegroundSoundCount = 0
+    private var isDucked = false
+    private let duckRatio: Float = 0.3
+    private let duckFadeDuration: TimeInterval = 0.4
+
     init(story: StoryItem) {
         // Migrate legacy text -> textObjects si necessaire
         var objects = story.storyEffects?.textObjects ?? []
@@ -493,10 +502,12 @@ private final class ReaderState: ObservableObject {
         // Timer.scheduledTimer is not guaranteed to fire at exact intervals —
         // accumulating 0.05 causes 0.5-1.5s drift over a 30s story.
         playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            guard let self, let start = self.playbackStartDate else { return }
-            self.currentTime = Date().timeIntervalSince(start)
-            self.checkPendingVideoStarts()
-            self.checkPendingAudioStarts()
+            Task { @MainActor [weak self] in
+                guard let self, let start = self.playbackStartDate else { return }
+                self.currentTime = Date().timeIntervalSince(start)
+                self.checkPendingVideoStarts()
+                self.checkPendingAudioStarts()
+            }
         }
     }
 
@@ -716,10 +727,10 @@ private final class ReaderState: ObservableObject {
     func startMuteObservers() {
         muteObserver = NotificationCenter.default.addObserver(
             forName: .storyComposerMuteCanvas, object: nil, queue: .main
-        ) { [weak self] _ in self?.muteAllMedia() }
+        ) { [weak self] _ in Task { @MainActor in self?.muteAllMedia() } }
         unmuteObserver = NotificationCenter.default.addObserver(
             forName: .storyComposerUnmuteCanvas, object: nil, queue: .main
-        ) { [weak self] _ in self?.unmuteAllMedia() }
+        ) { [weak self] _ in Task { @MainActor in self?.unmuteAllMedia() } }
     }
 
     func stopMuteObservers() {
@@ -787,6 +798,8 @@ private final class ReaderState: ObservableObject {
         startedForegroundAudios = []
         pendingVideoStarts = [:]
         pendingAudioStarts = [:]
+        activeForegroundSoundCount = 0
+        isDucked = false
     }
 
     /// Fade-out progressif (2s) puis arret complet de tous les medias.
@@ -848,6 +861,27 @@ private final class ReaderState: ObservableObject {
         fadeTimers.append(timer)
     }
 
+    // MARK: Audio Ducking
+
+    /// Called when a foreground audio/video player starts producing sound.
+    /// Ducks background audio to 30% of target volume with a smooth fade.
+    private func foregroundSoundDidStart() {
+        activeForegroundSoundCount += 1
+        guard !isDucked, let bg = backgroundPlayer else { return }
+        isDucked = true
+        let duckedVolume = targetBackgroundVolume * duckRatio
+        fadeVolume(player: bg, from: bg.volume, to: duckedVolume, duration: duckFadeDuration)
+    }
+
+    /// Called when a foreground audio/video player stops producing sound.
+    /// Restores background audio to full target volume when all foreground sound stops.
+    private func foregroundSoundDidStop() {
+        activeForegroundSoundCount = max(0, activeForegroundSoundCount - 1)
+        guard activeForegroundSoundCount == 0, isDucked, let bg = backgroundPlayer else { return }
+        isDucked = false
+        fadeVolume(player: bg, from: bg.volume, to: targetBackgroundVolume, duration: duckFadeDuration)
+    }
+
     // MARK: Foreground video players (timing-aware start)
 
     func startForegroundVideos(story: StoryItem, preloadedVideoURLs: [String: URL] = [:]) {
@@ -905,14 +939,18 @@ private final class ReaderState: ObservableObject {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { [weak player] _ in
-            guard shouldLoop else { return }
-            player?.seek(to: .zero)
-            player?.play()
+        ) { [weak self, weak player] _ in
+            if shouldLoop {
+                player?.seek(to: .zero)
+                player?.play()
+            } else {
+                self?.foregroundSoundDidStop()
+            }
         }
         foregroundLoopObservers[media.id] = obs
 
         player.play()
+        foregroundSoundDidStart()
 
         let fadeInDuration = TimeInterval(media.fadeIn ?? 0)
         if fadeInDuration > 0 {
@@ -962,10 +1000,13 @@ private final class ReaderState: ObservableObject {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { [weak player] _ in
-            guard shouldLoop else { return }
-            player?.seek(to: .zero)
-            player?.play()
+        ) { [weak self, weak player] _ in
+            if shouldLoop {
+                player?.seek(to: .zero)
+                player?.play()
+            } else {
+                self?.foregroundSoundDidStop()
+            }
         }
         foregroundLoopObservers[media.id] = obs
 
@@ -973,14 +1014,17 @@ private final class ReaderState: ObservableObject {
         let mediaId = media.id
         if player.currentItem?.status == .readyToPlay {
             player.play()
+            foregroundSoundDidStart()
         } else {
             readyObservers[mediaId]?.invalidate()
             readyObservers[mediaId] = player.currentItem?.observe(\.status, options: [.new]) { [weak self, weak player] item, _ in
                 guard item.status == .readyToPlay || item.status == .failed else { return }
-                // KVO fires on background thread — dispatch to main for @MainActor safety
                 DispatchQueue.main.async {
                     self?.readyObservers.removeValue(forKey: mediaId)?.invalidate()
-                    if item.status == .readyToPlay { player?.play() }
+                    if item.status == .readyToPlay {
+                        player?.play()
+                        self?.foregroundSoundDidStart()
+                    }
                 }
             }
         }
@@ -1059,10 +1103,13 @@ private final class ReaderState: ObservableObject {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { [weak player] _ in
-            guard shouldLoop else { return }
-            player?.seek(to: .zero)
-            player?.play()
+        ) { [weak self, weak player] _ in
+            if shouldLoop {
+                player?.seek(to: .zero)
+                player?.play()
+            } else {
+                self?.foregroundSoundDidStop()
+            }
         }
         foregroundAudioObservers[audio.id] = obs
 
@@ -1070,14 +1117,17 @@ private final class ReaderState: ObservableObject {
         let audioId = audio.id
         if player.currentItem?.status == .readyToPlay {
             player.play()
+            foregroundSoundDidStart()
         } else {
             readyObservers[audioId]?.invalidate()
             readyObservers[audioId] = player.currentItem?.observe(\.status, options: [.new]) { [weak self, weak player] item, _ in
                 guard item.status == .readyToPlay || item.status == .failed else { return }
-                // KVO fires on background thread — dispatch to main for @MainActor safety
                 DispatchQueue.main.async {
                     self?.readyObservers.removeValue(forKey: audioId)?.invalidate()
-                    if item.status == .readyToPlay { player?.play() }
+                    if item.status == .readyToPlay {
+                        player?.play()
+                        self?.foregroundSoundDidStart()
+                    }
                 }
             }
         }

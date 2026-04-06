@@ -467,8 +467,7 @@ final class StoryComposerViewModel {
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            // Already on .main queue, no extra Task dispatch needed
-            self?.evictNonVisibleSlideMedia()
+            Task { @MainActor in self?.evictNonVisibleSlideMedia() }
         }
     }
 

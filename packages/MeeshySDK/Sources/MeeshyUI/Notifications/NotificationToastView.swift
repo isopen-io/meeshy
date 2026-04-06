@@ -31,7 +31,7 @@ public struct NotificationToastView: View {
 
                 // Content
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(event.title)
+                    Text(event.title ?? "Meeshy")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
