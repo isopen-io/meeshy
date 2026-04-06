@@ -15,8 +15,8 @@ public struct DraggableMediaView: View {
     /// Appelé quand l'utilisateur toggle play/pause — passe l'ID de l'élément média.
     public let onTogglePlay: ((String) -> Void)?
 
-    @State private var internalPlayer: AVPlayer?
-    @State private var loopObserver: AnyObject? = nil
+    @State private var internalPlayer: AVQueuePlayer?
+    @State private var playerLooper: AVPlayerLooper?
     @State private var isPlaying: Bool = false
 
     // Local state snapshots: read from binding once, then only update on gesture end.
@@ -78,22 +78,22 @@ public struct DraggableMediaView: View {
                         isPlaying = externalPlayer?.rate ?? 0 > 0
                     }
                 }
-                .onChange(of: geo.size) { newSize in
+                .onChange(of: geo.size) { _, newSize in
                     canvasSize = newSize
                 }
-                .onChange(of: videoURL) { newURL in
+                .onChange(of: videoURL) { _, newURL in
                     if externalPlayer == nil, let url = newURL {
                         teardownInternalPlayer()
                         setupInternalPlayer(url: url)
                     }
                 }
-                .onChange(of: mediaObject.id) { _ in
+                .onChange(of: mediaObject.id) { _, _ in
                     syncBaseFromBinding()
                 }
-                .onChange(of: mediaObject.x) { _ in syncBaseFromBinding() }
-                .onChange(of: mediaObject.y) { _ in syncBaseFromBinding() }
-                .onChange(of: mediaObject.scale) { _ in syncBaseFromBinding() }
-                .onChange(of: mediaObject.rotation) { _ in syncBaseFromBinding() }
+                .onChange(of: mediaObject.x) { _, _ in syncBaseFromBinding() }
+                .onChange(of: mediaObject.y) { _, _ in syncBaseFromBinding() }
+                .onChange(of: mediaObject.scale) { _, _ in syncBaseFromBinding() }
+                .onChange(of: mediaObject.rotation) { _, _ in syncBaseFromBinding() }
                 .onDisappear {
                     if externalPlayer == nil {
                         teardownInternalPlayer()
@@ -306,37 +306,36 @@ public struct DraggableMediaView: View {
     private func setupInternalPlayer(url: URL) {
         teardownInternalPlayer()
         // Try cached prerolled player first (zero-latency path)
-        let player = StoryMediaLoader.shared.cachedPlayer(for: url) ?? AVPlayer(url: url)
-        player.isMuted = false
-        player.currentItem?.preferredForwardBufferDuration = 2.0
-        internalPlayer = player
-
-        let observer = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: player.currentItem,
-            queue: .main
-        ) { _ in
-            player.seek(to: .zero)
-            player.play()
+        let cachedPlayer = StoryMediaLoader.shared.cachedPlayer(for: url)
+        let queuePlayer: AVQueuePlayer
+        if let cached = cachedPlayer as? AVQueuePlayer {
+            queuePlayer = cached
+        } else {
+            let item = AVPlayerItem(url: url)
+            item.preferredForwardBufferDuration = 2.0
+            queuePlayer = AVQueuePlayer(playerItem: item)
         }
-        loopObserver = observer as AnyObject
+        queuePlayer.isMuted = false
+        internalPlayer = queuePlayer
+
+        // Seamless looping via AVPlayerLooper (no gap, Apple recommended)
+        if let currentItem = queuePlayer.currentItem {
+            playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: currentItem)
+        }
+
         if isEditing {
-            // In composer: user must tap play explicitly
-            player.pause()
+            queuePlayer.pause()
             isPlaying = false
         } else {
-            // In reader/viewer: autoplay immediately
-            player.play()
+            queuePlayer.play()
             isPlaying = true
         }
     }
 
     private func teardownInternalPlayer() {
         internalPlayer?.pause()
-        if let observer = loopObserver {
-            NotificationCenter.default.removeObserver(observer)
-            loopObserver = nil
-        }
+        playerLooper?.disableLooping()
+        playerLooper = nil
         internalPlayer = nil
         isPlaying = false
     }

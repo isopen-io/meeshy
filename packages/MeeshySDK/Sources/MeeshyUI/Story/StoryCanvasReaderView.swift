@@ -442,7 +442,9 @@ private final class ReaderState: ObservableObject {
 
     private var backgroundPlayer: AVPlayer?
     private var backgroundVideoPlayer: AVPlayer?
+    private var backgroundVideoLooper: AVPlayerLooper?
     private var loopObserver: NSObjectProtocol?
+    private var foregroundLoopers: [String: AVPlayerLooper] = [:]
     private var foregroundLoopObservers: [String: NSObjectProtocol] = [:]
     private var foregroundStopTimers: [String: Timer] = [:]
     private var foregroundAudioPlayers: [String: AVPlayer] = [:]
@@ -768,6 +770,8 @@ private final class ReaderState: ObservableObject {
         backgroundPlayer = nil
         backgroundVideoPlayer?.pause()
         backgroundVideoPlayer = nil
+        backgroundVideoLooper?.disableLooping()
+        backgroundVideoLooper = nil
         if let observer = loopObserver {
             NotificationCenter.default.removeObserver(observer)
             loopObserver = nil
@@ -780,6 +784,8 @@ private final class ReaderState: ObservableObject {
         }
         foregroundVideoPlayers = [:]
         foregroundLoopObservers = [:]
+        for (_, looper) in foregroundLoopers { looper.disableLooping() }
+        foregroundLoopers = [:]
         for (_, obs) in readyObservers { obs.invalidate() }
         readyObservers = [:]
         for (_, timer) in foregroundStopTimers { timer.invalidate() }
@@ -935,15 +941,16 @@ private final class ReaderState: ObservableObject {
         foregroundVideoPlayers[media.id] = player
 
         let shouldLoop = media.loop ?? true
+        // Use AVPlayerLooper for seamless looping (Apple recommended, no gap)
+        if shouldLoop, let queuePlayer = player as? AVQueuePlayer, let item = queuePlayer.currentItem {
+            foregroundLoopers[media.id] = AVPlayerLooper(player: queuePlayer, templateItem: item)
+        }
         let obs = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { [weak self, weak player] _ in
-            if shouldLoop {
-                player?.seek(to: .zero)
-                player?.play()
-            } else {
+        ) { [weak self] _ in
+            if !shouldLoop {
                 self?.foregroundSoundDidStop()
             }
         }
@@ -986,9 +993,16 @@ private final class ReaderState: ObservableObject {
         startedForegroundVideos.insert(media.id)
 
         // Use cached prerolled player if available, otherwise create fresh
-        let player = StoryMediaLoader.shared.cachedPlayer(for: url) ?? AVPlayer(url: url)
+        let cached = StoryMediaLoader.shared.cachedPlayer(for: url)
+        let player: AVPlayer
+        if let cached {
+            player = cached
+        } else {
+            let item = AVPlayerItem(url: url)
+            item.preferredForwardBufferDuration = 2.0
+            player = AVQueuePlayer(playerItem: item)
+        }
         player.isMuted = false
-        player.currentItem?.preferredForwardBufferDuration = 2.0
         let targetVolume = media.volume
         let hasFadeIn = (media.fadeIn ?? 0) > 0
 
@@ -996,17 +1010,16 @@ private final class ReaderState: ObservableObject {
         foregroundVideoPlayers[media.id] = player
 
         let shouldLoop = media.loop ?? true
+        // Use AVPlayerLooper for seamless looping (Apple recommended, no gap)
+        if shouldLoop, let queuePlayer = player as? AVQueuePlayer, let item = queuePlayer.currentItem {
+            foregroundLoopers[media.id] = AVPlayerLooper(player: queuePlayer, templateItem: item)
+        }
         let obs = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { [weak self, weak player] _ in
-            if shouldLoop {
-                player?.seek(to: .zero)
-                player?.play()
-            } else {
-                self?.foregroundSoundDidStop()
-            }
+        ) { [weak self] _ in
+            if !shouldLoop { self?.foregroundSoundDidStop() }
         }
         foregroundLoopObservers[media.id] = obs
 
@@ -1090,8 +1103,15 @@ private final class ReaderState: ObservableObject {
         startedForegroundAudios.insert(audio.id)
 
         // Use cached prerolled player if available, otherwise create fresh
-        let player = StoryMediaLoader.shared.cachedPlayer(for: url) ?? AVPlayer(url: url)
-        player.currentItem?.preferredForwardBufferDuration = 2.0
+        let cached = StoryMediaLoader.shared.cachedPlayer(for: url)
+        let player: AVPlayer
+        if let cached {
+            player = cached
+        } else {
+            let item = AVPlayerItem(url: url)
+            item.preferredForwardBufferDuration = 2.0
+            player = AVQueuePlayer(playerItem: item)
+        }
         let targetVolume = audio.volume
         let hasFadeIn = (audio.fadeIn ?? 0) > 0
 
@@ -1099,17 +1119,16 @@ private final class ReaderState: ObservableObject {
         foregroundAudioPlayers[audio.id] = player
 
         let shouldLoop = audio.loop ?? false
+        // Use AVPlayerLooper for seamless looping (Apple recommended)
+        if shouldLoop, let queuePlayer = player as? AVQueuePlayer, let item = queuePlayer.currentItem {
+            foregroundLoopers[audio.id] = AVPlayerLooper(player: queuePlayer, templateItem: item)
+        }
         let obs = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { [weak self, weak player] _ in
-            if shouldLoop {
-                player?.seek(to: .zero)
-                player?.play()
-            } else {
-                self?.foregroundSoundDidStop()
-            }
+        ) { [weak self] _ in
+            if !shouldLoop { self?.foregroundSoundDidStop() }
         }
         foregroundAudioObservers[audio.id] = obs
 
