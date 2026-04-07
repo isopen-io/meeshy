@@ -565,7 +565,7 @@ function generateLurkerReactions(
     );
     if (candidates.length === 0) continue;
 
-    const reactionCount = 2 + Math.floor(Math.random() * 3); // 2-4
+    const reactionCount = 1 + Math.floor(Math.random() * 2); // 1-2
     for (let i = 0; i < reactionCount && i < candidates.length && totalReactions < maxReactions; i++) {
       const targetMsg = candidates[candidates.length - 1 - i];
       const emoji = userEmojis[Math.floor(Math.random() * userEmojis.length)];

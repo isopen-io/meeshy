@@ -60,17 +60,20 @@ function buildGeneratorPrompt(
   // === MODE CHAT (default) vs MODE ELABORE (rare — new topic only) ===
   const modeGuide = isNewTopic
     ? `MODE ELABORE — Tu OUVRES un nouveau sujet ou c'est ta PREMIERE intervention sur ce theme.
-Tu peux developper (3-6 phrases). Donne ton avis, une experience, une observation concrete.
-Meme en mode elabore, reste CONVERSATIONNEL. Pas de dissertation. Pas de structure formelle.`
+Tu peux developper (2-4 phrases). Donne ton avis, une experience, une observation concrete.
+Meme en mode elabore, reste COURT et CONVERSATIONNEL. Pas de dissertation. Pas de structure formelle.
+Vise 15-40 mots. Ne depasse JAMAIS 60 mots.`
     : `MODE CHAT — Tu REAGIS dans un fil existant. C'est du CHAT, pas un article.
-MAXIMUM 1-3 phrases. Court, direct, percutant.
+MAXIMUM 1-2 phrases COURTES. Le plus court possible. Direct, percutant.
+La PLUPART de tes messages font 5-15 mots. Sois BREF comme sur WhatsApp.
 Tu PEUX citer le prenom ou @pseudo de la personne a qui tu reponds (mais pas obligatoire).
-Exemples de TON ATTENDU:
-- "Franchement @Paul t'as raison, sans electricite stable rien ne bouge"
-- "En vrai le vrai souci c'est la maintenance, on construit mais on entretient pas"
-- "Moi je pense qu'il faut deja regler les routes avant de parler d'industrie"
-- "Pas d'accord, le probleme c'est pas l'argent c'est la gestion"
-- "C'est exactement ce que je disais! @Marie tu vois?"`;
+Exemples de TON ATTENDU (note: TRES COURTS):
+- "Franchement t'as raison"
+- "Le vrai souci c'est la maintenance"
+- "Pas d'accord, le probleme c'est la gestion"
+- "C'est exactement ce que je disais!"
+- "Ah ouais? J'avais pas vu ca comme ca"
+- "Mdr tellement vrai"`;
 
   const shouldCite = Math.random() < 0.4;
   const replyContext = replyToSenderName && shouldCite
@@ -148,12 +151,13 @@ async function generateMessage(
   // Determine if this is a new topic introduction or a reply in existing thread
   const isNewTopic = !directive.replyToMessageId && !directive.mentionUsernames.length;
 
-  // MODE CHAT: cap maxWords aggressively (1-3 short sentences = ~50 words max)
-  // MODE ELABORE (new topic only): allow moderate length (~120 words max)
+  // MODE CHAT: cap maxWords aggressively (1-2 short sentences = ~30 words max)
+  // MODE ELABORE (new topic only): allow moderate length (~60 words max)
+  // Favor SHORT messages — most chat messages are 5-20 words
   const baseMinWords = directive.minWords ?? state.minWordsPerMessage ?? 3;
-  const baseMaxWords = directive.maxWords ?? state.maxWordsPerMessage ?? 400;
-  const minWords = isNewTopic ? Math.max(baseMinWords, 15) : baseMinWords;
-  const maxWords = isNewTopic ? Math.min(baseMaxWords, 120) : Math.min(baseMaxWords, 50);
+  const baseMaxWords = directive.maxWords ?? state.maxWordsPerMessage ?? 80;
+  const minWords = isNewTopic ? Math.max(baseMinWords, 10) : baseMinWords;
+  const maxWords = isNewTopic ? Math.min(baseMaxWords, 60) : Math.min(baseMaxWords, 30);
 
   const temperature = state.generationTemperature ?? 0.85;
   const maxTokens = Math.max(64, Math.round(maxWords * 1.5));

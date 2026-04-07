@@ -75,7 +75,7 @@ export class ReactionService {
       throw new Error('User is not a participant of this conversation');
     }
 
-    const MAX_REACTIONS_PER_USER = 3;
+    const MAX_REACTIONS_PER_USER = 1;
 
     const userExistingReactions = await this.prisma.reaction.findMany({
       where: {
