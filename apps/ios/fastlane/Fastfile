@@ -54,7 +54,8 @@ platform :ios do
       type: "appstore",
       app_identifier: "me.meeshy.app",
       api_key: api_key,
-      readonly: is_ci
+      readonly: is_ci,
+      force_legacy_encryption: true
     )
   end
 
