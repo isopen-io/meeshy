@@ -71,6 +71,14 @@ Build + submit to App Store
 
 Bump version (patch/minor/major)
 
+### ios force_sync
+
+```sh
+[bundle exec] fastlane ios force_sync
+```
+
+Force regenerate all provisioning profiles
+
 ### ios clean
 
 ```sh
