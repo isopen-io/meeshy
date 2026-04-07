@@ -280,7 +280,7 @@ final class StoryComposerViewModel {
     @discardableResult
     func addText() -> StoryTextObject? {
         guard canAddText else { return nil }
-        let center = viewportCenter()
+        let center = CGPoint(x: 0.5, y: 0.5)
         let obj = StoryTextObject(
             content: "",
             x: center.x,
@@ -306,7 +306,7 @@ final class StoryComposerViewModel {
     @discardableResult
     func addMediaObject(type: String, placement: String = "foreground") -> StoryMediaObject? {
         guard canAddMedia else { return nil }
-        let center = viewportCenter()
+        let center = CGPoint(x: 0.5, y: 0.5)
         let obj = StoryMediaObject(
             postMediaId: "",
             mediaType: type,
@@ -330,7 +330,7 @@ final class StoryComposerViewModel {
     @discardableResult
     func addAudioObject(placement: String = "foreground") -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
-        let center = viewportCenter()
+        let center = CGPoint(x: 0.5, y: 0.5)
         let obj = StoryAudioPlayerObject(
             postMediaId: "",
             placement: placement,
@@ -429,7 +429,7 @@ final class StoryComposerViewModel {
 
         // Reset position to center when moving to foreground
         if medias[idx].placement == "foreground" {
-            let center = viewportCenter()
+            let center = CGPoint(x: 0.5, y: 0.5)
             medias[idx].x = center.x
             medias[idx].y = center.y
             medias[idx].scale = 1.0

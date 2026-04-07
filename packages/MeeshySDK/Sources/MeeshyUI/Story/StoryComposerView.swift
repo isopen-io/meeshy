@@ -1250,24 +1250,38 @@ public struct StoryComposerView: View {
 
     private func addForegroundMedia(from item: PhotosPickerItem?, type: String) {
         guard let item else { return }
+        isLoadingMedia = true
+        mediaLoadProgress = 0
+        mediaLoadLabel = type == "video"
+            ? String(localized: "story.composer.loadingVideo", defaultValue: "Chargement de la video...", bundle: .module)
+            : String(localized: "story.composer.loadingImage", defaultValue: "Chargement de l'image...", bundle: .module)
         Task {
+            defer {
+                isLoadingMedia = false
+                mediaLoadProgress = 0
+                mediaLoadLabel = ""
+            }
             let objectId = UUID().uuidString
             if type == "video" {
                 guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                mediaLoadProgress = 0.3
                 let ext = item.supportedContentTypes
                     .first { $0.conforms(to: .audiovisualContent) }?
                     .preferredFilenameExtension ?? "mp4"
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(objectId + "." + ext)
                 do {
                     try data.write(to: tempURL)
+                    mediaLoadProgress = 0.5
                     // Async thumbnail extraction via StoryMediaLoader (cached, off main thread)
                     let thumbnail = await StoryMediaLoader.shared.videoThumbnail(url: tempURL, maxDimension: 400)
+                    mediaLoadProgress = 0.7
                     let asset = AVURLAsset(url: tempURL)
                     var mediaDuration: Float?
                     if let cmDur = try? await asset.load(.duration) {
                         let secs = CMTimeGetSeconds(cmDur)
                         if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
                     }
+                    mediaLoadProgress = 1.0
                     await MainActor.run {
                         viewModel.loadedVideoURLs[objectId] = tempURL
                         if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
@@ -1288,8 +1302,10 @@ public struct StoryComposerView: View {
                 }
             } else {
                 // ImageIO downsample for foreground images (max 1080px)
+                mediaLoadProgress = 0.3
                 guard let data = try? await item.loadTransferable(type: Data.self),
                       let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else { return }
+                mediaLoadProgress = 1.0
                 await MainActor.run {
                     if let obj = viewModel.addMediaObject(type: "image") {
                         viewModel.loadedImages[obj.id] = image

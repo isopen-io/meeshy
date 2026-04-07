@@ -21,6 +21,7 @@ struct SlideMiniPreview: View {
                 textLayer(in: geo.size)
                 stickerLayer(in: geo.size)
                 indexBadge
+                bgColorDot(in: geo.size)
             }
         }
         .clipped()
@@ -154,6 +155,27 @@ struct SlideMiniPreview: View {
                     .background(Color.black.opacity(0.55))
                     .clipShape(RoundedRectangle(cornerRadius: 2))
                     .padding(2)
+            }
+        }
+    }
+
+    // MARK: - Background Color Dot
+
+    @ViewBuilder
+    private func bgColorDot(in size: CGSize) -> some View {
+        let hasBgImage = bgImage != nil
+            || effects.mediaObjects?.contains(where: { $0.placement == "background" && loadedImages[$0.id] != nil }) == true
+        if hasBgImage, let bg = effects.background {
+            VStack {
+                Spacer()
+                HStack {
+                    Circle()
+                        .fill(Color(hex: bg))
+                        .frame(width: 8, height: 8)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 0.5))
+                        .padding(2)
+                    Spacer()
+                }
             }
         }
     }
