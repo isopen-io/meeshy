@@ -38,11 +38,6 @@ struct ContextualToolbar: View {
             segmentButton(.fond, label: "FOND")
             segmentButton(.front, label: "FRONT")
         }
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.ultraThinMaterial)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     private func segmentButton(_ group: StoryToolGroup, label: String) -> some View {
@@ -58,25 +53,21 @@ struct ContextualToolbar: View {
         } label: {
             HStack(spacing: 6) {
                 Text(label)
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+                    .font(.system(size: 14, weight: isSelected ? .bold : .regular, design: .rounded))
 
                 if groupBadge(group) > 0 {
                     Text("\(groupBadge(group))")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(minWidth: 16, minHeight: 16)
-                        .background(isSelected ? Color.white.opacity(0.3) : MeeshyColors.indigo400)
+                        .background(MeeshyColors.indigo400)
                         .clipShape(Circle())
                 }
             }
-            .foregroundStyle(isSelected ? .white : theme.textMuted)
+            .foregroundStyle(.white)
+            .opacity(isSelected ? 1.0 : 0.4)
             .frame(maxWidth: .infinity)
             .frame(height: 44)
-            .background(
-                isSelected
-                    ? AnyShapeStyle(MeeshyColors.brandGradient)
-                    : AnyShapeStyle(Color.clear)
-            )
         }
         .buttonStyle(.plain)
     }
