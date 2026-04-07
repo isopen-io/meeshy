@@ -149,7 +149,15 @@ platform :ios do
       force: true,
       skip_metadata: options[:skip_metadata] || false,
       skip_screenshots: options[:skip_screenshots] || false,
-      precheck_include_in_app_purchases: false
+      precheck_include_in_app_purchases: false,
+      submission_information: {
+        add_id_info_uses_idfa: false
+      },
+      app_review_information: {
+        demo_user: "atabeth",
+        demo_password: "pD5p1ir9uxLUf2X2FpNE",
+        notes: "Use these credentials to log in and test all features: messaging, social feed, stories, voice/video calls, and translation."
+      }
     )
 
     version = get_version_number(xcodeproj: "Meeshy.xcodeproj")
