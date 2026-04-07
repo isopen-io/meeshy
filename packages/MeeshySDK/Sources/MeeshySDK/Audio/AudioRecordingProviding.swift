@@ -6,6 +6,7 @@ import Combine
 /// Unified protocol for all audio recording across the app.
 /// Concrete implementation lives in the app layer (AudioRecorderManager).
 /// Views in MeeshyUI depend on this protocol for injection.
+@MainActor
 public protocol AudioRecordingProviding: AnyObject, ObservableObject {
     var isRecording: Bool { get }
     var duration: TimeInterval { get }
