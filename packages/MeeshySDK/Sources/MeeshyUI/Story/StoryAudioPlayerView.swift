@@ -131,11 +131,20 @@ public struct StoryAudioPlayerView: View {
     private var playerContent: some View {
         HStack(spacing: 8) {
             Button(action: togglePlayback) {
-                Image(systemName: buttonIcon)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
+                ZStack {
+                    if !isEditing {
+                        Circle()
+                            .fill(Color.black.opacity(0.3))
+                            .frame(width: 36, height: 36)
+                    }
+                    Image(systemName: buttonIcon)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white.opacity(isEditing ? 1.0 : (isMuted ? 0.6 : 1.0)))
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .scaleEffect(isEditing ? 1.0 : (isMuted ? 0.95 : 1.0))
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isMuted)
             }
             .accessibilityLabel(buttonAccessibilityLabel)
 
@@ -248,6 +257,8 @@ public struct StoryAudioPlayerView: View {
             }
         } else {
             // Mode viewer : mute/unmute uniquement
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
             isMuted.toggle()
             player?.isMuted = isMuted
         }
