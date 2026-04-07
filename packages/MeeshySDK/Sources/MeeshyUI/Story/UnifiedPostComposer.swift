@@ -59,7 +59,7 @@ public struct UnifiedPostComposer: View {
                     onPublish(.story, slide.content ?? "", nil, slide.effects, image)
                     showStoryComposer = false
                 },
-                onPublishAllInBackground: { _, _, _, _ in },
+                onPublishAllInBackground: { _, _, _, _, _ in },
                 onPreview: { _, _, _, _, _ in },
                 onDismiss: { showStoryComposer = false }
             )
