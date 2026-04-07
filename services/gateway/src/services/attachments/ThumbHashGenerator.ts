@@ -2,9 +2,9 @@ import sharp from 'sharp'
 import { rgbaToThumbHash } from 'thumbhash'
 import ffmpeg from 'fluent-ffmpeg'
 import { PassThrough } from 'stream'
-import { createLogger } from '../../utils/logger.js'
+import logger from '../../utils/logger.js'
 
-const logger = createLogger('thumbhash')
+const log = logger.child({ module: 'thumbhash' })
 
 export class ThumbHashGenerator {
   /**
@@ -26,12 +26,10 @@ export class ThumbHashGenerator {
       if (mimeType.startsWith('video/')) {
         return await this.fromVideo(filePath)
       }
-      if (mimeType === 'application/pdf') {
-        return await this.fromPDF(filePath)
-      }
+      // PDF support requires pdf2pic + ghostscript — skip for now
       return null
     } catch (error) {
-      logger.warn({ error, filePath, mimeType }, 'ThumbHash generation failed — skipping')
+      log.warn({ error, filePath, mimeType }, 'ThumbHash generation failed — skipping')
       return null
     }
   }
@@ -65,35 +63,6 @@ export class ThumbHashGenerator {
 
     const hash = rgbaToThumbHash(info.width, info.height, new Uint8Array(data))
     return Buffer.from(hash).toString('base64')
-  }
-
-  /**
-   * PDF — render page 1 as image
-   * ~100-300ms (requires pdf2pic + ghostscript)
-   */
-  private static async fromPDF(filePath: string): Promise<string | null> {
-    try {
-      const { fromPath } = await import('pdf2pic')
-      const converter = fromPath(filePath, {
-        density: 72,
-        format: 'png',
-        width: 200,
-        height: 200,
-      })
-      const result = await converter(1)
-      if (!result.buffer) return null
-
-      const { data, info } = await sharp(result.buffer)
-        .resize(100, 100, { fit: 'inside' })
-        .ensureAlpha()
-        .raw()
-        .toBuffer({ resolveWithObject: true })
-
-      const hash = rgbaToThumbHash(info.width, info.height, new Uint8Array(data))
-      return Buffer.from(hash).toString('base64')
-    } catch {
-      return null
-    }
   }
 
   /**
