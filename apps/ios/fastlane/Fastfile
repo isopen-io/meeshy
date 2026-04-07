@@ -78,7 +78,7 @@ platform :ios do
       clean: true,
       export_options: {
         provisioningProfiles: {
-          "com.meeshy.app.staging" => "match AdHoc com.meeshy.app.staging"
+          "me.meeshy.app.staging" => "match AdHoc me.meeshy.app.staging"
         }
       }
     )
@@ -96,7 +96,7 @@ platform :ios do
       clean: true,
       export_options: {
         provisioningProfiles: {
-          "com.meeshy.app" => "match AppStore com.meeshy.app"
+          "me.meeshy.app" => "match AppStore me.meeshy.app"
         }
       }
     )
@@ -110,19 +110,19 @@ platform :ios do
   lane :sync_certificates do
     match(
       type: "development",
-      app_identifier: ["com.meeshy.app", "com.meeshy.app.staging", "com.meeshy.app.debug"],
+      app_identifier: ["me.meeshy.app", "me.meeshy.app.staging", "me.meeshy.app.debug"],
       readonly: is_ci
     )
 
     match(
       type: "adhoc",
-      app_identifier: ["com.meeshy.app", "com.meeshy.app.staging"],
+      app_identifier: ["me.meeshy.app", "me.meeshy.app.staging"],
       readonly: is_ci
     )
 
     match(
       type: "appstore",
-      app_identifier: "com.meeshy.app",
+      app_identifier: "me.meeshy.app",
       readonly: is_ci
     )
   end
@@ -214,7 +214,8 @@ platform :ios do
       force: true,
       skip_metadata: options[:skip_metadata] || false,
       skip_screenshots: options[:skip_screenshots] || false,
-      precheck_include_in_app_purchases: false
+      precheck_include_in_app_purchases: false,
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
     )
 
     # Tag release

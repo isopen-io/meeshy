@@ -1,7 +1,7 @@
 # Appfile for Meeshy iOS
 
 # Apple Developer Account
-app_identifier("com.meeshy.app")
+app_identifier("me.meeshy.app")
 apple_id(ENV["FASTLANE_USER"] || "your-apple-id@example.com")
 
 # Team ID (Developer Portal Team ID)
@@ -13,10 +13,10 @@ itc_team_id(ENV["FASTLANE_ITC_TEAM_ID"] || ENV["FASTLANE_TEAM_ID"] || "YOUR_ITC_
 # For multiple app identifiers
 for_platform :ios do
   for_lane :beta do
-    app_identifier("com.meeshy.app.staging")
+    app_identifier("me.meeshy.app.staging")
   end
 
   for_lane :release do
-    app_identifier("com.meeshy.app")
+    app_identifier("me.meeshy.app")
   end
 end

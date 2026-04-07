@@ -45,7 +45,7 @@ if [ -d "Meeshy.xcodeproj" ]; then
     echo ""
     echo "📱 Type: Application iOS (pas un package !)"
     echo "📦 Nom: Meeshy"
-    echo "🎯 Bundle ID: com.meeshy.app"
+    echo "🎯 Bundle ID: me.meeshy.app"
     echo "📂 Fichiers: 20 fichiers Swift inclus"
     echo "🔌 Dépendances: Socket.IO configuré"
     echo ""
