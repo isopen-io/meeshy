@@ -4,8 +4,6 @@ import ffmpeg from 'fluent-ffmpeg'
 import { PassThrough } from 'stream'
 import logger from '../../utils/logger.js'
 
-const log = logger.child({ module: 'thumbhash' })
-
 export class ThumbHashGenerator {
   /**
    * Generate ThumbHash for any visual attachment.
@@ -29,7 +27,7 @@ export class ThumbHashGenerator {
       // PDF support requires pdf2pic + ghostscript — skip for now
       return null
     } catch (error) {
-      log.warn({ error, filePath, mimeType }, 'ThumbHash generation failed — skipping')
+      logger.warn(`ThumbHash generation failed for ${mimeType}: ${(error as Error).message}`)
       return null
     }
   }
