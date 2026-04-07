@@ -173,12 +173,38 @@ async function generateMessage(
 
   // Favor SHORT messages — most chat messages are 1-20 words
   // Allow ultra-short acknowledgements ("Oui", "Bien d'accord", "@name compris")
-  // MODE CHAT: cap maxWords (1-2 sentences = ~40 words max, varies short/medium)
-  // MODE ELABORE (new topic only): moderate length (~60 words max)
+  // BUT: occasionally allow longer messages (moyen 2-3x/week, elabore 1x/week)
+  // Probability-based length selection preserves the ability to go long when needed.
   const baseMinWords = directive.minWords ?? state.minWordsPerMessage ?? 1;
-  const baseMaxWords = directive.maxWords ?? state.maxWordsPerMessage ?? 60;
-  const minWords = isNewTopic ? Math.max(baseMinWords, 5) : Math.max(baseMinWords, 1);
-  const maxWords = isNewTopic ? Math.min(baseMaxWords, 60) : Math.min(baseMaxWords, 40);
+  const baseMaxWords = directive.maxWords ?? state.maxWordsPerMessage ?? 500;
+
+  // Roll a dice for message length tier:
+  // ~70% court (1-40), ~20% moyen (30-80), ~8% long (60-150), ~2% elabore (100-500)
+  const lengthRoll = Math.random();
+  let tierMax: number;
+  let tierMin: number;
+  if (lengthRoll < 0.70) {
+    // Court — most messages
+    tierMin = 1;
+    tierMax = 40;
+  } else if (lengthRoll < 0.90) {
+    // Moyen — a few times per day
+    tierMin = 15;
+    tierMax = 80;
+  } else if (lengthRoll < 0.98) {
+    // Long — 2-3 times per week (with web search, deep topic)
+    tierMin = 30;
+    tierMax = 150;
+  } else {
+    // Elabore — ~1 time per week (rare, detailed analysis)
+    tierMin = 60;
+    tierMax = 500;
+  }
+
+  const minWords = isNewTopic
+    ? Math.max(baseMinWords, Math.min(tierMin, 10))
+    : Math.max(baseMinWords, tierMin);
+  const maxWords = Math.min(baseMaxWords, tierMax);
 
   const temperature = state.generationTemperature ?? 0.85;
   const maxTokens = Math.max(64, Math.round(maxWords * 1.5));

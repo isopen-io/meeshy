@@ -292,12 +292,13 @@ function calculateWordLimits(
   // 4. Conversation default fallback
   if (minWords === undefined || minWords === null) minWords = state.minWordsPerMessage;
   if (maxWords === undefined || maxWords === null) {
-    maxWords = isInterpelle ? state.maxWordsPerMessage : Math.min(80, state.maxWordsPerMessage);
+    // Don't cap here — the generator applies probability-based tier selection
+    maxWords = state.maxWordsPerMessage;
   }
 
   return {
-    minWords: Number(minWords) || 2,
-    maxWords: Number(maxWords) || 40,
+    minWords: Number(minWords) || 1,
+    maxWords: Number(maxWords) || 500,
   };
 }
 
