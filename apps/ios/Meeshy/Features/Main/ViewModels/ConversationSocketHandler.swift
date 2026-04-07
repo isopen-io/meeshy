@@ -152,14 +152,17 @@ final class ConversationSocketHandler {
                 Task { [weak self] in
                     guard let self, let delegate = self.delegate else { return }
 
-                    // Message already exists: update own optimistic message with attachment data from socket
                     if delegate.containsMessage(id: apiMsg.id) {
                         if apiMsg.senderId == userId,
                            let socketAttachments = apiMsg.attachments, !socketAttachments.isEmpty,
-                           let idx = delegate.messageIndex(for: apiMsg.id),
-                           delegate.messages[idx].attachments.isEmpty {
-                            await MainActor.run {
-                                delegate.messages[idx] = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
+                           let idx = delegate.messageIndex(for: apiMsg.id) {
+                            let existing = delegate.messages[idx]
+                            let hasNewData = existing.attachments.count != socketAttachments.count
+                                || existing.deliveryStatus == .sending
+                            if hasNewData {
+                                await MainActor.run {
+                                    delegate.messages[idx] = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
+                                }
                             }
                         }
                         return
