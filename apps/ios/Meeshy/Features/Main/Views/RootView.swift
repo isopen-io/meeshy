@@ -182,8 +182,8 @@ struct RootView: View {
                     case .dataExport:
                         DataExportView()
                             .navigationBarHidden(true)
-                    case .postDetail(let postId, let initialPost):
-                        PostDetailView(postId: postId, initialPost: initialPost)
+                    case .postDetail(let postId, let initialPost, let showComments):
+                        PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments)
                     case .bookmarks:
                         BookmarksView()
                             .navigationBarHidden(true)
@@ -374,7 +374,12 @@ struct RootView: View {
                 router.push(.postDetail(postId))
             } else if routeName.hasPrefix("storyDetail:") {
                 let postId = String(routeName.dropFirst("storyDetail:".count))
-                router.push(.postDetail(postId))
+                if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                    selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
+                    showStoryViewerFromConv = true
+                } else {
+                    router.push(.postDetail(postId))
+                }
             } else {
                 switch routeName {
                 case "userStats": router.push(.userStats)
@@ -546,12 +551,27 @@ struct RootView: View {
                 navigateToConversationById(conversationId)
             }
 
-        case .postLike, .legacyPostLike, .postComment, .legacyPostComment, .postRepost,
-             .storyReaction, .statusReaction, .commentLike, .commentReply:
+        case .postLike, .legacyPostLike, .postRepost:
             if let postId = notification.context?.postId ?? data?.postId {
                 router.push(.postDetail(postId))
             } else if let conversationId = data?.conversationId {
                 navigateToConversationById(conversationId)
+            }
+
+        case .postComment, .legacyPostComment, .commentLike, .commentReply:
+            if let postId = notification.context?.postId ?? data?.postId {
+                router.push(.postDetail(postId, nil, showComments: true))
+            } else if let conversationId = data?.conversationId {
+                navigateToConversationById(conversationId)
+            }
+
+        case .storyReaction, .statusReaction:
+            if let postId = notification.context?.postId ?? data?.postId,
+               let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
+                showStoryViewerFromConv = true
+            } else if let postId = notification.context?.postId ?? data?.postId {
+                router.push(.postDetail(postId))
             }
 
         case .missedCall, .callDeclined, .legacyCallMissed,
@@ -592,10 +612,22 @@ struct RootView: View {
                 )
             }
 
-        case .postLike, .legacyPostLike, .postComment, .legacyPostComment,
-             .postRepost, .commentLike, .commentReply,
-             .storyReaction, .statusReaction:
+        case .postLike, .legacyPostLike, .postRepost:
             if let postId = event.postId {
+                router.push(.postDetail(postId))
+            }
+
+        case .postComment, .legacyPostComment, .commentLike, .commentReply:
+            if let postId = event.postId {
+                router.push(.postDetail(postId, nil, showComments: true))
+            }
+
+        case .storyReaction, .statusReaction:
+            if let postId = event.postId,
+               let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
+                showStoryViewerFromConv = true
+            } else if let postId = event.postId {
                 router.push(.postDetail(postId))
             }
 

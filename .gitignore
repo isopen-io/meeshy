@@ -306,3 +306,4 @@ Jinu_*/
 *.p8
 match_key
 match_key.pub
+apps/ios/SourcePackages/
