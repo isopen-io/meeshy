@@ -23,6 +23,21 @@ public enum StoryBackgroundPalette {
         ("1A1A2E", "E94057"),
         ("2ECC71", "3498DB"),
     ]
+
+    public static func randomBackgroundColor() -> String {
+        let existingSet = Set(colors.map { $0.uppercased() })
+        var hex: String
+        repeat {
+            let hue = Double.random(in: 0...1)
+            let saturation = Double.random(in: 0.5...0.9)
+            let brightness = Double.random(in: 0.2...0.7)
+            let color = UIColor(hue: hue, saturation: saturation, brightness: brightness, alpha: 1.0)
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+            color.getRed(&r, green: &g, blue: &b, alpha: nil)
+            hex = String(format: "%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
+        } while existingSet.contains(hex)
+        return hex
+    }
 }
 
 // MARK: - Story Composer Draft
@@ -1098,7 +1113,7 @@ public struct StoryComposerView: View {
     private func restoreCanvas(from slide: StorySlide) {
         let e = slide.effects
         if let bgHex = e.background { viewModel.backgroundColor = "#\(bgHex)" }
-        else { viewModel.backgroundColor = "#0F0C29" }
+        else { viewModel.backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())" }
         selectedImage = viewModel.slideImages[slide.id]
         viewModel.hasBackgroundImage = selectedImage != nil
         stickerObjects = e.stickerObjects ?? []

@@ -105,7 +105,7 @@ final class StoryComposerViewModel {
 
     // MARK: - Background
 
-    var backgroundColor: String = "#000000"
+    var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())"
 
     // Per-slide background image transforms (persisted across slide changes)
     struct BackgroundTransform {
@@ -523,7 +523,7 @@ final class StoryComposerViewModel {
         drawingData = nil
         drawingColor = .white
         drawingWidth = 5
-        backgroundColor = "#000000"
+        backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())"
         loadedImages = [:]
         loadedVideoURLs = [:]
         loadedAudioURLs = [:]
