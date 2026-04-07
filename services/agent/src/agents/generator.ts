@@ -65,18 +65,34 @@ Tu peux developper (2-4 phrases). Donne ton avis, une experience, une observatio
 Reste CONVERSATIONNEL. Pas de dissertation. Pas de structure formelle.`
     : `MODE CHAT — Tu REAGIS dans un fil existant. C'est du CHAT, pas un article.
 Ta reponse DOIT etre en RELATION DIRECTE avec ce qui vient d'etre dit. Ne change pas de sujet.
-VARIE la longueur: parfois tres court (5-10 mots), parfois un peu plus developpe (20-40 mots).
+VARIE la longueur NATURELLEMENT. En vrai chat, beaucoup de messages font 1-5 mots.
 Tu PEUX citer le prenom ou @pseudo de la personne a qui tu reponds (mais pas obligatoire).
-Exemples de messages COURTS (50% du temps):
+
+Exemples ULTRA-COURTS (quand tu acquiesces, reagis ou reponds a une interpellation):
+- "Oui"
+- "Non"
+- "Exactement"
+- "Bien d'accord"
+- "Je vois"
+- "@Paul compris"
+- "C'est clair"
+- "Grave"
+- "Ah bon?"
+- "Carrément"
+- "Mdr"
+
+Exemples COURTS (reaction avec un peu plus de substance):
 - "Franchement t'as raison"
-- "Pas d'accord, le probleme c'est la gestion"
-- "Ah ouais? J'avais pas vu ca comme ca"
-- "Mdr tellement vrai"
-Exemples de messages MOYENS (50% du temps):
+- "Pas d'accord la"
+- "Ah ouais j'avais pas vu ca comme ca"
+- "Tellement vrai"
+
+Exemples MOYENS (quand tu developpes un point):
 - "Franchement @Paul t'as raison, sans electricite stable rien ne bouge"
 - "En vrai le vrai souci c'est la maintenance, on construit mais on entretient pas"
 - "Moi je pense qu'il faut deja regler les routes avant de parler d'industrie"
-- "Pas d'accord, le probleme c'est pas l'argent c'est la gestion au quotidien"`;
+
+Repartition naturelle: ~30% ultra-court, ~40% court, ~30% moyen.`;
 
   const shouldCite = Math.random() < 0.4;
   const replyContext = replyToSenderName && shouldCite
@@ -155,12 +171,13 @@ async function generateMessage(
   // Determine if this is a new topic introduction or a reply in existing thread
   const isNewTopic = !directive.replyToMessageId && !directive.mentionUsernames.length;
 
-  // Favor SHORT messages — most chat messages are 5-20 words
+  // Favor SHORT messages — most chat messages are 1-20 words
+  // Allow ultra-short acknowledgements ("Oui", "Bien d'accord", "@name compris")
   // MODE CHAT: cap maxWords (1-2 sentences = ~40 words max, varies short/medium)
   // MODE ELABORE (new topic only): moderate length (~60 words max)
-  const baseMinWords = directive.minWords ?? state.minWordsPerMessage ?? 3;
-  const baseMaxWords = directive.maxWords ?? state.maxWordsPerMessage ?? 80;
-  const minWords = isNewTopic ? Math.max(baseMinWords, 10) : baseMinWords;
+  const baseMinWords = directive.minWords ?? state.minWordsPerMessage ?? 1;
+  const baseMaxWords = directive.maxWords ?? state.maxWordsPerMessage ?? 60;
+  const minWords = isNewTopic ? Math.max(baseMinWords, 5) : Math.max(baseMinWords, 1);
   const maxWords = isNewTopic ? Math.min(baseMaxWords, 60) : Math.min(baseMaxWords, 40);
 
   const temperature = state.generationTemperature ?? 0.85;
