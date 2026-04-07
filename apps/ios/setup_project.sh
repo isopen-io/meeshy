@@ -7,7 +7,7 @@ set -e
 
 PROJECT_DIR="/Users/smpceo/Documents/Services/Meeshy/ios"
 PROJECT_NAME="Meeshy"
-BUNDLE_ID="com.meeshy.app"
+BUNDLE_ID="me.meeshy.app"
 ORG_NAME="Meeshy"
 
 echo "🚀 Configuration automatique du projet iOS Meeshy"
@@ -122,7 +122,7 @@ echo ""
 echo "7️⃣  Configurez l'URL Scheme pour deep links:"
 echo "    • Sélectionnez le projet > Info"
 echo "    • URL Types > + (Add)"
-echo "    • Identifier: com.meeshy.app"
+echo "    • Identifier: me.meeshy.app"
 echo "    • URL Schemes: meeshy"
 echo ""
 echo "8️⃣  Build & Run:"

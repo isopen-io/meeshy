@@ -15,7 +15,7 @@ NC='\033[0m'
 # Configuration
 PROJECT_DIR="/Users/smpceo/Documents/Services/Meeshy/ios"
 APP_NAME="Meeshy"
-BUNDLE_ID="com.meeshy.app"
+BUNDLE_ID="me.meeshy.app"
 SIMULATOR_NAME="iPhone 16 Pro"
 DERIVED_DATA_PATH="$PROJECT_DIR/DerivedData"
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/$APP_NAME.app"

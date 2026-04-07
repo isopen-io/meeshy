@@ -8,9 +8,9 @@ type("development") # The default type, can be: appstore, adhoc, enterprise or d
 
 # App Identifiers
 app_identifier([
-  "com.meeshy.app",
-  "com.meeshy.app.staging",
-  "com.meeshy.app.debug"
+  "me.meeshy.app",
+  "me.meeshy.app.staging",
+  "me.meeshy.app.debug"
 ])
 
 # Your Apple Developer Portal username
