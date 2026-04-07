@@ -22,7 +22,7 @@ enum Route: Hashable {
     case shareLinks
     case communityLinks
     case dataExport
-    case postDetail(String, FeedPost? = nil)
+    case postDetail(String, FeedPost? = nil, showComments: Bool = false)
     case bookmarks
     case friendRequests
     case editProfile

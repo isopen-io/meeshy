@@ -16,9 +16,7 @@
 	<key>com.apple.developer.messaging-app</key>
 	<true/>
 	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.me.meeshy.app</string>
-	</array>
+	<array/>
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)me.meeshy.app</string>

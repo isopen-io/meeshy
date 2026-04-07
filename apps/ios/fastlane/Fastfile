@@ -23,7 +23,7 @@ platform :ios do
   # BEFORE ALL
   # ========================================
   before_all do
-    ensure_git_status_clean unless ENV['CI']
+    ensure_git_status_clean unless ENV['CI'] || ENV['SKIP_GIT_CHECK']
   end
 
   # ========================================

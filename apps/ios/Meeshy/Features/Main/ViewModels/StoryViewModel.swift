@@ -203,6 +203,12 @@ class StoryViewModel: ObservableObject {
         storyGroups.firstIndex { $0.id == userId }
     }
 
+    func groupIndex(forStoryId storyId: String) -> Int? {
+        storyGroups.firstIndex { group in
+            group.stories.contains { $0.id == storyId }
+        }
+    }
+
     func hasStories(forUserId userId: String) -> Bool {
         storyGroups.contains { $0.id == userId }
     }

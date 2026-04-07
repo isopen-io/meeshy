@@ -5,6 +5,7 @@ import MeeshyUI
 struct PostDetailView: View {
     let postId: String
     var initialPost: FeedPost?
+    var showComments: Bool = false
 
     @StateObject private var viewModel = PostDetailViewModel()
     private var theme: ThemeManager { ThemeManager.shared }
@@ -100,6 +101,7 @@ struct PostDetailView: View {
             navBar
 
             if let post = displayPost {
+                ScrollViewReader { scrollProxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 0) {
                         // ZONE 1: Text
@@ -127,6 +129,7 @@ struct PostDetailView: View {
                             .padding(.horizontal, 16)
 
                         commentsHeader
+                            .id("commentsSection")
 
                         // Comments (threaded)
                         ForEach(viewModel.topLevelComments) { comment in
@@ -175,6 +178,17 @@ struct PostDetailView: View {
                     }
                     .padding(.bottom, 80)
                 }
+                .onAppear {
+                    if showComments {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            withAnimation {
+                                scrollProxy.scrollTo("commentsSection", anchor: .top)
+                            }
+                            composerFocusTrigger.toggle()
+                        }
+                    }
+                }
+                } // ScrollViewReader
             } else if viewModel.isLoading {
                 Spacer()
                 ProgressView()

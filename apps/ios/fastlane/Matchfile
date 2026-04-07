@@ -1,7 +1,7 @@
 # Matchfile for Meeshy iOS Code Signing
 # Uses SSH deploy key for Git access in CI
 
-git_url(ENV["MATCH_GIT_URL"] || "git@github.com:isopen-io/meeshy-certificates.git")
+git_url(ENV["MATCH_GIT_URL"] || "https://github.com/isopen-io/meeshy-certificates.git")
 
 storage_mode("git")
 
