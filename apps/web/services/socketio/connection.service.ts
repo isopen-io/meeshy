@@ -214,6 +214,8 @@ export class ConnectionService {
   getConnectionDiagnostics(): ConnectionDiagnostics {
     return {
       status: this.getConnectionStatus(),
+      isConnected: this.state.isConnected,
+      hasSocket: !!this.state.socket,
       reconnectAttempts: this.state.reconnectAttempts,
       transport: this.state.socket?.io?.engine?.transport?.name || 'unknown',
       socketId: this.state.socket?.id || null
