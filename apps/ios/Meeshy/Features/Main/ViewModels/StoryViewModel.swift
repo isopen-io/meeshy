@@ -49,6 +49,7 @@ class StoryViewModel: ObservableObject {
         let slideImages: [String: UIImage]
         let loadedImages: [String: UIImage]
         let loadedVideoURLs: [String: URL]
+        let loadedAudioURLs: [String: URL]
 
         enum UploadPhase: Sendable {
             case uploading
@@ -344,7 +345,8 @@ class StoryViewModel: ObservableObject {
         slides: [StorySlide],
         slideImages: [String: UIImage],
         loadedImages: [String: UIImage],
-        loadedVideoURLs: [String: URL]
+        loadedVideoURLs: [String: URL],
+        loadedAudioURLs: [String: URL] = [:]
     ) {
         guard activeUpload == nil else { return }
 
@@ -363,7 +365,8 @@ class StoryViewModel: ObservableObject {
             slides: slides,
             slideImages: slideImages,
             loadedImages: loadedImages,
-            loadedVideoURLs: loadedVideoURLs
+            loadedVideoURLs: loadedVideoURLs,
+            loadedAudioURLs: loadedAudioURLs
         )
         activeUpload = upload
         showStoryComposer = false
@@ -440,6 +443,22 @@ class StoryViewModel: ObservableObject {
                         updatedEffects.mediaObjects = mediaObjects
                     }
 
+                    if var audioObjects = updatedEffects.audioPlayerObjects {
+                        for i in audioObjects.indices where audioObjects[i].postMediaId.isEmpty {
+                            guard !Task.isCancelled else { return }
+                            let obj = audioObjects[i]
+                            if let audioURL = upload.loadedAudioURLs[obj.id] ?? upload.loadedVideoURLs[obj.id] {
+                                let result = try await uploader.uploadFile(
+                                    fileURL: audioURL, mimeType: "audio/mp4",
+                                    token: token, uploadContext: "story"
+                                )
+                                audioObjects[i].postMediaId = result.id
+                                foregroundMediaIds.append(result.id)
+                            }
+                        }
+                        updatedEffects.audioPlayerObjects = audioObjects
+                    }
+
                     activeUpload?.phase = .publishing
                     var allMediaIds: [String] = []
                     if let id = uploadResult?.id { allMediaIds.append(id) }
@@ -497,6 +516,9 @@ class StoryViewModel: ObservableObject {
     /// Cleanup temp video/audio files after upload completes.
     private func cleanupUploadTempFiles(_ upload: StoryUploadState) {
         for (_, url) in upload.loadedVideoURLs {
+            try? FileManager.default.removeItem(at: url)
+        }
+        for (_, url) in upload.loadedAudioURLs {
             try? FileManager.default.removeItem(at: url)
         }
     }

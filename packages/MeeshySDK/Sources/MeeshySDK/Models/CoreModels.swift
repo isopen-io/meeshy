@@ -635,7 +635,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     }
 
     public static func audio(durationMs: Int, color: String = "9B59B6") -> MeeshyMessageAttachment {
-        MeeshyMessageAttachment(mimeType: "audio/mpeg", duration: durationMs, thumbnailColor: color)
+        MeeshyMessageAttachment(mimeType: "audio/mp4", duration: durationMs, channels: 2, thumbnailColor: color)
     }
 
     public static func file(name: String, size: Int, color: String = "F8B500") -> MeeshyMessageAttachment {

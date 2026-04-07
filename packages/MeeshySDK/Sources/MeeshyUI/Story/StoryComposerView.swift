@@ -161,14 +161,15 @@ public struct StoryComposerView: View {
         _ slides: [StorySlide],
         _ slideImages: [String: UIImage],
         _ loadedImages: [String: UIImage],
-        _ loadedVideoURLs: [String: URL]
+        _ loadedVideoURLs: [String: URL],
+        _ loadedAudioURLs: [String: URL]
     ) -> Void
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
     public init(
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void = { _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL]) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -1346,10 +1347,9 @@ public struct StoryComposerView: View {
     private func publishAllSlides() {
         syncCurrentSlideEffects()
         let snapshot = snapshotAllSlides()
-        let allMediaURLs = viewModel.loadedVideoURLs.merging(viewModel.loadedAudioURLs) { v, _ in v }
         clearAllDrafts()
         HapticFeedback.success()
-        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, allMediaURLs)
+        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs)
     }
 
     private func snapshotAllSlides() -> (slides: [StorySlide], bgImages: [String: UIImage]) {
