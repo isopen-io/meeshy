@@ -5,7 +5,7 @@ project("Meeshy.xcodeproj")
 scheme("Meeshy")
 
 # Build Configuration
-configuration("Production")
+configuration("Release")
 clean(true)
 
 # Output

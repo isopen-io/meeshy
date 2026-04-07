@@ -52,7 +52,11 @@ platform :ios do
   lane :sync_certificates do
     match(
       type: "appstore",
-      app_identifier: "me.meeshy.app",
+      app_identifier: [
+        "me.meeshy.app",
+        "me.meeshy.app.notification-service",
+        "me.meeshy.app.widgets"
+      ],
       api_key: api_key,
       readonly: is_ci,
       force_legacy_encryption: true
@@ -80,14 +84,13 @@ platform :ios do
       scheme: "Meeshy",
       configuration: "Release",
       export_method: "app-store",
+      export_team_id: "D72UK7R5RE",
       output_directory: "./build",
       output_name: "Meeshy.ipa",
-      clean: true,
-      export_options: {
-        provisioningProfiles: {
-          "me.meeshy.app" => "match AppStore me.meeshy.app"
-        }
-      }
+      derived_data_path: "./Build",
+      clean: false,
+      cloned_source_packages_path: "./SourcePackages",
+      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates"
     )
   end
 
@@ -163,6 +166,21 @@ platform :ios do
     increment_version_number(bump_type: type)
     version = get_version_number(xcodeproj: "Meeshy.xcodeproj")
     UI.success("Version bumped to #{version}")
+  end
+
+  desc "Force regenerate all provisioning profiles"
+  lane :force_sync do
+    match(
+      type: "appstore",
+      app_identifier: [
+        "me.meeshy.app",
+        "me.meeshy.app.notification-service",
+        "me.meeshy.app.widgets"
+      ],
+      api_key: api_key,
+      force: true,
+      force_legacy_encryption: true
+    )
   end
 
   desc "Clean build artifacts"
