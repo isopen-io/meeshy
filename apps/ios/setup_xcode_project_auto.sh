@@ -7,7 +7,7 @@ set -e  # Arrêt en cas d'erreur
 
 PROJECT_DIR="/Users/smpceo/Documents/Services/Meeshy/ios"
 PROJECT_NAME="Meeshy"
-BUNDLE_ID="com.meeshy.app"
+BUNDLE_ID="me.meeshy.app"
 TEAM_ID=""  # À remplir si nécessaire
 
 echo "🚀 Démarrage de la configuration automatique du projet Meeshy iOS..."
@@ -118,7 +118,7 @@ cat > Meeshy/Info.plist << 'INFOEOF'
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.meeshy.app</string>
+			<string>me.meeshy.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>meeshy</string>

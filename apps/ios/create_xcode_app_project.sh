@@ -9,7 +9,7 @@ echo ""
 
 PROJECT_DIR="/Users/smpceo/Documents/Services/Meeshy/ios"
 PROJECT_NAME="Meeshy"
-BUNDLE_ID="com.meeshy.app"
+BUNDLE_ID="me.meeshy.app"
 ORG_NAME="Meeshy"
 
 cd "$PROJECT_DIR"
@@ -301,7 +301,7 @@ cat > "$PROJECT_NAME.xcodeproj/project.pbxproj" << 'PBXPROJ'
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.meeshy.app;
+				PRODUCT_BUNDLE_IDENTIFIER = me.meeshy.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -331,7 +331,7 @@ cat > "$PROJECT_NAME.xcodeproj/project.pbxproj" << 'PBXPROJ'
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.meeshy.app;
+				PRODUCT_BUNDLE_IDENTIFIER = me.meeshy.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

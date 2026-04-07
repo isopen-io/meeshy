@@ -41,7 +41,7 @@ Le build utilise le dossier `Build/` relatif au workspace (`apps/ios/Build/`). X
 ./meeshy.sh test               # Unit tests (--ui for UI tests)
 ```
 - Simulator: iPhone 16 Pro (UDID: 30BFD3A6-C80B-489D-825E-5D14D6FCCAB5)
-- Bundle ID: `com.meeshy.app`
+- Bundle ID: `me.meeshy.app`
 
 ## Naming Conventions
 
@@ -783,11 +783,11 @@ Use Apple's unified logging system (`os.Logger`), not `print()`:
 import os
 
 extension Logger {
-    static let network = Logger(subsystem: "com.meeshy.app", category: "network")
-    static let auth = Logger(subsystem: "com.meeshy.app", category: "auth")
-    static let messages = Logger(subsystem: "com.meeshy.app", category: "messages")
-    static let media = Logger(subsystem: "com.meeshy.app", category: "media")
-    static let socket = Logger(subsystem: "com.meeshy.app", category: "socket")
+    static let network = Logger(subsystem: "me.meeshy.app", category: "network")
+    static let auth = Logger(subsystem: "me.meeshy.app", category: "auth")
+    static let messages = Logger(subsystem: "me.meeshy.app", category: "messages")
+    static let media = Logger(subsystem: "me.meeshy.app", category: "media")
+    static let socket = Logger(subsystem: "me.meeshy.app", category: "socket")
 }
 
 // Usage

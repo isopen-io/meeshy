@@ -623,7 +623,7 @@ Simuler différentes conditions réseau:
 // Logging structuré
 import OSLog
 
-let logger = Logger(subsystem: "com.meeshy.app", category: "network")
+let logger = Logger(subsystem: "me.meeshy.app", category: "network")
 
 logger.info("Fetching messages...")
 logger.error("Failed to fetch: \(error.localizedDescription)")

@@ -132,7 +132,7 @@ Les scripts utilisent les paramètres suivants (modifiables dans chaque script) 
 ```bash
 PROJECT_DIR="/Users/smpceo/Documents/Services/Meeshy/ios"
 APP_NAME="Meeshy"
-BUNDLE_ID="com.meeshy.app"
+BUNDLE_ID="me.meeshy.app"
 SCHEME="Meeshy"
 SIMULATOR_NAME="iPhone 16 Pro"
 ```
