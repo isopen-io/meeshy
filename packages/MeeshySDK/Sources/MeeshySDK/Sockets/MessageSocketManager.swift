@@ -851,13 +851,44 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     ) {
         var payload: [String: Any] = [
             "conversationId": conversationId,
+            "content": content ?? "",
             "attachmentIds": attachmentIds,
             "isEncrypted": isEncrypted
         ]
-        if let content, !content.isEmpty { payload["content"] = content }
         if let replyToId { payload["replyToId"] = replyToId }
         if let originalLanguage { payload["originalLanguage"] = originalLanguage }
         socket?.emit("message:send-with-attachments", payload)
+    }
+
+    public func sendWithAttachmentsAsync(
+        conversationId: String,
+        content: String?,
+        attachmentIds: [String],
+        replyToId: String?,
+        originalLanguage: String? = nil,
+        isEncrypted: Bool = false
+    ) async -> String? {
+        guard let socket else { return nil }
+        var payload: [String: Any] = [
+            "conversationId": conversationId,
+            "content": content ?? "",
+            "attachmentIds": attachmentIds,
+            "isEncrypted": isEncrypted
+        ]
+        if let replyToId { payload["replyToId"] = replyToId }
+        if let originalLanguage { payload["originalLanguage"] = originalLanguage }
+        return await withCheckedContinuation { continuation in
+            socket.emitWithAck("message:send-with-attachments", payload).timingOut(after: 30) { items in
+                if let response = items.first as? [String: Any],
+                   let success = response["success"] as? Bool, success,
+                   let data = response["data"] as? [String: Any],
+                   let messageId = data["messageId"] as? String {
+                    continuation.resume(returning: messageId)
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
     }
 
     // MARK: - Call Signaling Emission

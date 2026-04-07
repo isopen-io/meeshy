@@ -1041,6 +1041,31 @@ class ConversationViewModel: ObservableObject {
         messages.removeAll { $0.id == messageId && $0.deliveryStatus == .failed }
     }
 
+    // MARK: - Insert Optimistic Audio Message (WebSocket path)
+
+    func insertOptimisticAudioMessage(
+        messageId: String,
+        content: String,
+        attachments: [MeeshyMessageAttachment],
+        replyToId: String?
+    ) {
+        let msg = Message(
+            id: messageId,
+            conversationId: conversationId,
+            senderId: currentUserId,
+            content: content,
+            messageType: .audio,
+            replyToId: replyToId,
+            createdAt: Date(),
+            updatedAt: Date(),
+            attachments: attachments,
+            deliveryStatus: .sent,
+            isMe: true
+        )
+        messages.append(msg)
+        newMessageAppended += 1
+    }
+
     // MARK: - Handle Expired Messages
 
     func removeExpiredMessages() {
