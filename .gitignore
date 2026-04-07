@@ -304,3 +304,5 @@ Jinu_*/
 *_webp/
 *_webp.zip
 *.p8
+match_key
+match_key.pub
