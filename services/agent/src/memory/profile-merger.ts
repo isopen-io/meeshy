@@ -45,7 +45,7 @@ export function mergeProfile(global: GlobalProfile | null, override: Conversatio
     personaSummary: '',
     tone: 'neutre',
     vocabularyLevel: 'courant',
-    typicalLength: 'moyen',
+    typicalLength: 'court',
     emojiUsage: 'occasionnel',
     catchphrases: [],
     topicsOfExpertise: [],

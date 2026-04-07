@@ -257,11 +257,11 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
 }
 
 const TYPICAL_LENGTH_RANGES: Record<string, { min: number; max: number }> = {
-  expeditif: { min: 1, max: 15 },
-  court: { min: 10, max: 60 },
-  moyen: { min: 30, max: 150 },
-  long: { min: 100, max: 250 },
-  'tres long': { min: 200, max: 500 },
+  expeditif: { min: 1, max: 10 },
+  court: { min: 2, max: 30 },
+  moyen: { min: 10, max: 60 },
+  long: { min: 30, max: 120 },       // admin/expert only
+  'tres long': { min: 60, max: 250 }, // admin/expert only
 };
 
 function calculateWordLimits(
@@ -292,12 +292,12 @@ function calculateWordLimits(
   // 4. Conversation default fallback
   if (minWords === undefined || minWords === null) minWords = state.minWordsPerMessage;
   if (maxWords === undefined || maxWords === null) {
-    maxWords = isInterpelle ? state.maxWordsPerMessage : Math.min(300, state.maxWordsPerMessage);
+    maxWords = isInterpelle ? state.maxWordsPerMessage : Math.min(80, state.maxWordsPerMessage);
   }
 
   return {
-    minWords: Number(minWords) || 10,
-    maxWords: Number(maxWords) || 150,
+    minWords: Number(minWords) || 2,
+    maxWords: Number(maxWords) || 40,
   };
 }
 

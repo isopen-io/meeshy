@@ -382,7 +382,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           maxReactionsPerCycle: config?.maxReactionsPerCycle ?? 4,
           agentInstructions: config?.agentInstructions ?? null,
           webSearchEnabled: config?.webSearchEnabled ?? true,
-          minWordsPerMessage: config?.minWordsPerMessage ?? 3,
+          minWordsPerMessage: config?.minWordsPerMessage ?? 1,
           maxWordsPerMessage: config?.maxWordsPerMessage ?? 80,
           minHistoricalMessages: config?.minHistoricalMessages ?? 0,
           generationTemperature: config?.generationTemperature ?? 0.8,

@@ -258,7 +258,7 @@ export class MongoPersistence {
           personaSummary: '',
           tone: 'neutre',
           vocabularyLevel: 'courant',
-          typicalLength: 'moyen',
+          typicalLength: 'court',
           emojiUsage: 'occasionnel',
           topicsOfExpertise: [],
           topicsAvoided: [],

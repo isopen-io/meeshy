@@ -205,11 +205,11 @@ export const ConversationStateAnnotation = Annotation.Root({
   }),
   minWordsPerMessage: Annotation<number>({
     reducer: (_current, update) => update,
-    default: () => 3,
+    default: () => 1,
   }),
   maxWordsPerMessage: Annotation<number>({
     reducer: (_current, update) => update,
-    default: () => 400,
+    default: () => 60,
   }),
   generationTemperature: Annotation<number>({
     reducer: (_current, update) => update,
