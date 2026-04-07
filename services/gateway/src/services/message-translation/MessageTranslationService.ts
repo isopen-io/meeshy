@@ -868,7 +868,7 @@ export class MessageTranslationService extends EventEmitter {
             cloned: ta.voiceCloned,
             quality: ta.voiceQuality,
             ttsModel: 'chatterbox',
-            segments: ta.segments ?? [],
+            segments: (ta.segments ?? []).map(s => ({ text: s.text, startMs: s.startMs, endMs: s.endMs })),
           };
         }
         await PostAudioService.shared.handleAudioTranslationsReady({

@@ -207,11 +207,11 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     }
 
     private func stopRecording() {
+        let capturedDuration = recorder.duration
         guard let url = recorder.stopRecording() else { return }
-        let duration = recorder.duration
-        guard duration >= Double(minimumDurationSeconds) else { return }
+        guard capturedDuration >= Double(minimumDurationSeconds) else { return }
         let data = try? Data(contentsOf: url)
-        recordedSamples.append(RecordedSample(duration: duration, data: data, url: url))
+        recordedSamples.append(RecordedSample(duration: capturedDuration, data: data, url: url))
     }
 
     private func formattedDuration(_ duration: TimeInterval) -> String {

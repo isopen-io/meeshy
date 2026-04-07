@@ -57,9 +57,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         audioLevels = levelHistory
 
         timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updateMetering()
-            }
+            Task { @MainActor in self?.updateMetering() }
         }
     }
 

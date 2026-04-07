@@ -316,8 +316,9 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     }
 
     private func handleStopRecording() {
+        let capturedDuration = recorder.duration
         guard let url = recorder.stopRecording() else { return }
-        guard recorder.duration >= settings.minimumDuration || settings.minimumDuration <= 0.5 else { return }
+        guard capturedDuration >= settings.minimumDuration else { return }
         recordedURL = url
         showPreview = true
         HapticFeedback.success()

@@ -153,11 +153,12 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
     private func stopRecording() {
         guard recorder.isRecording else { return }
+        let capturedDuration = recorder.duration
         guard let url = recorder.stopRecording() else { return }
         stopPhaseTimer()
         HapticFeedback.success()
 
-        if recorder.duration > 0.5 || true {
+        if capturedDuration > 0.5 {
             onRecordComplete(url)
         }
     }
