@@ -611,10 +611,8 @@ public struct MeeshyAudioEditorView: View {
             isPlaying = false
         }
 
-        Task.detached(priority: .userInitiated) {
-            if let data = try? Data(contentsOf: url) {
-                await analyzer.analyze(data: data, barCount: 100)
-            }
+        Task {
+            await analyzer.analyze(url: url, barCount: 100)
         }
     }
 

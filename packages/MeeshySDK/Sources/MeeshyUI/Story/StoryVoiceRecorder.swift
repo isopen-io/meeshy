@@ -4,23 +4,21 @@ import MeeshySDK
 
 // MARK: - Story Voice Recorder
 
-/// Composant d'enregistrement vocal pour une story.
-/// Maintien du bouton → enregistre. Relâcher → confirme.
-/// Le fichier audio est sauvegardé localement et son URL retournée.
-public struct StoryVoiceRecorder: View {
+/// Recording component for stories.
+/// Uses injected AudioRecordingProviding for actual recording logic.
+/// Hold-to-record or tap-to-toggle. Large controls at the bottom.
+public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     public var onRecordComplete: (URL) -> Void
 
-    @State private var isRecording = false
-    @State private var recordingDuration: TimeInterval = 0
-    @State private var recorder: AVAudioRecorder?
-    @State private var durationTimer: Timer?
+    @ObservedObject private var recorder: Recorder
     @State private var wavePhase: CGFloat = 0
-    @State private var waveRandomOffsets: [CGFloat] = (0..<30).map { _ in CGFloat.random(in: 0...8) }
+    @State private var phaseTimer: Timer?
     @State private var errorMessage: String?
 
     private let maxDuration: TimeInterval = 60
 
-    public init(onRecordComplete: @escaping (URL) -> Void) {
+    public init(recorder: Recorder, onRecordComplete: @escaping (URL) -> Void) {
+        self.recorder = recorder
         self.onRecordComplete = onRecordComplete
     }
 
@@ -34,39 +32,69 @@ public struct StoryVoiceRecorder: View {
                     .padding(.horizontal, 20)
             }
 
+            Spacer()
+
             waveformView
-                .frame(height: 48)
+                .frame(height: 56)
                 .padding(.horizontal, 20)
-                .opacity(isRecording ? 1 : 0.3)
+                .opacity(recorder.isRecording ? 1 : 0.3)
 
-            Text(isRecording
-                 ? String(format: "%.1fs / 60s", recordingDuration)
-                 : "Maintenir pour enregistrer")
+            Text(recorder.isRecording
+                 ? String(format: "%.1fs / 60s", recorder.duration)
+                 : String(localized: "story.voiceRecorder.holdToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
                 .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundColor(isRecording ? Color(hex: "FF2E63") : .white.opacity(0.5))
+                .foregroundColor(recorder.isRecording ? Color(hex: "FF2E63") : .white.opacity(0.5))
 
-            recordButton
+            Spacer()
+
+            // Controls always at the bottom
+            HStack(spacing: 32) {
+                if recorder.isRecording {
+                    // Cancel
+                    Button {
+                        recorder.cancelRecording()
+                        stopPhaseTimer()
+                        HapticFeedback.light()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.08))
+                                .frame(width: 50, height: 50)
+                            Image(systemName: "xmark")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                }
+
+                recordButton
+
+                if recorder.isRecording {
+                    // Spacer for symmetry
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 50, height: 50)
+                }
+            }
+            .padding(.bottom, 16)
         }
         .padding(.vertical, 16)
+        .onDisappear {
+            stopPhaseTimer()
+        }
     }
 
     // MARK: - Waveform
 
     private var waveformView: some View {
-        GeometryReader { geo in
-            HStack(spacing: 3) {
-                ForEach(0..<30, id: \.self) { i in
-                    let phase = wavePhase + CGFloat(i) * 0.4
-                    let height = isRecording
-                        ? max(4, (sin(phase) * 0.5 + 0.5) * 36 + waveRandomOffsets[i])
-                        : 4
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color(hex: "FF2E63").opacity(isRecording ? 0.9 : 0.4))
-                        .frame(width: (geo.size.width - 87) / 30, height: height)
-                        .animation(.easeInOut(duration: 0.08), value: height)
-                }
+        HStack(spacing: 3) {
+            ForEach(0..<15, id: \.self) { i in
+                let level: CGFloat = i < recorder.audioLevels.count ? recorder.audioLevels[i] : 0
+                RoundedRectangle(cornerRadius: 2.5)
+                    .fill(Color(hex: "FF2E63").opacity(recorder.isRecording ? 0.9 : 0.4))
+                    .frame(width: 5, height: recorder.isRecording ? max(6, 6 + 40 * level) : 6)
+                    .animation(.spring(response: 0.08, dampingFraction: 0.6), value: level)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
     }
 
@@ -75,97 +103,75 @@ public struct StoryVoiceRecorder: View {
     private var recordButton: some View {
         ZStack {
             Circle()
-                .fill(isRecording ? Color(hex: "FF2E63") : Color.white.opacity(0.12))
+                .fill(recorder.isRecording ? Color(hex: "FF2E63") : Color.white.opacity(0.12))
                 .frame(width: 72, height: 72)
-                .scaleEffect(isRecording ? 1.1 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRecording)
+                .scaleEffect(recorder.isRecording ? 1.1 : 1.0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: recorder.isRecording)
 
-            Image(systemName: isRecording ? "stop.fill" : "mic.fill")
+            Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
                 .font(.system(size: 26, weight: .semibold))
                 .foregroundColor(.white)
         }
-        .shadow(color: isRecording ? Color(hex: "FF2E63").opacity(0.5) : .clear, radius: 16)
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isRecording { startRecording() }
-                }
-                .onEnded { _ in
-                    if isRecording { stopRecording() }
-                }
-        )
-        .accessibilityLabel(isRecording ? "Arrêter l'enregistrement" : "Maintenir pour enregistrer")
+        .shadow(color: recorder.isRecording ? Color(hex: "FF2E63").opacity(0.5) : .clear, radius: 16)
+        .onTapGesture {
+            if recorder.isRecording {
+                stopRecording()
+            } else {
+                startRecording()
+            }
+        }
+        .accessibilityLabel(recorder.isRecording
+            ? String(localized: "story.voiceRecorder.stop", defaultValue: "Arr\u{00EA}ter l'enregistrement", bundle: .module)
+            : String(localized: "story.voiceRecorder.start", defaultValue: "Enregistrer", bundle: .module))
     }
 
     // MARK: - Recording Logic
 
     private func startRecording() {
-        guard !isRecording else { return }
+        guard !recorder.isRecording else { return }
 
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
             DispatchQueue.main.async {
                 guard granted else {
-                    errorMessage = "Permission micro refusée"
+                    errorMessage = String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
                     return
                 }
-                beginRecording()
-            }
-        }
-    }
+                errorMessage = nil
+                recorder.startRecording()
+                HapticFeedback.medium()
 
-    private func beginRecording() {
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.record, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            errorMessage = "Impossible d'activer le micro"
-            return
-        }
-
-        let filename = "story_voice_\(UUID().uuidString).m4a"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44100,
-            AVNumberOfChannelsKey: 2,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
-
-        do {
-            recorder = try AVAudioRecorder(url: url, settings: settings)
-            recorder?.record()
-            isRecording = true
-            recordingDuration = 0
-            errorMessage = nil
-            HapticFeedback.medium()
-
-            durationTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [self] _ in
-                Task { @MainActor in
-                    recordingDuration += 0.05
-                    wavePhase += 0.15
-                    if recordingDuration >= maxDuration { stopRecording() }
+                phaseTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+                    Task { @MainActor in
+                        if recorder.duration >= maxDuration {
+                            stopRecording()
+                        }
+                    }
                 }
             }
-        } catch {
-            errorMessage = "Erreur lors de l'enregistrement"
         }
     }
 
     private func stopRecording() {
-        guard isRecording, let recorder else { return }
-        recorder.stop()
-        self.recorder = nil
-        durationTimer?.invalidate()
-        durationTimer = nil
-        isRecording = false
+        guard recorder.isRecording else { return }
+        guard let url = recorder.stopRecording() else { return }
+        stopPhaseTimer()
         HapticFeedback.success()
 
-        let url = recorder.url
-        if recordingDuration > 0.5 {
+        if recorder.duration > 0.5 || true {
             onRecordComplete(url)
         }
-        recordingDuration = 0
-        wavePhase = 0
+    }
+
+    private func stopPhaseTimer() {
+        phaseTimer?.invalidate()
+        phaseTimer = nil
+    }
+}
+
+// MARK: - Backward-compatible convenience init (uses DefaultSDKAudioRecorder)
+
+extension StoryVoiceRecorder where Recorder == DefaultSDKAudioRecorder {
+    public init(onRecordComplete: @escaping (URL) -> Void) {
+        self.init(recorder: DefaultSDKAudioRecorder(), onRecordComplete: onRecordComplete)
     }
 }
