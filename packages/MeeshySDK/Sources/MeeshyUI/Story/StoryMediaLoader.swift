@@ -124,22 +124,27 @@ public final class StoryMediaLoader {
         // Both KVO callback and timeout dispatch to main to avoid race on resumed flag
         if item.status != .readyToPlay {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                var resumed = false
-                var observation: NSKeyValueObservation?
-                observation = item.observe(\.status, options: [.new]) { item, _ in
+                // Use a class wrapper for shared mutable state to satisfy Sendable
+                final class ResumeState: @unchecked Sendable {
+                    var resumed = false
+                    var observation: NSKeyValueObservation?
+                }
+                let state = ResumeState()
+
+                state.observation = item.observe(\.status, options: [.new]) { item, _ in
                     guard item.status == .readyToPlay || item.status == .failed else { return }
                     DispatchQueue.main.async {
-                        guard !resumed else { return }
-                        resumed = true
-                        observation?.invalidate()
+                        guard !state.resumed else { return }
+                        state.resumed = true
+                        state.observation?.invalidate()
                         continuation.resume()
                     }
                 }
                 // Timeout after 5 seconds to avoid hanging on bad URLs
                 DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                    observation?.invalidate()
-                    guard !resumed else { return }
-                    resumed = true
+                    state.observation?.invalidate()
+                    guard !state.resumed else { return }
+                    state.resumed = true
                     continuation.resume()
                 }
             }
