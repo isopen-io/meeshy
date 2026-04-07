@@ -39,6 +39,7 @@ struct FeedPostCard: View {
     @State private var activeDisplayLangCode: String? = nil
     @State var fullscreenMediaId: String? = nil
     @State var showFullscreenGallery = false
+    @State private var isTextExpanded = false
 
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
@@ -123,18 +124,42 @@ struct FeedPostCard: View {
                     // Author header
                     authorHeader
 
-                    // Post content (truncated for feed — Prisme Linguistique)
+                    // Post content (expandable in-place — Prisme Linguistique)
                     let truncation = truncatedContent
-                    (Text(truncation.text)
-                        .font(.system(size: 15))
-                        .foregroundColor(theme.textPrimary)
-                    + (truncation.isTruncated
-                        ? Text("... ").font(.system(size: 15)).foregroundColor(theme.textPrimary)
-                          + Text("voir plus").font(.system(size: 15, weight: .medium))
-                            .foregroundColor(theme.textMuted)
-                        : Text("")
-                    ))
-                    .lineLimit(nil)
+                    if isTextExpanded {
+                        (Text(effectiveContent)
+                            .font(.system(size: 15))
+                            .foregroundColor(theme.textPrimary)
+                        + Text(" ")
+                        + Text("voir moins").font(.system(size: 15, weight: .medium))
+                            .foregroundColor(theme.textMuted))
+                        .lineLimit(nil)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                isTextExpanded = false
+                            }
+                        }
+                    } else {
+                        (Text(truncation.text)
+                            .font(.system(size: 15))
+                            .foregroundColor(theme.textPrimary)
+                        + (truncation.isTruncated
+                            ? Text("... ").font(.system(size: 15)).foregroundColor(theme.textPrimary)
+                              + Text("voir plus").font(.system(size: 15, weight: .medium))
+                                .foregroundColor(theme.textMuted)
+                            : Text("")
+                        ))
+                        .lineLimit(nil)
+                        .onTapGesture {
+                            if truncation.isTruncated {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    isTextExpanded = true
+                                }
+                            } else {
+                                onTapPost?(post)
+                            }
+                        }
+                    }
 
                     // Inline secondary translation panel
                     if let content = secondaryContent, let code = secondaryLangCode {
