@@ -132,9 +132,9 @@ struct StoryCanvasView: View {
 
                 // Layers 4-N: Front elements (text, stickers, audio)
                 // Explicit zIndex ensures SwiftUI front content renders above
-                // UIKit-backed drawing layer (UIViewRepresentable can break ZStack order).
+                // UIKit-backed drawing layer AND foreground media (whose zIndex increments via bringToFront).
                 frontElementsGroup(canvasSize: geo.size)
-                    .zIndex(1)
+                    .zIndex(1000)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(
