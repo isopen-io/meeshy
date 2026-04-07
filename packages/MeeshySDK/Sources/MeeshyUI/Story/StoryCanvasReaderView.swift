@@ -465,6 +465,8 @@ private final class ReaderState: ObservableObject {
     private var pendingVideoStarts: [String: (url: URL, media: StoryMediaObject)] = [:]
     /// Stores audio objects for timing-based scheduling of foreground audios.
     private var pendingAudioStarts: [String: (url: URL, audio: StoryAudioPlayerObject)] = [:]
+    /// Reference to the current story, used to compute audio-vs-video timing for looping.
+    private var currentStoryRef: StoryItem?
     /// Active fade-volume timers (Issue 5: must be tracked to invalidate on cleanup).
     private var fadeTimers: [Timer] = []
     /// Observer token for storyAudioFadeOut notification (Issue 6: must be removed on cleanup).
@@ -786,6 +788,7 @@ private final class ReaderState: ObservableObject {
         foregroundLoopObservers = [:]
         for (_, looper) in foregroundLoopers { looper.disableLooping() }
         foregroundLoopers = [:]
+        currentStoryRef = nil
         for (_, obs) in readyObservers { obs.invalidate() }
         readyObservers = [:]
         for (_, timer) in foregroundStopTimers { timer.invalidate() }
@@ -891,6 +894,7 @@ private final class ReaderState: ObservableObject {
     // MARK: Foreground video players (timing-aware start)
 
     func startForegroundVideos(story: StoryItem, preloadedVideoURLs: [String: URL] = [:]) {
+        currentStoryRef = story
         guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
         let videoObjects = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "video" }
         for media in videoObjects {
@@ -940,7 +944,7 @@ private final class ReaderState: ObservableObject {
         player.volume = hasFadeIn ? 0.0 : targetVolume
         foregroundVideoPlayers[media.id] = player
 
-        let shouldLoop = media.loop ?? true
+        let shouldLoop = (media.loop ?? true) || shouldLoopVideoForAudio(media: media)
         // Use AVPlayerLooper for seamless looping (Apple recommended, no gap)
         if shouldLoop, let queuePlayer = player as? AVQueuePlayer, let item = queuePlayer.currentItem {
             foregroundLoopers[media.id] = AVPlayerLooper(player: queuePlayer, templateItem: item)
@@ -964,7 +968,7 @@ private final class ReaderState: ObservableObject {
             fadeVolume(player: player, from: 0.0, to: targetVolume, duration: fadeInDuration)
         }
 
-        if let dur = media.duration, !(media.loop ?? false) {
+        if let dur = media.duration, !shouldLoop {
             let stopDelay = TimeInterval(dur)
             let fadeOutDur = TimeInterval(media.fadeOut ?? 0)
             let fadeOutStart = max(0, stopDelay - fadeOutDur)
@@ -976,6 +980,28 @@ private final class ReaderState: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Returns the latest effective end time among all foreground audio elements.
+    /// Used to determine if a video should loop because audio outlasts it.
+    private func maxForegroundAudioEndTime() -> Double {
+        guard let audioObjects = currentStoryRef?.storyEffects?.audioPlayerObjects?
+            .filter({ $0.placement == "foreground" }) else { return 0 }
+        var maxEnd: Double = 0
+        for audio in audioObjects {
+            let start = Double(audio.startTime ?? 0)
+            let duration = Double(audio.duration ?? 0)
+            maxEnd = max(maxEnd, start + duration)
+        }
+        return maxEnd
+    }
+
+    /// Determines whether a video element should loop because foreground audio extends beyond its end time.
+    private func shouldLoopVideoForAudio(media: StoryMediaObject) -> Bool {
+        guard let videoDuration = media.duration else { return false }
+        let videoEnd = Double(media.startTime ?? 0) + Double(videoDuration)
+        let audioEnd = maxForegroundAudioEndTime()
+        return audioEnd > videoEnd
     }
 
     private func checkPendingVideoStarts() {
@@ -1009,7 +1035,7 @@ private final class ReaderState: ObservableObject {
         player.volume = hasFadeIn ? 0.0 : targetVolume
         foregroundVideoPlayers[media.id] = player
 
-        let shouldLoop = media.loop ?? true
+        let shouldLoop = (media.loop ?? true) || shouldLoopVideoForAudio(media: media)
         // Use AVPlayerLooper for seamless looping (Apple recommended, no gap)
         if shouldLoop, let queuePlayer = player as? AVQueuePlayer, let item = queuePlayer.currentItem {
             foregroundLoopers[media.id] = AVPlayerLooper(player: queuePlayer, templateItem: item)
@@ -1049,7 +1075,7 @@ private final class ReaderState: ObservableObject {
         }
 
         // Schedule stop + fade-out if duration is set and not looping
-        if let dur = media.duration, !(media.loop ?? false) {
+        if let dur = media.duration, !shouldLoop {
             let stopDelay = TimeInterval(dur)
             let fadeOutDur = TimeInterval(media.fadeOut ?? 0)
             let fadeOutStart = max(0, stopDelay - fadeOutDur)
