@@ -155,6 +155,7 @@ async function generateMessage(
   // Determine if this is a new topic introduction or a reply in existing thread
   const isNewTopic = !directive.replyToMessageId && !directive.mentionUsernames.length;
 
+  // Favor SHORT messages — most chat messages are 5-20 words
   // MODE CHAT: cap maxWords (1-2 sentences = ~40 words max, varies short/medium)
   // MODE ELABORE (new topic only): moderate length (~60 words max)
   const baseMinWords = directive.minWords ?? state.minWordsPerMessage ?? 3;
