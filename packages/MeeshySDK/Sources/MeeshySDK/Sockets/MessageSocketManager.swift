@@ -841,14 +841,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Send With Attachments
 
-    public func sendWithAttachments(
-        conversationId: String,
-        content: String?,
-        attachmentIds: [String],
-        replyToId: String?,
-        originalLanguage: String? = nil,
-        isEncrypted: Bool = false
-    ) {
+    private func buildAttachmentPayload(
+        conversationId: String, content: String?, attachmentIds: [String],
+        replyToId: String?, originalLanguage: String?, isEncrypted: Bool
+    ) -> [String: Any] {
         var payload: [String: Any] = [
             "conversationId": conversationId,
             "content": content ?? "",
@@ -857,6 +853,21 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         ]
         if let replyToId { payload["replyToId"] = replyToId }
         if let originalLanguage { payload["originalLanguage"] = originalLanguage }
+        return payload
+    }
+
+    public func sendWithAttachments(
+        conversationId: String,
+        content: String?,
+        attachmentIds: [String],
+        replyToId: String?,
+        originalLanguage: String? = nil,
+        isEncrypted: Bool = false
+    ) {
+        let payload = buildAttachmentPayload(
+            conversationId: conversationId, content: content, attachmentIds: attachmentIds,
+            replyToId: replyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted
+        )
         socket?.emit("message:send-with-attachments", payload)
     }
 
@@ -869,14 +880,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         isEncrypted: Bool = false
     ) async -> String? {
         guard let socket else { return nil }
-        var payload: [String: Any] = [
-            "conversationId": conversationId,
-            "content": content ?? "",
-            "attachmentIds": attachmentIds,
-            "isEncrypted": isEncrypted
-        ]
-        if let replyToId { payload["replyToId"] = replyToId }
-        if let originalLanguage { payload["originalLanguage"] = originalLanguage }
+        let payload = buildAttachmentPayload(
+            conversationId: conversationId, content: content, attachmentIds: attachmentIds,
+            replyToId: replyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted
+        )
         return await withCheckedContinuation { continuation in
             socket.emitWithAck("message:send-with-attachments", payload).timingOut(after: 30) { items in
                 if let response = items.first as? [String: Any],

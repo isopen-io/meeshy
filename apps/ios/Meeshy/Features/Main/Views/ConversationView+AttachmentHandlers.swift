@@ -144,8 +144,6 @@ extension ConversationView {
                 let lang = composerState.selectedLanguage
 
                 if hasAudio && !uploadedIds.isEmpty {
-                    // Audio messages MUST use WebSocket to trigger the audio pipeline
-                    // (transcription via Whisper, translation via NLLB, TTS via Chatterbox)
                     let messageId = await MessageSocketManager.shared.sendWithAttachmentsAsync(
                         conversationId: viewModel.conversationId,
                         content: content.isEmpty ? nil : content,
@@ -161,9 +159,11 @@ extension ConversationView {
                             replyToId: replyId
                         )
                         sendSuccess = true
+                    } else {
+                        viewModel.error = "Echec de l'envoi du message vocal"
+                        ToastManager.shared.showError("Echec de l'envoi du message vocal")
                     }
                 } else if !uploadedIds.isEmpty || !content.isEmpty {
-                    // Non-audio attachments (images, videos, files) use REST
                     sendSuccess = await viewModel.sendMessage(
                         content: content,
                         replyToId: replyId,

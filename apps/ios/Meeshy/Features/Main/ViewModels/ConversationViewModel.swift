@@ -1041,14 +1041,13 @@ class ConversationViewModel: ObservableObject {
         messages.removeAll { $0.id == messageId && $0.deliveryStatus == .failed }
     }
 
-    // MARK: - Insert Optimistic Audio Message (WebSocket path)
-
     func insertOptimisticAudioMessage(
         messageId: String,
         content: String,
         attachments: [MeeshyMessageAttachment],
         replyToId: String?
     ) {
+        let now = Date()
         let msg = Message(
             id: messageId,
             conversationId: conversationId,
@@ -1056,8 +1055,8 @@ class ConversationViewModel: ObservableObject {
             content: content,
             messageType: .audio,
             replyToId: replyToId,
-            createdAt: Date(),
-            updatedAt: Date(),
+            createdAt: now,
+            updatedAt: now,
             attachments: attachments,
             deliveryStatus: .sent,
             isMe: true

@@ -443,7 +443,6 @@ class StoryViewModel: ObservableObject {
                         updatedEffects.mediaObjects = mediaObjects
                     }
 
-                    // Upload audio player objects (foreground + background voice recordings)
                     if var audioObjects = updatedEffects.audioPlayerObjects {
                         for i in audioObjects.indices where audioObjects[i].postMediaId.isEmpty {
                             guard !Task.isCancelled else { return }
@@ -517,6 +516,9 @@ class StoryViewModel: ObservableObject {
     /// Cleanup temp video/audio files after upload completes.
     private func cleanupUploadTempFiles(_ upload: StoryUploadState) {
         for (_, url) in upload.loadedVideoURLs {
+            try? FileManager.default.removeItem(at: url)
+        }
+        for (_, url) in upload.loadedAudioURLs {
             try? FileManager.default.removeItem(at: url)
         }
     }
