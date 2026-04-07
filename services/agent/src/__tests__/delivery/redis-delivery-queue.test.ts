@@ -320,8 +320,10 @@ describe('RedisDeliveryQueue — rate limit', () => {
     const scheduledTimes = items.map((i) => i.scheduledAt).sort((a, b) => a - b);
     const thirdTime = scheduledTimes[2];
     const firstTime = scheduledTimes[0];
-    // Third must be at least 10 min after the first (rate limited)
-    expect(thirdTime - firstTime).toBeGreaterThanOrEqual(10 * 60 * 1000);
+    // Third must be at least ~10 min after the first (rate limited).
+    // Allow 2s tolerance for execution time between enqueue calls.
+    const tenMinMs = 10 * 60 * 1000;
+    expect(thirdTime - firstTime).toBeGreaterThanOrEqual(tenMinMs - 2000);
   });
 });
 
