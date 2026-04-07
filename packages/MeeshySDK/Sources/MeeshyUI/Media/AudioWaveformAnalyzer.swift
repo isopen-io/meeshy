@@ -1,8 +1,11 @@
 import Foundation
 import AVFoundation
+import MeeshySDK
 
 // MARK: - Audio Waveform Analyzer
 
+/// Observable wrapper around WaveformCache for SwiftUI views.
+/// Provides @Published samples that views can bind to directly.
 @MainActor
 public class AudioWaveformAnalyzer: ObservableObject {
     @Published public var samples: [Float] = []
@@ -16,67 +19,48 @@ public class AudioWaveformAnalyzer: ObservableObject {
         analyzeTask?.cancel()
         isAnalyzing = true
 
-        analyzeTask = Task.detached { [weak self] in
-            let result = Self.extractSamples(from: data, barCount: barCount)
-            guard !Task.isCancelled else { return }
-            await MainActor.run { [weak self] in
+        analyzeTask = Task { [weak self] in
+            do {
+                let result = try await WaveformCache.shared.samples(from: data, count: barCount)
+                guard !Task.isCancelled else { return }
                 self?.samples = result
+                self?.isAnalyzing = false
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.samples = Self.generateFallback(count: barCount)
                 self?.isAnalyzing = false
             }
         }
     }
 
-    nonisolated private static func extractSamples(from data: Data, barCount: Int) -> [Float] {
-        let tempDir = FileManager.default.temporaryDirectory
-        let tempFile = tempDir.appendingPathComponent("waveform_\(UUID().uuidString).caf")
+    public func analyze(url: URL, barCount: Int = 120) {
+        analyzeTask?.cancel()
+        isAnalyzing = true
 
-        defer { try? FileManager.default.removeItem(at: tempFile) }
-
-        do {
-            try data.write(to: tempFile)
-
-            let audioFile = try AVAudioFile(forReading: tempFile)
-            let format = audioFile.processingFormat
-            let frameCount = AVAudioFrameCount(audioFile.length)
-
-            guard frameCount > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
-                return Self.generateFallback(count: barCount)
+        analyzeTask = Task { [weak self] in
+            do {
+                let result = try await WaveformCache.shared.samples(from: url, count: barCount)
+                guard !Task.isCancelled else { return }
+                self?.samples = result
+                self?.isAnalyzing = false
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.samples = Self.generateFallback(count: barCount)
+                self?.isAnalyzing = false
             }
-
-            try audioFile.read(into: buffer)
-
-            guard let channelData = buffer.floatChannelData else {
-                return Self.generateFallback(count: barCount)
-            }
-
-            let totalFrames = Int(buffer.frameLength)
-            guard totalFrames > 0 else { return Self.generateFallback(count: barCount) }
-
-            let samplesPerBar = max(1, totalFrames / barCount)
-            var result = [Float](repeating: 0, count: barCount)
-
-            for bar in 0..<barCount {
-                let start = bar * samplesPerBar
-                let end = min(start + samplesPerBar, totalFrames)
-                guard start < end else { continue }
-
-                var sum: Float = 0
-                for i in start..<end {
-                    sum += abs(channelData[0][i])
-                }
-                result[bar] = sum / Float(end - start)
-            }
-
-            let maxVal = result.max() ?? 1.0
-            guard maxVal > 0 else { return Self.generateFallback(count: barCount) }
-
-            return result.map { min(1.0, $0 / maxVal) }
-        } catch {
-            return Self.generateFallback(count: barCount)
         }
     }
 
-    nonisolated private static func generateFallback(count: Int) -> [Float] {
+    /// Generate waveform image data for use as audio thumbhash.
+    public func waveformImageData(from url: URL, width: Int = 64, height: Int = 32) async -> Data {
+        do {
+            return try await WaveformCache.shared.waveformImageData(from: url, width: width, height: height)
+        } catch {
+            return Data()
+        }
+    }
+
+    nonisolated static func generateFallback(count: Int) -> [Float] {
         (0..<count).map { i in
             let seed = Double(i * 7 + 3)
             let value = 0.2 + abs(sin(seed) * 0.4 + cos(seed * 0.5) * 0.3)

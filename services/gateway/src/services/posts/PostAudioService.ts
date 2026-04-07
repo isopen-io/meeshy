@@ -2,7 +2,9 @@
  * PostAudioService
  * Handles audio processing pipeline for PostMedia:
  * - Sends audio to the translator (Whisper transcription via ZMQ)
+ * - Sends audio for translation to platform languages (TTS via ZMQ)
  * - Receives transcription_ready event and persists it to PostMedia
+ * - Receives audioProcessCompleted event and persists translations to PostMedia
  * - Broadcasts post:updated to clients via SocialEventsHandler
  */
 
@@ -11,6 +13,7 @@ import type { Post } from '@meeshy/shared/types/post';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ZMQSingleton } from '../ZmqSingleton';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
+import { getLanguagesWithTranslation } from '../../utils/languages';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
@@ -77,6 +80,8 @@ type ProcessPostAudioParams = {
   postMediaId: string;
   fileUrl: string;
   authorId: string;
+  /** When true, triggers full translation pipeline (transcription + TTS for platform languages) */
+  translateToAllLanguages?: boolean;
 };
 
 type HandleTranscriptionReadyParams = {
@@ -95,6 +100,23 @@ type HandleTranscriptionReadyParams = {
     senderVoiceIdentified?: boolean;
     senderSpeakerId?: string | null;
   };
+};
+
+type HandleAudioTranslationsReadyParams = {
+  postId: string;
+  postMediaId: string;
+  translations: Record<string, {
+    type: string;
+    transcription: string;
+    path: string;
+    url: string;
+    durationMs: number;
+    format: string;
+    cloned: boolean;
+    quality: number;
+    ttsModel: string;
+    segments?: Array<{ text: string; startMs: number; endMs: number }>;
+  }>;
 };
 
 export class PostAudioService {
@@ -118,8 +140,24 @@ export class PostAudioService {
   }
 
   /**
-   * Enqueue a post audio file for Whisper transcription via ZMQ.
-   * Fire-and-forget: the result arrives later as a transcription_ready event.
+   * Returns the list of platform language codes for translation.
+   * Posts/stories destined to all users should be translated to these languages.
+   */
+  private getPlatformTargetLanguages(sourceLanguage?: string): string[] {
+    const translatable = getLanguagesWithTranslation();
+    const codes = translatable.map(l => l.code);
+    if (sourceLanguage) {
+      return codes.filter(c => c !== sourceLanguage);
+    }
+    return codes;
+  }
+
+  /**
+   * Enqueue a post audio file for processing via ZMQ.
+   *
+   * When translateToAllLanguages is true (default for posts/stories),
+   * the full pipeline runs: Whisper transcription → NLLB translation → TTS for all platform languages.
+   * When false, only transcription is performed (backward-compatible behavior).
    */
   async processPostAudio(params: ProcessPostAudioParams): Promise<void> {
     const zmqClient = ZMQSingleton.getInstanceSync();
@@ -129,8 +167,6 @@ export class PostAudioService {
     }
 
     // Resolve the absolute file path from the URL.
-    // PostMedia.fileUrl is typically a public URL like /uploads/... — derive the local path
-    // from the uploads directory the same way attachment processing does.
     const uploadsBase = process.env.UPLOADS_DIR ?? '/opt/meeshy/uploads';
     const urlPath = params.fileUrl.startsWith('http')
       ? new URL(params.fileUrl).pathname
@@ -139,26 +175,37 @@ export class PostAudioService {
       ? `${uploadsBase}${urlPath.slice('/uploads'.length)}`
       : urlPath;
 
-    log.info('Sending post audio for transcription', { postId: params.postId, postMediaId: params.postMediaId, audioPath });
+    const enableTranslation = params.translateToAllLanguages !== false;
+    const targetLanguages = enableTranslation ? this.getPlatformTargetLanguages() : [];
+
+    log.info('Sending post audio for processing', {
+      postId: params.postId,
+      postMediaId: params.postMediaId,
+      audioPath,
+      translateToAllLanguages: enableTranslation,
+      targetLanguageCount: targetLanguages.length,
+    });
 
     try {
       await zmqClient.sendAudioProcessRequest({
-        // Use postMediaId as both messageId and attachmentId so the translator
-        // echoes them back in the transcription_ready event.
         messageId: params.postMediaId,
         attachmentId: params.postMediaId,
         conversationId: '',
         senderId: params.authorId,
         audioPath,
         audioDurationMs: 0,
-        targetLanguages: [],
-        generateVoiceClone: false,
+        targetLanguages,
+        generateVoiceClone: enableTranslation,
         modelType: 'medium',
         postId: params.postId,
         postMediaId: params.postMediaId,
       });
 
-      log.info('Post audio enqueued', { postId: params.postId, postMediaId: params.postMediaId });
+      log.info('Post audio enqueued', {
+        postId: params.postId,
+        postMediaId: params.postMediaId,
+        targetLanguages: enableTranslation ? targetLanguages.length : 0,
+      });
     } catch (err) {
       log.error('Failed to enqueue post audio', err, { postId: params.postId });
     }
@@ -195,21 +242,53 @@ export class PostAudioService {
 
       log.info('Transcription persisted — fetching post for broadcast', { postId, postMediaId });
 
-      const post = await this.prisma.post.findFirst({
-        where: { id: postId, isDeleted: false },
-        include: postInclude,
-      });
-
-      if (!post) {
-        log.warn('Post not found after transcription update — skipping broadcast', { postId });
-        return;
-      }
-
-      await this.socialEvents.broadcastPostUpdated(post as unknown as Post, post.authorId);
-
-      log.info('post:updated broadcast sent after transcription', { postId });
+      await this.broadcastPostUpdate(postId);
     } catch (err: unknown) {
       log.error('handleTranscriptionReady failed', err, { postId, postMediaId });
     }
+  }
+
+  /**
+   * Called when the translator returns audioProcessCompleted with translations for a post.
+   * Persists translated audio files + text translations to PostMedia.translations.
+   */
+  async handleAudioTranslationsReady(params: HandleAudioTranslationsReadyParams): Promise<void> {
+    const { postId, postMediaId, translations } = params;
+
+    try {
+      const langCount = Object.keys(translations).length;
+      log.info('Post audio translations ready — persisting', { postId, postMediaId, langCount });
+
+      const translationsPayload: Prisma.InputJsonValue = translations as unknown as Prisma.InputJsonValue;
+
+      await this.prisma.postMedia.update({
+        where: { id: postMediaId },
+        data: { translations: translationsPayload },
+      });
+
+      log.info('Translations persisted — broadcasting post:updated', { postId, postMediaId, langCount });
+
+      await this.broadcastPostUpdate(postId);
+    } catch (err: unknown) {
+      log.error('handleAudioTranslationsReady failed', err, { postId, postMediaId });
+    }
+  }
+
+  /**
+   * Fetch the post and broadcast post:updated to all connected clients.
+   */
+  private async broadcastPostUpdate(postId: string): Promise<void> {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, isDeleted: false },
+      include: postInclude,
+    });
+
+    if (!post) {
+      log.warn('Post not found after update — skipping broadcast', { postId });
+      return;
+    }
+
+    await this.socialEvents.broadcastPostUpdated(post as unknown as Post, post.authorId);
+    log.info('post:updated broadcast sent', { postId });
   }
 }
