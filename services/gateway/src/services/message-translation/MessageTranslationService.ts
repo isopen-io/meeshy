@@ -23,6 +23,7 @@ import { MultiLevelJobMappingCache } from '../MultiLevelJobMappingCache';
 import type { AttachmentTranscription, AttachmentTranslations, AttachmentTranslation, TranscriptionSegment } from '@meeshy/shared/types/attachment-audio';
 import { toSocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/translation-transformer';
+import { PostAudioService } from '../posts/PostAudioService';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -790,6 +791,8 @@ export class MessageTranslationService extends EventEmitter {
     taskId: string;
     messageId: string;
     attachmentId: string;
+    postId?: string;
+    postMediaId?: string;
     transcription: {
       text: string;
       language: string;
@@ -850,6 +853,31 @@ export class MessageTranslationService extends EventEmitter {
         `Traductions: ${data.translatedAudios.length} | ` +
         `Temps: ${data.processingTimeMs}ms | TaskID: ${data.taskId}`
       );
+
+      // Route post/story audio translations to PostAudioService
+      if (data.postId && data.postMediaId && data.translatedAudios.length > 0) {
+        const translations: Record<string, any> = {};
+        for (const ta of data.translatedAudios) {
+          translations[ta.targetLanguage] = {
+            type: 'audio',
+            transcription: ta.translatedText,
+            path: ta.audioPath,
+            url: ta.audioUrl,
+            durationMs: ta.durationMs,
+            format: ta.audioMimeType ?? 'audio/mp3',
+            cloned: ta.voiceCloned,
+            quality: ta.voiceQuality,
+            ttsModel: 'chatterbox',
+            segments: (ta.segments ?? []).map(s => ({ text: s.text, startMs: s.startMs, endMs: s.endMs })),
+          };
+        }
+        await PostAudioService.shared.handleAudioTranslationsReady({
+          postId: data.postId,
+          postMediaId: data.postMediaId,
+          translations,
+        });
+        return;
+      }
 
       // 1. Récupérer les infos de l'attachment et traductions existantes
       const attachment = await this.prisma.messageAttachment.findUnique({

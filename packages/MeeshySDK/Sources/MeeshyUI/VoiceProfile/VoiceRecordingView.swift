@@ -2,17 +2,18 @@ import SwiftUI
 import AVFoundation
 import MeeshySDK
 
-public struct VoiceRecordingView: View {
+public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     let accentColor: String
     let minimumSamples: Int
     let minimumDurationSeconds: Int
     let onSamplesReady: (([Data]) -> Void)?
 
-    @StateObject private var recorder = VoiceSampleRecorder()
+    @ObservedObject private var recorder: Recorder
     @State private var recordedSamples: [RecordedSample] = []
 
-    public init(accentColor: String = "A855F7", minimumSamples: Int = 3,
+    public init(recorder: Recorder, accentColor: String = "A855F7", minimumSamples: Int = 3,
                 minimumDurationSeconds: Int = 10, onSamplesReady: (([Data]) -> Void)? = nil) {
+        self.recorder = recorder
         self.accentColor = accentColor
         self.minimumSamples = minimumSamples
         self.minimumDurationSeconds = minimumDurationSeconds
@@ -31,9 +32,12 @@ public struct VoiceRecordingView: View {
         VStack(spacing: 16) {
             sampleTextCard
 
-            recordingControls
-
             samplesList
+
+            Spacer()
+
+            // Controls always at the bottom
+            recordingControls
 
             if recordedSamples.count >= minimumSamples {
                 submitButton
@@ -82,7 +86,7 @@ public struct VoiceRecordingView: View {
 
             HStack(spacing: 20) {
                 if recorder.isRecording {
-                    Text(formattedDuration(recorder.currentDuration))
+                    Text(formattedDuration(recorder.duration))
                         .font(.system(size: 14, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(hex: "FF6B6B"))
 
@@ -99,11 +103,11 @@ public struct VoiceRecordingView: View {
                     ZStack {
                         Circle()
                             .fill(recorder.isRecording ? Color(hex: "FF6B6B") : Color(hex: accentColor))
-                            .frame(width: 60, height: 60)
+                            .frame(width: 64, height: 64)
                             .shadow(color: (recorder.isRecording ? Color(hex: "FF6B6B") : Color(hex: accentColor)).opacity(0.3), radius: 8, y: 2)
 
                         Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                             .foregroundColor(.white)
                     }
                 }
@@ -124,14 +128,15 @@ public struct VoiceRecordingView: View {
 
     private var waveformIndicator: some View {
         HStack(spacing: 3) {
-            ForEach(0..<20, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1.5)
+            ForEach(0..<15, id: \.self) { i in
+                let level: CGFloat = i < recorder.audioLevels.count ? recorder.audioLevels[i] : 0
+                RoundedRectangle(cornerRadius: 2)
                     .fill(Color(hex: accentColor).opacity(0.6))
-                    .frame(width: 3, height: CGFloat.random(in: 8...30))
-                    .animation(.easeInOut(duration: 0.3).delay(Double(i) * 0.05).repeatForever(autoreverses: true), value: recorder.isRecording)
+                    .frame(width: 4, height: max(8, 8 + 30 * level))
+                    .animation(.spring(response: 0.08, dampingFraction: 0.6), value: level)
             }
         }
-        .frame(height: 30)
+        .frame(height: 38)
     }
 
     // MARK: - Samples List
@@ -202,15 +207,32 @@ public struct VoiceRecordingView: View {
     }
 
     private func stopRecording() {
-        guard let result = recorder.stopRecording() else { return }
-        guard result.duration >= Double(minimumDurationSeconds) else { return }
-        recordedSamples.append(result)
+        let capturedDuration = recorder.duration
+        guard let url = recorder.stopRecording() else { return }
+        guard capturedDuration >= Double(minimumDurationSeconds) else { return }
+        let data = try? Data(contentsOf: url)
+        recordedSamples.append(RecordedSample(duration: capturedDuration, data: data, url: url))
     }
 
     private func formattedDuration(_ duration: TimeInterval) -> String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Backward-compatible convenience init
+
+extension VoiceRecordingView where Recorder == DefaultSDKAudioRecorder {
+    public init(accentColor: String = "A855F7", minimumSamples: Int = 3,
+                minimumDurationSeconds: Int = 10, onSamplesReady: (([Data]) -> Void)? = nil) {
+        self.init(
+            recorder: DefaultSDKAudioRecorder(),
+            accentColor: accentColor,
+            minimumSamples: minimumSamples,
+            minimumDurationSeconds: minimumDurationSeconds,
+            onSamplesReady: onSamplesReady
+        )
     }
 }
 
@@ -221,70 +243,4 @@ struct RecordedSample: Identifiable {
     let duration: TimeInterval
     let data: Data?
     let url: URL?
-}
-
-// MARK: - Voice Sample Recorder
-
-@MainActor
-class VoiceSampleRecorder: ObservableObject {
-    @Published var isRecording = false
-    @Published var currentDuration: TimeInterval = 0
-
-    private var audioRecorder: AVAudioRecorder?
-    private var recordingURL: URL?
-    private var timer: Timer?
-    private var startTime: Date?
-
-    func startRecording() {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
-            try session.setActive(true)
-        } catch {
-            return
-        }
-
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice_sample_\(UUID().uuidString).m4a")
-        recordingURL = url
-
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44100,
-            AVNumberOfChannelsKey: 2,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-        ]
-
-        do {
-            audioRecorder = try AVAudioRecorder(url: url, settings: settings)
-            audioRecorder?.record()
-            isRecording = true
-            startTime = Date()
-            currentDuration = 0
-
-            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                guard let self, let start = self.startTime else { return }
-                Task { @MainActor in
-                    self.currentDuration = Date().timeIntervalSince(start)
-                }
-            }
-        } catch {
-            return
-        }
-    }
-
-    func stopRecording() -> RecordedSample? {
-        audioRecorder?.stop()
-        timer?.invalidate()
-        timer = nil
-        isRecording = false
-
-        guard let url = recordingURL else { return nil }
-        let duration = currentDuration
-        let data = try? Data(contentsOf: url)
-
-        currentDuration = 0
-        startTime = nil
-
-        return RecordedSample(duration: duration, data: data, url: url)
-    }
 }

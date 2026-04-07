@@ -1,71 +1,14 @@
 @preconcurrency import AVFoundation
 
+/// Deprecated: Use WaveformCache.shared instead.
+/// This wrapper delegates to WaveformCache for backward compatibility.
+@available(*, deprecated, message: "Use WaveformCache.shared.samples(from:count:) instead")
 public actor WaveformGenerator {
 
     public static let shared = WaveformGenerator()
     private init() {}
 
-    private var cache: [String: [Float]] = [:]
-
-    /// Extrait ~sampleCount amplitudes normalisées (0.0–1.0) depuis une URL audio locale.
     public func generateSamples(from url: URL, sampleCount: Int = 80) async throws -> [Float] {
-        let cacheKey = "\(url.lastPathComponent)_\(sampleCount)"
-        if let cached = cache[cacheKey] {
-            return cached
-        }
-
-        let asset = AVURLAsset(url: url)
-        let duration = try await asset.load(.duration)
-        guard duration.seconds > 0 else { return [] }
-
-        guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
-            return []
-        }
-
-        let reader = try AVAssetReader(asset: asset)
-        let outputSettings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsBigEndianKey: false,
-            AVLinearPCMIsFloatKey: false,
-        ]
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
-        reader.add(output)
-        reader.startReading()
-        defer { if reader.status == .reading { reader.cancelReading() } }
-
-        var allSamples: [Float] = []
-        while let buffer = output.copyNextSampleBuffer() {
-            try Task.checkCancellation()
-            guard let blockBuffer = CMSampleBufferGetDataBuffer(buffer) else { continue }
-            let length = CMBlockBufferGetDataLength(blockBuffer)
-            guard length > 0 else { continue }
-            var data = Data(count: length)
-            _ = data.withUnsafeMutableBytes { ptr in
-                guard let base = ptr.baseAddress else { return OSStatus(0) }
-                return CMBlockBufferCopyDataBytes(blockBuffer, atOffset: 0,
-                                           dataLength: length, destination: base)
-            }
-            let samples = data.withUnsafeBytes { ptr -> [Float] in
-                let int16Ptr = ptr.bindMemory(to: Int16.self)
-                return int16Ptr.map { Float(abs($0)) / Float(Int16.max) }
-            }
-            allSamples.append(contentsOf: samples)
-        }
-
-        guard !allSamples.isEmpty else { return [] }
-
-        // Réduire à sampleCount amplitudes (moyennes de buckets)
-        let bucketSize = allSamples.count / sampleCount
-        guard bucketSize > 0 else { return Array(allSamples.prefix(sampleCount)) }
-
-        let result = (0..<sampleCount).map { i in
-            let start = i * bucketSize
-            let end = min(start + bucketSize, allSamples.count)
-            let bucket = allSamples[start..<end]
-            return bucket.reduce(0, +) / Float(bucket.count)
-        }
-        cache[cacheKey] = result
-        return result
+        try await WaveformCache.shared.samples(from: url, count: sampleCount)
     }
 }
