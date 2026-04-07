@@ -267,12 +267,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 var codec: String?
 
                 for (_, stats) in report.statistics {
-                    if stats.type == "candidate-pair", let values = stats.values as? [String: NSObject] {
+                    if stats.type == "candidate-pair" {
+                        let values = stats.values
                         if let rttValue = values["currentRoundTripTime"] as? NSNumber {
                             rtt = rttValue.doubleValue * 1000
                         }
                     }
-                    if stats.type == "inbound-rtp", let values = stats.values as? [String: NSObject] {
+                    if stats.type == "inbound-rtp" {
+                        let values = stats.values
                         if let lost = values["packetsLost"] as? NSNumber {
                             packetsLost = lost.intValue
                         }
@@ -280,7 +282,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                             codec = codecId
                         }
                     }
-                    if stats.type == "outbound-rtp", let values = stats.values as? [String: NSObject] {
+                    if stats.type == "outbound-rtp" {
+                        let values = stats.values
                         if let bytesSent = values["bytesSent"] as? NSNumber {
                             bandwidth = bytesSent.intValue
                         }

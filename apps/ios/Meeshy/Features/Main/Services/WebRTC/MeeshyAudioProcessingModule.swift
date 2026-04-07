@@ -63,18 +63,19 @@ final class MeeshyAudioProcessingModule: NSObject {
 
         // CLEAN PATH: Send original audio to transcription
         if let callback = onCleanAudioBuffer {
+            nonisolated(unsafe) let sendableCallback = callback
             if hasEffects {
                 // Effects will modify buffer — copy first, dispatch off audio thread
                 guard let cleanCopy = copyBuffer(buffer) else { return }
                 transcriptionQueue.async {
-                    callback(cleanCopy)
+                    sendableCallback(cleanCopy)
                 }
             } else {
                 // No effects — buffer won't be modified, but still dispatch off audio thread
                 // Copy needed because RTCAudioBuffer memory is only valid during this callback
                 guard let cleanCopy = copyBuffer(buffer) else { return }
                 transcriptionQueue.async {
-                    callback(cleanCopy)
+                    sendableCallback(cleanCopy)
                 }
             }
         }
