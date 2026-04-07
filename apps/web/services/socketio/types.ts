@@ -71,6 +71,8 @@ export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
  */
 export interface ConnectionDiagnostics {
   status: ConnectionStatus;
+  isConnected: boolean;
+  hasSocket: boolean;
   reconnectAttempts: number;
   transport: string;
   socketId: string | null;
