@@ -60,20 +60,23 @@ function buildGeneratorPrompt(
   // === MODE CHAT (default) vs MODE ELABORE (rare — new topic only) ===
   const modeGuide = isNewTopic
     ? `MODE ELABORE — Tu OUVRES un nouveau sujet ou c'est ta PREMIERE intervention sur ce theme.
+Le sujet DOIT etre en rapport DIRECT avec le titre et la description de la conversation.
 Tu peux developper (2-4 phrases). Donne ton avis, une experience, une observation concrete.
-Meme en mode elabore, reste COURT et CONVERSATIONNEL. Pas de dissertation. Pas de structure formelle.
-Vise 15-40 mots. Ne depasse JAMAIS 60 mots.`
+Reste CONVERSATIONNEL. Pas de dissertation. Pas de structure formelle.`
     : `MODE CHAT — Tu REAGIS dans un fil existant. C'est du CHAT, pas un article.
-MAXIMUM 1-2 phrases COURTES. Le plus court possible. Direct, percutant.
-La PLUPART de tes messages font 5-15 mots. Sois BREF comme sur WhatsApp.
+Ta reponse DOIT etre en RELATION DIRECTE avec ce qui vient d'etre dit. Ne change pas de sujet.
+VARIE la longueur: parfois tres court (5-10 mots), parfois un peu plus developpe (20-40 mots).
 Tu PEUX citer le prenom ou @pseudo de la personne a qui tu reponds (mais pas obligatoire).
-Exemples de TON ATTENDU (note: TRES COURTS):
+Exemples de messages COURTS (50% du temps):
 - "Franchement t'as raison"
-- "Le vrai souci c'est la maintenance"
 - "Pas d'accord, le probleme c'est la gestion"
-- "C'est exactement ce que je disais!"
 - "Ah ouais? J'avais pas vu ca comme ca"
-- "Mdr tellement vrai"`;
+- "Mdr tellement vrai"
+Exemples de messages MOYENS (50% du temps):
+- "Franchement @Paul t'as raison, sans electricite stable rien ne bouge"
+- "En vrai le vrai souci c'est la maintenance, on construit mais on entretient pas"
+- "Moi je pense qu'il faut deja regler les routes avant de parler d'industrie"
+- "Pas d'accord, le probleme c'est pas l'argent c'est la gestion au quotidien"`;
 
   const shouldCite = Math.random() < 0.4;
   const replyContext = replyToSenderName && shouldCite
@@ -121,6 +124,7 @@ REGLES ABSOLUES:
 - ${minWords}-${maxWords} mots. PAS PLUS.
 - LANGUE: "${userLanguage}"
 - Ecris comme dans WhatsApp/Telegram — PAS comme un article Wikipedia.
+- PERTINENCE: Ta reponse doit TOUJOURS etre en rapport avec la discussion en cours ou avec le theme de la conversation ("${conversationTitle || 'Sans titre'}"). Hors sujet = SKIP.
 
 Resume conversation: ${summary}`;
 }
@@ -151,13 +155,12 @@ async function generateMessage(
   // Determine if this is a new topic introduction or a reply in existing thread
   const isNewTopic = !directive.replyToMessageId && !directive.mentionUsernames.length;
 
-  // MODE CHAT: cap maxWords aggressively (1-2 short sentences = ~30 words max)
-  // MODE ELABORE (new topic only): allow moderate length (~60 words max)
-  // Favor SHORT messages — most chat messages are 5-20 words
+  // MODE CHAT: cap maxWords (1-2 sentences = ~40 words max, varies short/medium)
+  // MODE ELABORE (new topic only): moderate length (~60 words max)
   const baseMinWords = directive.minWords ?? state.minWordsPerMessage ?? 3;
   const baseMaxWords = directive.maxWords ?? state.maxWordsPerMessage ?? 80;
   const minWords = isNewTopic ? Math.max(baseMinWords, 10) : baseMinWords;
-  const maxWords = isNewTopic ? Math.min(baseMaxWords, 60) : Math.min(baseMaxWords, 30);
+  const maxWords = isNewTopic ? Math.min(baseMaxWords, 60) : Math.min(baseMaxWords, 40);
 
   const temperature = state.generationTemperature ?? 0.85;
   const maxTokens = Math.max(64, Math.round(maxWords * 1.5));
