@@ -75,7 +75,7 @@ export async function findEligibleConversations(
       agentInstructions: config?.agentInstructions ?? null,
       webSearchEnabled: config?.webSearchEnabled ?? true,
       minWordsPerMessage: Math.max(1, config?.minWordsPerMessage ?? 1),
-      maxWordsPerMessage: Math.max(10, Math.min(config?.maxWordsPerMessage ?? 60, 2000)),
+      maxWordsPerMessage: Math.max(10, Math.min(config?.maxWordsPerMessage ?? 500, 2000)),
       generationTemperature: Math.max(0, Math.min(config?.generationTemperature ?? 0.8, 2.0)),
       qualityGateEnabled: config?.qualityGateEnabled ?? true,
       qualityGateMinScore: Math.max(0, Math.min(config?.qualityGateMinScore ?? 0.5, 1.0)),
