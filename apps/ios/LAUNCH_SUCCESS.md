@@ -119,7 +119,7 @@ xcodebuild -scheme Meeshy \
 xcrun simctl install 1607E13B-0863-4F11-A2DA-AEE6646C279B \
   ./DerivedData/Build/Products/Debug-iphonesimulator/Meeshy.app
 
-xcrun simctl launch 1607E13B-0863-4F11-A2DA-AEE6646C279B com.meeshy.app
+xcrun simctl launch 1607E13B-0863-4F11-A2DA-AEE6646C279B me.meeshy.app
 ```
 
 ### Via Xcode (Recommandé)
@@ -221,10 +221,10 @@ L'app est maintenant lancée sur le simulateur. Vous pouvez tester :
 xcrun simctl spawn 1607E13B-0863-4F11-A2DA-AEE6646C279B log stream --predicate 'process == "Meeshy"'
 
 # Fermer l'app
-xcrun simctl terminate 1607E13B-0863-4F11-A2DA-AEE6646C279B com.meeshy.app
+xcrun simctl terminate 1607E13B-0863-4F11-A2DA-AEE6646C279B me.meeshy.app
 
 # Relancer l'app
-xcrun simctl launch 1607E13B-0863-4F11-A2DA-AEE6646C279B com.meeshy.app
+xcrun simctl launch 1607E13B-0863-4F11-A2DA-AEE6646C279B me.meeshy.app
 
 # Rebuild complet
 xcodebuild -scheme Meeshy -destination 'id=1607E13B-0863-4F11-A2DA-AEE6646C279B' clean build

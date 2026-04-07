@@ -113,7 +113,7 @@ end
 widget_target = add_extension_target(
   project, main_target,
   'MeeshyWidgets',
-  'com.meeshy.app.widgets',
+  'me.meeshy.app.widgets',
   :app_extension,
   'MeeshyWidgets/MeeshyWidgets.entitlements',
   [
@@ -136,7 +136,7 @@ puts "\nWidget extension target added successfully!"
 notif_target = add_extension_target(
   project, main_target,
   'MeeshyNotificationExtension',
-  'com.meeshy.app.notification-service',
+  'me.meeshy.app.notification-service',
   :app_extension,
   'MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements',
   [

@@ -262,21 +262,21 @@ L'application supporte trois environnements:
 
 ### Debug (Développement Local)
 - **API:** `http://localhost:3000` ou `https://dev.gate.meeshy.me`
-- **Bundle ID:** `com.meeshy.app.debug`
+- **Bundle ID:** `me.meeshy.app.debug`
 - **Logging:** Complet
 - **Optimisations:** Désactivées
 - **Usage:** Développement local
 
 ### Staging (Pré-production)
 - **API:** `https://staging.gate.meeshy.me`
-- **Bundle ID:** `com.meeshy.app.staging`
+- **Bundle ID:** `me.meeshy.app.staging`
 - **Logging:** Verbose
 - **Optimisations:** Activées
 - **Usage:** Tests internes
 
 ### Production
 - **API:** `https://gate.meeshy.me`
-- **Bundle ID:** `com.meeshy.app`
+- **Bundle ID:** `me.meeshy.app`
 - **Logging:** Erreurs uniquement
 - **Optimisations:** Maximales
 - **Usage:** App Store

@@ -33,7 +33,7 @@ If the project doesn't exist:
    - Product Name: **Meeshy**
    - Team: Your Apple ID team
    - Organization Identifier: **com.meeshy**
-   - Bundle Identifier: **com.meeshy.app**
+   - Bundle Identifier: **me.meeshy.app**
    - Interface: **SwiftUI**
    - Language: **Swift**
    - Minimum Deployment: **iOS 16.0**
@@ -50,7 +50,7 @@ If the project doesn't exist:
 - Add Capabilities:
   - Push Notifications
   - Background Modes (Remote notifications, Background fetch)
-  - App Groups (com.meeshy.app.group)
+  - App Groups (me.meeshy.app.group)
   - Keychain Sharing
 
 **Build Settings:**
@@ -534,7 +534,7 @@ final class LoginFlowTests: XCTestCase {
 **1. Create Firebase Project**
 - Go to [Firebase Console](https://console.firebase.google.com)
 - Create new project: "Meeshy"
-- Add iOS app with bundle ID: `com.meeshy.app`
+- Add iOS app with bundle ID: `me.meeshy.app`
 
 **2. Download Config File**
 - Download `GoogleService-Info.plist`

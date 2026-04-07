@@ -1,12 +1,12 @@
 name: Meeshy
 options:
-  bundleIdPrefix: com.meeshy
+  bundleIdPrefix: me.meeshy
   deploymentTarget:
     iOS: "17.0"
   developmentLanguage: en
 
 settings:
-  SWIFT_VERSION: "5.0"
+  SWIFT_VERSION: "6.0"
   IPHONEOS_DEPLOYMENT_TARGET: "17.0"
   PRODUCT_NAME: Meeshy
   TARGETED_DEVICE_FAMILY: "1,2"
@@ -16,12 +16,10 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
-
     sources:
       - path: Meeshy
         excludes:
           - "**/*.md"
-
     settings:
       INFOPLIST_FILE: Meeshy/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app
@@ -29,6 +27,34 @@ targets:
       ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
       ENABLE_PREVIEWS: YES
       CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: Meeshy/Meeshy.entitlements
+    dependencies:
+      - target: MeeshyWidgets
+      - target: MeeshyNotificationExtension
 
-    scheme:
-      testTargets: []
+  MeeshyWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MeeshyWidgets
+    settings:
+      INFOPLIST_FILE: MeeshyWidgets/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.widgets
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: MeeshyWidgets/MeeshyWidgets.entitlements
+
+  MeeshyNotificationExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MeeshyNotificationExtension
+    settings:
+      INFOPLIST_FILE: MeeshyNotificationExtension/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-service
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements
+
+scheme:
+  testTargets: []

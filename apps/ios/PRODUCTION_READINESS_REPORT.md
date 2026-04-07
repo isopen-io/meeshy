@@ -709,7 +709,7 @@ No critical issues prevent production deployment.
 
 2. **Configure Apple Developer**
    - Enroll in Apple Developer Program ($99/year)
-   - Create App ID (com.meeshy.app)
+   - Create App ID (me.meeshy.app)
    - Configure capabilities (Push, CallKit, etc.)
    - Set up code signing certificates
 

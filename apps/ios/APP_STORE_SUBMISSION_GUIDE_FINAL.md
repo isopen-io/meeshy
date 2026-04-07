@@ -84,4 +84,11 @@ Apple a besoin d'un compte de test pour vérifier l'application. Dans la section
 
 ---
 
+## 7. Notes Techniques sur l'Environnement de Build
+
+L'application utilise désormais **Swift 6** pour garantir la sécurité de la concurrence.
+- **Xcode Requis** : Version 16.0 ou supérieure.
+- **macOS Requis** : macOS Sonoma (14.0) ou supérieur pour le développement local, **macOS Sequoia (15.0)** pour les runners CI.
+- **Swift Version** : 6.0.
+
 🚀 **Félicitations ! Votre application est prête pour le monde entier.**
