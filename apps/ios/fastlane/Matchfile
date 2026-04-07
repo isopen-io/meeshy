@@ -1,25 +1,12 @@
 # Matchfile for Meeshy iOS Code Signing
+# Uses SSH deploy key for Git access in CI
 
-git_url(ENV["MATCH_GIT_URL"] || "https://github.com/your-org/certificates")
+git_url(ENV["MATCH_GIT_URL"] || "git@github.com:isopen-io/meeshy-certificates.git")
 
 storage_mode("git")
 
-type("development") # The default type, can be: appstore, adhoc, enterprise or development
+type("appstore")
 
-# App Identifiers
-app_identifier([
-  "me.meeshy.app",
-  "me.meeshy.app.staging",
-  "me.meeshy.app.debug"
-])
+app_identifier(["me.meeshy.app"])
 
-# Your Apple Developer Portal username
-username(ENV["FASTLANE_USER"] || "your-apple-id@example.com")
-
-# Team ID
-team_id(ENV["FASTLANE_TEAM_ID"] || "YOUR_TEAM_ID")
-
-# For all available options run `fastlane match --help`
-# Remove the # in the beginning of the line to enable the other options
-
-# The docs are available on https://docs.fastlane.tools/actions/match
+team_id(ENV["FASTLANE_TEAM_ID"] || "D72UK7R5RE")
