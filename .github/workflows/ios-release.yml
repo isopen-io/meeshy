@@ -4,53 +4,89 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: 'Fastlane lane (beta or release)'
+        required: true
+        default: 'beta'
+        type: choice
+        options:
+          - beta
+          - release
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and Release to App Store
+  build-and-release:
+    name: Build & Upload
     runs-on: macos-15
+    timeout-minutes: 45
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Ruby
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: apps/ios
 
-      - name: Install dependencies
-        run: |
-          cd apps/ios
-          bundle install
-
-      - name: Cache Swift Package Manager
-        uses: actions/cache@v3
+      - name: Cache SPM packages
+        uses: actions/cache@v4
         with:
-          path: .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-spm-
+          path: |
+            apps/ios/Build/SourcePackages
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('apps/ios/Meeshy.xcodeproj/project.pbxproj') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Setup SSH for Match
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.MATCH_DEPLOY_KEY }}
 
       - name: Decode GoogleService-Info.plist
         run: |
           echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" | base64 --decode > apps/ios/Meeshy/GoogleService-Info.plist
 
-      - name: Run Fastlane Release
+      - name: Decode API Key
+        run: |
+          echo "${{ secrets.ASC_KEY_CONTENT }}" | base64 --decode > /tmp/AuthKey.p8
+
+      - name: Determine lane
+        id: lane
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "lane=${{ github.event.inputs.lane }}" >> $GITHUB_OUTPUT
+          else
+            echo "lane=beta" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Fastlane
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_FILEPATH: /tmp/AuthKey.p8
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-          FASTLANE_USER: ${{ secrets.APPLE_ID }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           FASTLANE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          FASTLANE_ITC_TEAM_ID: ${{ secrets.APPLE_ITC_TEAM_ID }}
-          GIT_AUTHOR_NAME: github-actions[bot]
-          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
-          GIT_COMMITTER_NAME: github-actions[bot]
-          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+          FASTLANE_ITC_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           cd apps/ios
-          bundle exec fastlane release skip_metadata:true skip_screenshots:true
+          bundle exec fastlane ${{ steps.lane.outputs.lane }} skip_tests:true skip_metadata:true skip_screenshots:true
+
+      - name: Upload IPA artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Meeshy-${{ github.ref_name }}
+          path: apps/ios/build/Meeshy.ipa
+          retention-days: 30
