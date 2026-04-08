@@ -48,7 +48,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
-	<true/>
+	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
