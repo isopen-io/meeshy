@@ -115,7 +115,7 @@ public struct JoinedConversation: Decodable {
 
 // MARK: - Create Share Link Request (POST /links)
 
-public struct CreateShareLinkRequest: Encodable {
+public struct CreateShareLinkRequest: Encodable, Sendable {
     public let conversationId: String
     public let name: String?
     public let description: String?
