@@ -196,14 +196,15 @@ struct FeedPostCard: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 
-                    // Media preview
-                    if post.hasMedia {
-                        mediaPreview
-                    }
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
                     onTapPost?(post)
+                }
+
+                // Media preview (outside nav tap target — has its own fullscreen gesture)
+                if post.hasMedia {
+                    mediaPreview
                 }
 
                 // Reposted content (outside parent tap target so its own Button works)
