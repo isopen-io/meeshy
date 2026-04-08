@@ -342,6 +342,7 @@ public struct AudioPlayerView: View {
         }
         .onChange(of: player.isPlaying) { playing in
             onPlayingChange?(playing)
+            if playing { loadWaveformSamples() }
         }
         .onChange(of: externalLanguage?.wrappedValue) { newLang in
             let code = newLang ?? "orig"

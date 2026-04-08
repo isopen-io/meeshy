@@ -287,6 +287,18 @@ export class ZmqMessageHandler extends EventEmitter {
    * Gère un événement de processing audio terminé (MULTIPART)
    */
   private handleAudioProcessCompleted(event: AudioProcessCompletedEvent, binaryFrames: Buffer[]): void {
+    // Deduplication by taskId (retries reuse the same taskId)
+    const resultKey = `audio_${event.taskId}`;
+    if (this.processedResults.has(resultKey)) {
+      logger.info(`⏭️ Audio process déjà traité (taskId=${event.taskId}), ignoré`);
+      return;
+    }
+    this.processedResults.add(resultKey);
+    if (this.processedResults.size > 1000) {
+      const firstKey = this.processedResults.values().next().value;
+      this.processedResults.delete(firstKey);
+    }
+
     logger.info(`🎤 Audio process terminé: ${event.messageId}`);
     if (event.transcription?.text) {
       logger.info(`   📝 Transcription: ${event.transcription.text.substring(0, 50)}...`);

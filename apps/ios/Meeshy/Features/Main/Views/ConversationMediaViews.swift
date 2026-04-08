@@ -517,10 +517,11 @@ struct AudioMediaView: View {
             }
             .disabled(downloader.isDownloading)
 
-            // Static waveform placeholder
+            // Static waveform placeholder (deterministic heights)
             HStack(spacing: 2) {
                 ForEach(0..<25, id: \.self) { i in
-                    let height = CGFloat.random(in: 6...22)
+                    let seed = Double(i * 7 + 3)
+                    let height = CGFloat(max(6, min(22, 8.0 + sin(seed) * 5 + cos(seed * 0.5) * 4)))
                     RoundedRectangle(cornerRadius: 2)
                         .fill(accent.opacity(0.2))
                         .frame(width: 2, height: height)
