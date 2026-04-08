@@ -168,20 +168,22 @@ private struct AudioFullscreenPage: View {
 
     private var displaySegments: [TranscriptionDisplaySegment] {
         if selectedLanguage != "orig",
-           let audio = translatedAudios.first(where: { $0.targetLanguage == selectedLanguage }),
+           let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedLanguage.lowercased() }),
            !audio.segments.isEmpty {
-            return audio.segments.enumerated().map { _, seg in
-                TranscriptionDisplaySegment(
-                    text: seg.text,
-                    startTime: seg.startTime ?? 0,
-                    endTime: seg.endTime ?? 0,
-                    speakerId: nil,
-                    speakerColor: TranscriptionDisplaySegment.speakerPalette[0]
-                )
-            }
+            return TranscriptionDisplaySegment.buildFrom(segments: audio.segments)
         }
         guard let t = transcription else { return [] }
-        return TranscriptionDisplaySegment.buildFrom(t)
+        let built = TranscriptionDisplaySegment.buildFrom(t)
+        if built.isEmpty, !t.text.isEmpty {
+            return [TranscriptionDisplaySegment(
+                text: t.text,
+                startTime: 0,
+                endTime: Double(t.durationMs ?? 0) / 1000.0,
+                speakerId: nil,
+                speakerColor: TranscriptionDisplaySegment.speakerPalette[0]
+            )]
+        }
+        return built
     }
 
     private var estimatedDuration: TimeInterval {
@@ -696,7 +698,7 @@ private struct AudioFullscreenPage: View {
                     flag: display?.flag ?? "\u{1F310}",
                     code: audio.targetLanguage,
                     label: display?.name ?? audio.targetLanguage,
-                    isSelected: selectedLanguage == audio.targetLanguage
+                    isSelected: selectedLanguage.lowercased() == audio.targetLanguage.lowercased()
                 )
             }
 
@@ -727,7 +729,7 @@ private struct AudioFullscreenPage: View {
             }
             if code == "orig" {
                 player.play(urlString: attachment.fileUrl)
-            } else if let audio = translatedAudios.first(where: { $0.targetLanguage == code }) {
+            } else if let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
                 player.play(urlString: audio.url)
             }
             loadWaveform()
@@ -751,7 +753,7 @@ private struct AudioFullscreenPage: View {
             List {
                 ForEach(sortedLanguages, id: \.code) { lang in
                     let hasAudio = translatedAudios.contains(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() })
-                    let isSelected = selectedLanguage == lang.code
+                    let isSelected = selectedLanguage.lowercased() == lang.code.lowercased()
 
                     Button {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -823,7 +825,7 @@ private struct AudioFullscreenPage: View {
 
     private var currentAudioUrl: String {
         if selectedLanguage != "orig",
-           let audio = translatedAudios.first(where: { $0.targetLanguage == selectedLanguage }) {
+           let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedLanguage.lowercased() }) {
             return audio.url
         }
         return attachment.fileUrl
