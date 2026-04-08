@@ -297,7 +297,7 @@ struct AudioPostComposerView: View {
     private func publish() {
         guard let url = recordedURL else { return }
         let payload = transcription.map { buildPayload($0) }
-        onPublish(url, "audio/m4a", payload)
+        onPublish(url, "audio/mp4", payload)
     }
 
     private func buildPayload(_ t: OnDeviceTranscription) -> MobileTranscriptionPayload {
