@@ -90,7 +90,7 @@ platform :ios do
       derived_data_path: "./Build",
       clean: false,
       cloned_source_packages_path: "./SourcePackages",
-      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates"
+      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates SWIFT_OPTIMIZATION_LEVEL=-Onone"
     )
   end
 
