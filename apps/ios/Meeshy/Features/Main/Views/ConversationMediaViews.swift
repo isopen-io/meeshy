@@ -75,7 +75,7 @@ struct DownloadBadgeView: View {
             while !Task.isCancelled && !downloader.isCached {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { break }
-                let store = isAudio ? CacheCoordinator.shared.audio : CacheCoordinator.shared.video
+                let store = isAudio ? await CacheCoordinator.shared.audio : await CacheCoordinator.shared.video
                 let cached = await store.isCached(resolved)
                 if cached {
                     downloader.isCached = true
@@ -139,7 +139,7 @@ final class AttachmentDownloader: ObservableObject {
 
     func checkCache(_ urlString: String, isAudio: Bool = false) async {
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-        let store = isAudio ? CacheCoordinator.shared.audio : CacheCoordinator.shared.video
+        let store = isAudio ? await CacheCoordinator.shared.audio : await CacheCoordinator.shared.video
         let cached = await store.isCached(resolved)
         if cached { isCached = true }
     }
@@ -196,7 +196,7 @@ final class AttachmentDownloader: ObservableObject {
                 }
 
                 let resolvedKey = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
-                let store = isAudio ? CacheCoordinator.shared.audio : CacheCoordinator.shared.video
+                let store = isAudio ? await CacheCoordinator.shared.audio : await CacheCoordinator.shared.video
                 await store.store(data, for: resolvedKey)
 
                 let finalSize = Int64(data.count)
@@ -518,16 +518,7 @@ struct AudioMediaView: View {
             .disabled(downloader.isDownloading)
 
             // Static waveform placeholder (deterministic heights)
-            HStack(spacing: 2) {
-                ForEach(0..<25, id: \.self) { i in
-                    let seed = Double(i * 7 + 3)
-                    let height = CGFloat(max(6, min(22, 8.0 + sin(seed) * 5 + cos(seed * 0.5) * 4)))
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(accent.opacity(0.2))
-                        .frame(width: 2, height: height)
-                }
-            }
-            .frame(height: 26)
+            waveformPlaceholder(accent: accent)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -539,6 +530,19 @@ struct AudioMediaView: View {
                         .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 1)
                 )
         )
+    }
+
+    private func waveformPlaceholder(accent: Color) -> some View {
+        HStack(spacing: 2) {
+            ForEach(0..<25, id: \.self) { i in
+                let seed = Double(i * 7 + 3)
+                let h = CGFloat(max(6, min(22, 8.0 + sin(seed) * 5 + cos(seed * 0.5) * 4)))
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(accent.opacity(0.2))
+                    .frame(width: 2, height: h)
+            }
+        }
+        .frame(height: 26)
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
