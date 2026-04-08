@@ -1644,6 +1644,7 @@ class ConversationViewModel: ObservableObject {
                             format: trans.format ?? "mp3",
                             cloned: trans.cloned ?? false,
                             quality: trans.quality ?? 0,
+                            voiceModelId: trans.voiceModelId,
                             ttsModel: trans.ttsModel ?? "xtts",
                             segments: segments
                         ))

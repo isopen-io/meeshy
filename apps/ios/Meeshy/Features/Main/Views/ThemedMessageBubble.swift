@@ -449,6 +449,7 @@ struct ThemedMessageBubble: View {
                 isMe: message.isMe
             )
             .padding(.horizontal, 14)
+            .padding(.bottom, 8)
         }
     }
 

@@ -426,6 +426,7 @@ final class ConversationSocketHandler {
                 format: event.translatedAudio.format,
                 cloned: event.translatedAudio.cloned,
                 quality: event.translatedAudio.quality,
+                voiceModelId: event.translatedAudio.voiceModelId,
                 ttsModel: event.translatedAudio.ttsModel,
                 segments: segments
             )

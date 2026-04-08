@@ -46,15 +46,17 @@ public struct MessageTranslatedAudio: Identifiable, Sendable {
     public let format: String
     public let cloned: Bool
     public let quality: Double
+    public let voiceModelId: String?
     public let ttsModel: String
     public let segments: [MessageTranscriptionSegment]
 
     public init(id: String, attachmentId: String, targetLanguage: String, url: String,
                 transcription: String, durationMs: Int, format: String, cloned: Bool,
-                quality: Double, ttsModel: String, segments: [MessageTranscriptionSegment] = []) {
+                quality: Double, voiceModelId: String? = nil, ttsModel: String,
+                segments: [MessageTranscriptionSegment] = []) {
         self.id = id; self.attachmentId = attachmentId; self.targetLanguage = targetLanguage
         self.url = url; self.transcription = transcription; self.durationMs = durationMs
         self.format = format; self.cloned = cloned; self.quality = quality
-        self.ttsModel = ttsModel; self.segments = segments
+        self.voiceModelId = voiceModelId; self.ttsModel = ttsModel; self.segments = segments
     }
 }
