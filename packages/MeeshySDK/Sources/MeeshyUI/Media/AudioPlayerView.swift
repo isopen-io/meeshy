@@ -266,6 +266,7 @@ public struct AudioPlayerView: View {
     private var bottomSlot: AnyView?
 
     @StateObject private var player = AudioPlaybackManager()
+    @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isTranscriptionExpanded = false
     @State private var selectedAudioLanguage: String = "orig"
@@ -333,6 +334,7 @@ public struct AudioPlayerView: View {
             AudioPlaybackManager.registerAutoplay(url: attachment.fileUrl) { [player] in
                 player.play(urlString: attachment.fileUrl)
             }
+            loadWaveformSamples()
         }
         .onDisappear {
             AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
@@ -705,8 +707,24 @@ public struct AudioPlayerView: View {
     }
 
     private func waveformHeight(index: Int, total: Int) -> CGFloat {
+        let samples = waveformAnalyzer.samples
+        if !samples.isEmpty && index < samples.count {
+            let sample = CGFloat(samples[index])
+            return max(3, sample * 18)
+        }
         let seed = Double(index * 7 + 3)
         let base = 4.0 + sin(seed) * 5 + cos(seed * 0.5) * 3.5
         return CGFloat(max(3, min(18, base)))
+    }
+
+    private func loadWaveformSamples() {
+        guard waveformAnalyzer.samples.isEmpty else { return }
+        let barCount = context.isCompact ? 25 : 35
+        let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
+        Task {
+            if let data = try? await CacheCoordinator.shared.audio.data(for: resolved) {
+                waveformAnalyzer.analyze(data: data, barCount: barCount)
+            }
+        }
     }
 }

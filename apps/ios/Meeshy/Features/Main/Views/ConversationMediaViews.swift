@@ -65,14 +65,18 @@ struct DownloadBadgeView: View {
             .background(Capsule().fill(.black.opacity(0.5)))
         }
         .padding(4)
-        .task { await downloader.checkCache(attachment.fileUrl) }
         .task {
-            // Poll cache periodically so badge disappears when file is cached by player/gallery
+            let isAudio = attachment.mimeType.hasPrefix("audio/")
+            await downloader.checkCache(attachment.fileUrl, isAudio: isAudio)
+        }
+        .task {
+            let isAudio = attachment.mimeType.hasPrefix("audio/")
             let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
             while !Task.isCancelled && !downloader.isCached {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { break }
-                let cached = await CacheCoordinator.shared.video.isCached(resolved)
+                let store = isAudio ? CacheCoordinator.shared.audio : CacheCoordinator.shared.video
+                let cached = await store.isCached(resolved)
                 if cached {
                     downloader.isCached = true
                     break
@@ -133,15 +137,17 @@ final class AttachmentDownloader: ObservableObject {
 
     private var downloadTask: Task<Void, Never>?
 
-    func checkCache(_ urlString: String) async {
+    func checkCache(_ urlString: String, isAudio: Bool = false) async {
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-        let cached = await CacheCoordinator.shared.video.isCached(resolved)
+        let store = isAudio ? CacheCoordinator.shared.audio : CacheCoordinator.shared.video
+        let cached = await store.isCached(resolved)
         if cached { isCached = true }
     }
 
     func start(attachment: MessageAttachment, onShare: ((URL) -> Void)?) {
         let fileUrl = attachment.fileUrl
         guard !fileUrl.isEmpty else { return }
+        let isAudio = attachment.mimeType.hasPrefix("audio/")
         isDownloading = true
         downloadedBytes = 0
         totalBytes = Int64(attachment.fileSize)
@@ -190,7 +196,8 @@ final class AttachmentDownloader: ObservableObject {
                 }
 
                 let resolvedKey = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
-                await CacheCoordinator.shared.video.store(data, for: resolvedKey)
+                let store = isAudio ? CacheCoordinator.shared.audio : CacheCoordinator.shared.video
+                await store.store(data, for: resolvedKey)
 
                 let finalSize = Int64(data.count)
                 await MainActor.run { [weak self] in

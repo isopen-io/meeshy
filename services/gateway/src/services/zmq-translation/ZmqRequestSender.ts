@@ -61,8 +61,8 @@ export class ZmqRequestSender {
   /**
    * Envoie une requête de traduction
    */
-  async sendTranslationRequest(request: TranslationRequest): Promise<string> {
-    const taskId = randomUUID();
+  async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
+    const taskId = existingTaskId ?? randomUUID();
 
     // Préparer le message de commande
     const requestMessage = {
@@ -111,13 +111,13 @@ export class ZmqRequestSender {
    * 3. Cloner la voix de l'émetteur
    * 4. Générer des versions audio traduites
    */
-  async sendAudioProcessRequest(request: Omit<AudioProcessRequest, 'type'>): Promise<string> {
+  async sendAudioProcessRequest(request: Omit<AudioProcessRequest, 'type'>, existingTaskId?: string): Promise<string> {
     // Valider qu'on a une source audio
     if (!request.audioPath) {
       throw new Error('audioPath must be provided');
     }
 
-    const taskId = randomUUID();
+    const taskId = existingTaskId ?? randomUUID();
 
     // Charger l'audio en binaire (OBLIGATOIRE - pas de fallback URL)
     const audioData = await loadAudioAsBinary(request.audioPath);
@@ -224,7 +224,8 @@ export class ZmqRequestSender {
    * - Mode base64: audioData fourni → décode en Buffer
    */
   async sendTranscriptionOnlyRequest(
-    request: Omit<TranscriptionOnlyRequest, 'type' | 'taskId'>
+    request: Omit<TranscriptionOnlyRequest, 'type' | 'taskId'>,
+    existingTaskId?: string
   ): Promise<string> {
     logger.info(`🔍 [ZMQ-TRACE] ======== DÉBUT ENVOI TRANSCRIPTION ========`);
     logger.info(`🔍 [ZMQ-TRACE] Request params:`);
@@ -241,7 +242,7 @@ export class ZmqRequestSender {
       throw new Error('Either audioPath or audioData (base64) must be provided');
     }
 
-    const taskId = randomUUID();
+    const taskId = existingTaskId ?? randomUUID();
     logger.info(`🔍 [ZMQ-TRACE] Task ID généré: ${taskId}`);
 
     let audioBuffer: Buffer;
@@ -336,7 +337,7 @@ export class ZmqRequestSender {
    * - voice_feedback / voice_history / voice_stats
    * - voice_admin_metrics / voice_health / voice_languages
    */
-  async sendVoiceAPIRequest(request: VoiceAPIRequest): Promise<string> {
+  async sendVoiceAPIRequest(request: VoiceAPIRequest, _existingTaskId?: string): Promise<string> {
     logger.info('🎤 ENVOI VOICE API REQUEST:');
     logger.info(`   📋 type: ${request.type}`);
     logger.info(`   📋 taskId: ${request.taskId}`);
@@ -366,7 +367,7 @@ export class ZmqRequestSender {
    * - voice_profile_verify: Verify audio matches existing profile
    * - voice_profile_compare: Compare two fingerprints
    */
-  async sendVoiceProfileRequest(request: VoiceProfileRequest): Promise<string> {
+  async sendVoiceProfileRequest(request: VoiceProfileRequest, _existingTaskId?: string): Promise<string> {
     logger.info('🎤 ENVOI VOICE PROFILE REQUEST:');
     logger.info(`   📋 type: ${request.type}`);
     logger.info(`   📋 request_id: ${request.request_id}`);

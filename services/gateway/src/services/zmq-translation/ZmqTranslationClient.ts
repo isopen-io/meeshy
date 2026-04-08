@@ -109,37 +109,38 @@ export class ZmqTranslationClient extends EventEmitter {
 
   /**
    * Registers a 30-second timeout for a pending ZMQ request.
-   * On first timeout: retries the send once.
-   * On second timeout: emits a synthetic error event and cleans up.
+   * On timeout: retries the send with the SAME taskId (to avoid duplicate processing).
+   * On final timeout: emits a synthetic error event and cleans up.
    *
-   * @param taskId - Correlation ID for the request
+   * @param taskId - Correlation ID for the request (preserved across retries)
    * @param errorEvent - The error event payload to emit if all retries fail
    * @param errorEventName - The EventEmitter event name to emit on final failure
-   * @param resend - Async function that re-sends the request and returns the new taskId
+   * @param resend - Async function that re-sends the request with the same taskId
    */
   private _registerRequestTimeout(
     taskId: string,
     errorEventName: string,
     errorEvent: Record<string, unknown>,
-    resend: () => Promise<string>
+    resend: (existingTaskId: string) => Promise<string>
   ): void {
     this.requestSender.registerTimeout(taskId, ZMQ_REQUEST_TIMEOUT_MS, async () => {
       const retries = this.retryCount.get(taskId) ?? 0;
-      this.retryCount.delete(taskId);
 
       if (retries < ZMQ_MAX_RETRIES) {
-        logger.warn(`⏱️ ZMQ timeout for taskId=${taskId} (attempt ${retries + 1}/${ZMQ_MAX_RETRIES + 1}), retrying...`);
+        logger.warn(`⏱️ ZMQ timeout for taskId=${taskId} (attempt ${retries + 1}/${ZMQ_MAX_RETRIES + 1}), retrying with same taskId...`);
         try {
-          const newTaskId = await resend();
-          this.retryCount.set(newTaskId, retries + 1);
-          this._registerRequestTimeout(newTaskId, errorEventName, { ...errorEvent, taskId: newTaskId }, resend);
+          await resend(taskId);
+          this.retryCount.set(taskId, retries + 1);
+          this._registerRequestTimeout(taskId, errorEventName, errorEvent, resend);
         } catch (err) {
           logger.error(`❌ ZMQ retry failed for taskId=${taskId}: ${err}`);
+          this.retryCount.delete(taskId);
           this.stats.errors_received++;
           this.emit(errorEventName, { ...errorEvent, taskId });
         }
       } else {
         logger.error(`❌ ZMQ timeout after ${ZMQ_MAX_RETRIES + 1} attempt(s) for taskId=${taskId}, giving up`);
+        this.retryCount.delete(taskId);
         this.stats.errors_received++;
         this.emit(errorEventName, { ...errorEvent, taskId });
       }
@@ -357,10 +358,10 @@ export class ZmqTranslationClient extends EventEmitter {
       taskId,
       'translationError',
       { taskId, messageId: request.messageId, error: 'ZMQ timeout: no response from translator', conversationId: request.conversationId },
-      async () => {
-        const newTaskId = await this.requestSender.sendTranslationRequest(request);
+      async (existingTaskId: string) => {
+        await this.requestSender.sendTranslationRequest(request, existingTaskId);
         this.stats.requests_sent++;
-        return newTaskId;
+        return existingTaskId;
       }
     );
     return taskId;
@@ -376,10 +377,10 @@ export class ZmqTranslationClient extends EventEmitter {
       taskId,
       'audioProcessError',
       { taskId, messageId: request.messageId, attachmentId: request.attachmentId, error: 'ZMQ timeout: no response from translator' },
-      async () => {
-        const newTaskId = await this.requestSender.sendAudioProcessRequest(request);
+      async (existingTaskId: string) => {
+        await this.requestSender.sendAudioProcessRequest(request, existingTaskId);
         this.stats.requests_sent++;
-        return newTaskId;
+        return existingTaskId;
       }
     );
     return taskId;
@@ -397,10 +398,10 @@ export class ZmqTranslationClient extends EventEmitter {
       taskId,
       'transcriptionError',
       { taskId, messageId: request.messageId, attachmentId: request.attachmentId, error: 'ZMQ timeout: no response from translator' },
-      async () => {
-        const newTaskId = await this.requestSender.sendTranscriptionOnlyRequest(request);
+      async (existingTaskId: string) => {
+        await this.requestSender.sendTranscriptionOnlyRequest(request, existingTaskId);
         this.stats.requests_sent++;
-        return newTaskId;
+        return existingTaskId;
       }
     );
     return taskId;
@@ -416,10 +417,10 @@ export class ZmqTranslationClient extends EventEmitter {
       taskId,
       'voiceAPIError',
       { taskId, requestType: request.type, error: 'ZMQ timeout: no response from translator', errorCode: 'TIMEOUT' },
-      async () => {
-        const newTaskId = await this.requestSender.sendVoiceAPIRequest(request);
+      async (existingTaskId: string) => {
+        await this.requestSender.sendVoiceAPIRequest(request, existingTaskId);
         this.stats.requests_sent++;
-        return newTaskId;
+        return existingTaskId;
       }
     );
     return taskId;
@@ -435,10 +436,10 @@ export class ZmqTranslationClient extends EventEmitter {
       taskId,
       'voiceProfileError',
       { request_id: taskId, error: 'ZMQ timeout: no response from translator', success: false },
-      async () => {
-        const newTaskId = await this.requestSender.sendVoiceProfileRequest(request);
+      async (existingTaskId: string) => {
+        await this.requestSender.sendVoiceProfileRequest(request, existingTaskId);
         this.stats.requests_sent++;
-        return newTaskId;
+        return existingTaskId;
       }
     );
     return taskId;
