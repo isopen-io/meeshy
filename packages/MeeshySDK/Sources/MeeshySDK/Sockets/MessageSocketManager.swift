@@ -187,6 +187,7 @@ public struct TranslatedAudioInfo: Codable, Sendable {
     public let format: String
     public let cloned: Bool
     public let quality: Double
+    public let voiceModelId: String?
     public let ttsModel: String
     public let segments: [TranscriptionSegment]?
 }
