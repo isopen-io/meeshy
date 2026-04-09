@@ -1,8 +1,8 @@
 import SwiftUI
 
 public enum CollapsibleHeaderMetrics {
-    public static var expandedHeight: CGFloat { 100 }
-    public static var collapsedHeight: CGFloat { 52 }
+    public static var expandedHeight: CGFloat { 64 }
+    public static var collapsedHeight: CGFloat { 44 }
 }
 
 public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, TrailingContent: View>: View {
@@ -18,8 +18,8 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     let titleView: (() -> TitleContent)?
     let trailing: () -> TrailingContent
 
-    public static var expandedHeight: CGFloat { 100 }
-    public static var collapsedHeight: CGFloat { 52 }
+    public static var expandedHeight: CGFloat { 64 }
+    public static var collapsedHeight: CGFloat { 44 }
 
     public init(
         title: String,
@@ -56,7 +56,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     }
 
     private var titleSize: CGFloat {
-        lerp(32, 17, progress)
+        lerp(24, 17, progress)
     }
 
     private var titleWeight: Font.Weight {
@@ -64,7 +64,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     }
 
     private var titleBottomPadding: CGFloat {
-        lerp(12, 0, progress)
+        lerp(6, 0, progress)
     }
 
     private var backArrowSize: CGFloat {
@@ -141,15 +141,16 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             Divider()
                 .opacity(Double(progress) * 0.3)
         }
+        .frame(maxWidth: .infinity)
         .background(
             Rectangle()
                 .fill(.ultraThinMaterial)
                 .overlay(
                     LinearGradient(
                         stops: [
-                            .init(color: backgroundColor.opacity(0.88), location: 0),
-                            .init(color: backgroundColor.opacity(0.98), location: 0.9),
-                            .init(color: backgroundColor.opacity(0.98), location: 1.0),
+                            .init(color: backgroundColor.opacity(0.5), location: 0),
+                            .init(color: backgroundColor.opacity(0.65), location: 0.8),
+                            .init(color: backgroundColor.opacity(0.7), location: 1.0),
                         ],
                         startPoint: .top,
                         endPoint: .bottom
