@@ -152,6 +152,7 @@ struct ThemedFeedOverlay: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
+    @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
     @State private var showStoryViewer = false
@@ -317,6 +318,9 @@ struct ThemedFeedOverlay: View {
                     currentGroupIndex: resolvedIndex,
                     isPresented: $showStoryViewer
                 )
+                .environmentObject(router)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationListViewModel)
             }
         }
         .sheet(isPresented: $showStatusComposer) {

@@ -281,7 +281,17 @@ public struct AudioPlayerView: View {
             return TranscriptionDisplaySegment.buildFrom(segments: translated.segments)
         }
         guard let t = transcription else { return [] }
-        return TranscriptionDisplaySegment.buildFrom(t)
+        let built = TranscriptionDisplaySegment.buildFrom(t)
+        if built.isEmpty, !t.text.isEmpty {
+            return [TranscriptionDisplaySegment(
+                text: t.text,
+                startTime: 0,
+                endTime: Double(t.durationMs ?? 0) / 1000.0,
+                speakerId: nil,
+                speakerColor: TranscriptionDisplaySegment.speakerPalette[0]
+            )]
+        }
+        return built
     }
 
     private var estimatedDuration: TimeInterval {
@@ -517,13 +527,21 @@ public struct AudioPlayerView: View {
         return isDark ? Color.white.opacity(0.35) : Color.black.opacity(0.25)
     }
 
+    private var currentAudioUrl: String {
+        if selectedAudioLanguage != "orig",
+           let translated = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedAudioLanguage.lowercased() }) {
+            return translated.url
+        }
+        return attachment.fileUrl
+    }
+
     // MARK: - Play Button
     private var playButton: some View {
         Button {
             if player.isPlaying || player.progress > 0 {
                 player.togglePlayPause()
             } else {
-                player.play(urlString: attachment.fileUrl)
+                player.play(urlString: currentAudioUrl)
             }
             HapticFeedback.light()
         } label: {
@@ -672,7 +690,7 @@ public struct AudioPlayerView: View {
                         flag: lang?.flag ?? "\u{1F310}",
                         code: audio.targetLanguage,
                         label: lang?.name ?? audio.targetLanguage,
-                        isSelected: selectedAudioLanguage == audio.targetLanguage
+                        isSelected: selectedAudioLanguage.lowercased() == audio.targetLanguage.lowercased()
                     )
                 }
             }

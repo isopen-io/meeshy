@@ -10,6 +10,7 @@ export const SocketMessageSendSchema = z.object({
   originalLanguage: z.string().optional(),
   messageType: z.string().optional(),
   replyToId: mongoId.optional(),
+  storyReplyToId: mongoId.optional(),
   clientMessageId: z.string().optional(),
 });
 
@@ -21,6 +22,7 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   originalLanguage: z.string().optional(),
   attachmentIds: z.array(mongoId).min(1),
   replyToId: mongoId.optional(),
+  storyReplyToId: mongoId.optional(),
   clientMessageId: z.string().optional(),
 });
 

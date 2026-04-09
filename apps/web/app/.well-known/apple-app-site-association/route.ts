@@ -2,20 +2,19 @@ import { NextResponse } from "next/server"
 
 const AASA = {
   applinks: {
-    apps: [],
     details: [
       {
-        appID: "J2LP6UE7JQ.me.meeshy.app",
-        paths: [
-          "/join/*",
-          "/l/*",
-          "/c/*",
-          "/conversation/*",
-          "/u/*",
-          "/me",
-          "/links",
-          "/auth/magic-link",
-          "/share",
+        appIDs: ["J2LP6UE7JQ.me.meeshy.app"],
+        components: [
+          { "/": "/join/*", "comment": "Join conversation links" },
+          { "/": "/l/*", "comment": "Legacy join links" },
+          { "/": "/c/*", "comment": "Conversation links" },
+          { "/": "/conversation/*", "comment": "Conversation links" },
+          { "/": "/u/*", "comment": "User profile links" },
+          { "/": "/me", "comment": "Own profile" },
+          { "/": "/links", "comment": "User links hub" },
+          { "/": "/auth/magic-link", "comment": "Passwordless auth" },
+          { "/": "/share", "comment": "Share content" },
         ],
       },
     ],

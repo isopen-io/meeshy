@@ -159,7 +159,10 @@ struct SharePickerView: View {
         case .message(let msg):
             return msg.content.isEmpty ? "[Media]" : String(msg.content.prefix(120))
         case .story(let item, let authorName):
-            return item.content?.isEmpty == false ? String(item.content!.prefix(120)) : "Story de \(authorName)"
+            if let content = item.content, !content.isEmpty {
+                return String(content.prefix(120))
+            }
+            return "Story de \(authorName)"
         }
     }
 

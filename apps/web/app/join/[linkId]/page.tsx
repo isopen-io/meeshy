@@ -57,8 +57,18 @@ export default function JoinConversationPage() {
       if (autoAnonymous === 'true' && !currentUser) {
         setShowAnonymousForm(true);
       }
+
+      // On iOS/Android, attempt to open the native app via custom URL scheme.
+      // If the app is installed it will intercept; otherwise nothing happens
+      // and the user stays on the web join page.
+      const ua = navigator.userAgent;
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+      if (isMobile && linkId && urlParams.get('noredirect') !== '1') {
+        const appUrl = `meeshy://join/${linkId}`;
+        window.location.href = appUrl;
+      }
     }
-  }, [currentUser, setShowAnonymousForm]);
+  }, [currentUser, setShowAnonymousForm, linkId]);
 
   const handleJoinConversation = useCallback(async () => {
     const anonymousSession = typeof window !== 'undefined'

@@ -1017,40 +1017,29 @@ struct StoryViewersSheet: View {
             let avatarUrl: String?
             let viewedAt: Date?
             let reaction: String?
-            let isReshared: Bool?
-            let reply: String?
         }
         let viewers: [ViewerApi]
     }
 
     private func loadViewers() async {
-        do {
-            let response: APIResponse<ViewersResponse>? = try? await APIClient.shared.request(endpoint: "/posts/\(story.id)/interactions")
-            
-            await MainActor.run {
-                if let apiViewers = response?.data.viewers, !apiViewers.isEmpty {
-                    self.viewers = apiViewers.map { v in
-                        StoryViewerItem(
-                            id: v.id,
-                            username: v.username,
-                            displayName: v.displayName ?? v.username,
-                            avatarUrl: v.avatarUrl,
-                            viewedAt: v.viewedAt ?? Date(),
-                            reactionEmoji: v.reaction,
-                            replyContent: v.reply,
-                            hasReshared: v.isReshared ?? false
-                        )
-                    }
-                } else {
-                    // Mock data if backend not connected or returns 404
-                    self.viewers = [
-                        StoryViewerItem(id: "1", username: "alex", displayName: "Alex", avatarUrl: nil, viewedAt: Date().addingTimeInterval(-3600), reactionEmoji: "🔥", replyContent: nil, hasReshared: false),
-                        StoryViewerItem(id: "2", username: "sarah", displayName: "Sarah", avatarUrl: nil, viewedAt: Date().addingTimeInterval(-7200), reactionEmoji: nil, replyContent: "Wow, incroyable !", hasReshared: true),
-                        StoryViewerItem(id: "3", username: "marc", displayName: "Marc", avatarUrl: nil, viewedAt: Date().addingTimeInterval(-86400), reactionEmoji: "❤️", replyContent: nil, hasReshared: false)
-                    ]
+        let response: APIResponse<ViewersResponse>? = try? await APIClient.shared.request(endpoint: "/posts/\(story.id)/interactions")
+
+        await MainActor.run {
+            if let apiViewers = response?.data.viewers {
+                self.viewers = apiViewers.map { v in
+                    StoryViewerItem(
+                        id: v.id,
+                        username: v.username,
+                        displayName: v.displayName ?? v.username,
+                        avatarUrl: v.avatarUrl,
+                        viewedAt: v.viewedAt ?? Date(),
+                        reactionEmoji: v.reaction,
+                        replyContent: nil,
+                        hasReshared: false
+                    )
                 }
-                self.isLoading = false
             }
+            self.isLoading = false
         }
     }
 }

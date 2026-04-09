@@ -106,6 +106,7 @@ export interface MessageRequest {
   readonly originalLanguage?: string;        // Default: détection auto ou langue utilisateur
   readonly messageType?: string;             // Default: "text"
   readonly replyToId?: string;              // Pour les réponses/threads
+  readonly storyReplyToId?: string;        // ID de la story pour réponse privée (DM avec contexte story)
   readonly forwardedFromId?: string;        // ID du message original (transfert)
   readonly forwardedFromConversationId?: string; // ID de la conversation source (transfert cross-conversation)
 

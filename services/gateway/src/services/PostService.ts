@@ -625,6 +625,43 @@ export class PostService {
     return { items: views, total, hasMore: offset + limit < total };
   }
 
+  async getPostInteractions(postId: string, userId: string, limit: number = 50, offset: number = 0) {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, isDeleted: false },
+      select: { id: true, authorId: true, reactions: true },
+    });
+    if (!post) return null;
+    if (post.authorId !== userId) throw new Error('FORBIDDEN');
+
+    const [views, total] = await Promise.all([
+      this.prisma.postView.findMany({
+        where: { postId },
+        include: { user: { select: authorSelect } },
+        orderBy: { viewedAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.postView.count({ where: { postId } }),
+    ]);
+
+    const reactions = (post.reactions as any[] | null) ?? [];
+    const reactionByUser = new Map<string, string>();
+    for (const r of reactions) {
+      reactionByUser.set(r.userId, r.emoji);
+    }
+
+    const viewers = views.map((v) => ({
+      id: v.user.id,
+      username: v.user.username,
+      displayName: v.user.displayName,
+      avatarUrl: v.user.avatar,
+      viewedAt: v.viewedAt,
+      reaction: reactionByUser.get(v.user.id) ?? null,
+    }));
+
+    return { viewers, total, hasMore: offset + limit < total };
+  }
+
   async repostPost(postId: string, userId: string, content?: string, isQuote: boolean = false) {
     const original = await this.prisma.post.findFirst({
       where: { id: postId, isDeleted: false },
