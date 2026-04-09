@@ -334,7 +334,7 @@ export class UploadProcessor {
     let thumbHash: string | null = providedMetadata?.thumbHash ?? null;
     if (!thumbHash) {
       const { ThumbHashGenerator } = await import('./ThumbHashGenerator.js');
-      thumbHash = await ThumbHashGenerator.generate(filePath, file.mimeType);
+      thumbHash = await ThumbHashGenerator.generate(path.join(this.uploadBasePath, filePath), file.mimeType);
     }
 
     const fileUrl = this.getAttachmentPath(filePath);

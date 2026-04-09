@@ -48,7 +48,7 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
     }
 
     public func updateProfile(_ request: UpdateProfileRequest) async throws -> MeeshyUser {
-        let response: APIResponse<UpdateProfileResponse> = try await api.put(endpoint: "/users/me", body: request)
+        let response: APIResponse<UpdateProfileResponse> = try await api.patch(endpoint: "/users/me", body: request)
         return response.data.user
     }
 

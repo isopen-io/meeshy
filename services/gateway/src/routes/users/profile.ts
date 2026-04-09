@@ -269,7 +269,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
         type: 'object',
         required: ['avatar'],
         properties: {
-          avatar: { type: 'string', format: 'uri', description: 'Avatar image URL' }
+          avatar: { type: 'string', description: 'Avatar image URL or API path' }
         }
       },
       response: {
@@ -395,7 +395,7 @@ export async function updateUserBanner(fastify: FastifyInstance) {
         type: 'object',
         required: ['banner'],
         properties: {
-          banner: { type: 'string', format: 'uri', description: 'Banner image URL' }
+          banner: { type: 'string', description: 'Banner image URL or API path' }
         }
       },
       response: {

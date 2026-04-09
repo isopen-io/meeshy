@@ -251,8 +251,8 @@ export const updateAvatarSchema = z.object({
       'Avatar must be a file URL, not a base64 data URI'
     )
     .refine(
-      (val) => val.startsWith('http://') || val.startsWith('https://'),
-      'Avatar must be an HTTP or HTTPS URL'
+      (val) => val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/api/'),
+      'Avatar must be an HTTP(S) URL or API path'
     )
 }).strict();
 
@@ -263,9 +263,10 @@ export const updateBannerSchema = z.object({
   banner: z.string().refine(
     (data) => {
       return data.startsWith('http://') ||
-             data.startsWith('https://');
+             data.startsWith('https://') ||
+             data.startsWith('/api/');
     },
-    'Format bannière invalide. Doit être une URL HTTP(S)'
+    'Format bannière invalide. Doit être une URL HTTP(S) ou un chemin API'
   )
 }).strict();
 
