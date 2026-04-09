@@ -508,7 +508,26 @@ struct StoryViewerView: View {
                 .zIndex(10)
             }
 
-            // 2. Forward (send to someone)
+            // 2. Reply privately (opens DM with story context)
+            if !isOwnStory, onReplyToStory != nil {
+                storyActionButton(
+                    icon: "arrowshape.turn.up.left.fill",
+                    label: "Répondre"
+                ) {
+                    HapticFeedback.light()
+                    guard let story = currentStory, let group = currentGroup else { return }
+                    let preview = story.content?.prefix(80).description ?? "Story"
+                    onReplyToStory?(.story(
+                        storyId: story.id,
+                        authorId: group.id,
+                        authorName: group.username,
+                        preview: preview
+                    ))
+                    isPresented = false
+                }
+            }
+
+            // 3. Forward (send to someone)
             storyActionButton(
                 icon: "paperplane.fill",
                 label: "Envoyer"
@@ -520,7 +539,7 @@ struct StoryViewerView: View {
                 }
             }
 
-            // 3. Reshare (republish to own story) — hidden for own stories
+            // 4. Reshare (republish to own story) — hidden for own stories
             if !isOwnStory {
                 storyActionButton(
                     icon: "arrow.2.squarepath",
@@ -581,8 +600,8 @@ struct StoryViewerView: View {
                 }
             }
 
-            // 6. Translate — brand cyan when active
-            if !isOwnStory {
+            // 6. Translate — brand cyan when active (only for stories with text/audio)
+            if !isOwnStory && storyHasTranslatableContent {
                 storyActionButton(
                     icon: "textformat.abc",
                     label: "Traductions",
@@ -675,38 +694,48 @@ struct StoryViewerView: View {
 
     // MARK: - Language Scroll Strip
 
+    private var availableTranslationLanguages: [TranslationLanguage] {
+        guard let translations = currentStory?.translations, !translations.isEmpty else { return [] }
+        let availableCodes = Set(translations.map(\.language))
+        return TranslationLanguage.all.filter { availableCodes.contains($0.id) }
+    }
+
     private var languageScrollStrip: some View {
-        HStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(LanguageUsageTracker.sorted(TranslationLanguage.all)) { lang in
-                        Button {
-                            HapticFeedback.light()
-                            LanguageUsageTracker.recordUsage(languageId: lang.id)
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                showLanguageOptions = false
+        let available = availableTranslationLanguages
+
+        return HStack(spacing: 0) {
+            if !available.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(LanguageUsageTracker.sorted(available)) { lang in
+                            Button {
+                                HapticFeedback.light()
+                                LanguageUsageTracker.recordUsage(languageId: lang.id)
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    showLanguageOptions = false
+                                }
+                                guard let story = currentStory else { return }
+                                Task {
+                                    let body: [String: String] = ["targetLanguage": lang.id]
+                                    let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
+                                        endpoint: "/posts/\(story.id)/translate",
+                                        body: body
+                                    )
+                                }
+                            } label: {
+                                Text(lang.flag)
+                                    .font(.system(size: 22))
+                                    .frame(width: 38, height: 38)
+                                    .background(Circle().fill(Color.white.opacity(0.1)))
                             }
-                            guard let story = currentStory else { return }
-                            Task {
-                                let body: [String: String] = ["targetLanguage": lang.id]
-                                let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-                                    endpoint: "/posts/\(story.id)/translate",
-                                    body: body
-                                )
-                            }
-                        } label: {
-                            Text(lang.flag)
-                                .font(.system(size: 22))
-                                .frame(width: 38, height: 38)
-                                .background(Circle().fill(Color.white.opacity(0.1)))
+                            .accessibilityLabel("Voir en \(lang.name)")
                         }
-                        .accessibilityLabel("Traduire en \(lang.name)")
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .frame(width: min(CGFloat(available.count) * 46 + 20, 222), height: 50)
             }
-            .frame(width: 222, height: 50)
 
             Button {
                 HapticFeedback.light()
@@ -728,8 +757,8 @@ struct StoryViewerView: View {
             }
             .padding(.trailing, 10)
             .padding(.vertical, 6)
-            .accessibilityLabel("Plus de langues")
-            .accessibilityHint("Ouvre la liste complete des langues")
+            .accessibilityLabel("Demander une traduction")
+            .accessibilityHint("Ouvre la liste des langues pour demander une nouvelle traduction")
         }
         .background(
             Capsule()
@@ -738,7 +767,7 @@ struct StoryViewerView: View {
                 .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Selection de langue de traduction")
+        .accessibilityLabel("Traductions disponibles")
     }
 
     // MARK: - Story Reactions
@@ -870,8 +899,19 @@ struct StoryViewerView: View {
         AuthManager.shared.currentUser?.systemLanguage
     }
 
+    var storyHasTranslatableContent: Bool { // internal for cross-file extension access
+        guard let story = currentStory else { return false }
+        if let text = story.content, !text.isEmpty { return true }
+        if let effects = story.storyEffects {
+            if effects.voiceAttachmentId != nil { return true }
+            if let audioObjs = effects.audioPlayerObjects, !audioObjs.isEmpty { return true }
+        }
+        return false
+    }
+
     var isContentTranslated: Bool { // internal for cross-file extension access
-        guard let story = currentStory,
+        guard storyHasTranslatableContent,
+              let story = currentStory,
               let viewerLang = resolvedViewerLanguage,
               let translations = story.translations,
               !translations.isEmpty else { return false }
