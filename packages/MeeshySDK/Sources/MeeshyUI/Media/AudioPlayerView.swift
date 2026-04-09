@@ -232,8 +232,8 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     private static func triggerAutoplayNext(afterUrl: String) {
         guard let idx = autoplayRegistry.firstIndex(where: { $0.url == afterUrl }) else { return }
-        let next = idx + 1
-        guard next < autoplayRegistry.count else { return }
+        let next = idx - 1
+        guard next >= 0 else { return }
         autoplayRegistry[next].play()
     }
 }

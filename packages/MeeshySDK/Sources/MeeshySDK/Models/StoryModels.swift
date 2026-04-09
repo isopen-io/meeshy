@@ -630,6 +630,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public var isViewed: Bool
     public let translations: [StoryTranslation]?
     public let backgroundAudio: StoryBackgroundAudioEntry?
+    public var reactionCount: Int
+    public var commentCount: Int
 
     public var timeAgo: String {
         let seconds = Int(-createdAt.timeIntervalSinceNow)
@@ -651,11 +653,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
 
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,
                 createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil, repostAuthorName: String? = nil,
-                isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil) {
+                isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
+                reactionCount: Int = 0, commentCount: Int = 0) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
         self.repostAuthorName = repostAuthorName; self.isViewed = isViewed
         self.translations = translations; self.backgroundAudio = backgroundAudio
+        self.reactionCount = reactionCount; self.commentCount = commentCount
     }
 }
 
@@ -742,13 +746,15 @@ extension Array where Element == APIPost {
             }
             let effectiveExpiresAt = post.expiresAt
                 ?? Calendar.current.date(byAdding: .hour, value: 21, to: post.createdAt)
+            let totalReactions = post.reactionSummary?.values.reduce(0, +) ?? 0
             let item = StoryItem(id: post.id, content: post.content, media: media,
                                  storyEffects: post.storyEffects,
                                  createdAt: post.createdAt, expiresAt: effectiveExpiresAt,
                                  repostOfId: post.repostOf?.id,
                                  repostAuthorName: post.repostOf?.author.name,
                                  isViewed: post.isViewedByMe ?? false,
-                                 translations: storyTranslations)
+                                 translations: storyTranslations,
+                                 reactionCount: totalReactions, commentCount: post.commentCount ?? 0)
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing
             } else {
@@ -786,14 +792,16 @@ extension APIPost {
 
 // MARK: - Reply Context
 public enum ReplyContext {
-    case story(storyId: String, authorId: String, authorName: String, preview: String)
+    case story(storyId: String, authorId: String, authorName: String, preview: String,
+               publishedAt: Date? = nil, reactionCount: Int? = nil, commentCount: Int? = nil, thumbnailUrl: String? = nil)
     case status(statusId: String, authorId: String, authorName: String, emoji: String, content: String?)
 
     public var toReplyReference: ReplyReference {
         switch self {
-        case .story(let storyId, let _, let authorName, let preview):
-            return ReplyReference(messageId: storyId, authorName: authorName, previewText: preview, isStoryReply: true)
-        case .status(let statusId, let _, let authorName, let emoji, let content):
+        case .story(let storyId, _, let authorName, let preview, let publishedAt, let reactionCount, let commentCount, let thumbnailUrl):
+            return ReplyReference(messageId: storyId, authorName: authorName, previewText: preview, isStoryReply: true,
+                                  storyPublishedAt: publishedAt, storyReactionCount: reactionCount, storyCommentCount: commentCount, storyThumbnailUrl: thumbnailUrl)
+        case .status(let statusId, _, let authorName, let emoji, let content):
             return ReplyReference(messageId: statusId, authorName: authorName, previewText: "\(emoji) \(content ?? "")", isStoryReply: true)
         }
     }

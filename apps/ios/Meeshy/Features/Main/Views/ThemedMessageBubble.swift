@@ -27,6 +27,7 @@ struct ThemedMessageBubble: View {
     var onShowInfo: (() -> Void)? = nil
     var onShowReactions: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
+    var onStoryReplyTap: ((String) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     var onRequestTranslation: ((String, String) -> Void)? = nil
@@ -540,7 +541,11 @@ struct ThemedMessageBubble: View {
                                         .onTapGesture {
                                             guard !reply.messageId.isEmpty else { return }
                                             HapticFeedback.light()
-                                            onReplyTap?(reply.messageId)
+                                            if reply.isStoryReply {
+                                                onStoryReplyTap?(reply.messageId)
+                                            } else {
+                                                onReplyTap?(reply.messageId)
+                                            }
                                         }
                                 }
 
@@ -1056,28 +1061,32 @@ struct ThemedMessageBubble: View {
                         .foregroundColor(nameColor)
                         .lineLimit(1)
 
-                    HStack(spacing: 5) {
-                        if let attType = reply.attachmentType {
-                            Image(systemName: replyAttachmentIcon(attType))
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(previewColor)
-                        }
+                    if reply.isStoryReply {
+                        storyReplyPreview(reply, previewColor: previewColor)
+                    } else {
+                        HStack(spacing: 5) {
+                            if let attType = reply.attachmentType {
+                                Image(systemName: replyAttachmentIcon(attType))
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(previewColor)
+                            }
 
-                        MessageTextRenderer.render(
-                            reply.previewText.isEmpty ? "Media" : reply.previewText,
-                            fontSize: 12, color: previewColor,
-                            mentionColor: mentionTint, accentColor: previewColor,
-                            mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                        )
-                        .lineLimit(2)
-                        .tint(previewColor)
+                            MessageTextRenderer.render(
+                                reply.previewText.isEmpty ? "Media" : reply.previewText,
+                                fontSize: 12, color: previewColor,
+                                mentionColor: mentionTint, accentColor: previewColor,
+                                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+                            )
+                            .lineLimit(2)
+                            .tint(previewColor)
+                        }
                     }
                 }
 
                 Spacer(minLength: 0)
 
-                // Attachment thumbnail
-                if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
+                // Attachment thumbnail or story thumbnail
+                if let thumbUrl = (reply.isStoryReply ? reply.storyThumbnailUrl : reply.attachmentThumbnailUrl), !thumbUrl.isEmpty {
                     CachedAsyncImage(url: thumbUrl) {
                         Color(hex: reply.authorColor).opacity(0.3)
                     }
@@ -1097,6 +1106,61 @@ struct ThemedMessageBubble: View {
         .padding(.horizontal, 6)
         .padding(.top, 6)
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func storyReplyPreview(_ reply: ReplyReference, previewColor: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(previewColor)
+            Text("Story")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(previewColor)
+
+            if let date = reply.storyPublishedAt {
+                Text("\u{2022}")
+                    .font(.system(size: 8))
+                    .foregroundColor(previewColor.opacity(0.6))
+                Text(date, style: .relative)
+                    .font(.system(size: 10))
+                    .foregroundColor(previewColor.opacity(0.8))
+            }
+
+            let reactions = reply.storyReactionCount ?? 0
+            let comments = reply.storyCommentCount ?? 0
+            if reactions > 0 || comments > 0 {
+                Text("(")
+                    .font(.system(size: 10))
+                    .foregroundColor(previewColor.opacity(0.6))
+                if reactions > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 8))
+                        Text("\(reactions)")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(previewColor.opacity(0.8))
+                }
+                if reactions > 0 && comments > 0 {
+                    Text("\u{2022}")
+                        .font(.system(size: 6))
+                        .foregroundColor(previewColor.opacity(0.5))
+                }
+                if comments > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "bubble.right.fill")
+                            .font(.system(size: 8))
+                        Text("\(comments)")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(previewColor.opacity(0.8))
+                }
+                Text(")")
+                    .font(.system(size: 10))
+                    .foregroundColor(previewColor.opacity(0.6))
+            }
+        }
     }
 
     private func replyAttachmentIcon(_ type: String) -> String {

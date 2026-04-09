@@ -673,8 +673,13 @@ public struct ReplyReference: Codable, Sendable {
     public let attachmentType: String?
     public let attachmentThumbnailUrl: String?
     public let isStoryReply: Bool
+    public var storyPublishedAt: Date?
+    public var storyReactionCount: Int?
+    public var storyCommentCount: Int?
+    public var storyThumbnailUrl: String?
 
-    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil, isStoryReply: Bool = false) {
+    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil, isStoryReply: Bool = false,
+                storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyThumbnailUrl: String? = nil) {
         self.messageId = messageId
         self.authorName = authorName
         self.previewText = previewText
@@ -683,6 +688,10 @@ public struct ReplyReference: Codable, Sendable {
         self.attachmentType = attachmentType
         self.attachmentThumbnailUrl = attachmentThumbnailUrl
         self.isStoryReply = isStoryReply
+        self.storyPublishedAt = storyPublishedAt
+        self.storyReactionCount = storyReactionCount
+        self.storyCommentCount = storyCommentCount
+        self.storyThumbnailUrl = storyThumbnailUrl
     }
 }
 

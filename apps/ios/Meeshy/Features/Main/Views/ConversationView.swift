@@ -44,6 +44,7 @@ struct ConversationOverlayState {
     var showStoryViewer = false
     var storyViewerUserId: String? = nil
     var storyViewerGroupIndex: Int = 0
+    var storyViewerSlideIndex: Int = 0
 }
 
 struct ConversationScrollState {
@@ -489,11 +490,13 @@ struct ConversationView: View {
             }
             .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
                 if let resolvedIndex = storyViewModel.groupIndex(forUserId: overlayState.storyViewerUserId ?? "") {
+                    let slideIdx = overlayState.storyViewerSlideIndex
                     StoryViewerView(
                         viewModel: storyViewModel,
                         groups: [storyViewModel.storyGroups[resolvedIndex]],
                         currentGroupIndex: 0,
-                        isPresented: $overlayState.showStoryViewer
+                        isPresented: $overlayState.showStoryViewer,
+                        initialStoryIndex: slideIdx
                     )
                 }
             }

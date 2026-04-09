@@ -492,7 +492,7 @@ struct RootView: View {
     private func handleStoryReply(_ context: ReplyContext) {
         let authId: String
         switch context {
-        case .story(_, let authorId, _, _): authId = authorId
+        case .story(_, let authorId, _, _, _, _, _, _): authId = authorId
         case .status(_, let authorId, _, _, _): authId = authorId
         }
 

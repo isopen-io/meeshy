@@ -93,6 +93,16 @@ extension ConversationView {
                     onReplyTap: { messageId in
                         scrollState.scrollToMessageId = messageId
                     },
+                    onStoryReplyTap: { storyId in
+                        if let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) {
+                            let group = storyViewModel.storyGroups[groupIdx]
+                            let slideIdx = group.stories.firstIndex { $0.id == storyId } ?? 0
+                            overlayState.storyViewerUserId = group.id
+                            overlayState.storyViewerGroupIndex = groupIdx
+                            overlayState.storyViewerSlideIndex = slideIdx
+                            overlayState.showStoryViewer = true
+                        }
+                    },
                     onMediaTap: { attachment in
                         // User explicitly tapped media -> always cache (not conditional)
                         if let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {

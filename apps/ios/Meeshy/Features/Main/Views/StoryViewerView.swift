@@ -25,6 +25,7 @@ struct StoryViewerView: View {
     var preloadedImages: [String: UIImage] = [:]
     var preloadedVideoURLs: [String: URL] = [:]
     var preloadedAudioURLs: [String: URL] = [:]
+    var initialStoryIndex: Int = 0
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
@@ -56,6 +57,7 @@ struct StoryViewerView: View {
     @State var showLanguageOptions = false // internal for cross-file extension access
     @State var showFullLanguagePicker = false // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()
+    @Environment(\.scenePhase) private var scenePhase
 
     // === Transition states ===
 
@@ -94,6 +96,7 @@ struct StoryViewerView: View {
     @State var gestureAxis: Int = 0 // internal for cross-file extension access  // 0=undecided, 1=horizontal, 2=vertical
     @State var showViewersSheet = false
     @State var showCommentsOverlay = false
+    @State var storyReactionCount: Int = 0
     @State var storyComments: [FeedComment] = []
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
@@ -170,6 +173,9 @@ struct StoryViewerView: View {
         .statusBarHidden()
         .gesture(unifiedDragGesture)
         .onAppear {
+            if initialStoryIndex > 0, currentGroupIndex < groups.count {
+                currentStoryIndex = min(initialStoryIndex, groups[currentGroupIndex].stories.count - 1)
+            }
             startTimer()
             markCurrentViewed()
             prefetchCurrentGroup()
@@ -184,6 +190,13 @@ struct StoryViewerView: View {
             StoryMediaCoordinator.shared.deactivate()
             StoryMediaLoader.shared.clearThumbnailCache()
             StoryMediaLoader.shared.clearPlayerCache()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background {
+                timerCancellable?.cancel()
+                PlaybackCoordinator.shared.stopAll()
+                isPresented = false
+            }
         }
         .sheet(isPresented: $showViewersSheet, onDismiss: {
             resumeTimer()
@@ -470,8 +483,8 @@ struct StoryViewerView: View {
             if !isOwnStory {
                 storyActionButton(
                     icon: "heart.fill",
-                    label: "React",
-                    isActive: showEmojiStrip,
+                    label: storyReactionCount > 0 ? "\(storyReactionCount)" : "React",
+                    isActive: showEmojiStrip || storyReactionCount > 0,
                     activeColor: MeeshyColors.indigo500,
                     activeGlow: MeeshyColors.indigo500
                 ) {
@@ -520,11 +533,15 @@ struct StoryViewerView: View {
                     HapticFeedback.light()
                     guard let story = currentStory, let group = currentGroup else { return }
                     let preview = story.content?.prefix(80).description ?? "Story"
+                    let thumbUrl = story.media.first?.thumbnailUrl ?? story.media.first?.url
                     onReplyToStory?(.story(
                         storyId: story.id,
                         authorId: group.id,
                         authorName: group.username,
-                        preview: preview
+                        preview: preview,
+                        publishedAt: story.createdAt,
+                        commentCount: storyCommentCount > 0 ? storyCommentCount : nil,
+                        thumbnailUrl: thumbUrl
                     ))
                     isPresented = false
                 }
@@ -654,17 +671,13 @@ struct StoryViewerView: View {
                     }
 
                     Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            Circle()
-                                .fill(isActive ? activeColor.opacity(0.15) : Color.black.opacity(0.15))
-                        )
+                        .fill(isActive ? activeColor.opacity(0.15) : Color.white.opacity(0.08))
                         .overlay(
                             Circle()
                                 .stroke(
                                     isActive ?
                                         AnyShapeStyle(activeColor.opacity(0.4)) :
-                                        AnyShapeStyle(Color.white.opacity(0.12)),
+                                        AnyShapeStyle(Color.white.opacity(0.15)),
                                     lineWidth: isActive ? 1 : 0.5
                                 )
                         )
@@ -805,6 +818,7 @@ struct StoryViewerView: View {
             }
         }
 
+        storyReactionCount += 1
         sendReaction(emoji: emoji)
     }
 

@@ -76,6 +76,17 @@ public final class PlaybackCoordinator {
         SharedAVPlayerManager.shared.stop()
     }
 
+    // MARK: - Stop All Playback
+
+    public func stopAll() {
+        pruneDeadReferences()
+        for (_, weak) in audioPlayers {
+            weak.player?.stop()
+        }
+        stopAllExternal(except: nil)
+        SharedAVPlayerManager.shared.stop()
+    }
+
     // MARK: - Cleanup
 
     private func stopAllExternal(except excludeId: ObjectIdentifier?) {

@@ -158,6 +158,16 @@ class ConversationListViewModel: ObservableObject {
         _ filtered: [Conversation],
         categories: [ConversationSection]
     ) -> [(section: ConversationSection, conversations: [Conversation])] {
+        // No categories → flat list, no section headers needed
+        let hasPinned = filtered.contains { $0.isPinned && $0.sectionId == nil }
+        if categories.isEmpty && !hasPinned {
+            let sorted = filtered.sorted { a, b in
+                if a.isPinned != b.isPinned { return a.isPinned }
+                return a.lastMessageAt > b.lastMessageAt
+            }
+            return sorted.isEmpty ? [] : [(ConversationSection.other, sorted)]
+        }
+
         var result: [(section: ConversationSection, conversations: [Conversation])] = []
 
         // O(1) lookup sets

@@ -523,6 +523,7 @@ extension StoryViewerView {
         hasFiredFadeOut = false
         showCommentsOverlay = false
         loadStoryCommentCount()
+        storyReactionCount = currentStory?.reactionCount ?? 0
         updateStoryDuration()
         let duration = computedStoryDuration
         let interval: Double = 0.03
@@ -1223,10 +1224,12 @@ extension StoryViewerView {
             return
         }
 
+        storyCommentCount = story.commentCount
+
         Task {
             do {
                 let response = try await PostService.shared.getComments(postId: story.id, limit: 1)
-                if response.success {
+                if response.success && response.data.count > storyCommentCount {
                     storyCommentCount = response.data.count
                 }
             } catch {}

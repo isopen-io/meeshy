@@ -162,28 +162,35 @@ struct ConversationListView: View {
         }
     }
 
+    private var isSingleUngroupedSection: Bool {
+        conversationViewModel.groupedConversations.count == 1
+        && conversationViewModel.groupedConversations[0].section.id == "other"
+    }
+
     @ViewBuilder
     private func sectionView(for group: (section: ConversationSection, conversations: [Conversation])) -> some View {
-        // Section Header with drop target
-        SectionHeaderView(
-            section: group.section,
-            count: group.conversations.count,
-            isExpanded: expandedSections.contains(group.section.id),
-            isDropTarget: dropTargetSection == group.section.id && group.section.id != "pinned"
-        ) {
-            toggleSection(group.section.id)
+        // Hide section header when there are no user categories (flat list)
+        if !isSingleUngroupedSection {
+            SectionHeaderView(
+                section: group.section,
+                count: group.conversations.count,
+                isExpanded: expandedSections.contains(group.section.id),
+                isDropTarget: dropTargetSection == group.section.id && group.section.id != "pinned"
+            ) {
+                toggleSection(group.section.id)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .onDrop(of: [.text], delegate: SectionDropDelegate(
+                sectionId: group.section.id,
+                dropTargetSection: $dropTargetSection,
+                draggingConversation: $draggingConversation,
+                onDrop: { handleDrop(to: group.section.id, providers: $0) }
+            ))
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .onDrop(of: [.text], delegate: SectionDropDelegate(
-            sectionId: group.section.id,
-            dropTargetSection: $dropTargetSection,
-            draggingConversation: $draggingConversation,
-            onDrop: { handleDrop(to: group.section.id, providers: $0) }
-        ))
 
-        // Section Content with animated expand/collapse
-        if expandedSections.contains(group.section.id) {
+        // Section Content — always visible when no categories, otherwise animated expand/collapse
+        if isSingleUngroupedSection || expandedSections.contains(group.section.id) {
             sectionConversations(group.conversations)
                 .padding(.horizontal, 16)
                 .transition(.asymmetric(

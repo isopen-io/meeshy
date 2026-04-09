@@ -335,14 +335,7 @@ struct AudioMediaView: View {
                         .padding(.top, 6)
                 }
             }
-            .overlay(alignment: .bottom) {
-                DownloadBadgeView(
-                    attachment: attachment,
-                    accentColor: contactColor,
-                    onShareFile: onShareFile
-                )
-                .padding(.bottom, 6)
-            }
+            // Download handled by audioPlaceholder's integrated play button
 
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && visualAttachments.isEmpty {
                 MessageTextRenderer.render(

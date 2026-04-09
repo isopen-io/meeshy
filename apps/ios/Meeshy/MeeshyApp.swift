@@ -265,6 +265,7 @@ struct MeeshyApp: App {
     }
 
     private func handleBackgroundTransition() {
+        PlaybackCoordinator.shared.stopAll()
         guard authManager.isAuthenticated else { return }
         BackgroundTaskManager.shared.scheduleConversationSync()
         BackgroundTaskManager.shared.scheduleMessagePrefetch()
