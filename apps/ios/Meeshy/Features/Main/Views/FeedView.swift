@@ -627,7 +627,7 @@ struct FeedView: View {
                 Spacer(minLength: 0)
 
                 // Toolbar
-                HStack(spacing: 24) {
+                HStack(spacing: 16) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 20))
