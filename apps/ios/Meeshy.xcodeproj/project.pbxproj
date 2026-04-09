@@ -122,6 +122,11 @@
 		CC4000000000002F40 /* ContactCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4000000000001F40 /* ContactCardView.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* AdaptiveRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6A7B8C9D0E1F2A3B4 /* AdaptiveRootView.swift */; };
 		CC5DF0610487315B178B7FE5 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BB909122D8D9361EC72DF1 /* RootView.swift */; };
+		D4E5F6A7B8C9D0E1F2A3B4D9 /* iPadRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* iPadRootView.swift */; };
+		D4E5F6A7B8C9D0E1F2A3B4D2 /* iPadRootView+Sheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4D1 /* iPadRootView+Sheets.swift */; };
+		D4E5F6A7B8C9D0E1F2A3B4D4 /* iPadRootView+Panels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4D3 /* iPadRootView+Panels.swift */; };
+		D4E5F6A7B8C9D0E1F2A3B4D6 /* iPadRootView+Overlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4D5 /* iPadRootView+Overlays.swift */; };
+		D4E5F6A7B8C9D0E1F2A3B4D8 /* iPadRootView+Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4D7 /* iPadRootView+Navigation.swift */; };
 		CDL6001A001A001A001A0001 /* CommunityLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDL6002A002A002A002A0002 /* CommunityLinkDetailView.swift */; };
 		CE4300000000002F43 /* CallEffectsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE4300000000001F43 /* CallEffectsOverlay.swift */; };
 		CEE3D363209C096087B36241 /* SecurityVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A356FD5DE5874BCEFB9139C4 /* SecurityVerificationView.swift */; };
@@ -327,6 +332,10 @@
 		31BB909122D8D9361EC72DF1 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C3D4E5F6A7B8C9D0E1F2A3B4 /* AdaptiveRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveRootView.swift; sourceTree = "<group>"; };
 		D4E5F6A7B8C9D0E1F2A3B4C5 /* iPadRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPadRootView.swift; sourceTree = "<group>"; };
+		D4E5F6A7B8C9D0E1F2A3B4D1 /* iPadRootView+Sheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Sheets.swift"; sourceTree = "<group>"; };
+		D4E5F6A7B8C9D0E1F2A3B4D3 /* iPadRootView+Panels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Panels.swift"; sourceTree = "<group>"; };
+		D4E5F6A7B8C9D0E1F2A3B4D5 /* iPadRootView+Overlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Overlays.swift"; sourceTree = "<group>"; };
+		D4E5F6A7B8C9D0E1F2A3B4D7 /* iPadRootView+Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Navigation.swift"; sourceTree = "<group>"; };
 		3CA306483025A83773D87DED /* StatsTimelineChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsTimelineChart.swift; sourceTree = "<group>"; };
 		3CD3F73AED1D6C3D98E9730A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		3D8B8C79D3A388D45C5B5EEF /* UserStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStatsView.swift; sourceTree = "<group>"; };
@@ -761,6 +770,10 @@
 				694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */,
 				C3D4E5F6A7B8C9D0E1F2A3B4 /* AdaptiveRootView.swift */,
 				D4E5F6A7B8C9D0E1F2A3B4C5 /* iPadRootView.swift */,
+				D4E5F6A7B8C9D0E1F2A3B4D7 /* iPadRootView+Navigation.swift */,
+				D4E5F6A7B8C9D0E1F2A3B4D5 /* iPadRootView+Overlays.swift */,
+				D4E5F6A7B8C9D0E1F2A3B4D3 /* iPadRootView+Panels.swift */,
+				D4E5F6A7B8C9D0E1F2A3B4D1 /* iPadRootView+Sheets.swift */,
 				31BB909122D8D9361EC72DF1 /* RootView.swift */,
 				AA00BB11CC22DD33EE440015 /* RootViewComponents.swift */,
 				SP3400000000001F34 /* SharePickerView.swift */,
@@ -1308,6 +1321,11 @@
 				72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */,
 				63036D51D98A1B79ADC9401D /* OverlayMenu.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* AdaptiveRootView.swift in Sources */,
+				D4E5F6A7B8C9D0E1F2A3B4D9 /* iPadRootView.swift in Sources */,
+				D4E5F6A7B8C9D0E1F2A3B4D2 /* iPadRootView+Sheets.swift in Sources */,
+				D4E5F6A7B8C9D0E1F2A3B4D4 /* iPadRootView+Panels.swift in Sources */,
+				D4E5F6A7B8C9D0E1F2A3B4D6 /* iPadRootView+Overlays.swift in Sources */,
+				D4E5F6A7B8C9D0E1F2A3B4D8 /* iPadRootView+Navigation.swift in Sources */,
 				CC5DF0610487315B178B7FE5 /* RootView.swift in Sources */,
 				E5F6A7B8C9D0E1F2A3B4C5D6 /* FeedViewModel.swift in Sources */,
 				AA00BB11CC22DD33EE440073 /* PostDetailViewModel.swift in Sources */,
