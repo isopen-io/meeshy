@@ -123,6 +123,7 @@ final class AttachmentSendService: AttachmentSendServiceProviding {
                 content: content,
                 attachmentIds: uploadedIds,
                 replyToId: replyToId,
+                storyReplyToId: nil,
                 originalLanguage: originalLanguage,
                 isEncrypted: false
             )

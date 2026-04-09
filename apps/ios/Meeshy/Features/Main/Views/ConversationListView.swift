@@ -52,6 +52,12 @@ struct ConversationListView: View {
     var onStoryViewRequest: ((String, Bool) -> Void)? = nil  // (userId, fromTray)
     var onNewConversation: (() -> Void)? = nil
 
+    // iPad-specific: extra trailing icons and Feed button in header
+    var iPadNotificationCount: Int = 0
+    var onNotificationsTap: (() -> Void)? = nil
+    var onSettingsTap: (() -> Void)? = nil
+    var iPadFeedAction: (() -> Void)? = nil
+
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var lockManager = ConversationLockManager.shared
@@ -118,12 +124,26 @@ struct ConversationListView: View {
 
 
     // Alternative init without binding for backward compatibility
-    init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((String, Bool) -> Void)? = nil, onNewConversation: (() -> Void)? = nil) {
+    init(
+        isScrollingDown: Binding<Bool>? = nil,
+        feedIsVisible: Binding<Bool>? = nil,
+        onSelect: @escaping (Conversation) -> Void,
+        onStoryViewRequest: ((String, Bool) -> Void)? = nil,
+        onNewConversation: (() -> Void)? = nil,
+        iPadNotificationCount: Int = 0,
+        onNotificationsTap: (() -> Void)? = nil,
+        onSettingsTap: (() -> Void)? = nil,
+        iPadFeedAction: (() -> Void)? = nil
+    ) {
         self._isScrollingDown = isScrollingDown ?? .constant(false)
         self._feedIsVisible = feedIsVisible ?? .constant(false)
         self.onSelect = onSelect
         self.onStoryViewRequest = onStoryViewRequest
         self.onNewConversation = onNewConversation
+        self.iPadNotificationCount = iPadNotificationCount
+        self.onNotificationsTap = onNotificationsTap
+        self.onSettingsTap = onSettingsTap
+        self.iPadFeedAction = iPadFeedAction
     }
 
     // The filtered and grouped conversations are now calculated on a background queue 
@@ -722,6 +742,30 @@ struct ConversationListView: View {
                 titleColor: theme.textPrimary,
                 backArrowColor: MeeshyColors.indigo500,
                 backgroundColor: theme.backgroundPrimary,
+                leading: {
+                    if let iPadFeedAction {
+                        Button {
+                            HapticFeedback.light()
+                            iPadFeedAction()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "square.stack.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text("Feed")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundStyle(
+                                LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
+                            )
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.15 : 1))
+                            )
+                        }
+                    }
+                },
                 titleView: {
                     Text("Meeshy")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -748,6 +792,41 @@ struct ConversationListView: View {
                                 .foregroundColor(MeeshyColors.indigo500)
                         }
                         .accessibilityLabel("Nouvelle conversation")
+
+                        if let onNotificationsTap {
+                            Button {
+                                HapticFeedback.light()
+                                onNotificationsTap()
+                            } label: {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: "bell.fill")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(MeeshyColors.indigo500)
+
+                                    if iPadNotificationCount > 0 {
+                                        Text("\(min(iPadNotificationCount, 99))")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .frame(width: 16, height: 16)
+                                            .background(Circle().fill(MeeshyColors.error))
+                                            .offset(x: 6, y: -6)
+                                    }
+                                }
+                            }
+                            .accessibilityLabel("Notifications")
+                        }
+
+                        if let onSettingsTap {
+                            Button {
+                                HapticFeedback.light()
+                                onSettingsTap()
+                            } label: {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(MeeshyColors.indigo500)
+                            }
+                            .accessibilityLabel("Reglages")
+                        }
                     }
                 }
             )

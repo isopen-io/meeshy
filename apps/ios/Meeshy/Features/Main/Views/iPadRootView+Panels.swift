@@ -221,15 +221,43 @@ struct iPadLeftColumnHeader: View {
     }
 }
 
-// MARK: - iPad Divider
+// MARK: - iPad Resizable Handle
 
-struct iPadDivider: View {
+struct iPadResizableHandle: View {
+    @Binding var ratio: CGFloat
+    let screenWidth: CGFloat
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var isDragging = false
+
+    private let minRatio: CGFloat = 0.30
+    private let maxRatio: CGFloat = 0.50
+    private let handleWidth: CGFloat = 20
 
     var body: some View {
-        Rectangle()
-            .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.08))
-            .frame(width: 1)
-            .ignoresSafeArea()
+        ZStack {
+            Rectangle()
+                .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.08))
+                .frame(width: 1)
+
+            RoundedRectangle(cornerRadius: 2)
+                .fill(isDragging ? MeeshyColors.indigo400 : (theme.mode.isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)))
+                .frame(width: 4, height: 36)
+                .animation(.easeInOut(duration: 0.15), value: isDragging)
+        }
+        .frame(width: handleWidth)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    isDragging = true
+                    let currentX = screenWidth * ratio + value.translation.width
+                    let newRatio = currentX / screenWidth
+                    ratio = min(maxRatio, max(minRatio, newRatio))
+                }
+                .onEnded { _ in
+                    isDragging = false
+                }
+        )
+        .ignoresSafeArea()
     }
 }

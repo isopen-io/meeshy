@@ -535,7 +535,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitLiveLocationStart(payload: LiveLocationStartPayload)
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
-    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, originalLanguage: String?, isEncrypted: Bool)
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool)
     func emitCallInitiate(conversationId: String, isVideo: Bool)
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)

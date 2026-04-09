@@ -45,6 +45,7 @@ struct iPadRootView: View {
     @State var showNewConversation = false
     @State private var isScrollingDown = false
     @State private var feedIsVisible = true
+    @State private var leftColumnRatio: CGFloat = 0.38
 
     private var isConversationOpen: Bool {
         activeConversation != nil
@@ -55,14 +56,16 @@ struct iPadRootView: View {
             ZStack {
                 themedBackground
 
-                HStack(spacing: 0) {
-                    leftColumn
-                        .frame(minWidth: 320, idealWidth: 380, maxWidth: 420)
+                GeometryReader { geometry in
+                    HStack(spacing: 0) {
+                        leftColumn
+                            .frame(width: geometry.size.width * leftColumnRatio)
 
-                    iPadDivider()
+                        iPadResizableHandle(ratio: $leftColumnRatio, screenWidth: geometry.size.width)
 
-                    rightColumn
-                        .frame(maxWidth: .infinity)
+                        rightColumn
+                            .frame(maxWidth: .infinity)
+                    }
                 }
 
                 overlays
@@ -144,34 +147,9 @@ struct iPadRootView: View {
     @ViewBuilder
     private var leftColumn: some View {
         if isConversationOpen {
-            VStack(spacing: 0) {
-                iPadLeftColumnHeader(
-                    title: "Messages",
-                    showFeedButton: true,
-                    onFeedTap: { closePanels() },
-                    notificationCount: notificationManager.unreadCount,
-                    onNotificationsTap: { rightPanelRoute = .notifications },
-                    onSettingsTap: { rightPanelRoute = .settings }
-                )
-
-                ConversationListView(
-                    isScrollingDown: $isScrollingDown,
-                    feedIsVisible: $feedIsVisible,
-                    onSelect: { conversation in
-                        openConversation(conversation)
-                    },
-                    onStoryViewRequest: { userId, _ in
-                        selectedStoryUserIdFromConv = userId
-                        showStoryViewerFromConv = true
-                    },
-                    onNewConversation: { showNewConversation = true }
-                )
-                .navigationBarHidden(true)
-            }
+            iPadConversationList(showFeedButton: true)
         } else {
-            VStack(spacing: 0) {
-                FeedView()
-            }
+            FeedView()
         }
     }
 
@@ -189,30 +167,30 @@ struct iPadRootView: View {
         } else if let route = rightPanelRoute {
             rightPanelContent(for: route)
         } else {
-            VStack(spacing: 0) {
-                iPadLeftColumnHeader(
-                    title: "Messages",
-                    showFeedButton: false,
-                    notificationCount: notificationManager.unreadCount,
-                    onNotificationsTap: { rightPanelRoute = .notifications },
-                    onSettingsTap: { rightPanelRoute = .settings }
-                )
-
-                ConversationListView(
-                    isScrollingDown: $isScrollingDown,
-                    feedIsVisible: $feedIsVisible,
-                    onSelect: { conversation in
-                        openConversation(conversation)
-                    },
-                    onStoryViewRequest: { userId, _ in
-                        selectedStoryUserIdFromConv = userId
-                        showStoryViewerFromConv = true
-                    },
-                    onNewConversation: { showNewConversation = true }
-                )
-                .navigationBarHidden(true)
-            }
+            iPadConversationList(showFeedButton: false)
         }
+    }
+
+    // MARK: - iPad Conversation List (shared between columns)
+
+    @ViewBuilder
+    private func iPadConversationList(showFeedButton: Bool) -> some View {
+        let feedAction: (() -> Void)? = showFeedButton ? { closePanels() } : nil
+        ConversationListView(
+            isScrollingDown: $isScrollingDown,
+            feedIsVisible: $feedIsVisible,
+            onSelect: { conversation in openConversation(conversation) },
+            onStoryViewRequest: { userId, _ in
+                selectedStoryUserIdFromConv = userId
+                showStoryViewerFromConv = true
+            },
+            onNewConversation: { showNewConversation = true },
+            iPadNotificationCount: notificationManager.unreadCount,
+            onNotificationsTap: { rightPanelRoute = .notifications },
+            onSettingsTap: { rightPanelRoute = .settings },
+            iPadFeedAction: feedAction
+        )
+        .navigationBarHidden(true)
     }
 
     // MARK: - Themed Background

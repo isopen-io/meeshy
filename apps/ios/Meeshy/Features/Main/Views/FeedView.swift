@@ -9,6 +9,7 @@ import MeeshyUI
 // MARK: - Feed View
 struct FeedView: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @StateObject var viewModel = FeedViewModel()
@@ -76,16 +77,18 @@ struct FeedView: View {
 
             feedScrollView
 
-            VStack(spacing: 0) {
-                CollapsibleHeader(
-                    title: "Feeds",
-                    scrollOffset: headerScrollOffset,
-                    showBackButton: false,
-                    titleColor: theme.textPrimary,
-                    backArrowColor: MeeshyColors.indigo500,
-                    backgroundColor: theme.backgroundPrimary
-                )
-                Spacer()
+            if sizeClass != .regular {
+                VStack(spacing: 0) {
+                    CollapsibleHeader(
+                        title: "Feeds",
+                        scrollOffset: headerScrollOffset,
+                        showBackButton: false,
+                        titleColor: theme.textPrimary,
+                        backArrowColor: MeeshyColors.indigo500,
+                        backgroundColor: theme.backgroundPrimary
+                    )
+                    Spacer()
+                }
             }
 
             // Full-screen composer overlay

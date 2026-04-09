@@ -5,7 +5,7 @@ public enum CollapsibleHeaderMetrics {
     public static var collapsedHeight: CGFloat { 52 }
 }
 
-public struct CollapsibleHeader<TitleContent: View, TrailingContent: View>: View {
+public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, TrailingContent: View>: View {
     let title: String
     let subtitle: String?
     let scrollOffset: CGFloat
@@ -14,6 +14,7 @@ public struct CollapsibleHeader<TitleContent: View, TrailingContent: View>: View
     let titleColor: Color
     let backArrowColor: Color
     let backgroundColor: Color
+    let leading: (() -> LeadingContent)?
     let titleView: (() -> TitleContent)?
     let trailing: () -> TrailingContent
 
@@ -29,6 +30,7 @@ public struct CollapsibleHeader<TitleContent: View, TrailingContent: View>: View
         titleColor: Color,
         backArrowColor: Color,
         backgroundColor: Color,
+        @ViewBuilder leading: @escaping () -> LeadingContent,
         @ViewBuilder titleView: @escaping () -> TitleContent,
         @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
     ) {
@@ -40,6 +42,7 @@ public struct CollapsibleHeader<TitleContent: View, TrailingContent: View>: View
         self.titleColor = titleColor
         self.backArrowColor = backArrowColor
         self.backgroundColor = backgroundColor
+        self.leading = leading
         self.titleView = titleView
         self.trailing = trailing
     }
@@ -91,6 +94,12 @@ public struct CollapsibleHeader<TitleContent: View, TrailingContent: View>: View
             HStack(alignment: .center, spacing: 0) {
                 if showBackButton {
                     backButton
+                }
+
+                if let leading {
+                    leading()
+                        .scaleEffect(lerp(1.0, 0.8, progress), anchor: .leading)
+                        .padding(.leading, showBackButton ? 0 : 8)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -166,9 +175,9 @@ public struct CollapsibleHeader<TitleContent: View, TrailingContent: View>: View
     }
 }
 
-// MARK: - Convenience init (no custom titleView — backward compatible)
+// MARK: - Convenience init (no custom titleView, no leading — backward compatible)
 
-extension CollapsibleHeader where TitleContent == EmptyView {
+extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == EmptyView {
     public init(
         title: String,
         subtitle: String? = nil,
@@ -188,7 +197,37 @@ extension CollapsibleHeader where TitleContent == EmptyView {
         self.titleColor = titleColor
         self.backArrowColor = backArrowColor
         self.backgroundColor = backgroundColor
+        self.leading = nil
         self.titleView = nil
+        self.trailing = trailing
+    }
+}
+
+// MARK: - Convenience init (custom titleView, no leading)
+
+extension CollapsibleHeader where LeadingContent == EmptyView {
+    public init(
+        title: String,
+        subtitle: String? = nil,
+        scrollOffset: CGFloat,
+        showBackButton: Bool = true,
+        onBack: (() -> Void)? = nil,
+        titleColor: Color,
+        backArrowColor: Color,
+        backgroundColor: Color,
+        @ViewBuilder titleView: @escaping () -> TitleContent,
+        @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.scrollOffset = scrollOffset
+        self.showBackButton = showBackButton
+        self.onBack = onBack
+        self.titleColor = titleColor
+        self.backArrowColor = backArrowColor
+        self.backgroundColor = backgroundColor
+        self.leading = nil
+        self.titleView = titleView
         self.trailing = trailing
     }
 }
