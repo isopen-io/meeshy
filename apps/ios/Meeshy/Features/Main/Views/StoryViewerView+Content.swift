@@ -122,7 +122,11 @@ extension StoryViewerView {
     func mediaOverlay(media: FeedMedia, geometry: GeometryProxy) -> some View {
         Group {
             if media.url != nil {
-                CachedAsyncImage(url: media.url) {
+                ProgressiveCachedImage(
+                    thumbHash: media.thumbHash,
+                    thumbnailUrl: media.thumbnailUrl,
+                    fullUrl: media.url
+                ) {
                     coloredMediaFallback(media: media)
                 }
                 .aspectRatio(contentMode: .fill)
@@ -382,8 +386,8 @@ extension StoryViewerView {
         update()
         markCurrentViewed()
 
-        // Prefetch incoming story's media and await it (max 300ms) so L1 cache is warm
-        let incomingPrefetch = currentStory.map { prefetchAllMedia(for: $0) }
+        // Fire-and-forget prefetch — thumbHash provides instant visual while full image loads
+        if let story = currentStory { prefetchAllMedia(for: story) }
         prefetchStory(at: currentStoryIndex + 1)
         prefetchStory(at: currentStoryIndex + 2)
 
@@ -425,37 +429,21 @@ extension StoryViewerView {
             animation = .easeOut(duration: 0.35)
         }
 
-        // 3. Await cache warm-up (max 300ms), then animate
-        let performAnimation = { [self] in
-            withAnimation(animation) {
-                outgoingOpacity = 0
-                contentOpacity = 1
-                openingScale = 1.0
-                textSlideOffset = 0
-                if incomingEffect == .reveal { isRevealActive = true }
-                if closingEffect == .zoom { closingScale = 1.08 }
-            }
-
-            restartTimer()
-            DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.04) {
-                outgoingStory = nil
-                isTransitioning = false
-                closingScale = 1.0
-            }
+        // 3. Animate immediately — thumbHash provides instant visual while full image loads
+        withAnimation(animation) {
+            outgoingOpacity = 0
+            contentOpacity = 1
+            openingScale = 1.0
+            textSlideOffset = 0
+            if incomingEffect == .reveal { isRevealActive = true }
+            if closingEffect == .zoom { closingScale = 1.08 }
         }
 
-        if let prefetch = incomingPrefetch {
-            Task { @MainActor in
-                await withTaskGroup(of: Void.self) { group in
-                    group.addTask { await prefetch.value }
-                    group.addTask { try? await Task.sleep(nanoseconds: 300_000_000) }
-                    _ = await group.next()
-                    group.cancelAll()
-                }
-                performAnimation()
-            }
-        } else {
-            performAnimation()
+        restartTimer()
+        DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.04) {
+            outgoingStory = nil
+            isTransitioning = false
+            closingScale = 1.0
         }
     }
 
@@ -472,31 +460,20 @@ extension StoryViewerView {
             groupSlide = exitX
         }
 
-        // 2. Swap content while off-screen, prefetch first story, then slide new card in
+        // 2. Swap content while off-screen, slide new card in immediately
+        //    ThumbHash provides instant visual — no need to await prefetch
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             update()
             markCurrentViewed()
-            let firstStory = currentGroupIndex < groups.count ? groups[currentGroupIndex].stories.first : nil
-            let firstPrefetch = firstStory.map { prefetchAllMedia(for: $0) }
             prefetchCurrentGroup()
 
-            Task { @MainActor in
-                if let prefetch = firstPrefetch {
-                    await withTaskGroup(of: Void.self) { group in
-                        group.addTask { await prefetch.value }
-                        group.addTask { try? await Task.sleep(nanoseconds: 200_000_000) }
-                        _ = await group.next()
-                        group.cancelAll()
-                    }
-                }
-                groupSlide = enterX
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                    groupSlide = 0
-                }
-                restartTimer()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    isTransitioning = false
-                }
+            groupSlide = enterX
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                groupSlide = 0
+            }
+            restartTimer()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                isTransitioning = false
             }
         }
     }

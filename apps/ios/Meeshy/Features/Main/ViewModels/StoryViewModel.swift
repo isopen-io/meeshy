@@ -126,60 +126,69 @@ class StoryViewModel: ObservableObject {
 
     /// Prefetch all media for all story groups in the background.
     /// Downloads images to disk cache and prerolls video players for the first 3 groups.
-    /// This runs at low priority to avoid competing with foreground work.
+    /// First slide of each group is prefetched at high priority for instant display.
     private func prefetchAllStoryMedia(_ groups: [StoryGroup]) {
+        // High priority: prefetch first slide of each unviewed group (what the user taps first)
+        let groupsToPreload = Array(groups.prefix(5))
+        Task(priority: .high) {
+            let imageCache = await CacheCoordinator.shared.images
+            for group in groupsToPreload {
+                guard !Task.isCancelled else { return }
+                guard let firstStory = group.stories.first else { continue }
+                await Self.prefetchStoryMedia(firstStory, imageCache: imageCache, prerollPlayer: true)
+            }
+        }
+
+        // Utility priority: prefetch remaining slides (not the first) for smooth navigation
         Task(priority: .utility) {
             let imageCache = await CacheCoordinator.shared.images
-
-            // Sliding window: only prefetch first 5 groups (not all 50)
-            // StoryViewerView.prefetchCurrentGroup() handles deeper prefetch on open
-            let groupsToPreload = groups.prefix(5)
             for (groupIndex, group) in groupsToPreload.enumerated() {
                 guard !Task.isCancelled else { return }
-                for story in group.stories {
-                    // Collect all media URLs from the story
-                    var urls: [String] = story.media.compactMap(\.url)
-
-                    if let mediaObjs = story.storyEffects?.mediaObjects {
-                        for obj in mediaObjs {
-                            if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
-                                urls.append(urlStr)
-                            }
-                        }
-                    }
-
-                    if let audioObjs = story.storyEffects?.audioPlayerObjects {
-                        for obj in audioObjs {
-                            if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
-                                urls.append(urlStr)
-                            }
-                        }
-                    }
-
-                    if let bgAudioId = story.storyEffects?.backgroundAudioId {
-                        if let urlStr = story.media.first(where: { $0.id == bgAudioId })?.url {
-                            urls.append(urlStr)
-                        }
-                    }
-
-                    // Download all media to disk cache + populate UIImage NSCache
-                    for urlString in Set(urls) {
-                        let mediaType = story.media.first(where: { $0.url == urlString })?.type
-
-                        if mediaType == .video || mediaType == .audio {
-                            // Video/Audio: download raw data to disk + preroll player for first 3 groups
-                            _ = try? await imageCache.data(for: urlString)
-                            if groupIndex < 3, let url = URL(string: urlString) {
-                                await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
-                            }
-                        } else {
-                            // Image: use image(for:) which downloads AND populates
-                            // the static UIImage NSCache — so DiskCacheStore.cachedImage(for:)
-                            // returns the image instantly when the viewer renders
-                            _ = await imageCache.image(for: urlString)
-                        }
-                    }
+                for (storyIndex, story) in group.stories.enumerated() {
+                    guard !Task.isCancelled else { return }
+                    if storyIndex == 0 { continue }
+                    await Self.prefetchStoryMedia(story, imageCache: imageCache, prerollPlayer: groupIndex < 3)
                 }
+            }
+        }
+    }
+
+    /// Prefetch all media URLs for a single story into disk + memory cache.
+    private static func prefetchStoryMedia(_ story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async {
+        var urls: [String] = story.media.compactMap(\.url)
+
+        if let mediaObjs = story.storyEffects?.mediaObjects {
+            for obj in mediaObjs {
+                if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
+                    urls.append(urlStr)
+                }
+            }
+        }
+
+        if let audioObjs = story.storyEffects?.audioPlayerObjects {
+            for obj in audioObjs {
+                if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
+                    urls.append(urlStr)
+                }
+            }
+        }
+
+        if let bgAudioId = story.storyEffects?.backgroundAudioId {
+            if let urlStr = story.media.first(where: { $0.id == bgAudioId })?.url {
+                urls.append(urlStr)
+            }
+        }
+
+        for urlString in Set(urls) {
+            let mediaType = story.media.first(where: { $0.url == urlString })?.type
+
+            if mediaType == .video || mediaType == .audio {
+                _ = try? await imageCache.data(for: urlString)
+                if prerollPlayer, let url = URL(string: urlString) {
+                    await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
+                }
+            } else {
+                _ = await imageCache.image(for: urlString)
             }
         }
     }

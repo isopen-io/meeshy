@@ -49,22 +49,30 @@ struct DownloadBadgeView: View {
         Button {
             downloader.start(attachment: attachment, onShare: onShareFile)
         } label: {
-            HStack(spacing: 3) {
-                if !totalSizeText.isEmpty {
-                    Text(totalSizeText)
-                        .font(.system(size: 8, weight: .semibold))
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 56, height: 56)
+                    Circle()
+                        .fill(accent.opacity(0.85))
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "arrow.down.to.line")
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundColor(.white)
                 }
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 16))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, accent.opacity(0.85))
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+
+                if !totalSizeText.isEmpty {
+                    Text(totalSizeText)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(.black.opacity(0.55)))
+                }
             }
-            .padding(.horizontal, 5)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(.black.opacity(0.5)))
         }
-        .padding(4)
         .task {
             let isAudio = attachment.mimeType.hasPrefix("audio/")
             await downloader.checkCache(attachment.fileUrl, isAudio: isAudio)

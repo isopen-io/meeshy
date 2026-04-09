@@ -100,6 +100,9 @@ public struct StoryCanvasReaderView: View {
                 Color(hex: bg)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        } else if let avgColor = state.thumbHashAverageColor {
+            Color(avgColor)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             LinearGradient(
                 colors: [Color(hex: "1A1A2E"), Color(hex: "0F3460")],
@@ -116,32 +119,18 @@ public struct StoryCanvasReaderView: View {
     private var bgTransformOffsetY: CGFloat { story.storyEffects?.backgroundTransform?.offsetY ?? 0 }
     private var bgTransformRotation: Double { story.storyEffects?.backgroundTransform?.rotation ?? 0 }
 
+    /// Resolves the best available thumbHash for this story's background media.
+    private var resolvedThumbHash: String? {
+        story.storyEffects?.thumbHash ?? story.media.first?.thumbHash
+    }
+
     @ViewBuilder
     private var backgroundMediaLayer: some View {
         if let bgMedia = story.storyEffects?.mediaObjects?.first(where: { $0.placement == "background" }) {
             if bgMedia.mediaType == "image" {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId) {
-                    let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
-                    if let cached = DiskCacheStore.cachedImage(for: resolved) {
-                        Image(uiImage: cached)
-                            .resizable()
-                            .scaledToFill()
-                            .scaleEffect(bgTransformScale)
-                            .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
-                            .rotationEffect(.degrees(bgTransformRotation))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .clipped()
-                    } else {
-                        CachedAsyncImage(url: urlStr) {
-                            Color.clear
-                        }
-                        .scaledToFill()
-                        .scaleEffect(bgTransformScale)
-                        .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
-                        .rotationEffect(.degrees(bgTransformRotation))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
-                    }
+                    let thumbHash = story.media.first(where: { $0.id == bgMedia.postMediaId })?.thumbHash ?? resolvedThumbHash
+                    backgroundImageView(urlStr: urlStr, thumbHash: thumbHash)
                 }
             } else if bgMedia.mediaType == "video" {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId),
@@ -167,8 +156,6 @@ public struct StoryCanvasReaderView: View {
         } else if let legacyMedia = story.media.first,
                   let urlStr = legacyMedia.url,
                   (story.storyEffects?.mediaObjects ?? []).isEmpty {
-            // Legacy path: only for stories that predate the canvas system (no mediaObjects at all).
-            // If mediaObjects exist, videos are rendered via foregroundMediaLayer — skip here to avoid duplication.
             if legacyMedia.type == .video, let url = MeeshyConfig.resolveMediaURL(urlStr) {
                 let player = state.ensureBackgroundVideoPlayer(url: url)
                 BareVideoLayer(player: player)
@@ -178,28 +165,41 @@ public struct StoryCanvasReaderView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
             } else {
-                let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
-                if let cached = DiskCacheStore.cachedImage(for: resolved) {
-                    Image(uiImage: cached)
+                backgroundImageView(urlStr: urlStr, thumbHash: legacyMedia.thumbHash ?? resolvedThumbHash)
+            }
+        }
+    }
+
+    /// Renders a background image with instant thumbHash placeholder fallback.
+    /// Priority: L1/L2 cached image (instant) > ProgressiveCachedImage (thumbHash -> full).
+    @ViewBuilder
+    private func backgroundImageView(urlStr: String, thumbHash: String?) -> some View {
+        let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
+        if let cached = DiskCacheStore.cachedImage(for: resolved) {
+            Image(uiImage: cached)
+                .resizable()
+                .scaledToFill()
+                .scaleEffect(bgTransformScale)
+                .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
+                .rotationEffect(.degrees(bgTransformRotation))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        } else {
+            ProgressiveCachedImage(thumbHash: thumbHash, thumbnailUrl: nil, fullUrl: urlStr) {
+                if let img = state.thumbHashImage {
+                    Image(uiImage: img)
                         .resizable()
-                        .scaledToFill()
-                        .scaleEffect(bgTransformScale)
-                        .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
-                        .rotationEffect(.degrees(bgTransformRotation))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
+                        .interpolation(.low)
                 } else {
-                    CachedAsyncImage(url: urlStr) {
-                        Color.clear
-                    }
-                    .scaledToFill()
-                    .scaleEffect(bgTransformScale)
-                    .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
-                    .rotationEffect(.degrees(bgTransformRotation))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
+                    Color.clear
                 }
             }
+            .scaledToFill()
+            .scaleEffect(bgTransformScale)
+            .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
+            .rotationEffect(.degrees(bgTransformRotation))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
         }
     }
 
@@ -480,6 +480,11 @@ private final class ReaderState: ObservableObject {
     private let duckRatio: Float = 0.3
     private let duckFadeDuration: TimeInterval = 0.4
 
+    /// Pre-decoded thumbHash placeholder (< 1ms decode). Available from the first frame.
+    let thumbHashImage: UIImage?
+    /// Average color extracted from thumbHash (< 0.01ms). Ultra-instant background tint.
+    let thumbHashAverageColor: UIColor?
+
     init(story: StoryItem) {
         // Migrate legacy text -> textObjects si necessaire
         var objects = story.storyEffects?.textObjects ?? []
@@ -489,6 +494,12 @@ private final class ReaderState: ObservableObject {
             objects = effects.textObjects ?? []
         }
         self.textObjects = objects
+
+        // Pre-decode thumbHash for instant placeholder display
+        let hash = story.storyEffects?.thumbHash ?? story.media.first?.thumbHash
+        self.thumbHashImage = hash.flatMap { UIImage.fromThumbHash($0) }
+        self.thumbHashAverageColor = hash.flatMap { UIImage.thumbHashAverageColor($0) }
+
         fadeOutObserver = NotificationCenter.default.addObserver(forName: .storyAudioFadeOut, object: nil, queue: .main) { [weak self] _ in
             self?.fadeOutThenStop()
         }

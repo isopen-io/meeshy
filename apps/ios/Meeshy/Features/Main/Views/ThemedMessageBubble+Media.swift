@@ -155,10 +155,9 @@ extension ThemedMessageBubble {
                 }
                 HapticFeedback.light()
             }
-            .overlay(alignment: .bottom) {
+            .overlay {
                 if !attachmentIsProtected || isRevealed {
                     downloadBadge(attachment)
-                        .padding(.bottom, 6)
                 }
             }
         )
@@ -195,9 +194,13 @@ extension ThemedMessageBubble {
     @ViewBuilder
     private func gridVideoThumbnail(_ attachment: MessageAttachment, solo: Bool = false) -> some View {
         ZStack {
-            let thumbUrl = attachment.thumbnailUrl ?? ""
-            if !thumbUrl.isEmpty {
-                CachedAsyncImage(url: thumbUrl) {
+            let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+            if thumbUrl != nil || attachment.thumbHash != nil {
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: thumbUrl,
+                    fullUrl: thumbUrl
+                ) {
                     Color(hex: attachment.thumbnailColor).shimmer()
                 }
                 .aspectRatio(contentMode: .fill)
