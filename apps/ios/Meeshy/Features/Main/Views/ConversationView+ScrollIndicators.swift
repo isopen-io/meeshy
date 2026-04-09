@@ -161,8 +161,14 @@ extension ConversationView {
         switch attachment.type {
         case .image, .video:
             // Thumbnail
-            if let thumbUrl = attachment.thumbnailUrl ?? (attachment.type == .image ? attachment.fileUrl : nil) {
-                CachedAsyncImage(url: thumbUrl) {
+            let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+            let fullUrl = attachment.type == .image && !attachment.fileUrl.isEmpty ? attachment.fileUrl : nil
+            if thumbUrl != nil || fullUrl != nil || attachment.thumbHash != nil {
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: thumbUrl,
+                    fullUrl: fullUrl ?? thumbUrl
+                ) {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.white.opacity(0.2))
                         .frame(width: 36, height: 36)

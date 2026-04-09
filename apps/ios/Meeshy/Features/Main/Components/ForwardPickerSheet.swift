@@ -125,9 +125,14 @@ struct ForwardPickerSheet: View {
 
     @ViewBuilder
     private func attachmentThumbnail(_ attachment: MessageAttachment) -> some View {
-        let thumbUrl = attachment.thumbnailUrl ?? (attachment.type == .image ? attachment.fileUrl : nil)
-        if let urlStr = thumbUrl, !urlStr.isEmpty {
-            CachedAsyncImage(url: urlStr) {
+        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+        let fullUrl = attachment.type == .image && !attachment.fileUrl.isEmpty ? attachment.fileUrl : nil
+        if thumbUrl != nil || fullUrl != nil || attachment.thumbHash != nil {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: thumbUrl,
+                fullUrl: fullUrl ?? thumbUrl
+            ) {
                 Color(hex: accentColor).opacity(0.3)
             }
             .aspectRatio(contentMode: .fill)

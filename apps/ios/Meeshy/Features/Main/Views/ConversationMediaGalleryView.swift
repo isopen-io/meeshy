@@ -179,10 +179,15 @@ struct ConversationMediaGalleryView: View {
 
     @ViewBuilder
     private func galleryImagePage(_ attachment: MessageAttachment) -> some View {
-        let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
+        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
 
-        if !urlStr.isEmpty {
-            CachedAsyncImage(url: urlStr) {
+        if fullUrl != nil || thumbUrl != nil || attachment.thumbHash != nil {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: thumbUrl,
+                fullUrl: fullUrl ?? thumbUrl
+            ) {
                 ProgressView().tint(.white)
             }
             .aspectRatio(contentMode: .fit)
@@ -218,11 +223,18 @@ struct ConversationMediaGalleryView: View {
         let isActive = videoManager.activeURL == attachment.fileUrl && videoManager.isPlaying
 
         ZStack {
-            if let thumb = attachment.thumbnailUrl, !thumb.isEmpty, !isActive {
-                CachedAsyncImage(url: thumb) {
-                    Color(hex: attachment.thumbnailColor)
+            if !isActive {
+                let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+                if thumbUrl != nil || attachment.thumbHash != nil {
+                    ProgressiveCachedImage(
+                        thumbHash: attachment.thumbHash,
+                        thumbnailUrl: thumbUrl,
+                        fullUrl: thumbUrl
+                    ) {
+                        Color(hex: attachment.thumbnailColor)
+                    }
+                    .aspectRatio(contentMode: .fit)
                 }
-                .aspectRatio(contentMode: .fit)
             }
 
             if isActive || (videoManager.activeURL == attachment.fileUrl) {

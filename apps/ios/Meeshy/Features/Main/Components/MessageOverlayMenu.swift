@@ -303,8 +303,13 @@ struct MessageOverlayMenu: View {
     }
 
     private func previewSingleImage(_ attachment: MessageAttachment) -> some View {
-        let url = attachment.thumbnailUrl ?? attachment.fileUrl
-        return CachedAsyncImage(url: url) {
+        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
+        return ProgressiveCachedImage(
+            thumbHash: attachment.thumbHash,
+            thumbnailUrl: thumbUrl,
+            fullUrl: fullUrl ?? thumbUrl
+        ) {
             Color(hex: attachment.thumbnailColor).opacity(0.3)
         }
         .aspectRatio(contentMode: .fill)
@@ -662,8 +667,13 @@ private struct PreviewVideoPlayer: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                let thumbUrl = attachment.thumbnailUrl ?? attachment.fileUrl
-                CachedAsyncImage(url: thumbUrl) {
+                let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+                let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: thumbUrl,
+                    fullUrl: fullUrl ?? thumbUrl
+                ) {
                     Color(hex: contactColor).opacity(0.2)
                 }
                 .aspectRatio(16/9, contentMode: .fill)

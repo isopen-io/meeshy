@@ -668,12 +668,17 @@ struct ConversationInfoSheet: View {
 
     @ViewBuilder
     private func mediaGridCell(_ attachment: MessageAttachment) -> some View {
-        let urlStr = attachment.thumbnailUrl ?? attachment.fileUrl
+        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let color = Color(hex: attachment.thumbnailColor)
 
         ZStack {
-            if !urlStr.isEmpty {
-                CachedAsyncImage(url: urlStr) {
+            if thumbUrl != nil || fullUrl != nil || attachment.thumbHash != nil {
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: thumbUrl,
+                    fullUrl: fullUrl ?? thumbUrl
+                ) {
                     color.shimmer()
                 }
                 .aspectRatio(contentMode: .fill)

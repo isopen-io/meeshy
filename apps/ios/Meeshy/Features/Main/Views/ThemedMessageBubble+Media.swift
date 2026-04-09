@@ -471,17 +471,15 @@ struct BubbleCarouselView: View {
 
     @ViewBuilder
     private func carouselImageCell(_ attachment: MessageAttachment) -> some View {
-        let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
-        if !urlStr.isEmpty {
-            CachedAsyncImage(url: urlStr) {
-                if let thumb = attachment.thumbnailUrl, !thumb.isEmpty, thumb != urlStr {
-                    CachedAsyncImage(url: thumb) {
-                        Color(hex: attachment.thumbnailColor).shimmer()
-                    }
-                    .aspectRatio(contentMode: .fill)
-                } else {
-                    Color(hex: attachment.thumbnailColor).shimmer()
-                }
+        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
+        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+        if fullUrl != nil || thumbUrl != nil || attachment.thumbHash != nil {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: thumbUrl,
+                fullUrl: fullUrl ?? thumbUrl
+            ) {
+                Color(hex: attachment.thumbnailColor).shimmer()
             }
             .aspectRatio(contentMode: .fit)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
