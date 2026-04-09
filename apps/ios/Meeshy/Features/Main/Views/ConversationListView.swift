@@ -614,8 +614,8 @@ struct ConversationListView: View {
                     }
                     .frame(height: 0)
 
-                    // Header spacer — pushes content below the expanded header (100pt)
-                    Color.clear.frame(height: 100)
+                    // Header spacer — pushes content below the expanded header
+                    Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
                     // Story carousel
                     StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
