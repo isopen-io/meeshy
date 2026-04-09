@@ -35,6 +35,57 @@ import type { Server as SocketIOServer } from 'socket.io';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
 
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `0:${String(seconds).padStart(2, '0')}`;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
+function formatAttachmentNotificationBody(params: {
+  attachmentCount?: number;
+  firstAttachmentType?: string;
+  firstAttachmentFileSize?: number | null;
+  firstAttachmentDuration?: number | null;
+  firstAttachmentWidth?: number | null;
+  firstAttachmentHeight?: number | null;
+}): string {
+  const count = params.attachmentCount ?? 1;
+  const type = params.firstAttachmentType ?? 'document';
+  const details: string[] = [];
+
+  if (type === 'audio') {
+    const label = count > 1 ? `🎵 ${count} audios` : '🎵 Audio';
+    if (params.firstAttachmentDuration) details.push(formatDuration(params.firstAttachmentDuration));
+    if (params.firstAttachmentFileSize) details.push(formatFileSize(params.firstAttachmentFileSize));
+    return details.length > 0 ? `${label} · ${details.join(' · ')}` : label;
+  }
+
+  if (type === 'video') {
+    const label = count > 1 ? `🎬 ${count} vidéos` : '🎬 Vidéo';
+    if (params.firstAttachmentDuration) details.push(formatDuration(params.firstAttachmentDuration));
+    if (params.firstAttachmentFileSize) details.push(formatFileSize(params.firstAttachmentFileSize));
+    return details.length > 0 ? `${label} · ${details.join(' · ')}` : label;
+  }
+
+  if (type === 'image') {
+    const label = count > 1 ? `📷 ${count} photos` : '📷 Photo';
+    if (params.firstAttachmentWidth && params.firstAttachmentHeight) {
+      details.push(`${params.firstAttachmentWidth}×${params.firstAttachmentHeight}`);
+    }
+    if (params.firstAttachmentFileSize) details.push(formatFileSize(params.firstAttachmentFileSize));
+    return details.length > 0 ? `${label} · ${details.join(' · ')}` : label;
+  }
+
+  return count > 1 ? `📎 ${count} fichiers` : '📎 Document';
+}
+
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
   private recentMentions: Map<string, number[]> = new Map();
@@ -442,6 +493,10 @@ export class NotificationService {
     attachmentCount?: number;
     firstAttachmentType?: 'image' | 'video' | 'audio' | 'document' | 'text' | 'code';
     firstAttachmentFilename?: string;
+    firstAttachmentFileSize?: number | null;
+    firstAttachmentDuration?: number | null;
+    firstAttachmentWidth?: number | null;
+    firstAttachmentHeight?: number | null;
   }): Promise<Notification | null> {
     // Récupérer les infos de l'expéditeur
     const sender = await this.prisma.user.findUnique({
@@ -462,11 +517,15 @@ export class NotificationService {
       select: { title: true, type: true },
     });
 
+    const content = params.messagePreview || (params.hasAttachments
+      ? formatAttachmentNotificationBody(params)
+      : '');
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'new_message',
       priority: 'normal',
-      content: params.messagePreview,
+      content,
 
       actor: {
         id: params.senderId,

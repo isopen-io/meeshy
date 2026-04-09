@@ -770,16 +770,21 @@ export class MessageProcessor {
       // 4. Préparer les infos d'attachments
       const attachments = await this.prisma.messageAttachment.findMany({
         where: { messageId: message.id },
-        select: { mimeType: true, fileName: true }
+        select: { mimeType: true, fileName: true, fileSize: true, duration: true, width: true, height: true }
       });
 
+      const first = attachments[0];
       const attachmentInfo = {
         hasAttachments: attachments.length > 0,
         attachmentCount: attachments.length,
-        firstAttachmentType: attachments[0]?.mimeType?.startsWith('image/') ? 'image' :
-                            attachments[0]?.mimeType?.startsWith('video/') ? 'video' :
-                            attachments[0]?.mimeType?.startsWith('audio/') ? 'audio' : 'document',
-        firstAttachmentFilename: attachments[0]?.fileName
+        firstAttachmentType: first?.mimeType?.startsWith('image/') ? 'image' as const :
+                            first?.mimeType?.startsWith('video/') ? 'video' as const :
+                            first?.mimeType?.startsWith('audio/') ? 'audio' as const : 'document' as const,
+        firstAttachmentFilename: first?.fileName,
+        firstAttachmentFileSize: first?.fileSize,
+        firstAttachmentDuration: first?.duration,
+        firstAttachmentWidth: first?.width,
+        firstAttachmentHeight: first?.height,
       };
 
       // 5. Notification de RÉPONSE (prioritaire sur message régulier)
