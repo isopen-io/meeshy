@@ -121,8 +121,9 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         if (notificationService) {
           notificationService.createLoginNewDeviceNotification({
             recipientUserId: user.id,
-            deviceInfo: requestContext.userAgent,
+            deviceInfo: requestContext.deviceInfo,
             ipAddress: requestContext.ip,
+            geoData: requestContext.geoData,
           }).catch((err: unknown) => console.error('[AUTH] Notification error (login_new_device):', err));
         }
       }
@@ -240,8 +241,9 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         if (notificationService) {
           notificationService.createLoginNewDeviceNotification({
             recipientUserId: user.id,
-            deviceInfo: requestContext.userAgent,
+            deviceInfo: requestContext.deviceInfo,
             ipAddress: requestContext.ip,
+            geoData: requestContext.geoData,
           }).catch((err: unknown) => console.error('[AUTH] Notification error (login_new_device 2FA):', err));
         }
       }

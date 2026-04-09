@@ -220,7 +220,7 @@ export interface NotificationDelivery {
  * Metadata de base commune à toutes les notifications
  */
 interface BaseNotificationMetadata {
-  readonly action?: 'view_message' | 'view_conversation' | 'join_conversation' | 'accept_or_reject_contact' | 'open_call' | 'view_details' | 'update_app' | 'none';
+  readonly action?: 'view_message' | 'view_conversation' | 'view_post' | 'join_conversation' | 'accept_or_reject_contact' | 'open_call' | 'view_details' | 'update_app' | 'none';
 }
 
 /**
@@ -314,7 +314,7 @@ export interface PostLikeNotificationMetadata extends BaseNotificationMetadata {
   readonly postId: string;
   readonly emoji: string;
   readonly postType?: 'POST' | 'STORY' | 'STATUS';
-  readonly action: 'view_message';
+  readonly action: 'view_post';
 }
 
 /**
@@ -324,7 +324,7 @@ export interface PostCommentNotificationMetadata extends BaseNotificationMetadat
   readonly postId: string;
   readonly commentId?: string;
   readonly commentPreview: string;
-  readonly action: 'view_message';
+  readonly action: 'view_post';
 }
 
 /**
@@ -333,7 +333,7 @@ export interface PostCommentNotificationMetadata extends BaseNotificationMetadat
 export interface PostRepostNotificationMetadata extends BaseNotificationMetadata {
   readonly originalPostId: string;
   readonly repostId: string;
-  readonly action: 'view_message';
+  readonly action: 'view_post';
 }
 
 /**
@@ -343,7 +343,24 @@ export interface CommentLikeNotificationMetadata extends BaseNotificationMetadat
   readonly postId: string;
   readonly commentId: string;
   readonly emoji: string;
-  readonly action: 'view_message';
+  readonly action: 'view_post';
+}
+
+/**
+ * Metadata pour login_new_device
+ */
+export interface LoginNewDeviceNotificationMetadata extends BaseNotificationMetadata {
+  readonly deviceName: string | null;
+  readonly deviceVendor: string | null;
+  readonly deviceOS: string | null;
+  readonly deviceOSVersion: string | null;
+  readonly deviceType: string | null;
+  readonly ipAddress: string | null;
+  readonly country: string | null;
+  readonly countryName: string | null;
+  readonly city: string | null;
+  readonly location: string | null;
+  readonly action: 'view_details';
 }
 
 /**
@@ -371,6 +388,7 @@ export type NotificationMetadata =
   | PostCommentNotificationMetadata
   | PostRepostNotificationMetadata
   | CommentLikeNotificationMetadata
+  | LoginNewDeviceNotificationMetadata
   | GenericNotificationMetadata;
 
 // =====================================================
@@ -452,6 +470,13 @@ export function isFriendRequestNotification(n: Notification): n is Notification 
  */
 export function isMemberEventNotification(n: Notification): n is Notification & { metadata: MemberEventNotificationMetadata } {
   return n.type === 'member_joined' || n.type === 'member_left' || n.type === 'added_to_conversation' || n.type === 'removed_from_conversation';
+}
+
+/**
+ * Type guard pour login_new_device
+ */
+export function isLoginNewDeviceNotification(n: Notification): n is Notification & { metadata: LoginNewDeviceNotificationMetadata } {
+  return n.type === 'login_new_device';
 }
 
 /**

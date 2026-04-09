@@ -997,7 +997,7 @@ export class NotificationService {
       },
 
       metadata: {
-        action: 'view_message',
+        action: 'view_post',
         postId: params.postId,
         emoji: params.emoji,
         postType: params.postType || 'POST',
@@ -1042,7 +1042,7 @@ export class NotificationService {
       },
 
       metadata: {
-        action: 'view_message',
+        action: 'view_post',
         postId: params.postId,
         commentId: params.commentId,
         commentPreview: this.truncateMessage(params.commentPreview),
@@ -1086,7 +1086,7 @@ export class NotificationService {
       },
 
       metadata: {
-        action: 'view_message',
+        action: 'view_post',
         originalPostId: params.originalPostId,
         repostId: params.repostId,
       },
@@ -1130,7 +1130,7 @@ export class NotificationService {
       },
 
       metadata: {
-        action: 'view_message',
+        action: 'view_post',
         postId: params.postId,
         commentId: params.commentId,
         commentPreview: this.truncateMessage(params.replyPreview),
@@ -1175,7 +1175,7 @@ export class NotificationService {
       },
 
       metadata: {
-        action: 'view_message',
+        action: 'view_post',
         postId: params.postId,
         commentId: params.commentId,
         emoji: params.emoji,
@@ -1485,9 +1485,30 @@ export class NotificationService {
 
   async createLoginNewDeviceNotification(params: {
     recipientUserId: string;
-    deviceInfo?: string;
+    deviceInfo?: {
+      type?: string;
+      vendor?: string | null;
+      model?: string | null;
+      os?: string | null;
+      osVersion?: string | null;
+    } | null;
     ipAddress?: string;
+    geoData?: {
+      country?: string | null;
+      countryName?: string | null;
+      city?: string | null;
+      location?: string | null;
+    } | null;
   }): Promise<Notification | null> {
+    const device = params.deviceInfo;
+    const geo = params.geoData;
+
+    const deviceName = [device?.vendor, device?.model].filter(Boolean).join(' ') || null;
+    const deviceOS = device?.os
+      ? (device.osVersion ? `${device.os} ${device.osVersion}` : device.os)
+      : null;
+    const location = geo?.location || [geo?.city, geo?.countryName].filter(Boolean).join(', ') || null;
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'login_new_device',
@@ -1495,9 +1516,17 @@ export class NotificationService {
       content: '',
       context: {},
       metadata: {
-        action: 'view_details',
-        ...(params.deviceInfo && { deviceInfo: params.deviceInfo }),
-        ...(params.ipAddress && { ipAddress: params.ipAddress }),
+        action: 'view_details' as const,
+        deviceName,
+        deviceVendor: device?.vendor || null,
+        deviceOS,
+        deviceOSVersion: device?.osVersion || null,
+        deviceType: device?.type || null,
+        ipAddress: params.ipAddress || null,
+        country: geo?.country || null,
+        countryName: geo?.countryName || null,
+        city: geo?.city || null,
+        location,
       },
     });
   }
