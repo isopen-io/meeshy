@@ -56,10 +56,10 @@ struct StoryViewerView: View {
 
     // === Transition states ===
 
-    // Appear
-    @State private var appearScale: CGFloat = 0.45
-    @State private var appearCornerRadius: CGFloat = 32
-    @State private var appearOpacity: Double = 0
+    // Appear — start visible to avoid blank screen if animation doesn't fire
+    @State private var appearScale: CGFloat = 0.92
+    @State private var appearCornerRadius: CGFloat = 24
+    @State private var appearOpacity: Double = 1
 
     // Dismiss
     @State var isDismissing = false // internal for cross-file extension access
@@ -170,11 +170,10 @@ struct StoryViewerView: View {
             startTimer()
             markCurrentViewed()
             prefetchCurrentGroup()
-            // Entrance: scale up from small card to fullscreen
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
+            // Entrance: subtle scale-up from near-fullscreen card
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                 appearScale = 1.0
                 appearCornerRadius = 0
-                appearOpacity = 1
             }
         }
         .onDisappear {
