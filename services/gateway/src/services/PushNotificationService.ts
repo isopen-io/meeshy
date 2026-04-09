@@ -355,6 +355,7 @@ export class PushNotificationService {
               sound: payload.sound || 'default',
               category: payload.category,
               'thread-id': payload.threadId,
+              'mutable-content': 1,
             },
           },
         };
@@ -441,6 +442,8 @@ export class PushNotificationService {
       if (payload.threadId) {
         notification.threadId = payload.threadId;
       }
+
+      notification.mutableContent = true;
 
       if (payload.data) {
         notification.payload = payload.data;

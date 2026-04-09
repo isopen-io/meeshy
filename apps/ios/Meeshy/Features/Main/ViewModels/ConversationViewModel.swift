@@ -1272,24 +1272,16 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Mark as Read
 
     func markAsRead() {
-        // Notify ConversationListViewModel immediately to clear the badge in the list
-        NotificationCenter.default.post(name: .conversationMarkedRead, object: conversationId)
-        guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
-        Task {
-            try? await conversationService.markRead(conversationId: conversationId)
-        }
-        markConversationAsRead()
-    }
-
-    func markConversationAsRead() {
-        guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
         let convId = conversationId
+        // 1. Update cache immediately (local-first) — survives reloadFromCache()
+        Task { await ConversationSyncEngine.shared.markConversationReadLocally(convId) }
+        // 2. Notify ConversationListViewModel to clear badge in current @Published state
+        NotificationCenter.default.post(name: .conversationMarkedRead, object: convId)
+        // 3. Send to server in background (fire-and-forget, queue on failure)
+        guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
         Task {
             do {
-                let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                    endpoint: "/conversations/\(convId)/mark-as-read",
-                    method: "POST"
-                )
+                try await conversationService.markRead(conversationId: convId)
             } catch {
                 await PendingStatusQueue.shared.enqueue(.init(
                     conversationId: convId, type: "read", timestamp: Date()

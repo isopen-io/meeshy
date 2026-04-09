@@ -727,86 +727,91 @@ struct ConversationView: View {
     // MARK: - Message Scroll View (extracted to help type-checker)
 
     @ViewBuilder
+    private var messageListContent: some View {
+        if viewModel.hasOlderMessages {
+            if viewModel.isLoadingOlder {
+                HStack(spacing: 8) {
+                    ProgressView().tint(Color(hex: accentColor))
+                    Text(String(localized: "loading", defaultValue: "Chargement..."))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .frame(height: 36).transition(.opacity)
+            } else {
+                Color.clear.frame(height: 1)
+                    .onAppear {
+                        guard !viewModel.isProgrammaticScroll else { return }
+                        Task { await viewModel.loadOlderMessages() }
+                    }
+            }
+        } else if !viewModel.messages.isEmpty, let joinedAt = viewModel.memberJoinedAt {
+            joinedBanner(date: joinedAt)
+        }
+
+        Color.clear.frame(height: 70)
+
+        if viewModel.isLoadingInitial && viewModel.messages.isEmpty {
+            ForEach(0..<6, id: \.self) { index in
+                SkeletonMessageBubble(index: index)
+                    .staggeredAppear(index: index, baseDelay: 0.04)
+            }
+            .transition(.opacity)
+        } else if viewModel.messages.isEmpty && !viewModel.isLoadingInitial {
+            conversationEmptyState
+        } else {
+            encryptionDisclaimer
+        }
+
+        ForEach(viewModel.messagesByDate) { group in
+            Section {
+                ForEach(group.messages) { msg in
+                    let index = viewModel.messageIndex(for: msg.id) ?? 0
+                    if msg.id == viewModel.firstUnreadMessageId { unreadSeparator }
+                    messageRow(index: index, msg: msg)
+                        .onAppear {
+                            if index < 5 && viewModel.hasOlderMessages && !viewModel.isLoadingOlder && !viewModel.isProgrammaticScroll {
+                                Task { await viewModel.loadOlderMessages() }
+                            }
+                        }
+                }
+            } header: {
+                dateSectionView(for: group.date)
+            }
+        }
+
+        if !viewModel.typingUsernames.isEmpty {
+            inlineTypingIndicator
+                .id("typing_indicator")
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.typingUsernames.count)
+        }
+
+        if viewModel.hasNewerMessages && !viewModel.isLoadingNewer {
+            Color.clear.frame(height: 1)
+                .onAppear {
+                    guard !viewModel.isProgrammaticScroll else { return }
+                    Task { await viewModel.loadNewerMessages() }
+                }
+        }
+
+        Color.clear.frame(height: 1).id("near_bottom_anchor")
+            .onAppear {
+                scrollState.isNearBottom = true; scrollState.unreadBadgeCount = 0; viewModel.lastUnreadMessage = nil
+                if viewModel.firstUnreadMessageId != nil {
+                    withAnimation(.easeOut(duration: 0.3)) { viewModel.firstUnreadMessageId = nil }
+                }
+            }
+            .onDisappear { scrollState.isNearBottom = false }
+
+        Color.clear.frame(height: composerHeight).id("bottom_spacer")
+    }
+
+    @ViewBuilder
     private var messageScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    if viewModel.hasOlderMessages {
-                        if viewModel.isLoadingOlder {
-                            HStack(spacing: 8) {
-                                ProgressView().tint(Color(hex: accentColor))
-                                Text(String(localized: "loading", defaultValue: "Chargement..."))
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.secondary)
-                            }
-                            .frame(height: 36).transition(.opacity)
-                        } else {
-                            Color.clear.frame(height: 1)
-                                .onAppear {
-                                    guard !viewModel.isProgrammaticScroll else { return }
-                                    Task { await viewModel.loadOlderMessages() }
-                                }
-                        }
-                    } else if !viewModel.messages.isEmpty, let joinedAt = viewModel.memberJoinedAt {
-                        joinedBanner(date: joinedAt)
-                    }
-
-                    Color.clear.frame(height: 70)
-
-                    if viewModel.isLoadingInitial && viewModel.messages.isEmpty {
-                        ForEach(0..<6, id: \.self) { index in
-                            SkeletonMessageBubble(index: index)
-                                .staggeredAppear(index: index, baseDelay: 0.04)
-                        }
-                        .transition(.opacity)
-                    } else if viewModel.messages.isEmpty && !viewModel.isLoadingInitial {
-                        conversationEmptyState
-                    } else {
-                        encryptionDisclaimer
-                    }
-
-                    ForEach(viewModel.messagesByDate) { group in
-                        Section {
-                            ForEach(group.messages) { msg in
-                                let index = viewModel.messageIndex(for: msg.id) ?? 0
-                                if msg.id == viewModel.firstUnreadMessageId { unreadSeparator }
-                                messageRow(index: index, msg: msg)
-                                    .onAppear {
-                                        if index < 5 && viewModel.hasOlderMessages && !viewModel.isLoadingOlder && !viewModel.isProgrammaticScroll {
-                                            Task { await viewModel.loadOlderMessages() }
-                                        }
-                                    }
-                            }
-                        } header: {
-                            dateSectionView(for: group.date)
-                        }
-                    }
-
-                    if !viewModel.typingUsernames.isEmpty {
-                        inlineTypingIndicator
-                            .id("typing_indicator")
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.typingUsernames.count)
-                    }
-
-                    if viewModel.hasNewerMessages && !viewModel.isLoadingNewer {
-                        Color.clear.frame(height: 1)
-                            .onAppear {
-                                guard !viewModel.isProgrammaticScroll else { return }
-                                Task { await viewModel.loadNewerMessages() }
-                            }
-                    }
-
-                    Color.clear.frame(height: 1).id("near_bottom_anchor")
-                        .onAppear {
-                            scrollState.isNearBottom = true; scrollState.unreadBadgeCount = 0; viewModel.lastUnreadMessage = nil
-                            if viewModel.firstUnreadMessageId != nil {
-                                withAnimation(.easeOut(duration: 0.3)) { viewModel.firstUnreadMessageId = nil }
-                            }
-                        }
-                        .onDisappear { scrollState.isNearBottom = false }
-
-                    Color.clear.frame(height: composerHeight).id("bottom_spacer")
+                    messageListContent
                 }
                 .padding(.horizontal, 16)
             }
@@ -824,7 +829,7 @@ struct ConversationView: View {
                     viewModel.markProgrammaticScroll()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { proxy.scrollTo(lastMsg.id, anchor: .bottom) }
                     if scrollState.isNearBottom && !lastMsg.isMe {
-                        viewModel.markConversationAsRead()
+                        viewModel.markAsRead()
                     }
                 } else { scrollState.unreadBadgeCount += 1 }
             }

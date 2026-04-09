@@ -67,6 +67,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 
     /// Called when a notification is received while the app is in the foreground.
+    /// In foreground, the in-app toast (via Socket.IO) handles display — suppress APNs banner
+    /// to avoid duplicate notifications. Keep sound + badge for awareness.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
@@ -75,7 +77,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         let type = notification.request.content.userInfo["type"] as? String ?? "unknown"
         logger.info("Foreground notification received: type=\(type)")
 
-        completionHandler([.banner, .sound, .badge])
+        completionHandler([.sound, .badge])
     }
 
     /// Called when the user taps on a notification (from background or lock screen).

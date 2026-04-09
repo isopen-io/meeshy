@@ -686,8 +686,8 @@ extension StoryViewerView {
             authorUsername: currentUser?.username,
             authorAvatarURL: currentUser?.avatar,
             content: text,
-            originalLanguage: currentUser?.systemLanguage,
-            effectFlags: effectFlags ?? 0
+            effectFlags: effectFlags ?? 0,
+            originalLanguage: currentUser?.systemLanguage
         )
         storyComments.append(optimisticComment)
         storyCommentCount += 1

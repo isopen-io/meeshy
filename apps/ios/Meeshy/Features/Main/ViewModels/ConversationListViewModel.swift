@@ -315,16 +315,16 @@ class ConversationListViewModel: ObservableObject {
 
     private func syncBadgeOnUnreadChange() {
         $conversations
-            .removeDuplicates { $0.map(\.id) == $1.map(\.id) && $0.map(\.unreadCount) == $1.map(\.unreadCount) }
+            .map { convs in convs.reduce(0) { $0 + $1.unreadCount } }
+            .removeDuplicates()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
-            .sink { [weak self] conversations in
-                guard self != nil else { return }
-                let total = conversations.reduce(0) { $0 + $1.unreadCount }
+            .sink { [weak self] total in
+                guard let self else { return }
                 Task {
                     await PushNotificationManager.shared.updateBadge(totalUnread: total)
                 }
-                WidgetDataManager.shared.updateConversations(conversations)
-                WidgetDataManager.shared.updateFavoriteContacts(conversations)
+                WidgetDataManager.shared.updateConversations(self.conversations)
+                WidgetDataManager.shared.updateFavoriteContacts(self.conversations)
             }
             .store(in: &cancellables)
     }
@@ -487,6 +487,7 @@ class ConversationListViewModel: ObservableObject {
         let previousCount = conversations[index].unreadCount
 
         conversations[index].unreadCount = 0
+        await syncEngine.markConversationReadLocally(conversationId)
 
         guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
         do {

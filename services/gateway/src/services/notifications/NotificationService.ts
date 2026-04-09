@@ -347,37 +347,38 @@ export class NotificationService {
         this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, formatted);
       }
 
-      // Send push notification if user is offline
-      if (this.pushService && this.io) {
+      // Send push notification (always — iOS willPresent handles foreground display)
+      if (this.pushService) {
         try {
-          const sockets = await this.io.in(params.userId).fetchSockets();
-          if (sockets.length === 0) {
-            const link = params.context.conversationId ?
-              (params.context.messageId ?
-                `/conversations/${params.context.conversationId}?messageId=${params.context.messageId}` :
-                `/conversations/${params.context.conversationId}`) :
-              undefined;
+          const link = params.context.conversationId ?
+            (params.context.messageId ?
+              `/conversations/${params.context.conversationId}?messageId=${params.context.messageId}` :
+              `/conversations/${params.context.conversationId}`) :
+            undefined;
 
-            this.pushService.sendToUser({
-              userId: params.userId,
-              payload: {
-                title: params.actor?.displayName || 'Meeshy',
-                body: params.content.substring(0, 200),
-                link,
-                data: {
-                  type: params.type,
-                  conversationId: params.context.conversationId || '',
-                  messageId: params.context.messageId || '',
-                  postId: params.context.postId || '',
-                  postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
-                },
+          this.pushService.sendToUser({
+            userId: params.userId,
+            payload: {
+              title: params.actor?.displayName || 'Meeshy',
+              body: params.content.substring(0, 200),
+              link,
+              data: {
+                type: params.type,
+                conversationId: params.context.conversationId || '',
+                messageId: params.context.messageId || '',
+                postId: params.context.postId || '',
+                postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
+                senderId: params.actor?.id || '',
+                senderUsername: params.actor?.username || '',
+                senderDisplayName: params.actor?.displayName || '',
+                senderAvatar: params.actor?.avatar || '',
               },
-            }).catch(err => {
-              notificationLogger.error('Push notification failed', { error: err, userId: params.userId });
-            });
-          }
+            },
+          }).catch(err => {
+            notificationLogger.error('Push notification failed', { error: err, userId: params.userId });
+          });
         } catch (err) {
-          // fetchSockets can fail — non-blocking
+          // non-blocking
         }
       }
 

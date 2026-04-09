@@ -15,6 +15,7 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func cleanupRetentionIfNeeded() async
     func startSocketRelay() async
     func stopSocketRelay() async
+    func markConversationReadLocally(_ conversationId: String) async
 }
 
 // MARK: - Implementation
@@ -376,6 +377,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
         }
         let userId = await currentUserId()
+        let isMe = apiMessage.senderId == userId
         let msg = apiMessage.toMessage(currentUserId: userId)
         await cache.messages.upsert(item: msg, for: msg.conversationId) { existing, new in
             existing.contains(where: { $0.id == new.id }) ? existing : existing + [new]
@@ -389,7 +391,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 updated[idx].lastMessageId = msg.id
                 updated[idx].lastMessageSenderName = msg.senderName
                 updated[idx].lastMessageAt = msg.createdAt
-                updated[idx].unreadCount += 1
+                if !isMe {
+                    updated[idx].unreadCount += 1
+                }
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)
             }
@@ -479,6 +483,19 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
+                updated[idx].unreadCount = 0
+            }
+            return updated
+        }
+        _conversationsDidChange.send()
+    }
+
+    // MARK: - Local-First Updates
+
+    public func markConversationReadLocally(_ conversationId: String) async {
+        await cache.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].unreadCount = 0
             }
             return updated

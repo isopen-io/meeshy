@@ -167,6 +167,8 @@ public struct NotificationPayload {
     public let messageId: String?
     public let senderId: String?
     public let senderUsername: String?
+    public let senderDisplayName: String?
+    public let senderAvatar: String?
     public let postId: String?
     public let postType: String?
     public let title: String?
@@ -178,6 +180,10 @@ public struct NotificationPayload {
         self.messageId = userInfo["messageId"] as? String
         self.senderId = userInfo["senderId"] as? String
         self.senderUsername = userInfo["senderUsername"] as? String
+        let rawDisplayName = userInfo["senderDisplayName"] as? String ?? ""
+        self.senderDisplayName = rawDisplayName.isEmpty ? nil : rawDisplayName
+        let rawAvatar = userInfo["senderAvatar"] as? String ?? ""
+        self.senderAvatar = rawAvatar.isEmpty ? nil : rawAvatar
         let rawPostId = userInfo["postId"] as? String ?? ""
         self.postId = rawPostId.isEmpty ? nil : rawPostId
         let rawPostType = userInfo["postType"] as? String ?? ""
