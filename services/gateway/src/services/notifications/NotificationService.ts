@@ -48,9 +48,43 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
+function extractExtension(filename: string | null | undefined): string | null {
+  if (!filename) return null;
+  const dot = filename.lastIndexOf('.');
+  if (dot < 0 || dot === filename.length - 1) return null;
+  return filename.slice(dot + 1).toLowerCase();
+}
+
+const DOC_LABELS: Record<string, string> = {
+  pdf: '📄 PDF',
+  doc: '📝 Word',
+  docx: '📝 Word',
+  xls: '📊 Excel',
+  xlsx: '📊 Excel',
+  csv: '📊 CSV',
+  ppt: '📊 PowerPoint',
+  pptx: '📊 PowerPoint',
+  txt: '📝 Texte',
+  rtf: '📝 RTF',
+  md: '📝 Markdown',
+  json: '📋 JSON',
+  xml: '📋 XML',
+  html: '📋 HTML',
+  zip: '📦 ZIP',
+  rar: '📦 RAR',
+  '7z': '📦 7z',
+  tar: '📦 TAR',
+  gz: '📦 GZ',
+};
+
+function formatDocumentLabel(ext: string): string {
+  return DOC_LABELS[ext] ?? `📎 Fichier .${ext}`;
+}
+
 function formatAttachmentNotificationBody(params: {
   attachmentCount?: number;
   firstAttachmentType?: string;
+  firstAttachmentFilename?: string | null;
   firstAttachmentFileSize?: number | null;
   firstAttachmentDuration?: number | null;
   firstAttachmentWidth?: number | null;
@@ -83,7 +117,11 @@ function formatAttachmentNotificationBody(params: {
     return details.length > 0 ? `${label} · ${details.join(' · ')}` : label;
   }
 
-  return count > 1 ? `📎 ${count} fichiers` : '📎 Document';
+  const ext = extractExtension(params.firstAttachmentFilename);
+  const docLabel = ext ? formatDocumentLabel(ext) : '📎 Document';
+  if (count > 1) return `📎 ${count} fichiers`;
+  if (params.firstAttachmentFileSize) return `${docLabel} · ${formatFileSize(params.firstAttachmentFileSize)}`;
+  return docLabel;
 }
 
 export class NotificationService {
