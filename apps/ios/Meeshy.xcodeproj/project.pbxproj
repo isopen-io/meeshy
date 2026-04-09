@@ -83,6 +83,7 @@
 		AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */; };
 		AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */; };
 		AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */; };
+		SVCT0000000000000001BF /* StoryViewerContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVCT0000000000000001FR /* StoryViewerContainer.swift */; };
 		AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660066 /* StatusBarView.swift */; };
 		AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */; };
 		AA2000000000002FA2 /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000001FA2 /* LocationPickerView.swift */; };
@@ -450,6 +451,7 @@
 		BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusViewModel.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryTrayView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerView.swift; sourceTree = "<group>"; };
+		SVCT0000000000000001FR /* StoryViewerContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerContainer.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Content.swift"; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660066 /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusComposerView.swift; sourceTree = "<group>"; };
@@ -847,6 +849,7 @@
 				SP3400000000001F34 /* SharePickerView.swift */,
 				BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */,
 				BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */,
+				SVCT0000000000000001FR /* StoryViewerContainer.swift */,
 				BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */,
 				BB22CC33DD44EE55FF660066 /* StatusBarView.swift */,
 				CC44DD55EE66FF7788990011 /* AudioPostComposerView.swift */,
@@ -1448,6 +1451,7 @@
 				AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */,
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
+				SVCT0000000000000001BF /* StoryViewerContainer.swift in Sources */,
 				AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */,
 				DD55EE66FF7788990011AA22 /* AudioPostComposerView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */,

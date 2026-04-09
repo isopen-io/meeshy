@@ -310,12 +310,10 @@ struct ThemedFeedOverlay: View {
             viewModel.unsubscribeFromSocketEvents()
         }
         .fullScreenCover(isPresented: $showStoryViewer) {
-            if let userId = selectedStoryUserId,
-               let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
-                StoryViewerView(
+            if let userId = selectedStoryUserId {
+                StoryViewerContainer(
                     viewModel: storyViewModel,
-                    groups: storyViewModel.storyGroups,
-                    currentGroupIndex: resolvedIndex,
+                    userId: userId,
                     isPresented: $showStoryViewer
                 )
                 .environmentObject(router)

@@ -483,20 +483,23 @@ struct ConversationView: View {
                 keyboardHeight = 0
             }
             .fullScreenCover(isPresented: $headerState.showStoryViewerFromHeader) {
-                if let userId = headerState.storyUserIdForHeader,
-                   let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
-                    StoryViewerView(viewModel: storyViewModel, groups: [storyViewModel.storyGroups[resolvedIndex]], currentGroupIndex: 0, isPresented: $headerState.showStoryViewerFromHeader)
+                if let userId = headerState.storyUserIdForHeader {
+                    StoryViewerContainer(
+                        viewModel: storyViewModel,
+                        userId: userId,
+                        isPresented: $headerState.showStoryViewerFromHeader,
+                        singleGroup: true
+                    )
                 }
             }
             .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
-                if let resolvedIndex = storyViewModel.groupIndex(forUserId: overlayState.storyViewerUserId ?? "") {
-                    let slideIdx = overlayState.storyViewerSlideIndex
-                    StoryViewerView(
+                if let userId = overlayState.storyViewerUserId {
+                    StoryViewerContainer(
                         viewModel: storyViewModel,
-                        groups: [storyViewModel.storyGroups[resolvedIndex]],
-                        currentGroupIndex: 0,
+                        userId: userId,
                         isPresented: $overlayState.showStoryViewer,
-                        initialStoryIndex: slideIdx
+                        singleGroup: true,
+                        initialStoryIndex: overlayState.storyViewerSlideIndex
                     )
                 }
             }

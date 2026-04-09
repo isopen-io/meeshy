@@ -312,12 +312,10 @@ struct RootView: View {
             await notificationManager.refreshUnreadCount()
         }
         .fullScreenCover(isPresented: $showStoryViewerFromConv) {
-            if let userId = selectedStoryUserIdFromConv,
-               let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
-                StoryViewerView(
+            if let userId = selectedStoryUserIdFromConv {
+                StoryViewerContainer(
                     viewModel: storyViewModel,
-                    groups: storyViewModel.storyGroups,
-                    currentGroupIndex: resolvedIndex,
+                    userId: userId,
                     isPresented: $showStoryViewerFromConv,
                     onReplyToStory: { replyContext in
                         showStoryViewerFromConv = false

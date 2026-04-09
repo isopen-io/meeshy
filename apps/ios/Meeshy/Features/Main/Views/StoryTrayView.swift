@@ -96,14 +96,12 @@ struct StoryTrayView: View {
             }
         }
         .fullScreenCover(isPresented: $showOwnStoryViewer) {
-            if let myGroup = viewModel.storyGroupForUser(userId: AuthManager.shared.currentUser?.id ?? "") {
-                StoryViewerView(
-                    viewModel: viewModel,
-                    groups: [myGroup],
-                    currentGroupIndex: 0,
-                    isPresented: $showOwnStoryViewer
-                )
-            }
+            StoryViewerContainer(
+                viewModel: viewModel,
+                userId: AuthManager.shared.currentUser?.id ?? "",
+                isPresented: $showOwnStoryViewer,
+                singleGroup: true
+            )
         }
         .withStatusBubble()
     }
