@@ -67,17 +67,17 @@ describe('Strategist — Dynamic Word Limits', () => {
     const messageInterventions = interventions.filter((i: any) => i.type === 'message');
     expect(messageInterventions).toHaveLength(2);
 
-    // Intervention 1: Dynamique — typicalLength 'moyen' → 30-150
+    // Intervention 1: Dynamique — typicalLength 'moyen' → 10-60
     const int1 = messageInterventions.find((i: any) => i.asUserId === 'u1') as MessageDirective;
     expect(int1).toBeDefined();
-    expect(int1.minWords).toBe(30);
-    expect(int1.maxWords).toBe(150);
+    expect(int1.minWords).toBe(10);
+    expect(int1.maxWords).toBe(60);
 
-    // Intervention 2: Interpellé (reply to m1) — typicalLength 'moyen' → 30-150
+    // Intervention 2: Interpellé (reply to m1) — typicalLength 'moyen' → 10-60
     const int2 = messageInterventions.find((i: any) => i.asUserId === 'u2') as MessageDirective;
     expect(int2).toBeDefined();
-    expect(int2.minWords).toBe(30);
-    expect(int2.maxWords).toBe(150);
+    expect(int2.minWords).toBe(10);
+    expect(int2.maxWords).toBe(60);
   });
 
   it('respects user overrides in hierarchy', async () => {
@@ -136,10 +136,10 @@ describe('Strategist — Dynamic Word Limits', () => {
     const shortUser = msgs.find((i: any) => i.asUserId === 'short') as MessageDirective;
     const longUser = msgs.find((i: any) => i.asUserId === 'long') as MessageDirective;
 
-    expect(shortUser.minWords).toBe(10);
-    expect(shortUser.maxWords).toBe(60);
-    expect(longUser.minWords).toBe(100);
-    expect(longUser.maxWords).toBe(250);
+    expect(shortUser.minWords).toBe(2);
+    expect(shortUser.maxWords).toBe(30);
+    expect(longUser.minWords).toBe(30);
+    expect(longUser.maxWords).toBe(120);
   });
 
   it('does not inject reactions when LLM already provided them', async () => {
