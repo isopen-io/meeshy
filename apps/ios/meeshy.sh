@@ -53,6 +53,7 @@ ENTITLEMENTS_FILE="Meeshy/Meeshy.entitlements"
 NOTIF_ENTITLEMENTS_FILE="MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements"
 PHYSICAL_DEVICE_ID=""
 PHYSICAL_DEVICE_NAME=""
+PLATFORM="iphone"  # iphone | ipad | mac
 
 # ─── Physical Device Detection ──────────────────────────────────────────────
 detect_physical_device() {
@@ -293,9 +294,20 @@ do_device_deploy_only() {
 
 # ─── Simulator Detection ────────────────────────────────────────────────────
 detect_simulator() {
-    # Priority 1: Already booted iPhone
+    # For macOS "Designed for iPad" — no simulator needed
+    if [ "$PLATFORM" = "mac" ]; then
+        DEVICE_ID="mac"
+        DEVICE_NAME="My Mac (Designed for iPad)"
+        ok "Target: ${BOLD}$DEVICE_NAME${NC}"
+        return 0
+    fi
+
+    local device_family="iPhone"
+    [ "$PLATFORM" = "ipad" ] && device_family="iPad"
+
+    # Priority 1: Already booted device of the right family
     local booted
-    booted=$(xcrun simctl list devices | grep -E "iPhone.*\(Booted\)" | head -n 1)
+    booted=$(xcrun simctl list devices | grep -E "$device_family.*\(Booted\)" | head -n 1 || true)
     if [ -n "$booted" ]; then
         DEVICE_ID=$(echo "$booted" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
         DEVICE_NAME=$(echo "$booted" | sed 's/ (.*//' | xargs)
@@ -303,11 +315,11 @@ detect_simulator() {
         return 0
     fi
 
-    # Priority 2: Any available iPhone (prefer Pro models)
+    # Priority 2: Any available device of the right family (prefer Pro models)
     local available
-    available=$(xcrun simctl list devices available | grep -E "iPhone" | grep -v "unavailable")
+    available=$(xcrun simctl list devices available | grep -E "$device_family" | grep -v "unavailable" || true)
     if [ -z "$available" ]; then
-        err "No iPhone simulators found. Install via Xcode > Settings > Platforms."
+        err "No $device_family simulators found. Install via Xcode > Settings > Platforms."
         exit 1
     fi
 
@@ -328,6 +340,11 @@ detect_simulator() {
 
 # ─── Simulator Helpers ───────────────────────────────────────────────────────
 ensure_booted() {
+    # macOS — no simulator to boot
+    if [ "$PLATFORM" = "mac" ]; then
+        return 0
+    fi
+
     local boot_state
     boot_state=$(xcrun simctl list devices | grep "$DEVICE_ID" | grep -c "Booted" || true)
     if [ "$boot_state" -eq 0 ]; then
@@ -340,14 +357,23 @@ ensure_booted() {
 }
 
 is_app_running() {
-    xcrun simctl spawn "$DEVICE_ID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID" 2>/dev/null
+    if [ "$PLATFORM" = "mac" ]; then
+        pgrep -f "$(app_path)/Contents/MacOS/" >/dev/null 2>&1
+    else
+        xcrun simctl spawn "$DEVICE_ID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID" 2>/dev/null
+    fi
 }
 
 app_path() {
     # Debug config produces "Meeshy Dev.app", Release produces "Meeshy.app"
     local product_name="$APP_NAME"
     [ "$CONFIGURATION" = "Debug" ] && product_name="$APP_NAME Dev"
-    echo "$DERIVED_DATA/Products/$CONFIGURATION-iphonesimulator/$product_name.app"
+
+    if [ "$PLATFORM" = "mac" ]; then
+        echo "$DERIVED_DATA/Products/$CONFIGURATION-maccatalyst/$product_name.app"
+    else
+        echo "$DERIVED_DATA/Products/$CONFIGURATION-iphonesimulator/$product_name.app"
+    fi
 }
 
 # ─── Build Guard (wait or kill existing builds) ─────────────────────────────
@@ -455,6 +481,17 @@ do_clean() {
     fi
 }
 
+build_destination() {
+    case "$PLATFORM" in
+        mac)
+            echo "platform=macOS,arch=arm64"
+            ;;
+        *)
+            echo "id=$DEVICE_ID"
+            ;;
+    esac
+}
+
 do_build() {
     wait_for_existing_build
 
@@ -472,13 +509,24 @@ do_build() {
         log "Using Xcode package cache: ${XCODE_PKG_CACHE##*/}"
     fi
 
+    local mac_flags=()
+    if [ "$PLATFORM" = "mac" ]; then
+        mac_flags=(
+            SUPPORTS_MACCATALYST=YES
+            CODE_SIGN_IDENTITY=-
+            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_ALLOWED=NO
+        )
+    fi
+
     xcodebuild \
         -project "$PROJECT" \
         -scheme "$SCHEME" \
         -configuration "$CONFIGURATION" \
-        -destination "id=$DEVICE_ID" \
+        -destination "$(build_destination)" \
         -derivedDataPath "$DERIVED_DATA" \
         "${pkg_flags[@]}" \
+        "${mac_flags[@]}" \
         -quiet \
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
         build 2>&1 | while IFS= read -r line; do
@@ -507,12 +555,27 @@ do_build() {
 }
 
 do_install() {
+    if [ "$PLATFORM" = "mac" ]; then
+        ok "macOS app — no install step needed"
+        return 0
+    fi
     log "Installing..."
     xcrun simctl install "$DEVICE_ID" "$(app_path)"
     ok "Installed"
 }
 
 do_launch() {
+    if [ "$PLATFORM" = "mac" ]; then
+        # Kill existing instance
+        pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
+        sleep 0.5
+
+        log "Launching ${BOLD}$APP_NAME${NC} on macOS..."
+        open "$(app_path)"
+        ok "App launched"
+        return 0
+    fi
+
     # Kill existing instance
     xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
     sleep 0.5
@@ -541,10 +604,18 @@ start_log_stream() {
     log "Press ${BOLD}Ctrl+C${NC} to stop"
     echo ""
 
-    xcrun simctl spawn "$DEVICE_ID" log stream \
-        --level debug \
-        --predicate "process == \"$APP_NAME\"" \
-        2>&1 | tee -a "$LOGFILE" &
+    if [ "$PLATFORM" = "mac" ]; then
+        # Stream logs from the local Mac process
+        log stream \
+            --level debug \
+            --predicate "process == \"$APP_NAME\" OR process == \"$APP_NAME Dev\"" \
+            2>&1 | tee -a "$LOGFILE" &
+    else
+        xcrun simctl spawn "$DEVICE_ID" log stream \
+            --level debug \
+            --predicate "process == \"$APP_NAME\"" \
+            2>&1 | tee -a "$LOGFILE" &
+    fi
     LOG_STREAM_PID=$!
 }
 
@@ -552,13 +623,22 @@ start_crash_monitor() {
     (
         while true; do
             sleep 5
-            local running
-            running=$(xcrun simctl spawn "$DEVICE_ID" launchctl list 2>/dev/null | grep "$BUNDLE_ID" || true)
-            if [ -z "$running" ]; then
-                echo ""
-                err "App appears to have crashed or been terminated."
-                err "Check logs at: $LOGFILE"
-                break
+            if [ "$PLATFORM" = "mac" ]; then
+                if ! pgrep -f "$(app_path)/Contents/MacOS/" >/dev/null 2>&1; then
+                    echo ""
+                    err "App appears to have crashed or been terminated."
+                    err "Check logs at: $LOGFILE"
+                    break
+                fi
+            else
+                local running
+                running=$(xcrun simctl spawn "$DEVICE_ID" launchctl list 2>/dev/null | grep "$BUNDLE_ID" || true)
+                if [ -z "$running" ]; then
+                    echo ""
+                    err "App appears to have crashed or been terminated."
+                    err "Check logs at: $LOGFILE"
+                    break
+                fi
             fi
         done
     ) &
@@ -981,6 +1061,11 @@ usage() {
     echo -e "    ${GREEN}device${NC}       Pick a device (simulator or physical) and deploy ${DIM}(interactive)${NC}"
     echo -e "    ${GREEN}screenshot${NC}   Take simulator screenshot"
     echo ""
+    echo -e "  ${BOLD}Platform:${NC}"
+    echo -e "    ${YELLOW}--iphone${NC}                 iPhone simulator ${DIM}(default)${NC}"
+    echo -e "    ${YELLOW}--ipad${NC}                   iPad simulator"
+    echo -e "    ${YELLOW}--mac, --macos${NC}            macOS (Mac Catalyst)"
+    echo ""
     echo -e "  ${BOLD}Flags:${NC}"
     echo -e "    ${YELLOW}--clean, -C${NC}              Clean before building"
     echo -e "    ${YELLOW}--release, -r${NC}            Release configuration"
@@ -991,9 +1076,12 @@ usage() {
     echo -e "    ${YELLOW}--deep${NC}                   Deep clean (global Xcode caches)"
     echo ""
     echo -e "  ${BOLD}Examples:${NC}"
-    echo -e "    ${DIM}./meeshy.sh${NC}                          ${DIM}# Build + run + logs${NC}"
+    echo -e "    ${DIM}./meeshy.sh${NC}                          ${DIM}# Build + run iPhone sim + logs${NC}"
+    echo -e "    ${DIM}./meeshy.sh run --ipad${NC}               ${DIM}# Build + run iPad sim + logs${NC}"
+    echo -e "    ${DIM}./meeshy.sh run --mac${NC}                ${DIM}# Build + run as macOS app${NC}"
     echo -e "    ${DIM}./meeshy.sh run --clean${NC}              ${DIM}# Clean build + run${NC}"
     echo -e "    ${DIM}./meeshy.sh build --release${NC}          ${DIM}# Release build only${NC}"
+    echo -e "    ${DIM}./meeshy.sh build --ipad${NC}             ${DIM}# Build for iPad sim${NC}"
     echo -e "    ${DIM}./meeshy.sh archive -m ad-hoc${NC}        ${DIM}# Ad-hoc IPA${NC}"
     echo -e "    ${DIM}./meeshy.sh distribute${NC}               ${DIM}# App Store / TestFlight build${NC}"
     echo -e "    ${DIM}./meeshy.sh test --ui --coverage${NC}     ${DIM}# All tests + coverage${NC}"
@@ -1031,6 +1119,9 @@ while [[ $# -gt 0 ]]; do
         --ui)             UI_TESTS=true; shift ;;
         --coverage)       COVERAGE=true; shift ;;
         --deep)           DEEP_CLEAN=true; shift ;;
+        --iphone)         PLATFORM="iphone"; shift ;;
+        --ipad)           PLATFORM="ipad"; shift ;;
+        --mac|--macos)    PLATFORM="mac"; shift ;;
         -h|--help|help)   usage ;;
         *)
             err "Unknown flag: $1 (use --help)"
@@ -1047,7 +1138,10 @@ case "$COMMAND" in
 
     run)
         echo ""
-        echo -e "${BOLD}${CYAN}  Meeshy iOS Build & Run${NC}"
+        platform_label="iOS"
+        [ "$PLATFORM" = "ipad" ] && platform_label="iPadOS"
+        [ "$PLATFORM" = "mac" ] && platform_label="macOS"
+        echo -e "${BOLD}${CYAN}  Meeshy $platform_label Build & Run${NC}"
         echo ""
         detect_simulator
         ensure_booted
@@ -1075,7 +1169,11 @@ case "$COMMAND" in
     stop)
         detect_simulator
         log "Stopping $APP_NAME..."
-        xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
+        if [ "$PLATFORM" = "mac" ]; then
+            pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
+        else
+            xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
+        fi
         ok "App stopped"
         ;;
 
@@ -1083,7 +1181,11 @@ case "$COMMAND" in
         detect_simulator
         ensure_booted
         log "Stopping $APP_NAME..."
-        xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
+        if [ "$PLATFORM" = "mac" ]; then
+            pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
+        else
+            xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
+        fi
         sleep 1
         do_build
         do_install
