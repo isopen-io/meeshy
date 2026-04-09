@@ -2750,6 +2750,7 @@ model PostMedia {
   height       Int?
   thumbnailPath String?
   thumbnailUrl  String?
+  thumbHash    String?  // Base64-encoded ThumbHash (~28 chars) — instant placeholder
 
   // Metadata audio/vidéo
   duration     Int?     // ms

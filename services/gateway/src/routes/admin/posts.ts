@@ -56,6 +56,7 @@ const mediaSelect = {
   width: true,
   height: true,
   thumbnailUrl: true,
+  thumbHash: true,
   duration: true,
   order: true,
   caption: true,

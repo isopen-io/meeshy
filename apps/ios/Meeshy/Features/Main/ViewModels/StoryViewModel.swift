@@ -277,8 +277,9 @@ class StoryViewModel: ObservableObject {
                 try compressed.data.write(to: tempURL)
                 defer { try? FileManager.default.removeItem(at: tempURL) }
 
+                let thumbHash = image.toThumbHash()
                 let uploader = TusUploadManager(baseURL: baseURL)
-                uploadResult = try await uploader.uploadFile(fileURL: tempURL, mimeType: compressed.mimeType, token: token, uploadContext: "story")
+                uploadResult = try await uploader.uploadFile(fileURL: tempURL, mimeType: compressed.mimeType, token: token, uploadContext: "story", thumbHash: thumbHash)
             }
 
             let post = try await postService.createStory(
@@ -323,6 +324,7 @@ class StoryViewModel: ObservableObject {
         // 1. Upload background thumbnail (image de fond du slide)
         var uploadResult: TusUploadResult? = nil
         if let image {
+            let thumbHash = image.toThumbHash()
             let compressed = await MediaCompressor.shared.compressImage(image)
             let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -330,7 +332,7 @@ class StoryViewModel: ObservableObject {
             defer { try? FileManager.default.removeItem(at: tempURL) }
             uploadResult = try await uploader.uploadFile(
                 fileURL: tempURL, mimeType: compressed.mimeType,
-                token: token, uploadContext: "story"
+                token: token, uploadContext: "story", thumbHash: thumbHash
             )
         }
 
@@ -442,6 +444,7 @@ class StoryViewModel: ObservableObject {
 
                     var uploadResult: TusUploadResult? = nil
                     if let bgImage = upload.slideImages[slide.id] {
+                        let thumbHash = bgImage.toThumbHash()
                         let compressed = await MediaCompressor.shared.compressImage(bgImage)
                         let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
                         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -449,7 +452,7 @@ class StoryViewModel: ObservableObject {
                         defer { try? FileManager.default.removeItem(at: tempURL) }
                         uploadResult = try await uploader.uploadFile(
                             fileURL: tempURL, mimeType: compressed.mimeType,
-                            token: token, uploadContext: "story"
+                            token: token, uploadContext: "story", thumbHash: thumbHash
                         )
                     }
                     activeUpload?.progress = baseProgress + 0.30 * slideShare
@@ -641,13 +644,14 @@ class StoryViewModel: ObservableObject {
 
     private func buildFeedMedia(from post: APIPost, fallback uploadResult: TusUploadResult?) -> [FeedMedia] {
         let apiMedia = (post.media ?? []).map { m in
-            FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
-                      width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
+            FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbHash: m.thumbHash,
+                      thumbnailColor: "4ECDC4", width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
         }
         if !apiMedia.isEmpty { return apiMedia }
         if let uploaded = uploadResult {
             return [FeedMedia(id: uploaded.id, type: .image, url: uploaded.fileUrl,
-                              thumbnailColor: "4ECDC4", width: uploaded.width, height: uploaded.height)]
+                              thumbHash: uploaded.thumbHash, thumbnailColor: "4ECDC4",
+                              width: uploaded.width, height: uploaded.height)]
         }
         return []
     }
