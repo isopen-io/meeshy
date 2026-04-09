@@ -11,12 +11,10 @@ extension iPadRootView {
         switch route {
         case .settings:
             SettingsView()
-                .iPadFormWidth()
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .profile:
             ProfileView()
-                .iPadFormWidth()
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .contacts(let initialTab):
             ContactsHubView(initialTab: initialTab)
                 .navigationBarHidden(true)
@@ -82,53 +80,41 @@ extension iPadRootView {
                 },
                 onDismiss: { rightPanelRoute = nil }
             )
-            .iPadFormWidth(MeeshyLayout.contentMaxWidth)
-            .navigationBarHidden(true)
+                        .navigationBarHidden(true)
             .onDisappear {
                 Task { await notificationManager.refreshUnreadCount() }
             }
         case .userStats:
             UserStatsView()
-                .iPadFormWidth()
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .links:
             LinksHubView()
-                .iPadFormWidth()
-        case .affiliate:
+                        case .affiliate:
             AffiliateView()
-                .iPadFormWidth()
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .trackingLinks:
             TrackingLinksView()
-                .iPadFormWidth()
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .shareLinks:
             ShareLinksView()
-                .iPadFormWidth()
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .communityLinks:
             CommunityLinksView()
-                .iPadFormWidth()
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .dataExport:
             DataExportView()
-                .iPadFormWidth()
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .postDetail(let postId, let initialPost, let showComments):
             PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments)
-                .iPadFormWidth(MeeshyLayout.contentMaxWidth)
-        case .bookmarks:
+                        case .bookmarks:
             BookmarksView()
-                .iPadFormWidth(MeeshyLayout.contentMaxWidth)
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .friendRequests:
             FriendRequestListView()
-                .iPadFormWidth()
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .editProfile:
             EditProfileView()
-                .iPadFormWidth()
-                .navigationBarHidden(true)
+                                .navigationBarHidden(true)
         case .conversation:
             EmptyView()
         }
