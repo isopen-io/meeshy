@@ -271,6 +271,18 @@ public struct NotificationMetadata: Codable, Sendable {
     public let emoji: String?
     public let postType: String?
 
+    // Login new device fields
+    public let deviceName: String?
+    public let deviceVendor: String?
+    public let deviceOS: String?
+    public let deviceOSVersion: String?
+    public let deviceType: String?
+    public let ipAddress: String?
+    public let country: String?
+    public let countryName: String?
+    public let city: String?
+    public let location: String?
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         messagePreview = try container.decodeIfPresent(String.self, forKey: .messagePreview)
@@ -283,11 +295,23 @@ public struct NotificationMetadata: Codable, Sendable {
         commentPreview = try container.decodeIfPresent(String.self, forKey: .commentPreview)
         emoji = try container.decodeIfPresent(String.self, forKey: .emoji)
         postType = try container.decodeIfPresent(String.self, forKey: .postType)
+        deviceName = try container.decodeIfPresent(String.self, forKey: .deviceName)
+        deviceVendor = try container.decodeIfPresent(String.self, forKey: .deviceVendor)
+        deviceOS = try container.decodeIfPresent(String.self, forKey: .deviceOS)
+        deviceOSVersion = try container.decodeIfPresent(String.self, forKey: .deviceOSVersion)
+        deviceType = try container.decodeIfPresent(String.self, forKey: .deviceType)
+        ipAddress = try container.decodeIfPresent(String.self, forKey: .ipAddress)
+        country = try container.decodeIfPresent(String.self, forKey: .country)
+        countryName = try container.decodeIfPresent(String.self, forKey: .countryName)
+        city = try container.decodeIfPresent(String.self, forKey: .city)
+        location = try container.decodeIfPresent(String.self, forKey: .location)
     }
 
     private enum CodingKeys: String, CodingKey {
         case messagePreview, action, reactionEmoji, callType, memberCount
         case postId, commentId, commentPreview, emoji, postType
+        case deviceName, deviceVendor, deviceOS, deviceOSVersion, deviceType
+        case ipAddress, country, countryName, city, location
     }
 }
 
@@ -402,7 +426,8 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
         case .securityAlert, .legacySystemAlert:
             return "Alerte de securite"
         case .loginNewDevice:
-            return "Connexion depuis un nouvel appareil"
+            let device = metadata?.deviceName ?? metadata?.deviceOS ?? "un appareil inconnu"
+            return "Connexion depuis \(device)"
         case .passwordChanged:
             return "Mot de passe modifie"
         case .twoFactorEnabled:
@@ -436,9 +461,28 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
             return content?.isEmpty == false ? content : metadata?.messagePreview
         case .postComment, .commentReply, .legacyPostComment:
             return metadata?.commentPreview
+        case .loginNewDevice:
+            return loginDeviceBody
         default:
             return nil
         }
+    }
+
+    private var loginDeviceBody: String? {
+        var parts: [String] = []
+        if let location = metadata?.location, !location.isEmpty {
+            parts.append(location)
+        } else {
+            let loc = [metadata?.city, metadata?.countryName].compactMap { $0 }.joined(separator: ", ")
+            if !loc.isEmpty { parts.append(loc) }
+        }
+        if let ip = metadata?.ipAddress, !ip.isEmpty {
+            parts.append("IP: \(ip)")
+        }
+        if let os = metadata?.deviceOS, !os.isEmpty {
+            parts.append(os)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 

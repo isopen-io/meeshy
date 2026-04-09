@@ -158,7 +158,13 @@ public struct NotificationRowView: View {
         case .securityAlert, .legacySystemAlert:
             return "Alerte systeme"
         case .loginNewDevice:
-            return "Connexion nouvel appareil"
+            let device = notification.metadata?.deviceName ?? notification.metadata?.deviceOS ?? "appareil inconnu"
+            let location = notification.metadata?.location
+                ?? [notification.metadata?.city, notification.metadata?.countryName].compactMap { $0 }.joined(separator: ", ")
+            if !location.isEmpty {
+                return "Connexion depuis \(device) — \(location)"
+            }
+            return "Connexion depuis \(device)"
         case .passwordChanged:
             return "Mot de passe modifie"
         case .twoFactorEnabled:
