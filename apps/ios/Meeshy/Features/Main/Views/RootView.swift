@@ -496,6 +496,7 @@ struct RootView: View {
         case .status(_, let authorId, _, _, _): authId = authorId
         }
 
+        // 1. Check local cache first
         if let existingConv = conversationViewModel.conversations.first(where: {
             $0.type == .direct && $0.participantUserId == authId
         }) {
@@ -504,22 +505,28 @@ struct RootView: View {
             return
         }
 
+        // 2. Not in local cache — ask the API for an existing DM, or create one
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         Task {
             do {
-                let response = try await ConversationService.shared.create(
-                    type: "direct",
-                    participantIds: [authId]
-                )
-                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                let apiConv = try await ConversationService.shared.getById(response.id)
-                let conv = apiConv.toConversation(currentUserId: currentUserId)
+                let conv: Conversation
+                if let existingApi = try await ConversationService.shared.findDirectWith(userId: authId) {
+                    conv = existingApi.toConversation(currentUserId: currentUserId)
+                } else {
+                    let created = try await ConversationService.shared.create(
+                        type: "direct",
+                        participantIds: [authId]
+                    )
+                    let apiConv = try await ConversationService.shared.getById(created.id)
+                    conv = apiConv.toConversation(currentUserId: currentUserId)
+                }
 
                 await MainActor.run {
                     pendingReplyContext = context
                     router.navigateToConversation(conv)
                 }
             } catch {
-                ToastManager.shared.showError("Impossible de créer la conversation")
+                ToastManager.shared.showError("Impossible d'ouvrir la conversation")
             }
         }
     }

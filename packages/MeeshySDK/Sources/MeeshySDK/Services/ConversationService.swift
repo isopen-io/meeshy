@@ -12,6 +12,7 @@ public protocol ConversationServiceProviding: Sendable {
     func getParticipants(conversationId: String, limit: Int, cursor: String?) async throws -> PaginatedAPIResponse<[APIParticipant]>
     func deleteForMe(conversationId: String) async throws
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation]
+    func findDirectWith(userId: String) async throws -> APIConversation?
     func removeParticipant(conversationId: String, participantId: String) async throws
     func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws
     func update(
@@ -183,6 +184,19 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             ]
         )
         return response.data
+    }
+
+    /// Finds the most recent existing direct conversation with a given user, or nil if none exists.
+    public func findDirectWith(userId: String) async throws -> APIConversation? {
+        let response: APIResponse<[APIConversation]> = try await api.request(
+            endpoint: "/conversations",
+            queryItems: [
+                URLQueryItem(name: "type", value: "direct"),
+                URLQueryItem(name: "withUserId", value: userId),
+                URLQueryItem(name: "limit", value: "1")
+            ]
+        )
+        return response.data.first
     }
 }
 
