@@ -258,10 +258,10 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
 
 const TYPICAL_LENGTH_RANGES: Record<string, { min: number; max: number }> = {
   expeditif: { min: 1, max: 10 },
-  court: { min: 2, max: 30 },
-  moyen: { min: 10, max: 60 },
-  long: { min: 30, max: 120 },       // admin/expert only
-  'tres long': { min: 60, max: 250 }, // admin/expert only
+  court: { min: 10, max: 60 },
+  moyen: { min: 30, max: 150 },
+  long: { min: 100, max: 250 },       // admin/expert only
+  'tres long': { min: 150, max: 400 }, // admin/expert only
 };
 
 function calculateWordLimits(
