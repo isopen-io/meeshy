@@ -535,6 +535,14 @@ struct FeedComposerSheet: View {
     @State private var isLoadingMedia = false
     @State private var postVisibility: String = "PUBLIC"
     @State private var showEmojiPicker = false
+    @State private var showAudioComposer = false
+    @State private var composerLanguage: String = AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+    @State private var showLanguagePicker = false
+
+    private var composerLanguageDisplayName: String {
+        let name = Locale.current.localizedString(forLanguageCode: composerLanguage) ?? composerLanguage
+        return name.prefix(1).uppercased() + name.dropFirst()
+    }
 
     private var hasContent: Bool {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
@@ -674,7 +682,7 @@ struct FeedComposerSheet: View {
                 Spacer(minLength: 0)
 
                 // Toolbar
-                HStack(spacing: 24) {
+                HStack(spacing: 16) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 20))
@@ -700,11 +708,60 @@ struct FeedComposerSheet: View {
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "2ECC71"))
                     }
+                    Button { showAudioComposer = true; HapticFeedback.light() } label: {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(hex: "FF2E63"))
+                    }
+
                     Spacer()
+
+                    Button {
+                        showLanguagePicker = true
+                        HapticFeedback.light()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "globe")
+                                .font(.system(size: 14))
+                            Text(composerLanguageDisplayName)
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(MeeshyColors.indigo500)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.15 : 1))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                    }
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)
             }
+        }
+        .sheet(isPresented: $showAudioComposer) {
+            AudioPostComposerView { audioURL, mimeType, transcription in
+                showAudioComposer = false
+                Task {
+                    await publishAudioFromSheet(audioURL: audioURL, mimeType: mimeType, transcription: transcription)
+                }
+            }
+        }
+        .sheet(isPresented: $showLanguagePicker) {
+            AudioLanguagePickerView(
+                selectedLocale: Binding(
+                    get: { Locale(identifier: composerLanguage) },
+                    set: { newLocale in
+                        let langCode = newLocale.language.languageCode?.identifier ?? newLocale.identifier
+                        composerLanguage = langCode
+                    }
+                ),
+                theme: theme
+            )
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
@@ -1034,7 +1091,8 @@ struct FeedComposerSheet: View {
             onDismiss()
             HapticFeedback.success()
             if !text.isEmpty {
-                Task { await viewModel.createPost(content: text, visibility: postVisibility) }
+                let lang = composerLanguage
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang) }
             }
             return
         }
@@ -1070,7 +1128,7 @@ struct FeedComposerSheet: View {
                 }
                 progressCancellable?.cancel()
 
-                await viewModel.createPost(content: text, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds)
+                await viewModel.createPost(content: text, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
 
                 await MainActor.run {
                     isUploading = false
@@ -1087,6 +1145,34 @@ struct FeedComposerSheet: View {
                     HapticFeedback.error()
                     ToastManager.shared.showError("Echec de la publication du post")
                 }
+            }
+        }
+    }
+
+    private func publishAudioFromSheet(audioURL: URL, mimeType: String, transcription: MobileTranscriptionPayload?) async {
+        guard let token = APIClient.shared.authToken,
+              let baseURL = URL(string: MeeshyConfig.shared.serverOrigin) else { return }
+        await MainActor.run { isUploading = true }
+        do {
+            let uploader = TusUploadManager(baseURL: baseURL)
+            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token, uploadContext: "post")
+            try? FileManager.default.removeItem(at: audioURL)
+            await viewModel.createPost(
+                mediaIds: [result.id],
+                originalLanguage: transcription?.language ?? composerLanguage,
+                mobileTranscription: transcription
+            )
+            await MainActor.run {
+                isUploading = false
+                onDismiss()
+                HapticFeedback.success()
+                ToastManager.shared.showSuccess("Post audio publie")
+            }
+        } catch {
+            await MainActor.run {
+                isUploading = false
+                HapticFeedback.error()
+                ToastManager.shared.showError("Echec de la publication")
             }
         }
     }
