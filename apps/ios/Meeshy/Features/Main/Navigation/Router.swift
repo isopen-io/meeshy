@@ -45,6 +45,13 @@ final class Router: ObservableObject {
     @Published var deepLinkProfileUser: ProfileSheetUser?
     @Published var pendingShareContent: SharedContentType? = nil
 
+    /// iPad two-column mode: when set, route requests are forwarded here
+    /// instead of being pushed onto the NavigationStack path.
+    var onRouteRequested: ((Route) -> Bool)?
+
+    /// iPad two-column mode: called when pop/popToRoot is requested.
+    var onPopRequested: (() -> Void)?
+
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "router")
 
     var currentRoute: Route? { path.last }
@@ -60,6 +67,11 @@ final class Router: ObservableObject {
     func push(_ route: Route) {
         if currentRoute == route { return }
 
+        // iPad intercept: if the callback handles the route, skip NavigationStack push
+        if let onRouteRequested, onRouteRequested(route) {
+            return
+        }
+
         if route.isHub, let idx = path.lastIndex(where: { $0 == route }) {
             path.removeSubrange((idx + 1)...)
             return
@@ -69,11 +81,18 @@ final class Router: ObservableObject {
     }
 
     func pop() {
-        guard !path.isEmpty else { return }
+        if path.isEmpty {
+            onPopRequested?()
+            return
+        }
         path.removeLast()
     }
 
     func popToRoot() {
+        if path.isEmpty {
+            onPopRequested?()
+            return
+        }
         path.removeAll()
     }
 
