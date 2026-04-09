@@ -597,15 +597,33 @@ struct FeedComposerSheet: View {
                         name: getUserDisplayName(authManager.currentUser, fallback: "M"),
                         context: .feedComposer,
                         accentColor: "FF6B6B",
-                        secondaryColor: "4ECDC4"
+                        secondaryColor: "4ECDC4",
+                        avatarURL: authManager.currentUser?.avatar
                     )
                     VStack(alignment: .leading, spacing: 2) {
                         Text(getUserDisplayName(authManager.currentUser, fallback: "Moi"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
-                        Text("Public")
-                            .font(.system(size: 12))
+
+                        Menu {
+                            Button { postVisibility = "PUBLIC" } label: {
+                                Label("Public", systemImage: "globe")
+                            }
+                            Button { postVisibility = "FRIENDS" } label: {
+                                Label("Amis", systemImage: "person.2")
+                            }
+                            Button { postVisibility = "PRIVATE" } label: {
+                                Label("Priv\u{00E9}", systemImage: "lock")
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
+                                    .font(.system(size: 10))
+                                Text(postVisibility == "PUBLIC" ? "Public" : postVisibility == "FRIENDS" ? "Amis" : "Priv\u{00E9}")
+                                    .font(.system(size: 12))
+                            }
                             .foregroundColor(theme.textMuted)
+                        }
                     }
                     Spacer()
                 }

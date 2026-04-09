@@ -538,24 +538,16 @@ struct FeedView: View {
 
                 // User row
                 HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [MeeshyColors.error, MeeshyColors.indigo300],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 40, height: 40)
-
-                        Text("M")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                    }
+                    MeeshyAvatar(
+                        name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
+                        context: .feedComposer,
+                        accentColor: "FF6B6B",
+                        secondaryColor: "4ECDC4",
+                        avatarURL: AuthManager.shared.currentUser?.avatar
+                    )
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "Moi", defaultValue: "Moi"))
+                        Text(getUserDisplayName(AuthManager.shared.currentUser, fallback: "Moi"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
 
