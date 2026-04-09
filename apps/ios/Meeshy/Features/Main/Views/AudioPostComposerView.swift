@@ -15,6 +15,14 @@ struct AudioPostComposerView: View {
     @State private var recordedURL: URL?
     @State private var recordedDuration: TimeInterval = 0
     @State private var phase: ComposerPhase = .idle
+    @State private var selectedLocale: Locale = {
+        let user = AuthManager.shared.currentUser
+        if let lang = user?.systemLanguage {
+            return Locale(identifier: lang)
+        }
+        return Locale(identifier: "fr")
+    }()
+    @State private var showLanguagePicker = false
     @Environment(\.dismiss) private var dismiss
 
     // MARK: - Phase
@@ -37,6 +45,8 @@ struct AudioPostComposerView: View {
                     Spacer()
 
                     recordingSection
+
+                    languageChip
 
                     if let error = transcriptionError {
                         Text(error)
@@ -223,6 +233,50 @@ struct AudioPostComposerView: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.75), value: phase)
     }
 
+    // MARK: - Language Chip
+
+    private var languageChip: some View {
+        Button {
+            showLanguagePicker = true
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "globe")
+                    .font(.system(size: 13, weight: .medium))
+                Text(languageDisplayName)
+                    .font(.system(size: 14, weight: .semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .foregroundStyle(
+                LinearGradient(colors: [MeeshyColors.indigo400, MeeshyColors.indigo600], startPoint: .leading, endPoint: .trailing)
+            )
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.12 : 0.8))
+                    .overlay(
+                        Capsule()
+                            .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+        .disabled(phase == .recording || phase == .transcribing)
+        .opacity(phase == .recording || phase == .transcribing ? 0.5 : 1)
+        .sheet(isPresented: $showLanguagePicker) {
+            AudioLanguagePickerView(
+                selectedLocale: $selectedLocale,
+                theme: theme
+            )
+        }
+    }
+
+    private var languageDisplayName: String {
+        let name = Locale.current.localizedString(forIdentifier: selectedLocale.identifier) ?? selectedLocale.identifier
+        return name.prefix(1).uppercased() + name.dropFirst()
+    }
+
     // MARK: - Helpers
 
     private var formattedDuration: String {
@@ -261,10 +315,9 @@ struct AudioPostComposerView: View {
 
         Task {
             do {
-                let deviceLocale = Locale.current
                 let result = try await EdgeTranscriptionService.shared.transcribe(
                     audioURL: url,
-                    locale: deviceLocale
+                    locale: selectedLocale
                 )
                 await MainActor.run {
                     transcription = result
@@ -331,5 +384,69 @@ private struct WaveformView: View {
                     .animation(.easeInOut(duration: 0.08), value: levels[i])
             }
         }
+    }
+}
+
+// MARK: - Audio Language Picker
+
+struct AudioLanguagePickerView: View {
+    @Binding var selectedLocale: Locale
+    @ObservedObject var theme: ThemeManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+
+    private var languages: [(locale: Locale, name: String)] {
+        EdgeTranscriptionService.shared.supportedLocales.compactMap { locale in
+            guard let name = Locale.current.localizedString(forIdentifier: locale.identifier) else { return nil }
+            let capitalized = name.prefix(1).uppercased() + name.dropFirst()
+            return (locale, capitalized)
+        }
+        .sorted { $0.name < $1.name }
+    }
+
+    private var filteredLanguages: [(locale: Locale, name: String)] {
+        guard !searchText.isEmpty else { return languages }
+        let query = searchText.lowercased()
+        return languages.filter { $0.name.lowercased().contains(query) || $0.locale.identifier.lowercased().contains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(filteredLanguages, id: \.locale.identifier) { item in
+                Button {
+                    selectedLocale = item.locale
+                    HapticFeedback.light()
+                    dismiss()
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name)
+                                .font(.system(size: 16, weight: selectedLocale.identifier == item.locale.identifier ? .semibold : .regular))
+                                .foregroundColor(theme.textPrimary)
+                            Text(item.locale.identifier)
+                                .font(.system(size: 12))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        Spacer()
+                        if selectedLocale.identifier == item.locale.identifier {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(MeeshyColors.indigo500)
+                        }
+                    }
+                }
+            }
+            .searchable(text: $searchText, prompt: String(localized: "Rechercher une langue", defaultValue: "Rechercher une langue"))
+            .navigationTitle(String(localized: "Langue de l'audio", defaultValue: "Langue de l'audio"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(String(localized: "Fermer", defaultValue: "Fermer")) { dismiss() }
+                        .foregroundColor(MeeshyColors.indigo500)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }

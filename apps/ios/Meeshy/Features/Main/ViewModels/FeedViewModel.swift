@@ -216,7 +216,7 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) async {
+    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) async {
         publishError = nil
         publishSuccess = false
         do {
@@ -228,6 +228,7 @@ class FeedViewModel: ObservableObject {
                 mediaIds: mediaIds,
                 audioUrl: audioUrl,
                 audioDuration: audioDuration,
+                originalLanguage: originalLanguage,
                 mobileTranscription: mobileTranscription
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)

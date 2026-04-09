@@ -113,25 +113,32 @@ extension UniversalComposerBar {
             ? [Color.white.opacity(0.9), Color.white.opacity(0.5)]
             : [Color(hex: accentColor).opacity(0.9), Color(hex: accentColor).opacity(0.5)]
 
+        let barWidth: CGFloat = 3
+        let barSpacing: CGFloat = 3
+        let timerWidth: CGFloat = 56
+
         return HStack(spacing: 12) {
-            // Waveform bars: real levels if external, animated if internal
-            HStack(spacing: 3) {
-                if let levels = externalAudioLevels {
-                    ForEach(0..<15, id: \.self) { i in
-                        let level: CGFloat = i < levels.count ? levels[i] : 0
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(LinearGradient(colors: barGradient, startPoint: .top, endPoint: .bottom))
-                            .frame(width: 3, height: effectiveIsRecording ? 6 + 20 * level : 6)
-                            .animation(.spring(response: 0.08, dampingFraction: 0.6), value: level)
-                    }
-                } else {
-                    ForEach(0..<15, id: \.self) { i in
-                        ComposerWaveformBar(index: i, isRecording: isRecording, accentColor: "FF6B6B")
+            // Waveform bars: fill available width dynamically
+            GeometryReader { geo in
+                let availableWidth = geo.size.width
+                let barCount = max(1, Int(availableWidth / (barWidth + barSpacing)))
+                HStack(spacing: barSpacing) {
+                    if let levels = externalAudioLevels {
+                        ForEach(0..<barCount, id: \.self) { i in
+                            let level: CGFloat = i < levels.count ? levels[i] : 0
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(LinearGradient(colors: barGradient, startPoint: .top, endPoint: .bottom))
+                                .frame(width: barWidth, height: effectiveIsRecording ? 6 + 20 * level : 6)
+                                .animation(.spring(response: 0.08, dampingFraction: 0.6), value: level)
+                        }
+                    } else {
+                        ForEach(0..<barCount, id: \.self) { i in
+                            ComposerWaveformBar(index: i, isRecording: isRecording, accentColor: "FF6B6B")
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
-
-            Spacer()
 
             // Timer
             Text(formatDuration(effectiveDuration))
@@ -139,6 +146,7 @@ extension UniversalComposerBar {
                 .foregroundColor(timerColor)
                 .contentTransition(.numericText())
                 .animation(.spring(response: 0.3), value: effectiveDuration)
+                .frame(width: timerWidth, alignment: .trailing)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

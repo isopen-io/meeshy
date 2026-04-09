@@ -214,7 +214,8 @@ extension FeedView {
             feedCleanupAttachments()
             HapticFeedback.success()
             if !text.isEmpty {
-                Task { await viewModel.createPost(content: text, visibility: postVisibility) }
+                let lang = composerLanguage
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang) }
             }
             return
         }
@@ -265,7 +266,8 @@ extension FeedView {
 
                 await viewModel.createPost(
                     content: text,
-                    mediaIds: uploadedIds.isEmpty ? nil : uploadedIds
+                    mediaIds: uploadedIds.isEmpty ? nil : uploadedIds,
+                    originalLanguage: composerLanguage
                 )
 
                 await MainActor.run {
@@ -295,7 +297,7 @@ extension FeedView {
     }
 
     // MARK: - Audio Post
-    func publishAudioPost(audioURL: URL, mimeType: String, transcription: MobileTranscriptionPayload?) async {
+    func publishAudioPost(audioURL: URL, mimeType: String, transcription: MobileTranscriptionPayload?, originalLanguage: String? = nil) async {
         guard let token = APIClient.shared.authToken,
               let baseURL = URL(string: MeeshyConfig.shared.serverOrigin) else { return }
 
@@ -308,6 +310,7 @@ extension FeedView {
 
             await viewModel.createPost(
                 mediaIds: [result.id],
+                originalLanguage: originalLanguage ?? transcription?.language,
                 mobileTranscription: transcription
             )
 

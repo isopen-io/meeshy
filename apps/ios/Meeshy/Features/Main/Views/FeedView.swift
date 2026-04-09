@@ -21,6 +21,8 @@ struct FeedView: View {
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
     @State private var showAudioComposer = false
+    @State var composerLanguage: String = AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+    @State var showComposerLanguagePicker = false
     @State private var headerScrollOffset: CGFloat = 0
 
     // Impression tracking
@@ -48,6 +50,11 @@ struct FeedView: View {
 
     var composerHasContent: Bool {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+    }
+
+    private var composerLanguageDisplayName: String {
+        let name = Locale.current.localizedString(forLanguageCode: composerLanguage) ?? composerLanguage
+        return name.prefix(1).uppercased() + name.dropFirst()
     }
 
     private var posts: [FeedPost] { viewModel.posts }
@@ -454,9 +461,21 @@ struct FeedView: View {
             AudioPostComposerView { audioURL, mimeType, transcription in
                 showAudioComposer = false
                 Task {
-                    await publishAudioPost(audioURL: audioURL, mimeType: mimeType, transcription: transcription)
+                    await publishAudioPost(audioURL: audioURL, mimeType: mimeType, transcription: transcription, originalLanguage: transcription?.language)
                 }
             }
+        }
+        .sheet(isPresented: $showComposerLanguagePicker) {
+            AudioLanguagePickerView(
+                selectedLocale: Binding(
+                    get: { Locale(identifier: composerLanguage) },
+                    set: { newLocale in
+                        let langCode = newLocale.language.languageCode?.identifier ?? newLocale.identifier
+                        composerLanguage = langCode
+                    }
+                ),
+                theme: theme
+            )
         }
     }
 
@@ -562,6 +581,25 @@ struct FeedView: View {
                     }
 
                     Spacer()
+
+                    Button {
+                        showComposerLanguagePicker = true
+                        HapticFeedback.light()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "globe")
+                                .font(.system(size: 11))
+                            Text(composerLanguageDisplayName)
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(MeeshyColors.indigo400)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.12 : 0.8))
+                        )
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)

@@ -78,13 +78,15 @@ public struct CreatePostRequest: Encodable {
     public let mediaIds: [String]?
     public let audioUrl: String?
     public let audioDuration: Int?
+    public let originalLanguage: String?
     public let mobileTranscription: MobileTranscriptionPayload?
     public let viaUsername: String?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
+        self.originalLanguage = originalLanguage
         self.mobileTranscription = mobileTranscription; self.viaUsername = viaUsername
     }
 }
