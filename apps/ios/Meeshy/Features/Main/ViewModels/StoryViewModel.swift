@@ -350,6 +350,7 @@ class StoryViewModel: ObservableObject {
                     mediaObjects[i].postMediaId = result.id
                     foregroundMediaIds.append(result.id)
                 } else if obj.mediaType == "image", let uiImage = loadedImages[obj.id] {
+                    let fgThumbHash = uiImage.toThumbHash()
                     let compressed = await MediaCompressor.shared.compressImage(uiImage)
                     let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
                     let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -357,7 +358,7 @@ class StoryViewModel: ObservableObject {
                     defer { try? FileManager.default.removeItem(at: tempURL) }
                     let result = try await uploader.uploadFile(
                         fileURL: tempURL, mimeType: compressed.mimeType,
-                        token: token, uploadContext: "story"
+                        token: token, uploadContext: "story", thumbHash: fgThumbHash
                     )
                     mediaObjects[i].postMediaId = result.id
                     foregroundMediaIds.append(result.id)
@@ -473,6 +474,7 @@ class StoryViewModel: ObservableObject {
                                 mediaObjects[i].postMediaId = result.id
                                 foregroundMediaIds.append(result.id)
                             } else if obj.mediaType == "image", let uiImage = upload.loadedImages[obj.id] {
+                                let fgThumbHash = uiImage.toThumbHash()
                                 let compressed = await MediaCompressor.shared.compressImage(uiImage)
                                 let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
                                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -480,7 +482,7 @@ class StoryViewModel: ObservableObject {
                                 defer { try? FileManager.default.removeItem(at: tempURL) }
                                 let result = try await uploader.uploadFile(
                                     fileURL: tempURL, mimeType: compressed.mimeType,
-                                    token: token, uploadContext: "story"
+                                    token: token, uploadContext: "story", thumbHash: fgThumbHash
                                 )
                                 mediaObjects[i].postMediaId = result.id
                                 foregroundMediaIds.append(result.id)

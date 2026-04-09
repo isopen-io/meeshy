@@ -125,8 +125,9 @@ extension ConversationView {
                 for attachment in attachments where attachment.type != .audio {
                     if let fileURL = mediaFiles[attachment.id] {
                         let fileData = try? Data(contentsOf: fileURL)
+                        let thumbHash = composerState.pendingThumbnails[attachment.id]?.toThumbHash()
                         let result = try await uploader.uploadFile(
-                            fileURL: fileURL, mimeType: attachment.mimeType, token: token
+                            fileURL: fileURL, mimeType: attachment.mimeType, token: token, thumbHash: thumbHash
                         )
                         uploadedIds.append(result.id)
                         if let fileData {

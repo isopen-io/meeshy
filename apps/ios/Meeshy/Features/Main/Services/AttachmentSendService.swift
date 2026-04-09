@@ -187,8 +187,9 @@ final class AttachmentSendService: AttachmentSendServiceProviding {
     ) async throws -> (uploadedId: String, localAttachment: MeeshyMessageAttachment) {
         let fileData = try? Data(contentsOf: fileURL)
 
+        let thumbHash = thumbnail?.toThumbHash()
         let result = try await uploader.uploadFile(
-            fileURL: fileURL, mimeType: mimeType, token: token
+            fileURL: fileURL, mimeType: mimeType, token: token, thumbHash: thumbHash
         )
 
         if let fileData {
