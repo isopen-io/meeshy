@@ -376,8 +376,8 @@ APNS_KEY_PATH=./secrets/apns-auth-key-dev.p8
 # Identifiants APNS
 APNS_KEY_ID=XXXXXXXXXX
 APNS_TEAM_ID=XXXXXXXXXX
-APNS_BUNDLE_ID=com.meeshy.app
-APNS_VOIP_BUNDLE_ID=com.meeshy.app.voip
+APNS_BUNDLE_ID=me.meeshy.app
+APNS_VOIP_BUNDLE_ID=me.meeshy.app.voip
 APNS_ENVIRONMENT=development
 
 # Feature flags

@@ -379,12 +379,12 @@ describe('PushNotificationService', () => {
         APNS_KEY_ID: 'test-key-id',
         APNS_TEAM_ID: 'test-team-id',
         APNS_KEY_PATH: '/path/to/key.p8',
-        APNS_BUNDLE_ID: 'com.meeshy.app',
+        APNS_BUNDLE_ID: 'me.meeshy.app',
       });
       const service = new PushNotificationService(mockPrisma as any);
 
       mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'com.meeshy.app' },
+        { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
       ]);
       mockPrisma.pushToken.update.mockResolvedValue({});
 
@@ -410,7 +410,7 @@ describe('PushNotificationService', () => {
         APNS_KEY_ID: 'test-key-id',
         APNS_TEAM_ID: 'test-team-id',
         APNS_KEY_PATH: '/path/to/key.p8',
-        APNS_VOIP_BUNDLE_ID: 'com.meeshy.app.voip',
+        APNS_VOIP_BUNDLE_ID: 'me.meeshy.app.voip',
       });
       const service = new PushNotificationService(mockPrisma as any);
 
