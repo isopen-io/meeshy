@@ -677,10 +677,12 @@ extension StoryViewerView {
 
         // Optimistic local insert
         let currentUser = AuthManager.shared.currentUser
+        let authorName: String = currentUser?.displayName ?? currentUser?.username ?? "Moi"
+        let authorId: String = currentUser?.id ?? ""
         let optimisticComment = FeedComment(
             id: "temp_\(UUID().uuidString)",
-            author: currentUser?.displayName ?? currentUser?.username ?? "Moi",
-            authorId: currentUser?.id ?? "",
+            author: authorName,
+            authorId: authorId,
             authorUsername: currentUser?.username,
             authorAvatarURL: currentUser?.avatar,
             content: text,

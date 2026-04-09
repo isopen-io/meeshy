@@ -856,6 +856,8 @@ struct StoryViewerView: View {
                 }
             },
             injectedEmoji: $emojiToInject,
+            isBlurEnabled: $commentBlurEnabled,
+            pendingEffects: $commentEffects,
             storyId: currentStory?.id,
             onSaveDraft: { storyId, text, attachments in
                 if text.isEmpty && attachments.isEmpty {
@@ -871,8 +873,6 @@ struct StoryViewerView: View {
             onAnyInteraction: {
                 // No-op: shouldPauseTimer handles all pause logic based on UI state
             },
-            isBlurEnabled: $commentBlurEnabled,
-            pendingEffects: $commentEffects,
             focusTrigger: $composerFocusTrigger,
             onRecordingChange: { recording in
                 isComposerEngaged = recording
