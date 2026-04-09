@@ -175,6 +175,94 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(dict["type"] as? String, "apns")
     }
 
+    // MARK: - NotificationMetadata (Login Device Fields)
+
+    func testNotificationMetadataDecodesLoginDeviceFields() throws {
+        let json = """
+        {
+            "action": "view_details",
+            "deviceName": "Apple iPhone",
+            "deviceVendor": "Apple",
+            "deviceOS": "iOS 17.5",
+            "deviceOSVersion": "17.5",
+            "deviceType": "mobile",
+            "ipAddress": "82.123.45.67",
+            "country": "FR",
+            "countryName": "France",
+            "city": "Paris",
+            "location": "Paris, France"
+        }
+        """.data(using: .utf8)!
+
+        let metadata = try JSONDecoder().decode(NotificationMetadata.self, from: json)
+        XCTAssertEqual(metadata.action, "view_details")
+        XCTAssertEqual(metadata.deviceName, "Apple iPhone")
+        XCTAssertEqual(metadata.deviceVendor, "Apple")
+        XCTAssertEqual(metadata.deviceOS, "iOS 17.5")
+        XCTAssertEqual(metadata.deviceOSVersion, "17.5")
+        XCTAssertEqual(metadata.deviceType, "mobile")
+        XCTAssertEqual(metadata.ipAddress, "82.123.45.67")
+        XCTAssertEqual(metadata.country, "FR")
+        XCTAssertEqual(metadata.countryName, "France")
+        XCTAssertEqual(metadata.city, "Paris")
+        XCTAssertEqual(metadata.location, "Paris, France")
+    }
+
+    func testNotificationMetadataDecodesWithoutLoginFields() throws {
+        let json = """
+        {"messagePreview":"Hello!","action":"view_message"}
+        """.data(using: .utf8)!
+
+        let metadata = try JSONDecoder().decode(NotificationMetadata.self, from: json)
+        XCTAssertEqual(metadata.messagePreview, "Hello!")
+        XCTAssertNil(metadata.deviceName)
+        XCTAssertNil(metadata.ipAddress)
+        XCTAssertNil(metadata.location)
+    }
+
+    func testLoginNewDeviceNotificationFormattedTitle() throws {
+        let json = """
+        {
+            "id": "notif-login",
+            "userId": "user1",
+            "type": "login_new_device",
+            "content": "",
+            "metadata": {
+                "action": "view_details",
+                "deviceName": "Apple iPhone",
+                "deviceOS": "iOS 17.5",
+                "ipAddress": "82.123.45.67",
+                "location": "Paris, France"
+            },
+            "state": {"isRead":false,"createdAt":"2026-04-09T10:00:00.000Z"}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+        XCTAssertEqual(notification.notificationType, .loginNewDevice)
+        XCTAssertTrue(notification.formattedTitle.contains("Apple iPhone"))
+        XCTAssertNotNil(notification.formattedBody)
+        XCTAssertTrue(notification.formattedBody?.contains("Paris, France") ?? false)
+        XCTAssertTrue(notification.formattedBody?.contains("82.123.45.67") ?? false)
+    }
+
+    func testLoginNewDeviceNotificationFallbackTitle() throws {
+        let json = """
+        {
+            "id": "notif-login2",
+            "userId": "user1",
+            "type": "login_new_device",
+            "content": "",
+            "metadata": {"action": "view_details"},
+            "state": {"isRead":false,"createdAt":"2026-04-09T10:00:00.000Z"}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+        XCTAssertTrue(notification.formattedTitle.contains("appareil inconnu"))
+        XCTAssertNil(notification.formattedBody)
+    }
+
     // MARK: - NotificationPagination
 
     func testNotificationPaginationDecoding() throws {
