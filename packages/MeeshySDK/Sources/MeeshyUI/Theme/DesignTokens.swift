@@ -51,3 +51,19 @@ public enum MeeshyAnimation {
     public static let springBouncy = Animation.spring(response: 0.5, dampingFraction: 0.6)
     public static let staggerDelay: Double = 0.04
 }
+
+// MARK: - iPad Layout
+
+public enum MeeshyLayout {
+    public static let formMaxWidth: CGFloat = 600
+    public static let contentMaxWidth: CGFloat = 700
+}
+
+extension View {
+    /// Constrains content to a readable width on iPad, centered in the available space.
+    /// No effect on compact width (iPhone).
+    public func iPadFormWidth(_ maxWidth: CGFloat = MeeshyLayout.formMaxWidth) -> some View {
+        frame(maxWidth: maxWidth)
+            .frame(maxWidth: .infinity)
+    }
+}

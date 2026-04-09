@@ -28,9 +28,10 @@ struct MeeshyApp: App {
                 ZStack {
                     Group {
                         if authManager.isAuthenticated {
-                            RootView()
+                            AdaptiveRootView()
                         } else if hasCheckedSession {
                             LoginView()
+                                .iPadFormWidth()
                         }
                     }
                     .opacity(showSplash ? 0 : 1)
