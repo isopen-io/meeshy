@@ -289,10 +289,8 @@ final class ConversationSocketHandler {
                 let summary = event.summary
 
                 let newStatus: Message.DeliveryStatus
-                if summary.totalMembers > 0 && summary.readCount >= summary.totalMembers {
+                if summary.readCount > 0 {
                     newStatus = .read
-                } else if summary.readCount > 0 {
-                    newStatus = summary.totalMembers == 1 ? .read : .delivered
                 } else if summary.deliveredCount > 0 {
                     newStatus = .delivered
                 } else {
@@ -310,6 +308,8 @@ final class ConversationSocketHandler {
 
                         if newStatus == .read || (newStatus == .delivered && current != .read) {
                             delegate.messages[i].deliveryStatus = newStatus
+                            delegate.messages[i].deliveredCount = summary.deliveredCount
+                            delegate.messages[i].readCount = summary.readCount
                         }
                     } else if current == .read {
                         break

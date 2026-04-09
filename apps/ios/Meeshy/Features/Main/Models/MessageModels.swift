@@ -136,6 +136,8 @@ extension APIMessage {
 
         let status: Message.DeliveryStatus = {
             guard (sender?.resolvedUserId ?? senderId) == currentUserId else { return .sent }
+            if (readCount ?? 0) > 0 { return .read }
+            if (deliveredCount ?? 0) > 0 { return .delivered }
             if readByAllAt != nil { return .read }
             if deliveredToAllAt != nil { return .delivered }
             return .sent
