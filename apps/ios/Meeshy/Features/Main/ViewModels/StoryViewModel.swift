@@ -130,12 +130,15 @@ class StoryViewModel: ObservableObject {
     private func prefetchAllStoryMedia(_ groups: [StoryGroup]) {
         // High priority: prefetch first slide of each unviewed group (what the user taps first)
         let groupsToPreload = Array(groups.prefix(5))
-        Task(priority: .high) {
+        Task(priority: .userInitiated) {
             let imageCache = await CacheCoordinator.shared.images
-            for group in groupsToPreload {
-                guard !Task.isCancelled else { return }
-                guard let firstStory = group.stories.first else { continue }
-                await Self.prefetchStoryMedia(firstStory, imageCache: imageCache, prerollPlayer: true)
+            await withTaskGroup(of: Void.self) { taskGroup in
+                for group in groupsToPreload {
+                    guard let firstStory = group.stories.first else { continue }
+                    taskGroup.addTask {
+                        await Self.prefetchStoryMedia(firstStory, imageCache: imageCache, prerollPlayer: true)
+                    }
+                }
             }
         }
 

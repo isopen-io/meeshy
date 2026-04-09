@@ -137,33 +137,21 @@ public struct StoryCanvasReaderView: View {
                    let url = MeeshyConfig.resolveMediaURL(urlStr) {
                     let player = state.ensureBackgroundVideoPlayer(url: url, muted: true)
                     BareVideoLayer(player: player)
-                        .scaleEffect(bgTransformScale)
-                        .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
-                        .rotationEffect(.degrees(bgTransformRotation))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
+                        .bgTransform(scale: bgTransformScale, offsetX: bgTransformOffsetX, offsetY: bgTransformOffsetY, rotation: bgTransformRotation)
                 }
             }
         } else if let preloadedBg = preloadedImages[story.id] {
             Image(uiImage: preloadedBg)
                 .resizable()
                 .scaledToFill()
-                .scaleEffect(bgTransformScale)
-                .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
-                .rotationEffect(.degrees(bgTransformRotation))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+                .bgTransform(scale: bgTransformScale, offsetX: bgTransformOffsetX, offsetY: bgTransformOffsetY, rotation: bgTransformRotation)
         } else if let legacyMedia = story.media.first,
                   let urlStr = legacyMedia.url,
                   (story.storyEffects?.mediaObjects ?? []).isEmpty {
             if legacyMedia.type == .video, let url = MeeshyConfig.resolveMediaURL(urlStr) {
                 let player = state.ensureBackgroundVideoPlayer(url: url)
                 BareVideoLayer(player: player)
-                    .scaleEffect(bgTransformScale)
-                    .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
-                    .rotationEffect(.degrees(bgTransformRotation))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
+                    .bgTransform(scale: bgTransformScale, offsetX: bgTransformOffsetX, offsetY: bgTransformOffsetY, rotation: bgTransformRotation)
             } else {
                 backgroundImageView(urlStr: urlStr, thumbHash: legacyMedia.thumbHash ?? resolvedThumbHash)
             }
@@ -174,18 +162,15 @@ public struct StoryCanvasReaderView: View {
     /// Priority: L1/L2 cached image (instant) > ProgressiveCachedImage (thumbHash -> full).
     @ViewBuilder
     private func backgroundImageView(urlStr: String, thumbHash: String?) -> some View {
+        // Resolve URL once — avoids double parsing in ProgressiveCachedImage init
         let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
         if let cached = DiskCacheStore.cachedImage(for: resolved) {
             Image(uiImage: cached)
                 .resizable()
                 .scaledToFill()
-                .scaleEffect(bgTransformScale)
-                .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
-                .rotationEffect(.degrees(bgTransformRotation))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+                .bgTransform(scale: bgTransformScale, offsetX: bgTransformOffsetX, offsetY: bgTransformOffsetY, rotation: bgTransformRotation)
         } else {
-            ProgressiveCachedImage(thumbHash: thumbHash, thumbnailUrl: nil, fullUrl: urlStr) {
+            ProgressiveCachedImage(thumbHash: thumbHash, thumbnailUrl: nil, fullUrl: resolved) {
                 if let img = state.thumbHashImage {
                     Image(uiImage: img)
                         .resizable()
@@ -195,11 +180,7 @@ public struct StoryCanvasReaderView: View {
                 }
             }
             .scaledToFill()
-            .scaleEffect(bgTransformScale)
-            .offset(x: bgTransformOffsetX, y: bgTransformOffsetY)
-            .rotationEffect(.degrees(bgTransformRotation))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+            .bgTransform(scale: bgTransformScale, offsetX: bgTransformOffsetX, offsetY: bgTransformOffsetY, rotation: bgTransformRotation)
         }
     }
 
@@ -429,6 +410,19 @@ public struct StoryCanvasReaderView: View {
 }
 
 // MARK: - ReaderState (gestion lifecycle, audio de fond, socket updates, timing)
+
+// MARK: - Background Transform Modifier (eliminates 6x duplication)
+
+private extension View {
+    func bgTransform(scale: CGFloat, offsetX: CGFloat, offsetY: CGFloat, rotation: Double) -> some View {
+        self
+            .scaleEffect(scale)
+            .offset(x: offsetX, y: offsetY)
+            .rotationEffect(.degrees(rotation))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+    }
+}
 
 @MainActor
 private final class ReaderState: ObservableObject {
