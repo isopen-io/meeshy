@@ -301,6 +301,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var deletedAt: Date?
     public var isDeleted: Bool { deletedAt != nil }
     public var replyToId: String?
+    public var storyReplyToId: String?
     public var forwardedFromId: String?
     public var forwardedFromConversationId: String?
     public var expiresAt: Date?
@@ -359,7 +360,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 content: String, originalLanguage: String = "fr",
                 messageType: MessageType = .text, messageSource: MessageSource = .user,
                 isEdited: Bool = false, editedAt: Date? = nil, deletedAt: Date? = nil,
-                replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil,
+                replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil,
                 expiresAt: Date? = nil, effects: MessageEffects = .none, maxViewOnceCount: Int? = nil,
                 viewOnceCount: Int = 0, pinnedAt: Date? = nil, pinnedBy: String? = nil,
                 isEncrypted: Bool = false, encryptionMode: String? = nil,
@@ -374,7 +375,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.content = content
         self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
         self.isEdited = isEdited; self.editedAt = editedAt; self.deletedAt = deletedAt
-        self.replyToId = replyToId; self.forwardedFromId = forwardedFromId
+        self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.expiresAt = expiresAt; self.effects = effects; self.maxViewOnceCount = maxViewOnceCount
         self.viewOnceCount = viewOnceCount
@@ -392,7 +393,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, conversationId, senderId, content, originalLanguage
         case messageType, messageSource, isEdited, editedAt, deletedAt
-        case replyToId, forwardedFromId, forwardedFromConversationId
+        case replyToId, storyReplyToId, forwardedFromId, forwardedFromConversationId
         case expiresAt, effects, maxViewOnceCount, viewOnceCount
         case pinnedAt, pinnedBy, isEncrypted, encryptionMode
         case createdAt, updatedAt, attachments, reactions
@@ -417,6 +418,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         editedAt = try c.decodeIfPresent(Date.self, forKey: .editedAt)
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
+        storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
         forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId)
         forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
@@ -466,6 +468,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(editedAt, forKey: .editedAt)
         try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
         try c.encodeIfPresent(replyToId, forKey: .replyToId)
+        try c.encodeIfPresent(storyReplyToId, forKey: .storyReplyToId)
         try c.encodeIfPresent(forwardedFromId, forKey: .forwardedFromId)
         try c.encodeIfPresent(forwardedFromConversationId, forKey: .forwardedFromConversationId)
         try c.encodeIfPresent(expiresAt, forKey: .expiresAt)

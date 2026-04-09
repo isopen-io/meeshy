@@ -342,16 +342,24 @@ extension APIMessage {
         }()
 
         let uiReplyTo: ReplyReference? = {
-            guard let reply = replyTo else { return nil }
-            let isReplyMe = reply.senderId == currentUserId
-            let authorName = reply.sender?.name ?? "?"
-            let firstAtt = reply.attachments?.first
-            return ReplyReference(
-                messageId: reply.id, authorName: authorName,
-                previewText: reply.content ?? "", isMe: isReplyMe,
-                attachmentType: firstAtt?.mimeType,
-                attachmentThumbnailUrl: firstAtt?.thumbnailUrl
-            )
+            if let reply = replyTo {
+                let isReplyMe = reply.senderId == currentUserId
+                let authorName = reply.sender?.name ?? "?"
+                let firstAtt = reply.attachments?.first
+                return ReplyReference(
+                    messageId: reply.id, authorName: authorName,
+                    previewText: reply.content ?? "", isMe: isReplyMe,
+                    attachmentType: firstAtt?.mimeType,
+                    attachmentThumbnailUrl: firstAtt?.thumbnailUrl
+                )
+            }
+            if let storyId = storyReplyToId, !storyId.isEmpty {
+                return ReplyReference(
+                    messageId: storyId, authorName: "Story",
+                    previewText: "\u{1F4F7} Story", isStoryReply: true
+                )
+            }
+            return nil
         }()
 
         let uiForwardRef: ForwardReference? = {
@@ -389,6 +397,7 @@ extension APIMessage {
             content: content ?? "",
             originalLanguage: originalLanguage ?? "fr", messageType: msgType, messageSource: msgSource,
             isEdited: isEdited ?? false, deletedAt: deletedAt, replyToId: replyToId,
+            storyReplyToId: storyReplyToId,
             forwardedFromId: forwardedFromId, forwardedFromConversationId: forwardedFromConversationId,
             expiresAt: expiresAt, effects: effects,
             pinnedAt: pinnedAt.flatMap { Self.pinnedAtFormatter.date(from: $0) },

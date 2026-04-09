@@ -43,7 +43,12 @@ extension ConversationView {
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !composerState.pendingAttachments.isEmpty else { return }
 
-        let replyId = composerState.pendingReplyReference?.messageId.isEmpty == false ? composerState.pendingReplyReference?.messageId : nil
+        let pendingRef = composerState.pendingReplyReference
+        let isStory = pendingRef?.isStoryReply == true
+        let refId = pendingRef?.messageId.isEmpty == false ? pendingRef?.messageId : nil
+        let replyId = isStory ? nil : refId
+        let storyReplyId = isStory ? refId : nil
+        let storyRef = isStory ? pendingRef : nil
         let content = text
 
         let attachments = composerState.pendingAttachments
@@ -62,7 +67,7 @@ extension ConversationView {
             viewModel.stopTypingEmission()
             HapticFeedback.light()
             let lang = composerState.selectedLanguage
-            Task { await viewModel.sendMessage(content: content, replyToId: replyId, originalLanguage: lang) }
+            Task { await viewModel.sendMessage(content: content, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang) }
             return
         }
 
@@ -149,6 +154,7 @@ extension ConversationView {
                         content: content.isEmpty ? nil : content,
                         attachmentIds: uploadedIds,
                         replyToId: replyId,
+                        storyReplyToId: storyReplyId,
                         originalLanguage: lang
                     )
                     if let messageId {
@@ -156,7 +162,8 @@ extension ConversationView {
                             messageId: messageId,
                             content: content,
                             attachments: localAttachments,
-                            replyToId: replyId
+                            replyToId: replyId,
+                            replyReference: storyRef
                         )
                         sendSuccess = true
                     } else {
@@ -167,6 +174,8 @@ extension ConversationView {
                     sendSuccess = await viewModel.sendMessage(
                         content: content,
                         replyToId: replyId,
+                        storyReplyToId: storyReplyId,
+                        storyReplyReference: storyRef,
                         attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds,
                         localAttachments: localAttachments.isEmpty ? nil : localAttachments,
                         originalLanguage: lang
