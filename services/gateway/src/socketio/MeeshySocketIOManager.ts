@@ -1526,12 +1526,33 @@ export class MeeshySocketIOManager {
 
       const message = await this.prisma.message.findUnique({
         where: { id: reaction.targetMessageId },
-        select: { conversationId: true },
+        select: { conversationId: true, senderId: true },
       });
 
       if (message) {
         const normalizedConversationId = message.conversationId;
         this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
+
+        const authorParticipant = message.senderId
+          ? await this.prisma.participant.findUnique({
+              where: { id: message.senderId },
+              select: { userId: true },
+            })
+          : null;
+        const authorUserId = authorParticipant?.userId;
+        if (authorUserId && authorUserId !== reaction.asUserId) {
+          this.notificationService
+            .createReactionNotification({
+              messageAuthorId: authorUserId,
+              reactorUserId: reaction.asUserId,
+              messageId: reaction.targetMessageId,
+              conversationId: normalizedConversationId,
+              reactionEmoji: reaction.emoji,
+            })
+            .catch((error) => {
+              logger.error('[Agent] Reaction notification error:', error);
+            });
+        }
       }
 
       logger.info(`[Agent] Reaction sent — conv=${reaction.conversationId} user=${reaction.asUserId} emoji=${reaction.emoji} msg=${reaction.targetMessageId}`);
