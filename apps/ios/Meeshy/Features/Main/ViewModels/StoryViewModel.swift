@@ -88,15 +88,37 @@ class StoryViewModel: ObservableObject {
             let response = try await storyService.list(cursor: nil, limit: 50)
 
             if response.success {
-                let groups = response.data.toStoryGroups()
+                var groups = response.data.toStoryGroups()
+
+                // Preserve locally-viewed state for stories the API hasn't synced yet
+                let locallyViewed = buildLocallyViewedSet()
+                if !locallyViewed.isEmpty {
+                    groups = groups.map { group in
+                        let merged = group.stories.map { story in
+                            guard !story.isViewed, locallyViewed.contains(story.id) else { return story }
+                            var copy = story; copy.isViewed = true; return copy
+                        }
+                        return group.with(stories: merged)
+                    }
+                }
+
                 storyGroups = groups
                 await CacheCoordinator.shared.stories.save(groups, for: "recent_tray")
-                // Preload all media in background — zero latency when user opens a story
                 prefetchAllStoryMedia(groups)
             }
         } catch {
             Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
         }
+    }
+
+    private func buildLocallyViewedSet() -> Set<String> {
+        var ids = Set<String>()
+        for group in storyGroups {
+            for story in group.stories where story.isViewed {
+                ids.insert(story.id)
+            }
+        }
+        return ids
     }
 
     // MARK: - Background Prefetch (triggered on story load)

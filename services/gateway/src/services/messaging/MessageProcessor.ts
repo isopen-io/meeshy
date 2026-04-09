@@ -295,6 +295,7 @@ export class MessageProcessor {
     messageType?: string;
     messageSource?: string;
     replyToId?: string;
+    storyReplyToId?: string;
     forwardedFromId?: string;
     forwardedFromConversationId?: string;
     mentionedUserIds?: readonly string[];
@@ -347,6 +348,7 @@ export class MessageProcessor {
         messageType: data.messageType || 'text',
         messageSource: data.messageSource || 'user',
         replyToId: data.replyToId,
+        storyReplyToId: data.storyReplyToId || null,
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
         isEncrypted: encryptionContext.isEncrypted,

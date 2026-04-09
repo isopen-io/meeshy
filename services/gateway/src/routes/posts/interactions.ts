@@ -367,6 +367,38 @@ export function registerInteractionRoutes(
     }
   });
 
+  // GET /posts/:postId/interactions — Story viewers enriched with reactions & replies (author only)
+  fastify.get('/posts/:postId/interactions', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return reply.status(401).send({ success: false, error: 'Authentication required' });
+      }
+
+      const { postId } = request.params;
+      const query = request.query as any;
+      const limit = parseInt(query.limit) || 50;
+      const offset = parseInt(query.offset) || 0;
+
+      const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset);
+      if (!result) {
+        return reply.status(404).send({ success: false, error: 'Post not found' });
+      }
+
+      return sendSuccess(reply, { viewers: result.viewers }, {
+        pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'FORBIDDEN') {
+        return reply.status(403).send({ success: false, error: 'Only the author can view interactions' });
+      }
+      fastify.log.error(`[GET /posts/:postId/interactions] Error: ${error}`);
+      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   // POST /posts/:postId/repost
   fastify.post('/posts/:postId/repost', {
     preValidation: [requiredAuth],

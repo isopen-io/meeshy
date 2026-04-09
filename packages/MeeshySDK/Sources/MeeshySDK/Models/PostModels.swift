@@ -98,6 +98,7 @@ public struct APIPost: Decodable, Sendable {
     public let storyEffects: StoryEffects?
     public let translations: [String: APIPostTranslationEntry]?
     public let isLikedByMe: Bool?
+    public let isViewedByMe: Bool?
     public let mentionedUsers: [MentionedUser]?
     public let viaUsername: String?
 }

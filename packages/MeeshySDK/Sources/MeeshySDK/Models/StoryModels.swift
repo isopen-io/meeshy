@@ -747,7 +747,7 @@ extension Array where Element == APIPost {
                                  createdAt: post.createdAt, expiresAt: effectiveExpiresAt,
                                  repostOfId: post.repostOf?.id,
                                  repostAuthorName: post.repostOf?.author.name,
-                                 isViewed: false,
+                                 isViewed: post.isViewedByMe ?? false,
                                  translations: storyTranslations)
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing

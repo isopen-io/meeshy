@@ -195,7 +195,19 @@ export class PostFeedService {
       take: 50,
     });
 
-    return stories.map((s) => this.enrichWithLikeStatus(s, userId));
+    const storyIds = stories.map((s) => s.id);
+    const viewedRows = storyIds.length > 0
+      ? await this.prisma.postView.findMany({
+          where: { postId: { in: storyIds }, userId },
+          select: { postId: true },
+        })
+      : [];
+    const viewedSet = new Set(viewedRows.map((v) => v.postId));
+
+    return stories.map((s) => ({
+      ...this.enrichWithLikeStatus(s, userId),
+      isViewedByMe: viewedSet.has(s.id),
+    }));
   }
 
   async getStatuses(userId: string, cursor?: string, limit: number = 20) {
