@@ -2,8 +2,11 @@ import Foundation
 
 public final class StatsService: @unchecked Sendable {
     public static let shared = StatsService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func fetchStats() async throws -> UserStats {
         let response: APIResponse<UserStats> = try await api.request(endpoint: "/users/me/stats")

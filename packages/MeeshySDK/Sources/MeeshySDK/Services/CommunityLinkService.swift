@@ -2,9 +2,11 @@ import Foundation
 
 public final class CommunityLinkService: @unchecked Sendable {
     public static let shared = CommunityLinkService()
-    private let api = APIClient.shared
+    private let api: APIClientProviding
 
-    private init() {}
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     /// Retourne les communautés créées ou administrées par l'utilisateur,
     /// formatées comme des CommunityLinks (avec leur URL de partage).

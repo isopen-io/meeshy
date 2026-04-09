@@ -1,7 +1,6 @@
 import SwiftUI
 import MeeshySDK
 
-/// Toast in-app affiché quand une notification arrive via Socket.IO
 public struct NotificationToastView: View {
     public let event: SocketNotificationEvent
     public var onTap: (() -> Void)?
@@ -16,28 +15,78 @@ public struct NotificationToastView: View {
         self.onTap = onTap
     }
 
+    // MARK: - Author display
+
+    private var authorName: String {
+        event.senderDisplayName ?? event.senderUsername ?? event.title ?? "Meeshy"
+    }
+
+    private var authorInitials: String {
+        let name = authorName
+        let parts = name.split(separator: " ")
+        if parts.count >= 2 {
+            return "\(parts[0].prefix(1))\(parts[1].prefix(1))".uppercased()
+        }
+        return String(name.prefix(2)).uppercased()
+    }
+
+    private var authorColor: Color {
+        let hex = DynamicColorGenerator.colorForName(event.senderId ?? authorName)
+        return Color(hex: hex)
+    }
+
+    // MARK: - Body text
+
+    private var bodyText: String? {
+        if let label = event.attachmentLabel {
+            if let preview = event.messagePreview, !preview.isEmpty {
+                return "\(label) \u{2022} \(preview)"
+            }
+            return label
+        }
+        if let preview = event.messagePreview, !preview.isEmpty { return preview }
+        if !event.content.isEmpty { return event.content }
+        return nil
+    }
+
+    // MARK: - Conversation context (non-DM only)
+
+    private var conversationLabel: String? {
+        guard !event.isDirect, let title = event.conversationTitle, !title.isEmpty else { return nil }
+        return "dans \(title)"
+    }
+
+    // MARK: - Body
+
     public var body: some View {
         Button { onTap?() } label: {
-            HStack(spacing: 12) {
-                // Icon with accent background
+            HStack(spacing: 10) {
+                // Author avatar (initials circle)
                 Circle()
-                    .fill(accentColor.opacity(0.15))
-                    .frame(width: 40, height: 40)
+                    .fill(authorColor)
+                    .frame(width: 36, height: 36)
                     .overlay(
-                        Image(systemName: notifType.systemIcon)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(accentColor)
+                        Text(authorInitials)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
                     )
 
-                // Content
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(event.title ?? "Meeshy")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(authorName)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
 
-                    let body = event.messagePreview ?? (event.content.isEmpty ? nil : event.content)
-                    if let body {
+                        if let convLabel = conversationLabel {
+                            Text(convLabel)
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.textMuted)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    if let body = bodyText {
                         Text(body)
                             .font(.system(size: 12))
                             .foregroundColor(theme.textSecondary)

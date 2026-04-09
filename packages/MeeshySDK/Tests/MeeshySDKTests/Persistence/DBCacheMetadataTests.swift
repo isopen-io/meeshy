@@ -133,4 +133,91 @@ final class DBCacheMetadataTests: XCTestCase {
         let fetched = try db.read { try DBCacheMetadata.fetchOne($0, key: "participants:conv789") }
         XCTAssertNil(fetched)
     }
+
+    // MARK: - Pagination metadata (point 59)
+
+    func test_pagination_cursorProgression() throws {
+        let db = try makeDatabase()
+
+        var page1 = DBCacheMetadata(
+            key: "messages:conv-abc",
+            nextCursor: "cursor_page2",
+            hasMore: true,
+            totalCount: 100,
+            lastFetchedAt: Date()
+        )
+        try db.write { try page1.save($0) }
+
+        let fetched1 = try db.read { try DBCacheMetadata.fetchOne($0, key: "messages:conv-abc") }
+        XCTAssertEqual(fetched1?.nextCursor, "cursor_page2")
+        XCTAssertTrue(fetched1?.hasMore ?? false)
+
+        page1.nextCursor = "cursor_page3"
+        page1.totalCount = 100
+        try db.write { try page1.save($0) }
+
+        let fetched2 = try db.read { try DBCacheMetadata.fetchOne($0, key: "messages:conv-abc") }
+        XCTAssertEqual(fetched2?.nextCursor, "cursor_page3")
+    }
+
+    func test_pagination_lastPage_hasMoreFalse_cursorNil() throws {
+        let db = try makeDatabase()
+
+        var record = DBCacheMetadata(
+            key: "messages:conv-last",
+            nextCursor: nil,
+            hasMore: false,
+            totalCount: 25,
+            lastFetchedAt: Date()
+        )
+        try db.write { try record.save($0) }
+
+        let fetched = try db.read { try DBCacheMetadata.fetchOne($0, key: "messages:conv-last") }
+        XCTAssertNil(fetched?.nextCursor)
+        XCTAssertFalse(fetched?.hasMore ?? true)
+        XCTAssertEqual(fetched?.totalCount, 25)
+    }
+
+    func test_pagination_multipleKeys_independent() throws {
+        let db = try makeDatabase()
+
+        var meta1 = DBCacheMetadata(
+            key: "messages:conv-1",
+            nextCursor: "c1",
+            hasMore: true,
+            totalCount: 50,
+            lastFetchedAt: Date()
+        )
+        var meta2 = DBCacheMetadata(
+            key: "messages:conv-2",
+            nextCursor: "c2",
+            hasMore: false,
+            totalCount: 10,
+            lastFetchedAt: Date()
+        )
+
+        try db.write { db in
+            try meta1.save(db)
+            try meta2.save(db)
+        }
+
+        let f1 = try db.read { try DBCacheMetadata.fetchOne($0, key: "messages:conv-1") }
+        let f2 = try db.read { try DBCacheMetadata.fetchOne($0, key: "messages:conv-2") }
+
+        XCTAssertEqual(f1?.nextCursor, "c1")
+        XCTAssertTrue(f1?.hasMore ?? false)
+        XCTAssertEqual(f2?.nextCursor, "c2")
+        XCTAssertFalse(f2?.hasMore ?? true)
+    }
+
+    func test_isExpired_exactlyAtTTL_isExpired() throws {
+        let record = DBCacheMetadata(
+            key: "test",
+            nextCursor: nil,
+            hasMore: false,
+            totalCount: nil,
+            lastFetchedAt: Date().addingTimeInterval(-60)
+        )
+        XCTAssertTrue(record.isExpired(ttl: 60))
+    }
 }

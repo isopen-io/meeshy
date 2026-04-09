@@ -1,0 +1,96 @@
+<h2>Sous-filtres de l'onglet Contacts</h2>
+<p class="subtitle">Comment presenter les filtres ? Cliquez sur votre preference.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Chips scrollables horizontaux</h3>
+      <p>Bande de chips sous les tabs principaux, scrollable si besoin</p>
+      <div style="background:#09090B;border-radius:16px;padding:16px;margin-top:8px;">
+        <!-- Main tabs -->
+        <div style="display:flex;gap:0;border-bottom:1px solid #312E81;margin-bottom:12px;">
+          <div style="flex:1;text-align:center;padding:8px 0;color:#EEF2FF;font-size:13px;font-weight:600;border-bottom:2px solid #6366F1;">Contacts</div>
+          <div style="flex:1;text-align:center;padding:8px 0;color:#818CF8;font-size:13px;opacity:0.5;">Demandes</div>
+          <div style="flex:1;text-align:center;padding:8px 0;color:#818CF8;font-size:13px;opacity:0.5;">Decouvrir</div>
+          <div style="flex:1;text-align:center;padding:8px 0;color:#818CF8;font-size:13px;opacity:0.5;">Bloques</div>
+        </div>
+        <!-- Filter chips -->
+        <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;">
+          <span style="background:#6366F1;color:white;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;">Tous (24)</span>
+          <span style="background:#1E1B4B;color:#A5B4FC;padding:5px 14px;border-radius:20px;font-size:11px;white-space:nowrap;border:1px solid #312E81;">En ligne (5)</span>
+          <span style="background:#1E1B4B;color:#A5B4FC;padding:5px 14px;border-radius:20px;font-size:11px;white-space:nowrap;border:1px solid #312E81;">Hors ligne</span>
+          <span style="background:#1E1B4B;color:#A5B4FC;padding:5px 14px;border-radius:20px;font-size:11px;white-space:nowrap;border:1px solid #312E81;">Repertoire</span>
+          <span style="background:#1E1B4B;color:#A5B4FC;padding:5px 14px;border-radius:20px;font-size:11px;white-space:nowrap;border:1px solid #312E81;">Affilies</span>
+        </div>
+        <!-- Contact rows -->
+        <div style="display:flex;flex-direction:column;gap:2px;margin-top:8px;">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:#13111C;">
+            <div style="position:relative;">
+              <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#4338CA);display:flex;align-items:center;justify-content:center;color:white;font-size:15px;font-weight:bold;">JC</div>
+              <div style="position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;background:#34D399;border:2px solid #13111C;"></div>
+            </div>
+            <div style="flex:1;">
+              <div style="color:#EEF2FF;font-size:14px;font-weight:600;">Jean-Charles</div>
+              <div style="color:#818CF8;font-size:11px;opacity:0.7;">@jcharlesnm</div>
+            </div>
+            <div style="color:#34D399;font-size:10px;font-weight:500;">En ligne</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:#13111C;">
+            <div style="position:relative;">
+              <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#E91E63,#C2185B);display:flex;align-items:center;justify-content:center;color:white;font-size:15px;font-weight:bold;">SA</div>
+              <div style="position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;background:#64748b;border:2px solid #13111C;"></div>
+            </div>
+            <div style="flex:1;">
+              <div style="color:#EEF2FF;font-size:14px;font-weight:600;">Sarah Atkinson</div>
+              <div style="color:#818CF8;font-size:11px;opacity:0.7;">@sarah_atk</div>
+            </div>
+            <div style="color:#64748b;font-size:10px;">Vu il y a 3h</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Sections groupees avec headers</h3>
+      <p>Pas de chips — les contacts sont automatiquement groupes par section avec des headers sticky</p>
+      <div style="background:#09090B;border-radius:16px;padding:16px;margin-top:8px;">
+        <!-- Main tabs -->
+        <div style="display:flex;gap:0;border-bottom:1px solid #312E81;margin-bottom:12px;">
+          <div style="flex:1;text-align:center;padding:8px 0;color:#EEF2FF;font-size:13px;font-weight:600;border-bottom:2px solid #6366F1;">Contacts</div>
+          <div style="flex:1;text-align:center;padding:8px 0;color:#818CF8;font-size:13px;opacity:0.5;">Demandes</div>
+          <div style="flex:1;text-align:center;padding:8px 0;color:#818CF8;font-size:13px;opacity:0.5;">Decouvrir</div>
+          <div style="flex:1;text-align:center;padding:8px 0;color:#818CF8;font-size:13px;opacity:0.5;">Bloques</div>
+        </div>
+        <!-- Section: En ligne -->
+        <div style="color:#34D399;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:8px 4px 4px;">En ligne (3)</div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:#13111C;margin-bottom:2px;">
+          <div style="width:36px;height:36px;border-radius:50%;background:#6366F1;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;font-weight:bold;">JC</div>
+          <div style="flex:1;color:#EEF2FF;font-size:13px;font-weight:600;">Jean-Charles</div>
+          <div style="width:8px;height:8px;border-radius:50%;background:#34D399;"></div>
+        </div>
+        <!-- Section: Hors ligne -->
+        <div style="color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:12px 4px 4px;">Hors ligne (21)</div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:#13111C;margin-bottom:2px;">
+          <div style="width:36px;height:36px;border-radius:50%;background:#E91E63;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;font-weight:bold;">SA</div>
+          <div style="flex:1;color:#EEF2FF;font-size:13px;font-weight:600;">Sarah Atkinson</div>
+          <div style="color:#64748b;font-size:10px;">3h</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px;">
+  <h3>Recapitulatif tabs finaux</h3>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+    <span style="background:#6366F1;color:white;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;">Contacts</span>
+    <span style="background:#312E81;color:#A5B4FC;padding:6px 16px;border-radius:20px;font-size:13px;">Demandes</span>
+    <span style="background:#312E81;color:#A5B4FC;padding:6px 16px;border-radius:20px;font-size:13px;">Decouvrir</span>
+    <span style="background:#312E81;color:#A5B4FC;padding:6px 16px;border-radius:20px;font-size:13px;">Bloques</span>
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin-top:8px;">4 onglets avec sous-filtres dans Contacts</p>
+</div>

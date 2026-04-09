@@ -672,7 +672,7 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendComment(text: String) {
+    func sendComment(text: String, effectFlags: Int? = nil) {
         guard !text.isEmpty, let story = currentStory else { return }
 
         // Optimistic local insert
@@ -684,14 +684,18 @@ extension StoryViewerView {
             authorUsername: currentUser?.username,
             authorAvatarURL: currentUser?.avatar,
             content: text,
-            originalLanguage: currentUser?.systemLanguage
+            originalLanguage: currentUser?.systemLanguage,
+            effectFlags: effectFlags ?? 0
         )
         storyComments.append(optimisticComment)
         storyCommentCount += 1
 
         // Send to API
         Task {
-            let body: [String: String] = ["content": text]
+            var body: [String: AnyCodable] = ["content": AnyCodable(text)]
+            if let effectFlags {
+                body["effectFlags"] = AnyCodable(effectFlags)
+            }
             let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
                 endpoint: "/posts/\(story.id)/comments",
                 body: body

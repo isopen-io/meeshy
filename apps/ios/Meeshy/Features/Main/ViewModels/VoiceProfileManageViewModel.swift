@@ -10,9 +10,9 @@ final class VoiceProfileManageViewModel: ObservableObject {
     @Published var isCloningEnabled = false
     @Published var error: String?
 
-    private let service: VoiceProfileService
+    private let service: VoiceProfileServiceProviding
 
-    init(service: VoiceProfileService = .shared) {
+    init(service: VoiceProfileServiceProviding = VoiceProfileService.shared) {
         self.service = service
     }
 

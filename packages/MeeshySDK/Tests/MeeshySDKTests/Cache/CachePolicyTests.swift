@@ -92,4 +92,49 @@ final class CachePolicyTests: XCTestCase {
         let result = policy.freshness(age: 4000)
         XCTAssertEqual(result, .expired)
     }
+
+    // MARK: - TTL edge cases (point 45 extras)
+
+    func test_freshness_zeroAge_isFresh() {
+        let policy = CachePolicy(ttl: 3600, staleTTL: 300, maxItemCount: nil, storageLocation: .grdb)
+        XCTAssertEqual(policy.freshness(age: 0), .fresh)
+    }
+
+    func test_freshness_noStaleTTL_atExactTTL_isExpired() {
+        let policy = CachePolicy(ttl: 3600, staleTTL: nil, maxItemCount: nil, storageLocation: .grdb)
+        XCTAssertEqual(policy.freshness(age: 3600), .expired)
+    }
+
+    func test_freshness_noStaleTTL_justUnderTTL_isFresh() {
+        let policy = CachePolicy(ttl: 3600, staleTTL: nil, maxItemCount: nil, storageLocation: .grdb)
+        XCTAssertEqual(policy.freshness(age: 3599.9), .fresh)
+    }
+
+    func test_freshness_verySmallTTL() {
+        let policy = CachePolicy(ttl: 0.001, staleTTL: nil, maxItemCount: nil, storageLocation: .grdb)
+        XCTAssertEqual(policy.freshness(age: 0.0001), .fresh)
+        XCTAssertEqual(policy.freshness(age: 0.01), .expired)
+    }
+
+    func test_freshness_staleTTLZero_alwaysStaleUntilExpired() {
+        let policy = CachePolicy(ttl: 3600, staleTTL: 0, maxItemCount: nil, storageLocation: .grdb)
+        // age 0 is not < staleTTL (0), so it should be stale
+        XCTAssertEqual(policy.freshness(age: 0), .stale)
+        XCTAssertEqual(policy.freshness(age: 1800), .stale)
+        XCTAssertEqual(policy.freshness(age: 3600), .expired)
+    }
+
+    func test_predefined_feedPosts() {
+        let p = CachePolicy.feedPosts
+        XCTAssertEqual(p.ttl, TimeInterval.hours(6))
+        XCTAssertEqual(p.staleTTL, TimeInterval.minutes(2))
+        XCTAssertEqual(p.maxItemCount, 100)
+    }
+
+    func test_predefined_notifications() {
+        let p = CachePolicy.notifications
+        XCTAssertEqual(p.ttl, TimeInterval.hours(24))
+        XCTAssertEqual(p.staleTTL, TimeInterval.minutes(2))
+        XCTAssertEqual(p.maxItemCount, 200)
+    }
 }

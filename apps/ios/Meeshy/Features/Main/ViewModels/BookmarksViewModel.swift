@@ -8,6 +8,11 @@ class BookmarksViewModel: ObservableObject {
     @Published var hasMore = true
 
     private var nextCursor: String?
+    private let postService: PostServiceProviding
+
+    init(postService: PostServiceProviding = PostService.shared) {
+        self.postService = postService
+    }
 
     private var preferredLanguages: [String] {
         AuthManager.shared.currentUser?.preferredContentLanguages ?? []
@@ -38,7 +43,7 @@ class BookmarksViewModel: ObservableObject {
 
     private func fetchBookmarksFromNetwork() async {
         do {
-            let response = try await PostService.shared.getBookmarks(cursor: nextCursor)
+            let response = try await postService.getBookmarks(cursor: nextCursor, limit: 20)
             let newPosts = response.data.map { $0.toFeedPost(preferredLanguages: preferredLanguages) }
             let existingIds = Set(posts.map(\.id))
             let unique = newPosts.filter { !existingIds.contains($0.id) }
@@ -58,7 +63,7 @@ class BookmarksViewModel: ObservableObject {
         let snapshot = posts
         posts.removeAll { $0.id == postId }
         do {
-            try await PostService.shared.removeBookmark(postId: postId)
+            try await postService.removeBookmark(postId: postId)
             await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
         } catch {
             posts = snapshot

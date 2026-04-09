@@ -2,8 +2,11 @@ import Foundation
 
 public final class NotificationService: @unchecked Sendable {
     public static let shared = NotificationService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func list(offset: Int = 0, limit: Int = 20, unreadOnly: Bool = false) async throws -> NotificationListResponse {
         var queryItems = [

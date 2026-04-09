@@ -13,8 +13,11 @@ public protocol FriendServiceProviding: Sendable {
 
 public final class FriendService: FriendServiceProviding, @unchecked Sendable {
     public static let shared = FriendService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     // MARK: - Send Friend Request
 

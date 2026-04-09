@@ -259,4 +259,97 @@ final class GRDBCacheStoreTests: XCTestCase {
             XCTFail("Expected .stale or .expired but got \(result)")
         }
     }
+
+    // MARK: - L1 eviction ordering
+
+    func test_lru_evictsLeastRecentlyUsed_notMostRecent() async throws {
+        let db = try makeDB()
+        let store = try makeStore(maxL1Keys: 3, db: db)
+
+        await store.save([CacheTestItem(id: "1", name: "A")], for: "k1")
+        await store.save([CacheTestItem(id: "2", name: "B")], for: "k2")
+        await store.save([CacheTestItem(id: "3", name: "C")], for: "k3")
+
+        // Touch k1 to make it recently used
+        _ = await store.load(for: "k1")
+
+        // Adding k4 should evict k2 (least recently used), not k1
+        await store.save([CacheTestItem(id: "4", name: "D")], for: "k4")
+
+        let loadedKeys = await store.loadedKeys()
+        XCTAssertTrue(loadedKeys.contains("k1"), "k1 should remain in L1 (recently accessed)")
+        XCTAssertFalse(loadedKeys.contains("k2"), "k2 should be evicted from L1 (LRU)")
+        XCTAssertTrue(loadedKeys.contains("k3"), "k3 should remain in L1")
+        XCTAssertTrue(loadedKeys.contains("k4"), "k4 should be in L1 (just added)")
+
+        // k2 should still be loadable from L2
+        let k2Result = await store.load(for: "k2")
+        XCTAssertNotNil(k2Result.value, "Evicted key should still be loadable from L2")
+    }
+
+    func test_lru_multipleSaves_evictsMultipleOldEntries() async throws {
+        let db = try makeDB()
+        let store = try makeStore(maxL1Keys: 2, db: db)
+
+        await store.save([CacheTestItem(id: "1", name: "A")], for: "a")
+        await store.save([CacheTestItem(id: "2", name: "B")], for: "b")
+        await store.save([CacheTestItem(id: "3", name: "C")], for: "c")
+        await store.save([CacheTestItem(id: "4", name: "D")], for: "d")
+
+        let loadedKeys = await store.loadedKeys()
+        XCTAssertEqual(loadedKeys.count, 2, "Only maxL1Keys entries should remain in L1")
+
+        // All entries should be loadable from L2
+        for key in ["a", "b", "c", "d"] {
+            let result = await store.load(for: key)
+            XCTAssertNotNil(result.value, "Key '\(key)' should be loadable from L2")
+        }
+    }
+
+    // MARK: - Concurrent access
+
+    func test_concurrentSaveAndLoad_doesNotCrash() async throws {
+        let db = try makeDB()
+        let store = try makeStore(maxL1Keys: 5, db: db)
+
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<20 {
+                group.addTask {
+                    let item = CacheTestItem(id: "\(i)", name: "Item \(i)")
+                    await store.save([item], for: "concurrent-\(i % 5)")
+                }
+                group.addTask {
+                    _ = await store.load(for: "concurrent-\(i % 5)")
+                }
+            }
+        }
+
+        // If we get here without crash, the test passes.
+        // Verify at least some data is accessible
+        let result = await store.load(for: "concurrent-0")
+        XCTAssertNotNil(result.value)
+    }
+
+    func test_concurrentUpdatesAndFlush_doesNotCrash() async throws {
+        let db = try makeDB()
+        let store = try makeStore(db: db)
+
+        await store.save([CacheTestItem(id: "1", name: "Initial")], for: "shared")
+
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<10 {
+                group.addTask {
+                    await store.update(for: "shared") { items in
+                        items + [CacheTestItem(id: "extra-\(i)", name: "Extra \(i)")]
+                    }
+                }
+            }
+            group.addTask {
+                await store.flushDirtyKeys()
+            }
+        }
+
+        let result = await store.load(for: "shared")
+        XCTAssertNotNil(result.value)
+    }
 }

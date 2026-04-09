@@ -207,6 +207,128 @@ final class DeepLinkParserTests: XCTestCase {
             return
         }
     }
+
+    // MARK: - Edge Cases: Malformed URLs
+
+    func test_parse_customScheme_emptyPath_returnsExternal() {
+        let url = URL(string: "meeshy://")!
+        let result = DeepLinkParser.parse(url)
+        guard case .external = result else {
+            XCTFail("Expected .external for empty meeshy:// path, got \(result)")
+            return
+        }
+    }
+
+    func test_parse_customScheme_userProfile_emptyUsername_returnsExternal() {
+        let url = URL(string: "meeshy://u/")!
+        let result = DeepLinkParser.parse(url)
+        guard case .external = result else {
+            XCTFail("Expected .external for empty username, got \(result)")
+            return
+        }
+    }
+
+    func test_parse_customScheme_conversation_emptyId_returnsExternal() {
+        let url = URL(string: "meeshy://c/")!
+        let result = DeepLinkParser.parse(url)
+        guard case .external = result else {
+            XCTFail("Expected .external for empty conversation id, got \(result)")
+            return
+        }
+    }
+
+    func test_parse_customScheme_share_noParams_returnsShare() {
+        let url = URL(string: "meeshy://share")!
+        let result = DeepLinkParser.parse(url)
+        guard case .share(let text, let urlString) = result else {
+            XCTFail("Expected .share, got \(result)")
+            return
+        }
+        XCTAssertNil(text)
+        XCTAssertNil(urlString)
+    }
+
+    func test_parse_customScheme_specialCharacters_inUsername() {
+        let url = URL(string: "meeshy://u/user%20name%40test")!
+        let result = DeepLinkParser.parse(url)
+        guard case .userProfile(let username) = result else {
+            XCTFail("Expected .userProfile, got \(result)")
+            return
+        }
+        XCTAssertEqual(username, "user name@test")
+    }
+
+    func test_parse_magicLink_emptyToken_returnsMagicLinkWithEmptyString() {
+        let url = URL(string: "meeshy://auth/magic-link?token=")!
+        let result = DeepLinkParser.parse(url)
+        guard case .magicLink(let token) = result else {
+            XCTFail("Expected .magicLink with empty token, got \(result)")
+            return
+        }
+        XCTAssertEqual(token, "")
+    }
+
+    // MARK: - Universal Links (https://meeshy.me)
+
+    func test_parse_universalLink_userProfile_returnsUsername() {
+        let url = URL(string: "https://meeshy.me/u/testuser123")!
+        let result = DeepLinkParser.parse(url)
+        guard case .userProfile(let username) = result else {
+            XCTFail("Expected .userProfile, got \(result)")
+            return
+        }
+        XCTAssertEqual(username, "testuser123")
+    }
+
+    func test_parse_universalLink_conversation_returnsId() {
+        let url = URL(string: "https://meeshy.me/c/60d0fe4f5311236168a109ca")!
+        let result = DeepLinkParser.parse(url)
+        guard case .conversation(let id) = result else {
+            XCTFail("Expected .conversation, got \(result)")
+            return
+        }
+        XCTAssertEqual(id, "60d0fe4f5311236168a109ca")
+    }
+
+    func test_parse_universalLink_magic_returnsToken() {
+        let url = URL(string: "https://meeshy.me/auth/magic-link?token=abcdef123456")!
+        let result = DeepLinkParser.parse(url)
+        guard case .magicLink(let token) = result else {
+            XCTFail("Expected .magicLink, got \(result)")
+            return
+        }
+        XCTAssertEqual(token, "abcdef123456")
+    }
+
+    func test_parse_universalLink_appSubdomain_conversation() {
+        let url = URL(string: "https://app.meeshy.me/c/conv999")!
+        let result = DeepLinkParser.parse(url)
+        guard case .conversation(let id) = result else {
+            XCTFail("Expected .conversation, got \(result)")
+            return
+        }
+        XCTAssertEqual(id, "conv999")
+    }
+
+    func test_parse_universalLink_unknownSubpath_returnsExternal() {
+        let url = URL(string: "https://meeshy.me/unknown/deep/path")!
+        let result = DeepLinkParser.parse(url)
+        guard case .external = result else {
+            XCTFail("Expected .external, got \(result)")
+            return
+        }
+    }
+
+    func test_parse_webUrl_share_urlOnly() {
+        let url = URL(string: "https://meeshy.me/share?url=https://example.com/page")!
+        let result = DeepLinkParser.parse(url)
+        guard case .share(let text, let urlString) = result else {
+            XCTFail("Expected .share, got \(result)")
+            return
+        }
+        XCTAssertNil(text)
+        XCTAssertEqual(urlString, "https://example.com/page")
+    }
 }
 
 // MARK: - DeepLinkRouter Tests

@@ -50,6 +50,9 @@ struct StoryViewerView: View {
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var emojiToInject = ""
     @State private var composerFocusTrigger = false
+    @State private var composerLanguage: String = "fr"
+    @State private var commentBlurEnabled: Bool = false
+    @State private var commentEffects: MessageEffects = .none
     @State var showLanguageOptions = false // internal for cross-file extension access
     @State var showFullLanguagePicker = false // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()
@@ -810,8 +813,19 @@ struct StoryViewerView: View {
     private var storyComposerBar: some View {
         UniversalComposerBar(
             style: .dark,
-            placeholder: "Commenter...",
-            onSend: { text in sendComment(text: text) },
+            mode: .comment,
+            accentColor: currentGroup?.avatarColor ?? "6366F1",
+            selectedLanguage: composerLanguage,
+            onLanguageChange: { composerLanguage = $0 },
+            onSend: { text in
+                let effects = commentEffects
+                let blur = commentBlurEnabled
+                commentEffects = .none
+                commentBlurEnabled = false
+                let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+                let effectFlags = flags > 0 ? Int(flags) : nil
+                sendComment(text: text, effectFlags: effectFlags)
+            },
             onFocusChange: { focused in
                 if focused {
                     isComposerEngaged = true
@@ -857,6 +871,8 @@ struct StoryViewerView: View {
             onAnyInteraction: {
                 // No-op: shouldPauseTimer handles all pause logic based on UI state
             },
+            isBlurEnabled: $commentBlurEnabled,
+            pendingEffects: $commentEffects,
             focusTrigger: $composerFocusTrigger,
             onRecordingChange: { recording in
                 isComposerEngaged = recording

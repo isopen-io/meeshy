@@ -29,6 +29,8 @@ final class MockAuthManager: AuthManaging {
     var logoutCallCount = 0
     var checkExistingSessionCallCount = 0
     var handleUnauthorizedCallCount = 0
+    var removeSavedAccountCallCount = 0
+    var lastRemovedSavedAccountUserId: String?
 
     // MARK: - Stubbed Results
 
@@ -90,6 +92,12 @@ final class MockAuthManager: AuthManaging {
         authToken = nil
     }
 
+    func removeSavedAccount(userId: String) {
+        removeSavedAccountCallCount += 1
+        lastRemovedSavedAccountUserId = userId
+        savedAccounts.removeAll { $0.id == userId }
+    }
+
     // MARK: - Test Helpers
 
     func simulateLoggedIn(user: MeeshyUser, token: String = "mock-token") {
@@ -120,6 +128,8 @@ final class MockAuthManager: AuthManaging {
         logoutCallCount = 0
         checkExistingSessionCallCount = 0
         handleUnauthorizedCallCount = 0
+        removeSavedAccountCallCount = 0
+        lastRemovedSavedAccountUserId = nil
         magicLinkResult = true
         passwordResetResult = true
         loginError = nil

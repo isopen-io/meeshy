@@ -4,11 +4,13 @@ import Foundation
 
 public final class TrackingLinkService: @unchecked Sendable {
     public static let shared = TrackingLinkService()
-    private let api = APIClient.shared
+    private let api: APIClientProviding
 
-    private init() {}
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
-    private struct TrackingLinksData: Decodable {
+    struct TrackingLinksData: Decodable {
         let trackingLinks: [TrackingLink]
     }
 

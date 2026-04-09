@@ -529,4 +529,61 @@ final class StatusViewModelTests: XCTestCase {
 
         XCTAssertNil(handler, "Should return nil when no status exists for the user")
     }
+
+    // MARK: - Status Lifecycle Tests (Point 85)
+
+    func test_publishStatus_success_addsToList() async {
+        let createdPost = Self.makeStatusAPIPost(id: "new-pub", content: "Published", moodEmoji: "\u{1F60A}", authorId: "me")
+        mockStatusService.createResult = .success(createdPost)
+
+        await sut.setStatus(emoji: "\u{1F60A}", content: "Published")
+
+        XCTAssertNotNil(sut.myStatus)
+        XCTAssertEqual(sut.myStatus?.moodEmoji, "\u{1F60A}")
+        XCTAssertFalse(sut.statuses.isEmpty, "Status should be added to the list")
+        XCTAssertEqual(sut.statuses.first?.content, "Published")
+    }
+
+    func test_updateStatus_success_modifiesInList() async {
+        // First create a status
+        let initialPost = Self.makeStatusAPIPost(id: "update-target", content: "Initial", moodEmoji: "\u{1F60A}", authorId: "me")
+        mockStatusService.createResult = .success(initialPost)
+        await sut.setStatus(emoji: "\u{1F60A}", content: "Initial")
+        XCTAssertEqual(sut.myStatus?.content, "Initial")
+
+        // Simulate socket update modifying the status
+        sut.subscribeToSocketEvents()
+
+        let updatedPost = Self.makeStatusAPIPost(
+            id: "update-target",
+            content: "Modified content",
+            moodEmoji: "\u{1F525}",
+            authorId: "me"
+        )
+        mockSocket.statusUpdated.send(updatedPost)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.statuses.count, 1)
+        XCTAssertEqual(sut.statuses[0].content, "Modified content")
+    }
+
+    func test_deleteStatus_success_removesFromList() async {
+        // First set a status
+        let createdPost = Self.makeStatusAPIPost(id: "delete-target", content: "To delete", moodEmoji: "\u{1F389}", authorId: "me")
+        mockStatusService.createResult = .success(createdPost)
+        await sut.setStatus(emoji: "\u{1F389}", content: "To delete")
+        XCTAssertEqual(sut.statuses.count, 1)
+
+        // Set the myStatus so clearStatus works
+        let entry = makeStatusEntry(id: "delete-target", userId: "me")
+        sut.myStatus = entry
+        sut.statuses = [entry]
+
+        await sut.clearStatus()
+
+        XCTAssertNil(sut.myStatus)
+        XCTAssertTrue(sut.statuses.isEmpty, "Status should be removed from the list")
+        XCTAssertEqual(mockStatusService.deleteCallCount, 1)
+    }
 }

@@ -456,4 +456,35 @@ final class StoryViewModelTests: XCTestCase {
         sut.cancelUpload()
         XCTAssertNil(sut.activeUpload)
     }
+
+    // MARK: - Publish Story Tests (Point 84)
+
+    func test_publishStory_multiSlides_callsService() async {
+        mockAPI.authToken = "token"
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost(id: "multi-slide-story"))
+
+        sut.publishStoryInBackground(
+            slides: [StorySlide(), StorySlide(), StorySlide()],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:]
+        )
+
+        XCTAssertNotNil(sut.activeUpload, "Should start an upload for multi-slide story")
+        XCTAssertFalse(sut.showStoryComposer, "Composer should close when publishing starts")
+    }
+
+    func test_publishError_setsError() async {
+        mockAPI.authToken = "token"
+        mockPostService.createStoryResult = .failure(APIError.networkError(URLError(.timedOut)))
+
+        await sut.publishStory(
+            effects: StoryEffects(),
+            content: "Error story",
+            image: nil
+        )
+
+        XCTAssertNotNil(sut.publishError)
+        XCTAssertFalse(sut.isPublishing)
+    }
 }

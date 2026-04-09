@@ -162,4 +162,92 @@ final class OfflineQueueTests: XCTestCase {
         let count = await queue.count
         XCTAssertEqual(count, 1)
     }
+
+    // MARK: - Advanced queue operations (point 47)
+
+    func test_pendingItems_preservesFIFO_afterDequeue() async {
+        let item1 = OfflineQueueItem(conversationId: "conv-1", content: "First")
+        let item2 = OfflineQueueItem(conversationId: "conv-1", content: "Second")
+        let item3 = OfflineQueueItem(conversationId: "conv-1", content: "Third")
+
+        await queue.enqueue(item1)
+        await queue.enqueue(item2)
+        await queue.enqueue(item3)
+
+        // Dequeue middle item
+        await queue.dequeue(item2.id)
+
+        let pending = await queue.pendingItems
+        XCTAssertEqual(pending.count, 2)
+        XCTAssertEqual(pending[0].content, "First")
+        XCTAssertEqual(pending[1].content, "Third")
+    }
+
+    func test_pendingItems_preservesAllMetadata() async {
+        let item = OfflineQueueItem(
+            conversationId: "conv-123",
+            content: "Test with metadata",
+            replyToId: "reply-1",
+            forwardedFromId: "fwd-1",
+            forwardedFromConversationId: "fwd-conv-1",
+            attachmentIds: ["att-1", "att-2"]
+        )
+
+        await queue.enqueue(item)
+
+        let pending = await queue.pendingItems
+        XCTAssertEqual(pending.count, 1)
+        let retrieved = pending[0]
+        XCTAssertEqual(retrieved.id, item.id)
+        XCTAssertEqual(retrieved.conversationId, "conv-123")
+        XCTAssertEqual(retrieved.content, "Test with metadata")
+        XCTAssertEqual(retrieved.replyToId, "reply-1")
+        XCTAssertEqual(retrieved.forwardedFromId, "fwd-1")
+        XCTAssertEqual(retrieved.forwardedFromConversationId, "fwd-conv-1")
+        XCTAssertEqual(retrieved.attachmentIds, ["att-1", "att-2"])
+    }
+
+    func test_clearAll_thenEnqueue_worksNormally() async {
+        await queue.enqueue(OfflineQueueItem(conversationId: "conv-1", content: "Before clear"))
+        await queue.clearAll()
+
+        await queue.enqueue(OfflineQueueItem(conversationId: "conv-2", content: "After clear"))
+
+        let count = await queue.count
+        XCTAssertEqual(count, 1)
+        let pending = await queue.pendingItems
+        XCTAssertEqual(pending.first?.content, "After clear")
+    }
+
+    func test_dequeue_allItems_makesQueueEmpty() async {
+        let item1 = OfflineQueueItem(conversationId: "conv-1", content: "A")
+        let item2 = OfflineQueueItem(conversationId: "conv-1", content: "B")
+
+        await queue.enqueue(item1)
+        await queue.enqueue(item2)
+
+        await queue.dequeue(item1.id)
+        await queue.dequeue(item2.id)
+
+        let isEmpty = await queue.isEmpty
+        XCTAssertTrue(isEmpty)
+        let count = await queue.count
+        XCTAssertEqual(count, 0)
+    }
+
+    func test_enqueue_multipleConversations_preservesOrder() async {
+        let items = (1...5).map { i in
+            OfflineQueueItem(conversationId: "conv-\(i)", content: "Message \(i)")
+        }
+
+        for item in items {
+            await queue.enqueue(item)
+        }
+
+        let pending = await queue.pendingItems
+        XCTAssertEqual(pending.count, 5)
+        for (index, item) in pending.enumerated() {
+            XCTAssertEqual(item.conversationId, "conv-\(index + 1)")
+        }
+    }
 }

@@ -65,4 +65,59 @@ final class DraftStoreTests: XCTestCase {
         sut.save("Draft", for: "conv1")
         XCTAssertTrue(sut.hasDraft(for: "conv1"))
     }
+
+    // MARK: - Overwrite
+
+    func test_save_overwritesExistingDraft() {
+        let sut = makeSUT()
+        sut.save("First", for: "conv1")
+        sut.save("Second", for: "conv1")
+        XCTAssertEqual(sut.load(for: "conv1"), "Second")
+    }
+
+    // MARK: - Remove Non-Existent
+
+    func test_remove_nonExistentConversation_doesNotCrash() {
+        let sut = makeSUT()
+        sut.remove(for: "doesNotExist")
+        XCTAssertEqual(sut.load(for: "doesNotExist"), "")
+    }
+
+    // MARK: - Clear All Isolation
+
+    func test_clearAll_doesNotAffectOtherUserDefaultsKeys() {
+        let defaults = UserDefaults(suiteName: "DraftStoreTests")!
+        defaults.set("preserved", forKey: "other_key")
+        let sut = DraftStore(userDefaults: defaults)
+        sut.save("Draft", for: "conv1")
+        sut.clearAll()
+        XCTAssertEqual(defaults.string(forKey: "other_key"), "preserved")
+        defaults.removeObject(forKey: "other_key")
+    }
+
+    // MARK: - Has Draft After Remove
+
+    func test_hasDraft_afterRemove_returnsFalse() {
+        let sut = makeSUT()
+        sut.save("Draft", for: "conv1")
+        sut.remove(for: "conv1")
+        XCTAssertFalse(sut.hasDraft(for: "conv1"))
+    }
+
+    // MARK: - Preserves Whitespace In Content
+
+    func test_save_preservesInternalWhitespace() {
+        let sut = makeSUT()
+        sut.save("Hello   world", for: "conv1")
+        XCTAssertEqual(sut.load(for: "conv1"), "Hello   world")
+    }
+
+    // MARK: - Newlines
+
+    func test_save_newlinesOnly_removesDraft() {
+        let sut = makeSUT()
+        sut.save("Draft", for: "conv1")
+        sut.save("\n\n\n", for: "conv1")
+        XCTAssertEqual(sut.load(for: "conv1"), "")
+    }
 }

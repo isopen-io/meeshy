@@ -1,0 +1,74 @@
+<h2>Structure des onglets — Hub Contacts</h2>
+<p class="subtitle">Quels onglets et dans quel ordre ? Cliquez sur votre preference.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>4 onglets — Complet</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
+        <span style="background:#6366F1;color:white;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;">Contacts</span>
+        <span style="background:#334155;color:#94a3b8;padding:4px 12px;border-radius:20px;font-size:13px;">Demandes</span>
+        <span style="background:#334155;color:#94a3b8;padding:4px 12px;border-radius:20px;font-size:13px;">Inviter</span>
+        <span style="background:#334155;color:#94a3b8;padding:4px 12px;border-radius:20px;font-size:13px;">Bloques</span>
+      </div>
+      <p><strong>Contacts</strong> = amis acceptes (online first, avec presence)<br>
+      <strong>Demandes</strong> = recues + envoyees (sous-filtre)<br>
+      <strong>Inviter</strong> = email, SMS, contact device<br>
+      <strong>Bloques</strong> = liste des bloques + debloquer</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>3 onglets — Bloques dans Settings</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
+        <span style="background:#6366F1;color:white;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;">Contacts</span>
+        <span style="background:#334155;color:#94a3b8;padding:4px 12px;border-radius:20px;font-size:13px;">Demandes</span>
+        <span style="background:#334155;color:#94a3b8;padding:4px 12px;border-radius:20px;font-size:13px;">Inviter</span>
+      </div>
+      <p><strong>Contacts</strong> = amis acceptes (online first)<br>
+      <strong>Demandes</strong> = recues + envoyees (sous-filtre)<br>
+      <strong>Inviter</strong> = email, SMS, contact device<br>
+      <em>Bloques reste dans Parametres (moins frequent)</em></p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>3 onglets — Inviter integre</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
+        <span style="background:#6366F1;color:white;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;">Contacts</span>
+        <span style="background:#334155;color:#94a3b8;padding:4px 12px;border-radius:20px;font-size:13px;">Demandes</span>
+        <span style="background:#334155;color:#94a3b8;padding:4px 12px;border-radius:20px;font-size:13px;">Decouvrir</span>
+      </div>
+      <p><strong>Contacts</strong> = amis acceptes (online first)<br>
+      <strong>Demandes</strong> = recues + envoyees (sous-filtre avec badges)<br>
+      <strong>Decouvrir</strong> = inviter (email/SMS) + recherche utilisateurs<br>
+      <em>Bloques dans Parametres, inviter et recherche fusionnes</em></p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>Detail de l'onglet "Demandes" (commun a toutes les options)</h3>
+  <div style="background:#1e1b4b;border-radius:12px;padding:16px;margin-top:8px;">
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <span style="background:#6366F1;color:white;padding:4px 16px;border-radius:16px;font-size:12px;font-weight:600;">Recues (3)</span>
+      <span style="background:#312E81;color:#A5B4FC;padding:4px 16px;border-radius:16px;font-size:12px;">Envoyees (1)</span>
+    </div>
+    <div style="background:#13111C;border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px;">
+      <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#4338CA);display:flex;align-items:center;justify-content:center;color:white;font-size:14px;font-weight:bold;">JC</div>
+      <div style="flex:1;">
+        <div style="color:#EEF2FF;font-size:13px;font-weight:600;">Jean-Charles</div>
+        <div style="color:#818CF8;font-size:11px;">@jcharlesnm &middot; Il y a 2h</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;">&#10005;</div>
+        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#34D399,#10B981);display:flex;align-items:center;justify-content:center;color:white;font-size:12px;">&#10003;</div>
+      </div>
+    </div>
+  </div>
+</div>

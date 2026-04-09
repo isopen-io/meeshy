@@ -130,4 +130,74 @@ final class AppDatabaseMigrationTests: XCTestCase {
         }
         XCTAssertEqual(fetched?.encodedData, Data("new".utf8))
     }
+
+    // MARK: - CacheEntry delete (point 58)
+
+    func test_cacheEntry_deleteByKey() throws {
+        let db = try migratedDatabase()
+        let now = Date()
+
+        try db.write { db in
+            try CacheEntry(key: "messages", itemId: "m1", encodedData: Data("a".utf8), updatedAt: now).save(db)
+            try CacheEntry(key: "messages", itemId: "m2", encodedData: Data("b".utf8), updatedAt: now).save(db)
+            try CacheEntry(key: "other", itemId: "o1", encodedData: Data("c".utf8), updatedAt: now).save(db)
+        }
+
+        try db.write { db in
+            try CacheEntry.filter(Column("key") == "messages").deleteAll(db)
+        }
+
+        let messagesCount = try db.read { db in
+            try CacheEntry.filter(Column("key") == "messages").fetchCount(db)
+        }
+        XCTAssertEqual(messagesCount, 0)
+
+        let otherCount = try db.read { db in
+            try CacheEntry.filter(Column("key") == "other").fetchCount(db)
+        }
+        XCTAssertEqual(otherCount, 1, "Other keys should be unaffected")
+    }
+
+    func test_cacheEntry_updateEncodedData() throws {
+        let db = try migratedDatabase()
+        let now = Date()
+
+        try db.write { db in
+            try CacheEntry(key: "test", itemId: "item1", encodedData: Data("original".utf8), updatedAt: now).save(db)
+        }
+
+        let later = now.addingTimeInterval(30)
+        try db.write { db in
+            try CacheEntry(key: "test", itemId: "item1", encodedData: Data("updated".utf8), updatedAt: later).save(db)
+        }
+
+        let fetched = try db.read { db in
+            try CacheEntry.filter(Column("key") == "test" && Column("itemId") == "item1").fetchOne(db)
+        }
+        XCTAssertEqual(fetched?.encodedData, Data("updated".utf8))
+    }
+
+    // MARK: - v4 migration (point 56 — all migrations)
+
+    func test_v4Migration_dropsLegacyTables() throws {
+        let db = try migratedDatabase()
+        try db.read { db in
+            XCTAssertFalse(try db.tableExists("conversations"), "conversations table should be dropped after v4")
+            XCTAssertFalse(try db.tableExists("messages"), "messages table should be dropped after v4")
+        }
+    }
+
+    func test_allMigrations_cacheEntriesAndMetadataCoexist() throws {
+        let db = try migratedDatabase()
+        try db.read { db in
+            XCTAssertTrue(try db.tableExists("cache_entries"))
+            XCTAssertTrue(try db.tableExists("cache_metadata"))
+        }
+    }
+
+    func test_migrations_runIdempotently() throws {
+        let db1 = try migratedDatabase()
+        // Running migrations again on the same db should not error
+        XCTAssertNoThrow(try AppDatabase.runMigrations(on: db1))
+    }
 }

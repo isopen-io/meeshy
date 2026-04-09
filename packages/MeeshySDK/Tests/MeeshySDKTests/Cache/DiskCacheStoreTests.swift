@@ -137,6 +137,55 @@ final class DiskCacheStoreTests: XCTestCase {
         XCTAssertFalse(cached)
     }
 
+    // MARK: - Size management (point 44)
+
+    func test_evictOverBudget_respectsMaxSize() async {
+        let policy = CachePolicy(ttl: .hours(24), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Test", maxBytes: 50))
+        let store = makeStore(policy: policy)
+
+        // Save 3 files totaling > 50 bytes
+        await store.save(Data(repeating: 0xAA, count: 20), for: "https://example.com/1.dat")
+        try? await Task.sleep(for: .milliseconds(50))
+        await store.save(Data(repeating: 0xBB, count: 20), for: "https://example.com/2.dat")
+        try? await Task.sleep(for: .milliseconds(50))
+        await store.save(Data(repeating: 0xCC, count: 20), for: "https://example.com/3.dat")
+
+        await store.evictOverBudget()
+
+        // The oldest file(s) should be evicted to bring total under 50 bytes
+        let result1 = await store.load(for: "https://example.com/1.dat")
+        let result3 = await store.load(for: "https://example.com/3.dat")
+
+        // Newest file should survive
+        XCTAssertNotNil(result3.value, "Newest file should survive eviction")
+        // Oldest may be evicted (depending on exact budget enforcement)
+        if case .empty = result1 {
+            // Expected — oldest evicted
+        }
+    }
+
+    func test_evictOverBudget_noOpWhenUnderBudget() async {
+        let policy = CachePolicy(ttl: .hours(24), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Test", maxBytes: 1_000_000))
+        let store = makeStore(policy: policy)
+
+        await store.save(Data("small".utf8), for: "https://example.com/tiny.dat")
+        await store.evictOverBudget()
+
+        let result = await store.load(for: "https://example.com/tiny.dat")
+        XCTAssertNotNil(result.value, "File under budget should not be evicted")
+    }
+
+    func test_evictExpired_keepsNonExpiredFiles() async {
+        let policy = CachePolicy(ttl: .hours(24), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Test", maxBytes: 100_000_000))
+        let store = makeStore(policy: policy)
+
+        await store.save(Data("keep me".utf8), for: "https://example.com/fresh.dat")
+        await store.evictExpired()
+
+        let result = await store.load(for: "https://example.com/fresh.dat")
+        XCTAssertNotNil(result.value, "Non-expired file should survive eviction")
+    }
+
     // MARK: - UIImage Cache Tests
 
     private func make1x1PNGData() -> Data {

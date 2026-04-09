@@ -10,6 +10,10 @@ public protocol PostServiceProviding: Sendable {
     func like(postId: String) async throws
     func unlike(postId: String) async throws
     func bookmark(postId: String) async throws
+    func getBookmarks(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    func removeBookmark(postId: String) async throws
+    func getPost(postId: String) async throws -> APIPost
+    func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
     func repost(postId: String, quote: String?) async throws

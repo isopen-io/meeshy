@@ -734,4 +734,271 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertNil(APIClient.shared.anonymousSessionToken)
         _ = sut
     }
+
+    // MARK: - Search Tests (Point 74)
+
+    func test_searchMessages_withResults_populatesSearchResults() async {
+        let searchResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello world","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}},
+            {"id":"sr-2","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello again","createdAt":"2026-01-01T00:01:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(searchResponse)
+        let sut = makeSUT()
+
+        await sut.searchMessages(query: "Hello")
+
+        XCTAssertEqual(sut.searchResults.count, 2)
+        XCTAssertFalse(sut.isSearching)
+        XCTAssertEqual(sut.currentSearchQuery, "Hello")
+        XCTAssertEqual(mockMessageService.searchCallCount, 1)
+    }
+
+    func test_searchMessages_empty_setsEmptyResults() async {
+        let emptyResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(emptyResponse)
+        let sut = makeSUT()
+
+        await sut.searchMessages(query: "nonexistent")
+
+        XCTAssertTrue(sut.searchResults.isEmpty)
+        XCTAssertFalse(sut.isSearching)
+        XCTAssertEqual(sut.currentSearchQuery, "nonexistent")
+    }
+
+    func test_clearSearch_resetsState() async {
+        let sut = makeSUT()
+        // First populate search results
+        let searchResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello world","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser"}}
+        ],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(searchResponse)
+        await sut.searchMessages(query: "Hello")
+        XCTAssertFalse(sut.searchResults.isEmpty)
+
+        // Clear by searching with short query (< 2 chars)
+        await sut.searchMessages(query: "H")
+
+        XCTAssertTrue(sut.searchResults.isEmpty)
+        XCTAssertNil(sut.currentSearchQuery)
+        XCTAssertFalse(sut.isSearching)
+    }
+
+    // MARK: - Translation Tests (Point 75)
+
+    func test_preferredTranslation_fallsToRegionalLanguage() {
+        let currentUser = MeeshyUser(
+            id: testUserId, username: "testuser",
+            systemLanguage: "en", regionalLanguage: "de"
+        )
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+        let sut = ConversationViewModel(
+            conversationId: testConversationId,
+            authManager: mockAuthManager,
+            messageService: mockMessageService,
+            conversationService: mockConversationService,
+            reactionService: mockReactionService,
+            reportService: mockReportService
+        )
+        sut.messages = [makeMessage(id: "msg-r", content: "Bonjour")]
+        // No English translation available, but German (regional) is available
+        sut.messageTranslations["msg-r"] = [
+            MessageTranslation(
+                id: "t-de", messageId: "msg-r",
+                sourceLanguage: "fr", targetLanguage: "de",
+                translatedContent: "Hallo", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        let result = sut.preferredTranslation(for: "msg-r")
+
+        XCTAssertEqual(result?.targetLanguage, "de")
+        XCTAssertEqual(result?.translatedContent, "Hallo")
+    }
+
+    func test_preferredTranslation_returnsNilWhenNoMatch() {
+        let currentUser = MeeshyUser(
+            id: testUserId, username: "testuser",
+            systemLanguage: "en"
+        )
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+        let sut = ConversationViewModel(
+            conversationId: testConversationId,
+            authManager: mockAuthManager,
+            messageService: mockMessageService,
+            conversationService: mockConversationService,
+            reactionService: mockReactionService,
+            reportService: mockReportService
+        )
+        sut.messages = [makeMessage(id: "msg-n", content: "Bonjour")]
+        // Only Japanese translation available, but user prefers English
+        sut.messageTranslations["msg-n"] = [
+            MessageTranslation(
+                id: "t-ja", messageId: "msg-n",
+                sourceLanguage: "fr", targetLanguage: "ja",
+                translatedContent: "こんにちは", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        let result = sut.preferredTranslation(for: "msg-n")
+
+        XCTAssertNil(result, "Should return nil when no translation matches preferred languages")
+    }
+
+    func test_activeTranslationOverrides_overridesPreferred() {
+        let currentUser = MeeshyUser(
+            id: testUserId, username: "testuser",
+            systemLanguage: "en"
+        )
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+        let sut = ConversationViewModel(
+            conversationId: testConversationId,
+            authManager: mockAuthManager,
+            messageService: mockMessageService,
+            conversationService: mockConversationService,
+            reactionService: mockReactionService,
+            reportService: mockReportService
+        )
+        sut.messages = [makeMessage(id: "msg-o", content: "Bonjour")]
+        sut.messageTranslations["msg-o"] = [
+            MessageTranslation(
+                id: "t-en", messageId: "msg-o",
+                sourceLanguage: "fr", targetLanguage: "en",
+                translatedContent: "Hello", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+            MessageTranslation(
+                id: "t-ja", messageId: "msg-o",
+                sourceLanguage: "fr", targetLanguage: "ja",
+                translatedContent: "こんにちは", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+        // Override to Japanese even though system language is English
+        let jaTranslation = sut.messageTranslations["msg-o"]!.first(where: { $0.targetLanguage == "ja" })!
+        sut.activeTranslationOverrides["msg-o"] = jaTranslation
+
+        let result = sut.preferredTranslation(for: "msg-o")
+
+        XCTAssertEqual(result?.targetLanguage, "ja")
+        XCTAssertEqual(result?.translatedContent, "こんにちは")
+    }
+
+    // MARK: - Transcription Tests (Point 76)
+
+    func test_messageTranscriptions_cachePopulated() {
+        let sut = makeSUT()
+        let transcription = MessageTranscription(
+            attachmentId: "att-1",
+            text: "Hello world",
+            language: "en",
+            confidence: 0.95,
+            durationMs: 5000,
+            segments: [],
+            speakerCount: 1
+        )
+
+        sut.messageTranscriptions["msg-1"] = transcription
+
+        XCTAssertNotNil(sut.messageTranscriptions["msg-1"])
+        XCTAssertEqual(sut.messageTranscriptions["msg-1"]?.text, "Hello world")
+        XCTAssertEqual(sut.messageTranscriptions["msg-1"]?.language, "en")
+    }
+
+    func test_transcriptionEvent_updatesCache() {
+        let sut = makeSUT()
+        XCTAssertNil(sut.messageTranscriptions["msg-t1"])
+
+        let transcription = MessageTranscription(
+            attachmentId: "att-t1",
+            text: "Transcribed text",
+            language: "fr",
+            confidence: 0.88,
+            durationMs: 3000,
+            segments: [
+                MessageTranscriptionSegment(text: "Transcribed", startTime: 0, endTime: 1.5, speakerId: nil),
+                MessageTranscriptionSegment(text: "text", startTime: 1.5, endTime: 3.0, speakerId: nil),
+            ],
+            speakerCount: 1
+        )
+
+        sut.messageTranscriptions["msg-t1"] = transcription
+
+        XCTAssertEqual(sut.messageTranscriptions["msg-t1"]?.text, "Transcribed text")
+        XCTAssertEqual(sut.messageTranscriptions["msg-t1"]?.segments.count, 2)
+    }
+
+    // MARK: - Mention Tests (Point 77)
+
+    func test_mentionSuggestions_updatedWithQuery() {
+        let sut = makeSUT()
+        // Populate messages with senders for local mention candidates
+        sut.messages = [
+            Message(id: "m1", conversationId: testConversationId, senderId: "u1", content: "Hello",
+                    createdAt: Date(), updatedAt: Date(), senderName: "Alice", senderUsername: "alice"),
+            Message(id: "m2", conversationId: testConversationId, senderId: "u2", content: "World",
+                    createdAt: Date(), updatedAt: Date(), senderName: "Bob", senderUsername: "bob"),
+        ]
+
+        sut.handleMentionQuery(in: "Hey @al")
+
+        XCTAssertEqual(sut.activeMentionQuery, "al")
+        XCTAssertEqual(sut.mentionSuggestions.count, 1)
+        XCTAssertEqual(sut.mentionSuggestions.first?.username, "alice")
+    }
+
+    func test_activeMentionQuery_triggersSearch() {
+        let sut = makeSUT()
+        sut.messages = [
+            Message(id: "m1", conversationId: testConversationId, senderId: "u1", content: "Hello",
+                    createdAt: Date(), updatedAt: Date(), senderName: "Alice", senderUsername: "alice"),
+            Message(id: "m2", conversationId: testConversationId, senderId: "u2", content: "World",
+                    createdAt: Date(), updatedAt: Date(), senderName: "Bob", senderUsername: "bob"),
+        ]
+
+        // Empty query after @ shows all candidates
+        sut.handleMentionQuery(in: "Hey @")
+
+        XCTAssertEqual(sut.activeMentionQuery, "")
+        XCTAssertEqual(sut.mentionSuggestions.count, 2)
+
+        // Clear suggestions
+        sut.clearMentionSuggestions()
+
+        XCTAssertTrue(sut.mentionSuggestions.isEmpty)
+        XCTAssertNil(sut.activeMentionQuery)
+    }
+
+    // MARK: - Effects Tests (Point 78)
+
+    func test_pendingEffects_addAndRemove() {
+        let sut = makeSUT()
+
+        XCTAssertEqual(sut.pendingEffects, .none)
+
+        sut.pendingEffects = MessageEffects(flags: .confetti)
+        XCTAssertNotEqual(sut.pendingEffects, .none)
+
+        sut.pendingEffects = .none
+        XCTAssertEqual(sut.pendingEffects, .none)
+    }
+
+    func test_showEffectsPicker_toggles() {
+        let sut = makeSUT()
+
+        XCTAssertFalse(sut.showEffectsPicker)
+
+        sut.showEffectsPicker = true
+        XCTAssertTrue(sut.showEffectsPicker)
+
+        sut.showEffectsPicker = false
+        XCTAssertFalse(sut.showEffectsPicker)
+    }
 }

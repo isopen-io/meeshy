@@ -405,6 +405,22 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     public var postId: String? { context?.postId ?? metadata?.postId }
     public var postType: String? { metadata?.postType }
     public var messagePreview: String? { metadata?.commentPreview }
+    public var conversationTitle: String? { context?.conversationTitle }
+    public var conversationType: String? { context?.conversationType }
+    public var isDirect: Bool { context?.conversationType == "direct" }
+    public var attachments: SocketNotificationAttachments? { metadata?.attachments }
+
+    public var attachmentLabel: String? {
+        guard let att = metadata?.attachments, let count = att.count, count > 0 else { return nil }
+        if count > 1 { return "\u{1F4CE} \(count) fichiers" }
+        switch att.firstType {
+        case "image": return "\u{1F4F7} Photo"
+        case "video": return "\u{1F3AC} Vid\u{00E9}o"
+        case "audio": return "\u{1F3B5} Audio"
+        case "document": return "\u{1F4C4} Document"
+        default: return "\u{1F4CE} Fichier"
+        }
+    }
 
     public var notificationType: MeeshyNotificationType {
         MeeshyNotificationType(rawValue: type) ?? .system
@@ -420,6 +436,8 @@ public struct SocketNotificationActor: Decodable, Sendable {
 
 public struct SocketNotificationContext: Decodable, Sendable {
     public let conversationId: String?
+    public let conversationTitle: String?
+    public let conversationType: String?
     public let messageId: String?
     public let postId: String?
     public let commentId: String?
@@ -431,6 +449,13 @@ public struct SocketNotificationMetadata: Decodable, Sendable {
     public let postType: String?
     public let commentPreview: String?
     public let emoji: String?
+    public let attachments: SocketNotificationAttachments?
+}
+
+public struct SocketNotificationAttachments: Decodable, Sendable {
+    public let count: Int?
+    public let firstType: String?
+    public let firstFilename: String?
 }
 
 public struct NotificationReadEvent: Decodable, Sendable {

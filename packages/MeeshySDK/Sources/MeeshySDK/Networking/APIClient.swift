@@ -77,6 +77,13 @@ public struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {
     public let data: T
     public let pagination: OffsetPagination?
     public let error: String?
+
+    public init(success: Bool, data: T, pagination: OffsetPagination?, error: String?) {
+        self.success = success
+        self.data = data
+        self.pagination = pagination
+        self.error = error
+    }
 }
 
 private struct ErrorBody: Decodable {

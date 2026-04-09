@@ -62,8 +62,11 @@ public protocol DataExportServiceProviding: AnyObject, Sendable {
 
 public final class DataExportService: DataExportServiceProviding, @unchecked Sendable {
     public static let shared = DataExportService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func requestExport(format: String, types: [String]) async throws -> DataExportData {
         let typesStr = types.joined(separator: ",")

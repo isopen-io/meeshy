@@ -2,8 +2,11 @@ import Foundation
 
 public final class AffiliateService: @unchecked Sendable {
     public static let shared = AffiliateService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func listTokens(offset: Int = 0, limit: Int = 50) async throws -> [AffiliateToken] {
         let response: OffsetPaginatedAPIResponse<[AffiliateToken]> = try await api.request(

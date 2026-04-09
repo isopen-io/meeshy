@@ -88,6 +88,30 @@ final class MockPostService: PostServiceProviding {
     var getCommentRepliesCallCount = 0
     var getCommunityPostsCallCount = 0
 
+    var getBookmarksResult: Result<PaginatedAPIResponse<[APIPost]>, Error> = .success(emptyPaginatedPosts)
+    var getBookmarksCallCount = 0
+    var lastGetBookmarksCursor: String?
+
+    var removeBookmarkResult: Result<Void, Error> = .success(())
+    var removeBookmarkCallCount = 0
+    var lastRemoveBookmarkPostId: String?
+
+    var getPostResult: Result<APIPost, Error> = .success(stubPost)
+    var getPostCallCount = 0
+    var lastGetPostId: String?
+
+    var getCommentsResult: Result<PaginatedAPIResponse<[APIPostComment]>, Error> = {
+        let empty: PaginatedAPIResponse<[APIPostComment]> = JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"error":null}
+        """)
+        return .success(empty)
+    }()
+    var getCommentsCallCount = 0
+    var lastGetCommentsPostId: String?
+
+    var recordImpressionsCallCount = 0
+    var lastRecordImpressionPostIds: [String]?
+
     // MARK: - Protocol Conformance
 
     func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -192,7 +216,9 @@ final class MockPostService: PostServiceProviding {
 
     func getPostViews(postId: String, limit: Int, offset: Int) async throws -> PostViewersResponse {
         getPostViewsCallCount += 1
-        return PostViewersResponse(items: [], pagination: PostViewersPagination(total: 0, offset: 0, limit: limit, hasMore: false))
+        return JSONStub.decode("""
+        {"items":[],"pagination":{"total":0,"offset":0,"limit":\(limit),"hasMore":false}}
+        """)
     }
 
     func getUserPosts(userId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -210,6 +236,35 @@ final class MockPostService: PostServiceProviding {
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         getCommunityPostsCallCount += 1
         return try getFeedResult.get()
+    }
+
+    func getBookmarks(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        getBookmarksCallCount += 1
+        lastGetBookmarksCursor = cursor
+        return try getBookmarksResult.get()
+    }
+
+    func removeBookmark(postId: String) async throws {
+        removeBookmarkCallCount += 1
+        lastRemoveBookmarkPostId = postId
+        try removeBookmarkResult.get()
+    }
+
+    func getPost(postId: String) async throws -> APIPost {
+        getPostCallCount += 1
+        lastGetPostId = postId
+        return try getPostResult.get()
+    }
+
+    func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]> {
+        getCommentsCallCount += 1
+        lastGetCommentsPostId = postId
+        return try getCommentsResult.get()
+    }
+
+    func recordImpressions(postIds: [String], source: String) async throws {
+        recordImpressionsCallCount += 1
+        lastRecordImpressionPostIds = postIds
     }
 
     // MARK: - Reset
@@ -277,5 +332,23 @@ final class MockPostService: PostServiceProviding {
         getUserPostsCallCount = 0
         getCommentRepliesCallCount = 0
         getCommunityPostsCallCount = 0
+
+        getBookmarksResult = .success(emptyPaginatedPosts)
+        getBookmarksCallCount = 0
+        lastGetBookmarksCursor = nil
+
+        removeBookmarkResult = .success(())
+        removeBookmarkCallCount = 0
+        lastRemoveBookmarkPostId = nil
+
+        getPostResult = .success(stubPost)
+        getPostCallCount = 0
+        lastGetPostId = nil
+
+        getCommentsCallCount = 0
+        lastGetCommentsPostId = nil
+
+        recordImpressionsCallCount = 0
+        lastRecordImpressionPostIds = nil
     }
 }

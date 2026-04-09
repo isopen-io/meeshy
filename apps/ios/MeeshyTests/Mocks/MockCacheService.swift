@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import MeeshySDK
 @testable import Meeshy
 
 final class MockCacheService {
@@ -13,7 +14,7 @@ final class MockCacheService {
 
     private var cachedMessages: [String: [Message]] = [:]
     private var cachedConversations: [Conversation] = []
-    private var cachedUsers: [String: User] = [:]
+    private var cachedMeeshyUsers: [String: MeeshyUser] = [:]
 
     // MARK: - Configuration
 
@@ -104,14 +105,14 @@ final class MockCacheService {
         }
     }
 
-    // MARK: - User Caching
+    // MARK: - MeeshyUser Caching
 
-    func getCachedUser(id: String) -> User? {
-        return cachedUsers[id]
+    func getCachedMeeshyUser(id: String) -> MeeshyUser? {
+        return cachedMeeshyUsers[id]
     }
 
-    func cacheUser(_ user: User) {
-        cachedUsers[user.id] = user
+    func cacheMeeshyUser(_ user: MeeshyUser) {
+        cachedMeeshyUsers[user.id] = user
     }
 
     // MARK: - Clear Cache
@@ -120,7 +121,7 @@ final class MockCacheService {
         clearAllCallCount += 1
         cachedMessages.removeAll()
         cachedConversations.removeAll()
-        cachedUsers.removeAll()
+        cachedMeeshyUsers.removeAll()
     }
 
     func clearConversation(id: String) {

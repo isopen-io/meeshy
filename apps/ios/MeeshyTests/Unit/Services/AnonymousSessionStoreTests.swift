@@ -42,6 +42,62 @@ final class AnonymousSessionStoreTests: XCTestCase {
         XCTAssertNil(result)
     }
 
+    // MARK: - Overwrite
+
+    func test_save_sameKeyTwice_overwritesPrevious() {
+        let id = "overwrite_\(UUID().uuidString)"
+        defer { AnonymousSessionStore.delete(linkId: id) }
+
+        let ctx1 = makeContext(linkId: id, token: "token-first")
+        let ctx2 = makeContext(linkId: id, token: "token-second")
+
+        AnonymousSessionStore.save(ctx1)
+        AnonymousSessionStore.save(ctx2)
+
+        let loaded = AnonymousSessionStore.load(linkId: id)
+        XCTAssertEqual(loaded?.sessionToken, "token-second")
+    }
+
+    // MARK: - Delete Non-Existent
+
+    func test_delete_nonExistentKey_doesNotCrash() {
+        AnonymousSessionStore.delete(linkId: "non_existent_\(UUID().uuidString)")
+    }
+
+    // MARK: - Context Fields
+
+    func test_load_preservesAllFields() {
+        let id = "fields_\(UUID().uuidString)"
+        defer { AnonymousSessionStore.delete(linkId: id) }
+
+        let ctx = AnonymousSessionContext(
+            sessionToken: "tok-123",
+            participantId: "part-456",
+            permissions: .defaultAnonymous,
+            linkId: id,
+            conversationId: "conv-789"
+        )
+
+        AnonymousSessionStore.save(ctx)
+        let loaded = AnonymousSessionStore.load(linkId: id)
+
+        XCTAssertEqual(loaded?.sessionToken, "tok-123")
+        XCTAssertEqual(loaded?.participantId, "part-456")
+        XCTAssertEqual(loaded?.linkId, id)
+        XCTAssertEqual(loaded?.conversationId, "conv-789")
+        XCTAssertTrue(loaded?.permissions.canSendMessages ?? false)
+        XCTAssertFalse(loaded?.permissions.canSendFiles ?? true)
+    }
+
+    // MARK: - Save Return Value
+
+    func test_save_returnsTrue() {
+        let ctx = makeContext()
+        defer { AnonymousSessionStore.delete(linkId: ctx.linkId) }
+        let result = AnonymousSessionStore.save(ctx)
+        XCTAssertTrue(result)
+    }
+
     // MARK: - Factory
 
     private func makeContext(

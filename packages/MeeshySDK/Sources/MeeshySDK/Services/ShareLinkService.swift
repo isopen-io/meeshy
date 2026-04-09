@@ -2,8 +2,11 @@ import Foundation
 
 public final class ShareLinkService: @unchecked Sendable {
     public static let shared = ShareLinkService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     // MARK: - User's Own Links (authenticated)
 

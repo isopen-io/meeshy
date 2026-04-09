@@ -1,9 +1,24 @@
 import Foundation
 
-public final class VoiceProfileService: @unchecked Sendable {
+public protocol VoiceProfileServiceProviding: Sendable {
+    func getConsentStatus() async throws -> VoiceConsentStatus
+    func grantConsent(ageVerification: Bool, birthDate: String?) async throws -> VoiceConsentResponse
+    func revokeConsent() async throws
+    func getProfile() async throws -> VoiceProfile?
+    func getSamples() async throws -> [VoiceSample]
+    func uploadSample(audioData: Data, durationMs: Int) async throws -> VoiceSampleUploadResponse
+    func toggleVoiceCloning(enabled: Bool) async throws
+    func deleteProfile() async throws
+    func deleteSample(sampleId: String) async throws
+}
+
+public final class VoiceProfileService: VoiceProfileServiceProviding, @unchecked Sendable {
     public static let shared = VoiceProfileService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     // MARK: - Consent
 

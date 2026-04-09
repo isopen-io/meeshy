@@ -55,7 +55,12 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
     let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+    let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
+    let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
+    let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
+    let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
     let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
+    let callSignalOfferReceived = PassthroughSubject<CallAnswerData, Never>()
 
     // MARK: - Call Tracking
 
@@ -79,6 +84,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var callToggleAudioCallCount = 0
     var callToggleVideoCallCount = 0
     var callEndCallCount = 0
+    var callHeartbeatCallCount = 0
 
     // MARK: - Protocol Methods
 
@@ -137,7 +143,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         liveLocationStopConversationIds.append(conversationId)
     }
 
-    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, originalLanguage: String?, isEncrypted: Bool) {
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool) {
         sendWithAttachmentsCallCount += 1
     }
 
@@ -167,6 +173,10 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
 
     func emitCallEnd(callId: String) {
         callEndCallCount += 1
+    }
+
+    func emitCallHeartbeat(callId: String) {
+        callHeartbeatCallCount += 1
     }
 
     // MARK: - Simulation Helpers
@@ -220,5 +230,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callToggleAudioCallCount = 0
         callToggleVideoCallCount = 0
         callEndCallCount = 0
+        callHeartbeatCallCount = 0
     }
 }

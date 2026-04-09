@@ -2,8 +2,11 @@ import Foundation
 
 public final class AccountService: @unchecked Sendable {
     public static let shared = AccountService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func deleteAccount(confirmationPhrase: String) async throws {
         let body = DeleteAccountBody(confirmationPhrase: confirmationPhrase)

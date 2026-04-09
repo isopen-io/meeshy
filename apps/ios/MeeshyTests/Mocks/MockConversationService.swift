@@ -91,6 +91,24 @@ final class MockConversationService: ConversationServiceProviding {
     var lastUpdateDescription: String?
     var lastUpdateAvatar: String?
     var lastUpdateBanner: String?
+    var lastUpdateDefaultWriteRole: String?
+    var lastUpdateIsAnnouncementChannel: Bool?
+    var lastUpdateSlowModeSeconds: Int?
+    var lastUpdateAutoTranslateEnabled: Bool?
+
+    var leaveCallCount = 0
+    var lastLeaveConversationId: String?
+    var leaveResult: Result<Void, Error> = .success(())
+
+    var banParticipantCallCount = 0
+    var lastBanParticipantConversationId: String?
+    var lastBanParticipantUserId: String?
+    var banParticipantResult: Result<Void, Error> = .success(())
+
+    var unbanParticipantCallCount = 0
+    var lastUnbanParticipantConversationId: String?
+    var lastUnbanParticipantUserId: String?
+    var unbanParticipantResult: Result<Void, Error> = .success(())
 
     // MARK: - Protocol Conformance
 
@@ -191,7 +209,7 @@ final class MockConversationService: ConversationServiceProviding {
         return try await MainActor.run { try listSharedWithResult.get() }
     }
 
-    nonisolated func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?) async throws -> APIConversation {
+    nonisolated func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?, defaultWriteRole: String?, isAnnouncementChannel: Bool?, slowModeSeconds: Int?, autoTranslateEnabled: Bool?) async throws -> APIConversation {
         await MainActor.run {
             updateCallCount += 1
             lastUpdateConversationId = conversationId
@@ -199,8 +217,38 @@ final class MockConversationService: ConversationServiceProviding {
             lastUpdateDescription = description
             lastUpdateAvatar = avatar
             lastUpdateBanner = banner
+            lastUpdateDefaultWriteRole = defaultWriteRole
+            lastUpdateIsAnnouncementChannel = isAnnouncementChannel
+            lastUpdateSlowModeSeconds = slowModeSeconds
+            lastUpdateAutoTranslateEnabled = autoTranslateEnabled
         }
         return try await MainActor.run { try updateResult.get() }
+    }
+
+    nonisolated func leave(conversationId: String) async throws {
+        await MainActor.run {
+            leaveCallCount += 1
+            lastLeaveConversationId = conversationId
+        }
+        try await MainActor.run { try leaveResult.get() }
+    }
+
+    nonisolated func banParticipant(conversationId: String, userId: String) async throws {
+        await MainActor.run {
+            banParticipantCallCount += 1
+            lastBanParticipantConversationId = conversationId
+            lastBanParticipantUserId = userId
+        }
+        try await MainActor.run { try banParticipantResult.get() }
+    }
+
+    nonisolated func unbanParticipant(conversationId: String, userId: String) async throws {
+        await MainActor.run {
+            unbanParticipantCallCount += 1
+            lastUnbanParticipantConversationId = conversationId
+            lastUnbanParticipantUserId = userId
+        }
+        try await MainActor.run { try unbanParticipantResult.get() }
     }
 
     // MARK: - Reset
@@ -242,5 +290,17 @@ final class MockConversationService: ConversationServiceProviding {
         lastUpdateDescription = nil
         lastUpdateAvatar = nil
         lastUpdateBanner = nil
+        lastUpdateDefaultWriteRole = nil
+        lastUpdateIsAnnouncementChannel = nil
+        lastUpdateSlowModeSeconds = nil
+        lastUpdateAutoTranslateEnabled = nil
+        leaveCallCount = 0
+        lastLeaveConversationId = nil
+        banParticipantCallCount = 0
+        lastBanParticipantConversationId = nil
+        lastBanParticipantUserId = nil
+        unbanParticipantCallCount = 0
+        lastUnbanParticipantConversationId = nil
+        lastUnbanParticipantUserId = nil
     }
 }

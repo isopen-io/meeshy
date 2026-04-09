@@ -23,6 +23,18 @@ public struct AffiliateToken: Codable, Identifiable, Sendable, CacheIdentifiable
         case clickCount
     }
 
+    public init(
+        id: String, token: String, name: String, affiliateLink: String?,
+        maxUses: Int?, currentUses: Int, isActive: Bool, expiresAt: String?,
+        createdAt: String, _count: AffiliateCount?, clickCount: Int
+    ) {
+        self.id = id; self.token = token; self.name = name
+        self.affiliateLink = affiliateLink; self.maxUses = maxUses
+        self.currentUses = currentUses; self.isActive = isActive
+        self.expiresAt = expiresAt; self.createdAt = createdAt
+        self._count = _count; self.clickCount = clickCount
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)

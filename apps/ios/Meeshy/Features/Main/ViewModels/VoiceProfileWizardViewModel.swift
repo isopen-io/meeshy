@@ -14,9 +14,9 @@ final class VoiceProfileWizardViewModel: ObservableObject {
     @Published var ageVerified = false
     @Published var birthDate = Date()
 
-    private let service: VoiceProfileService
+    private let service: VoiceProfileServiceProviding
 
-    init(service: VoiceProfileService = .shared) {
+    init(service: VoiceProfileServiceProviding = VoiceProfileService.shared) {
         self.service = service
     }
 
@@ -41,7 +41,7 @@ final class VoiceProfileWizardViewModel: ObservableObject {
         error = nil
 
         do {
-            _ = try await service.grantConsent(ageVerification: ageVerified)
+            _ = try await service.grantConsent(ageVerification: ageVerified, birthDate: nil)
             currentStep = .recording
         } catch {
             self.error = "Erreur lors de l'enregistrement du consentement."

@@ -1025,4 +1025,124 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertFalse(sut.isLoading)
     }
+
+    // MARK: - Category Filter Tests (Point 80)
+
+    func test_selectedFilter_filtersConversations() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.conversations = [
+            makeConversation(id: "dm1", unreadCount: 3, type: .direct),
+            makeConversation(id: "dm2", unreadCount: 0, type: .direct),
+            makeConversation(id: "grp1", unreadCount: 5, type: .group),
+        ]
+
+        // Switch to unread filter: should show only dm1 and grp1
+        sut.selectedFilter = .unread
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(sut.filteredConversations.count, 2)
+        let unreadIds = Set(sut.filteredConversations.map(\.id))
+        XCTAssertTrue(unreadIds.contains("dm1"))
+        XCTAssertTrue(unreadIds.contains("grp1"))
+        XCTAssertFalse(unreadIds.contains("dm2"))
+    }
+
+    func test_groupedConversations_groupsCorrectly() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let section = ConversationSection(id: "cat-dev", name: "Dev", icon: "wrench.fill", color: "3498DB", order: 0)
+        sut.userCategories = [section]
+        sut.conversations = [
+            makeConversation(id: "dev1", sectionId: "cat-dev"),
+            makeConversation(id: "dev2", sectionId: "cat-dev"),
+            makeConversation(id: "other1"),
+        ]
+        sut.selectedFilter = .all
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let devSection = sut.groupedConversations.first(where: { $0.section.id == "cat-dev" })
+        XCTAssertNotNil(devSection)
+        XCTAssertEqual(devSection?.conversations.count, 2)
+
+        let otherSection = sut.groupedConversations.first(where: { $0.section.id == "other" })
+        XCTAssertNotNil(otherSection)
+        XCTAssertEqual(otherSection?.conversations.count, 1)
+    }
+
+    // MARK: - Typing Tests (Point 81)
+
+    func test_typingEvent_setsTypingUsername() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+
+        messageSocket.typingStarted.send(TypingEvent(userId: "u1", username: "Charlie", conversationId: "conv-typing"))
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.typingUsernames["conv-typing"], "Charlie")
+    }
+
+    // MARK: - Preview Message Tests (Point 82)
+
+    func test_previewMessages_containsLastMessage() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.conversations = [makeConversation(id: "conv-preview")]
+
+        let apiMsg: APIMessage = JSONStub.decode("""
+        {
+            "id":"preview-msg1",
+            "conversationId":"conv-preview",
+            "senderId":"user-x",
+            "content":"Latest message",
+            "createdAt":"2026-03-06T12:00:00.000Z",
+            "sender":{"id":"user-x","username":"xavier","displayName":"Xavier"}
+        }
+        """)
+        messageSocket.simulateMessage(apiMsg)
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].lastMessagePreview, "Latest message")
+        XCTAssertEqual(sut.conversations[0].lastMessageSenderName, "Xavier")
+    }
+
+    func test_newSocketMessage_updatesPreview() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.conversations = [makeConversation(id: "conv-update")]
+
+        // Send first message
+        let msg1: APIMessage = JSONStub.decode("""
+        {
+            "id":"msg-first",
+            "conversationId":"conv-update",
+            "senderId":"user-a",
+            "content":"First message",
+            "createdAt":"2026-03-06T12:00:00.000Z",
+            "sender":{"id":"user-a","username":"alice","displayName":"Alice"}
+        }
+        """)
+        messageSocket.simulateMessage(msg1)
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(sut.conversations[0].lastMessagePreview, "First message")
+
+        // Send second message: preview should update
+        let msg2: APIMessage = JSONStub.decode("""
+        {
+            "id":"msg-second",
+            "conversationId":"conv-update",
+            "senderId":"user-b",
+            "content":"Second message",
+            "createdAt":"2026-03-06T12:01:00.000Z",
+            "sender":{"id":"user-b","username":"bob","displayName":"Bob"}
+        }
+        """)
+        messageSocket.simulateMessage(msg2)
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(sut.conversations[0].lastMessagePreview, "Second message")
+        XCTAssertEqual(sut.conversations[0].lastMessageSenderName, "Bob")
+    }
 }

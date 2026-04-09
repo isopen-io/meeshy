@@ -340,7 +340,7 @@ final class APIServiceTests: XCTestCase {
         let pagination = try JSONDecoder().decode(CursorPagination.self, from: data)
 
         XCTAssertEqual(pagination.nextCursor, "cursor123")
-        XCTAssertFalse(pagination.hasMore)
+        XCTAssertEqual(pagination.hasMore, false)
         XCTAssertEqual(pagination.limit, 50)
     }
 

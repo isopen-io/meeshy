@@ -30,7 +30,7 @@ final class RouterTests: XCTestCase {
     }
 
     func test_isHub_contacts_returnsTrue() {
-        XCTAssertTrue(Route.contacts.isHub)
+        XCTAssertTrue(Route.contacts().isHub)
     }
 
     func test_isHub_links_returnsTrue() {
@@ -67,8 +67,8 @@ final class RouterTests: XCTestCase {
         XCTAssertFalse(Route.communityInvite("123").isHub)
     }
 
-    func test_isHub_notifications_returnsFalse() {
-        XCTAssertFalse(Route.notifications.isHub)
+    func test_isHub_notifications_returnsTrue() {
+        XCTAssertTrue(Route.notifications.isHub)
     }
 
     func test_isHub_userStats_returnsFalse() {
@@ -201,5 +201,270 @@ final class RouterTests: XCTestCase {
         router.pop()
         XCTAssertTrue(router.isHubRoute)
         XCTAssertEqual(router.currentRoute, .profile)
+    }
+
+    // MARK: - Push each Route case
+
+    func test_push_conversation_addsToPath() {
+        let router = Router()
+        router.push(.conversation(makeConversation()))
+        XCTAssertEqual(router.path.count, 1)
+        if case .conversation = router.currentRoute {} else {
+            XCTFail("Expected .conversation route")
+        }
+    }
+
+    func test_push_settings_addsToPath() {
+        let router = Router()
+        router.push(.settings)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .settings)
+    }
+
+    func test_push_contacts_addsToPath() {
+        let router = Router()
+        router.push(.contacts())
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .contacts())
+    }
+
+    func test_push_contacts_withTab_addsToPath() {
+        let router = Router()
+        router.push(.contacts(.requests))
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .contacts(.requests))
+    }
+
+    func test_push_communityList_addsToPath() {
+        let router = Router()
+        router.push(.communityList)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .communityList)
+    }
+
+    func test_push_communityDetail_addsToPath() {
+        let router = Router()
+        router.push(.communityDetail("comm123"))
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .communityDetail("comm123"))
+    }
+
+    func test_push_communityCreate_addsToPath() {
+        let router = Router()
+        router.push(.communityCreate)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .communityCreate)
+    }
+
+    func test_push_communitySettings_addsToPath() {
+        let router = Router()
+        router.push(.communitySettings(makeCommunity()))
+        XCTAssertEqual(router.path.count, 1)
+        if case .communitySettings = router.currentRoute {} else {
+            XCTFail("Expected .communitySettings route")
+        }
+    }
+
+    func test_push_communityMembers_addsToPath() {
+        let router = Router()
+        router.push(.communityMembers("comm123"))
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .communityMembers("comm123"))
+    }
+
+    func test_push_communityInvite_addsToPath() {
+        let router = Router()
+        router.push(.communityInvite("comm123"))
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .communityInvite("comm123"))
+    }
+
+    func test_push_notifications_addsToPath() {
+        let router = Router()
+        router.push(.notifications)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .notifications)
+    }
+
+    func test_push_userStats_addsToPath() {
+        let router = Router()
+        router.push(.userStats)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .userStats)
+    }
+
+    func test_push_links_addsToPath() {
+        let router = Router()
+        router.push(.links)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .links)
+    }
+
+    func test_push_affiliate_addsToPath() {
+        let router = Router()
+        router.push(.affiliate)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .affiliate)
+    }
+
+    func test_push_trackingLinks_addsToPath() {
+        let router = Router()
+        router.push(.trackingLinks)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .trackingLinks)
+    }
+
+    func test_push_shareLinks_addsToPath() {
+        let router = Router()
+        router.push(.shareLinks)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .shareLinks)
+    }
+
+    func test_push_communityLinks_addsToPath() {
+        let router = Router()
+        router.push(.communityLinks)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .communityLinks)
+    }
+
+    func test_push_dataExport_addsToPath() {
+        let router = Router()
+        router.push(.dataExport)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .dataExport)
+    }
+
+    func test_push_postDetail_addsToPath() {
+        let router = Router()
+        router.push(.postDetail("post123"))
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .postDetail("post123"))
+    }
+
+    func test_push_postDetail_withShowComments_addsToPath() {
+        let router = Router()
+        router.push(.postDetail("post123", showComments: true))
+        XCTAssertEqual(router.path.count, 1)
+    }
+
+    func test_push_bookmarks_addsToPath() {
+        let router = Router()
+        router.push(.bookmarks)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .bookmarks)
+    }
+
+    func test_push_friendRequests_addsToPath() {
+        let router = Router()
+        router.push(.friendRequests)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .friendRequests)
+    }
+
+    func test_push_editProfile_addsToPath() {
+        let router = Router()
+        router.push(.editProfile)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .editProfile)
+    }
+
+    // MARK: - Pop from each route
+
+    func test_pop_fromConversation_returnsToEmpty() {
+        let router = Router()
+        router.push(.conversation(makeConversation()))
+        router.pop()
+        XCTAssertTrue(router.path.isEmpty)
+    }
+
+    func test_pop_fromDeepCommunityChain_returnsToParent() {
+        let router = Router()
+        router.push(.communityList)
+        router.push(.communityDetail("c1"))
+        router.push(.communityMembers("c1"))
+        XCTAssertEqual(router.path.count, 3)
+        router.pop()
+        XCTAssertEqual(router.path.count, 2)
+        XCTAssertEqual(router.currentRoute, .communityDetail("c1"))
+    }
+
+    func test_popToRoot_fromDeepChain_clearsAll() {
+        let router = Router()
+        router.push(.profile)
+        router.push(.editProfile)
+        router.push(.bookmarks)
+        XCTAssertEqual(router.path.count, 3)
+        router.popToRoot()
+        XCTAssertTrue(router.path.isEmpty)
+    }
+
+    // MARK: - Duplicate push prevention
+
+    func test_push_sameRoute_doesNotDuplicate() {
+        let router = Router()
+        router.push(.settings)
+        router.push(.settings)
+        XCTAssertEqual(router.path.count, 1)
+    }
+
+    // MARK: - Hub route deduplication
+
+    func test_push_hubRoute_alreadyInStack_popsToExisting() {
+        let router = Router()
+        router.push(.profile)
+        router.push(.editProfile)
+        router.push(.bookmarks)
+        XCTAssertEqual(router.path.count, 3)
+        router.push(.profile)
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .profile)
+    }
+
+    // MARK: - iPad onRouteRequested intercept
+
+    func test_push_withOnRouteRequested_interceptsRoute() {
+        let router = Router()
+        var interceptedRoute: Route?
+        router.onRouteRequested = { route in
+            interceptedRoute = route
+            return true
+        }
+        router.push(.settings)
+        XCTAssertTrue(router.path.isEmpty)
+        XCTAssertEqual(interceptedRoute, .settings)
+    }
+
+    func test_push_withOnRouteRequested_returningFalse_pushesNormally() {
+        let router = Router()
+        router.onRouteRequested = { _ in false }
+        router.push(.settings)
+        XCTAssertEqual(router.path.count, 1)
+    }
+
+    // MARK: - iPad onPopRequested
+
+    func test_pop_emptyPath_callsOnPopRequested() {
+        let router = Router()
+        var popRequestedCalled = false
+        router.onPopRequested = { popRequestedCalled = true }
+        router.pop()
+        XCTAssertTrue(popRequestedCalled)
+    }
+
+    func test_popToRoot_emptyPath_callsOnPopRequested() {
+        let router = Router()
+        var popRequestedCalled = false
+        router.onPopRequested = { popRequestedCalled = true }
+        router.popToRoot()
+        XCTAssertTrue(popRequestedCalled)
+    }
+
+    // MARK: - handleShareDeepLink via pendingShareContent
+
+    func test_handleShareDeepLink_url_setsPendingShareContent() {
+        let router = Router()
+        let url = URL(string: "meeshy://share?url=https://example.com")!
+        router.handleDeepLink(url)
     }
 }

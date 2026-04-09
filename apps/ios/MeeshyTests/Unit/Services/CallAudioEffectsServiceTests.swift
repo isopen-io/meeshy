@@ -260,13 +260,13 @@ final class CallAudioEffectsServiceTests: XCTestCase {
         )
         try sut.setEffect(.voiceCoder(params))
         let timePitch = sut.activeNodeChain.first(where: { $0 is AVAudioUnitTimePitch }) as? AVAudioUnitTimePitch
-        XCTAssertEqual(timePitch?.pitch, 5 * 100, accuracy: 0.01)
+        XCTAssertEqual(timePitch?.pitch ?? 0, 5 * 100, accuracy: Float(0.01))
     }
 
     func test_demonVoice_setsNegativePitch() throws {
         let sut = makeSUT()
         try sut.setEffect(.demonVoice(DemonVoiceParams(pitch: -10, distortion: 50, reverb: 50)))
         let timePitch = sut.activeNodeChain.first(where: { $0 is AVAudioUnitTimePitch }) as? AVAudioUnitTimePitch
-        XCTAssertEqual(Float(timePitch?.pitch ?? 0), Float(-10 * 100), accuracy: 0.01)
+        XCTAssertEqual(timePitch?.pitch ?? 0, Float(-10 * 100), accuracy: Float(0.01))
     }
 }

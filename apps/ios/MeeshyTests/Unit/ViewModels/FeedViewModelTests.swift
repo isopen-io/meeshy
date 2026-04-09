@@ -833,4 +833,40 @@ final class FeedViewModelTests: XCTestCase {
         // requestTranslation is a fire-and-forget, just verify no crash
         XCTAssertTrue(true)
     }
+
+    // MARK: - Publish Post Tests (Point 83)
+
+    func test_publishPost_success_setsPublishSuccess() async {
+        let (sut, _, _, postService) = makeSUT()
+        postService.createResult = .success(Self.makeAPIPost(id: "pub-1", content: "Published post"))
+
+        await sut.createPost(content: "Published post")
+
+        XCTAssertTrue(sut.publishSuccess)
+        XCTAssertNil(sut.publishError)
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts[0].content, "Published post")
+    }
+
+    func test_publishPost_error_setsPublishError() async {
+        let (sut, _, _, postService) = makeSUT()
+        postService.createResult = .failure(APIError.networkError(URLError(.timedOut)))
+
+        await sut.createPost(content: "Failing publish")
+
+        XCTAssertFalse(sut.publishSuccess)
+        XCTAssertNotNil(sut.publishError)
+        XCTAssertTrue(sut.posts.isEmpty)
+    }
+
+    func test_publishPost_withMedia_callsService() async {
+        let (sut, _, _, postService) = makeSUT()
+        postService.createResult = .success(Self.makeAPIPost(id: "media-pub", content: "With media"))
+
+        await sut.createPost(content: "With media", mediaIds: ["media-1", "media-2"])
+
+        XCTAssertEqual(postService.createCallCount, 1)
+        XCTAssertTrue(sut.publishSuccess)
+        XCTAssertEqual(sut.posts.count, 1)
+    }
 }

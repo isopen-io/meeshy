@@ -22,8 +22,13 @@ class PostDetailViewModel: ObservableObject {
     var topLevelComments: [FeedComment] { _topLevelComments }
 
     private var commentCursor: String?
+    private let postService: PostServiceProviding
     private let socialSocket = SocialSocketManager.shared
     private var cancellables = Set<AnyCancellable>()
+
+    init(postService: PostServiceProviding = PostService.shared) {
+        self.postService = postService
+    }
 
     var preferredLanguages: [String] {
         AuthManager.shared.currentUser?.preferredContentLanguages ?? []
@@ -55,7 +60,7 @@ class PostDetailViewModel: ObservableObject {
     private func refreshPost(_ postId: String) async {
         defer { isLoading = false }
         do {
-            let apiPost = try await PostService.shared.getPost(postId: postId)
+            let apiPost = try await postService.getPost(postId: postId)
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             post = feedPost
             await CacheCoordinator.shared.feed.save([feedPost], for: postId)
@@ -92,7 +97,7 @@ class PostDetailViewModel: ObservableObject {
         isLoadingComments = true
         defer { isLoadingComments = false }
         do {
-            let response = try await PostService.shared.getComments(postId: postId, cursor: commentCursor)
+            let response = try await postService.getComments(postId: postId, cursor: commentCursor, limit: 20)
             let langs = preferredLanguages
             let newComments = response.data.map { c -> FeedComment in
                 let translatedContent: String? = Self.resolveCommentTranslation(
@@ -138,8 +143,8 @@ class PostDetailViewModel: ObservableObject {
         loadingReplies.insert(commentId)
         defer { loadingReplies.remove(commentId) }
         do {
-            let response = try await PostService.shared.getCommentReplies(
-                postId: postId, commentId: commentId
+            let response = try await postService.getCommentReplies(
+                postId: postId, commentId: commentId, cursor: nil, limit: 20
             )
             let langs = preferredLanguages
             let replies = response.data.map { c -> FeedComment in
@@ -171,9 +176,9 @@ class PostDetailViewModel: ObservableObject {
         post = current
         do {
             if current.isLiked {
-                try await PostService.shared.like(postId: current.id)
+                try await postService.like(postId: current.id)
             } else {
-                try await PostService.shared.unlike(postId: current.id)
+                try await postService.unlike(postId: current.id)
             }
         } catch {
             current.isLiked.toggle()
@@ -185,7 +190,7 @@ class PostDetailViewModel: ObservableObject {
     func bookmarkPost() async {
         guard let post else { return }
         do {
-            try await PostService.shared.bookmark(postId: post.id)
+            try await postService.bookmark(postId: post.id)
         } catch {
             ToastManager.shared.showError("Erreur lors de l'enregistrement")
         }
@@ -194,7 +199,7 @@ class PostDetailViewModel: ObservableObject {
     func sendComment(_ content: String, effectFlags: Int? = nil) async {
         guard let post else { return }
         do {
-            let apiComment = try await PostService.shared.addComment(postId: post.id, content: content, effectFlags: effectFlags)
+            let apiComment = try await postService.addComment(postId: post.id, content: content, parentId: nil, effectFlags: effectFlags)
             let comment = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                 authorAvatarURL: apiComment.author.avatar,
@@ -215,7 +220,7 @@ class PostDetailViewModel: ObservableObject {
         let parentId = parent.id
         replyingTo = nil
         do {
-            let apiComment = try await PostService.shared.addComment(postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags)
+            let apiComment = try await postService.addComment(postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags)
             let reply = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                 authorAvatarURL: apiComment.author.avatar,
