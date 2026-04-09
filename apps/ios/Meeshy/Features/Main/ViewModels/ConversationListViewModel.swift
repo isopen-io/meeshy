@@ -20,7 +20,10 @@ class ConversationListViewModel: ObservableObject {
     @Published var selectedFilter: ConversationFilter = .all
     @Published var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
-    @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName
+    /// Typing usernames indexed by conversationId. NOT @Published to avoid triggering
+    /// a full list re-render on every typing event from any conversation.
+    /// Rows read this during natural re-renders (scroll, message arrival).
+    var typingUsernames: [String: String] = [:]  // conversationId → displayName
     var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
     private var previewLoadingInFlight: Set<String> = []
     private var typingTimers: [String: Timer] = [:]

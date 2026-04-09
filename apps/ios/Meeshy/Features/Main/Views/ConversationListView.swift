@@ -59,8 +59,12 @@ struct ConversationListView: View {
     var iPadFeedAction: (() -> Void)? = nil
 
     @Environment(\.scenePhase) private var scenePhase
-    @ObservedObject var theme = ThemeManager.shared
-    @ObservedObject var lockManager = ConversationLockManager.shared
+    // Lecture directe sans @ObservedObject — évite que chaque changement de thème ou de verrou
+    // force un re-render complet de la liste (centaines de rows). Les valeurs sont lues
+    // lors des refreshs naturels (scroll, interaction).
+    // internal for cross-file extension access
+    var theme: ThemeManager { ThemeManager.shared }
+    var lockManager: ConversationLockManager { ConversationLockManager.shared }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la liste. La présence est rafraîchie lors des refreshs naturels.
     private var presenceManager: PresenceManager { PresenceManager.shared }
