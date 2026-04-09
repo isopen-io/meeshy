@@ -197,6 +197,8 @@ struct RootView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
 
             // 3. Feed overlay
             if showFeed {
@@ -289,6 +291,16 @@ struct RootView: View {
         .environmentObject(storyViewModel)
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
+        .onChange(of: router.sceneTitle) { _, title in
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first?.title = "Meeshy — \(title)"
+        }
+        .onAppear {
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first?.title = "Meeshy — Conversations"
+        }
         .task {
             // Connect Socket.IO early so the backend knows we're online
             MessageSocketManager.shared.connect()

@@ -37,6 +37,55 @@ extension Route {
             return false
         }
     }
+
+    var displayTitle: String {
+        switch self {
+        case .conversation(let conv):
+            return conv.name
+        case .settings:
+            return "Parametres"
+        case .profile:
+            return "Profil"
+        case .contacts:
+            return "Contacts"
+        case .communityList:
+            return "Communautes"
+        case .communityDetail:
+            return "Communaute"
+        case .communityCreate:
+            return "Nouvelle communaute"
+        case .communitySettings:
+            return "Parametres communaute"
+        case .communityMembers:
+            return "Membres"
+        case .communityInvite:
+            return "Inviter"
+        case .notifications:
+            return "Notifications"
+        case .userStats:
+            return "Statistiques"
+        case .links:
+            return "Liens"
+        case .affiliate:
+            return "Affiliation"
+        case .trackingLinks:
+            return "Liens de suivi"
+        case .shareLinks:
+            return "Liens de partage"
+        case .communityLinks:
+            return "Liens communaute"
+        case .dataExport:
+            return "Export de donnees"
+        case .postDetail(_, let post, _):
+            return post?.author ?? "Publication"
+        case .bookmarks:
+            return "Signets"
+        case .friendRequests:
+            return "Demandes d'amis"
+        case .editProfile:
+            return "Modifier le profil"
+        }
+    }
 }
 
 @MainActor
@@ -55,6 +104,10 @@ final class Router: ObservableObject {
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "router")
 
     var currentRoute: Route? { path.last }
+
+    var sceneTitle: String {
+        currentRoute?.displayTitle ?? "Conversations"
+    }
 
     var isHubRoute: Bool {
         currentRoute?.isHub ?? true
