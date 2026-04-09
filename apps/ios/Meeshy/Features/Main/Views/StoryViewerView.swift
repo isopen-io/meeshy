@@ -540,6 +540,7 @@ struct StoryViewerView: View {
                         authorName: group.username,
                         preview: preview,
                         publishedAt: story.createdAt,
+                        reactionCount: storyReactionCount > 0 ? storyReactionCount : nil,
                         commentCount: storyCommentCount > 0 ? storyCommentCount : nil,
                         thumbnailUrl: thumbUrl
                     ))
