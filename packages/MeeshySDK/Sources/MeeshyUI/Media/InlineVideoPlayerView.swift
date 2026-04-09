@@ -125,8 +125,12 @@ public struct InlineVideoPlayerView: View {
     private var thumbnailLayer: some View {
         let thumbUrl = attachment.thumbnailUrl ?? ""
 
-        if !thumbUrl.isEmpty {
-            CachedAsyncImage(url: thumbUrl) {
+        if !thumbUrl.isEmpty || attachment.thumbHash != nil {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: attachment.thumbnailUrl,
+                fullUrl: attachment.thumbnailUrl ?? attachment.fileUrl
+            ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }
             .aspectRatio(contentMode: .fit)

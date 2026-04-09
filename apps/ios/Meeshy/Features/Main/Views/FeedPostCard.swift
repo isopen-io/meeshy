@@ -124,40 +124,37 @@ struct FeedPostCard: View {
                     // Author header
                     authorHeader
 
-                    // Post content (expandable in-place — Prisme Linguistique)
+                    // Post content — tap text opens detail, "voir plus/moins" toggles expansion
                     let truncation = truncatedContent
                     if isTextExpanded {
-                        (Text(effectiveContent)
+                        Text(effectiveContent)
                             .font(.system(size: 15))
                             .foregroundColor(theme.textPrimary)
-                        + Text(" ")
-                        + Text("voir moins").font(.system(size: 15, weight: .medium))
-                            .foregroundColor(theme.textMuted))
-                        .lineLimit(nil)
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                isTextExpanded = false
-                            }
-                        }
-                    } else {
-                        (Text(truncation.text)
-                            .font(.system(size: 15))
-                            .foregroundColor(theme.textPrimary)
-                        + (truncation.isTruncated
-                            ? Text("... ").font(.system(size: 15)).foregroundColor(theme.textPrimary)
-                              + Text("voir plus").font(.system(size: 15, weight: .medium))
-                                .foregroundColor(theme.textMuted)
-                            : Text("")
-                        ))
-                        .lineLimit(nil)
-                        .onTapGesture {
-                            if truncation.isTruncated {
+                            .lineLimit(nil)
+
+                        Text("voir moins")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                            .onTapGesture {
                                 withAnimation(.easeInOut(duration: 0.25)) {
-                                    isTextExpanded = true
+                                    isTextExpanded = false
                                 }
-                            } else {
-                                onTapPost?(post)
                             }
+                    } else {
+                        Text(truncation.text + (truncation.isTruncated ? "..." : ""))
+                            .font(.system(size: 15))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(nil)
+
+                        if truncation.isTruncated {
+                            Text("voir plus")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(theme.textMuted)
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.25)) {
+                                        isTextExpanded = true
+                                    }
+                                }
                         }
                     }
 
@@ -266,10 +263,18 @@ struct FeedPostCard: View {
             let attachments = post.media
                 .filter { $0.type == .image || $0.type == .video }
                 .map { $0.toMessageAttachment() }
+            let senderInfo = ConversationViewModel.MediaSenderInfo(
+                senderName: post.author,
+                senderAvatarURL: post.authorAvatarURL,
+                senderColor: post.authorColor,
+                sentAt: post.timestamp
+            )
+            let senderMap = Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, senderInfo) })
             ConversationMediaGalleryView(
                 allAttachments: attachments,
                 startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
-                accentColor: accentColor
+                accentColor: accentColor,
+                senderInfoMap: senderMap
             )
         }
         .withStatusBubble()

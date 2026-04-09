@@ -15,6 +15,7 @@ extension FeedPostCard {
         if count == 1, let media = mediaList.first {
             singleMediaView(media)
                 .frame(height: mediaIsCompact(media) ? nil : 220)
+                .contentShape(RoundedRectangle(cornerRadius: 12))
         } else if count == 2 {
             // Two images side by side - equal width
             HStack(spacing: spacing) {
@@ -108,7 +109,7 @@ extension FeedPostCard {
     func galleryImageView(_ media: FeedMedia) -> some View {
         ZStack {
             let thumbUrl = media.thumbnailUrl ?? media.url ?? ""
-            if !thumbUrl.isEmpty && (media.type == .image || media.type == .video) {
+            if !thumbUrl.isEmpty || media.thumbHash != nil {
                 ProgressiveCachedImage(
                     thumbHash: media.thumbHash,
                     thumbnailUrl: media.thumbnailUrl,
