@@ -69,8 +69,8 @@ const config = {
     teamId: process.env.APNS_TEAM_ID,
     keyPath: process.env.APNS_KEY_PATH,
     keyContent: process.env.APNS_KEY_CONTENT,
-    bundleId: process.env.APNS_BUNDLE_ID || 'com.meeshy.app',
-    voipBundleId: process.env.APNS_VOIP_BUNDLE_ID || 'com.meeshy.app.voip',
+    bundleId: process.env.APNS_BUNDLE_ID || 'me.meeshy.app',
+    voipBundleId: process.env.APNS_VOIP_BUNDLE_ID || 'me.meeshy.app.voip',
     environment: (process.env.APNS_ENVIRONMENT || 'development') as 'development' | 'production',
   },
 };

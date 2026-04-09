@@ -76,8 +76,8 @@ APNS_TEAM_ID=XXXXXXXXXX
 APNS_KEY_PATH=/opt/meeshy/secrets/apns-auth-key.p8
 
 # Bundle IDs de vos applications iOS
-APNS_BUNDLE_ID=com.meeshy.app
-APNS_VOIP_BUNDLE_ID=com.meeshy.app.voip
+APNS_BUNDLE_ID=me.meeshy.app
+APNS_VOIP_BUNDLE_ID=me.meeshy.app.voip
 
 # Environnement APNS (development ou production)
 APNS_ENVIRONMENT=production
