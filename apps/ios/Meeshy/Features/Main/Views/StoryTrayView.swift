@@ -46,13 +46,14 @@ struct StoryTrayView: View {
         .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
             ZStack {
                 StoryComposerView(
-                    onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs in
+                    onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage in
                         viewModel.publishStoryInBackground(
                             slides: slides,
                             slideImages: slideImages,
                             loadedImages: loadedImages,
                             loadedVideoURLs: loadedVideoURLs,
-                            loadedAudioURLs: loadedAudioURLs
+                            loadedAudioURLs: loadedAudioURLs,
+                            originalLanguage: originalLanguage
                         )
                     },
                     onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in

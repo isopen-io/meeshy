@@ -50,6 +50,7 @@ class StoryViewModel: ObservableObject {
         let loadedImages: [String: UIImage]
         let loadedVideoURLs: [String: URL]
         let loadedAudioURLs: [String: URL]
+        let originalLanguage: String?
 
         enum UploadPhase: Sendable {
             case uploading
@@ -241,7 +242,7 @@ class StoryViewModel: ObservableObject {
 
     // MARK: - Publish Story
 
-    func publishStory(effects: StoryEffects, content: String?, image: UIImage?) async {
+    func publishStory(effects: StoryEffects, content: String?, image: UIImage?, originalLanguage: String? = nil) async {
         guard !isPublishing else { return }
         isPublishing = true
         publishError = nil
@@ -272,6 +273,7 @@ class StoryViewModel: ObservableObject {
                 content: content,
                 storyEffects: effects,
                 visibility: "PUBLIC",
+                originalLanguage: originalLanguage,
                 mediaIds: uploadResult.map { [$0.id] }
             )
 
@@ -296,7 +298,8 @@ class StoryViewModel: ObservableObject {
         content: String?,
         image: UIImage?,
         loadedImages: [String: UIImage] = [:],
-        loadedVideoURLs: [String: URL] = [:]
+        loadedVideoURLs: [String: URL] = [:],
+        originalLanguage: String? = nil
     ) async throws {
         let serverOrigin = MeeshyConfig.shared.serverOrigin
         guard let baseURL = URL(string: serverOrigin),
@@ -358,6 +361,7 @@ class StoryViewModel: ObservableObject {
             content: content,
             storyEffects: updatedEffects,
             visibility: "PUBLIC",
+            originalLanguage: originalLanguage,
             mediaIds: allMediaIds.isEmpty ? nil : allMediaIds
         )
 
@@ -374,7 +378,8 @@ class StoryViewModel: ObservableObject {
         slideImages: [String: UIImage],
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
-        loadedAudioURLs: [String: URL] = [:]
+        loadedAudioURLs: [String: URL] = [:],
+        originalLanguage: String? = nil
     ) {
         guard activeUpload == nil else { return }
 
@@ -394,7 +399,8 @@ class StoryViewModel: ObservableObject {
             slideImages: slideImages,
             loadedImages: loadedImages,
             loadedVideoURLs: loadedVideoURLs,
-            loadedAudioURLs: loadedAudioURLs
+            loadedAudioURLs: loadedAudioURLs,
+            originalLanguage: originalLanguage
         )
         activeUpload = upload
         showStoryComposer = false
@@ -496,6 +502,7 @@ class StoryViewModel: ObservableObject {
                         content: slide.content,
                         storyEffects: updatedEffects,
                         visibility: "PUBLIC",
+                        originalLanguage: upload.originalLanguage,
                         mediaIds: allMediaIds.isEmpty ? nil : allMediaIds
                     )
 

@@ -93,6 +93,8 @@ public struct StoryComposerView: View {
 
     @State private var showAudioDocumentPicker = false
     @State private var showVoiceRecorderSheet = false
+    @State private var storyLanguage: String = AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+    @State private var showLanguagePicker = false
     @State private var showFilterSheet = false
     @State private var showTransitionSheet = false
     @State private var audioEditorItem: AudioEditorItemWrapper?
@@ -171,20 +173,21 @@ public struct StoryComposerView: View {
 
     // MARK: - Callbacks (public API preserved)
 
-    public var onPublishSlide: (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void
+    public var onPublishSlide: (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void
     public var onPublishAllInBackground: (
         _ slides: [StorySlide],
         _ slideImages: [String: UIImage],
         _ loadedImages: [String: UIImage],
         _ loadedVideoURLs: [String: URL],
-        _ loadedAudioURLs: [String: URL]
+        _ loadedAudioURLs: [String: URL],
+        _ originalLanguage: String?
     ) -> Void
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
     public init(
-        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void = { _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
+        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -446,6 +449,7 @@ public struct StoryComposerView: View {
                 .frame(maxWidth: .infinity)
 
             HStack(spacing: 8) {
+                storyLanguageChip
                 previewButton
                 publishButton
                 overflowMenu
@@ -492,6 +496,27 @@ public struct StoryComposerView: View {
                 )
                 .frame(width: 44, height: 44)
                 .contentShape(Circle())
+        }
+    }
+
+    private var storyLanguageChip: some View {
+        Button {
+            showLanguagePicker = true
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "globe")
+                    .font(.system(size: 11, weight: .medium))
+                Text((Locale.current.localizedString(forLanguageCode: storyLanguage) ?? storyLanguage).prefix(3).uppercased())
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundColor(.white.opacity(0.9))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.white.opacity(0.2)))
+        }
+        .sheet(isPresented: $showLanguagePicker) {
+            StoryLanguagePickerView(selectedLanguage: $storyLanguage)
         }
     }
 
@@ -1380,7 +1405,7 @@ public struct StoryComposerView: View {
         let snapshot = snapshotAllSlides()
         clearAllDrafts()
         HapticFeedback.success()
-        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs)
+        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage)
     }
 
     private func snapshotAllSlides() -> (slides: [StorySlide], bgImages: [String: UIImage]) {
@@ -1502,4 +1527,73 @@ struct EditingMediaVideo: Identifiable {
     let id = UUID()
     let elementId: String
     let url: URL
+}
+
+// MARK: - Story Language Picker
+
+struct StoryLanguagePickerView: View {
+    @Binding var selectedLanguage: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+
+    private var languages: [(code: String, name: String)] {
+        Locale.availableIdentifiers
+            .compactMap { id -> (String, String)? in
+                let locale = Locale(identifier: id)
+                guard let langCode = locale.language.languageCode?.identifier,
+                      langCode.count >= 2, langCode.count <= 3,
+                      let name = Locale.current.localizedString(forLanguageCode: langCode) else { return nil }
+                return (langCode, name.prefix(1).uppercased() + name.dropFirst())
+            }
+            .reduce(into: [(String, String)]()) { result, item in
+                if !result.contains(where: { $0.0 == item.0 }) { result.append(item) }
+            }
+            .sorted { $0.1 < $1.1 }
+    }
+
+    private var filteredLanguages: [(code: String, name: String)] {
+        guard !searchText.isEmpty else { return languages }
+        let query = searchText.lowercased()
+        return languages.filter { $0.name.lowercased().contains(query) || $0.code.lowercased().contains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(filteredLanguages, id: \.code) { item in
+                Button {
+                    selectedLanguage = item.code
+                    HapticFeedback.light()
+                    dismiss()
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name)
+                                .font(.system(size: 16, weight: selectedLanguage == item.code ? .semibold : .regular))
+                                .foregroundColor(.primary)
+                            Text(item.code)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        if selectedLanguage == item.code {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(MeeshyColors.indigo500)
+                        }
+                    }
+                }
+            }
+            .searchable(text: $searchText, prompt: "Rechercher une langue")
+            .navigationTitle("Langue du contenu")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Fermer") { dismiss() }
+                        .foregroundColor(MeeshyColors.indigo500)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
 }

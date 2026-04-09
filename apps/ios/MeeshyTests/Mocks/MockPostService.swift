@@ -99,7 +99,8 @@ final class MockPostService: PostServiceProviding {
 
     func create(content: String?, type: String, visibility: String, moodEmoji: String?,
                 mediaIds: [String]?, audioUrl: String?, audioDuration: Int?,
-                originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?) async throws -> APIPost {
+                originalLanguage: String?,
+                mobileTranscription: MobileTranscriptionPayload?) async throws -> APIPost {
         createCallCount += 1
         lastCreateContent = content
         lastCreateType = type
@@ -159,7 +160,7 @@ final class MockPostService: PostServiceProviding {
     }
 
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String,
-                     mediaIds: [String]?) async throws -> APIPost {
+                     originalLanguage: String?, mediaIds: [String]?) async throws -> APIPost {
         createStoryCallCount += 1
         lastCreateStoryContent = content
         return try createStoryResult.get()

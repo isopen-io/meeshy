@@ -558,28 +558,28 @@ struct StoryViewerView: View {
                 }
             }
 
-            // 4. Mute/Unmute — toggles all audio in current story
-            // Uses .highPriorityGesture ONLY (not button action) to ensure
-            // the tap is captured before the parent drag gesture, and fires exactly once.
-            storyActionButton(
-                icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                label: isGlobalMuted ? "Mute" : "Son",
-                isActive: !isGlobalMuted,
-                activeColor: MeeshyColors.indigo400,
-                activeGlow: isGlobalMuted ? nil : MeeshyColors.indigo400
-            ) {
-                // Action handled by .highPriorityGesture below
-            }
-            .highPriorityGesture(
-                TapGesture().onEnded {
-                    HapticFeedback.light()
-                    isGlobalMuted.toggle()
-                    NotificationCenter.default.post(
-                        name: isGlobalMuted ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
-                        object: nil
-                    )
+            // 4. Mute/Unmute — only shown if story has audio or video content
+            if storyHasAudioOrVideo {
+                storyActionButton(
+                    icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                    label: isGlobalMuted ? "Mute" : "Son",
+                    isActive: !isGlobalMuted,
+                    activeColor: MeeshyColors.indigo400,
+                    activeGlow: isGlobalMuted ? nil : MeeshyColors.indigo400
+                ) {
+                    // Action handled by .highPriorityGesture below
                 }
-            )
+                .highPriorityGesture(
+                    TapGesture().onEnded {
+                        HapticFeedback.light()
+                        isGlobalMuted.toggle()
+                        NotificationCenter.default.post(
+                            name: isGlobalMuted ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
+                            object: nil
+                        )
+                    }
+                )
+            }
 
             // 5. Comments toggle
             if storyCommentCount > 0 {
@@ -897,6 +897,18 @@ struct StoryViewerView: View {
 
     private var resolvedViewerLanguage: String? {
         AuthManager.shared.currentUser?.systemLanguage
+    }
+
+    var storyHasAudioOrVideo: Bool {
+        guard let story = currentStory else { return false }
+        guard let effects = story.storyEffects else { return false }
+        if effects.voiceAttachmentId != nil { return true }
+        if effects.backgroundAudioId != nil { return true }
+        if let audioObjs = effects.audioPlayerObjects, !audioObjs.isEmpty { return true }
+        if let mediaObjs = effects.mediaObjects {
+            if mediaObjs.contains(where: { $0.mediaType == "video" }) { return true }
+        }
+        return false
     }
 
     var storyHasTranslatableContent: Bool { // internal for cross-file extension access

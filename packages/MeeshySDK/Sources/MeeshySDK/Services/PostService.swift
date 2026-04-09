@@ -14,7 +14,7 @@ public protocol PostServiceProviding: Sendable {
     func likeComment(postId: String, commentId: String) async throws
     func repost(postId: String, quote: String?) async throws
     func share(postId: String) async throws
-    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, mediaIds: [String]?) async throws -> APIPost
+    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, originalLanguage: String?, mediaIds: [String]?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
     func pinPost(postId: String) async throws
@@ -125,8 +125,8 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/comments/\(commentId)")
     }
 
-    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", mediaIds: [String]? = nil) async throws -> APIPost {
-        let body = CreateStoryRequest(content: content, storyEffects: storyEffects, visibility: visibility, mediaIds: mediaIds)
+    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", originalLanguage: String? = nil, mediaIds: [String]? = nil) async throws -> APIPost {
+        let body = CreateStoryRequest(content: content, storyEffects: storyEffects, visibility: visibility, originalLanguage: originalLanguage, mediaIds: mediaIds)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }
