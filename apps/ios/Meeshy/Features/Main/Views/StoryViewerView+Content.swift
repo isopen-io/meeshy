@@ -1017,7 +1017,6 @@ struct StoryViewersSheet: View {
             let avatarUrl: String?
             let viewedAt: Date?
             let reaction: String?
-            let reply: String?
         }
         let viewers: [ViewerApi]
     }
@@ -1035,7 +1034,7 @@ struct StoryViewersSheet: View {
                         avatarUrl: v.avatarUrl,
                         viewedAt: v.viewedAt ?? Date(),
                         reactionEmoji: v.reaction,
-                        replyContent: v.reply,
+                        replyContent: nil,
                         hasReshared: false
                     )
                 }

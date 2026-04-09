@@ -633,17 +633,13 @@ export class PostService {
     if (!post) return null;
     if (post.authorId !== userId) throw new Error('FORBIDDEN');
 
-    const [views, comments, total] = await Promise.all([
+    const [views, total] = await Promise.all([
       this.prisma.postView.findMany({
         where: { postId },
         include: { user: { select: authorSelect } },
         orderBy: { viewedAt: 'desc' },
         take: limit,
         skip: offset,
-      }),
-      this.prisma.postComment.findMany({
-        where: { postId, isDeleted: false, parentId: null },
-        select: { authorId: true, content: true },
       }),
       this.prisma.postView.count({ where: { postId } }),
     ]);
@@ -654,13 +650,6 @@ export class PostService {
       reactionByUser.set(r.userId, r.emoji);
     }
 
-    const replyByUser = new Map<string, string>();
-    for (const c of comments) {
-      if (!replyByUser.has(c.authorId)) {
-        replyByUser.set(c.authorId, c.content);
-      }
-    }
-
     const viewers = views.map((v) => ({
       id: v.user.id,
       username: v.user.username,
@@ -668,7 +657,6 @@ export class PostService {
       avatarUrl: v.user.avatar,
       viewedAt: v.viewedAt,
       reaction: reactionByUser.get(v.user.id) ?? null,
-      reply: replyByUser.get(v.user.id) ?? null,
     }));
 
     return { viewers, total, hasMore: offset + limit < total };
