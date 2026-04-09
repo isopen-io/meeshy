@@ -581,25 +581,6 @@ struct FeedView: View {
                     }
 
                     Spacer()
-
-                    Button {
-                        showComposerLanguagePicker = true
-                        HapticFeedback.light()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "globe")
-                                .font(.system(size: 11))
-                            Text(composerLanguageDisplayName)
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .foregroundColor(MeeshyColors.indigo400)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.12 : 0.8))
-                        )
-                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
@@ -685,6 +666,30 @@ struct FeedView: View {
                     .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
 
                     Spacer()
+
+                    Button {
+                        showComposerLanguagePicker = true
+                        HapticFeedback.light()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "globe")
+                                .font(.system(size: 14))
+                            Text(composerLanguageDisplayName)
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(MeeshyColors.indigo500)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.15 : 1))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)
