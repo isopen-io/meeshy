@@ -1414,6 +1414,15 @@ public struct StoryComposerView: View {
         if idx < slides.count {
             slides[idx].effects = buildEffects()
         }
+        // Compute composite thumbHash for each slide (bg + text + media + stickers)
+        for i in slides.indices {
+            let bgImage = viewModel.slideImages[slides[i].id]
+            slides[i].effects.thumbHash = StorySlideRenderer.computeThumbHash(
+                slide: slides[i],
+                bgImage: bgImage,
+                loadedImages: viewModel.loadedImages
+            )
+        }
         return (slides, viewModel.slideImages)
     }
 
