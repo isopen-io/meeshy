@@ -83,6 +83,7 @@ struct RootView: View {
                             replyContext: pendingReplyContext
                         )
                         .navigationBarHidden(true)
+                        .onAppear { pendingReplyContext = nil }
                     case .settings:
                         SettingsView()
                             .navigationBarHidden(true)

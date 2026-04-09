@@ -222,8 +222,10 @@ struct ConversationView: View {
     }
 
     private var isCurrentUserAdminOrMod: Bool {
-        let role = conversation?.currentUserRole?.uppercased() ?? ""
-        return ["ADMIN", "MODERATOR", "BIGBOSS"].contains(role)
+        let convRole = conversation?.currentUserRole?.uppercased() ?? ""
+        let platformRole = AuthManager.shared.currentUser?.role?.uppercased() ?? ""
+        let modRoles: Set<String> = ["ADMIN", "MODERATOR", "BIGBOSS"]
+        return modRoles.contains(convRole) || modRoles.contains(platformRole)
     }
 
     // MARK: - Init
@@ -1037,6 +1039,7 @@ struct ConversationView: View {
                 messageBubbleFrame: .zero,
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
+                canEdit: msg.isMe || isCurrentUserAdminOrMod,
                 onReply: { triggerReply(for: msg) },
                 onCopy: { UIPasteboard.general.string = msg.content; HapticFeedback.success() },
                 onEdit: {

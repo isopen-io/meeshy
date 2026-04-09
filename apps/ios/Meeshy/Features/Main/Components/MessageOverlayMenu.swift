@@ -12,6 +12,7 @@ struct MessageOverlayMenu: View {
     let messageBubbleFrame: CGRect
     @Binding var isPresented: Bool
     var canDelete: Bool = false
+    var canEdit: Bool = false
     var onReply: (() -> Void)?
     var onCopy: (() -> Void)?
     var onEdit: (() -> Void)?
@@ -487,7 +488,7 @@ struct MessageOverlayMenu: View {
             handler: { dismissThen { onPin?() } }
         ))
 
-        if message.isMe && hasText {
+        if canEdit && hasText {
             actions.append(MessageAction(
                 id: "edit", icon: "pencil",
                 label: "Modifier", color: "F8B500",

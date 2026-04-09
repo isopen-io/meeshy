@@ -985,16 +985,13 @@ struct MessageDetailSheet: View {
                 if status.receivedBy.isEmpty {
                     emptyStateView(icon: "checkmark.circle", text: "Aucune confirmation de distribution", accent: accent)
                 } else {
-                    // Timeline header
-                    if let deliveredAt = message.deliveredToAllAt {
-                        timelineBanner(
-                            icon: "checkmark.circle.fill",
-                            text: "Distribue a tous",
-                            detail: formatTimeFR(deliveredAt),
-                            count: "\(status.receivedCount)/\(status.totalMembers)",
-                            accent: accent
-                        )
-                    }
+                    timelineBanner(
+                        icon: "checkmark.circle.fill",
+                        text: status.receivedCount >= status.totalMembers ? "Distribue a tous" : "Distribue",
+                        detail: status.receivedBy.first.map { formatTimeFR($0.receivedAt) } ?? "",
+                        count: "\(status.receivedCount)/\(status.totalMembers)",
+                        accent: accent
+                    )
 
                     LazyVStack(spacing: 0) {
                         ForEach(Array(status.receivedBy.enumerated()), id: \.element.userId) { index, user in
@@ -1024,15 +1021,13 @@ struct MessageDetailSheet: View {
                 if status.readBy.isEmpty {
                     emptyStateView(icon: "eye.slash", text: "Personne n'a lu ce message", accent: accent)
                 } else {
-                    if let readAt = message.readByAllAt {
-                        timelineBanner(
-                            icon: "eye.fill",
-                            text: "Lu par tous",
-                            detail: formatTimeFR(readAt),
-                            count: "\(status.readCount)/\(status.totalMembers)",
-                            accent: accent
-                        )
-                    }
+                    timelineBanner(
+                        icon: "eye.fill",
+                        text: status.readCount >= status.totalMembers ? "Lu par tous" : "Lu",
+                        detail: status.readBy.first.map { formatTimeFR($0.readAt) } ?? "",
+                        count: "\(status.readCount)/\(status.totalMembers)",
+                        accent: accent
+                    )
 
                     LazyVStack(spacing: 0) {
                         ForEach(Array(status.readBy.enumerated()), id: \.element.userId) { index, user in

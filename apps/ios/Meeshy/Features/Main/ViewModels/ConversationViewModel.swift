@@ -806,7 +806,7 @@ class ConversationViewModel: ObservableObject {
     }
 
     @discardableResult
-    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil) async -> Bool {
+    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
 
@@ -859,9 +859,11 @@ class ConversationViewModel: ObservableObject {
 
         isSending = true
 
-        // Build ReplyReference from quoted message
+        // Build ReplyReference from quoted message or story
         var replyRef: ReplyReference?
-        if let replyId = replyToId, let quoted = messages.first(where: { $0.id == replyId }) {
+        if let storyRef = storyReplyReference {
+            replyRef = storyRef
+        } else if let replyId = replyToId, let quoted = messages.first(where: { $0.id == replyId }) {
             let previewText: String = {
                 if !quoted.content.isEmpty { return quoted.content }
                 if let first = quoted.attachments.first {
@@ -906,6 +908,7 @@ class ConversationViewModel: ObservableObject {
             content: text,
             messageType: optimisticMessageType,
             replyToId: replyToId,
+            storyReplyToId: storyReplyToId,
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
             expiresAt: resolvedExpiresAt,
@@ -952,6 +955,7 @@ class ConversationViewModel: ObservableObject {
                 content: finalContent,
                 originalLanguage: originalLanguage ?? detectKeyboardLanguage(),
                 replyToId: replyToId,
+                storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds,
@@ -1045,7 +1049,8 @@ class ConversationViewModel: ObservableObject {
         messageId: String,
         content: String,
         attachments: [MeeshyMessageAttachment],
-        replyToId: String?
+        replyToId: String?,
+        replyReference: ReplyReference? = nil
     ) {
         let now = Date()
         let msg = Message(
@@ -1055,9 +1060,11 @@ class ConversationViewModel: ObservableObject {
             content: content,
             messageType: .audio,
             replyToId: replyToId,
+            storyReplyToId: replyReference?.isStoryReply == true ? replyReference?.messageId : nil,
             createdAt: now,
             updatedAt: now,
             attachments: attachments,
+            replyTo: replyReference,
             deliveryStatus: .sent,
             isMe: true
         )
