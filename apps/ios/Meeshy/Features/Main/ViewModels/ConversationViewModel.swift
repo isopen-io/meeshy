@@ -1181,6 +1181,35 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Delete Attachment
+
+    func deleteAttachment(messageId: String, attachmentId: String) async {
+        guard let msgIdx = messageIndex(for: messageId) else { return }
+        let message = messages[msgIdx]
+        let isLastAttachment = message.attachments.count <= 1
+        let hasTextContent = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        // If it's the only attachment AND no text content → delete the whole message
+        if isLastAttachment && !hasTextContent {
+            await deleteMessage(messageId: messageId)
+            return
+        }
+
+        // Optimistic: remove attachment from local message
+        let originalAttachments = messages[msgIdx].attachments
+        messages[msgIdx].attachments.removeAll { $0.id == attachmentId }
+
+        do {
+            try await AttachmentService.shared.delete(attachmentId: attachmentId)
+        } catch {
+            // Revert on failure
+            if let idx = messageIndex(for: messageId) {
+                messages[idx].attachments = originalAttachments
+            }
+            self.error = error.localizedDescription
+        }
+    }
+
     // MARK: - Pin / Unpin Message
 
     func togglePin(messageId: String) async {

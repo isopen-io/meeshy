@@ -1080,6 +1080,9 @@ struct ConversationView: View {
                 },
                 onDelete: {
                     Task { await viewModel.deleteMessage(messageId: msg.id) }
+                },
+                onDeleteAttachment: { attachmentId in
+                    Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
                 }
             )
             .transition(.opacity).zIndex(999)
