@@ -13,7 +13,7 @@ struct MeeshyApp: App {
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @ObservedObject private var theme = ThemeManager.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @State private var showSplash = true
+    @State private var showSplash = AuthManager.shared.authToken == nil
     @State private var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
     @Environment(\.colorScheme) private var colorScheme

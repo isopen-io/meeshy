@@ -3,8 +3,6 @@ import Combine
 import MeeshySDK
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "notifications-list")
-
 // MARK: - Notification Category Filter
 
 enum NotificationCategory: String, CaseIterable {
@@ -458,7 +456,7 @@ final class NotificationListViewModel: ObservableObject {
             await CacheCoordinator.shared.notifications.save(response.data, for: "all")
             await NotificationManager.shared.refreshUnreadCount()
         } catch {
-            logger.error("Failed to refresh notifications: \(error.localizedDescription)")
+            Logger.notifications.error("Failed to refresh notifications: \(error.localizedDescription)")
         }
         isLoading = false
     }
@@ -474,7 +472,7 @@ final class NotificationListViewModel: ObservableObject {
             hasMore = response.pagination?.hasMore ?? false
             offset += limit
         } catch {
-            logger.error("Failed to load more notifications: \(error.localizedDescription)")
+            Logger.notifications.error("Failed to load more notifications: \(error.localizedDescription)")
         }
         isLoading = false
     }
@@ -485,7 +483,7 @@ final class NotificationListViewModel: ObservableObject {
             try await NotificationService.shared.markAsRead(notificationId: notification.id)
             handleReadEvent(notification.id)
         } catch {
-            logger.error("Failed to mark notification as read: \(error.localizedDescription)")
+            Logger.notifications.error("Failed to mark notification as read: \(error.localizedDescription)")
         }
     }
 
@@ -500,7 +498,13 @@ final class NotificationListViewModel: ObservableObject {
             notifications.removeAll { $0.id == notification.id }
             await NotificationManager.shared.refreshUnreadCount()
         } catch {
-            logger.error("Failed to delete notification: \(error.localizedDescription)")
+            Logger.notifications.error("Failed to delete notification: \(error.localizedDescription)")
         }
     }
+}
+
+// MARK: - Logger
+
+private extension Logger {
+    static let notifications = Logger(subsystem: "me.meeshy.sdk", category: "notifications")
 }
