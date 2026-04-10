@@ -384,13 +384,30 @@ export class MessageReadStatusService {
         }
       }
 
+      // Compute not-seen participants (active but no cursor matching this message)
+      const receivedIds = new Set(receivedBy.map(r => r.participantId));
+      const readIds = new Set(readBy.map(r => r.participantId));
+      const notSeenBy: Array<{ participantId: string; displayName: string; avatarURL: string | null }> = [];
+
+      for (const p of participants) {
+        if (p.id === message.senderId) continue;
+        if (receivedIds.has(p.id) || readIds.has(p.id)) continue;
+        notSeenBy.push({
+          participantId: p.id,
+          displayName: p.displayName,
+          avatarURL: p.user?.avatar ?? null,
+        });
+      }
+
       return {
         messageId,
         totalMembers,
         receivedCount: receivedBy.length,
         readCount: readBy.length,
+        notSeenCount: notSeenBy.length,
         receivedBy,
         readBy,
+        notSeenBy,
       };
     } catch (error) {
       logger.error(

@@ -56,7 +56,7 @@ enum DetailTab: String, CaseIterable, Identifiable {
 // MARK: - Views Sub-Filter
 
 private enum ViewsFilter: String, CaseIterable, Identifiable {
-    case sent, delivered, read, listened, watched
+    case sent, delivered, read, notSeen, listened, watched
 
     var id: String { rawValue }
 
@@ -65,6 +65,7 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
         case .sent: return "Envoye"
         case .delivered: return "Distribue"
         case .read: return "Lu"
+        case .notSeen: return "Pas vu"
         case .listened: return "Ecoute"
         case .watched: return "Vu"
         }
@@ -75,6 +76,7 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
         case .sent: return "paperplane.fill"
         case .delivered: return "checkmark.circle.fill"
         case .read: return "eye.fill"
+        case .notSeen: return "eye.slash.fill"
         case .listened: return "headphones"
         case .watched: return "play.rectangle.fill"
         }
@@ -224,7 +226,7 @@ struct MessageDetailSheet: View {
     }
 
     private var availableViewsFilters: [ViewsFilter] {
-        var filters: [ViewsFilter] = [.sent, .delivered, .read]
+        var filters: [ViewsFilter] = [.sent, .delivered, .read, .notSeen]
         let hasAudio = message.attachments.contains { $0.mimeType.hasPrefix("audio/") }
         let hasVideo = message.attachments.contains { $0.mimeType.hasPrefix("video/") }
         if hasAudio { filters.append(.listened) }
@@ -734,6 +736,8 @@ struct MessageDetailSheet: View {
                     viewsDeliveredContent(accent: accent)
                 case .read:
                     viewsReadContent(accent: accent)
+                case .notSeen:
+                    viewsNotSeenContent(accent: accent)
                 case .listened:
                     viewsListenedContent(accent: accent)
                 case .watched:
@@ -994,10 +998,10 @@ struct MessageDetailSheet: View {
                     )
 
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(status.receivedBy.enumerated()), id: \.element.userId) { index, user in
+                        ForEach(Array(status.receivedBy.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
-                                username: user.username,
-                                avatar: nil,
+                                username: user.displayName,
+                                avatar: user.avatarURL,
                                 date: user.receivedAt,
                                 accent: accent,
                                 index: index
@@ -1030,11 +1034,48 @@ struct MessageDetailSheet: View {
                     )
 
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(status.readBy.enumerated()), id: \.element.userId) { index, user in
+                        ForEach(Array(status.readBy.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
-                                username: user.username,
-                                avatar: nil,
+                                username: user.displayName,
+                                avatar: user.avatarURL,
                                 date: user.readAt,
+                                accent: accent,
+                                index: index
+                            )
+                        }
+                    }
+                }
+            } else {
+                emptyStateView(icon: "wifi.slash", text: "Impossible de charger les donnees", accent: accent)
+            }
+        }
+    }
+
+    // MARK: - Pas vu (Not Seen) — User List
+
+    private func viewsNotSeenContent(accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if isLoadingReadStatus {
+                loadingIndicator(accent: accent)
+            } else if let status = readStatusData {
+                let notSeen = status.notSeenBy ?? []
+                if notSeen.isEmpty {
+                    emptyStateView(icon: "checkmark.circle", text: "Tout le monde a recu le message", accent: accent)
+                } else {
+                    timelineBanner(
+                        icon: "eye.slash.fill",
+                        text: "Pas encore vu",
+                        detail: "\(notSeen.count) participant\(notSeen.count > 1 ? "s" : "")",
+                        count: "\(notSeen.count)/\(status.totalMembers)",
+                        accent: accent
+                    )
+
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(notSeen.enumerated()), id: \.element.participantId) { index, user in
+                            userStatusRow(
+                                username: user.displayName,
+                                avatar: user.avatarURL,
+                                date: nil,
                                 accent: accent,
                                 index: index
                             )
@@ -1135,7 +1176,7 @@ struct MessageDetailSheet: View {
         )
     }
 
-    private func userStatusRow(username: String, avatar: String?, date: Date, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
+    private func userStatusRow(username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
         HStack(spacing: 10) {
             MeeshyAvatar(
                 name: username,
@@ -1154,9 +1195,15 @@ struct MessageDetailSheet: View {
                 trailing
             }
 
-            Text(relativeDate(date))
-                .font(.system(size: 11))
-                .foregroundColor(theme.textMuted)
+            if let date {
+                Text(relativeDate(date))
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textMuted)
+            } else {
+                Image(systemName: "clock")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textMuted)
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
@@ -2072,9 +2119,12 @@ struct MessageDetailSheet: View {
         isLoadingConversations = false
     }
 
+    @State private var readStatusError: String? = nil
+
     private func loadReadStatus() async {
         guard readStatusData == nil, !isLoadingReadStatus else { return }
         isLoadingReadStatus = true
+        readStatusError = nil
         defer { isLoadingReadStatus = false }
         do {
             let response: APIResponse<ReadStatusData> = try await APIClient.shared.request(
@@ -2082,8 +2132,12 @@ struct MessageDetailSheet: View {
             )
             if response.success {
                 readStatusData = response.data
+            } else {
+                readStatusError = "Erreur serveur"
             }
-        } catch { }
+        } catch {
+            readStatusError = "Erreur de connexion"
+        }
     }
 
     private func loadAttachmentStatuses() async {
@@ -2228,19 +2282,32 @@ private struct ReadStatusData: Decodable {
     let totalMembers: Int
     let receivedCount: Int
     let readCount: Int
+    let notSeenCount: Int?
     let receivedBy: [ReceivedByUser]
     let readBy: [ReadByUser]
+    let notSeenBy: [NotSeenByUser]?
 }
 
-private struct ReceivedByUser: Decodable {
-    let userId: String
-    let username: String
+private struct ReceivedByUser: Decodable, Identifiable {
+    let participantId: String
+    let displayName: String
+    let avatarURL: String?
     let receivedAt: Date
+    var id: String { participantId }
 }
 
-private struct ReadByUser: Decodable {
-    let userId: String
-    let username: String
+private struct ReadByUser: Decodable, Identifiable {
+    let participantId: String
+    let displayName: String
+    let avatarURL: String?
     let readAt: Date
+    var id: String { participantId }
+}
+
+private struct NotSeenByUser: Decodable, Identifiable {
+    let participantId: String
+    let displayName: String
+    let avatarURL: String?
+    var id: String { participantId }
 }
 
