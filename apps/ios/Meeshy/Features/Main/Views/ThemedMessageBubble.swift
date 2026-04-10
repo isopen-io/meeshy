@@ -579,7 +579,6 @@ struct ThemedMessageBubble: View {
                                         .padding(.top, 6 + (message.replyTo != nil ? 52 : 0))
                                 }
                             }
-                            .fixedSize(horizontal: true, vertical: false)
                             .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: .leading)
                             .background(bubbleBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 18))
