@@ -357,6 +357,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             .store(in: &socketSubscriptions)
 
+        // Attachment status updated (listened, watched, viewed, downloaded)
+        messageSocket.attachmentStatusUpdated
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleAttachmentStatusUpdated(event) }
+            }
+            .store(in: &socketSubscriptions)
+
         // Reconnect -> delta sync
         messageSocket.didReconnect
             .sink { [weak self] in
@@ -525,6 +533,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     // MARK: - Local-First Updates
+
+    private func handleAttachmentStatusUpdated(_ event: AttachmentStatusUpdatedEvent) async {
+        // Trigger message refresh so UI can re-render attachment status indicators
+        _messagesDidChange.send(event.conversationId)
+    }
 
     public func markConversationReadLocally(_ conversationId: String) async {
         await cache.conversations.update(for: "list") { conversations in

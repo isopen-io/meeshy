@@ -115,6 +115,7 @@ struct AttachmentStatusBody: Encodable, Sendable {
     let playPositionMs: Int
     let durationMs: Int
     let complete: Bool
+    var wasZoomed: Bool?
 }
 
 // MARK: - Playback Speed

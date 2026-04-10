@@ -417,6 +417,12 @@ public struct VideoFullscreenPlayer: View {
                 try data.write(to: tempFile)
                 let saved = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
                 try? FileManager.default.removeItem(at: tempFile)
+                if saved, let attId = attachmentId {
+                    let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
+                    let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+                        endpoint: "/attachments/\(attId)/status", body: body
+                    )
+                }
                 await MainActor.run {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         saveState = saved ? .saved : .failed
