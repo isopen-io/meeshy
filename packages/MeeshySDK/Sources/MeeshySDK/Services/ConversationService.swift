@@ -8,6 +8,7 @@ public protocol ConversationServiceProviding: Sendable {
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse
     func delete(conversationId: String) async throws
     func markRead(conversationId: String) async throws
+    func markAsReceived(conversationId: String) async throws
     func markUnread(conversationId: String) async throws
     func getParticipants(conversationId: String, limit: Int, cursor: String?) async throws -> PaginatedAPIResponse<[APIParticipant]>
     func deleteForMe(conversationId: String) async throws

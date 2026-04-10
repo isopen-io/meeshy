@@ -489,8 +489,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     private func handleReadStatusUpdated(_ event: ReadStatusUpdateEvent) async {
         let userId = await currentUserId()
 
-        // Update conversation unread count
-        if event.userId == userId || event.participantId == userId {
+        // Update conversation unread count (userId is preferred, fallback to participantId)
+        let eventUserId = event.userId ?? event.participantId
+        if eventUserId == userId {
             await cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {

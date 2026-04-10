@@ -1294,7 +1294,11 @@ class ConversationViewModel: ObservableObject {
     func markAsReceived() {
         let convId = conversationId
         Task {
-            try? await conversationService.markAsReceived(conversationId: convId)
+            do {
+                try await conversationService.markAsReceived(conversationId: convId)
+            } catch {
+                // Non-critical — server will still count as received on next sync
+            }
         }
     }
 
