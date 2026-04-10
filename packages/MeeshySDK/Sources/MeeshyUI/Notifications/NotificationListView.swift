@@ -1,6 +1,9 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import os
+
+private let logger = Logger(subsystem: "me.meeshy.app", category: "notifications-list")
 
 // MARK: - Notification Category Filter
 
@@ -347,11 +350,12 @@ public struct NotificationListView: View {
 @MainActor
 final class NotificationListViewModel: ObservableObject {
     @Published var notifications: [APINotification] = []
-    @Published var unreadCount: Int = 0
     @Published var isLoading = false
     @Published var hasMore = false
     @Published var unreadOnly = false
     @Published var selectedCategory: NotificationCategory = .all
+
+    var unreadCount: Int { NotificationManager.shared.unreadCount }
 
     private var offset = 0
     private let limit = 30
@@ -359,10 +363,14 @@ final class NotificationListViewModel: ObservableObject {
     private var refreshTask: Task<Void, Never>?
 
     var filteredNotifications: [APINotification] {
-        guard selectedCategory != .all && selectedCategory != .unread else {
+        switch selectedCategory {
+        case .all:
             return notifications
+        case .unread:
+            return notifications.filter { !$0.isRead }
+        default:
+            return notifications.filter { selectedCategory.matches($0) }
         }
-        return notifications.filter { selectedCategory.matches($0) }
     }
 
     init() {
@@ -373,6 +381,13 @@ final class NotificationListViewModel: ObservableObject {
 
     private func subscribeToRealTimeEvents() {
         let manager = NotificationManager.shared
+
+        manager.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
 
         manager.newNotificationReceived
             .receive(on: DispatchQueue.main)
@@ -407,9 +422,7 @@ final class NotificationListViewModel: ObservableObject {
 
     private func handleReadEvent(_ notificationId: String) {
         guard let idx = notifications.firstIndex(where: { $0.id == notificationId }) else { return }
-        let wasUnread = !notifications[idx].isRead
         notifications[idx] = notifications[idx].withReadState(true)
-        if wasUnread { unreadCount = max(0, unreadCount - 1) }
     }
 
     // MARK: - Loading
@@ -440,11 +453,13 @@ final class NotificationListViewModel: ObservableObject {
                 offset: 0, limit: limit, unreadOnly: false
             )
             notifications = response.data
-            unreadCount = response.unreadCount ?? 0
             hasMore = response.pagination?.hasMore ?? false
             offset = limit
             await CacheCoordinator.shared.notifications.save(response.data, for: "all")
-        } catch {}
+            await NotificationManager.shared.refreshUnreadCount()
+        } catch {
+            logger.error("Failed to refresh notifications: \(error.localizedDescription)")
+        }
         isLoading = false
     }
 
@@ -458,7 +473,9 @@ final class NotificationListViewModel: ObservableObject {
             notifications.append(contentsOf: response.data)
             hasMore = response.pagination?.hasMore ?? false
             offset += limit
-        } catch {}
+        } catch {
+            logger.error("Failed to load more notifications: \(error.localizedDescription)")
+        }
         isLoading = false
     }
 
@@ -467,12 +484,13 @@ final class NotificationListViewModel: ObservableObject {
         do {
             try await NotificationService.shared.markAsRead(notificationId: notification.id)
             handleReadEvent(notification.id)
-        } catch {}
+        } catch {
+            logger.error("Failed to mark notification as read: \(error.localizedDescription)")
+        }
     }
 
     func markAllRead() async {
         await NotificationManager.shared.markAllAsRead()
-        unreadCount = 0
         await loadInitial()
     }
 
@@ -480,7 +498,9 @@ final class NotificationListViewModel: ObservableObject {
         do {
             try await NotificationService.shared.delete(notificationId: notification.id)
             notifications.removeAll { $0.id == notification.id }
-            if !notification.isRead { unreadCount = max(0, unreadCount - 1) }
-        } catch {}
+            await NotificationManager.shared.refreshUnreadCount()
+        } catch {
+            logger.error("Failed to delete notification: \(error.localizedDescription)")
+        }
     }
 }
