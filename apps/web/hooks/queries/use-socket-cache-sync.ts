@@ -429,6 +429,38 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
+    // Handler for attachment status updated (listened, watched, viewed, downloaded)
+    const handleAttachmentStatusUpdated = (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => {
+      const targetConversationId = data.conversationId;
+      if (!targetConversationId) return;
+
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(targetConversationId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) => {
+                if (m.id !== data.messageId) return m;
+                const attachments = Array.isArray(m.attachments) ? m.attachments.map((a: any) => {
+                  if (a.id !== data.attachmentId) return a;
+                  const updates: Record<string, unknown> = {};
+                  if (data.action === 'listened') updates.listenedAt = new Date().toISOString();
+                  if (data.action === 'watched') updates.watchedAt = new Date().toISOString();
+                  if (data.action === 'viewed') updates.viewedAt = new Date().toISOString();
+                  if (data.action === 'downloaded') updates.downloadedAt = new Date().toISOString();
+                  return { ...a, ...updates };
+                }) : m.attachments;
+                return { ...m, attachments };
+              }),
+            })),
+          };
+        }
+      );
+    };
+
     // Register listeners
     const unsubscribeMessage = meeshySocketIOService.onNewMessage(handleNewMessage);
     const unsubscribeEdit = meeshySocketIOService.onMessageEdited(handleMessageEdited);
@@ -437,6 +469,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeUnread = meeshySocketIOService.onUnreadUpdated(handleUnreadUpdated);
     const unsubscribeTranscription = meeshySocketIOService.onTranscription(handleTranscription);
     const unsubscribeAudioTranslation = meeshySocketIOService.onAudioTranslation(handleAudioTranslation);
+    const unsubscribeAttachmentStatus = meeshySocketIOService.onAttachmentStatusUpdated(handleAttachmentStatusUpdated);
     const unsubscribePreferences = meeshySocketIOService.onPreferencesUpdated((data) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.preferences.category(data.category),
@@ -454,6 +487,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeUnread?.();
       unsubscribeTranscription?.();
       unsubscribeAudioTranslation?.();
+      unsubscribeAttachmentStatus?.();
       unsubscribePreferences?.();
       unsubscribeJoined?.();
       unsubscribeLeft?.();

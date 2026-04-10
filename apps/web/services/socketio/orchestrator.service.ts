@@ -492,6 +492,10 @@ export class SocketIOOrchestrator {
     return this.messagingService.onMessageDeleted(listener);
   }
 
+  onAttachmentStatusUpdated(listener: (data: any) => void): UnsubscribeFn {
+    return this.messagingService.onAttachmentStatusUpdated(listener);
+  }
+
   onTranslation(listener: (data: any) => void): UnsubscribeFn {
     return this.translationService.onTranslation(listener);
   }

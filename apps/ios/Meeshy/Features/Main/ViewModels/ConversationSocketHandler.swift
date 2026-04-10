@@ -318,6 +318,18 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
+        // Attachment status updated (listened, watched, viewed, downloaded)
+        socketManager.attachmentStatusUpdated
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let delegate = self?.delegate else { return }
+                guard let msgIdx = delegate.messageIndex(for: event.messageId) else { return }
+                // Trigger UI refresh for this message's attachment status
+                delegate.messages[msgIdx].updatedAt = Date()
+            }
+            .store(in: &cancellables)
+
         // View-once consumed
         socketManager.messageConsumed
             .filter { $0.conversationId == convId }
