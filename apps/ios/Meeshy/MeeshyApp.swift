@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import MeeshySDK
 import MeeshyUI
 import os
@@ -12,7 +13,7 @@ struct MeeshyApp: App {
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @ObservedObject private var theme = ThemeManager.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @State private var showSplash = true
+    @State private var showSplash = AuthManager.shared.authToken == nil
     @State private var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
     @Environment(\.colorScheme) private var colorScheme
@@ -136,7 +137,7 @@ struct MeeshyApp: App {
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
                     case .active:
-                        Task { await pushManager.resetBadge() }
+                        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
                         Task { await handleForegroundTransition() }
                     case .background:
                         handleBackgroundTransition()
@@ -188,67 +189,16 @@ struct MeeshyApp: App {
     }
 
     private func handlePushNavigation(payload: NotificationPayload) {
-        guard authManager.isAuthenticated else { return }
-
-        let notifType = MeeshyNotificationType(rawValue: payload.type ?? "")
-
-        switch notifType {
-        case .friendRequest, .friendAccepted, .legacyFriendRequest, .legacyFriendAccepted,
-             .contactRequest, .contactAccepted, .legacyStatusUpdate:
-            if let senderId = payload.senderId {
-                NotificationCenter.default.post(
-                    name: Notification.Name("openProfileSheet"),
-                    object: ["userId": senderId, "username": payload.senderUsername ?? senderId]
-                )
-            }
+        guard authManager.isAuthenticated else {
             pushManager.clearPendingNotification()
-
-        case .achievementUnlocked, .legacyAchievementUnlocked:
-            NotificationCenter.default.post(
-                name: Notification.Name("pushNavigateToRoute"),
-                object: "userStats"
-            )
-            pushManager.clearPendingNotification()
-
-        case .legacyAffiliateSignup:
-            NotificationCenter.default.post(
-                name: Notification.Name("pushNavigateToRoute"),
-                object: "affiliate"
-            )
-            pushManager.clearPendingNotification()
-
-        case .postLike, .legacyPostLike, .postComment, .legacyPostComment,
-             .postRepost, .commentLike, .commentReply,
-             .storyReaction, .statusReaction:
-            if let postId = payload.postId {
-                let route = payload.postType == "STORY" ? "storyDetail:\(postId)" : "postDetail:\(postId)"
-                NotificationCenter.default.post(
-                    name: Notification.Name("pushNavigateToRoute"),
-                    object: route
-                )
-            }
-            pushManager.clearPendingNotification()
-
-        default:
-            guard let conversationId = payload.conversationId, !conversationId.isEmpty else {
-                pushManager.clearPendingNotification()
-                return
-            }
-            Task {
-                do {
-                    let userId = AuthManager.shared.currentUser?.id ?? ""
-                    let apiConversation = try await ConversationService.shared.getById(conversationId)
-                    let conversation = apiConversation.toConversation(currentUserId: userId)
-                    NotificationCenter.default.post(
-                        name: .navigateToConversation,
-                        object: conversation
-                    )
-                } catch {
-                    toastManager.showError(String(localized: "Impossible d'ouvrir la conversation", defaultValue: "Impossible d'ouvrir la conversation"))
-                }
-                pushManager.clearPendingNotification()
-            }
+            return
         }
+
+        NotificationCenter.default.post(
+            name: .handlePushNotification,
+            object: payload
+        )
+        pushManager.clearPendingNotification()
     }
 
     // MARK: - App Lifecycle Transitions

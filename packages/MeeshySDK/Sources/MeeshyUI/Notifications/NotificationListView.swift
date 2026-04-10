@@ -1,5 +1,7 @@
 import SwiftUI
+import Combine
 import MeeshySDK
+import os
 
 // MARK: - Notification Category Filter
 
@@ -346,21 +348,82 @@ public struct NotificationListView: View {
 @MainActor
 final class NotificationListViewModel: ObservableObject {
     @Published var notifications: [APINotification] = []
-    @Published var unreadCount: Int = 0
     @Published var isLoading = false
     @Published var hasMore = false
     @Published var unreadOnly = false
     @Published var selectedCategory: NotificationCategory = .all
 
+    var unreadCount: Int { NotificationManager.shared.unreadCount }
+
     private var offset = 0
     private let limit = 30
+    private var cancellables = Set<AnyCancellable>()
+    private var refreshTask: Task<Void, Never>?
 
     var filteredNotifications: [APINotification] {
-        guard selectedCategory != .all && selectedCategory != .unread else {
+        switch selectedCategory {
+        case .all:
             return notifications
+        case .unread:
+            return notifications.filter { !$0.isRead }
+        default:
+            return notifications.filter { selectedCategory.matches($0) }
         }
-        return notifications.filter { selectedCategory.matches($0) }
     }
+
+    init() {
+        subscribeToRealTimeEvents()
+    }
+
+    // MARK: - Real-Time Socket Subscriptions
+
+    private func subscribeToRealTimeEvents() {
+        let manager = NotificationManager.shared
+
+        manager.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        manager.newNotificationReceived
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.scheduleRefresh()
+            }
+            .store(in: &cancellables)
+
+        manager.notificationMarkedRead
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notificationId in
+                self?.handleReadEvent(notificationId)
+            }
+            .store(in: &cancellables)
+
+        manager.notificationWasDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notificationId in
+                self?.notifications.removeAll { $0.id == notificationId }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func scheduleRefresh() {
+        refreshTask?.cancel()
+        refreshTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            await refreshFromAPI()
+        }
+    }
+
+    private func handleReadEvent(_ notificationId: String) {
+        guard let idx = notifications.firstIndex(where: { $0.id == notificationId }) else { return }
+        notifications[idx] = notifications[idx].withReadState(true)
+    }
+
+    // MARK: - Loading
 
     func loadInitial() async {
         offset = 0
@@ -388,11 +451,13 @@ final class NotificationListViewModel: ObservableObject {
                 offset: 0, limit: limit, unreadOnly: false
             )
             notifications = response.data
-            unreadCount = response.unreadCount ?? 0
             hasMore = response.pagination?.hasMore ?? false
             offset = limit
             await CacheCoordinator.shared.notifications.save(response.data, for: "all")
-        } catch {}
+            await NotificationManager.shared.refreshUnreadCount()
+        } catch {
+            Logger.notifications.error("Failed to refresh notifications: \(error.localizedDescription)")
+        }
         isLoading = false
     }
 
@@ -406,7 +471,9 @@ final class NotificationListViewModel: ObservableObject {
             notifications.append(contentsOf: response.data)
             hasMore = response.pagination?.hasMore ?? false
             offset += limit
-        } catch {}
+        } catch {
+            Logger.notifications.error("Failed to load more notifications: \(error.localizedDescription)")
+        }
         isLoading = false
     }
 
@@ -414,24 +481,30 @@ final class NotificationListViewModel: ObservableObject {
         guard !notification.isRead else { return }
         do {
             try await NotificationService.shared.markAsRead(notificationId: notification.id)
-            if let _ = notifications.firstIndex(where: { $0.id == notification.id }) {
-                await loadInitial()
-            }
-        } catch {}
+            handleReadEvent(notification.id)
+        } catch {
+            Logger.notifications.error("Failed to mark notification as read: \(error.localizedDescription)")
+        }
     }
 
     func markAllRead() async {
-        do {
-            _ = try await NotificationService.shared.markAllAsRead()
-            await loadInitial()
-        } catch {}
+        await NotificationManager.shared.markAllAsRead()
+        await loadInitial()
     }
 
     func deleteNotification(_ notification: APINotification) async {
         do {
             try await NotificationService.shared.delete(notificationId: notification.id)
             notifications.removeAll { $0.id == notification.id }
-            if !notification.isRead { unreadCount = max(0, unreadCount - 1) }
-        } catch {}
+            await NotificationManager.shared.refreshUnreadCount()
+        } catch {
+            Logger.notifications.error("Failed to delete notification: \(error.localizedDescription)")
+        }
     }
+}
+
+// MARK: - Logger
+
+private extension Logger {
+    static let notifications = Logger(subsystem: "me.meeshy.sdk", category: "notifications")
 }

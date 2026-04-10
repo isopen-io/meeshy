@@ -248,6 +248,11 @@ public struct NotificationState: Codable, Sendable {
     public let readAt: String?
     public let createdAt: String
     public let expiresAt: String?
+
+    public init(isRead: Bool, readAt: String?, createdAt: String, expiresAt: String?) {
+        self.isRead = isRead; self.readAt = readAt
+        self.createdAt = createdAt; self.expiresAt = expiresAt
+    }
 }
 
 // MARK: - Notification Delivery
@@ -328,6 +333,16 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
     public let metadata: NotificationMetadata?
     public let state: NotificationState
     public let delivery: NotificationDelivery?
+
+    public init(
+        id: String, userId: String, type: String, priority: String?,
+        content: String?, actor: NotificationActor?, context: NotificationContext?,
+        metadata: NotificationMetadata?, state: NotificationState, delivery: NotificationDelivery?
+    ) {
+        self.id = id; self.userId = userId; self.type = type; self.priority = priority
+        self.content = content; self.actor = actor; self.context = context
+        self.metadata = metadata; self.state = state; self.delivery = delivery
+    }
 
     public var notificationType: MeeshyNotificationType {
         MeeshyNotificationType(rawValue: type) ?? .system
@@ -483,6 +498,24 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
             parts.append(os)
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - Mutation Helpers
+
+extension APINotification {
+    public func withReadState(_ isRead: Bool) -> APINotification {
+        let newState = NotificationState(
+            isRead: isRead,
+            readAt: isRead ? state.readAt ?? state.createdAt : nil,
+            createdAt: state.createdAt,
+            expiresAt: state.expiresAt
+        )
+        return APINotification(
+            id: id, userId: userId, type: type, priority: priority,
+            content: content, actor: actor, context: context,
+            metadata: metadata, state: newState, delivery: delivery
+        )
     }
 }
 

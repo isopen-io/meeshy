@@ -149,7 +149,10 @@ final class Router: ObservableObject {
         path.removeAll()
     }
 
-    func navigateToConversation(_ conversation: Conversation) {
+    @Published var pendingHighlightMessageId: String?
+
+    func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
+        pendingHighlightMessageId = highlightMessageId
         popToRoot()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             self.push(.conversation(conversation))

@@ -452,6 +452,20 @@ struct ConversationView: View {
                 viewModel.observeSync()
                 await viewModel.loadMessages()
                 MessageSocketManager.shared.connect()
+
+                if let messageId = router.pendingHighlightMessageId, !messageId.isEmpty {
+                    router.pendingHighlightMessageId = nil
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard !Task.isCancelled else { return }
+                    if viewModel.messages.contains(where: { $0.id == messageId }) {
+                        scrollState.scrollToMessageId = messageId
+                    } else {
+                        await viewModel.loadMessagesAround(messageId: messageId)
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                        guard !Task.isCancelled else { return }
+                        scrollState.scrollToMessageId = messageId
+                    }
+                }
             }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }

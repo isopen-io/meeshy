@@ -12,13 +12,17 @@ public final class NotificationManager: ObservableObject {
     @Published public private(set) var currentToast: SocketNotificationEvent?
     @Published public private(set) var activeConversationId: String?
 
+    public let newNotificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
+    public let notificationMarkedRead = PassthroughSubject<String, Never>()
+    public let notificationWasDeleted = PassthroughSubject<String, Never>()
+
     private var cancellables = Set<AnyCancellable>()
     private var toastDismissTask: Task<Void, Never>?
     private static let toastDuration: UInt64 = 7_000_000_000
     private static let refreshDelay: UInt64 = 500_000_000
 
     private init() {
-        subscribeToSocketNotifications()
+        subscribeToSocketEvents()
     }
 
     // MARK: - Public API
@@ -75,25 +79,69 @@ public final class NotificationManager: ObservableObject {
         activeConversationId = nil
     }
 
-    // MARK: - Private
+    // MARK: - Socket Subscriptions
 
-    private func subscribeToSocketNotifications() {
-        MessageSocketManager.shared.notificationReceived
+    private func subscribeToSocketEvents() {
+        let socket = MessageSocketManager.shared
+
+        socket.notificationReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                self?.handleSocketNotification(event)
+                self?.handleNewNotification(event)
+            }
+            .store(in: &cancellables)
+
+        socket.notificationRead
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleNotificationRead(event)
+            }
+            .store(in: &cancellables)
+
+        socket.notificationDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleNotificationDeleted(event)
+            }
+            .store(in: &cancellables)
+
+        socket.notificationCounts
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleNotificationCounts(event)
             }
             .store(in: &cancellables)
     }
 
-    private func handleSocketNotification(_ event: SocketNotificationEvent) {
+    // MARK: - Event Handlers
+
+    private func handleNewNotification(_ event: SocketNotificationEvent) {
         if let convId = event.conversationId, convId == activeConversationId {
             return
         }
 
         unreadCount += 1
         showToast(event)
+        newNotificationReceived.send(event)
     }
+
+    private func handleNotificationRead(_ event: NotificationReadEvent) {
+        unreadCount = max(0, unreadCount - 1)
+        notificationMarkedRead.send(event.notificationId)
+    }
+
+    private func handleNotificationDeleted(_ event: NotificationDeletedEvent) {
+        notificationWasDeleted.send(event.notificationId)
+    }
+
+    private func handleNotificationCounts(_ event: NotificationCountsEvent) {
+        unreadCount = event.unread
+        Task {
+            await PushNotificationManager.shared.updateBadge(totalUnread: event.unread)
+        }
+    }
+
+    // MARK: - Toast
 
     private func showToast(_ event: SocketNotificationEvent) {
         toastDismissTask?.cancel()
