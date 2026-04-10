@@ -133,7 +133,7 @@ export class MessagesService {
     const response = await apiService.get<{
       success: boolean;
       data: Record<string, { receivedCount: number; readCount: number }>;
-    }>(`/messages/read-statuses`, { conversationId, messageIds: messageIds.join(',') });
+    }>(`/conversations/${conversationId}/read-statuses`, { messageIds: messageIds.join(',') });
 
     return response.data?.data ?? {};
   }
@@ -176,7 +176,7 @@ export class MessagesService {
     });
 
     return {
-      statuses: response.data?.data ?? [],
+      statuses: Array.isArray(response.data?.data) ? response.data.data : [],
       pagination: response.data?.pagination ?? { total: 0, limit: 50, offset: 0, hasMore: false },
     };
   }

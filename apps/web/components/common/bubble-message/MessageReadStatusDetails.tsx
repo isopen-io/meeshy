@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { Check, CheckCheck, Eye, EyeOff, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -114,6 +114,10 @@ export const MessageReadStatusDetails = memo(function MessageReadStatusDetails({
 }: MessageReadStatusDetailsProps) {
   const [tab, setTab] = useState<string>('all');
   const { data, isLoading } = useMessageStatusDetails(messageId, { enabled: open });
+
+  useEffect(() => {
+    if (open) setTab('all');
+  }, [messageId, open]);
 
   const statuses = data?.statuses ?? [];
 

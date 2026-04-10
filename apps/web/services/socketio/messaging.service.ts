@@ -504,6 +504,9 @@ export class MessagingService {
     this.mentionListeners.clear();
     this.consumedListeners.clear();
     this.attachmentStatusListeners.clear();
+    this.markReceivedTimers.forEach(timer => clearTimeout(timer));
+    this.markReceivedTimers.clear();
+    this.currentUserId = null;
   }
 
   /**

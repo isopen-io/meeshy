@@ -465,7 +465,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                 className="flex items-center gap-2 cursor-pointer"
               >
                 <CheckCheck className="h-4 w-4" />
-                <span>Message info</span>
+                <span>{t('messageActions.messageInfo') || 'Message info'}</span>
               </DropdownMenuItem>
             )}
 

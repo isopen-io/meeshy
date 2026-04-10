@@ -70,7 +70,8 @@
       "reply": "Répondre",
       "edit": "Modifier",
       "delete": "Supprimer",
-      "more": "Plus d'options"
+      "more": "Plus d'options",
+      "messageInfo": "Infos du message"
     },
     "replyToMessage": "Répondre au message",
     "replyingTo": "Réponse à",

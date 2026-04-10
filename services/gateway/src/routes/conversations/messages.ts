@@ -142,6 +142,7 @@ export function registerMessagesRoutes(
   const trackingLinkService = new TrackingLinkService(prisma);
   const attachmentService = new AttachmentService(prisma);
   const socketIOHandler = (fastify as any).socketIOHandler;
+  const privacyPreferencesService = new PrivacyPreferencesService(prisma);
 
   fastify.get<{
     Params: ConversationParams;
@@ -1079,46 +1080,26 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Not a participant');
       }
 
-      // Récupérer tous les messages non lus de cette conversation pour cet utilisateur
-      const unreadMessages = await prisma.message.findMany({
-        where: {
-          conversationId: conversationId,
-          deletedAt: null,
-          senderId: { not: currentParticipant.id },
-          statusEntries: {
-            none: {
-              participantId: currentParticipant.id,
-              readAt: { not: null }
-            }
-          }
-        },
-        select: {
-          id: true
-        }
-      });
-
-      if (unreadMessages.length === 0) {
-        return sendSuccess(reply, { message: 'Aucun message non lu à marquer', markedCount: 0 });
-      }
-
-      // Marquer tous les messages comme lus (utiliser le nouveau système de curseur)
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      try {
-        await readStatusService.markMessagesAsRead(currentParticipant.id, conversationId);
-      } catch (err) {
-        logger.warn('Error marking messages as read:', err);
+      const unreadCount = await readStatusService.getUnreadCount(currentParticipant.id, conversationId);
+
+      if (unreadCount === 0) {
+        return sendSuccess(reply, { message: 'Aucun message non lu à marquer', markedCount: 0 });
       }
+
+      await readStatusService.markMessagesAsRead(currentParticipant.id, conversationId);
 
       // Broadcast READ_STATUS_UPDATED
       try {
-        const privacyService = new PrivacyPreferencesService(prisma);
-        const shouldBroadcast = await privacyService.shouldShowReadReceipts(userId, false);
-        if (shouldBroadcast) {
+        const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(
+          userId,
+          authRequest.authContext.type === 'anonymous'
+        );
+        if (shouldBroadcast && socketIOHandler) {
           const summary = await readStatusService.getLatestMessageSummary(conversationId);
-          const socketIOHandler = (request.server as any).socketIOHandler;
-          const socketIOManager = socketIOHandler?.getManager?.();
+          const socketIOManager = socketIOHandler.getManager?.();
           if (socketIOManager) {
             const room = ROOMS.conversation(conversationId);
             (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
@@ -1135,11 +1116,11 @@ export function registerMessagesRoutes(
         logger.error('Error broadcasting read status:', socketError);
       }
 
-      return sendSuccess(reply, { message: `${unreadMessages.length} message(s) marqué(s) comme lu(s)`, markedCount: unreadMessages.length });
+      return sendSuccess(reply, { message: `${unreadCount} message(s) marqué(s) comme lu(s)`, markedCount: unreadCount });
 
     } catch (error) {
       logger.error('Error marking conversation as read', error);
-      sendInternalError(reply, 'Erreur lors du marquage des messages comme lus');
+      return sendInternalError(reply, 'Erreur lors du marquage des messages comme lus');
     }
   });
 
@@ -1355,31 +1336,31 @@ export function registerMessagesRoutes(
         select: { id: true }
       });
 
-      if (!membership && id !== "meeshy") {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
+      if (!membership) {
+        return sendForbidden(reply, 'Not a participant in this conversation');
       }
-
-      const participantId = membership?.id ?? userId;
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const unreadCount = await readStatusService.getUnreadCount(participantId, conversationId);
-      await readStatusService.markMessagesAsRead(participantId, conversationId);
+      const unreadCount = await readStatusService.getUnreadCount(membership.id, conversationId);
+      await readStatusService.markMessagesAsRead(membership.id, conversationId);
 
       // Broadcast READ_STATUS_UPDATED via Socket.IO
       try {
-        const privacyService = new PrivacyPreferencesService(prisma);
-        const shouldBroadcast = await privacyService.shouldShowReadReceipts(userId, false);
-        if (shouldBroadcast) {
+        const authRequest = request as UnifiedAuthRequest;
+        const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(
+          userId,
+          authRequest.authContext.type === 'anonymous'
+        );
+        if (shouldBroadcast && socketIOHandler) {
           const summary = await readStatusService.getLatestMessageSummary(conversationId);
-          const socketIOHandler = (request.server as any).socketIOHandler;
-          const socketIOManager = socketIOHandler?.getManager?.();
+          const socketIOManager = socketIOHandler.getManager?.();
           if (socketIOManager) {
             const room = ROOMS.conversation(conversationId);
             (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
               conversationId,
-              participantId,
+              participantId: membership.id,
               userId,
               type: 'read',
               updatedAt: new Date(),
@@ -1394,7 +1375,7 @@ export function registerMessagesRoutes(
       return sendSuccess(reply, { markedCount: unreadCount });
     } catch (error) {
       logger.error('Error marking conversation as read', error);
-      sendInternalError(reply, 'Erreur lors du marquage comme lu');
+      return sendInternalError(reply, 'Erreur lors du marquage comme lu');
     }
   });
 

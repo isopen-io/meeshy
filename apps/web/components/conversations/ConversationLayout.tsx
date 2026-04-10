@@ -438,10 +438,12 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   ]);
 
   // Marquer comme lu à l'ouverture d'une conversation
+  const hasMarkedAsReadOnOpenRef = useRef<string | null>(null);
   useEffect(() => {
     const conversationId = selectedConversation?.id;
     if (!conversationId) return;
 
+    hasMarkedAsReadOnOpenRef.current = conversationId;
     conversationsService.markAsRead(conversationId)
       .then(() => {
         setConversations(prev =>
