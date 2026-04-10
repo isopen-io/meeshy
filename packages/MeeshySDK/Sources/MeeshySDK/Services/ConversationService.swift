@@ -61,7 +61,11 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     }
 
     public func markRead(conversationId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-read", method: "POST")
+        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-as-read", method: "POST")
+    }
+
+    public func markAsReceived(conversationId: String) async throws {
+        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-as-received", method: "POST")
     }
 
     public func markUnread(conversationId: String) async throws {

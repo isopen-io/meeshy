@@ -346,6 +346,20 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case delivered // recipient received (double gray check)
         case read      // recipient read (double blue check)
         case failed    // send failed, retry available
+
+        private var order: Int {
+            switch self {
+            case .failed: return 0
+            case .sending: return 1
+            case .sent: return 2
+            case .delivered: return 3
+            case .read: return 4
+            }
+        }
+
+        public func isBetterThan(_ other: DeliveryStatus) -> Bool {
+            order > other.order
+        }
     }
 
     public enum MessageType: String, Codable, CaseIterable, Sendable {

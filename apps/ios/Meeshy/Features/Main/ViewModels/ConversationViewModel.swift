@@ -604,8 +604,9 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
-        // Mark conversation as read (fire-and-forget)
+        // Mark conversation as read + received (fire-and-forget)
         markAsRead()
+        markAsReceived()
 
         // Prefetch media for visible messages
         prefetchRecentMedia()
@@ -1269,7 +1270,7 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Mark as Read
+    // MARK: - Mark as Read / Received
 
     func markAsRead() {
         let convId = conversationId
@@ -1287,6 +1288,13 @@ class ConversationViewModel: ObservableObject {
                     conversationId: convId, type: "read", timestamp: Date()
                 ))
             }
+        }
+    }
+
+    func markAsReceived() {
+        let convId = conversationId
+        Task {
+            try? await conversationService.markAsReceived(conversationId: convId)
         }
     }
 

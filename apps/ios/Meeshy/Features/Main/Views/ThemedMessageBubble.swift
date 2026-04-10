@@ -977,7 +977,7 @@ struct ThemedMessageBubble: View {
                     .font(.system(size: 9, weight: .semibold))
                     .offset(x: 3)
             }
-            .foregroundColor(.white)
+            .foregroundColor(Color(hex: "#60A5FA"))
             .frame(width: 14)
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
