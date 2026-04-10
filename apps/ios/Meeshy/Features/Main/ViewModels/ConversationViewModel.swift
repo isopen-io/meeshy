@@ -1001,6 +1001,16 @@ class ConversationViewModel: ObservableObject {
                 )
             }
 
+            // Move conversation to top of list immediately (optimistic)
+            let convId = conversationId
+            let msgContent = text
+            let msgTime = responseData.createdAt
+            Task {
+                await ConversationSyncEngine.shared.updateConversationAfterSend(
+                    conversationId: convId, messagePreview: msgContent, messageAt: msgTime
+                )
+            }
+
             // Clear ephemeral duration after successful send
             if ephemeralDuration != nil {
                 ephemeralDuration = nil
@@ -1017,11 +1027,21 @@ class ConversationViewModel: ObservableObject {
             isSending = false
             return true
         } catch {
-            // Mark optimistic message as failed (keep in list for retry)
+            // Mark optimistic message as sending (retry in progress)
             if let idx = messageIndex(for: tempId) {
-                messages[idx].deliveryStatus = .failed
+                messages[idx].deliveryStatus = .sending
             }
-            self.error = error.localizedDescription
+
+            // Enqueue for persistent auto-retry (5 attempts × 10s interval)
+            let retryItem = RetryQueueItem(
+                conversationId: conversationId,
+                content: text,
+                originalLanguage: originalLanguage,
+                replyToId: replyToId,
+                attachmentIds: attachmentIds
+            )
+            Task { await MessageRetryQueue.shared.enqueue(retryItem) }
+
             isSending = false
             return false
         }

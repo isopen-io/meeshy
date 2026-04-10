@@ -93,6 +93,7 @@ class ConversationListViewModel: ObservableObject {
         syncBadgeOnUnreadChange()
         setupBackgroundProcessing()
         observeMarkAsRead()
+        observeSync()
     }
 
     private var groupingTask: Task<Void, Never>?

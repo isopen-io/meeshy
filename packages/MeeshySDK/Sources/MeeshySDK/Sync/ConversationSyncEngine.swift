@@ -16,6 +16,7 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func startSocketRelay() async
     func stopSocketRelay() async
     func markConversationReadLocally(_ conversationId: String) async
+    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date) async
 }
 
 // MARK: - Implementation
@@ -537,6 +538,21 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     private func handleAttachmentStatusUpdated(_ event: AttachmentStatusUpdatedEvent) async {
         // Trigger message refresh so UI can re-render attachment status indicators
         _messagesDidChange.send(event.conversationId)
+    }
+
+    public func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date) async {
+        await cache.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
+                updated[idx].lastMessagePreview = messagePreview
+                updated[idx].lastMessageAt = messageAt
+                updated[idx].unreadCount = 0
+                let conv = updated.remove(at: idx)
+                updated.insert(conv, at: 0)
+            }
+            return updated
+        }
+        _conversationsDidChange.send()
     }
 
     public func markConversationReadLocally(_ conversationId: String) async {

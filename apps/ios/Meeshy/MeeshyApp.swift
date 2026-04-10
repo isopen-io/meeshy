@@ -121,6 +121,22 @@ struct MeeshyApp: App {
                             return false
                         }
                     }
+                    await MessageRetryQueue.shared.setRetrySend { @Sendable item in
+                        do {
+                            let request = SendMessageRequest(
+                                content: item.content,
+                                originalLanguage: item.originalLanguage,
+                                replyToId: item.replyToId,
+                                attachmentIds: item.attachmentIds
+                            )
+                            _ = try await MessageService.shared.send(
+                                conversationId: item.conversationId, request: request
+                            )
+                            return true
+                        } catch {
+                            return false
+                        }
+                    }
                     // Parallelize: friendship hydration + session check are independent
                     async let friendshipHydration: () = FriendshipCache.shared.hydrate()
                     async let sessionCheck: () = authManager.checkExistingSession()
