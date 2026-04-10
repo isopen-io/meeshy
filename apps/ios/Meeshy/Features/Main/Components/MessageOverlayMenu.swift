@@ -26,6 +26,7 @@ struct MessageOverlayMenu: View {
     var onReact: ((String) -> Void)?
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
+    var onDeleteAttachment: ((String) -> Void)?
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isVisible = false
@@ -499,6 +500,17 @@ struct MessageOverlayMenu: View {
                 label: "Modifier", color: "F8B500",
                 handler: { dismissThen { onEdit?() } }
             ))
+        }
+
+        if canDelete && !message.attachments.isEmpty, let onDeleteAttachment {
+            if message.attachments.count == 1 {
+                let attId = message.attachments[0].id
+                actions.append(MessageAction(
+                    id: "deleteAttachment", icon: "paperclip.badge.ellipsis",
+                    label: "Supprimer le media", color: "F87171",
+                    handler: { dismissThen { onDeleteAttachment(attId) } }
+                ))
+            }
         }
 
         return actions

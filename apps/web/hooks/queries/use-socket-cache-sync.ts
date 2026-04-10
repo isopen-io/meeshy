@@ -20,6 +20,38 @@ type CachedMessage = Message & {
   translatedAudios?: Record<string, SocketIOTranslation>;
 };
 
+type InfiniteConversationData = {
+  pages: { conversations: Conversation[]; pagination: any }[];
+  pageParams: number[];
+};
+
+function updateInfiniteConversationCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  updater: (conversations: Conversation[]) => Conversation[]
+): void {
+  queryClient.setQueryData(
+    queryKeys.conversations.infinite(),
+    (old: InfiniteConversationData | undefined) => {
+      if (!old) return old;
+      const allConversations = old.pages.flatMap(page => page.conversations);
+      const updated = updater(allConversations);
+      if (updated === allConversations) return old;
+      return {
+        pages: [{
+          conversations: updated,
+          pagination: {
+            total: updated.length,
+            offset: 0,
+            limit: updated.length,
+            hasMore: old.pages[old.pages.length - 1]?.pagination?.hasMore ?? false,
+          },
+        }],
+        pageParams: old.pageParams.slice(0, 1),
+      };
+    }
+  );
+}
+
 interface UseSocketCacheSyncOptions {
   conversationId?: string | null;
   enabled?: boolean;
@@ -126,6 +158,20 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         }
       );
 
+      // Update infinite conversations query (paginated cache used by ConversationList)
+      updateInfiniteConversationCache(queryClient, (convs) => {
+        let updated: Conversation | null = null;
+        const rest: Conversation[] = [];
+        for (const conv of convs) {
+          if (conv.id === targetConversationId) {
+            updated = { ...conv, lastMessage: message, lastMessageAt: message.createdAt, updatedAt: message.createdAt };
+          } else {
+            rest.push(conv);
+          }
+        }
+        return updated ? [updated, ...rest] : convs;
+      });
+
       // DO NOT invalidate here - setQueryData already has the correct lastMessage
       // Invalidating would trigger a re-fetch that could return stale data from backend cache
       // The backend may not have processed the message yet when we re-fetch
@@ -174,6 +220,13 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
             return conv;
           });
         }
+      );
+      updateInfiniteConversationCache(queryClient, (convs) =>
+        convs.map((conv) =>
+          conv.id === targetConversationId && conv.lastMessage?.id === message.id
+            ? { ...conv, lastMessage: message }
+            : conv
+        )
       );
     };
 
@@ -271,6 +324,13 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               : conv
           )
       );
+      updateInfiniteConversationCache(queryClient, (convs) =>
+        convs.map((conv) =>
+          conv.id === data.conversationId
+            ? { ...conv, unreadCount: data.unreadCount }
+            : conv
+        )
+      );
     };
 
     const handleParticipantRoleUpdated = (data: { conversationId: string; userId: string; newRole: string }) => {
@@ -335,16 +395,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
 
     // Handler for participant joined — update memberCount in conversation lists
     const handleConversationJoined = (data: { conversationId: string; userId: string }) => {
+      const joinUpdater = (convs: Conversation[]) =>
+        convs.map((conv) =>
+          conv.id === data.conversationId
+            ? { ...conv, memberCount: (conv.memberCount ?? 0) + 1 }
+            : conv
+        );
       queryClient.setQueriesData<Conversation[]>(
         { queryKey: queryKeys.conversations.lists() },
-        (old) =>
-          old?.map((conv) =>
-            conv.id === data.conversationId
-              ? { ...conv, memberCount: (conv.memberCount ?? 0) + 1 }
-              : conv
-          )
+        (old) => old ? joinUpdater(old) : old
       );
-      // Invalidate participants query to refetch fresh list
+      updateInfiniteConversationCache(queryClient, joinUpdater);
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.participants(data.conversationId),
       });
@@ -352,18 +413,52 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
 
     // Handler for participant left — update memberCount in conversation lists
     const handleConversationLeft = (data: { conversationId: string; userId: string }) => {
+      const leftUpdater = (convs: Conversation[]) =>
+        convs.map((conv) =>
+          conv.id === data.conversationId
+            ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
+            : conv
+        );
       queryClient.setQueriesData<Conversation[]>(
         { queryKey: queryKeys.conversations.lists() },
-        (old) =>
-          old?.map((conv) =>
-            conv.id === data.conversationId
-              ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
-              : conv
-          )
+        (old) => old ? leftUpdater(old) : old
       );
+      updateInfiniteConversationCache(queryClient, leftUpdater);
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.participants(data.conversationId),
       });
+    };
+
+    // Handler for attachment status updated (listened, watched, viewed, downloaded)
+    const handleAttachmentStatusUpdated = (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => {
+      const targetConversationId = data.conversationId;
+      if (!targetConversationId) return;
+
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(targetConversationId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) => {
+                if (m.id !== data.messageId) return m;
+                const attachments = Array.isArray(m.attachments) ? m.attachments.map((a: any) => {
+                  if (a.id !== data.attachmentId) return a;
+                  const updates: Record<string, unknown> = {};
+                  if (data.action === 'listened') updates.listenedAt = new Date().toISOString();
+                  if (data.action === 'watched') updates.watchedAt = new Date().toISOString();
+                  if (data.action === 'viewed') updates.viewedAt = new Date().toISOString();
+                  if (data.action === 'downloaded') updates.downloadedAt = new Date().toISOString();
+                  return { ...a, ...updates };
+                }) : m.attachments;
+                return { ...m, attachments };
+              }),
+            })),
+          };
+        }
+      );
     };
 
     // Register listeners
@@ -374,6 +469,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeUnread = meeshySocketIOService.onUnreadUpdated(handleUnreadUpdated);
     const unsubscribeTranscription = meeshySocketIOService.onTranscription(handleTranscription);
     const unsubscribeAudioTranslation = meeshySocketIOService.onAudioTranslation(handleAudioTranslation);
+    const unsubscribeAttachmentStatus = meeshySocketIOService.onAttachmentStatusUpdated(handleAttachmentStatusUpdated);
     const unsubscribePreferences = meeshySocketIOService.onPreferencesUpdated((data) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.preferences.category(data.category),
@@ -391,6 +487,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeUnread?.();
       unsubscribeTranscription?.();
       unsubscribeAudioTranslation?.();
+      unsubscribeAttachmentStatus?.();
       unsubscribePreferences?.();
       unsubscribeJoined?.();
       unsubscribeLeft?.();

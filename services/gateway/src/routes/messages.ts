@@ -592,6 +592,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
         // Diffuser le statut de lecture via Socket.IO
         try {
+          const summary = await readStatusService.getLatestMessageSummary(message.conversationId);
           const socketIOManager = socketIOHandler.getManager();
           if (socketIOManager) {
             const room = ROOMS.conversation(message.conversationId);
@@ -600,12 +601,12 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               participantId: participant.id,
               userId,
               type: 'read',
-              updatedAt: new Date()
+              updatedAt: new Date(),
+              summary
             });
           }
         } catch (socketError) {
           console.error('[MESSAGES] Erreur lors de la diffusion Socket.IO:', socketError);
-          // Ne pas faire échouer la mise à jour si la diffusion échoue
         }
 
         return reply.send({

@@ -48,6 +48,32 @@ export class MessagingService {
 
   private encryptionHandlers: EncryptionHandlers | null = null;
   private getMessageByIdCallback: GetMessageByIdCallback | null = null;
+  private currentUserId: string | null = null;
+  private markReceivedTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+  setCurrentUserId(userId: string | null): void {
+    this.currentUserId = userId;
+  }
+
+  private isOwnMessage(message: Message): boolean {
+    if (!this.currentUserId) return false;
+    const senderId = (message.sender as any)?.userId ?? (message.sender as any)?.id ?? (message as any).senderId;
+    return senderId === this.currentUserId;
+  }
+
+  private markAsReceivedDebounced(conversationId: string): void {
+    if (this.markReceivedTimers.has(conversationId)) return;
+    const timer = setTimeout(async () => {
+      this.markReceivedTimers.delete(conversationId);
+      try {
+        const { conversationsService } = await import('@/services/conversations.service');
+        await conversationsService.markAsReceived(conversationId);
+      } catch (error) {
+        logger.debug('[MessagingService]', 'Failed to mark as received', { conversationId });
+      }
+    }, 500);
+    this.markReceivedTimers.set(conversationId, timer);
+  }
 
   /**
    * Check if encryption handlers are already configured
@@ -99,6 +125,11 @@ export class MessagingService {
       message = await this.decryptMessage(socketMessage, message);
 
       this.messageListeners.forEach(listener => listener(message));
+
+      // Auto mark-as-received for messages from other users
+      if (message.conversationId && !this.isOwnMessage(message)) {
+        this.markAsReceivedDebounced(message.conversationId);
+      }
     });
 
     // Edited message
@@ -473,6 +504,9 @@ export class MessagingService {
     this.mentionListeners.clear();
     this.consumedListeners.clear();
     this.attachmentStatusListeners.clear();
+    this.markReceivedTimers.forEach(timer => clearTimeout(timer));
+    this.markReceivedTimers.clear();
+    this.currentUserId = null;
   }
 
   /**

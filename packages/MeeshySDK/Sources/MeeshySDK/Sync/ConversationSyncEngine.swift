@@ -16,6 +16,7 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func startSocketRelay() async
     func stopSocketRelay() async
     func markConversationReadLocally(_ conversationId: String) async
+    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date) async
 }
 
 // MARK: - Implementation
@@ -357,6 +358,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             .store(in: &socketSubscriptions)
 
+        // Attachment status updated (listened, watched, viewed, downloaded)
+        messageSocket.attachmentStatusUpdated
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleAttachmentStatusUpdated(event) }
+            }
+            .store(in: &socketSubscriptions)
+
         // Reconnect -> delta sync
         messageSocket.didReconnect
             .sink { [weak self] in
@@ -400,6 +409,13 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             return updated
         }
         _conversationsDidChange.send()
+
+        // Auto mark-as-received for messages from other users
+        if !isMe {
+            Task {
+                try? await ConversationService.shared.markAsReceived(conversationId: msg.conversationId)
+            }
+        }
     }
 
     private func handleEditedMessage(_ apiMessage: APIMessage) async {
@@ -480,17 +496,64 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     private func handleReadStatusUpdated(_ event: ReadStatusUpdateEvent) async {
+        let userId = await currentUserId()
+
+        // Update conversation unread count (userId is preferred, fallback to participantId)
+        let eventUserId = event.userId ?? event.participantId
+        if eventUserId == userId {
+            await cache.conversations.update(for: "list") { conversations in
+                var updated = conversations
+                if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
+                    updated[idx].unreadCount = 0
+                }
+                return updated
+            }
+            _conversationsDidChange.send()
+        }
+
+        // Update delivery status of own messages in the message cache
+        let summary = event.summary
+        let newStatus: MeeshyMessage.DeliveryStatus = summary.readCount > 0 ? .read
+            : summary.deliveredCount > 0 ? .delivered : .sent
+
+        await cache.messages.update(for: event.conversationId) { messages in
+            var updated = messages
+            for i in updated.indices.reversed() {
+                guard updated[i].isMe else { continue }
+                let current = updated[i].deliveryStatus
+                if current == .read { break }
+                if newStatus.isBetterThan(current) {
+                    updated[i].deliveryStatus = newStatus
+                    updated[i].deliveredCount = summary.deliveredCount
+                    updated[i].readCount = summary.readCount
+                }
+            }
+            return updated
+        }
+        _messagesDidChange.send(event.conversationId)
+    }
+
+    // MARK: - Local-First Updates
+
+    private func handleAttachmentStatusUpdated(_ event: AttachmentStatusUpdatedEvent) async {
+        // Trigger message refresh so UI can re-render attachment status indicators
+        _messagesDidChange.send(event.conversationId)
+    }
+
+    public func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date) async {
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
-            if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
+            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
+                updated[idx].lastMessagePreview = messagePreview
+                updated[idx].lastMessageAt = messageAt
                 updated[idx].unreadCount = 0
+                let conv = updated.remove(at: idx)
+                updated.insert(conv, at: 0)
             }
             return updated
         }
         _conversationsDidChange.send()
     }
-
-    // MARK: - Local-First Updates
 
     public func markConversationReadLocally(_ conversationId: String) async {
         await cache.conversations.update(for: "list") { conversations in

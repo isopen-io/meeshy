@@ -20,6 +20,8 @@ export const queryKeys = {
       [...queryKeys.messages.list(conversationId), 'infinite'] as const,
     detail: (conversationId: string, messageId: string) =>
       [...queryKeys.messages.list(conversationId), messageId] as const,
+    statusDetails: (messageId: string) =>
+      [...queryKeys.messages.all, 'status-details', messageId] as const,
   },
 
   users: {

@@ -15,6 +15,9 @@ import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
 import { apiService } from '@/services/api.service';
 import { AnonymousChatService } from '@/services/anonymous-chat.service';
+import { useConversationUIStore } from '@/stores/conversation-ui-store';
+import { messagesService } from '@/services/conversations/messages.service';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import type { Message, User } from '@meeshy/shared/types';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
 export type { OptimisticMessage } from '@/utils/optimistic-message';
@@ -170,6 +173,45 @@ export function useConversationMessagesRQ(
       return dateB - dateA;
     });
   }, [data?.messages]);
+
+  // Track latest own message + batch fetch read statuses for own messages
+  const batchFetchedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!conversationId || !currentUser?.id || messages.length === 0) return;
+
+    const ownMessages = messages.filter(msg => {
+      const senderId = getSenderUserId(msg.sender as Record<string, unknown>) ?? (msg.sender as any)?.id;
+      return senderId === currentUser.id;
+    });
+
+    if (ownMessages.length === 0) return;
+
+    // Messages sorted DESC — first own message is the latest
+    const store = useConversationUIStore.getState();
+    store.setLatestOwnMessageId(conversationId, ownMessages[0].id);
+
+    // Batch fetch read statuses for own messages (once per conversation load)
+    const fetchKey = `${conversationId}:${ownMessages[0].id}`;
+    if (batchFetchedRef.current === fetchKey) return;
+    batchFetchedRef.current = fetchKey;
+
+    const ownMessageIds = ownMessages.map(m => m.id).slice(0, 50);
+    messagesService.getReadStatuses(conversationId, ownMessageIds)
+      .then(statusMap => {
+        const batch: Record<string, { totalMembers: number; deliveredCount: number; readCount: number }> = {};
+        for (const [msgId, status] of Object.entries(statusMap)) {
+          batch[msgId] = {
+            totalMembers: status.totalMembers,
+            deliveredCount: status.receivedCount,
+            readCount: status.readCount,
+          };
+        }
+        if (Object.keys(batch).length > 0) {
+          useConversationUIStore.getState().updateMessageReadStatusBatch(batch);
+        }
+      })
+      .catch(() => {});
+  }, [conversationId, currentUser?.id, messages]);
 
   // Load more function
   const loadMore = useCallback(async () => {

@@ -41,10 +41,13 @@ public struct ImageViewerView: View {
         }
     }
 
+    public var isOwnMessage: Bool = false
+
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
-                accentColor: String = "08D9D6",
+                accentColor: String = "08D9D6", isOwnMessage: Bool = false,
                 onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
+        self.isOwnMessage = isOwnMessage
         self.onDelete = onDelete; self.onEdit = onEdit
     }
 
@@ -66,7 +69,8 @@ public struct ImageViewerView: View {
         .fullScreenCover(isPresented: $showFullscreen) {
             ImageFullscreen(
                 imageUrl: imageURL,
-                accentColor: accentColor
+                accentColor: accentColor,
+                attachmentId: isOwnMessage ? nil : attachment.id
             )
         }
     }
@@ -167,20 +171,23 @@ public struct ImageFullscreen: View {
     public let accentColor: String
     public var caption: String? = nil
     public var mentionDisplayNames: [String: String]? = nil
+    public var attachmentId: String? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @State private var showControls = true
     @State private var saveState: SaveState = .idle
+    @State private var viewStartTime: Date?
 
     private enum SaveState {
         case idle, saving, saved, failed
     }
 
-    public init(imageUrl: URL?, accentColor: String, caption: String? = nil, mentionDisplayNames: [String: String]? = nil) {
+    public init(imageUrl: URL?, accentColor: String, caption: String? = nil, mentionDisplayNames: [String: String]? = nil, attachmentId: String? = nil) {
         self.imageUrl = imageUrl; self.accentColor = accentColor
         self.caption = caption; self.mentionDisplayNames = mentionDisplayNames
+        self.attachmentId = attachmentId
     }
 
     public var body: some View {
@@ -292,6 +299,24 @@ public struct ImageFullscreen: View {
             }
         }
         .statusBar(hidden: true)
+        .onAppear { viewStartTime = Date() }
+        .onDisappear { reportImageViewed() }
+    }
+
+    private func reportImageViewed() {
+        guard let attId = attachmentId, let start = viewStartTime else { return }
+        let viewedMs = Int(Date().timeIntervalSince(start) * 1000)
+        guard viewedMs >= 500 else { return }
+        Task {
+            var body = AttachmentStatusBody(
+                action: "viewed", playPositionMs: 0, durationMs: viewedMs, complete: true
+            )
+            body.wasZoomed = scale > 1.05
+            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+                endpoint: "/attachments/\(attId)/status",
+                body: body
+            )
+        }
     }
 
     private func saveToPhotos() {
@@ -302,6 +327,12 @@ public struct ImageFullscreen: View {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 let saved = await PhotoLibraryManager.shared.saveImage(data)
+                if saved, let attId = attachmentId {
+                    let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
+                    let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+                        endpoint: "/attachments/\(attId)/status", body: body
+                    )
+                }
                 await MainActor.run {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         saveState = saved ? .saved : .failed

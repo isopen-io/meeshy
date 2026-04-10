@@ -216,6 +216,17 @@ public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let summary: ReadStatusSummary
 }
 
+// MARK: - Attachment Status Updated Event Data
+
+public struct AttachmentStatusUpdatedEvent: Decodable, Sendable {
+    public let attachmentId: String
+    public let messageId: String
+    public let conversationId: String
+    public let userId: String
+    public let action: String
+    public let updatedAt: Date?
+}
+
 // MARK: - Participant Role Updated Event Data
 
 public struct ParticipantRoleUpdatedParticipantInfo: Decodable, Sendable {
@@ -507,6 +518,7 @@ public protocol MessageSocketProviding: Sendable {
     var unreadUpdated: PassthroughSubject<UnreadUpdateEvent, Never> { get }
     var userStatusChanged: PassthroughSubject<UserStatusEvent, Never> { get }
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
+    var attachmentStatusUpdated: PassthroughSubject<AttachmentStatusUpdatedEvent, Never> { get }
     var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
@@ -595,6 +607,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+
+    // Combine publishers — attachment status
+    public let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
 
     // Combine publishers — conversation participation
     public let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
@@ -1165,6 +1180,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(ReadStatusUpdateEvent.self, from: data) { [weak self] event in
                 self?.readStatusUpdated.send(event)
+            }
+        }
+
+        socket.on("attachment-status:updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(AttachmentStatusUpdatedEvent.self, from: data) { [weak self] event in
+                self?.attachmentStatusUpdated.send(event)
             }
         }
 

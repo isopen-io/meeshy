@@ -256,8 +256,6 @@ export class MessageReadStatusService {
           conversationId,
           lastReadMessageId: messageId,
           lastReadAt: now,
-          lastDeliveredMessageId: messageId,
-          lastDeliveredAt: now,
           unreadCount: 0,
           version: 0,
         },
@@ -386,13 +384,30 @@ export class MessageReadStatusService {
         }
       }
 
+      // Compute not-seen participants (active but no cursor matching this message)
+      const receivedIds = new Set(receivedBy.map(r => r.participantId));
+      const readIds = new Set(readBy.map(r => r.participantId));
+      const notSeenBy: Array<{ participantId: string; displayName: string; avatarURL: string | null }> = [];
+
+      for (const p of participants) {
+        if (p.id === message.senderId) continue;
+        if (receivedIds.has(p.id) || readIds.has(p.id)) continue;
+        notSeenBy.push({
+          participantId: p.id,
+          displayName: p.displayName,
+          avatarURL: p.user?.avatar ?? null,
+        });
+      }
+
       return {
         messageId,
         totalMembers,
         receivedCount: receivedBy.length,
         readCount: readBy.length,
+        notSeenCount: notSeenBy.length,
         receivedBy,
         readBy,
+        notSeenBy,
       };
     } catch (error) {
       logger.error(
@@ -409,28 +424,39 @@ export class MessageReadStatusService {
   async getConversationReadStatuses(
     conversationId: string,
     messageIds: string[]
-  ): Promise<Map<string, { receivedCount: number; readCount: number }>> {
+  ): Promise<Map<string, { totalMembers: number; receivedCount: number; readCount: number }>> {
     try {
       const messages = await this.prisma.message.findMany({
         where: { id: { in: messageIds }, conversationId },
         select: { id: true, createdAt: true, senderId: true },
       });
 
+      const activeParticipantIds = new Set(
+        (await this.prisma.participant.findMany({
+          where: { conversationId, isActive: true },
+          select: { id: true },
+        })).map(p => p.id)
+      );
+
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: { conversationId },
         select: { participantId: true, lastReadAt: true, lastDeliveredAt: true },
       });
 
+      // Only consider cursors from active participants
+      const activeCursors = cursors.filter(c => activeParticipantIds.has(c.participantId));
+
       const statusMap = new Map<
         string,
-        { receivedCount: number; readCount: number }
+        { totalMembers: number; receivedCount: number; readCount: number }
       >();
 
       for (const msg of messages) {
+        const totalMembers = Math.max(0, activeParticipantIds.size - (activeParticipantIds.has(msg.senderId) ? 1 : 0));
         let receivedCount = 0;
         let readCount = 0;
 
-        for (const cursor of cursors) {
+        for (const cursor of activeCursors) {
           if (cursor.participantId === msg.senderId) continue;
 
           if (
@@ -444,7 +470,7 @@ export class MessageReadStatusService {
           }
         }
 
-        statusMap.set(msg.id, { receivedCount, readCount });
+        statusMap.set(msg.id, { totalMembers, receivedCount, readCount });
       }
 
       return statusMap;
@@ -494,7 +520,7 @@ export class MessageReadStatusService {
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: { conversationId: message.conversationId },
         include: {
-          participant: { select: { id: true, displayName: true, avatar: true } },
+          participant: { select: { id: true, displayName: true, avatar: true, isActive: true } },
         },
       });
 
@@ -509,7 +535,7 @@ export class MessageReadStatusService {
       }> = [];
 
       for (const cursor of cursors) {
-        if (!cursor.participant) continue;
+        if (!cursor.participant || !cursor.participant.isActive) continue;
 
         const deliveredAt =
           cursor.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
@@ -941,20 +967,26 @@ export class MessageReadStatusService {
         return { totalMembers: 0, deliveredCount: 0, readCount: 0 };
       }
 
-      const totalMembers = await this.prisma.participant.count({
-        where: { conversationId, isActive: true, id: { not: latestMessage.senderId } }
+      const activeParticipants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true, id: { not: latestMessage.senderId } },
+        select: { id: true }
       });
+      const totalMembers = activeParticipants.length;
+      const activeIds = new Set(activeParticipants.map(p => p.id));
 
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: { conversationId, participantId: { not: latestMessage.senderId } },
-        select: { lastDeliveredAt: true, lastReadAt: true }
+        select: { participantId: true, lastDeliveredAt: true, lastReadAt: true }
       });
 
-      const deliveredCount = cursors.filter(c =>
+      // Only count cursors from active participants
+      const activeCursors = cursors.filter(c => activeIds.has(c.participantId));
+
+      const deliveredCount = activeCursors.filter(c =>
         c.lastDeliveredAt && c.lastDeliveredAt >= latestMessage.createdAt
       ).length;
 
-      const readCount = cursors.filter(c =>
+      const readCount = activeCursors.filter(c =>
         c.lastReadAt && c.lastReadAt >= latestMessage.createdAt
       ).length;
 

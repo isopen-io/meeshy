@@ -392,6 +392,12 @@ extension APIMessage {
             UserDisplayNameCache.shared.track(username: username, displayName: displayName)
         }
 
+        let computedDeliveryStatus: MeeshyMessage.DeliveryStatus = {
+            if (readCount ?? 0) > 0 || readByAllAt != nil { return .read }
+            if (deliveredCount ?? 0) > 0 || deliveredToAllAt != nil { return .delivered }
+            return .sent
+        }()
+
         return MeeshyMessage(
             id: id, conversationId: conversationId, senderId: senderId,
             content: content ?? "",
@@ -408,7 +414,10 @@ extension APIMessage {
             forwardedFrom: uiForwardRef,
             senderName: senderDisplayName, senderUsername: resolvedUsername, senderColor: senderColor,
             senderAvatarURL: sender?.resolvedAvatar, senderUserId: sender?.resolvedUserId,
-            isMe: (sender?.resolvedUserId ?? senderId) == currentUserId
+            deliveryStatus: computedDeliveryStatus,
+            isMe: (sender?.resolvedUserId ?? senderId) == currentUserId,
+            deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
+            deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0
         )
     }
 }

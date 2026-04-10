@@ -604,8 +604,9 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
-        // Mark conversation as read (fire-and-forget)
+        // Mark conversation as read + received (fire-and-forget)
         markAsRead()
+        markAsReceived()
 
         // Prefetch media for visible messages
         prefetchRecentMedia()
@@ -1000,6 +1001,16 @@ class ConversationViewModel: ObservableObject {
                 )
             }
 
+            // Move conversation to top of list immediately (optimistic)
+            let convId = conversationId
+            let msgContent = text
+            let msgTime = responseData.createdAt
+            Task {
+                await ConversationSyncEngine.shared.updateConversationAfterSend(
+                    conversationId: convId, messagePreview: msgContent, messageAt: msgTime
+                )
+            }
+
             // Clear ephemeral duration after successful send
             if ephemeralDuration != nil {
                 ephemeralDuration = nil
@@ -1016,11 +1027,21 @@ class ConversationViewModel: ObservableObject {
             isSending = false
             return true
         } catch {
-            // Mark optimistic message as failed (keep in list for retry)
+            // Mark optimistic message as sending (retry in progress)
             if let idx = messageIndex(for: tempId) {
-                messages[idx].deliveryStatus = .failed
+                messages[idx].deliveryStatus = .sending
             }
-            self.error = error.localizedDescription
+
+            // Enqueue for persistent auto-retry (5 attempts × 10s interval)
+            let retryItem = RetryQueueItem(
+                conversationId: conversationId,
+                content: text,
+                originalLanguage: originalLanguage,
+                replyToId: replyToId,
+                attachmentIds: attachmentIds
+            )
+            Task { await MessageRetryQueue.shared.enqueue(retryItem) }
+
             isSending = false
             return false
         }
@@ -1160,6 +1181,35 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Delete Attachment
+
+    func deleteAttachment(messageId: String, attachmentId: String) async {
+        guard let msgIdx = messageIndex(for: messageId) else { return }
+        let message = messages[msgIdx]
+        let isLastAttachment = message.attachments.count <= 1
+        let hasTextContent = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        // If it's the only attachment AND no text content → delete the whole message
+        if isLastAttachment && !hasTextContent {
+            await deleteMessage(messageId: messageId)
+            return
+        }
+
+        // Optimistic: remove attachment from local message
+        let originalAttachments = messages[msgIdx].attachments
+        messages[msgIdx].attachments.removeAll { $0.id == attachmentId }
+
+        do {
+            try await AttachmentService.shared.delete(attachmentId: attachmentId)
+        } catch {
+            // Revert on failure
+            if let idx = messageIndex(for: messageId) {
+                messages[idx].attachments = originalAttachments
+            }
+            self.error = error.localizedDescription
+        }
+    }
+
     // MARK: - Pin / Unpin Message
 
     func togglePin(messageId: String) async {
@@ -1269,7 +1319,7 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Mark as Read
+    // MARK: - Mark as Read / Received
 
     func markAsRead() {
         let convId = conversationId
@@ -1286,6 +1336,17 @@ class ConversationViewModel: ObservableObject {
                 await PendingStatusQueue.shared.enqueue(.init(
                     conversationId: convId, type: "read", timestamp: Date()
                 ))
+            }
+        }
+    }
+
+    func markAsReceived() {
+        let convId = conversationId
+        Task {
+            do {
+                try await conversationService.markAsReceived(conversationId: convId)
+            } catch {
+                // Non-critical — server will still count as received on next sync
             }
         }
     }

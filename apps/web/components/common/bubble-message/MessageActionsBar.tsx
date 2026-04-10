@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useCallback, useState, useMemo } from 'react';
-import { Smile, Copy, Reply, Flag, Trash2, MoreVertical, Edit, Languages, CheckCircle2, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Smile, Copy, Reply, Flag, Trash2, MoreVertical, Edit, Languages, CheckCircle2, AlertTriangle, HelpCircle, CheckCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,7 @@ interface MessageActionsBarProps {
   onReport?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onViewInfo?: () => void;
   t: (key: string) => string;
   tReport: (key: string) => string;
   // Props pour les traductions
@@ -74,6 +75,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
   onReport,
   onEdit,
   onDelete,
+  onViewInfo,
   t,
   tReport,
   translationError,
@@ -455,6 +457,17 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                   : t('copyLink') || 'Copier le lien'}
               </span>
             </DropdownMenuItem>
+
+            {/* Message info - own messages only */}
+            {isOwnMessage && onViewInfo && (
+              <DropdownMenuItem
+                onClick={onViewInfo}
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <CheckCheck className="h-4 w-4" />
+                <span>{t('messageActions.messageInfo') || 'Message info'}</span>
+              </DropdownMenuItem>
+            )}
 
             {/* Separator before Edit/Delete if they exist */}
             {(canEditMessage || canDeleteMessage) && <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />}

@@ -99,7 +99,11 @@ struct ConversationComposerState {
     var pendingReplyReference: ReplyReference? = nil
     var editingMessageId: String? = nil
     var editingOriginalContent: String? = nil
-    
+
+    // Reply attachment preview
+    var previewMediaURL: URL? = nil
+    var previewMediaType: String? = nil
+
     // Misc Pickers
     var showContactPicker = false
     var showTextEmojiPicker = false
@@ -545,6 +549,21 @@ struct ConversationView: View {
                     captionMap: viewModel.mediaCaptionMap,
                     senderInfoMap: viewModel.mediaSenderInfoMap
                 )
+            }
+            .fullScreenCover(isPresented: Binding(
+                get: { composerState.previewMediaURL != nil },
+                set: { if !$0 { composerState.previewMediaURL = nil; composerState.previewMediaType = nil } }
+            )) {
+                if let url = composerState.previewMediaURL {
+                    switch composerState.previewMediaType {
+                    case "video":
+                        VideoFullscreenPlayer(urlString: url.absoluteString, speed: .normal)
+                    case "audio":
+                        VideoFullscreenPlayer(urlString: url.absoluteString, speed: .normal)
+                    default:
+                        ImageFullscreen(imageUrl: url, accentColor: accentColor)
+                    }
+                }
             }
             .sheet(isPresented: $overlayState.showMessageDetailSheet) {
                 if let msg = overlayState.detailSheetMessage {
@@ -1094,6 +1113,9 @@ struct ConversationView: View {
                 },
                 onDelete: {
                     Task { await viewModel.deleteMessage(messageId: msg.id) }
+                },
+                onDeleteAttachment: { attachmentId in
+                    Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
                 }
             )
             .transition(.opacity).zIndex(999)

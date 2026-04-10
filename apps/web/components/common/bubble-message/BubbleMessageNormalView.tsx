@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useRef, useCallback } from 'react';
+import { memo, useRef, useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   TooltipProvider,
@@ -18,6 +18,7 @@ import { MessageHeader } from './MessageHeader';
 import { MessageNameDate } from './MessageNameDate';
 import { MessageContent } from './MessageContent';
 import { MessageAttachmentsSection } from './MessageAttachmentsSection';
+import { MessageReadStatusDetails } from './MessageReadStatusDetails';
 import { useMessageInteractions } from '@/hooks/use-message-interactions';
 import { useMessageDisplay } from '@/hooks/use-message-display';
 
@@ -150,6 +151,9 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
 
   const hasReactions = message.reactionSummary && Object.keys(message.reactionSummary).length > 0;
 
+  // State pour le dialog de détails de lecture
+  const [showReadStatusDetails, setShowReadStatusDetails] = useState(false);
+
   // Handler pour les quick reactions
   const handleQuickReaction = useCallback((emoji: string) => {
     messageReactionsHook.addReaction(emoji);
@@ -249,6 +253,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
               onReport={canReportMessage() ? handleReportMessage : undefined}
               onEdit={canModifyMessage() ? handleEditMessage : undefined}
               onDelete={canDeleteMessage() ? handleDeleteMessage : undefined}
+              onViewInfo={isOwnMessage ? () => setShowReadStatusDetails(true) : undefined}
               t={tBubble}
               tReport={tReport}
               translationError={translationError}
@@ -266,6 +271,15 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
         {/* Empty space for received messages */}
         {!isOwnMessage && <div className="col-span-2 sm:col-span-4" />}
       </motion.div>
+
+      {/* Message read status details dialog */}
+      {isOwnMessage && (
+        <MessageReadStatusDetails
+          messageId={message.id}
+          open={showReadStatusDetails}
+          onOpenChange={setShowReadStatusDetails}
+        />
+      )}
     </TooltipProvider>
   );
 });

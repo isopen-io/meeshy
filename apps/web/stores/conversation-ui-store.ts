@@ -35,8 +35,14 @@ interface ConversationUIState {
   // Reply state (local UI)
   replyingTo: Map<string, string | null>; // conversationId -> messageId
 
-  // Read status summaries (real-time from socket)
+  // Read status summaries (real-time from socket) — per conversation for latest message
   readStatusSummaries: Record<string, ReadStatusSummary>;
+
+  // Per-message read status summaries (messageId → summary)
+  messageReadStatuses: Record<string, ReadStatusSummary>;
+
+  // Latest own message ID per conversation (for delivery indicator)
+  latestOwnMessageIds: Record<string, string>;
 
   // UI preferences
   isCompactView: boolean;
@@ -65,6 +71,9 @@ interface ConversationUIActions {
 
   // Read status
   updateReadStatusSummary: (conversationId: string, summary: ReadStatusSummary) => void;
+  updateMessageReadStatus: (messageId: string, summary: ReadStatusSummary) => void;
+  updateMessageReadStatusBatch: (statuses: Record<string, ReadStatusSummary>) => void;
+  setLatestOwnMessageId: (conversationId: string, messageId: string) => void;
 
   // UI preferences
   setCompactView: (isCompact: boolean) => void;
@@ -82,6 +91,8 @@ const initialState: ConversationUIState = {
   draftMessages: new Map(),
   replyingTo: new Map(),
   readStatusSummaries: {},
+  messageReadStatuses: {},
+  latestOwnMessageIds: {},
   isCompactView: false,
   showTranslations: true,
 };
@@ -194,8 +205,34 @@ export const useConversationUIStore = create<ConversationUIStore>()(
             && current.totalMembers === summary.totalMembers
             && current.deliveredCount === summary.deliveredCount
             && current.readCount === summary.readCount) return;
+          set((state) => {
+            const updates: Partial<ConversationUIState> = {
+              readStatusSummaries: { ...state.readStatusSummaries, [conversationId]: summary },
+            };
+            // Also update the latest own message's per-message status
+            const latestOwnMsgId = state.latestOwnMessageIds[conversationId];
+            if (latestOwnMsgId) {
+              updates.messageReadStatuses = { ...state.messageReadStatuses, [latestOwnMsgId]: summary };
+            }
+            return updates;
+          });
+        },
+
+        updateMessageReadStatus: (messageId, summary) => {
           set((state) => ({
-            readStatusSummaries: { ...state.readStatusSummaries, [conversationId]: summary },
+            messageReadStatuses: { ...state.messageReadStatuses, [messageId]: summary },
+          }));
+        },
+
+        updateMessageReadStatusBatch: (statuses) => {
+          set((state) => ({
+            messageReadStatuses: { ...state.messageReadStatuses, ...statuses },
+          }));
+        },
+
+        setLatestOwnMessageId: (conversationId, messageId) => {
+          set((state) => ({
+            latestOwnMessageIds: { ...state.latestOwnMessageIds, [conversationId]: messageId },
           }));
         },
 
@@ -244,3 +281,6 @@ export const useReplyingTo = (conversationId: string) =>
 
 export const useReadStatusSummary = (conversationId: string) =>
   useConversationUIStore((state) => state.readStatusSummaries[conversationId]);
+
+export const useMessageReadStatus = (messageId: string) =>
+  useConversationUIStore((state) => state.messageReadStatuses[messageId]);

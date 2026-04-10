@@ -279,40 +279,27 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Read status updated (delivered / read) — uses summary counts
+        // Read status updated (delivered / read) — update in-memory UI state
+        // Cache persistence is handled by ConversationSyncEngine
         socketManager.readStatusUpdated
             .filter { $0.conversationId == convId }
-            .filter { $0.userId != userId }
+            .filter { ($0.userId ?? $0.participantId) != userId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
                 let summary = event.summary
 
-                let newStatus: Message.DeliveryStatus
-                if summary.readCount > 0 {
-                    newStatus = .read
-                } else if summary.deliveredCount > 0 {
-                    newStatus = .delivered
-                } else {
-                    return
-                }
+                let newStatus: Message.DeliveryStatus = summary.readCount > 0 ? .read
+                    : summary.deliveredCount > 0 ? .delivered : .sent
 
                 for i in delegate.messages.indices.reversed() {
                     guard delegate.messages[i].isMe else { continue }
-
                     let current = delegate.messages[i].deliveryStatus
-
-                    if delegate.messages[i].createdAt <= event.updatedAt {
-                        if newStatus == .read && current == .read { break }
-                        if newStatus == .delivered && (current == .delivered || current == .read) { break }
-
-                        if newStatus == .read || (newStatus == .delivered && current != .read) {
-                            delegate.messages[i].deliveryStatus = newStatus
-                            delegate.messages[i].deliveredCount = summary.deliveredCount
-                            delegate.messages[i].readCount = summary.readCount
-                        }
-                    } else if current == .read {
-                        break
+                    guard current != .read else { break }
+                    if newStatus.isBetterThan(current) {
+                        delegate.messages[i].deliveryStatus = newStatus
+                        delegate.messages[i].deliveredCount = summary.deliveredCount
+                        delegate.messages[i].readCount = summary.readCount
                     }
                 }
             }
@@ -328,6 +315,18 @@ final class ConversationSocketHandler {
                     participantId: event.participant.id,
                     newRole: event.newRole
                 )
+            }
+            .store(in: &cancellables)
+
+        // Attachment status updated (listened, watched, viewed, downloaded)
+        socketManager.attachmentStatusUpdated
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let delegate = self?.delegate else { return }
+                guard let msgIdx = delegate.messageIndex(for: event.messageId) else { return }
+                // Trigger UI refresh for this message's attachment status
+                delegate.messages[msgIdx].updatedAt = Date()
             }
             .store(in: &cancellables)
 

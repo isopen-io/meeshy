@@ -27,6 +27,8 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 
 const SendMessageBodySchema = z.object({
   content: CommonSchemas.messageContent,
@@ -140,6 +142,38 @@ export function registerMessagesRoutes(
   const trackingLinkService = new TrackingLinkService(prisma);
   const attachmentService = new AttachmentService(prisma);
   const socketIOHandler = (fastify as any).socketIOHandler;
+  const privacyPreferencesService = new PrivacyPreferencesService(prisma);
+
+  async function broadcastReadStatus(
+    userId: string,
+    participantId: string,
+    conversationId: string,
+    type: 'read' | 'received',
+    isAnonymous: boolean
+  ): Promise<void> {
+    try {
+      const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(userId, isAnonymous);
+      if (!shouldBroadcast || !socketIOHandler) return;
+
+      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
+      const readStatusService = new MessageReadStatusService(prisma);
+      const summary = await readStatusService.getLatestMessageSummary(conversationId);
+      const socketIOManager = socketIOHandler.getManager?.();
+      if (socketIOManager) {
+        const room = ROOMS.conversation(conversationId);
+        (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
+          conversationId,
+          participantId,
+          userId,
+          type,
+          updatedAt: new Date(),
+          summary
+        });
+      }
+    } catch (error) {
+      logger.error('Error broadcasting read status:', error);
+    }
+  }
 
   fastify.get<{
     Params: ConversationParams;
@@ -731,6 +765,39 @@ export function registerMessagesRoutes(
         logger.info(`📊 [CONVERSATIONS] Statistiques audio: totalMessages=${messages.length}, audioAttachments=${audioAttachmentCount}, audioWithTranscription=${audioWithTranscriptionCount}, audioWithTranslatedAudios=${audioWithTranslatedAudiosCount}, transcriptionRate=${transcriptionRate}`);
       }
 
+      // Enrichir les messages avec les vrais statuts de lecture depuis les cursors
+      // Les champs dénormalisés (deliveredCount, readCount) ne sont jamais mis à jour en DB
+      // On les calcule dynamiquement ici depuis ConversationReadCursor
+      const readStatusMap = new Map<string, { deliveredCount: number; readCount: number }>();
+      if (messages.length > 0 && authContext?.userId) {
+        try {
+          const activeParticipants = await prisma.participant.findMany({
+            where: { conversationId, isActive: true },
+            select: { id: true }
+          });
+          const activeIds = new Set(activeParticipants.map((p: any) => p.id));
+
+          const cursors = await prisma.conversationReadCursor.findMany({
+            where: { conversationId },
+            select: { participantId: true, lastDeliveredAt: true, lastReadAt: true }
+          });
+          const activeCursors = cursors.filter((c: any) => activeIds.has(c.participantId));
+
+          for (const msg of (messages as any[])) {
+            let deliveredCount = 0;
+            let readCount = 0;
+            for (const cursor of activeCursors) {
+              if (cursor.participantId === msg.senderId) continue;
+              if (cursor.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt) deliveredCount++;
+              if (cursor.lastReadAt && cursor.lastReadAt >= msg.createdAt) readCount++;
+            }
+            readStatusMap.set(msg.id, { deliveredCount, readCount });
+          }
+        } catch (err) {
+          logger.warn('[CONVERSATIONS] Failed to compute read statuses:', err);
+        }
+      }
+
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types
       const mappedMessages = messages.map((message: any) => {
         // Construire l'objet de réponse aligné avec GatewayMessage
@@ -770,12 +837,12 @@ export function registerMessagesRoutes(
           pinnedAt: message.pinnedAt,
           pinnedBy: message.pinnedBy,
 
-          // Statuts agrégés (dénormalisés)
+          // Statuts agrégés (calculés dynamiquement depuis les cursors)
           deliveredToAllAt: message.deliveredToAllAt,
           receivedByAllAt: message.receivedByAllAt,
           readByAllAt: message.readByAllAt,
-          deliveredCount: message.deliveredCount,
-          readCount: message.readCount,
+          deliveredCount: readStatusMap.get(message.id)?.deliveredCount ?? message.deliveredCount ?? 0,
+          readCount: readStatusMap.get(message.id)?.readCount ?? message.readCount ?? 0,
 
           // Réactions (dénormalisées - toujours incluses)
           reactionSummary: message.reactionSummary,
@@ -1077,44 +1144,22 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Not a participant');
       }
 
-      // Récupérer tous les messages non lus de cette conversation pour cet utilisateur
-      const unreadMessages = await prisma.message.findMany({
-        where: {
-          conversationId: conversationId,
-          deletedAt: null,
-          senderId: { not: currentParticipant.id },
-          statusEntries: {
-            none: {
-              participantId: currentParticipant.id,
-              readAt: { not: null }
-            }
-          }
-        },
-        select: {
-          id: true
-        }
-      });
+      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
+      const readStatusService = new MessageReadStatusService(prisma);
 
-      if (unreadMessages.length === 0) {
-        return sendSuccess(reply, { message: 'Aucun message non lu à marquer', markedCount: 0 });
+      const unreadCount = await readStatusService.getUnreadCount(currentParticipant.id, conversationId);
+      if (unreadCount === 0) {
+        return sendSuccess(reply, { markedCount: 0 });
       }
 
-      // Marquer tous les messages comme lus (utiliser le nouveau système de curseur)
-      try {
-        const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
-        const readStatusService = new MessageReadStatusService(prisma);
+      await readStatusService.markMessagesAsRead(currentParticipant.id, conversationId);
+      await broadcastReadStatus(userId, currentParticipant.id, conversationId, 'read', authRequest.authContext.type === 'anonymous');
 
-        // Marquer comme lu (curseur automatiquement placé sur le dernier message)
-        await readStatusService.markMessagesAsRead(currentParticipant.id, conversationId);
-      } catch (err) {
-        logger.warn('Error marking messages as read:', err);
-      }
-
-      return sendSuccess(reply, { message: `${unreadMessages.length} message(s) marqué(s) comme lu(s)`, markedCount: unreadMessages.length });
+      return sendSuccess(reply, { markedCount: unreadCount });
 
     } catch (error) {
       logger.error('Error marking conversation as read', error);
-      sendInternalError(reply, 'Erreur lors du marquage des messages comme lus');
+      return sendInternalError(reply, 'Erreur lors du marquage des messages comme lus');
     }
   });
 
@@ -1324,37 +1369,27 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      // Vérifier les permissions d'accès
-      let canAccess = false;
+      // Résoudre userId → participantId (curseur = participantId)
+      const membership = await prisma.participant.findFirst({
+        where: { conversationId, userId, isActive: true },
+        select: { id: true }
+      });
 
-      if (id === "meeshy") {
-        canAccess = true; // Conversation globale accessible à tous les utilisateurs connectés
-      } else {
-        const membership = await prisma.participant.findFirst({
-          where: { conversationId: conversationId, userId, isActive: true }
-        });
-        canAccess = !!membership;
+      if (!membership) {
+        return sendForbidden(reply, 'Not a participant in this conversation');
       }
 
-      if (!canAccess) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // ✅ FIX: Utiliser uniquement le nouveau système de curseur
-      // Pas besoin de compter les messages - on marque simplement comme lu
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      // Calculer le nombre de messages non lus AVANT de marquer comme lu
-      const unreadCount = await readStatusService.getUnreadCount(userId, conversationId);
-
-      // Marquer la conversation comme lue (déplace le curseur au dernier message)
-      await readStatusService.markMessagesAsRead(userId, conversationId);
+      const unreadCount = await readStatusService.getUnreadCount(membership.id, conversationId);
+      await readStatusService.markMessagesAsRead(membership.id, conversationId);
+      await broadcastReadStatus(userId, membership.id, conversationId, 'read', (request as UnifiedAuthRequest).authContext.type === 'anonymous');
 
       return sendSuccess(reply, { markedCount: unreadCount });
     } catch (error) {
       logger.error('Error marking conversation as read', error);
-      sendInternalError(reply, 'Erreur lors du marquage comme lu');
+      return sendInternalError(reply, 'Erreur lors du marquage comme lu');
     }
   });
 

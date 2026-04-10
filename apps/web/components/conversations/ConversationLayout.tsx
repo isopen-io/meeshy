@@ -437,6 +437,23 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     instanceId,
   ]);
 
+  // Marquer comme lu à l'ouverture d'une conversation
+  const hasMarkedAsReadOnOpenRef = useRef<string | null>(null);
+  useEffect(() => {
+    const conversationId = selectedConversation?.id;
+    if (!conversationId) return;
+
+    hasMarkedAsReadOnOpenRef.current = conversationId;
+    conversationsService.markAsRead(conversationId)
+      .then(() => {
+        setConversations(prev =>
+          prev.map(conv =>
+            conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
+          )
+        );
+      })
+      .catch(() => {});
+  }, [selectedConversation?.id, setConversations]);
 
   // Marquer comme lu quand scroll vers le bas
   useEffect(() => {

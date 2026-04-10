@@ -70,7 +70,8 @@
       "reply": "Reply",
       "edit": "Edit",
       "delete": "Delete",
-      "more": "More options"
+      "more": "More options",
+      "messageInfo": "Message info"
     },
     "replyToMessage": "Reply to message",
     "replyingTo": "Replying to",

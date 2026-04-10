@@ -116,11 +116,73 @@ export class MessagesService {
    * Marquer une conversation comme lue
    */
   async markAsRead(conversationId: string): Promise<void> {
-    await apiService.post(`/conversations/${conversationId}/read`);
+    await apiService.post(`/conversations/${conversationId}/mark-as-read`);
   }
 
   /**
-   * Marquer tous les messages d'une conversation comme lus
+   * Marquer les messages d'une conversation comme reçus (delivered)
+   */
+  async markAsReceived(conversationId: string): Promise<void> {
+    await apiService.post(`/conversations/${conversationId}/mark-as-received`);
+  }
+
+  /**
+   * Récupérer les statuts de lecture batch pour plusieurs messages
+   */
+  async getReadStatuses(conversationId: string, messageIds: string[]): Promise<Record<string, { totalMembers: number; receivedCount: number; readCount: number }>> {
+    const response = await apiService.get<{
+      success: boolean;
+      data: Record<string, { totalMembers: number; receivedCount: number; readCount: number }>;
+    }>(`/conversations/${conversationId}/read-statuses`, { messageIds: messageIds.join(',') });
+
+    return response.data?.data ?? {};
+  }
+
+  /**
+   * Récupérer les détails de statut d'un message (qui a lu, reçu, pas vu)
+   */
+  async getMessageStatusDetails(messageId: string, options: {
+    offset?: number;
+    limit?: number;
+    filter?: 'all' | 'delivered' | 'read' | 'unread';
+  } = {}): Promise<{
+    statuses: Array<{
+      participantId: string;
+      displayName: string;
+      avatar?: string | null;
+      deliveredAt: string | null;
+      receivedAt: string | null;
+      readAt: string | null;
+      readDevice?: string | null;
+    }>;
+    pagination: { total: number; limit: number; offset: number; hasMore: boolean };
+  }> {
+    const response = await apiService.get<{
+      success: boolean;
+      data: Array<{
+        participantId: string;
+        displayName: string;
+        avatar?: string | null;
+        deliveredAt: string | null;
+        receivedAt: string | null;
+        readAt: string | null;
+        readDevice?: string | null;
+      }>;
+      pagination: { total: number; limit: number; offset: number; hasMore: boolean };
+    }>(`/messages/${messageId}/status-details`, {
+      offset: options.offset ?? 0,
+      limit: options.limit ?? 50,
+      filter: options.filter ?? 'all',
+    });
+
+    return {
+      statuses: Array.isArray(response.data?.data) ? response.data.data : [],
+      pagination: response.data?.pagination ?? { total: 0, limit: 50, offset: 0, hasMore: false },
+    };
+  }
+
+  /**
+   * Marquer tous les messages d'une conversation comme lus (legacy endpoint)
    */
   async markConversationAsRead(conversationId: string): Promise<MarkAsReadResponse> {
     const requestKey = `mark-read-${conversationId}`;

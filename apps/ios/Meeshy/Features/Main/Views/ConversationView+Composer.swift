@@ -352,6 +352,7 @@ extension ConversationView {
 
     // MARK: - Rich Attachment Preview for Reply Banner
     @ViewBuilder
+    @ViewBuilder
     func composerReplyAttachmentPreview(type: String, reply: ReplyReference) -> some View {
         let accent = Color(hex: reply.isMe ? accentColor : reply.authorColor)
 
@@ -364,6 +365,12 @@ extension ConversationView {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 40, height: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .onTapGesture {
+                    if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
+                        composerState.previewMediaURL = url
+                        composerState.previewMediaType = "image"
+                    }
+                }
             }
 
         case "video":
@@ -379,6 +386,12 @@ extension ConversationView {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: 18))
                         .foregroundStyle(.white, .black.opacity(0.4))
+                }
+                .onTapGesture {
+                    if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
+                        composerState.previewMediaURL = url
+                        composerState.previewMediaType = "video"
+                    }
                 }
             } else {
                 replyAttachmentFallbackBadge(icon: "video.fill", color: accent)
@@ -410,6 +423,12 @@ extension ConversationView {
                             .stroke(accent.opacity(0.15), lineWidth: 0.5)
                     )
             )
+            .onTapGesture {
+                if let thumbUrl = reply.attachmentThumbnailUrl, let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
+                    composerState.previewMediaURL = url
+                    composerState.previewMediaType = "audio"
+                }
+            }
 
         case "location":
             ZStack {
