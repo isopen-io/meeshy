@@ -765,6 +765,39 @@ export function registerMessagesRoutes(
         logger.info(`📊 [CONVERSATIONS] Statistiques audio: totalMessages=${messages.length}, audioAttachments=${audioAttachmentCount}, audioWithTranscription=${audioWithTranscriptionCount}, audioWithTranslatedAudios=${audioWithTranslatedAudiosCount}, transcriptionRate=${transcriptionRate}`);
       }
 
+      // Enrichir les messages avec les vrais statuts de lecture depuis les cursors
+      // Les champs dénormalisés (deliveredCount, readCount) ne sont jamais mis à jour en DB
+      // On les calcule dynamiquement ici depuis ConversationReadCursor
+      const readStatusMap = new Map<string, { deliveredCount: number; readCount: number }>();
+      if (messages.length > 0 && authContext?.userId) {
+        try {
+          const activeParticipants = await prisma.participant.findMany({
+            where: { conversationId, isActive: true },
+            select: { id: true }
+          });
+          const activeIds = new Set(activeParticipants.map((p: any) => p.id));
+
+          const cursors = await prisma.conversationReadCursor.findMany({
+            where: { conversationId },
+            select: { participantId: true, lastDeliveredAt: true, lastReadAt: true }
+          });
+          const activeCursors = cursors.filter((c: any) => activeIds.has(c.participantId));
+
+          for (const msg of (messages as any[])) {
+            let deliveredCount = 0;
+            let readCount = 0;
+            for (const cursor of activeCursors) {
+              if (cursor.participantId === msg.senderId) continue;
+              if (cursor.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt) deliveredCount++;
+              if (cursor.lastReadAt && cursor.lastReadAt >= msg.createdAt) readCount++;
+            }
+            readStatusMap.set(msg.id, { deliveredCount, readCount });
+          }
+        } catch (err) {
+          logger.warn('[CONVERSATIONS] Failed to compute read statuses:', err);
+        }
+      }
+
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types
       const mappedMessages = messages.map((message: any) => {
         // Construire l'objet de réponse aligné avec GatewayMessage
@@ -804,12 +837,12 @@ export function registerMessagesRoutes(
           pinnedAt: message.pinnedAt,
           pinnedBy: message.pinnedBy,
 
-          // Statuts agrégés (dénormalisés)
+          // Statuts agrégés (calculés dynamiquement depuis les cursors)
           deliveredToAllAt: message.deliveredToAllAt,
           receivedByAllAt: message.receivedByAllAt,
           readByAllAt: message.readByAllAt,
-          deliveredCount: message.deliveredCount,
-          readCount: message.readCount,
+          deliveredCount: readStatusMap.get(message.id)?.deliveredCount ?? message.deliveredCount ?? 0,
+          readCount: readStatusMap.get(message.id)?.readCount ?? message.readCount ?? 0,
 
           // Réactions (dénormalisées - toujours incluses)
           reactionSummary: message.reactionSummary,
