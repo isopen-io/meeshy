@@ -325,7 +325,6 @@ final class ConversationSocketHandler {
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
                 guard let msgIdx = delegate.messageIndex(for: event.messageId) else { return }
-                // Trigger UI refresh for this message's attachment status
                 delegate.messages[msgIdx].updatedAt = Date()
             }
             .store(in: &cancellables)

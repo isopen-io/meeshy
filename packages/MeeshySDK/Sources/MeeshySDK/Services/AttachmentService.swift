@@ -23,7 +23,7 @@ public final class AttachmentService: @unchecked Sendable {
     }
 
     public func delete(attachmentId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.delete(
+        let _: APIResponse<[String: Bool]> = try await api.delete(
             endpoint: "/attachments/\(attachmentId)"
         )
     }

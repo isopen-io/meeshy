@@ -352,7 +352,6 @@ extension ConversationView {
 
     // MARK: - Rich Attachment Preview for Reply Banner
     @ViewBuilder
-    @ViewBuilder
     func composerReplyAttachmentPreview(type: String, reply: ReplyReference) -> some View {
         let accent = Color(hex: reply.isMe ? accentColor : reply.authorColor)
 

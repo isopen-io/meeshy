@@ -1036,7 +1036,7 @@ class ConversationViewModel: ObservableObject {
             let retryItem = RetryQueueItem(
                 conversationId: conversationId,
                 content: text,
-                originalLanguage: originalLanguage,
+                originalLanguage: originalLanguage ?? "fr",
                 replyToId: replyToId,
                 attachmentIds: attachmentIds
             )

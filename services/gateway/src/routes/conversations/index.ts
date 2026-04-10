@@ -9,6 +9,7 @@ import { registerSearchRoutes } from './search';
 import { registerLeaveRoutes } from './leave';
 import { registerBanRoutes } from './ban';
 import { registerStatsRoutes } from './stats';
+import { registerThreadsRoutes } from './threads';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 
 /**
@@ -42,4 +43,5 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   registerLeaveRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerBanRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerStatsRoutes(fastify, prisma, requiredAuth);
+  registerThreadsRoutes(fastify, prisma, requiredAuth);
 }

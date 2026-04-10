@@ -555,7 +555,6 @@ public protocol MessageSocketProviding: Sendable {
     var callError: PassthroughSubject<CallErrorData, Never> { get }
     var reactionSynced: PassthroughSubject<ReactionSyncEvent, Never> { get }
     var systemMessageReceived: PassthroughSubject<SystemMessageEvent, Never> { get }
-    var attachmentStatusUpdated: PassthroughSubject<AttachmentStatusEvent, Never> { get }
     var mentionCreated: PassthroughSubject<MentionCreatedEvent, Never> { get }
     var isConnected: Bool { get }
     var connectionState: ConnectionState { get }
@@ -674,7 +673,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — reactions sync, system, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
     public let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
-    public let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusEvent, Never>()
     public let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
 
     @Published public var isConnected = false
@@ -1432,15 +1430,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(SystemMessageEvent.self, from: data) { [weak self] event in
                 self?.systemMessageReceived.send(event)
-            }
-        }
-
-        // --- Attachment status events ---
-
-        socket.on("attachment-status:updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(AttachmentStatusEvent.self, from: data) { [weak self] event in
-                self?.attachmentStatusUpdated.send(event)
             }
         }
 

@@ -45,6 +45,8 @@ struct ConversationOverlayState {
     var storyViewerUserId: String? = nil
     var storyViewerGroupIndex: Int = 0
     var storyViewerSlideIndex: Int = 0
+    var showReplyThread = false
+    var replyThreadParentId: String? = nil
 }
 
 struct ConversationScrollState {
@@ -449,8 +451,121 @@ struct ConversationView: View {
     // MARK: - Body
 
     var body: some View {
+        bodyWithSheets
+    }
+
+    private var bodyWithSheets: some View {
+        bodyWithCovers
+            .fullScreenCover(isPresented: $headerState.showStoryViewerFromHeader) {
+                if let userId = headerState.storyUserIdForHeader,
+                   let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
+                    StoryViewerView(viewModel: storyViewModel, groups: [storyViewModel.storyGroups[resolvedIndex]], currentGroupIndex: 0, isPresented: $headerState.showStoryViewerFromHeader)
+                }
+            }
+            .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
+                if let resolvedIndex = storyViewModel.groupIndex(forUserId: overlayState.storyViewerUserId ?? "") {
+                    let slideIdx = overlayState.storyViewerSlideIndex
+                    StoryViewerView(
+                        viewModel: storyViewModel,
+                        groups: [storyViewModel.storyGroups[resolvedIndex]],
+                        currentGroupIndex: 0,
+                        isPresented: $overlayState.showStoryViewer,
+                        initialStoryIndex: slideIdx
+                    )
+                }
+            }
+            .sheet(isPresented: $composerState.showConversationInfo) {
+                if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
+            }
+            .alert("Action sélectionnée", isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
+                Button("OK") { composerState.actionAlert = nil }
+            } message: { Text(composerState.actionAlert ?? "") }
+            .alert("Supprimer ce message ?", isPresented: Binding(get: {
+                overlayState.deleteConfirmMessageId != nil
+            }, set: {
+                if !$0 { overlayState.deleteConfirmMessageId = nil }
+            })) {
+                Button("Annuler", role: .cancel) { overlayState.deleteConfirmMessageId = nil }
+                Button("Supprimer", role: .destructive) {
+                    if let msgId = overlayState.deleteConfirmMessageId { Task { await viewModel.deleteMessage(messageId: msgId) } }
+                    overlayState.deleteConfirmMessageId = nil
+                }
+            } message: { Text("Cette action est irréversible.") }
+            .sheet(item: $composerState.forwardMessage) { msgToForward in
+                ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
+                    .presentationDetents([.medium, .large])
+            }
+            .overlay { overlayMenuContent }
+            .overlay { replyThreadOverlayContent }
+            .withStatusBubble()
+    }
+
+    private var bodyWithCovers: some View {
+        bodyWithLifecycle
+            .fullScreenCover(item: $scrollState.galleryStartAttachment) { startAttachment in
+                ConversationMediaGalleryView(
+                    allAttachments: viewModel.allVisualAttachments,
+                    startAttachmentId: startAttachment.id,
+                    accentColor: accentColor,
+                    captionMap: viewModel.mediaCaptionMap,
+                    senderInfoMap: viewModel.mediaSenderInfoMap
+                )
+            }
+            .fullScreenCover(isPresented: Binding(
+                get: { composerState.previewMediaURL != nil },
+                set: { if !$0 { composerState.previewMediaURL = nil; composerState.previewMediaType = nil } }
+            )) {
+                if let url = composerState.previewMediaURL {
+                    switch composerState.previewMediaType {
+                    case "video":
+                        VideoFullscreenPlayer(urlString: url.absoluteString, speed: .x1_0)
+                    case "audio":
+                        VideoFullscreenPlayer(urlString: url.absoluteString, speed: .x1_0)
+                    default:
+                        ImageFullscreen(imageUrl: url, accentColor: accentColor)
+                    }
+                }
+            }
+            .sheet(isPresented: $overlayState.showMessageDetailSheet) {
+                if let msg = overlayState.detailSheetMessage {
+                    MessageDetailSheet(
+                        message: msg,
+                        contactColor: conversation?.accentColor ?? "#FF2E63",
+                        conversationId: viewModel.conversationId,
+                        initialTab: overlayState.detailSheetInitialTab,
+                        canDelete: msg.isMe || isCurrentUserAdminOrMod,
+                        textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                        transcription: viewModel.messageTranscriptions[msg.id],
+                        translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                        onSelectTranslation: { translation in
+                            viewModel.setActiveTranslation(for: msg.id, translation: translation)
+                        },
+                        onSelectAudioLanguage: { langCode in
+                            viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
+                        },
+                        onRequestTranslation: { messageId, lang in
+                            MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
+                        },
+                        onReact: { emoji in
+                            viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                        },
+                        onReport: { type, reason in
+                            Task {
+                                let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
+                                if success { HapticFeedback.success() }
+                                else { HapticFeedback.error() }
+                            }
+                        },
+                        onDelete: {
+                            Task { await viewModel.deleteMessage(messageId: msg.id) }
+                        }
+                    )
+                }
+            }
+    }
+
+    private var bodyWithLifecycle: some View {
         bodyContent
-            // Réactive le swipe de bord gauche pour revenir en arrière (désactivé par navigationBarHidden)
             .background(InteractivePopEnabler())
             .task {
                 viewModel.observeSync()
@@ -500,108 +615,6 @@ struct ConversationView: View {
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
                 keyboardHeight = 0
             }
-            .fullScreenCover(isPresented: $headerState.showStoryViewerFromHeader) {
-                if let userId = headerState.storyUserIdForHeader,
-                   let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
-                    StoryViewerView(viewModel: storyViewModel, groups: [storyViewModel.storyGroups[resolvedIndex]], currentGroupIndex: 0, isPresented: $headerState.showStoryViewerFromHeader)
-                }
-            }
-            .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
-                if let resolvedIndex = storyViewModel.groupIndex(forUserId: overlayState.storyViewerUserId ?? "") {
-                    let slideIdx = overlayState.storyViewerSlideIndex
-                    StoryViewerView(
-                        viewModel: storyViewModel,
-                        groups: [storyViewModel.storyGroups[resolvedIndex]],
-                        currentGroupIndex: 0,
-                        isPresented: $overlayState.showStoryViewer,
-                        initialStoryIndex: slideIdx
-                    )
-                }
-            }
-            .sheet(isPresented: $composerState.showConversationInfo) {
-                if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
-            }
-            .alert("Action sélectionnée", isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
-                Button("OK") { composerState.actionAlert = nil }
-            } message: { Text(composerState.actionAlert ?? "") }
-            .alert("Supprimer ce message ?", isPresented: Binding(get: { 
-                overlayState.deleteConfirmMessageId != nil 
-            }, set: { 
-                if !$0 { overlayState.deleteConfirmMessageId = nil } 
-            })) {
-                Button("Annuler", role: .cancel) { overlayState.deleteConfirmMessageId = nil }
-                Button("Supprimer", role: .destructive) {
-                    if let msgId = overlayState.deleteConfirmMessageId { Task { await viewModel.deleteMessage(messageId: msgId) } }
-                    overlayState.deleteConfirmMessageId = nil
-                }
-            } message: { Text("Cette action est irréversible.") }
-            .sheet(item: $composerState.forwardMessage) { msgToForward in
-                ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
-                    .presentationDetents([.medium, .large])
-            }
-
-            .overlay { overlayMenuContent }
-            .fullScreenCover(item: $scrollState.galleryStartAttachment) { startAttachment in
-                ConversationMediaGalleryView(
-                    allAttachments: viewModel.allVisualAttachments,
-                    startAttachmentId: startAttachment.id,
-                    accentColor: accentColor,
-                    captionMap: viewModel.mediaCaptionMap,
-                    senderInfoMap: viewModel.mediaSenderInfoMap
-                )
-            }
-            .fullScreenCover(isPresented: Binding(
-                get: { composerState.previewMediaURL != nil },
-                set: { if !$0 { composerState.previewMediaURL = nil; composerState.previewMediaType = nil } }
-            )) {
-                if let url = composerState.previewMediaURL {
-                    switch composerState.previewMediaType {
-                    case "video":
-                        VideoFullscreenPlayer(urlString: url.absoluteString, speed: .normal)
-                    case "audio":
-                        VideoFullscreenPlayer(urlString: url.absoluteString, speed: .normal)
-                    default:
-                        ImageFullscreen(imageUrl: url, accentColor: accentColor)
-                    }
-                }
-            }
-            .sheet(isPresented: $overlayState.showMessageDetailSheet) {
-                if let msg = overlayState.detailSheetMessage {
-                    MessageDetailSheet(
-                        message: msg,
-                        contactColor: conversation?.accentColor ?? "#FF2E63",
-                        conversationId: viewModel.conversationId,
-                        initialTab: overlayState.detailSheetInitialTab,
-                        canDelete: msg.isMe || isCurrentUserAdminOrMod,
-                        textTranslations: viewModel.messageTranslations[msg.id] ?? [],
-                        transcription: viewModel.messageTranscriptions[msg.id],
-                        translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
-                        onSelectTranslation: { translation in
-                            viewModel.setActiveTranslation(for: msg.id, translation: translation)
-                        },
-                        onSelectAudioLanguage: { langCode in
-                            viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
-                        },
-                        onRequestTranslation: { messageId, lang in
-                            MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
-                        },
-                        onReact: { emoji in
-                            viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
-                        },
-                        onReport: { type, reason in
-                            Task {
-                                let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
-                                if success { HapticFeedback.success() }
-                                else { HapticFeedback.error() }
-                            }
-                        },
-                        onDelete: {
-                            Task { await viewModel.deleteMessage(messageId: msg.id) }
-                        }
-                    )
-                }
-            }
-            .withStatusBubble()
     }
 
     // MARK: - Body Content (extracted to help type-checker)
@@ -1066,6 +1079,25 @@ struct ConversationView: View {
             }
         )
         .padding(.horizontal, composerState.showOptions ? 8 : 16).padding(.top, 8)
+    }
+
+    // MARK: - Reply Thread Overlay
+
+    @ViewBuilder
+    private var replyThreadOverlayContent: some View {
+        if overlayState.showReplyThread, let parentId = overlayState.replyThreadParentId {
+            ReplyThreadOverlay(
+                conversationId: viewModel.conversationId,
+                parentMessageId: parentId,
+                accentColor: accentColor,
+                isDark: theme.mode.isDark,
+                allMessages: viewModel.messages,
+                translationResolver: { messageId in
+                    viewModel.preferredTranslation(for: messageId)?.translatedContent
+                },
+                isPresented: $overlayState.showReplyThread
+            )
+        }
     }
 
     // MARK: - Overlay Menu Content (extracted to help type-checker)

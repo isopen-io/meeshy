@@ -91,7 +91,8 @@ extension ConversationView {
                         overlayState.showMessageDetailSheet = true
                     },
                     onReplyTap: { messageId in
-                        scrollState.scrollToMessageId = messageId
+                        overlayState.replyThreadParentId = messageId
+                        overlayState.showReplyThread = true
                     },
                     onStoryReplyTap: { storyId in
                         if let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) {

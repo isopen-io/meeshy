@@ -71,8 +71,10 @@ public actor MessageRetryQueue {
 
     private init() {
         items = Self.loadItemsFromDisk()
-        purgeExpired()
-        Task { await observeConnection() }
+        Task {
+            await purgeExpired()
+            await observeConnection()
+        }
     }
 
     // MARK: - Queue Operations

@@ -538,6 +538,7 @@ struct ThemedMessageBubble: View {
                                 // Quoted reply preview (inside bubble)
                                 if let reply = message.replyTo {
                                     quotedReplyView(reply)
+                                        .padding(.bottom, 4)
                                         .onTapGesture {
                                             guard !reply.messageId.isEmpty else { return }
                                             HapticFeedback.light()

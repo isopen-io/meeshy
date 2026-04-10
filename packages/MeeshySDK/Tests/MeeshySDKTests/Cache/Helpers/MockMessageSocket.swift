@@ -42,7 +42,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callError = PassthroughSubject<CallErrorData, Never>()
     let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
     let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
-    let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusEvent, Never>()
+    let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
 
     var isConnected: Bool = false
