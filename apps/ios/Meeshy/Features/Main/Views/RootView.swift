@@ -152,10 +152,7 @@ struct RootView: View {
                     case .notifications:
                         NotificationListView(
                             onNotificationTap: { notification in
-                                router.pop()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                    handleNotificationTap(notification)
-                                }
+                                handleNotificationTap(notification)
                             },
                             onDismiss: { router.pop() }
                         )
@@ -351,6 +348,11 @@ struct RootView: View {
                 router.navigateToConversation(conversation)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .handlePushNotification)) { notification in
+            if let payload = notification.object as? NotificationPayload {
+                handlePushNotificationTap(payload)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
             guard let targetUserId = notification.object as? String else { return }
             if let existingConv = conversationViewModel.conversations.first(where: {
@@ -543,61 +545,111 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Handle Notification Tap
+    // MARK: - Unified Notification Navigation
+
+    private struct NotificationNavContext {
+        let type: MeeshyNotificationType
+        let conversationId: String?
+        let messageId: String?
+        let postId: String?
+        let senderId: String?
+        let senderUsername: String?
+
+        init(from notification: APINotification) {
+            type = notification.notificationType
+            conversationId = notification.context?.conversationId
+            messageId = notification.context?.messageId
+            postId = notification.context?.postId ?? notification.metadata?.postId
+            senderId = notification.senderId
+            senderUsername = notification.senderName
+        }
+
+        init(from event: SocketNotificationEvent) {
+            type = event.notificationType
+            conversationId = event.conversationId
+            messageId = event.messageId
+            postId = event.postId
+            senderId = event.senderId
+            senderUsername = event.senderUsername
+        }
+
+        init(from payload: NotificationPayload) {
+            type = MeeshyNotificationType(rawValue: payload.type ?? "") ?? .system
+            conversationId = payload.conversationId
+            messageId = payload.messageId
+            postId = payload.postId
+            senderId = payload.senderId
+            senderUsername = payload.senderUsername
+        }
+    }
 
     private func handleNotificationTap(_ notification: APINotification) {
-        let data = notification.data
-        switch notification.notificationType {
-        case .newMessage, .legacyNewMessage, .messageReply,
+        navigateFromNotification(NotificationNavContext(from: notification))
+    }
+
+    private func handleSocketNotificationTap(_ event: SocketNotificationEvent) {
+        navigateFromNotification(NotificationNavContext(from: event))
+    }
+
+    func handlePushNotificationTap(_ payload: NotificationPayload) {
+        navigateFromNotification(NotificationNavContext(from: payload))
+    }
+
+    private func navigateFromNotification(_ ctx: NotificationNavContext) {
+        switch ctx.type {
+        case .newMessage, .legacyNewMessage, .messageReply, .reply, .legacyStoryReply,
              .messageReaction, .reaction, .legacyMessageReaction,
              .userMentioned, .mention, .legacyMention,
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
-             .legacyStoryReply, .reply,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
-            guard let conversationId = data?.conversationId else { return }
-            navigateToConversationById(conversationId)
+            guard let conversationId = ctx.conversationId, !conversationId.isEmpty else { return }
+            navigateToConversationById(conversationId, highlightMessageId: ctx.messageId)
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
              .legacyStatusUpdate:
-            if let senderId = notification.senderId {
-                router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: notification.senderName ?? senderId)
+            if let senderId = ctx.senderId {
+                router.deepLinkProfileUser = ProfileSheetUser(
+                    userId: senderId,
+                    username: ctx.senderUsername ?? senderId
+                )
             }
 
-        case .communityInvite, .communityJoined, .communityLeft, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
+        case .communityInvite, .communityJoined, .communityLeft,
+             .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
              .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
              .addedToConversation, .newConversation, .removedFromConversation:
-            if let conversationId = data?.conversationId {
+            if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
-            }
-
-        case .postLike, .legacyPostLike, .postRepost:
-            if let postId = notification.context?.postId ?? data?.postId {
-                router.push(.postDetail(postId))
-            } else if let conversationId = data?.conversationId {
-                navigateToConversationById(conversationId)
-            }
-
-        case .postComment, .legacyPostComment, .commentLike, .commentReply:
-            if let postId = notification.context?.postId ?? data?.postId {
-                router.push(.postDetail(postId, nil, showComments: true))
-            } else if let conversationId = data?.conversationId {
-                navigateToConversationById(conversationId)
-            }
-
-        case .storyReaction, .statusReaction:
-            if let postId = notification.context?.postId ?? data?.postId,
-               let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                showStoryViewerFromConv = true
-            } else if let postId = notification.context?.postId ?? data?.postId {
-                router.push(.postDetail(postId))
             }
 
         case .missedCall, .callDeclined, .legacyCallMissed,
              .incomingCall, .callEnded, .legacyCallIncoming:
-            if let conversationId = data?.conversationId {
+            if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
+            }
+
+        case .postLike, .legacyPostLike, .postRepost:
+            if let postId = ctx.postId, !postId.isEmpty {
+                router.push(.postDetail(postId))
+            } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
+                navigateToConversationById(conversationId)
+            }
+
+        case .postComment, .legacyPostComment, .commentLike, .commentReply:
+            if let postId = ctx.postId, !postId.isEmpty {
+                router.push(.postDetail(postId, nil, showComments: true))
+            } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
+                navigateToConversationById(conversationId)
+            }
+
+        case .storyReaction, .statusReaction:
+            if let postId = ctx.postId, !postId.isEmpty,
+               let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
+                showStoryViewerFromConv = true
+            } else if let postId = ctx.postId, !postId.isEmpty {
+                router.push(.postDetail(postId))
             }
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
@@ -613,52 +665,9 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Handle Socket Notification Tap
-
-    private func handleSocketNotificationTap(_ event: SocketNotificationEvent) {
-        switch event.notificationType {
-        case .newMessage, .messageReply, .messageReaction, .reaction,
-             .mention, .missedCall,
-             .newConversation, .addedToConversation, .memberJoined:
-            if let conversationId = event.conversationId {
-                navigateToConversationById(conversationId)
-            }
-
-        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
-            if let senderId = event.senderId, let username = event.senderUsername {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: senderId,
-                    username: username
-                )
-            }
-
-        case .postLike, .legacyPostLike, .postRepost:
-            if let postId = event.postId {
-                router.push(.postDetail(postId))
-            }
-
-        case .postComment, .legacyPostComment, .commentLike, .commentReply:
-            if let postId = event.postId {
-                router.push(.postDetail(postId, nil, showComments: true))
-            }
-
-        case .storyReaction, .statusReaction:
-            if let postId = event.postId,
-               let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                showStoryViewerFromConv = true
-            } else if let postId = event.postId {
-                router.push(.postDetail(postId))
-            }
-
-        default:
-            break
-        }
-    }
-
-    private func navigateToConversationById(_ conversationId: String) {
+    private func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil) {
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
-            router.navigateToConversation(existing)
+            router.navigateToConversation(existing, highlightMessageId: highlightMessageId)
             return
         }
         Task {
@@ -666,9 +675,11 @@ struct RootView: View {
                 let currentUserId = AuthManager.shared.currentUser?.id ?? ""
                 let apiConv = try await ConversationService.shared.getById(conversationId)
                 let conv = apiConv.toConversation(currentUserId: currentUserId)
-                router.navigateToConversation(conv)
+                router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
             } catch {
-                ToastManager.shared.showError("Impossible d'ouvrir la conversation")
+                ToastManager.shared.showError(
+                    String(localized: "Impossible d'ouvrir la conversation", defaultValue: "Impossible d'ouvrir la conversation")
+                )
             }
         }
     }

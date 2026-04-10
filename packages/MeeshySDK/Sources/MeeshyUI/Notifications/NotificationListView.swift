@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MeeshySDK
 
 // MARK: - Notification Category Filter
@@ -354,6 +355,8 @@ final class NotificationListViewModel: ObservableObject {
 
     private var offset = 0
     private let limit = 30
+    private var cancellables = Set<AnyCancellable>()
+    private var refreshTask: Task<Void, Never>?
 
     var filteredNotifications: [APINotification] {
         guard selectedCategory != .all && selectedCategory != .unread else {
@@ -361,6 +364,55 @@ final class NotificationListViewModel: ObservableObject {
         }
         return notifications.filter { selectedCategory.matches($0) }
     }
+
+    init() {
+        subscribeToRealTimeEvents()
+    }
+
+    // MARK: - Real-Time Socket Subscriptions
+
+    private func subscribeToRealTimeEvents() {
+        let manager = NotificationManager.shared
+
+        manager.newNotificationReceived
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.scheduleRefresh()
+            }
+            .store(in: &cancellables)
+
+        manager.notificationMarkedRead
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notificationId in
+                self?.handleReadEvent(notificationId)
+            }
+            .store(in: &cancellables)
+
+        manager.notificationWasDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notificationId in
+                self?.notifications.removeAll { $0.id == notificationId }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func scheduleRefresh() {
+        refreshTask?.cancel()
+        refreshTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            await refreshFromAPI()
+        }
+    }
+
+    private func handleReadEvent(_ notificationId: String) {
+        guard let idx = notifications.firstIndex(where: { $0.id == notificationId }) else { return }
+        let wasUnread = !notifications[idx].isRead
+        notifications[idx] = notifications[idx].withReadState(true)
+        if wasUnread { unreadCount = max(0, unreadCount - 1) }
+    }
+
+    // MARK: - Loading
 
     func loadInitial() async {
         offset = 0
@@ -414,17 +466,14 @@ final class NotificationListViewModel: ObservableObject {
         guard !notification.isRead else { return }
         do {
             try await NotificationService.shared.markAsRead(notificationId: notification.id)
-            if let _ = notifications.firstIndex(where: { $0.id == notification.id }) {
-                await loadInitial()
-            }
+            handleReadEvent(notification.id)
         } catch {}
     }
 
     func markAllRead() async {
-        do {
-            _ = try await NotificationService.shared.markAllAsRead()
-            await loadInitial()
-        } catch {}
+        await NotificationManager.shared.markAllAsRead()
+        unreadCount = 0
+        await loadInitial()
     }
 
     func deleteNotification(_ notification: APINotification) async {
