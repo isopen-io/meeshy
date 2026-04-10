@@ -115,6 +115,24 @@ export class ConversationsService {
   }
 
   /**
+   * Marquer les messages d'une conversation comme reçus
+   */
+  async markAsReceived(conversationId: string): Promise<void> {
+    return messagesService.markAsReceived(conversationId);
+  }
+
+  /**
+   * Récupérer les détails de statut d'un message
+   */
+  async getMessageStatusDetails(messageId: string, options?: {
+    offset?: number;
+    limit?: number;
+    filter?: 'all' | 'delivered' | 'read' | 'unread';
+  }) {
+    return messagesService.getMessageStatusDetails(messageId, options);
+  }
+
+  /**
    * Marquer tous les messages d'une conversation comme lus
    */
   async markConversationAsRead(conversationId: string): Promise<MarkAsReadResponse> {

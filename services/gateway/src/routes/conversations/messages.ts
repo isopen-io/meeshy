@@ -27,6 +27,8 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 
 const SendMessageBodySchema = z.object({
   content: CommonSchemas.messageContent,
@@ -1100,14 +1102,37 @@ export function registerMessagesRoutes(
       }
 
       // Marquer tous les messages comme lus (utiliser le nouveau système de curseur)
-      try {
-        const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
-        const readStatusService = new MessageReadStatusService(prisma);
+      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
+      const readStatusService = new MessageReadStatusService(prisma);
 
-        // Marquer comme lu (curseur automatiquement placé sur le dernier message)
+      try {
         await readStatusService.markMessagesAsRead(currentParticipant.id, conversationId);
       } catch (err) {
         logger.warn('Error marking messages as read:', err);
+      }
+
+      // Broadcast READ_STATUS_UPDATED
+      try {
+        const privacyService = new PrivacyPreferencesService(prisma);
+        const shouldBroadcast = await privacyService.shouldShowReadReceipts(userId, false);
+        if (shouldBroadcast) {
+          const summary = await readStatusService.getLatestMessageSummary(conversationId);
+          const socketIOHandler = (request.server as any).socketIOHandler;
+          const socketIOManager = socketIOHandler?.getManager?.();
+          if (socketIOManager) {
+            const room = ROOMS.conversation(conversationId);
+            (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
+              conversationId,
+              participantId: currentParticipant.id,
+              userId,
+              type: 'read',
+              updatedAt: new Date(),
+              summary
+            });
+          }
+        }
+      } catch (socketError) {
+        logger.error('Error broadcasting read status:', socketError);
       }
 
       return sendSuccess(reply, { message: `${unreadMessages.length} message(s) marqué(s) comme lu(s)`, markedCount: unreadMessages.length });
@@ -1324,32 +1349,47 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      // Vérifier les permissions d'accès
-      let canAccess = false;
+      // Résoudre userId → participantId (curseur = participantId)
+      const membership = await prisma.participant.findFirst({
+        where: { conversationId, userId, isActive: true },
+        select: { id: true }
+      });
 
-      if (id === "meeshy") {
-        canAccess = true; // Conversation globale accessible à tous les utilisateurs connectés
-      } else {
-        const membership = await prisma.participant.findFirst({
-          where: { conversationId: conversationId, userId, isActive: true }
-        });
-        canAccess = !!membership;
-      }
-
-      if (!canAccess) {
+      if (!membership && id !== "meeshy") {
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      // ✅ FIX: Utiliser uniquement le nouveau système de curseur
-      // Pas besoin de compter les messages - on marque simplement comme lu
+      const participantId = membership?.id ?? userId;
+
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      // Calculer le nombre de messages non lus AVANT de marquer comme lu
-      const unreadCount = await readStatusService.getUnreadCount(userId, conversationId);
+      const unreadCount = await readStatusService.getUnreadCount(participantId, conversationId);
+      await readStatusService.markMessagesAsRead(participantId, conversationId);
 
-      // Marquer la conversation comme lue (déplace le curseur au dernier message)
-      await readStatusService.markMessagesAsRead(userId, conversationId);
+      // Broadcast READ_STATUS_UPDATED via Socket.IO
+      try {
+        const privacyService = new PrivacyPreferencesService(prisma);
+        const shouldBroadcast = await privacyService.shouldShowReadReceipts(userId, false);
+        if (shouldBroadcast) {
+          const summary = await readStatusService.getLatestMessageSummary(conversationId);
+          const socketIOHandler = (request.server as any).socketIOHandler;
+          const socketIOManager = socketIOHandler?.getManager?.();
+          if (socketIOManager) {
+            const room = ROOMS.conversation(conversationId);
+            (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
+              conversationId,
+              participantId,
+              userId,
+              type: 'read',
+              updatedAt: new Date(),
+              summary
+            });
+          }
+        }
+      } catch (socketError) {
+        logger.error('Error broadcasting read status:', socketError);
+      }
 
       return sendSuccess(reply, { markedCount: unreadCount });
     } catch (error) {

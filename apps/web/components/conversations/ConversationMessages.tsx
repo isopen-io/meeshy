@@ -291,7 +291,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
     previousMessageCountRef.current = 0;
   }, [conversationId]);
 
-  // AMÉLIORATION 1a: Premier chargement - scroll initial vers le dernier message
+  // Premier chargement - toujours scroller au dernier message
   useEffect(() => {
     if (isFirstLoadRef.current && messages.length > 0 && !isLoadingMessages) {
       isFirstLoadRef.current = false;
@@ -300,16 +300,11 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
         if (scrollDirection === 'down') {
           scrollToTop(false);
         } else {
-          const firstUnreadMessage = findFirstUnreadMessage();
-          if (firstUnreadMessage) {
-            scrollToMessage(firstUnreadMessage.id, false);
-          } else {
-            scrollToBottom(false);
-          }
+          scrollToBottom(false);
         }
       });
     }
-  }, [messages.length, isLoadingMessages, scrollDirection, scrollToBottom, scrollToTop, scrollToMessage, findFirstUnreadMessage]);
+  }, [messages.length, isLoadingMessages, scrollDirection, scrollToBottom, scrollToTop]);
 
   // AMÉLIORATION 1b: Maintenir le scroll en bas pendant le chargement des images/contenu async
   // Polling court qui force le scroll après le premier chargement.

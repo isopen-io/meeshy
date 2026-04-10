@@ -8,47 +8,67 @@ import { cn } from '@/lib/utils';
 import { MarkdownMessage } from '@/components/messages/MarkdownMessage';
 import { MessageReactions } from '@/components/common/message-reactions';
 import { MessageReplyPreview } from './MessageReplyPreview';
-import { useReadStatusSummary } from '@/stores/conversation-ui-store';
+import { useMessageReadStatus, useReadStatusSummary } from '@/stores/conversation-ui-store';
 import type { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 
 type UseReactionsQueryReturn = ReturnType<typeof useReactionsQuery>;
 
 const DeliveryIndicator = memo(function DeliveryIndicator({
   isOwnMessage,
+  messageId,
   conversationId,
 }: {
   isOwnMessage: boolean;
+  messageId: string;
   conversationId: string;
 }) {
-  const summary = useReadStatusSummary(conversationId);
+  const messageSummary = useMessageReadStatus(messageId);
+  const conversationSummary = useReadStatusSummary(conversationId);
 
   if (!isOwnMessage) return null;
 
+  // Per-message status takes priority, fallback to conversation-level summary
+  const summary = messageSummary || conversationSummary;
+
   if (!summary) {
-    return <Check className="h-3 w-3 text-gray-400 flex-shrink-0" />;
+    // No status info yet — show single gray check (sent)
+    return <Check className="h-3 w-3 text-white/60 flex-shrink-0" />;
   }
 
   const { totalMembers, deliveredCount, readCount } = summary;
 
+  // Read by all: double blue/green checks
   if (totalMembers > 0 && readCount >= totalMembers) {
     return (
       <span className="inline-flex -space-x-1.5 flex-shrink-0">
-        <Check className="h-3 w-3 text-indigo-400" />
-        <Check className="h-3 w-3 text-indigo-400" />
+        <Check className="h-3 w-3 text-sky-300" />
+        <Check className="h-3 w-3 text-sky-300" />
       </span>
     );
   }
 
+  // At least some have read: double blue checks
+  if (readCount > 0) {
+    return (
+      <span className="inline-flex -space-x-1.5 flex-shrink-0">
+        <Check className="h-3 w-3 text-sky-300" />
+        <Check className="h-3 w-3 text-sky-300" />
+      </span>
+    );
+  }
+
+  // Delivered but not read: double gray/white checks
   if (deliveredCount > 0) {
     return (
       <span className="inline-flex -space-x-1.5 flex-shrink-0">
-        <Check className="h-3 w-3 text-gray-400" />
-        <Check className="h-3 w-3 text-gray-400" />
+        <Check className="h-3 w-3 text-white/60" />
+        <Check className="h-3 w-3 text-white/60" />
       </span>
     );
   }
 
-  return <Check className="h-3 w-3 text-gray-400 flex-shrink-0" />;
+  // Sent only: single gray/white check
+  return <Check className="h-3 w-3 text-white/60 flex-shrink-0" />;
 });
 
 interface MessageContentProps {
@@ -150,6 +170,7 @@ export const MessageContent = memo(function MessageContent({
             <div className="flex justify-end px-1 pb-0.5 -mt-0.5">
               <DeliveryIndicator
                 isOwnMessage={isOwnMessage}
+                messageId={message.id}
                 conversationId={conversationId || message.conversationId}
               />
             </div>

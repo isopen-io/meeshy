@@ -239,6 +239,7 @@ export class SocketIOOrchestrator {
    */
   setCurrentUser(user: User): void {
     this.currentUserId = user.id;
+    this.messagingService.setCurrentUserId(user.id);
     this.connectionService.setCurrentUser(user);
 
     // Check if we have tokens

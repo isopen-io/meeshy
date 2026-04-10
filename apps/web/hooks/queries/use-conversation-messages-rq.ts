@@ -15,6 +15,8 @@ import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
 import { apiService } from '@/services/api.service';
 import { AnonymousChatService } from '@/services/anonymous-chat.service';
+import { useConversationUIStore } from '@/stores/conversation-ui-store';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import type { Message, User } from '@meeshy/shared/types';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
 export type { OptimisticMessage } from '@/utils/optimistic-message';
@@ -170,6 +172,19 @@ export function useConversationMessagesRQ(
       return dateB - dateA;
     });
   }, [data?.messages]);
+
+  // Track latest own message ID for read status indicators
+  useEffect(() => {
+    if (!conversationId || !currentUser?.id || messages.length === 0) return;
+    // Messages sorted DESC — first own message is the latest
+    const latestOwn = messages.find(msg => {
+      const senderId = getSenderUserId(msg.sender as Record<string, unknown>) ?? (msg.sender as any)?.id;
+      return senderId === currentUser.id;
+    });
+    if (latestOwn) {
+      useConversationUIStore.getState().setLatestOwnMessageId(conversationId, latestOwn.id);
+    }
+  }, [conversationId, currentUser?.id, messages]);
 
   // Load more function
   const loadMore = useCallback(async () => {
