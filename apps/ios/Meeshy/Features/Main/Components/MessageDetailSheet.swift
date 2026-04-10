@@ -761,6 +761,7 @@ struct MessageDetailSheet: View {
         switch filter {
         case .delivered: count = readStatusData?.receivedCount
         case .read: count = readStatusData?.readCount
+        case .notSeen: count = readStatusData?.notSeenCount
         case .listened:
             let audioIds = message.attachments.filter { $0.mimeType.hasPrefix("audio/") }.map(\.id)
             count = audioIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
