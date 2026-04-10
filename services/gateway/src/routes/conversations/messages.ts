@@ -144,6 +144,37 @@ export function registerMessagesRoutes(
   const socketIOHandler = (fastify as any).socketIOHandler;
   const privacyPreferencesService = new PrivacyPreferencesService(prisma);
 
+  async function broadcastReadStatus(
+    userId: string,
+    participantId: string,
+    conversationId: string,
+    type: 'read' | 'received',
+    isAnonymous: boolean
+  ): Promise<void> {
+    try {
+      const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(userId, isAnonymous);
+      if (!shouldBroadcast || !socketIOHandler) return;
+
+      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
+      const readStatusService = new MessageReadStatusService(prisma);
+      const summary = await readStatusService.getLatestMessageSummary(conversationId);
+      const socketIOManager = socketIOHandler.getManager?.();
+      if (socketIOManager) {
+        const room = ROOMS.conversation(conversationId);
+        (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
+          conversationId,
+          participantId,
+          userId,
+          type,
+          updatedAt: new Date(),
+          summary
+        });
+      }
+    } catch (error) {
+      logger.error('Error broadcasting read status:', error);
+    }
+  }
+
   fastify.get<{
     Params: ConversationParams;
     Querystring: MessagesQuery;
@@ -1084,39 +1115,14 @@ export function registerMessagesRoutes(
       const readStatusService = new MessageReadStatusService(prisma);
 
       const unreadCount = await readStatusService.getUnreadCount(currentParticipant.id, conversationId);
-
       if (unreadCount === 0) {
-        return sendSuccess(reply, { message: 'Aucun message non lu à marquer', markedCount: 0 });
+        return sendSuccess(reply, { markedCount: 0 });
       }
 
       await readStatusService.markMessagesAsRead(currentParticipant.id, conversationId);
+      await broadcastReadStatus(userId, currentParticipant.id, conversationId, 'read', authRequest.authContext.type === 'anonymous');
 
-      // Broadcast READ_STATUS_UPDATED
-      try {
-        const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(
-          userId,
-          authRequest.authContext.type === 'anonymous'
-        );
-        if (shouldBroadcast && socketIOHandler) {
-          const summary = await readStatusService.getLatestMessageSummary(conversationId);
-          const socketIOManager = socketIOHandler.getManager?.();
-          if (socketIOManager) {
-            const room = ROOMS.conversation(conversationId);
-            (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
-              conversationId,
-              participantId: currentParticipant.id,
-              userId,
-              type: 'read',
-              updatedAt: new Date(),
-              summary
-            });
-          }
-        }
-      } catch (socketError) {
-        logger.error('Error broadcasting read status:', socketError);
-      }
-
-      return sendSuccess(reply, { message: `${unreadCount} message(s) marqué(s) comme lu(s)`, markedCount: unreadCount });
+      return sendSuccess(reply, { markedCount: unreadCount });
 
     } catch (error) {
       logger.error('Error marking conversation as read', error);
@@ -1345,32 +1351,7 @@ export function registerMessagesRoutes(
 
       const unreadCount = await readStatusService.getUnreadCount(membership.id, conversationId);
       await readStatusService.markMessagesAsRead(membership.id, conversationId);
-
-      // Broadcast READ_STATUS_UPDATED via Socket.IO
-      try {
-        const authRequest = request as UnifiedAuthRequest;
-        const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(
-          userId,
-          authRequest.authContext.type === 'anonymous'
-        );
-        if (shouldBroadcast && socketIOHandler) {
-          const summary = await readStatusService.getLatestMessageSummary(conversationId);
-          const socketIOManager = socketIOHandler.getManager?.();
-          if (socketIOManager) {
-            const room = ROOMS.conversation(conversationId);
-            (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
-              conversationId,
-              participantId: membership.id,
-              userId,
-              type: 'read',
-              updatedAt: new Date(),
-              summary
-            });
-          }
-        }
-      } catch (socketError) {
-        logger.error('Error broadcasting read status:', socketError);
-      }
+      await broadcastReadStatus(userId, membership.id, conversationId, 'read', (request as UnifiedAuthRequest).authContext.type === 'anonymous');
 
       return sendSuccess(reply, { markedCount: unreadCount });
     } catch (error) {

@@ -129,10 +129,10 @@ export class MessagesService {
   /**
    * Récupérer les statuts de lecture batch pour plusieurs messages
    */
-  async getReadStatuses(conversationId: string, messageIds: string[]): Promise<Record<string, { receivedCount: number; readCount: number }>> {
+  async getReadStatuses(conversationId: string, messageIds: string[]): Promise<Record<string, { totalMembers: number; receivedCount: number; readCount: number }>> {
     const response = await apiService.get<{
       success: boolean;
-      data: Record<string, { receivedCount: number; readCount: number }>;
+      data: Record<string, { totalMembers: number; receivedCount: number; readCount: number }>;
     }>(`/conversations/${conversationId}/read-statuses`, { messageIds: messageIds.join(',') });
 
     return response.data?.data ?? {};

@@ -429,6 +429,7 @@ export interface ReadStatusSummary {
 export interface ReadStatusUpdatedEventData {
   readonly conversationId: string;
   readonly participantId: string;
+  readonly userId: string;
   readonly type: 'read' | 'received';
   readonly updatedAt: Date;
   readonly summary: ReadStatusSummary;
