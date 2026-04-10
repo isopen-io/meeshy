@@ -25,6 +25,7 @@ final class MockConversationService: ConversationServiceProviding {
     )
     var deleteResult: Result<Void, Error> = .success(())
     var markReadResult: Result<Void, Error> = .success(())
+    var markAsReceivedResult: Result<Void, Error> = .success(())
     var markUnreadResult: Result<Void, Error> = .success(())
     var getParticipantsResult: Result<PaginatedAPIResponse<[APIParticipant]>, Error> = .success(
         PaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
@@ -61,6 +62,9 @@ final class MockConversationService: ConversationServiceProviding {
     var markReadCallCount = 0
     var lastMarkReadConversationId: String?
     var onMarkReadCalled: (() -> Void)?
+
+    var markAsReceivedCallCount = 0
+    var lastMarkAsReceivedConversationId: String?
 
     var markUnreadCallCount = 0
     var lastMarkUnreadConversationId: String?
@@ -156,6 +160,14 @@ final class MockConversationService: ConversationServiceProviding {
         try await MainActor.run { try markReadResult.get() }
     }
 
+    nonisolated func markAsReceived(conversationId: String) async throws {
+        await MainActor.run {
+            markAsReceivedCallCount += 1
+            lastMarkAsReceivedConversationId = conversationId
+        }
+        try await MainActor.run { try markAsReceivedResult.get() }
+    }
+
     nonisolated func markUnread(conversationId: String) async throws {
         await MainActor.run {
             markUnreadCallCount += 1
@@ -179,6 +191,10 @@ final class MockConversationService: ConversationServiceProviding {
             lastDeleteForMeConversationId = conversationId
         }
         try await MainActor.run { try deleteForMeResult.get() }
+    }
+
+    nonisolated func findDirectWith(userId: String) async throws -> APIConversation? {
+        nil
     }
 
     nonisolated func removeParticipant(conversationId: String, participantId: String) async throws {
@@ -267,6 +283,8 @@ final class MockConversationService: ConversationServiceProviding {
         lastDeleteConversationId = nil
         markReadCallCount = 0
         lastMarkReadConversationId = nil
+        markAsReceivedCallCount = 0
+        lastMarkAsReceivedConversationId = nil
         markUnreadCallCount = 0
         lastMarkUnreadConversationId = nil
         getParticipantsCallCount = 0
