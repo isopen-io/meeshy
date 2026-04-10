@@ -314,8 +314,10 @@ export class MessageReadStatusService {
     totalMembers: number;
     receivedCount: number;
     readCount: number;
+    notSeenCount: number;
     receivedBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; receivedAt: Date }>;
     readBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; readAt: Date }>;
+    notSeenBy: Array<{ participantId: string; displayName: string; avatarURL: string | null }>;
   }> {
     try {
       const message = await this.prisma.message.findUnique({

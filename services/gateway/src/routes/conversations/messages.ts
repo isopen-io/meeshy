@@ -769,7 +769,7 @@ export function registerMessagesRoutes(
       // Les champs dénormalisés (deliveredCount, readCount) ne sont jamais mis à jour en DB
       // On les calcule dynamiquement ici depuis ConversationReadCursor
       const readStatusMap = new Map<string, { deliveredCount: number; readCount: number }>();
-      if (messages.length > 0 && authContext?.userId) {
+      if (messages.length > 0 && authRequest.authContext?.userId) {
         try {
           const activeParticipants = await prisma.participant.findMany({
             where: { conversationId, isActive: true },
