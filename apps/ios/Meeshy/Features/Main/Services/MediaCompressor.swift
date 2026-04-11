@@ -78,10 +78,22 @@ actor MediaCompressor {
     // MARK: - From UIImage (format already lost) → always JPEG
 
     func compressImage(_ image: UIImage, maxDimension: CGFloat = 2048, quality: CGFloat = 0.8) -> CompressedImageResult {
-        guard let data = image.jpegData(compressionQuality: 1.0) else {
-            return CompressedImageResult(data: Data(), mimeType: "image/jpeg")
+        let size = image.size
+        let needsResize = size.width > maxDimension || size.height > maxDimension
+
+        if needsResize {
+            guard let data = image.jpegData(compressionQuality: 1.0) else {
+                return CompressedImageResult(data: Data(), mimeType: "image/jpeg")
+            }
+            guard let downsampled = downsample(data: data, maxDimension: maxDimension) else {
+                return CompressedImageResult(data: data, mimeType: "image/jpeg")
+            }
+            let jpeg = downsampled.jpegData(compressionQuality: quality) ?? Data()
+            return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
         }
-        return compressImageData(data, maxDimension: maxDimension, quality: quality)
+
+        let jpeg = image.jpegData(compressionQuality: quality) ?? Data()
+        return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
     }
 
     // MARK: - From raw Data (preserves format, hardware-accelerated downsampling)
@@ -178,7 +190,6 @@ actor MediaCompressor {
             aInput.expectsMediaDataInRealTime = false
             writer.add(aInput)
             audioInput = aInput
-            _ = audioTrack
         }
 
         let reader = try AVAssetReader(asset: asset)
@@ -305,10 +316,13 @@ actor MediaCompressor {
     }
 
     private func transferSamples(from output: AVAssetReaderTrackOutput, to input: AVAssetWriterInput) async {
-        await withCheckedContinuation { continuation in
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            var finished = false
             input.requestMediaDataWhenReady(on: DispatchQueue(label: "me.meeshy.media-compressor.\(input.mediaType.rawValue)")) {
                 while input.isReadyForMoreMediaData {
+                    guard !finished else { return }
                     guard let sample = output.copyNextSampleBuffer() else {
+                        finished = true
                         input.markAsFinished()
                         continuation.resume()
                         return
