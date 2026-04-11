@@ -29,7 +29,7 @@ extension FeedView {
 
                         let compressedURL: URL
                         do {
-                            compressedURL = try await MediaCompressor.shared.compressVideo(rawURL)
+                            compressedURL = try await MediaCompressor.shared.compressVideo(rawURL, context: .feedPost)
                             try? FileManager.default.removeItem(at: rawURL)
                         } catch {
                             compressedURL = rawURL
@@ -120,7 +120,7 @@ extension FeedView {
         Task {
             let compressedURL: URL
             do {
-                compressedURL = try await MediaCompressor.shared.compressVideo(url)
+                compressedURL = try await MediaCompressor.shared.compressVideo(url, context: .feedPost)
                 try? FileManager.default.removeItem(at: url)
             } catch {
                 compressedURL = url
@@ -999,7 +999,7 @@ struct FeedComposerSheet: View {
                         try? movieData.write(to: rawURL)
                         let compressedURL: URL
                         do {
-                            compressedURL = try await MediaCompressor.shared.compressVideo(rawURL)
+                            compressedURL = try await MediaCompressor.shared.compressVideo(rawURL, context: .feedPost)
                             try? FileManager.default.removeItem(at: rawURL)
                         } catch { compressedURL = rawURL }
                         await MainActor.run {
@@ -1048,7 +1048,7 @@ struct FeedComposerSheet: View {
         Task {
             let compressedURL: URL
             do {
-                compressedURL = try await MediaCompressor.shared.compressVideo(url)
+                compressedURL = try await MediaCompressor.shared.compressVideo(url, context: .feedPost)
                 try? FileManager.default.removeItem(at: url)
             } catch { compressedURL = url }
             let fileSize = (try? FileManager.default.attributesOfItem(atPath: compressedURL.path)[.size] as? Int) ?? 0

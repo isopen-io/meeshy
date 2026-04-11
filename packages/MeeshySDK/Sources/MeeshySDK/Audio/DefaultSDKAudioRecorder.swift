@@ -33,9 +33,10 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
 
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44100,
-            AVNumberOfChannelsKey: 2,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            AVSampleRateKey: AudioRecordingSettings.standard.sampleRate,
+            AVNumberOfChannelsKey: AudioRecordingSettings.standard.numberOfChannels,
+            AVEncoderBitRateKey: AudioRecordingSettings.standard.bitRate,
+            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
         ]
 
         do {
@@ -63,6 +64,8 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         timer = nil
         recorder?.stop()
         isRecording = false
+
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 
         let url = recordedFileURL
         recorder = nil

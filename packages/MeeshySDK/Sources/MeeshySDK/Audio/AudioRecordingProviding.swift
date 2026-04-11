@@ -39,33 +39,39 @@ public struct AudioRecordingSettings: Sendable {
     public let minimumDuration: TimeInterval
     public let sampleRate: Double
     public let numberOfChannels: Int
+    public let bitRate: Int
 
     public static let standard = AudioRecordingSettings(
         maxDuration: nil,
         minimumDuration: 0.5,
         sampleRate: 44100,
-        numberOfChannels: 2
+        numberOfChannels: 1,
+        bitRate: 64000
     )
 
     public static let story = AudioRecordingSettings(
         maxDuration: 60,
         minimumDuration: 0.5,
         sampleRate: 44100,
-        numberOfChannels: 2
+        numberOfChannels: 1,
+        bitRate: 64000
     )
 
     public static let voiceSample = AudioRecordingSettings(
         maxDuration: nil,
         minimumDuration: 10,
         sampleRate: 44100,
-        numberOfChannels: 2
+        numberOfChannels: 1,
+        bitRate: 96000
     )
 
     public init(maxDuration: TimeInterval?, minimumDuration: TimeInterval,
-                sampleRate: Double = 44100, numberOfChannels: Int = 2) {
+                sampleRate: Double = 44100, numberOfChannels: Int = 1,
+                bitRate: Int = 64000) {
         self.maxDuration = maxDuration
         self.minimumDuration = minimumDuration
         self.sampleRate = sampleRate
         self.numberOfChannels = numberOfChannels
+        self.bitRate = bitRate
     }
 }
