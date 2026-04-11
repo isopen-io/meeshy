@@ -627,6 +627,22 @@ export function registerCoreRoutes(
         () => [] // REST ne connaît pas les sockets ici; la partie onlineUsers sera vide si non connue par cache
       );
 
+      // Calculer le unreadCount pour l'utilisateur courant
+      let unreadCount = 0;
+      try {
+        const participant = await prisma.participant.findFirst({
+          where: { conversationId, userId, isActive: true },
+          select: { id: true },
+        });
+        if (participant) {
+          const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
+          const readStatusService = new MessageReadStatusService(prisma);
+          unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
+        }
+      } catch (unreadError) {
+        console.warn('⚠️ Failed to compute unreadCount for conversation', conversationId, unreadError);
+      }
+
       // Marquer automatiquement toutes les notifications de cette conversation comme lues
       try {
         // Marquer les notifications comme lues (filtrage client-side car conversationId est dans context JSON)
@@ -661,6 +677,7 @@ export function registerCoreRoutes(
       return sendSuccess(reply, {
         ...conversation,
         title: displayTitle,
+        unreadCount,
         meta: {
           conversationStats: stats
         }

@@ -121,6 +121,11 @@ struct iPadRootView: View {
                     openConversation(conversation)
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .handlePushNotification)) { notification in
+                if let payload = notification.object as? NotificationPayload {
+                    handlePushNotificationTap(payload)
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
                 handleSendMessageToUser(notification)
             }

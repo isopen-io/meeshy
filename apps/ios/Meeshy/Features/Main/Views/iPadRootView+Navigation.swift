@@ -248,18 +248,101 @@ extension iPadRootView {
         }
     }
 
+    // MARK: - Handle Push Notification Tap
+
+    func handlePushNotificationTap(_ payload: NotificationPayload) {
+        let type = MeeshyNotificationType(rawValue: payload.type ?? "") ?? .system
+
+        switch type {
+        case .newMessage, .legacyNewMessage, .messageReply, .reply, .legacyStoryReply,
+             .messageReaction, .reaction, .legacyMessageReaction,
+             .userMentioned, .mention, .legacyMention,
+             .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
+             .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
+            guard let conversationId = payload.conversationId, !conversationId.isEmpty else { return }
+            navigateToConversationById(conversationId, highlightMessageId: payload.messageId, ensureUnread: true)
+
+        case .friendRequest, .contactRequest, .legacyFriendRequest,
+             .friendAccepted, .contactAccepted, .legacyFriendAccepted,
+             .legacyStatusUpdate:
+            if let senderId = payload.senderId {
+                router.deepLinkProfileUser = ProfileSheetUser(
+                    userId: senderId,
+                    username: payload.senderUsername ?? senderId
+                )
+            }
+
+        case .communityInvite, .communityJoined, .communityLeft,
+             .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
+             .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
+             .addedToConversation, .newConversation, .removedFromConversation:
+            if let conversationId = payload.conversationId, !conversationId.isEmpty {
+                navigateToConversationById(conversationId)
+            }
+
+        case .missedCall, .callDeclined, .legacyCallMissed,
+             .incomingCall, .callEnded, .legacyCallIncoming:
+            if let conversationId = payload.conversationId, !conversationId.isEmpty {
+                navigateToConversationById(conversationId)
+            }
+
+        case .postLike, .legacyPostLike, .postRepost:
+            if let postId = payload.postId, !postId.isEmpty {
+                rightPanelRoute = .postDetail(postId)
+            }
+
+        case .postComment, .legacyPostComment, .commentLike, .commentReply:
+            if let postId = payload.postId, !postId.isEmpty {
+                rightPanelRoute = .postDetail(postId, nil, showComments: true)
+            }
+
+        case .storyReaction, .statusReaction:
+            if let postId = payload.postId, !postId.isEmpty,
+               let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
+                showStoryViewerFromConv = true
+            } else if let postId = payload.postId, !postId.isEmpty {
+                rightPanelRoute = .postDetail(postId)
+            }
+
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+            rightPanelRoute = .userStats
+
+        case .legacyAffiliateSignup:
+            rightPanelRoute = .affiliate
+
+        case .securityAlert, .loginNewDevice, .legacySystemAlert,
+             .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
+             .system, .maintenance, .updateAvailable, .voiceCloneReady:
+            break
+        }
+    }
+
     // MARK: - Navigate to Conversation by ID
 
-    func navigateToConversationById(_ conversationId: String) {
+    func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil, ensureUnread: Bool = false) {
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
-            openConversation(existing)
+            var conv = existing
+            if ensureUnread && conv.unreadCount == 0 {
+                conv.unreadCount = 1
+            }
+            if let messageId = highlightMessageId {
+                router.pendingHighlightMessageId = messageId
+            }
+            openConversation(conv)
             return
         }
         Task {
             do {
                 let currentUserId = AuthManager.shared.currentUser?.id ?? ""
                 let apiConv = try await ConversationService.shared.getById(conversationId)
-                let conv = apiConv.toConversation(currentUserId: currentUserId)
+                var conv = apiConv.toConversation(currentUserId: currentUserId)
+                if ensureUnread && conv.unreadCount == 0 {
+                    conv.unreadCount = 1
+                }
+                if let messageId = highlightMessageId {
+                    router.pendingHighlightMessageId = messageId
+                }
                 openConversation(conv)
             } catch {
                 ToastManager.shared.showError("Impossible d'ouvrir la conversation")
