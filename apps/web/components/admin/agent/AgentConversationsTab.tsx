@@ -228,18 +228,18 @@ export function AgentConversationsTab() {
                         <Button
                           size="sm"
                           variant={config.isScanning ? 'destructive' : 'default'}
-                          className={`h-10 w-full flex-col gap-0.5 px-2 ${config.isScanning ? 'animate-pulse' : ''}`}
+                          className={`h-7 w-full gap-1 px-2 ${config.isScanning ? 'animate-pulse' : ''}`}
                           onClick={() => handleTrigger(config)}
                         >
                           {config.isScanning ? (
                             <>
-                              <Square className="h-3 w-3 fill-current" />
-                              <span className="text-[8px] font-bold tracking-tighter">STOP!</span>
+                              <Square className="h-2.5 w-2.5 fill-current" />
+                              <span className="text-[9px] font-bold tracking-tighter">Stop</span>
                             </>
                           ) : (
                             <>
-                              <Play className="h-4 w-4 fill-current" />
-                              <span className="text-[8px] font-bold uppercase">Play</span>
+                              <Play className="h-3 w-3 fill-current" />
+                              <span className="text-[9px] font-bold">Play</span>
                             </>
                           )}
                         </Button>
@@ -252,7 +252,7 @@ export function AgentConversationsTab() {
                             {config.enabled ? 'Actif' : 'Off'}
                           </Badge>
                         </div>
-                        {config.currentNode && (
+                        {config.isScanning && config.currentNode && (
                           <Badge variant="outline" className="text-[8px] h-3 px-1 border-red-200 text-red-500 animate-pulse truncate max-w-[80px] justify-center">
                             {config.currentNode}
                           </Badge>
