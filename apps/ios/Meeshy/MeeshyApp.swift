@@ -178,6 +178,9 @@ struct MeeshyApp: App {
                                 Logger.e2ee.error("E2EE bundle upload failed: \(error)")
                             }
                         }
+                        if let pending = pushManager.pendingNotificationPayload {
+                            handlePushNavigation(payload: pending)
+                        }
                     } else {
                         NotificationManager.shared.reset()
                     }
@@ -206,7 +209,6 @@ struct MeeshyApp: App {
 
     private func handlePushNavigation(payload: NotificationPayload) {
         guard authManager.isAuthenticated else {
-            pushManager.clearPendingNotification()
             return
         }
 
