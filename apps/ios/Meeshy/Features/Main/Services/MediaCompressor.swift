@@ -189,7 +189,7 @@ actor MediaCompressor {
 
         var audioInput: AVAssetWriterInput?
         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-        if let audioTrack = audioTracks.first {
+        if !audioTracks.isEmpty {
             let audioSettings: [String: Any] = [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVSampleRateKey: 44100,
@@ -323,18 +323,22 @@ actor MediaCompressor {
     }
 
     private static func transferSamples(from output: AVAssetReaderTrackOutput, to input: AVAssetWriterInput) async {
+        let wrappedInput = SendableWriterInput(value: input)
+        let wrappedOutput = SendableTrackOutput(value: output)
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            var finished = false
-            input.requestMediaDataWhenReady(on: DispatchQueue(label: "me.meeshy.media-compressor.\(input.mediaType.rawValue)")) {
-                while input.isReadyForMoreMediaData {
+            nonisolated(unsafe) var finished = false
+            let inp = wrappedInput.value
+            let out = wrappedOutput.value
+            inp.requestMediaDataWhenReady(on: DispatchQueue(label: "me.meeshy.media-compressor.\(inp.mediaType.rawValue)")) {
+                while inp.isReadyForMoreMediaData {
                     guard !finished else { return }
-                    guard let sample = output.copyNextSampleBuffer() else {
+                    guard let sample = out.copyNextSampleBuffer() else {
                         finished = true
-                        input.markAsFinished()
+                        inp.markAsFinished()
                         continuation.resume()
                         return
                     }
-                    input.append(sample)
+                    inp.append(sample)
                 }
             }
         }
