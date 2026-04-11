@@ -68,6 +68,16 @@ enum MediaContext: Sendable {
     }
 }
 
+// MARK: - Sendable Wrappers for AVFoundation types
+
+private struct SendableTrackOutput: @unchecked Sendable {
+    let value: AVAssetReaderTrackOutput
+}
+
+private struct SendableWriterInput: @unchecked Sendable {
+    let value: AVAssetWriterInput
+}
+
 // MARK: - MediaCompressor
 
 actor MediaCompressor {
@@ -217,16 +227,13 @@ actor MediaCompressor {
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
 
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask {
-                await self.transferSamples(from: videoOutput, to: videoInput)
-            }
-            if let audioOutput, let audioInput {
-                group.addTask {
-                    await self.transferSamples(from: audioOutput, to: audioInput)
-                }
-            }
-            try await group.waitForAll()
+        let vOut = SendableTrackOutput(value: videoOutput)
+        let vIn = SendableWriterInput(value: videoInput)
+        let aOut = audioOutput.map { SendableTrackOutput(value: $0) }
+        let aIn = audioInput.map { SendableWriterInput(value: $0) }
+        await Self.transferSamples(from: vOut.value, to: vIn.value)
+        if let aOut, let aIn {
+            await Self.transferSamples(from: aOut.value, to: aIn.value)
         }
 
         await writer.finishWriting()
@@ -315,7 +322,7 @@ actor MediaCompressor {
         return CGFloat(rounded % 2 == 0 ? rounded : rounded - 1)
     }
 
-    private func transferSamples(from output: AVAssetReaderTrackOutput, to input: AVAssetWriterInput) async {
+    private static func transferSamples(from output: AVAssetReaderTrackOutput, to input: AVAssetWriterInput) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             var finished = false
             input.requestMediaDataWhenReady(on: DispatchQueue(label: "me.meeshy.media-compressor.\(input.mediaType.rawValue)")) {
