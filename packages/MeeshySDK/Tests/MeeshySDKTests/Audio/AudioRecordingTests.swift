@@ -37,7 +37,8 @@ final class AudioRecordingTests: XCTestCase {
         XCTAssertNil(settings.maxDuration)
         XCTAssertEqual(settings.minimumDuration, 0.5)
         XCTAssertEqual(settings.sampleRate, 44100)
-        XCTAssertEqual(settings.numberOfChannels, 2)
+        XCTAssertEqual(settings.numberOfChannels, 1)
+        XCTAssertEqual(settings.bitRate, 64000)
     }
 
     func test_audioRecordingSettings_story_hasCorrectValues() {
@@ -46,7 +47,8 @@ final class AudioRecordingTests: XCTestCase {
         XCTAssertEqual(settings.maxDuration, 60)
         XCTAssertEqual(settings.minimumDuration, 0.5)
         XCTAssertEqual(settings.sampleRate, 44100)
-        XCTAssertEqual(settings.numberOfChannels, 2)
+        XCTAssertEqual(settings.numberOfChannels, 1)
+        XCTAssertEqual(settings.bitRate, 64000)
     }
 
     func test_audioRecordingSettings_voiceSample_hasCorrectValues() {
@@ -55,7 +57,8 @@ final class AudioRecordingTests: XCTestCase {
         XCTAssertNil(settings.maxDuration)
         XCTAssertEqual(settings.minimumDuration, 10)
         XCTAssertEqual(settings.sampleRate, 44100)
-        XCTAssertEqual(settings.numberOfChannels, 2)
+        XCTAssertEqual(settings.numberOfChannels, 1)
+        XCTAssertEqual(settings.bitRate, 96000)
     }
 
     // MARK: - Custom Settings
@@ -65,20 +68,23 @@ final class AudioRecordingTests: XCTestCase {
             maxDuration: 30,
             minimumDuration: 2.0,
             sampleRate: 22050,
-            numberOfChannels: 1
+            numberOfChannels: 2,
+            bitRate: 128000
         )
 
         XCTAssertEqual(settings.maxDuration, 30)
         XCTAssertEqual(settings.minimumDuration, 2.0)
         XCTAssertEqual(settings.sampleRate, 22050)
-        XCTAssertEqual(settings.numberOfChannels, 1)
+        XCTAssertEqual(settings.numberOfChannels, 2)
+        XCTAssertEqual(settings.bitRate, 128000)
     }
 
     func test_audioRecordingSettings_customInit_defaultSampleRateAndChannels() {
         let settings = AudioRecordingSettings(maxDuration: nil, minimumDuration: 1.0)
 
         XCTAssertEqual(settings.sampleRate, 44100)
-        XCTAssertEqual(settings.numberOfChannels, 2)
+        XCTAssertEqual(settings.numberOfChannels, 1)
+        XCTAssertEqual(settings.bitRate, 64000)
     }
 
     // MARK: - DefaultSDKAudioRecorder

@@ -39,7 +39,8 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
             AVSampleRateKey: settings.sampleRate,
             AVNumberOfChannelsKey: settings.numberOfChannels,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            AVEncoderBitRateKey: settings.bitRate,
+            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
         ]
 
         do {
@@ -67,6 +68,8 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         timer = nil
         recorder?.stop()
         isRecording = false
+
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 
         let url = recordedFileURL
         recorder = nil

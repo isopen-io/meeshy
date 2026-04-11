@@ -110,36 +110,45 @@ public actor WaveformCache {
         reader.startReading()
         defer { if reader.status == .reading { reader.cancelReading() } }
 
-        var allSamples: [Float] = []
+        // Two-pass streaming: first count total samples, then bucket in a streaming pass
+        // For short audio (< 5min), single-pass with estimated total is fine
+        let sampleRate = try await track.load(.naturalTimeScale)
+        let estimatedTotalSamples = Int(duration.seconds * Double(sampleRate))
+        let estimatedBucketSize = max(1, estimatedTotalSamples / count)
+
+        var buckets = [Float](repeating: 0, count: count)
+        var bucketCounts = [Int](repeating: 0, count: count)
+        var globalSampleIndex = 0
+
         while let buffer = output.copyNextSampleBuffer() {
             try Task.checkCancellation()
             guard let blockBuffer = CMSampleBufferGetDataBuffer(buffer) else { continue }
             let length = CMBlockBufferGetDataLength(blockBuffer)
             guard length > 0 else { continue }
+
             var data = Data(count: length)
             _ = data.withUnsafeMutableBytes { ptr in
                 guard let base = ptr.baseAddress else { return OSStatus(0) }
                 return CMBlockBufferCopyDataBytes(blockBuffer, atOffset: 0,
                                                   dataLength: length, destination: base)
             }
-            let rawSamples = data.withUnsafeBytes { ptr -> [Float] in
+
+            data.withUnsafeBytes { ptr in
                 let int16Ptr = ptr.bindMemory(to: Int16.self)
-                return int16Ptr.map { Float(abs($0)) / Float(Int16.max) }
+                for sample in int16Ptr {
+                    let bucketIndex = min(globalSampleIndex / estimatedBucketSize, count - 1)
+                    buckets[bucketIndex] += Float(abs(sample)) / Float(Int16.max)
+                    bucketCounts[bucketIndex] += 1
+                    globalSampleIndex += 1
+                }
             }
-            allSamples.append(contentsOf: rawSamples)
         }
 
-        guard !allSamples.isEmpty else { return [] }
-
-        let bucketSize = allSamples.count / count
-        guard bucketSize > 0 else { return Array(allSamples.prefix(count)) }
+        guard globalSampleIndex > 0 else { return [] }
 
         var result = [Float](repeating: 0, count: count)
         for i in 0..<count {
-            let start = i * bucketSize
-            let end = min(start + bucketSize, allSamples.count)
-            let bucket = allSamples[start..<end]
-            result[i] = bucket.reduce(0, +) / Float(bucket.count)
+            result[i] = bucketCounts[i] > 0 ? buckets[i] / Float(bucketCounts[i]) : 0
         }
 
         let maxVal = result.max() ?? 1.0
