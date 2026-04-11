@@ -102,6 +102,8 @@ export class ConversationScanner {
   }
 
   async scanConversation(conversationId: string): Promise<void> {
+    const globalConfig = await this.configCache.getGlobalConfig();
+    if (globalConfig?.enabled === false) return;
     const config = await this.configCache.getConfig(conversationId);
     if (config?.enabled === false) return;
     const conversation = await this.persistence.getConversationWithType(conversationId);
@@ -153,6 +155,10 @@ export class ConversationScanner {
 
   private async scanAll(): Promise<void> {
     const globalConfig = await this.configCache.getGlobalConfig();
+    if (globalConfig?.enabled === false) {
+      console.log('[Scanner] Global agent disabled, skipping scan cycle');
+      return;
+    }
     if (globalConfig?.globalScanEnabled) {
       return this.scanSequentially();
     }
@@ -249,7 +255,7 @@ export class ConversationScanner {
       for (const conv of eligible) {
         // Re-check global enabled flag before each conversation
         const currentGlobal = await this.configCache.getGlobalConfig();
-        if (!currentGlobal?.globalScanEnabled) break;
+        if (currentGlobal?.enabled === false || !currentGlobal?.globalScanEnabled) break;
 
         try {
           const lastScanKey = `agent:last-scan:${conv.conversationId}`;
