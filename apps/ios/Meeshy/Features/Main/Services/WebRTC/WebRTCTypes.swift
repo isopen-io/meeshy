@@ -85,6 +85,7 @@ protocol WebRTCClientProviding: AnyObject {
     func disconnect()
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { get }
+    var videoFilterPipeline: VideoFilterPipeline { get }
     func setAudioEffect(_ effect: AudioEffectConfig?) throws
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws
 }

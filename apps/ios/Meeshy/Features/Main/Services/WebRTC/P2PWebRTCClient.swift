@@ -681,6 +681,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func disconnect() {}
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { nil }
+    let videoFilterPipeline = VideoFilterPipeline()
     func setAudioEffect(_ effect: AudioEffectConfig?) throws { throw WebRTCError.notSupported }
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws { throw WebRTCError.notSupported }
 }

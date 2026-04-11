@@ -863,7 +863,7 @@ extension CallManager: ThermalStateMonitorDelegate {
         Task { @MainActor [weak self] in
             guard let self, self.callState == .connected else { return }
             if state == .critical {
-                self.webRTCService.videoFilterPipeline.reset()
+                self.webRTCService.videoFilters.reset()
                 self.activeAudioEffect = nil
                 self.webRTCService.setAudioEffect(nil)
                 Logger.calls.warning("Thermal critical — disabled all filters (video + audio)")
@@ -873,8 +873,8 @@ extension CallManager: ThermalStateMonitorDelegate {
                     Logger.calls.warning("Thermal critical — disabled video")
                 }
             } else if state == .serious {
-                self.webRTCService.videoFilterPipeline.config.backgroundBlurEnabled = false
-                self.webRTCService.videoFilterPipeline.config.skinSmoothingEnabled = false
+                self.webRTCService.videoFilters.config.backgroundBlurEnabled = false
+                self.webRTCService.videoFilters.config.skinSmoothingEnabled = false
                 Logger.calls.warning("Thermal serious — disabled advanced filters")
             }
         }

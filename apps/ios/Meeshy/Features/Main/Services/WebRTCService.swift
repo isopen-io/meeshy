@@ -19,8 +19,7 @@ protocol WebRTCServiceDelegate: AnyObject {
 final class WebRTCService: @unchecked Sendable {
     weak var delegate: WebRTCServiceDelegate?
 
-    let videoFilterPipeline = VideoFilterPipeline()
-    var videoFilters: VideoFilterPipeline { videoFilterPipeline }
+    var videoFilters: VideoFilterPipeline { client.videoFilterPipeline }
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { client.audioEffectsService }
     var localVideoTrack: Any? { client.localVideoTrack }
