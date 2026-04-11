@@ -124,6 +124,9 @@ async function start() {
     await stateManager.setMessages(msg.conversationId, window);
 
     // 2. Check for interpellation (reactive mode)
+    const globalCfg = await configCache.getGlobalConfig();
+    if (globalCfg?.enabled === false) return;
+
     const controlledUsers = await persistence.getControlledUsers(msg.conversationId);
     if (controlledUsers.length === 0) return;
 
