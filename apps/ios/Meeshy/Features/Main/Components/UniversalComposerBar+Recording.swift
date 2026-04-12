@@ -102,6 +102,10 @@ extension UniversalComposerBar {
             : Color(hex: accentColor).opacity(0.2)
         let timerColor = isDark ? Color.white : theme.textPrimary
         let waveformColor = isDark ? "FFFFFF" : accentColor
+        let canSend = effectiveDuration >= Self.minimumSendableDuration
+        let dotOpacity: Double = reduceMotion
+            ? 1
+            : (effectiveDuration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
 
         return HStack(spacing: 10) {
             // Cancel (X) button — discards the recording without sending.
@@ -137,9 +141,11 @@ extension UniversalComposerBar {
                 Circle()
                     .fill(Color(hex: "EF4444"))
                     .frame(width: 6, height: 6)
-                    .opacity(effectiveDuration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
+                    .opacity(dotOpacity)
                     .animation(
-                        .easeInOut(duration: 0.5).repeatForever(autoreverses: true),
+                        reduceMotion
+                            ? nil
+                            : .easeInOut(duration: 0.5).repeatForever(autoreverses: true),
                         value: effectiveIsRecording
                     )
 
@@ -158,7 +164,13 @@ extension UniversalComposerBar {
             // to onCustomSend which stops the recorder and sends. For internal
             // recording (stories, comments), we must materialize the voice
             // attachment ourselves by calling stopRecording() first.
+            // Disabled below the minimum duration to prevent accidental
+            // unusably-short voice messages.
             Button {
+                guard canSend else {
+                    HapticFeedback.error()
+                    return
+                }
                 HapticFeedback.medium()
                 if onCustomSend == nil && isRecording {
                     stopRecording()
@@ -175,15 +187,23 @@ extension UniversalComposerBar {
                             )
                         )
                         .frame(width: 32, height: 32)
-                        .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 2)
+                        .shadow(
+                            color: Color(hex: accentColor).opacity(canSend ? 0.4 : 0),
+                            radius: 6, y: 2
+                        )
                     Image(systemName: "arrow.up")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                 }
+                .opacity(canSend ? 1 : 0.4)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
             }
+            .animation(.easeInOut(duration: 0.2), value: canSend)
             .accessibilityLabel("Envoyer le message vocal")
+            .accessibilityHint(canSend
+                ? "Termine et envoie l'enregistrement"
+                : "Maintenez encore pour atteindre la duree minimum")
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 5)
@@ -207,6 +227,9 @@ extension UniversalComposerBar {
             Color(hex: colorHex).opacity(0.95),
             Color(hex: colorHex).opacity(0.55)
         ]
+        let barAnimation: Animation? = reduceMotion
+            ? nil
+            : .spring(response: 0.08, dampingFraction: 0.6)
 
         return GeometryReader { geo in
             let availableWidth = geo.size.width
@@ -221,7 +244,7 @@ extension UniversalComposerBar {
                         RoundedRectangle(cornerRadius: 1.25)
                             .fill(LinearGradient(colors: barGradient, startPoint: .top, endPoint: .bottom))
                             .frame(width: barWidth, height: effectiveIsRecording ? 3 + 22 * level : 3)
-                            .animation(.spring(response: 0.08, dampingFraction: 0.6), value: level)
+                            .animation(barAnimation, value: level)
                     }
                 } else {
                     ForEach(0..<barCount, id: \.self) { i in

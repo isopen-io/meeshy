@@ -205,6 +205,14 @@ struct UniversalComposerBar: View {
 
     @ObservedObject var theme = ThemeManager.shared
 
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+
+    // MARK: - Recording constants
+
+    /// Minimum duration below which the send button is disabled to prevent
+    /// accidental taps that would produce an unusably short voice message.
+    static let minimumSendableDuration: TimeInterval = 0.5
+
     // MARK: - Mode-resolved properties
 
     var resolvedPlaceholder: String { mode?.placeholder ?? placeholder }
@@ -438,10 +446,14 @@ struct UniversalComposerBar: View {
                     recordingBar
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.96)),
-                            removal: .opacity
-                        ))
+                        .transition(
+                            reduceMotion
+                                ? .opacity
+                                : .asymmetric(
+                                    insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                                    removal: .opacity
+                                )
+                        )
                 } else {
                     HStack(alignment: .bottom, spacing: 12) {
                         // Left: (+) attach button with ladder overlay above it
@@ -472,7 +484,12 @@ struct UniversalComposerBar: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: effectiveIsRecording)
+        .animation(
+            reduceMotion
+                ? .easeInOut(duration: 0.2)
+                : .spring(response: 0.35, dampingFraction: 0.8),
+            value: effectiveIsRecording
+        )
         .onChange(of: attachments.count) { _, _ in notifyContentChange() }
         .onChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
         .onAppear {
