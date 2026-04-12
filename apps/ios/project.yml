@@ -10,6 +10,18 @@ settings:
   IPHONEOS_DEPLOYMENT_TARGET: "17.0"
   PRODUCT_NAME: Meeshy
   TARGETED_DEVICE_FAMILY: "1,2"
+  # Swift 6.2 Approachable Concurrency (WWDC25).
+  # - SWIFT_APPROACHABLE_CONCURRENCY umbrella flag (includes Sendable
+  #   inference from captures, global-actor usability, etc.)
+  # - SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor (SE-0466): UI-centric code
+  #   is main-actor by default, background work must be explicit with
+  #   @concurrent / nonisolated. This shifts data races from runtime
+  #   crashes (background/foreground transitions) to compile errors.
+  # - NonisolatedNonsendingByDefault (SE-0461): async functions inherit
+  #   the caller's actor unless annotated @concurrent.
+  SWIFT_APPROACHABLE_CONCURRENCY: "YES"
+  SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+  SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: "YES"
 
 targets:
   Meeshy:
