@@ -147,6 +147,67 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(sink.reloadCount, 1)
     }
 
+    func test_registerConversations_mergesWithExistingCounts() {
+        let (sut, _, _, _) = makeSUT()
+        sut.registerConversations([
+            makeConversation(id: "c1", unread: 3),
+            makeConversation(id: "c2", unread: 5)
+        ])
+
+        // Second call with ONLY c3 — c1 and c2 must stay tracked.
+        sut.registerConversations([makeConversation(id: "c3", unread: 2)])
+
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 3)
+        XCTAssertEqual(sut.conversationUnreadCounts["c2"], 5)
+        XCTAssertEqual(sut.conversationUnreadCounts["c3"], 2)
+        XCTAssertEqual(sut.conversationUnreadTotal, 10)
+    }
+
+    func test_replaceConversations_dropsEntriesNotInList() {
+        let (sut, _, _, _) = makeSUT()
+        sut.registerConversations([
+            makeConversation(id: "c1", unread: 3),
+            makeConversation(id: "c2", unread: 5)
+        ])
+
+        sut.replaceConversations([makeConversation(id: "c3", unread: 2)])
+
+        XCTAssertNil(sut.conversationUnreadCounts["c1"])
+        XCTAssertNil(sut.conversationUnreadCounts["c2"])
+        XCTAssertEqual(sut.conversationUnreadCounts["c3"], 2)
+        XCTAssertEqual(sut.conversationUnreadTotal, 2)
+    }
+
+    func test_removeConversation_dropsEntryAndRecomputes() {
+        let (sut, _, _, _) = makeSUT()
+        sut.registerConversations([
+            makeConversation(id: "c1", unread: 3),
+            makeConversation(id: "c2", unread: 5)
+        ])
+
+        sut.removeConversation("c1")
+
+        XCTAssertNil(sut.conversationUnreadCounts["c1"])
+        XCTAssertEqual(sut.conversationUnreadTotal, 5)
+    }
+
+    func test_removeConversation_isNoOpForUnknownId() {
+        let (sut, writer, _, _) = makeSUT()
+        sut.registerConversations([makeConversation(id: "c1", unread: 3)])
+        waitFor("initial sync") { writer.writes.contains(3) }
+        let writesBefore = writer.writes.count
+
+        sut.removeConversation("does-not-exist")
+
+        let notScheduled = expectation(description: "no new write")
+        notScheduled.isInverted = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            if writer.writes.count > writesBefore { notScheduled.fulfill() }
+        }
+        wait(for: [notScheduled], timeout: 0.4)
+        XCTAssertEqual(writer.writes.count, writesBefore)
+    }
+
     // MARK: - applyConversationUnread
 
     func test_applyConversationUnread_updatesSingleEntry() async {

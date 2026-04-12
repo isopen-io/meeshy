@@ -53,21 +53,45 @@ class NotificationService: UNNotificationServiceExtension {
     // MARK: - Enrichment
 
     /// Map the server-provided `type` to an iOS category so action buttons appear.
+    ///
+    /// Source of truth: `packages/shared/types/notification.ts` → `NotificationTypeEnum`.
+    /// The gateway sends the enum's lowercase snake_case raw value as the `type` field.
+    /// Keep this switch aligned with that file whenever new types are added.
     private func applyCategory(to content: UNMutableNotificationContent) {
         let rawType = content.userInfo["type"] as? String ?? ""
         let category: String
 
         switch rawType {
-        case "new_message", "newMessage", "message_reply", "reply", "message_forwarded":
+        // Messaging — quick reply + mark as read
+        case "new_message",
+             "message_reply",
+             "reply",
+             "message_forwarded",
+             "message_reaction":
             category = "MEESHY_MESSAGE"
+
+        // Mentions — view + reply + mark as read
         case "mention", "user_mentioned":
             category = "MEESHY_MENTION"
+
+        // Social graph — accept / decline
         case "friend_request", "contact_request":
             category = "MEESHY_FRIEND_REQUEST"
-        case "post_comment", "post_like", "post_repost", "story_reaction", "comment_like":
+
+        // Social feed — view + mark as read
+        case "post_like",
+             "post_comment",
+             "post_repost",
+             "story_reaction",
+             "comment_like",
+             "comment_reply":
             category = "MEESHY_SOCIAL"
+
         default:
-            category = "MEESHY_MESSAGE"
+            // Unknown / new server-side type: stay quiet and show the default
+            // system banner with no actions. Do NOT fall back to MESSAGE — the
+            // reply action would be misleading for e.g. a security alert.
+            return
         }
 
         content.categoryIdentifier = category

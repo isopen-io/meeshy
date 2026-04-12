@@ -123,11 +123,22 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     // MARK: - Badge
 
     /// Reset the app badge count to zero.
+    ///
+    /// - Warning: Direct badge writes bypass `NotificationCoordinator`, which owns
+    ///   the alignment between the app icon, widgets and the in-app bell. Prefer
+    ///   `NotificationCoordinator.shared.reset()` — this method only remains for
+    ///   legacy callers and will be removed.
+    @available(*, deprecated, message: "Use NotificationCoordinator.shared.reset() so the widget / in-app bell stay aligned.")
     public func resetBadge() async {
         try? await UNUserNotificationCenter.current().setBadgeCount(0)
     }
 
     /// Update the app badge count to reflect total unread conversations.
+    ///
+    /// - Warning: Direct badge writes bypass `NotificationCoordinator`, which owns
+    ///   the alignment between the app icon, widgets and the in-app bell. Prefer
+    ///   pushing conversation state through `NotificationCoordinator.shared`.
+    @available(*, deprecated, message: "Route through NotificationCoordinator.shared instead so widgets stay aligned.")
     public func updateBadge(totalUnread: Int) async {
         let count = max(totalUnread, 0)
         try? await UNUserNotificationCenter.current().setBadgeCount(count)

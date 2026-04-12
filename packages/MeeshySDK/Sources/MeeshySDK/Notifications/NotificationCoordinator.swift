@@ -3,7 +3,7 @@ import Combine
 import UserNotifications
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "notification-coordinator")
+private let logger = Logger(subsystem: "me.meeshy.sdk", category: "notification-coordinator")
 
 /// Sink that receives notification data for home/lock-screen widgets.
 ///
@@ -103,9 +103,28 @@ public final class NotificationCoordinator: ObservableObject {
 
     // MARK: - Public API
 
-    /// Register the full conversation list, typically called from `ConversationListViewModel`
-    /// whenever the cached list mutates.
+    /// Merge the given conversation list into the coordinator's tracked counts.
+    ///
+    /// Callers typically pass the subset they currently see (e.g. the first page of
+    /// conversations). Merge semantics mean older conversations that aren't in the
+    /// snapshot keep their last known unread count — critical because otherwise a
+    /// paginated list would wipe out the unread total every time the VM republishes.
+    ///
+    /// Use `replaceConversations(_:)` when you explicitly want a reset (e.g. after a
+    /// full sync completes and the caller guarantees the snapshot is authoritative).
     public func registerConversations(_ conversations: [MeeshyConversation]) {
+        for c in conversations {
+            conversationUnreadCounts[c.id] = c.unreadCount
+        }
+        recomputeTotal()
+        widgetSink?.publishConversations(conversations)
+        widgetSink?.publishFavoriteContacts(conversations)
+        scheduleSync()
+    }
+
+    /// Replace the entire tracked set — use only when the caller guarantees the
+    /// passed list is authoritative (full sync, not pagination).
+    public func replaceConversations(_ conversations: [MeeshyConversation]) {
         var counts: [String: Int] = [:]
         for c in conversations {
             counts[c.id] = c.unreadCount
@@ -114,6 +133,13 @@ public final class NotificationCoordinator: ObservableObject {
         recomputeTotal()
         widgetSink?.publishConversations(conversations)
         widgetSink?.publishFavoriteContacts(conversations)
+        scheduleSync()
+    }
+
+    /// Forget a conversation entirely (user was removed from a group, conv deleted).
+    public func removeConversation(_ conversationId: String) {
+        guard conversationUnreadCounts.removeValue(forKey: conversationId) != nil else { return }
+        recomputeTotal()
         scheduleSync()
     }
 
