@@ -145,6 +145,17 @@ public final class NotificationCoordinator: ObservableObject {
         inAppNotificationUnread = max(count, 0)
     }
 
+    /// Optimistic increment after receiving a `notification:new` socket event, before
+    /// the server's `notification:counts` arrives.
+    public func incrementInAppNotificationUnread() {
+        inAppNotificationUnread += 1
+    }
+
+    /// Optimistic decrement after the user marks a single notification read.
+    public func decrementInAppNotificationUnread() {
+        inAppNotificationUnread = max(0, inAppNotificationUnread - 1)
+    }
+
     // MARK: - Private
 
     private func subscribeToSocketEvents() {

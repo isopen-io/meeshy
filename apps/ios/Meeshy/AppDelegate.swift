@@ -20,8 +20,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // NotificationCoordinator must be wired as early as possible so unread/badge
         // state stays aligned even if no view is yet in the hierarchy.
-        NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
-        NotificationCoordinator.shared.start()
+        // Accessing @MainActor state requires an explicit hop since the delegate
+        // method's isolation is inferred from UIKit preconcurrency annotations.
+        Task { @MainActor in
+            NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
+            NotificationCoordinator.shared.start()
+        }
 
         return true
     }

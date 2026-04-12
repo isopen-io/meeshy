@@ -2,13 +2,29 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "notifications")
+private let logger = Logger(subsystem: "me.meeshy.sdk", category: "notifications")
 
+/// High-level orchestrator for in-app notifications.
+///
+/// Responsibilities split (read carefully before touching):
+/// - **Toast / transient UI**: `currentToast` + dismiss timer — owned by this class.
+/// - **Active conversation tracking**: suppresses self-authored toasts.
+/// - **Unread count**: DELEGATED to `NotificationCoordinator`. Callers read
+///   `unreadCount` here for API continuity, but the value is mirrored from the
+///   coordinator — every mutation goes through the coordinator first.
+///
+/// The coordinator is the single source of truth for the notification bell, the
+/// system badge and the widget data store. This class must not write directly to
+/// `UIApplication.setBadgeCount` or to the App Group defaults.
 @MainActor
 public final class NotificationManager: ObservableObject {
     public static let shared = NotificationManager()
 
+    /// Mirrors `NotificationCoordinator.inAppNotificationUnread`. Kept as a
+    /// `@Published` convenience so legacy SwiftUI views that observe
+    /// `NotificationManager.shared` continue to refresh without changes.
     @Published public private(set) var unreadCount: Int = 0
+
     @Published public private(set) var currentToast: SocketNotificationEvent?
     @Published public private(set) var activeConversationId: String?
 
@@ -22,6 +38,7 @@ public final class NotificationManager: ObservableObject {
     private static let refreshDelay: UInt64 = 500_000_000
 
     private init() {
+        subscribeToCoordinator()
         subscribeToSocketEvents()
     }
 
@@ -30,7 +47,6 @@ public final class NotificationManager: ObservableObject {
     public func refreshUnreadCount() async {
         do {
             let count = try await NotificationService.shared.unreadCount()
-            unreadCount = count
             NotificationCoordinator.shared.setInAppNotificationUnread(count)
         } catch {
             logger.error("Failed to refresh unread count: \(error.localizedDescription)")
@@ -66,7 +82,6 @@ public final class NotificationManager: ObservableObject {
     public func markAllAsRead() async {
         do {
             _ = try await NotificationService.shared.markAllAsRead()
-            unreadCount = 0
             NotificationCoordinator.shared.setInAppNotificationUnread(0)
         } catch {
             logger.error("Failed to mark all as read: \(error.localizedDescription)")
@@ -74,9 +89,18 @@ public final class NotificationManager: ObservableObject {
     }
 
     public func reset() {
-        unreadCount = 0
         dismissToast()
         activeConversationId = nil
+        // Unread count cleared by NotificationCoordinator.reset() — do not
+        // duplicate that write here or both paths will race.
+    }
+
+    // MARK: - Coordinator Mirror
+
+    private func subscribeToCoordinator() {
+        NotificationCoordinator.shared.$inAppNotificationUnread
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$unreadCount)
     }
 
     // MARK: - Socket Subscriptions
@@ -105,12 +129,9 @@ public final class NotificationManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        socket.notificationCounts
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.handleNotificationCounts(event)
-            }
-            .store(in: &cancellables)
+        // `notification:counts` is handled by NotificationCoordinator directly —
+        // we used to duplicate the subscription here, but that race was the
+        // source of the drift between the bell and the badge.
     }
 
     // MARK: - Event Handlers
@@ -120,26 +141,18 @@ public final class NotificationManager: ObservableObject {
             return
         }
 
-        unreadCount += 1
+        NotificationCoordinator.shared.incrementInAppNotificationUnread()
         showToast(event)
         newNotificationReceived.send(event)
     }
 
     private func handleNotificationRead(_ event: NotificationReadEvent) {
-        unreadCount = max(0, unreadCount - 1)
+        NotificationCoordinator.shared.decrementInAppNotificationUnread()
         notificationMarkedRead.send(event.notificationId)
     }
 
     private func handleNotificationDeleted(_ event: NotificationDeletedEvent) {
         notificationWasDeleted.send(event.notificationId)
-    }
-
-    private func handleNotificationCounts(_ event: NotificationCountsEvent) {
-        unreadCount = event.unread
-        NotificationCoordinator.shared.applyInAppNotificationCounts(
-            total: event.total,
-            unread: event.unread
-        )
     }
 
     // MARK: - Toast

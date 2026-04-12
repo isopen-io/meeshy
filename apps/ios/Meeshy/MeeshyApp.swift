@@ -171,6 +171,11 @@ struct MeeshyApp: App {
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
                     if isAuth {
                         activeGuestSession = nil
+                        // Re-arm the notification coordinator after a logout/login
+                        // cycle. `start()` is idempotent, so the initial launch path
+                        // in AppDelegate is not impacted.
+                        NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
+                        NotificationCoordinator.shared.start()
                         Task { await requestPushPermissionIfNeeded() }
                         Task { await NotificationManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()

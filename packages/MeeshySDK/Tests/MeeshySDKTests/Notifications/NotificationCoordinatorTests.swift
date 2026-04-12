@@ -5,6 +5,17 @@ import Combine
 @MainActor
 final class NotificationCoordinatorTests: XCTestCase {
 
+    // Track app-group suite names so we can tear them down after each test.
+    private var createdSuiteNames: [String] = []
+
+    override func tearDown() {
+        for suite in createdSuiteNames {
+            UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        }
+        createdSuiteNames.removeAll()
+        super.tearDown()
+    }
+
     // MARK: - Test doubles
 
     final class MockBadgeWriter: NotificationBadgeWriting, @unchecked Sendable {
@@ -44,6 +55,7 @@ final class NotificationCoordinatorTests: XCTestCase {
 
     private func makeSUT() -> (NotificationCoordinator, MockBadgeWriter, MockWidgetSink, String) {
         let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
         let defaults = UserDefaults(suiteName: suite)
         defaults?.removePersistentDomain(forName: suite)
         let writer = MockBadgeWriter()
@@ -51,6 +63,28 @@ final class NotificationCoordinatorTests: XCTestCase {
         let sink = MockWidgetSink()
         sut.widgetSink = sink
         return (sut, writer, sink, suite)
+    }
+
+    /// Wait until `condition()` returns true or the timeout expires. Unlike
+    /// `Task.sleep`, this polls the Combine-driven debounce machinery on the
+    /// main run loop, which is the iOS test-guide's preferred pattern.
+    private func waitFor(
+        _ description: String,
+        timeout: TimeInterval = 1.0,
+        condition: @escaping () -> Bool
+    ) {
+        let expectation = expectation(description: description)
+        let start = Date()
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { timer in
+            if condition() {
+                expectation.fulfill()
+                timer.invalidate()
+            } else if Date().timeIntervalSince(start) > timeout {
+                timer.invalidate()
+            }
+        }
+        wait(for: [expectation], timeout: timeout + 0.1)
+        timer.invalidate()
     }
 
     private func makeConversation(
@@ -97,7 +131,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertEqual(sink.publishedFavorites.count, 1)
     }
 
-    func test_registerConversations_debouncesBadgeWrite() async throws {
+    func test_registerConversations_debouncesBadgeWrite() {
         let (sut, writer, sink, suite) = makeSUT()
 
         sut.registerConversations([makeConversation(id: "a", unread: 4)])
@@ -105,7 +139,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         // Writer is debounced (~150ms) — not called synchronously.
         XCTAssertTrue(writer.writes.isEmpty)
 
-        try await Task.sleep(nanoseconds: 300_000_000)
+        waitFor("badge written") { writer.writes.contains(4) }
 
         XCTAssertEqual(writer.writes.last, 4)
         XCTAssertEqual(sink.publishedUnread.last, 4)
@@ -143,16 +177,21 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.conversationUnreadTotal, 0)
     }
 
-    func test_applyConversationUnread_isIdempotentWhenSameCount() async throws {
+    func test_applyConversationUnread_isIdempotentWhenSameCount() {
         let (sut, writer, _, _) = makeSUT()
         sut.registerConversations([makeConversation(id: "c1", unread: 3)])
-        try await Task.sleep(nanoseconds: 300_000_000)
+        waitFor("first sync") { writer.writes.contains(3) }
         let countAfterFirstSync = writer.writes.count
 
         sut.applyConversationUnread(conversationId: "c1", unreadCount: 3)
-        try await Task.sleep(nanoseconds: 300_000_000)
+        // Give the debounce time to fire if it was going to — it shouldn't.
+        let notScheduled = expectation(description: "no new write")
+        notScheduled.isInverted = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            if writer.writes.count > countAfterFirstSync { notScheduled.fulfill() }
+        }
+        wait(for: [notScheduled], timeout: 0.4)
 
-        // Should not have scheduled a new badge write.
         XCTAssertEqual(writer.writes.count, countAfterFirstSync)
     }
 
@@ -171,24 +210,29 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.conversationUnreadTotal, 2)
     }
 
-    func test_markConversationRead_noOpWhenAlreadyRead() async throws {
+    func test_markConversationRead_noOpWhenAlreadyRead() {
         let (sut, writer, _, _) = makeSUT()
         sut.registerConversations([makeConversation(id: "c1", unread: 0)])
-        try await Task.sleep(nanoseconds: 300_000_000)
+        waitFor("initial sync") { !writer.writes.isEmpty || writer.writes.contains(0) }
         let writesBefore = writer.writes.count
 
         sut.markConversationRead("c1")
-        try await Task.sleep(nanoseconds: 300_000_000)
+        let notScheduled = expectation(description: "no new write")
+        notScheduled.isInverted = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            if writer.writes.count > writesBefore { notScheduled.fulfill() }
+        }
+        wait(for: [notScheduled], timeout: 0.4)
 
         XCTAssertEqual(writer.writes.count, writesBefore)
     }
 
     // MARK: - applyInAppNotificationCounts
 
-    func test_applyInAppNotificationCounts_updatesInAppBellOnly() async throws {
+    func test_applyInAppNotificationCounts_updatesInAppBellOnly() {
         let (sut, writer, _, _) = makeSUT()
         sut.registerConversations([makeConversation(id: "c1", unread: 5)])
-        try await Task.sleep(nanoseconds: 300_000_000)
+        waitFor("initial sync") { writer.writes.contains(5) }
         let writesBefore = writer.writes.count
 
         sut.applyInAppNotificationCounts(total: 12, unread: 7)
@@ -222,7 +266,7 @@ final class NotificationCoordinatorTests: XCTestCase {
 
     // MARK: - reset
 
-    func test_reset_clearsStateAndBadge() async {
+    func test_reset_clearsStateAndBadge() {
         let (sut, writer, sink, suite) = makeSUT()
         sut.registerConversations([makeConversation(id: "c1", unread: 5)])
         sut.applyInAppNotificationCounts(total: 1, unread: 1)
@@ -234,12 +278,31 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.inAppNotificationUnread, 0)
         XCTAssertFalse(sut.isRunning)
 
-        // reset() schedules an async badge-write; give it a beat.
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        waitFor("reset badge write") { writer.writes.last == 0 }
 
         XCTAssertEqual(writer.writes.last, 0)
         XCTAssertEqual(sink.publishedUnread.last, 0)
         XCTAssertEqual(UserDefaults(suiteName: suite)?.integer(forKey: "unread_count"), 0)
+    }
+
+    // MARK: - increment/decrement
+
+    func test_incrementInAppNotificationUnread_incrementsBy1() {
+        let (sut, _, _, _) = makeSUT()
+        sut.setInAppNotificationUnread(4)
+
+        sut.incrementInAppNotificationUnread()
+
+        XCTAssertEqual(sut.inAppNotificationUnread, 5)
+    }
+
+    func test_decrementInAppNotificationUnread_clampsAtZero() {
+        let (sut, _, _, _) = makeSUT()
+        sut.setInAppNotificationUnread(0)
+
+        sut.decrementInAppNotificationUnread()
+
+        XCTAssertEqual(sut.inAppNotificationUnread, 0)
     }
 
     // MARK: - start idempotency
