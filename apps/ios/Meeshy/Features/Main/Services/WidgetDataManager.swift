@@ -23,14 +23,20 @@ struct WidgetFavoriteContact: Codable, Identifiable {
 
 // MARK: - WidgetDataManager
 
+/// Bridges the NotificationCoordinator to the widget shared container + WidgetKit timeline reloader.
+///
+/// The manager is deliberately passive — it receives pushes from `NotificationCoordinator`
+/// (the single source of truth for unread counts) and keeps the App Group store aligned.
+/// No direct socket subscription, no direct badge write: this class only knows about widgets.
 @MainActor
-final class WidgetDataManager {
+final class WidgetDataManager: NotificationWidgetSink {
     static let shared = WidgetDataManager()
 
     private let suiteName = "group.me.meeshy.app"
     private let conversationsKey = "recent_conversations"
     private let unreadCountKey = "unread_count"
     private let favoritesKey = "favorite_contacts"
+    private let lastUpdatedKey = "widget_last_updated"
 
     private lazy var sharedDefaults: UserDefaults? = {
         UserDefaults(suiteName: suiteName)
@@ -44,9 +50,9 @@ final class WidgetDataManager {
 
     private init() {}
 
-    // MARK: - Public API
+    // MARK: - NotificationWidgetSink
 
-    func updateConversations(_ conversations: [MeeshyConversation]) {
+    func publishConversations(_ conversations: [MeeshyConversation]) {
         let widgetConversations = conversations
             .sorted { ($0.isPinned ? 0 : 1, $0.lastMessageAt) < ($1.isPinned ? 0 : 1, $1.lastMessageAt) }
             .reversed()
@@ -55,7 +61,9 @@ final class WidgetDataManager {
                 WidgetConversation(
                     id: conv.id,
                     contactName: conv.name,
-                    contactAvatar: conv.participantAvatarURL != nil ? "person.crop.circle.fill" : (conv.type == .group ? "person.3.fill" : "person.circle.fill"),
+                    contactAvatar: conv.participantAvatarURL != nil
+                        ? "person.crop.circle.fill"
+                        : (conv.type == .group ? "person.3.fill" : "person.circle.fill"),
                     lastMessage: formatLastMessage(conv),
                     timestamp: conv.lastMessageAt,
                     isUnread: conv.unreadCount > 0,
@@ -63,19 +71,14 @@ final class WidgetDataManager {
                 )
             }
 
-        let totalUnread = conversations.reduce(0) { $0 + $1.unreadCount }
+        guard let defaults = sharedDefaults,
+              let data = try? encoder.encode(Array(widgetConversations)) else { return }
 
-        guard let defaults = sharedDefaults else { return }
-
-        if let data = try? encoder.encode(Array(widgetConversations)) {
-            defaults.set(data, forKey: conversationsKey)
-        }
-        defaults.set(totalUnread, forKey: unreadCountKey)
-
-        reloadWidgets()
+        defaults.set(data, forKey: conversationsKey)
+        defaults.set(Date().timeIntervalSince1970, forKey: lastUpdatedKey)
     }
 
-    func updateFavoriteContacts(_ conversations: [MeeshyConversation]) {
+    func publishFavoriteContacts(_ conversations: [MeeshyConversation]) {
         let favorites = conversations
             .filter { $0.isPinned && $0.type == .direct }
             .prefix(8)
@@ -94,9 +97,31 @@ final class WidgetDataManager {
         defaults.set(data, forKey: favoritesKey)
     }
 
+    func publishUnreadCount(_ count: Int) {
+        sharedDefaults?.set(max(count, 0), forKey: unreadCountKey)
+    }
+
+    func reloadTimelines() {
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    // MARK: - Legacy shim (kept for callers still using the old API)
+
+    func updateConversations(_ conversations: [MeeshyConversation]) {
+        publishConversations(conversations)
+        publishFavoriteContacts(conversations)
+        let totalUnread = conversations.reduce(0) { $0 + $1.unreadCount }
+        publishUnreadCount(totalUnread)
+        reloadTimelines()
+    }
+
+    func updateFavoriteContacts(_ conversations: [MeeshyConversation]) {
+        publishFavoriteContacts(conversations)
+    }
+
     func updateUnreadCount(_ count: Int) {
-        sharedDefaults?.set(count, forKey: unreadCountKey)
-        reloadWidgets()
+        publishUnreadCount(count)
+        reloadTimelines()
     }
 
     // MARK: - Private
@@ -112,9 +137,5 @@ final class WidgetDataManager {
             return "[\(conv.lastMessageAttachmentCount) attachment\(conv.lastMessageAttachmentCount > 1 ? "s" : "")]"
         }
         return ""
-    }
-
-    private func reloadWidgets() {
-        WidgetCenter.shared.reloadAllTimelines()
     }
 }

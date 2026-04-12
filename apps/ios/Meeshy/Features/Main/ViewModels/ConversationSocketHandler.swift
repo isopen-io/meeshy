@@ -59,6 +59,7 @@ final class ConversationSocketHandler {
         subscribeToSocket()
         subscribeToReconnect()
         NotificationManager.shared.onConversationOpened(conversationId)
+        NotificationCoordinator.shared.markConversationRead(conversationId)
     }
 
     deinit {

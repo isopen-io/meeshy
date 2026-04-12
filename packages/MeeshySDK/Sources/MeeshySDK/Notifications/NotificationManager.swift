@@ -31,7 +31,7 @@ public final class NotificationManager: ObservableObject {
         do {
             let count = try await NotificationService.shared.unreadCount()
             unreadCount = count
-            await PushNotificationManager.shared.updateBadge(totalUnread: count)
+            NotificationCoordinator.shared.setInAppNotificationUnread(count)
         } catch {
             logger.error("Failed to refresh unread count: \(error.localizedDescription)")
         }
@@ -67,7 +67,7 @@ public final class NotificationManager: ObservableObject {
         do {
             _ = try await NotificationService.shared.markAllAsRead()
             unreadCount = 0
-            await PushNotificationManager.shared.resetBadge()
+            NotificationCoordinator.shared.setInAppNotificationUnread(0)
         } catch {
             logger.error("Failed to mark all as read: \(error.localizedDescription)")
         }
@@ -136,9 +136,10 @@ public final class NotificationManager: ObservableObject {
 
     private func handleNotificationCounts(_ event: NotificationCountsEvent) {
         unreadCount = event.unread
-        Task {
-            await PushNotificationManager.shared.updateBadge(totalUnread: event.unread)
-        }
+        NotificationCoordinator.shared.applyInAppNotificationCounts(
+            total: event.total,
+            unread: event.unread
+        )
     }
 
     // MARK: - Toast

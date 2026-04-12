@@ -146,6 +146,8 @@ struct MeeshyApp: App {
                     if authManager.isAuthenticated {
                         await requestPushPermissionIfNeeded()
                         VoIPPushManager.shared.register()
+                        await NotificationManager.shared.refreshUnreadCount()
+                        await NotificationCoordinator.shared.syncNow()
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
@@ -157,6 +159,9 @@ struct MeeshyApp: App {
                         Task { await handleForegroundTransition() }
                     case .background:
                         handleBackgroundTransition()
+                        // Refresh widgets with the latest coordinator snapshot before
+                        // the OS takes a screenshot of our app switcher preview.
+                        Task { await NotificationCoordinator.shared.syncNow() }
                     case .inactive:
                         break
                     @unknown default:
@@ -183,6 +188,7 @@ struct MeeshyApp: App {
                         }
                     } else {
                         NotificationManager.shared.reset()
+                        NotificationCoordinator.shared.reset()
                     }
                 }
                 .onReceive(pushManager.$pendingNotificationPayload) { payload in
