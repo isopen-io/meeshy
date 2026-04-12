@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import Combine
-import WidgetKit
 import os
 import MeeshySDK
 
@@ -323,19 +322,23 @@ class ConversationListViewModel: ObservableObject {
     }
 
     // MARK: - Badge Sync
+    //
+    // The coordinator owns the badge + widget shared store. We simply forward the
+    // latest conversation snapshot whenever the list mutates; the coordinator debounces
+    // the downstream writes so we don't need to.
 
     private func syncBadgeOnUnreadChange() {
         $conversations
-            .map { convs in convs.reduce(0) { $0 + $1.unreadCount } }
-            .removeDuplicates()
-            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
-            .sink { [weak self] total in
-                guard let self else { return }
-                Task {
-                    await PushNotificationManager.shared.updateBadge(totalUnread: total)
+            .removeDuplicates { lhs, rhs in
+                guard lhs.count == rhs.count else { return false }
+                for (a, b) in zip(lhs, rhs) where a.id != b.id || a.unreadCount != b.unreadCount || a.isPinned != b.isPinned {
+                    return false
                 }
-                WidgetDataManager.shared.updateConversations(self.conversations)
-                WidgetDataManager.shared.updateFavoriteContacts(self.conversations)
+                return true
+            }
+            .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
+            .sink { convs in
+                NotificationCoordinator.shared.registerConversations(convs)
             }
             .store(in: &cancellables)
     }
@@ -382,6 +385,9 @@ class ConversationListViewModel: ObservableObject {
             let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
             if let data = reloaded.value {
                 conversations = data
+                // Full sync just completed: snapshot is authoritative, so reconcile
+                // overrides anything the coordinator tracked from earlier socket events.
+                NotificationCoordinator.shared.reconcileConversationUnreads(data)
             }
             lastFetchedAt = Date()
             isLoading = false
@@ -404,6 +410,8 @@ class ConversationListViewModel: ObservableObject {
         let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
         if let data = reloaded.value {
             conversations = data
+            // User-triggered full sync: snapshot is authoritative, reconcile counts.
+            NotificationCoordinator.shared.reconcileConversationUnreads(data)
         }
         lastFetchedAt = Date()
         isLoading = false

@@ -104,6 +104,11 @@ struct MeeshyApp: App {
                 }
                 .task {
                     MeeshyConfig.shared.restoreEnvironment()
+                    // Bridge iOS Focus filter selection into the SDK so in-app
+                    // toasts respect the currently-active Focus filter.
+                    NotificationManager.shared.focusFilterProvider = {
+                        MeeshyFocusStore.shared.current.toSDKSnapshot()
+                    }
                     await CacheCoordinator.shared.start()
                     await OfflineQueue.shared.setRetrySend { @Sendable item in
                         do {
@@ -146,6 +151,8 @@ struct MeeshyApp: App {
                     if authManager.isAuthenticated {
                         await requestPushPermissionIfNeeded()
                         VoIPPushManager.shared.register()
+                        await NotificationManager.shared.refreshUnreadCount()
+                        await NotificationCoordinator.shared.syncNow()
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
@@ -155,8 +162,14 @@ struct MeeshyApp: App {
                     case .active:
                         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
                         Task { await handleForegroundTransition() }
+                        // Drain any mark-as-read actions the user tapped from the
+                        // widget while the app was suspended.
+                        Task { await WidgetActionFlusher.shared.flush() }
                     case .background:
                         handleBackgroundTransition()
+                        // Refresh widgets with the latest coordinator snapshot before
+                        // the OS takes a screenshot of our app switcher preview.
+                        Task { await NotificationCoordinator.shared.syncNow() }
                     case .inactive:
                         break
                     @unknown default:
@@ -166,6 +179,11 @@ struct MeeshyApp: App {
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
                     if isAuth {
                         activeGuestSession = nil
+                        // Re-arm the notification coordinator after a logout/login
+                        // cycle. `start()` is idempotent, so the initial launch path
+                        // in AppDelegate is not impacted.
+                        NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
+                        NotificationCoordinator.shared.start()
                         Task { await requestPushPermissionIfNeeded() }
                         Task { await NotificationManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
@@ -183,6 +201,7 @@ struct MeeshyApp: App {
                         }
                     } else {
                         NotificationManager.shared.reset()
+                        NotificationCoordinator.shared.reset()
                     }
                 }
                 .onReceive(pushManager.$pendingNotificationPayload) { payload in
