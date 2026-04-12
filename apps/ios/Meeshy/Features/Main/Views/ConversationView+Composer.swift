@@ -49,7 +49,6 @@ extension ConversationView {
             onStopRecording: { stopAndPreviewRecording() },
             onCancelRecording: {
                 audioRecorder.cancelRecording()
-                HapticFeedback.light()
             },
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,

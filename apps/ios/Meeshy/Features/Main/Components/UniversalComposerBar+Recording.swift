@@ -104,7 +104,9 @@ extension UniversalComposerBar {
         let waveformColor = isDark ? "FFFFFF" : accentColor
 
         return HStack(spacing: 10) {
-            // Cancel (X) button — discards the recording without sending
+            // Cancel (X) button — discards the recording without sending.
+            // Hit area expanded to 44x44pt per Apple HIG while keeping the
+            // visible pill at 32pt.
             Button {
                 HapticFeedback.light()
                 cancelRecording()
@@ -117,15 +119,20 @@ extension UniversalComposerBar {
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(Color(hex: "FF2E63"))
                 }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
             }
             .accessibilityLabel("Annuler l'enregistrement")
+            .accessibilityHint("Supprime le message vocal en cours")
 
-            // Live waveform — fills available horizontal space
+            // Live waveform — fills available horizontal space.
+            // Marked accessibilityHidden: purely decorative, timer conveys state.
             waveformStrip(color: waveformColor)
                 .frame(maxWidth: .infinity)
                 .frame(height: 28)
+                .accessibilityHidden(true)
 
-            // Recording indicator + timer
+            // Recording indicator + timer — grouped for VoiceOver.
             HStack(spacing: 5) {
                 Circle()
                     .fill(Color(hex: "EF4444"))
@@ -142,11 +149,20 @@ extension UniversalComposerBar {
                     .contentTransition(.numericText())
                     .animation(.spring(response: 0.3), value: effectiveDuration)
             }
-            .fixedSize()
+            .frame(width: 54, alignment: .trailing)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Enregistrement en cours, \(formatDuration(effectiveDuration))")
 
-            // Send button — stops recording and sends (triggers onCustomSend)
+            // Send button — stops recording and sends.
+            // For delegated recording (ConversationView), handleSend() dispatches
+            // to onCustomSend which stops the recorder and sends. For internal
+            // recording (stories, comments), we must materialize the voice
+            // attachment ourselves by calling stopRecording() first.
             Button {
                 HapticFeedback.medium()
+                if onCustomSend == nil && isRecording {
+                    stopRecording()
+                }
                 handleSend()
             } label: {
                 ZStack {
@@ -164,6 +180,8 @@ extension UniversalComposerBar {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                 }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
             }
             .accessibilityLabel("Envoyer le message vocal")
         }
@@ -182,7 +200,6 @@ extension UniversalComposerBar {
 
     // MARK: - Waveform strip used inside the recording bar
 
-    @ViewBuilder
     private func waveformStrip(color colorHex: String) -> some View {
         let barWidth: CGFloat = 2.5
         let barSpacing: CGFloat = 2.5
@@ -191,15 +208,16 @@ extension UniversalComposerBar {
             Color(hex: colorHex).opacity(0.55)
         ]
 
-        GeometryReader { geo in
+        return GeometryReader { geo in
             let availableWidth = geo.size.width
             let barCount = max(1, Int(availableWidth / (barWidth + barSpacing)))
             HStack(spacing: barSpacing) {
                 if let levels = externalAudioLevels, !levels.isEmpty {
-                    // Tile the sampled levels across the full bar count so the
-                    // waveform stays dense even on wide screens.
+                    // Linearly interpolate the sampled levels across the full
+                    // bar count so the waveform reads as a single continuous
+                    // curve (no tiled repetition). Left = oldest, right = newest.
                     ForEach(0..<barCount, id: \.self) { i in
-                        let level: CGFloat = levels[(levels.count - 1 - (i % levels.count)) % levels.count]
+                        let level = interpolatedLevel(at: i, barCount: barCount, levels: levels)
                         RoundedRectangle(cornerRadius: 1.25)
                             .fill(LinearGradient(colors: barGradient, startPoint: .top, endPoint: .bottom))
                             .frame(width: barWidth, height: effectiveIsRecording ? 3 + 22 * level : 3)
@@ -207,12 +225,23 @@ extension UniversalComposerBar {
                     }
                 } else {
                     ForEach(0..<barCount, id: \.self) { i in
-                        ComposerWaveformBar(index: i, isRecording: isRecording, accentColor: colorHex)
+                        ComposerWaveformBar(index: i, isRecording: effectiveIsRecording, accentColor: colorHex)
                     }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
+    }
+
+    /// Linear interpolation of audio `levels` onto `barCount` evenly-spaced points.
+    /// Returns a smooth curve with no tiling artifacts even when `barCount > levels.count`.
+    private func interpolatedLevel(at index: Int, barCount: Int, levels: [CGFloat]) -> CGFloat {
+        guard levels.count > 1, barCount > 1 else { return levels.first ?? 0 }
+        let position = CGFloat(index) * CGFloat(levels.count - 1) / CGFloat(barCount - 1)
+        let lowIndex = Int(position.rounded(.down))
+        let highIndex = min(lowIndex + 1, levels.count - 1)
+        let t = position - CGFloat(lowIndex)
+        return levels[lowIndex] * (1 - t) + levels[highIndex] * t
     }
 
     // MARK: - Recording Logic
