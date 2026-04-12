@@ -87,6 +87,14 @@ class NotificationService: UNNotificationServiceExtension {
              "comment_reply":
             category = "MEESHY_SOCIAL"
 
+        // Call events — callback / answer / decline actions
+        case "missed_call",
+             "incoming_call",
+             "call_ended",
+             "call_declined",
+             "call_recording_ready":
+            category = "MEESHY_CALL"
+
         default:
             // Unknown / new server-side type: stay quiet and show the default
             // system banner with no actions. Do NOT fall back to MESSAGE — the

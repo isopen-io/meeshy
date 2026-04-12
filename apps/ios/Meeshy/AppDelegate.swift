@@ -134,6 +134,24 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: [.destructive]
         )
 
+        let callbackAction = UNNotificationAction(
+            identifier: MeeshyNotificationAction.callback.rawValue,
+            title: String(localized: "notifications.action.callback", defaultValue: "Call back"),
+            options: [.foreground]
+        )
+
+        let answerCallAction = UNNotificationAction(
+            identifier: MeeshyNotificationAction.answerCall.rawValue,
+            title: String(localized: "notifications.action.answer", defaultValue: "Answer"),
+            options: [.foreground]
+        )
+
+        let declineCallAction = UNNotificationAction(
+            identifier: MeeshyNotificationAction.declineCall.rawValue,
+            title: String(localized: "notifications.action.declineCall", defaultValue: "Decline"),
+            options: [.destructive]
+        )
+
         let messageCategory = UNNotificationCategory(
             identifier: MeeshyNotificationCategory.message.rawValue,
             actions: [replyAction, markReadAction],
@@ -162,11 +180,23 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: []
         )
 
+        // Call category: distinct action set for incoming (ringing) vs missed/ended.
+        // Incoming calls would normally use CallKit/PushKit VoIP; this category
+        // covers the regular-APNs path (missed_call, call_ended, call_declined,
+        // call_recording_ready) where quick callback is the natural action.
+        let callCategory = UNNotificationCategory(
+            identifier: MeeshyNotificationCategory.call.rawValue,
+            actions: [callbackAction, answerCallAction, declineCallAction, viewAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+
         UNUserNotificationCenter.current().setNotificationCategories([
             messageCategory,
             mentionCategory,
             friendRequestCategory,
-            socialCategory
+            socialCategory,
+            callCategory
         ])
     }
 }
@@ -178,6 +208,7 @@ enum MeeshyNotificationCategory: String {
     case mention = "MEESHY_MENTION"
     case friendRequest = "MEESHY_FRIEND_REQUEST"
     case social = "MEESHY_SOCIAL"
+    case call = "MEESHY_CALL"
 }
 
 enum MeeshyNotificationAction: String {
@@ -186,6 +217,9 @@ enum MeeshyNotificationAction: String {
     case view = "MEESHY_ACTION_VIEW"
     case accept = "MEESHY_ACTION_ACCEPT"
     case decline = "MEESHY_ACTION_DECLINE"
+    case callback = "MEESHY_ACTION_CALLBACK"
+    case answerCall = "MEESHY_ACTION_ANSWER_CALL"
+    case declineCall = "MEESHY_ACTION_DECLINE_CALL"
 }
 
 // MARK: - UNUserNotificationCenterDelegate
@@ -265,8 +299,18 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
                 }
             case MeeshyNotificationAction.view.rawValue,
                  MeeshyNotificationAction.accept.rawValue,
-                 MeeshyNotificationAction.decline.rawValue:
+                 MeeshyNotificationAction.decline.rawValue,
+                 MeeshyNotificationAction.callback.rawValue,
+                 MeeshyNotificationAction.answerCall.rawValue:
+                // All of these surface the app to the relevant screen — the
+                // deep-link router decides the destination based on payload.type
+                // (incoming_call opens the call UI, missed_call opens the thread).
                 PushNotificationManager.shared.handleNotification(userInfo: userInfo)
+            case MeeshyNotificationAction.declineCall.rawValue:
+                // Silent decline — no navigation. The VoIP layer handles the
+                // actual decline via CallKit; APNs declineCall is just
+                // bookkeeping so we don't reopen the call screen.
+                break
             default:
                 PushNotificationManager.shared.handleNotification(userInfo: userInfo)
             }
