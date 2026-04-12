@@ -32,6 +32,11 @@ public final class NotificationManager: ObservableObject {
     public let notificationMarkedRead = PassthroughSubject<String, Never>()
     public let notificationWasDeleted = PassthroughSubject<String, Never>()
 
+    /// Optional hook the app target uses to inject the current iOS Focus
+    /// filter snapshot. The SDK can't observe `SetFocusFilterIntent` directly
+    /// (it lives in the app target), so we ask for a pull closure instead.
+    public var focusFilterProvider: (@MainActor () -> FocusFilterSnapshot)?
+
     private var cancellables = Set<AnyCancellable>()
     private var toastDismissTask: Task<Void, Never>?
     private static let toastDuration: UInt64 = 7_000_000_000
@@ -141,9 +146,22 @@ public final class NotificationManager: ObservableObject {
             return
         }
 
+        // The unread counter reflects what the *server* thinks — increment it
+        // regardless of local prefs so the coordinator stays aligned with the
+        // authoritative count. Local prefs only gate the TOAST surface.
         NotificationCoordinator.shared.incrementInAppNotificationUnread()
-        showToast(event)
         newNotificationReceived.send(event)
+
+        let prefs = UserPreferencesManager.shared.notification
+        let focus = focusFilterProvider?() ?? .permissive
+        let isDirect = event.isDirect
+        if prefs.allowsNotification(
+            type: event.notificationType,
+            isDirectConversation: isDirect,
+            focus: focus
+        ) {
+            showToast(event)
+        }
     }
 
     private func handleNotificationRead(_ event: NotificationReadEvent) {

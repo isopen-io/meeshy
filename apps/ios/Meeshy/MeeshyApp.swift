@@ -104,6 +104,11 @@ struct MeeshyApp: App {
                 }
                 .task {
                     MeeshyConfig.shared.restoreEnvironment()
+                    // Bridge iOS Focus filter selection into the SDK so in-app
+                    // toasts respect the currently-active Focus filter.
+                    NotificationManager.shared.focusFilterProvider = {
+                        MeeshyFocusStore.shared.current.toSDKSnapshot()
+                    }
                     await CacheCoordinator.shared.start()
                     await OfflineQueue.shared.setRetrySend { @Sendable item in
                         do {
@@ -157,6 +162,9 @@ struct MeeshyApp: App {
                     case .active:
                         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
                         Task { await handleForegroundTransition() }
+                        // Drain any mark-as-read actions the user tapped from the
+                        // widget while the app was suspended.
+                        Task { await WidgetActionFlusher.shared.flush() }
                     case .background:
                         handleBackgroundTransition()
                         // Refresh widgets with the latest coordinator snapshot before

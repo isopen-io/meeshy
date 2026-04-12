@@ -1,6 +1,85 @@
 import WidgetKit
 import SwiftUI
 import ActivityKit
+import AppIntents
+
+// MARK: - App Group Constants
+
+private enum WidgetSharedKeys {
+    static let suiteName = "group.me.meeshy.app"
+    static let conversations = "recent_conversations"
+    static let unreadCount = "unread_count"
+    static let pendingMarkRead = "pending_mark_read"
+}
+
+// MARK: - Mark-as-Read App Intent (iOS 17+)
+//
+// Invoked from the widget's Button(intent:) without launching the app. The
+// intent runs in the widget extension process, so it:
+//   1. Updates the App Group shared store optimistically (widget refresh is instant).
+//   2. Appends the conversation id to a `pending_mark_read` queue that the main
+//      app flushes on next foreground, since the widget process doesn't hold an
+//      auth token for authenticated REST calls.
+@available(iOS 17.0, *)
+struct MarkConversationReadIntent: AppIntent {
+    static var title: LocalizedStringResource = "Mark conversation as read"
+    static var description = IntentDescription(
+        "Clears the unread badge for this conversation from the widget."
+    )
+    static var openAppWhenRun: Bool = false
+
+    @Parameter(title: "Conversation ID")
+    var conversationId: String
+
+    init() {}
+
+    init(conversationId: String) {
+        self.conversationId = conversationId
+    }
+
+    func perform() async throws -> some IntentResult {
+        guard let defaults = UserDefaults(suiteName: WidgetSharedKeys.suiteName) else {
+            return .result()
+        }
+
+        // 1. Decrement total + clear per-conversation unread flag in the list.
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        if let data = defaults.data(forKey: WidgetSharedKeys.conversations),
+           var list = try? decoder.decode([Conversation].self, from: data),
+           let idx = list.firstIndex(where: { $0.id == conversationId }),
+           list[idx].isUnread {
+            list[idx] = Conversation(
+                id: list[idx].id,
+                contactName: list[idx].contactName,
+                contactAvatar: list[idx].contactAvatar,
+                lastMessage: list[idx].lastMessage,
+                timestamp: list[idx].timestamp,
+                isUnread: false,
+                isPinned: list[idx].isPinned
+            )
+            if let encoded = try? encoder.encode(list) {
+                defaults.set(encoded, forKey: WidgetSharedKeys.conversations)
+            }
+
+            let current = defaults.integer(forKey: WidgetSharedKeys.unreadCount)
+            defaults.set(max(0, current - 1), forKey: WidgetSharedKeys.unreadCount)
+        }
+
+        // 2. Queue the server-side mark-as-read for the main app to flush.
+        var queued = defaults.stringArray(forKey: WidgetSharedKeys.pendingMarkRead) ?? []
+        if !queued.contains(conversationId) {
+            queued.append(conversationId)
+            defaults.set(queued, forKey: WidgetSharedKeys.pendingMarkRead)
+        }
+
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result()
+    }
+}
 
 // MARK: - Widget Bundle
 @main
@@ -210,46 +289,63 @@ struct MediumConversationView: View {
             }
 
             ForEach(entry.conversations.prefix(2)) { conversation in
-                Link(destination: URL(string: "meeshy://conversation/\(conversation.id)")!) {
-                    HStack(spacing: 8) {
-                        Image(systemName: conversation.contactAvatar)
-                            .font(.title3)
-                            .foregroundColor(.blue)
-                            .frame(width: 30, height: 30)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(conversation.contactName)
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.primary)
-                                if conversation.isPinned {
-                                    Image(systemName: "pin.fill")
-                                        .font(.caption2)
-                                        .foregroundColor(.orange)
-                                }
-                            }
-                            Text(conversation.lastMessage)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        }
-
-                        Spacer()
-
-                        if conversation.isUnread {
-                            Circle()
-                                .fill(Color.blue)
-                                .frame(width: 8, height: 8)
-                        }
-                    }
-                }
+                conversationRow(conversation)
             }
 
             Spacer()
         }
         .padding()
         .containerBackground(.background, for: .widget)
+    }
+
+    @ViewBuilder
+    private func conversationRow(_ conversation: Conversation) -> some View {
+        HStack(spacing: 8) {
+            Link(destination: URL(string: "meeshy://conversation/\(conversation.id)")!) {
+                HStack(spacing: 8) {
+                    Image(systemName: conversation.contactAvatar)
+                        .font(.title3)
+                        .foregroundColor(.blue)
+                        .frame(width: 30, height: 30)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(conversation.contactName)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            if conversation.isPinned {
+                                Image(systemName: "pin.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                        Text(conversation.lastMessage)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    if conversation.isUnread {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 8, height: 8)
+                    }
+                }
+            }
+
+            if conversation.isUnread, #available(iOS 17.0, *) {
+                Button(intent: MarkConversationReadIntent(conversationId: conversation.id)) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Mark as read")
+            }
+        }
     }
 }
 

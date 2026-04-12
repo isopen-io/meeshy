@@ -142,6 +142,20 @@ public enum SidebarPosition: String, Codable, CaseIterable, Sendable {
 
 public enum DndDay: String, Codable, CaseIterable, Sendable {
     case mon, tue, wed, thu, fri, sat, sun
+
+    /// Map from `Calendar.Component.weekday` (1 = Sunday … 7 = Saturday).
+    public static func fromCalendarWeekday(_ weekday: Int) -> DndDay? {
+        switch weekday {
+        case 1: return .sun
+        case 2: return .mon
+        case 3: return .tue
+        case 4: return .wed
+        case 5: return .thu
+        case 6: return .fri
+        case 7: return .sat
+        default: return nil
+        }
+    }
 }
 
 // MARK: - Privacy Preferences
