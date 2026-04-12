@@ -385,6 +385,9 @@ class ConversationListViewModel: ObservableObject {
             let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
             if let data = reloaded.value {
                 conversations = data
+                // Full sync just completed: snapshot is authoritative, so reconcile
+                // overrides anything the coordinator tracked from earlier socket events.
+                NotificationCoordinator.shared.reconcileConversationUnreads(data)
             }
             lastFetchedAt = Date()
             isLoading = false
@@ -407,6 +410,8 @@ class ConversationListViewModel: ObservableObject {
         let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
         if let data = reloaded.value {
             conversations = data
+            // User-triggered full sync: snapshot is authoritative, reconcile counts.
+            NotificationCoordinator.shared.reconcileConversationUnreads(data)
         }
         lastFetchedAt = Date()
         isLoading = false

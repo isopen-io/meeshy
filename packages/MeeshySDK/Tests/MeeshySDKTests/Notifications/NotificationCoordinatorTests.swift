@@ -147,20 +147,34 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(sink.reloadCount, 1)
     }
 
-    func test_registerConversations_mergesWithExistingCounts() {
+    func test_registerConversations_onlyAddsUnknownConversations() {
         let (sut, _, _, _) = makeSUT()
         sut.registerConversations([
             makeConversation(id: "c1", unread: 3),
             makeConversation(id: "c2", unread: 5)
         ])
 
-        // Second call with ONLY c3 — c1 and c2 must stay tracked.
+        // Subsequent call adds c3; c1 and c2 stay tracked even though they're
+        // not in this snapshot (paginated VM republish must not drop them).
         sut.registerConversations([makeConversation(id: "c3", unread: 2)])
 
         XCTAssertEqual(sut.conversationUnreadCounts["c1"], 3)
         XCTAssertEqual(sut.conversationUnreadCounts["c2"], 5)
         XCTAssertEqual(sut.conversationUnreadCounts["c3"], 2)
         XCTAssertEqual(sut.conversationUnreadTotal, 10)
+    }
+
+    /// Critical for the double-path race: once the socket has set an authoritative
+    /// count, a stale VM snapshot (from slow cache propagation) must NOT roll it back.
+    func test_registerConversations_doesNotOverrideTrackedCounts() {
+        let (sut, _, _, _) = makeSUT()
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 7) // socket
+
+        // Stale VM snapshot arrives with the pre-socket value of 3.
+        sut.registerConversations([makeConversation(id: "c1", unread: 3)])
+
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 7)
+        XCTAssertEqual(sut.conversationUnreadTotal, 7)
     }
 
     func test_replaceConversations_dropsEntriesNotInList() {
@@ -176,6 +190,41 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertNil(sut.conversationUnreadCounts["c2"])
         XCTAssertEqual(sut.conversationUnreadCounts["c3"], 2)
         XCTAssertEqual(sut.conversationUnreadTotal, 2)
+    }
+
+    func test_reconcileConversationUnreads_overridesTrackedCounts() {
+        let (sut, _, _, _) = makeSUT()
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 7)
+        sut.applyConversationUnread(conversationId: "c2", unreadCount: 2)
+
+        // Post-reconnect resync with authoritative server counts — must override.
+        sut.reconcileConversationUnreads([
+            makeConversation(id: "c1", unread: 0),
+            makeConversation(id: "c2", unread: 4)
+        ])
+
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 0)
+        XCTAssertEqual(sut.conversationUnreadCounts["c2"], 4)
+        XCTAssertEqual(sut.conversationUnreadTotal, 4)
+    }
+
+    /// Convergence: simulate both paths (socket + VM snapshot) firing for the same
+    /// conversation. The socket value must win regardless of arrival order.
+    func test_socketAndVMPaths_convergeOnSocketValue() {
+        let (sut, _, _, _) = makeSUT()
+
+        // Order A: VM seeds first, then socket updates.
+        sut.registerConversations([makeConversation(id: "c1", unread: 2)])
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 9)
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 9)
+
+        // Order B: socket fires first for a new conversation, VM snapshot follows
+        // with a stale value. Socket stays authoritative.
+        sut.applyConversationUnread(conversationId: "c2", unreadCount: 6)
+        sut.registerConversations([makeConversation(id: "c2", unread: 1)])
+        XCTAssertEqual(sut.conversationUnreadCounts["c2"], 6)
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 15)
     }
 
     func test_removeConversation_dropsEntryAndRecomputes() {

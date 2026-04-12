@@ -102,29 +102,50 @@ public final class NotificationCoordinator: ObservableObject {
     }
 
     // MARK: - Public API
+    //
+    // Source-of-truth design (resolves the previous double-path issue):
+    //
+    //   applyConversationUnread(_:_:)  ← socket `conversation:unread-updated`
+    //      AUTHORITATIVE. Server-driven, instant, always wins.
+    //
+    //   markConversationRead(_:)       ← user opens the thread
+    //      Optimistic local write. Also authoritative vs. seeding.
+    //
+    //   registerConversations(_:)      ← VM snapshot (cache / REST)
+    //      NON-authoritative. Seeds counts for conversations the coordinator
+    //      has never seen and pushes the widget display list. It must never
+    //      override a count already owned by the socket path — otherwise a
+    //      stale cache snapshot could regress the badge right after a socket
+    //      event landed.
+    //
+    //   reconcileConversationUnreads(_:) ← explicit post-reconnect / full-sync resync
+    //      AUTHORITATIVE. Forcibly overwrites tracked counts. Use only when
+    //      the caller guarantees the snapshot reflects the server's truth.
 
-    /// Merge the given conversation list into the coordinator's tracked counts.
+    /// Seed tracked unread counts from a VM/cache snapshot and push the widget
+    /// display data. Counts that the coordinator already tracks are **not**
+    /// overwritten — the socket path owns them.
     ///
-    /// Callers typically pass the subset they currently see (e.g. the first page of
-    /// conversations). Merge semantics mean older conversations that aren't in the
-    /// snapshot keep their last known unread count — critical because otherwise a
-    /// paginated list would wipe out the unread total every time the VM republishes.
-    ///
-    /// Use `replaceConversations(_:)` when you explicitly want a reset (e.g. after a
-    /// full sync completes and the caller guarantees the snapshot is authoritative).
+    /// Safe to call on every conversation list mutation: it's idempotent for
+    /// known conversations and only mutates state for newly-seen ones.
     public func registerConversations(_ conversations: [MeeshyConversation]) {
-        for c in conversations {
+        var didChange = false
+        for c in conversations where conversationUnreadCounts[c.id] == nil {
             conversationUnreadCounts[c.id] = c.unreadCount
+            didChange = true
         }
-        recomputeTotal()
+        if didChange {
+            recomputeTotal()
+        }
         widgetSink?.publishConversations(conversations)
         widgetSink?.publishFavoriteContacts(conversations)
         scheduleSync()
     }
 
-    /// Replace the entire tracked set — use only when the caller guarantees the
-    /// passed list is authoritative (full sync, not pagination).
-    public func replaceConversations(_ conversations: [MeeshyConversation]) {
+    /// Forcibly re-seed every count from the given snapshot — destructive for
+    /// tracked keys. Intended for post-reconnect resync or a completed full sync
+    /// where the caller has authoritative data.
+    public func reconcileConversationUnreads(_ conversations: [MeeshyConversation]) {
         var counts: [String: Int] = [:]
         for c in conversations {
             counts[c.id] = c.unreadCount
@@ -134,6 +155,12 @@ public final class NotificationCoordinator: ObservableObject {
         widgetSink?.publishConversations(conversations)
         widgetSink?.publishFavoriteContacts(conversations)
         scheduleSync()
+    }
+
+    /// Alias for `reconcileConversationUnreads` kept for API clarity when the
+    /// caller wants "full replacement" semantics (e.g. VM full-sync completion).
+    public func replaceConversations(_ conversations: [MeeshyConversation]) {
+        reconcileConversationUnreads(conversations)
     }
 
     /// Forget a conversation entirely (user was removed from a group, conv deleted).
