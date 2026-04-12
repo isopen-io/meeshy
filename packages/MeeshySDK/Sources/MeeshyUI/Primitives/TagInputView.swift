@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 public struct TagInputView: View {
     @Binding var tags: [String]

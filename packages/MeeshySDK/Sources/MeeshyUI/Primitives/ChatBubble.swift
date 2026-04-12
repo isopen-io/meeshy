@@ -1,4 +1,6 @@
 import SwiftUI
+import Combine
+import MeeshySDK
 
 public struct ChatBubble: View {
     public let text: String

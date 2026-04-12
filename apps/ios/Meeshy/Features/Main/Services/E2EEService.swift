@@ -3,7 +3,7 @@ import CryptoKit
 import MeeshySDK
 import os
 
-public final class E2EEService: @unchecked Sendable {
+public final nonisolated class E2EEService: @unchecked Sendable {
     public static let shared = E2EEService()
 
     private let identityKeyIdentifier = "me.meeshy.e2ee.identityKey"

@@ -22,7 +22,7 @@ struct CompressedImageResult {
 
 // MARK: - Media Context
 
-enum MediaContext: Sendable {
+nonisolated enum MediaContext: Sendable {
     case message
     case story
     case feedPost
@@ -70,11 +70,11 @@ enum MediaContext: Sendable {
 
 // MARK: - Sendable Wrappers for AVFoundation types
 
-private struct SendableTrackOutput: @unchecked Sendable {
+private nonisolated struct SendableTrackOutput: @unchecked Sendable {
     let value: AVAssetReaderTrackOutput
 }
 
-private struct SendableWriterInput: @unchecked Sendable {
+private nonisolated struct SendableWriterInput: @unchecked Sendable {
     let value: AVAssetWriterInput
 }
 
@@ -387,7 +387,7 @@ enum CompressionError: LocalizedError {
 
 // MARK: - UIImage HEIC Extension
 
-private extension UIImage {
+private nonisolated extension UIImage {
     func heicData(compressionQuality: CGFloat) -> Data? {
         guard let cgImage else { return nil }
         let data = NSMutableData()

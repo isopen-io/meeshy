@@ -1,7 +1,7 @@
 import os
 
 extension Logger {
-    static let messages = Logger(subsystem: "me.meeshy.app", category: "messages")
-    static let socket = Logger(subsystem: "me.meeshy.app", category: "socket")
-    static let e2ee = Logger(subsystem: "me.meeshy.app", category: "e2ee")
+    nonisolated static let messages = Logger(subsystem: "me.meeshy.app", category: "messages")
+    nonisolated static let socket = Logger(subsystem: "me.meeshy.app", category: "socket")
+    nonisolated static let e2ee = Logger(subsystem: "me.meeshy.app", category: "e2ee")
 }

@@ -8,7 +8,7 @@ import UserNotifications
 ///   quick actions on the banner / lock screen / notification center.
 /// - Override the badge value so iOS keeps the displayed count in sync without a
 ///   foreground round-trip.
-class NotificationService: UNNotificationServiceExtension {
+nonisolated class NotificationService: UNNotificationServiceExtension {
 
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var bestAttemptContent: UNMutableNotificationContent?

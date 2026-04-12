@@ -141,8 +141,8 @@ public struct StoryFilterPicker: View {
 
 // MARK: - CIFilter Application
 
-public struct StoryFilterProcessor {
-    private static let context = CIContext()
+public nonisolated struct StoryFilterProcessor {
+    nonisolated(unsafe) private static let context = CIContext()
     nonisolated(unsafe) private static let cache = NSCache<NSString, UIImage>()
 
     public static func apply(_ filter: StoryFilter?, to image: UIImage, imageId: String? = nil) -> UIImage {

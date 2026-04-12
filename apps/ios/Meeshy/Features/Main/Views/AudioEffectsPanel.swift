@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MeeshyUI
 
 struct AudioEffectsPanel: View {

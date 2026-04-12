@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MeeshySDK
 
 /// Badge circulaire pour afficher un achievement avec progress ring.

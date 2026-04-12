@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Card horizontale pour afficher une statistique (icône + label + valeur).
 ///

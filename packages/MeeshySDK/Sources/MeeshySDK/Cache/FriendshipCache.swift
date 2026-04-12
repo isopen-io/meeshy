@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import os
 
 public enum FriendshipStatus: Sendable, Equatable {
@@ -124,7 +125,7 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     // MARK: - Pagination Helper
 
     private static func fetchAllPages(
-        fetch: @Sendable (Int, Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]>
+        fetch: (Int, Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]>
     ) async throws -> [FriendRequest] {
         var all: [FriendRequest] = []
         var offset = 0

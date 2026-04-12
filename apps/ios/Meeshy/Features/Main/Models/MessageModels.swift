@@ -22,7 +22,7 @@ private nonisolated(unsafe) let sharedISO8601Formatter: ISO8601DateFormatter = {
     return f
 }()
 
-extension APIMessage {
+nonisolated extension APIMessage {
     func toMessage(currentUserId: String, currentUsername: String? = nil) -> Message {
         let msgType: Message.MessageType = {
             switch messageType?.lowercased() {

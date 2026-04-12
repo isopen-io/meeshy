@@ -353,7 +353,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     }
 
     deinit {
-        disconnect()
+        // disconnect() is MainActor-isolated; callers must call it explicitly
+        // before release. ARC handles per-property cleanup here.
         RTCCleanupSSL()
     }
 
@@ -690,5 +691,5 @@ final class P2PWebRTCClient: WebRTCClientProviding {
 // MARK: - Logger Extension
 
 private extension Logger {
-    static let webrtc = Logger(subsystem: "me.meeshy.app", category: "webrtc")
+    nonisolated static let webrtc = Logger(subsystem: "me.meeshy.app", category: "webrtc")
 }

@@ -1,5 +1,6 @@
 // MARK: - Extracted from ConversationView.swift (via ThemedMessageBubble.swift)
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 

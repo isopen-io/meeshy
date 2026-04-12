@@ -4,7 +4,7 @@ import MeeshySDK
 
 // MARK: - Spectrogram Renderer
 
-struct AudioSpectrogramRenderer {
+nonisolated struct AudioSpectrogramRenderer {
 
     let fftSize: Int
     let frequencyBands: Int

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MeeshySDK
 
 // MARK: - Code Viewer View (inline card + full-screen sheet)

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Circular progress ring pour visualiser le taux de complétude du profil.
 ///

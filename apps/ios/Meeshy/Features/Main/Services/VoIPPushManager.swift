@@ -3,7 +3,7 @@ import CallKit
 import MeeshySDK
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "voip-push")
+nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "voip-push")
 
 @MainActor
 final class VoIPPushManager: NSObject, ObservableObject {

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct MessageComposer: View {
     @Binding var text: String

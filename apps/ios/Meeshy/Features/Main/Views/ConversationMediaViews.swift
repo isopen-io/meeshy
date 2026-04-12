@@ -1,5 +1,6 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 

@@ -153,8 +153,8 @@ final class WebRTCService: @unchecked Sendable {
             withTimeInterval: QualityThresholds.statsIntervalSeconds,
             repeats: true
         ) { [weak self] _ in
-            guard let self else { return }
-            Task { [weak self] in
+            guard self != nil else { return }
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard let stats = await self.client.getStats() else { return }
                 self.lastStats = stats
@@ -317,5 +317,5 @@ extension WebRTCService: WebRTCClientDelegate {
 // MARK: - Logger Extension
 
 private extension Logger {
-    static let webrtc = Logger(subsystem: "me.meeshy.app", category: "webrtc")
+    nonisolated static let webrtc = Logger(subsystem: "me.meeshy.app", category: "webrtc")
 }

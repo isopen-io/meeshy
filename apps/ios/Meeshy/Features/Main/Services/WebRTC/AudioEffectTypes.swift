@@ -151,5 +151,5 @@ enum AudioEffectsConstants {
 // MARK: - Logger Extension
 
 extension Logger {
-    static let audioEffects = Logger(subsystem: "me.meeshy.app", category: "audio-effects")
+    nonisolated static let audioEffects = Logger(subsystem: "me.meeshy.app", category: "audio-effects")
 }

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Friend Request
 
-public struct FriendRequest: Decodable, Identifiable {
+public struct FriendRequest: Decodable, Identifiable, Sendable {
     public let id: String
     public let senderId: String
     public let receiverId: String
@@ -15,7 +15,7 @@ public struct FriendRequest: Decodable, Identifiable {
     public let updatedAt: Date?
 }
 
-public struct FriendRequestUser: Codable, CacheIdentifiable {
+public struct FriendRequestUser: Codable, CacheIdentifiable, Sendable {
     public let id: String
     public let username: String
     public let firstName: String?
