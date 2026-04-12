@@ -7,13 +7,13 @@ import PackageDescription
 // App-level target is UI-heavy (SwiftUI views + view models). Default isolation
 // is `MainActor` per SE-0466 so concurrency issues surface at compile-time
 // rather than crashing the app when it resumes from background.
+// Only features still marked "upcoming" in Swift 6.2 are listed here.
+// SE-0418 and SE-0434 are already enabled by Swift 6 language mode.
 let appSwiftSettings: [SwiftSetting] = [
     .swiftLanguageMode(.v6),
     .defaultIsolation(MainActor.self),                            // SE-0466
     .enableUpcomingFeature("NonisolatedNonsendingByDefault"),     // SE-0461
     .enableUpcomingFeature("InferIsolatedConformances"),          // SE-0470
-    .enableUpcomingFeature("InferSendableFromCaptures"),          // SE-0418
-    .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),  // SE-0434
     .enableUpcomingFeature("MemberImportVisibility"),             // SE-0444
 ]
 

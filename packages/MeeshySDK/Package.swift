@@ -12,12 +12,14 @@ import PackageDescription
 // SwiftUI views, view models and Combine observers are main-actor-isolated by
 // default — cutting a whole class of data races that show up as crashes when
 // the app resumes from background.
+// Only features still marked "upcoming" in Swift 6.2 are listed here.
+// SE-0418 (InferSendableFromCaptures) and SE-0434 (GlobalActorIsolatedTypesUsability)
+// are already enabled by default in Swift 6 language mode — enabling them
+// again as upcoming features would emit a compiler warning.
 let coreSwiftSettings: [SwiftSetting] = [
     .swiftLanguageMode(.v6),
     .enableUpcomingFeature("NonisolatedNonsendingByDefault"),     // SE-0461
     .enableUpcomingFeature("InferIsolatedConformances"),          // SE-0470
-    .enableUpcomingFeature("InferSendableFromCaptures"),          // SE-0418
-    .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),  // SE-0434
     .enableUpcomingFeature("MemberImportVisibility"),             // SE-0444
 ]
 
