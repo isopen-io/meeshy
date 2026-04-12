@@ -607,9 +607,8 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     }
 
     deinit {
-        configQueue.sync { [self] in
-            stopEngineOnConfigQueue()
-            clearAllEffectsOnConfigQueue()
-        }
+        // Cleanup is driven by explicit reset() calls on the service owner;
+        // deinit is nonisolated under Swift 6.2 MainActor default and cannot
+        // call MainActor-bound helpers. ARC handles per-node deallocation.
     }
 }

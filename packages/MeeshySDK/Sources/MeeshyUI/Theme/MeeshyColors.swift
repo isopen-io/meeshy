@@ -1,6 +1,6 @@
 import SwiftUI
 
-public struct MeeshyColors {
+public nonisolated struct MeeshyColors {
 
     // MARK: - Brand Indigo Scale
 

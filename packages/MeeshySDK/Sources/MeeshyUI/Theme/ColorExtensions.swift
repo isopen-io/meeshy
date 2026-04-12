@@ -3,7 +3,7 @@ import MeeshySDK
 
 // MARK: - Color(hex:) Extension
 
-public extension Color {
+public nonisolated extension Color {
     init(hex: String) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")

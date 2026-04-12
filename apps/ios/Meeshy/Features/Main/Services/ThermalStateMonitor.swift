@@ -60,5 +60,5 @@ final class ThermalStateMonitor {
 // MARK: - Logger Extension
 
 private extension Logger {
-    static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
 }

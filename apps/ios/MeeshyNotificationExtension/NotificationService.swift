@@ -1,4 +1,4 @@
-import UserNotifications
+@preconcurrency import UserNotifications
 
 /// Rich-push service extension.
 ///
@@ -142,6 +142,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         from url: URL,
         completion: @escaping (UNNotificationAttachment?) -> Void
     ) {
+        nonisolated(unsafe) let completion = completion
         let task = URLSession.shared.downloadTask(with: url) { localURL, _, error in
             guard let localURL, error == nil else {
                 completion(nil)

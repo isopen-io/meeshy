@@ -634,5 +634,5 @@ struct ParticipantsView: View {
 // MARK: - Logger Extension
 
 private extension Logger {
-    static let participants = Logger(subsystem: "me.meeshy.app", category: "participants")
+    nonisolated static let participants = Logger(subsystem: "me.meeshy.app", category: "participants")
 }

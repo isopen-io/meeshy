@@ -327,8 +327,8 @@ actor MediaCompressor {
         let wrappedOutput = SendableTrackOutput(value: output)
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             nonisolated(unsafe) var finished = false
-            let inp = wrappedInput.value
-            let out = wrappedOutput.value
+            nonisolated(unsafe) let inp = wrappedInput.value
+            nonisolated(unsafe) let out = wrappedOutput.value
             inp.requestMediaDataWhenReady(on: DispatchQueue(label: "me.meeshy.media-compressor.\(inp.mediaType.rawValue)")) {
                 while inp.isReadyForMoreMediaData {
                     guard !finished else { return }
