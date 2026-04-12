@@ -1,9 +1,9 @@
-import AppIntents
+@preconcurrency import AppIntents
 import Foundation
 import MeeshySDK
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "focus-filter")
+nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "focus-filter")
 
 /// User-facing knobs exposed when configuring a Focus mode to include Meeshy.
 ///
@@ -14,8 +14,12 @@ private let logger = Logger(subsystem: "me.meeshy.app", category: "focus-filter"
 /// before surfacing a toast.
 @available(iOS 16.0, *)
 struct MeeshyFocusFilter: SetFocusFilterIntent {
-    static var title: LocalizedStringResource = "Meeshy Focus Filter"
-    static var description: LocalizedStringResource = "Choose which Meeshy notifications surface while this Focus is active."
+    nonisolated static let title: LocalizedStringResource = "Meeshy Focus Filter"
+    nonisolated static let description = IntentDescription("Choose which Meeshy notifications surface while this Focus is active.")
+
+    nonisolated var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: Self.title)
+    }
 
     @Parameter(
         title: "Allow direct messages",
@@ -74,7 +78,7 @@ struct MeeshyFocusFilter: SetFocusFilterIntent {
             allowCalls: allowCalls,
             isActive: true
         )
-        MeeshyFocusStore.shared.save(snapshot)
+        await MeeshyFocusStore.shared.save(snapshot)
         logger.info("Focus filter applied: \(String(describing: snapshot))")
         return .result()
     }

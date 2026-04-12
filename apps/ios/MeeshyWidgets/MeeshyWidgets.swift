@@ -5,11 +5,11 @@ import AppIntents
 
 // MARK: - App Group Constants
 
-private enum WidgetSharedKeys {
-    static let suiteName = "group.me.meeshy.app"
-    static let conversations = "recent_conversations"
-    static let unreadCount = "unread_count"
-    static let pendingMarkRead = "pending_mark_read"
+private enum WidgetSharedKeys: Sendable {
+    nonisolated static let suiteName = "group.me.meeshy.app"
+    nonisolated static let conversations = "recent_conversations"
+    nonisolated static let unreadCount = "unread_count"
+    nonisolated static let pendingMarkRead = "pending_mark_read"
 }
 
 // MARK: - Mark-as-Read App Intent (iOS 17+)
@@ -22,11 +22,11 @@ private enum WidgetSharedKeys {
 //      auth token for authenticated REST calls.
 @available(iOS 17.0, *)
 struct MarkConversationReadIntent: AppIntent {
-    static var title: LocalizedStringResource = "Mark conversation as read"
-    static var description = IntentDescription(
+    nonisolated static let title: LocalizedStringResource = "Mark conversation as read"
+    nonisolated static let description = IntentDescription(
         "Clears the unread badge for this conversation from the widget."
     )
-    static var openAppWhenRun: Bool = false
+    nonisolated static let openAppWhenRun: Bool = false
 
     @Parameter(title: "Conversation ID")
     var conversationId: String

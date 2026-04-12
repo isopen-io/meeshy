@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "widget-flusher")
+nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "widget-flusher")
 
 /// Drains actions queued by the widget extension (e.g. mark-as-read) once the
 /// main app foregrounds, because the widget process can't hold the auth token

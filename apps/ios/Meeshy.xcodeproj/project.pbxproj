@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FCFL01A1A1A1A1A1A1A10001 /* MeeshyFocusFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCFL01A1A1A1A1A1A1A10002 /* MeeshyFocusFilter.swift */; };
+		WDFL01B1B1B1B1B1B1B10001 /* WidgetActionFlusher.swift in Sources */ = {isa = PBXBuildFile; fileRef = WDFL01B1B1B1B1B1B1B10002 /* WidgetActionFlusher.swift */; };
+		LABR01C1C1C1C1C1C1C10001 /* LiveActivityBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LABR01C1C1C1C1C1C1C10002 /* LiveActivityBridge.swift */; };
 		009B4248B90F6AC8EE19E3B7 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22D7D8C0B82CB88F1D3D5CA2 /* AppDelegate.swift */; };
 		00CDA82D2AC8F3D9847F02C4 /* StatsTimelineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA306483025A83773D87DED /* StatsTimelineChart.swift */; };
 		031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7789A854759F389975CB9906 /* FeedViewModelTests.swift */; };
@@ -343,6 +346,9 @@
 
 /* Begin PBXFileReference section */
 		00075CCB07F2C17B7B703EDB /* MeeshyWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = MeeshyWidgets.entitlements; sourceTree = "<group>"; };
+		FCFL01A1A1A1A1A1A1A10002 /* MeeshyFocusFilter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyFocusFilter.swift; sourceTree = "<group>"; };
+		WDFL01B1B1B1B1B1B1B10002 /* WidgetActionFlusher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetActionFlusher.swift; sourceTree = "<group>"; };
+		LABR01C1C1C1C1C1C1C10002 /* LiveActivityBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiveActivityBridge.swift; sourceTree = "<group>"; };
 		00B3D9B4A2850060E2C9470D /* FloatingCallPillView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FloatingCallPillView.swift; sourceTree = "<group>"; };
 		0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliateCreateView.swift; sourceTree = "<group>"; };
 		02E6EEF0A507F120A2363E15 /* LiveActivities.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiveActivities.swift; sourceTree = "<group>"; };
@@ -938,6 +944,9 @@
 				CFCF53B6AD169522F7F20047 /* ThermalStateMonitor.swift */,
 				EC507BC8B27D02CB58CC096C /* DarkFrameDetector.swift */,
 				77988CFAAC714C1730B6ABD3 /* AudioPlayerManager.swift */,
+				FCFL01A1A1A1A1A1A1A10002 /* MeeshyFocusFilter.swift */,
+				WDFL01B1B1B1B1B1B1B10002 /* WidgetActionFlusher.swift */,
+				LABR01C1C1C1C1C1C1C10002 /* LiveActivityBridge.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1601,6 +1610,9 @@
 				A54BCE9ED2645E3D01AFA679 /* FloatingCallPillView.swift in Sources */,
 				5C3EBC97C453A81EFEAE35E6 /* VideoFilterControlView.swift in Sources */,
 				1CBAAFC69D3A2A2F928B9349 /* AudioPlayerManager.swift in Sources */,
+				FCFL01A1A1A1A1A1A1A10001 /* MeeshyFocusFilter.swift in Sources */,
+				WDFL01B1B1B1B1B1B1B10001 /* WidgetActionFlusher.swift in Sources */,
+				LABR01C1C1C1C1C1C1C10001 /* LiveActivityBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
