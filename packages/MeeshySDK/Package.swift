@@ -1,5 +1,31 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
+
+// Swift 6.2 "Approachable Concurrency" adoption.
+//
+// Core module (MeeshySDK) keeps default isolation `nonisolated` because it
+// contains actors, URLSession delegates, Socket.IO callbacks and background
+// workers that must run off the main thread. Each UI-touching type opts in to
+// `@MainActor` explicitly.
+//
+// UI module (MeeshyUI) flips the default to `MainActor` per SE-0466 so that
+// SwiftUI views, view models and Combine observers are main-actor-isolated by
+// default — cutting a whole class of data races that show up as crashes when
+// the app resumes from background.
+// Only features still marked "upcoming" in Swift 6.2 are listed here.
+// SE-0418 (InferSendableFromCaptures) and SE-0434 (GlobalActorIsolatedTypesUsability)
+// are already enabled by default in Swift 6 language mode — enabling them
+// again as upcoming features would emit a compiler warning.
+let coreSwiftSettings: [SwiftSetting] = [
+    .swiftLanguageMode(.v6),
+    .enableUpcomingFeature("NonisolatedNonsendingByDefault"),     // SE-0461
+    .enableUpcomingFeature("InferIsolatedConformances"),          // SE-0470
+    .enableUpcomingFeature("MemberImportVisibility"),             // SE-0444
+]
+
+let uiSwiftSettings: [SwiftSetting] = coreSwiftSettings + [
+    .defaultIsolation(MainActor.self),                            // SE-0466
+]
 
 let package = Package(
     name: "MeeshySDK",
@@ -22,23 +48,23 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "WebRTC", package: "WebRTC"),
             ],
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: coreSwiftSettings
         ),
         .target(
             name: "MeeshyUI",
             dependencies: ["MeeshySDK"],
             resources: [.process("Resources")],
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: uiSwiftSettings
         ),
         .testTarget(
             name: "MeeshySDKTests",
             dependencies: ["MeeshySDK"],
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: coreSwiftSettings
         ),
         .testTarget(
             name: "MeeshyUITests",
             dependencies: ["MeeshyUI", "MeeshySDK"],
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: uiSwiftSettings
         ),
     ]
 )
