@@ -93,6 +93,7 @@ struct UniversalComposerBar: View {
 
     var onStartRecording: (() -> Void)? = nil
     var onStopRecording: (() -> Void)? = nil
+    var onCancelRecording: (() -> Void)? = nil
     var externalIsRecording: Bool? = nil
     var externalRecordingDuration: TimeInterval? = nil
     var externalAudioLevels: [CGFloat]? = nil
@@ -421,51 +422,57 @@ struct UniversalComposerBar: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                // Top toolbar (ephemeral, sentiment, language, recording indicator, char counter)
-                topToolbar
-                    .padding(.horizontal, 8)
-                    .padding(.top, 6)
-                    .padding(.bottom, 2)
-
-                // Composer row — mirrors MessageComposer layout:
-                // [ (+) attach ]  [ text field / waveform ]  [ mic / send ]
-                HStack(alignment: .bottom, spacing: 12) {
-                    // Left: (+) attach button with ladder overlay above it
-                    Group {
-                        if effectiveIsRecording {
-                            stopRecordingButton
-                                .transition(.scale.combined(with: .opacity))
-                        } else if resolvedShowAttachment {
-                            attachButton
-                        }
-                    }
-                    .overlay(alignment: .bottom) {
-                        if showAttachOptions && resolvedShowAttachment && !effectiveIsRecording {
-                            attachmentLadder
-                                .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        }
-                    }
-
-                    // Center: text field or recording waveform
-                    if effectiveIsRecording {
-                        voiceRecordingView
-                    } else {
-                        textInputField
-                    }
-
-                    // Right: send (when content/recording) or mic (idle)
-                    actionButton
+                // Top toolbar (ephemeral, sentiment, language, char counter)
+                // Hidden during recording for a clean, iMessage-like full-width bar
+                if !effectiveIsRecording {
+                    topToolbar
+                        .padding(.horizontal, 8)
+                        .padding(.top, 6)
+                        .padding(.bottom, 2)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: effectiveIsRecording)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+
+                // Composer row — either the recording bar (full-width pill, iMessage-style)
+                // or the regular layout: [ (+) attach ]  [ text field ]  [ mic / send ]
+                if effectiveIsRecording {
+                    recordingBar
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                            removal: .opacity
+                        ))
+                } else {
+                    HStack(alignment: .bottom, spacing: 12) {
+                        // Left: (+) attach button with ladder overlay above it
+                        if resolvedShowAttachment {
+                            attachButton
+                                .overlay(alignment: .bottom) {
+                                    if showAttachOptions {
+                                        attachmentLadder
+                                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                                    }
+                                }
+                        }
+
+                        // Center: text field
+                        textInputField
+
+                        // Right: send (when content) or hidden (idle)
+                        actionButton
+                    }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .transition(.opacity)
+                }
             }
             .background(composerBackground)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: effectiveIsRecording)
         .onChange(of: attachments.count) { _, _ in notifyContentChange() }
         .onChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
         .onAppear {
@@ -767,7 +774,7 @@ struct UniversalComposerBar: View {
     // MARK: - Send Logic
     // ========================================================================
 
-    private func handleSend() {
+    func handleSend() {
         onAnyInteraction?()
 
         // Custom send (edit mode, recording, or parent-managed send)

@@ -11,7 +11,7 @@ import Combine
 
 extension UniversalComposerBar {
 
-    // MARK: - Text Input Field (counterpart to voiceRecordingView)
+    // MARK: - Text Input Field (shown when not recording)
 
     var textInputField: some View {
         let accent = Color(hex: accentColor)
@@ -84,117 +84,134 @@ extension UniversalComposerBar {
         .animation(.spring(response: 0.2, dampingFraction: 0.35), value: typeWave)
     }
 
-    // MARK: - Recording Indicator
+    // MARK: - Recording Bar (full-width iMessage-style pill)
+    //
+    // When recording starts, this thin unified pill replaces the entire composer row:
+    //   [ X ]  ░▅▂▇▃█▅▂▆▄▃▇▅▂▆▇▃▅▄  • 0:12  [ ↑ ]
+    //  cancel        live waveform       timer  send
+    //
+    // Reference: iOS 17+ iMessage voice message UI.
 
-    var recordingIndicator: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(Color(hex: "EF4444"))
-                .frame(width: 6, height: 6)
-                .opacity(effectiveDuration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
-                .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: effectiveIsRecording)
-
-            Text(formatDuration(effectiveDuration))
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundColor(Color(hex: "EF4444"))
-                .contentTransition(.numericText())
-        }
-    }
-
-    // MARK: - Voice Recording View (replaces text field while recording)
-
-    var voiceRecordingView: some View {
-        let recBgFill = style == .dark
+    var recordingBar: some View {
+        let isDark = style == .dark
+        let bgFill = isDark
             ? Color.white.opacity(0.08)
             : Color(hex: accentColor).opacity(0.06)
-        let recBorderColors: [Color] = [Color(hex: "FF2E63").opacity(0.5), Color(hex: "FF6B6B").opacity(0.5)]
-        let timerColor = style == .dark ? Color.white : theme.textPrimary
-        let barGradient: [Color] = style == .dark
-            ? [Color.white.opacity(0.9), Color.white.opacity(0.5)]
-            : [Color(hex: accentColor).opacity(0.9), Color(hex: accentColor).opacity(0.5)]
+        let borderColor: Color = isDark
+            ? Color.white.opacity(0.15)
+            : Color(hex: accentColor).opacity(0.2)
+        let timerColor = isDark ? Color.white : theme.textPrimary
+        let waveformColor = isDark ? "FFFFFF" : accentColor
 
-        let barWidth: CGFloat = 3
-        let barSpacing: CGFloat = 3
-        let timerWidth: CGFloat = 56
-
-        return HStack(spacing: 12) {
-            // Waveform bars: fill available width dynamically
-            GeometryReader { geo in
-                let availableWidth = geo.size.width
-                let barCount = max(1, Int(availableWidth / (barWidth + barSpacing)))
-                HStack(spacing: barSpacing) {
-                    if let levels = externalAudioLevels {
-                        ForEach(0..<barCount, id: \.self) { i in
-                            let level: CGFloat = i < levels.count ? levels[i] : 0
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(LinearGradient(colors: barGradient, startPoint: .top, endPoint: .bottom))
-                                .frame(width: barWidth, height: effectiveIsRecording ? 6 + 20 * level : 6)
-                                .animation(.spring(response: 0.08, dampingFraction: 0.6), value: level)
-                        }
-                    } else {
-                        ForEach(0..<barCount, id: \.self) { i in
-                            ComposerWaveformBar(index: i, isRecording: isRecording, accentColor: "FF6B6B")
-                        }
-                    }
+        return HStack(spacing: 10) {
+            // Cancel (X) button — discards the recording without sending
+            Button {
+                HapticFeedback.light()
+                cancelRecording()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: "FF2E63").opacity(0.14))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Color(hex: "FF2E63"))
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
+            .accessibilityLabel("Annuler l'enregistrement")
 
-            // Timer
-            Text(formatDuration(effectiveDuration))
-                .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                .foregroundColor(timerColor)
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.3), value: effectiveDuration)
-                .frame(width: timerWidth, alignment: .trailing)
+            // Live waveform — fills available horizontal space
+            waveformStrip(color: waveformColor)
+                .frame(maxWidth: .infinity)
+                .frame(height: 28)
+
+            // Recording indicator + timer
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(Color(hex: "EF4444"))
+                    .frame(width: 6, height: 6)
+                    .opacity(effectiveDuration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
+                    .animation(
+                        .easeInOut(duration: 0.5).repeatForever(autoreverses: true),
+                        value: effectiveIsRecording
+                    )
+
+                Text(formatDuration(effectiveDuration))
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundColor(timerColor)
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.3), value: effectiveDuration)
+            }
+            .fixedSize()
+
+            // Send button — stops recording and sends (triggers onCustomSend)
+            Button {
+                HapticFeedback.medium()
+                handleSend()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 32, height: 32)
+                        .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 2)
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            }
+            .accessibilityLabel("Envoyer le message vocal")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 5)
         .frame(minHeight: 44)
         .background(
             RoundedRectangle(cornerRadius: 22)
-                .fill(recBgFill)
+                .fill(bgFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 22)
-                        .stroke(
-                            LinearGradient(colors: recBorderColors, startPoint: .leading, endPoint: .trailing),
-                            lineWidth: 1.5
-                        )
+                        .stroke(borderColor, lineWidth: 1)
                 )
         )
-        // Wave pulse synced to recording timer (~every 0.5s)
-        .scaleEffect(
-            x: effectiveDuration.truncatingRemainder(dividingBy: 0.5) < 0.25 ? 1.012 : 1.0,
-            y: effectiveDuration.truncatingRemainder(dividingBy: 0.5) < 0.25 ? 0.975 : 1.0
-        )
-        .animation(.spring(response: 0.25, dampingFraction: 0.35), value: effectiveDuration)
     }
 
-    // MARK: - Stop Recording Button
+    // MARK: - Waveform strip used inside the recording bar
 
-    var stopRecordingButton: some View {
-        Button {
-            HapticFeedback.light()
-            stopRecording()
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-                    .shadow(color: Color(hex: "FF2E63").opacity(0.5), radius: 10, y: 3)
+    @ViewBuilder
+    private func waveformStrip(color colorHex: String) -> some View {
+        let barWidth: CGFloat = 2.5
+        let barSpacing: CGFloat = 2.5
+        let barGradient: [Color] = [
+            Color(hex: colorHex).opacity(0.95),
+            Color(hex: colorHex).opacity(0.55)
+        ]
 
-                Image(systemName: "stop.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
+        GeometryReader { geo in
+            let availableWidth = geo.size.width
+            let barCount = max(1, Int(availableWidth / (barWidth + barSpacing)))
+            HStack(spacing: barSpacing) {
+                if let levels = externalAudioLevels, !levels.isEmpty {
+                    // Tile the sampled levels across the full bar count so the
+                    // waveform stays dense even on wide screens.
+                    ForEach(0..<barCount, id: \.self) { i in
+                        let level: CGFloat = levels[(levels.count - 1 - (i % levels.count)) % levels.count]
+                        RoundedRectangle(cornerRadius: 1.25)
+                            .fill(LinearGradient(colors: barGradient, startPoint: .top, endPoint: .bottom))
+                            .frame(width: barWidth, height: effectiveIsRecording ? 3 + 22 * level : 3)
+                            .animation(.spring(response: 0.08, dampingFraction: 0.6), value: level)
+                    }
+                } else {
+                    ForEach(0..<barCount, id: \.self) { i in
+                        ComposerWaveformBar(index: i, isRecording: isRecording, accentColor: colorHex)
+                    }
+                }
             }
-            .scaleEffect(effectiveDuration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: effectiveIsRecording)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
     }
 
@@ -261,6 +278,23 @@ extension UniversalComposerBar {
         recordingDuration = 0
         onRecordingChange?(false)
         HapticFeedback.light()
+    }
+
+    /// Cancel recording — discard audio without creating an attachment.
+    /// Delegates to parent if `onCancelRecording` is provided; otherwise resets internal state.
+    func cancelRecording() {
+        onAnyInteraction?()
+        if let onCancelRecording {
+            onCancelRecording()
+            isRecording = false
+            onRecordingChange?(false)
+            return
+        }
+        isRecording = false
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        recordingDuration = 0
+        onRecordingChange?(false)
     }
 
     /// Force-stop recording when switching stories — always saves the voice attachment regardless of duration

@@ -47,6 +47,10 @@ extension ConversationView {
             onTextChange: { viewModel.onTextChanged($0) },
             onStartRecording: { startRecording() },
             onStopRecording: { stopAndPreviewRecording() },
+            onCancelRecording: {
+                audioRecorder.cancelRecording()
+                HapticFeedback.light()
+            },
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
