@@ -59,6 +59,10 @@ struct ConversationListView: View {
     var onSettingsTap: (() -> Void)? = nil
     var iPadFeedAction: (() -> Void)? = nil
 
+    /// iPad / macOS split view: id of the currently-open conversation, to highlight
+    /// the matching row with an accent tint + leading bar. nil on iPhone.
+    var selectedConversationId: String? = nil
+
     @Environment(\.scenePhase) private var scenePhase
     // Lecture directe sans @ObservedObject — évite que chaque changement de thème ou de verrou
     // force un re-render complet de la liste (centaines de rows). Les valeurs sont lues
@@ -138,7 +142,8 @@ struct ConversationListView: View {
         iPadNotificationCount: Int = 0,
         onNotificationsTap: (() -> Void)? = nil,
         onSettingsTap: (() -> Void)? = nil,
-        iPadFeedAction: (() -> Void)? = nil
+        iPadFeedAction: (() -> Void)? = nil,
+        selectedConversationId: String? = nil
     ) {
         self._isScrollingDown = isScrollingDown ?? .constant(false)
         self._feedIsVisible = feedIsVisible ?? .constant(false)
@@ -149,6 +154,7 @@ struct ConversationListView: View {
         self.onNotificationsTap = onNotificationsTap
         self.onSettingsTap = onSettingsTap
         self.iPadFeedAction = iPadFeedAction
+        self.selectedConversationId = selectedConversationId
     }
 
     // The filtered and grouped conversations are now calculated on a background queue 
@@ -266,7 +272,8 @@ struct ConversationListView: View {
                 isDark: theme.mode.isDark,
                 storyRingState: storyRingState(for: conversation),
                 moodStatus: conversationMoodStatus(for: conversation),
-                typingUsername: conversationViewModel.typingUsernames[conversation.id]
+                typingUsername: conversationViewModel.typingUsernames[conversation.id],
+                isSelected: selectedConversationId == conversation.id
             )
             .equatable()
             .contentShape(Rectangle())

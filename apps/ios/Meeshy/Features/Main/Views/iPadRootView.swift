@@ -194,7 +194,8 @@ struct iPadRootView: View {
             iPadNotificationCount: notificationManager.unreadCount,
             onNotificationsTap: { rightPanelRoute = .notifications },
             onSettingsTap: { rightPanelRoute = .settings },
-            iPadFeedAction: feedAction
+            iPadFeedAction: feedAction,
+            selectedConversationId: activeConversation?.id
         )
         .navigationBarHidden(true)
     }

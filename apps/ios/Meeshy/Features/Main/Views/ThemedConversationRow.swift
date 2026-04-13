@@ -23,6 +23,9 @@ struct ThemedConversationRow: View {
     var storyRingState: StoryRingState = .none
     var moodStatus: StatusEntry? = nil
     var typingUsername: String? = nil
+    /// iPad / macOS split-view selection: row highlighted with accent tint + leading bar.
+    /// iPhone passes false (NavigationStack hides the list when a conversation opens).
+    var isSelected: Bool = false
 
     private var accentColor: String { conversation.accentColor }
 
@@ -185,22 +188,40 @@ struct ThemedConversationRow: View {
             ZStack {
                 backgroundSecondary
                 heatBackground
+                if isSelected {
+                    accent.opacity(isDark ? 0.28 : 0.18)
+                }
                 if isDragging {
                     accent.opacity(0.05)
                 }
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 14 * (1 - swipeProgress), style: .continuous))
+        .overlay(alignment: .leading) {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(accent)
+                    .frame(width: 3)
+                    .padding(.vertical, 6)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        removal: .opacity
+                    ))
+            }
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 14 * (1 - swipeProgress), style: .continuous)
                 .strokeBorder(
-                    isDark ? Color.white.opacity(0.06 * (1 - swipeProgress)) : Color.black.opacity(0.06 * (1 - swipeProgress)),
-                    lineWidth: 0.5 * (1 - swipeProgress)
+                    isSelected
+                        ? accent.opacity(0.45 * (1 - swipeProgress))
+                        : (isDark ? Color.white.opacity(0.06 * (1 - swipeProgress)) : Color.black.opacity(0.06 * (1 - swipeProgress))),
+                    lineWidth: (isSelected ? 1.0 : 0.5) * (1 - swipeProgress)
                 )
         )
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .opacity(isDragging ? 0.8 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
+        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: isSelected)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(conversationAccessibilityLabel)
         .accessibilityValue(conversation.unreadCount > 0 ? "\(conversation.unreadCount) messages non lus" : "")
@@ -543,7 +564,8 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.isDark == rhs.isDark &&
         lhs.storyRingState == rhs.storyRingState &&
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
-        lhs.presenceState == rhs.presenceState
+        lhs.presenceState == rhs.presenceState &&
+        lhs.isSelected == rhs.isSelected
     }
 }
 
