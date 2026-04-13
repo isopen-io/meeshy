@@ -61,8 +61,15 @@ class StoryViewModel: ObservableObject {
 
     // MARK: - Load Stories
 
-    func loadStories() async {
+    func loadStories(forceNetwork: Bool = false) async {
         guard !isLoading else { return }
+
+        if forceNetwork {
+            isLoading = true
+            await fetchStoriesFromNetwork()
+            isLoading = false
+            return
+        }
 
         let cached = await CacheCoordinator.shared.stories.load(for: "recent_tray")
         switch cached {

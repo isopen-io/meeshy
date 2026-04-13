@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -123,6 +124,7 @@ struct StoryTrayView: View {
                         .staggeredAppear(index: visibleIndex, baseDelay: 0.05)
                         .onTapGesture {
                             HapticFeedback.medium()
+                            Logger.messages.info("[StoryTrayView] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
                             onViewStory(group.id)
                         }
                 }

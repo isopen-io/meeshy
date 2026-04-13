@@ -473,7 +473,8 @@ struct ConversationView: View {
                     viewModel: storyViewModel,
                     userId: headerState.storyUserIdForHeader,
                     isPresented: $headerState.showStoryViewerFromHeader,
-                    singleGroup: true
+                    singleGroup: true,
+                    presentationSource: "ConversationView.header"
                 )
             }
             .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
@@ -482,7 +483,8 @@ struct ConversationView: View {
                     userId: overlayState.storyViewerUserId,
                     isPresented: $overlayState.showStoryViewer,
                     singleGroup: true,
-                    initialStoryIndex: overlayState.storyViewerSlideIndex
+                    initialStoryIndex: overlayState.storyViewerSlideIndex,
+                    presentationSource: "ConversationView.overlay"
                 )
             }
             .sheet(isPresented: $composerState.showConversationInfo) {

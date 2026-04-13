@@ -1,11 +1,19 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
 // Components extracted to RootViewComponents.swift:
 // ThemedFloatingButton, ThemedActionButton, ThemedFeedOverlay,
 // ThemedFeedComposer, ThemedFeedCard, FeedActionButton, legacy wrappers
+
+/// Identifiable wrapper so the fullScreenCover receives the userId directly in
+/// its content closure, avoiding the SwiftUI race where isPresented flips true
+/// before the sibling @State (userId) has propagated through the view graph.
+struct StoryViewerRequest: Identifiable, Equatable {
+    let id: String
+}
 
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
@@ -23,8 +31,7 @@ struct RootView: View {
     @State private var feedWasVisibleBeforeNav = false
     @State private var showMenu = false
     @State private var pendingReplyContext: ReplyContext?
-    @State private var showStoryViewerFromConv = false
-    @State private var selectedStoryUserIdFromConv: String?
+    @State private var storyViewerRequest: StoryViewerRequest?
     @State private var joinFlowIdentifier: String?
     @State private var showJoinFlow = false
 
@@ -70,8 +77,9 @@ struct RootView: View {
                         router.push(.conversation(conversation))
                     },
                     onStoryViewRequest: { userId, _ in
-                        selectedStoryUserIdFromConv = userId
-                        showStoryViewerFromConv = true
+                        Logger.messages.info("[RootView] onStoryViewRequest userId=\(userId, privacy: .public) isEmpty=\(userId.isEmpty)")
+                        guard !userId.isEmpty else { return }
+                        storyViewerRequest = StoryViewerRequest(id: userId)
                     },
                     onNewConversation: { showNewConversation = true }
                 )
@@ -321,15 +329,19 @@ struct RootView: View {
             await conversationViewModel.loadConversations()
             await notificationManager.refreshUnreadCount()
         }
-        .fullScreenCover(isPresented: $showStoryViewerFromConv) {
+        .fullScreenCover(item: $storyViewerRequest) { request in
             StoryViewerContainer(
                 viewModel: storyViewModel,
-                userId: selectedStoryUserIdFromConv,
-                isPresented: $showStoryViewerFromConv,
+                userId: request.id,
+                isPresented: Binding(
+                    get: { storyViewerRequest != nil },
+                    set: { if !$0 { storyViewerRequest = nil } }
+                ),
                 onReplyToStory: { replyContext in
-                    showStoryViewerFromConv = false
+                    storyViewerRequest = nil
                     handleStoryReply(replyContext)
-                }
+                },
+                presentationSource: "RootView.fromConv"
             )
         }
         .fullScreenCover(isPresented: Binding(
@@ -387,8 +399,7 @@ struct RootView: View {
             } else if routeName.hasPrefix("storyDetail:") {
                 let postId = String(routeName.dropFirst("storyDetail:".count))
                 if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                    selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                    showStoryViewerFromConv = true
+                    storyViewerRequest = StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id)
                 } else {
                     router.push(.postDetail(postId))
                 }
@@ -643,8 +654,7 @@ struct RootView: View {
         case .storyReaction, .statusReaction:
             if let postId = ctx.postId, !postId.isEmpty,
                let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                showStoryViewerFromConv = true
+                storyViewerRequest = StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id)
             } else if let postId = ctx.postId, !postId.isEmpty {
                 router.push(.postDetail(postId))
             }
