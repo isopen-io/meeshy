@@ -138,6 +138,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var scale: CGFloat
     public var rotation: CGFloat       // degrés
     public var translations: [String: String]?  // { "en": "Hello", "es": "Hola", ... }
+    public var sourceLanguage: String?
 
     // Style per-objet (tous optionnels pour backward compat JSON existant)
     public var textStyle: String?      // "bold"|"neon"|"typewriter"|"handwriting"|"classic"
@@ -153,7 +154,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var fadeOut: Float?              // animation de sortie (secondes)
 
     enum CodingKeys: String, CodingKey {
-        case id, content, x, y, scale, rotation, translations
+        case id, content, x, y, scale, rotation, translations, sourceLanguage
         case textStyle, textColor, textSize, textAlign, textBg
         case startTime, displayDuration, fadeIn, fadeOut
     }
@@ -162,6 +163,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 x: CGFloat = 0.5, y: CGFloat = 0.5,
                 scale: CGFloat = 1.0, rotation: CGFloat = 0,
                 translations: [String: String]? = nil,
+                sourceLanguage: String? = nil,
                 textStyle: String? = "bold", textColor: String? = "FFFFFF",
                 textSize: CGFloat? = 28, textAlign: String? = "center",
                 textBg: String? = nil,
@@ -170,6 +172,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.id = id; self.content = content
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
         self.translations = translations
+        self.sourceLanguage = sourceLanguage
         self.textStyle = textStyle; self.textColor = textColor
         self.textSize = textSize; self.textAlign = textAlign; self.textBg = textBg
         self.startTime = startTime; self.displayDuration = displayDuration
@@ -211,10 +214,11 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var loop: Bool?                  // boucle automatique
     public var fadeIn: Float?               // fade-in (secondes)
     public var fadeOut: Float?              // fade-out (secondes)
+    public var sourceLanguage: String?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaType, placement, x, y, scale, rotation, volume
-        case startTime, duration, loop, fadeIn, fadeOut
+        case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -223,13 +227,15 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 scale: CGFloat = 1.0, rotation: CGFloat = 0,
                 volume: Float = 1.0,
                 startTime: Float? = nil, duration: Float? = nil,
-                loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil) {
+                loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
+                sourceLanguage: String? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.mediaType = mediaType; self.placement = placement
         self.x = x; self.y = y; self.scale = scale
         self.rotation = rotation; self.volume = volume
         self.startTime = startTime; self.duration = duration
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
+        self.sourceLanguage = sourceLanguage
     }
 }
 
@@ -250,10 +256,11 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var loop: Bool?                  // boucle automatique
     public var fadeIn: Float?               // fade-in (secondes)
     public var fadeOut: Float?              // fade-out (secondes)
+    public var sourceLanguage: String?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, placement, x, y, volume, waveformSamples
-        case startTime, duration, loop, fadeIn, fadeOut
+        case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -261,12 +268,14 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 x: CGFloat = 0.5, y: CGFloat = 0.8,
                 volume: Float = 1.0, waveformSamples: [Float] = [],
                 startTime: Float? = nil, duration: Float? = nil,
-                loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil) {
+                loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
+                sourceLanguage: String? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.placement = placement; self.x = x; self.y = y
         self.volume = volume; self.waveformSamples = waveformSamples
         self.startTime = startTime; self.duration = duration
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
+        self.sourceLanguage = sourceLanguage
     }
 }
 
