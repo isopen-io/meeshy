@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
 import PencilKit
 
@@ -59,6 +60,15 @@ enum MediaAsset {
 @Observable
 @MainActor
 final class StoryComposerViewModel {
+
+    // MARK: - Keyboard Language Detection
+
+    private var detectedKeyboardLanguage: String {
+        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
+            return String(kbd.prefix(2))
+        }
+        return AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+    }
 
     // MARK: - Slides
 
@@ -287,6 +297,7 @@ final class StoryComposerViewModel {
             y: center.y,
             scale: 1.0,
             rotation: 0,
+            sourceLanguage: detectedKeyboardLanguage,
             textStyle: "classic",
             textColor: "FFFFFF",
             textSize: 24,
@@ -315,7 +326,8 @@ final class StoryComposerViewModel {
             y: center.y,
             scale: 1.0,
             rotation: 0,
-            volume: 1.0
+            volume: 1.0,
+            sourceLanguage: detectedKeyboardLanguage
         )
         var effects = currentEffects
         var medias = effects.mediaObjects ?? []
@@ -337,7 +349,8 @@ final class StoryComposerViewModel {
             x: center.x,
             y: min(0.9, center.y + 0.15),
             volume: 1.0,
-            waveformSamples: []
+            waveformSamples: [],
+            sourceLanguage: detectedKeyboardLanguage
         )
         var effects = currentEffects
         var audios = effects.audioPlayerObjects ?? []
