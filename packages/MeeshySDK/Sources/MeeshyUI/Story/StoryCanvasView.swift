@@ -115,6 +115,7 @@ struct StoryCanvasView: View {
 
     var body: some View {
         GeometryReader { geo in
+            let canvasSize = StoryCanvasReaderView.canvasSize(fitting: geo.size)
             ZStack {
                 // Layer 0: Background color / gradient
                 backgroundLayer
@@ -133,9 +134,11 @@ struct StoryCanvasView: View {
                 // Layers 4-N: Front elements (text, stickers, audio)
                 // Explicit zIndex ensures SwiftUI front content renders above
                 // UIKit-backed drawing layer AND foreground media (whose zIndex increments via bringToFront).
-                frontElementsGroup(canvasSize: geo.size)
+                frontElementsGroup(canvasSize: canvasSize)
                     .zIndex(1000)
             }
+            .frame(width: canvasSize.width, height: canvasSize.height)
+            .clipped()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(
                 RoundedRectangle(cornerRadius: 2)
@@ -150,8 +153,10 @@ struct StoryCanvasView: View {
             .onTapGesture {
                 handleEmptyCanvasTap()
             }
-            .onAppear { viewModel.canvasSize = geo.size }
-            .onChange(of: geo.size) { _, newSize in viewModel.canvasSize = newSize }
+            .onAppear { viewModel.canvasSize = canvasSize }
+            .onChange(of: geo.size) { _, newSize in
+                viewModel.canvasSize = StoryCanvasReaderView.canvasSize(fitting: newSize)
+            }
         }
         .onAppear {
             updateFilteredImage()
