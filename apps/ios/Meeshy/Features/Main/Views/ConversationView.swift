@@ -472,6 +472,8 @@ struct ConversationView: View {
                 if let userId = headerState.storyUserIdForHeader,
                    let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
                     StoryViewerView(viewModel: storyViewModel, groups: [storyViewModel.storyGroups[resolvedIndex]], currentGroupIndex: 0, isPresented: $headerState.showStoryViewerFromHeader)
+                } else {
+                    storyLoadingFallback(isPresented: $headerState.showStoryViewerFromHeader)
                 }
             }
             .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
@@ -484,6 +486,8 @@ struct ConversationView: View {
                         isPresented: $overlayState.showStoryViewer,
                         initialStoryIndex: slideIdx
                     )
+                } else {
+                    storyLoadingFallback(isPresented: $overlayState.showStoryViewer)
                 }
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
@@ -872,6 +876,53 @@ struct ConversationView: View {
             .onDisappear { scrollState.isNearBottom = false }
 
         Color.clear.frame(height: composerHeight).id("bottom_spacer")
+    }
+
+    // MARK: - Story Loading Fallback
+
+    @ViewBuilder
+    private func storyLoadingFallback(isPresented: Binding<Bool>) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                if storyViewModel.isLoading {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.5)
+                    Text("Loading stories...")
+                        .foregroundColor(.white.opacity(0.7))
+                        .font(.subheadline)
+                } else {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 48))
+                        .foregroundColor(.white.opacity(0.5))
+                    Text("Story unavailable")
+                        .foregroundColor(.white.opacity(0.7))
+                        .font(.subheadline)
+                }
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button { isPresented.wrappedValue = false } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(Color.white.opacity(0.2)))
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.top, 8)
+                }
+                Spacer()
+            }
+        }
+        .task {
+            guard storyViewModel.storyGroups.isEmpty else { return }
+            await storyViewModel.loadStories()
+        }
     }
 
     @ViewBuilder

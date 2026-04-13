@@ -334,6 +334,8 @@ struct RootView: View {
                         handleStoryReply(replyContext)
                     }
                 )
+            } else {
+                storyLoadingFallback(isPresented: $showStoryViewerFromConv, userId: selectedStoryUserIdFromConv)
             }
         }
         .fullScreenCover(isPresented: Binding(
@@ -501,6 +503,61 @@ struct RootView: View {
             updatedAt: Date()
         )
         router.navigateToConversation(conv)
+    }
+
+    // MARK: - Story Loading Fallback
+
+    @ViewBuilder
+    private func storyLoadingFallback(isPresented: Binding<Bool>, userId: String?) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                if storyViewModel.isLoading {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.5)
+                    Text("Loading stories...")
+                        .foregroundColor(.white.opacity(0.7))
+                        .font(.subheadline)
+                } else {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 48))
+                        .foregroundColor(.white.opacity(0.5))
+                    Text("Story unavailable")
+                        .foregroundColor(.white.opacity(0.7))
+                        .font(.subheadline)
+                }
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button { isPresented.wrappedValue = false } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(Color.white.opacity(0.2)))
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.top, 8)
+                }
+                Spacer()
+            }
+        }
+        .task {
+            guard !storyViewModel.storyGroups.isEmpty else {
+                await storyViewModel.loadStories()
+                // After loading, if the user's stories are now available, re-trigger
+                if let uid = userId, storyViewModel.groupIndex(forUserId: uid) != nil {
+                    isPresented.wrappedValue = false
+                    try? await Task.sleep(for: .milliseconds(100))
+                    await MainActor.run { isPresented.wrappedValue = true }
+                }
+                return
+            }
+        }
     }
 
     // MARK: - Handle Story Reply
