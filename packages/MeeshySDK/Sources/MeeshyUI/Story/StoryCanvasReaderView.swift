@@ -42,21 +42,33 @@ public struct StoryCanvasReaderView: View {
         self._state = StateObject(wrappedValue: ReaderState(story: story))
     }
 
+    /// Computes the largest 9:16 canvas that fits within the available space.
+    public static func canvasSize(fitting available: CGSize) -> CGSize {
+        let targetRatio: CGFloat = 9.0 / 16.0
+        if available.width / available.height < targetRatio {
+            return CGSize(width: available.width, height: available.width / targetRatio)
+        } else {
+            return CGSize(width: available.height * targetRatio, height: available.height)
+        }
+    }
+
     public var body: some View {
         GeometryReader { geo in
+            let canvas = Self.canvasSize(fitting: geo.size)
             ZStack {
                 backgroundLayer
                 backgroundMediaLayer
                 filterOverlay
                 drawingLayer
-                stickerLayer(size: geo.size)
-                textLayer(size: geo.size)
-                textObjectsLayer(size: geo.size)
+                stickerLayer(size: canvas)
+                textLayer(size: canvas)
+                textObjectsLayer(size: canvas)
                 foregroundMediaLayer
                 foregroundAudioLayer
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: canvas.width, height: canvas.height)
             .clipped()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .task {
             await state.loadForegroundImages(story: story, preloadedImages: preloadedImages)
@@ -237,13 +249,13 @@ public struct StoryCanvasReaderView: View {
             if let content = resolvedContent, !content.isEmpty {
                 let effects = story.storyEffects
                 let pos = effects?.resolvedTextPosition ?? .center
-                styledText(content: content, effects: effects)
+                styledText(content: content, effects: effects, size: size)
                     .position(x: pos.x * size.width, y: pos.y * size.height)
             }
         }
     }
 
-    private func styledText(content: String, effects: StoryEffects?) -> some View {
+    private func styledText(content: String, effects: StoryEffects?, size: CGSize) -> some View {
         let fontSize = effects?.textSize ?? 28
         let colorHex = effects?.textColor ?? "FFFFFF"
         let alignment: TextAlignment = {
@@ -270,7 +282,7 @@ public struct StoryCanvasReaderView: View {
                 }
             )
             .shadow(color: textStyle == .neon ? Color(hex: colorHex).opacity(0.6) : .clear, radius: 10)
-            .frame(maxWidth: 280)
+            .frame(maxWidth: size.width * 0.75)
     }
 
     // MARK: - Text Objects Layer (multi-texte avec styles per-objet + traductions + timing)
@@ -308,7 +320,7 @@ public struct StoryCanvasReaderView: View {
                         }
                     )
                     .shadow(color: style == .neon ? Color(hex: colorHex).opacity(0.6) : .clear, radius: 10)
-                    .frame(maxWidth: 280)
+                    .frame(maxWidth: size.width * 0.75)
                     .scaleEffect(obj.scale)
                     .opacity(opacity)
                     .rotationEffect(.degrees(obj.rotation))
