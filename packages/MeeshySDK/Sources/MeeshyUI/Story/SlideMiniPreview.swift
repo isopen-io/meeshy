@@ -115,6 +115,7 @@ struct SlideMiniPreview: View {
 
     @ViewBuilder
     private func textItem(_ text: StoryTextObject, in size: CGSize) -> some View {
+        // 393pt = design reference width (9:16 canvas on iPhone 14 Pro). Mini preview scales proportionally.
         let fontSize = max(3, (text.textSize ?? 24) * size.width / 393)
         Text(text.content.isEmpty ? " " : text.content)
             .font(.system(size: fontSize, weight: .medium))

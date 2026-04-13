@@ -15,6 +15,10 @@ public struct DraggableMediaView: View {
     /// Appelé quand l'utilisateur toggle play/pause — passe l'ID de l'élément média.
     public let onTogglePlay: ((String) -> Void)?
 
+    /// Actual canvas width in points — used to compute proportional media base size.
+    /// Defaults to 393pt (iPhone 14 Pro reference width).
+    public var canvasWidth: CGFloat = 393
+
     @State private var internalPlayer: AVQueuePlayer?
     @State private var playerLooper: AVPlayerLooper?
     @State private var isPlaying: Bool = false
@@ -39,6 +43,7 @@ public struct DraggableMediaView: View {
                 videoURL: URL? = nil,
                 externalPlayer: AVPlayer? = nil,
                 isEditing: Bool = false,
+                canvasWidth: CGFloat = 393,
                 onDragEnd: @escaping () -> Void = {},
                 onTapToFront: (() -> Void)? = nil,
                 onTogglePlay: ((String) -> Void)? = nil) {
@@ -47,6 +52,7 @@ public struct DraggableMediaView: View {
         self.videoURL = videoURL
         self.externalPlayer = externalPlayer
         self.isEditing = isEditing
+        self.canvasWidth = canvasWidth
         self.onDragEnd = onDragEnd
         self.onTapToFront = onTapToFront
         self.onTogglePlay = onTogglePlay
@@ -130,7 +136,7 @@ public struct DraggableMediaView: View {
 
     // MARK: - Content with conditional gestures
 
-    private let baseMediaSize: CGFloat = 160
+    private var baseMediaSize: CGFloat { canvasWidth * 0.4 }
 
     @ViewBuilder
     private func mediaContentWithGestures(canvasWidth: CGFloat, canvasHeight: CGFloat) -> some View {

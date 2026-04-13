@@ -394,6 +394,7 @@ struct StoryCanvasView: View {
                     image: nil,
                     videoURL: viewModel.loadedVideoURLs[obj.id],
                     isEditing: true,
+                    canvasWidth: viewModel.canvasSize.width,
                     onDragEnd: {},
                     onTapToFront: {}
                 )
@@ -416,6 +417,7 @@ struct StoryCanvasView: View {
             image: viewModel.loadedImages[obj.id],
             videoURL: viewModel.loadedVideoURLs[obj.id],
             isEditing: interactive,
+            canvasWidth: viewModel.canvasSize.width,
             onDragEnd: {},
             onTapToFront: {
                 viewModel.selectedElementId = obj.id

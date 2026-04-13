@@ -63,7 +63,7 @@ public struct StoryCanvasReaderView: View {
                 stickerLayer(size: canvas)
                 textLayer(size: canvas)
                 textObjectsLayer(size: canvas)
-                foregroundMediaLayer
+                foregroundMediaLayer(canvasWidth: canvas.width)
                 foregroundAudioLayer
             }
             .frame(width: canvas.width, height: canvas.height)
@@ -361,7 +361,7 @@ public struct StoryCanvasReaderView: View {
     // MARK: - Foreground Media Layer (timing-aware visibility + volume fade)
 
     @ViewBuilder
-    private var foregroundMediaLayer: some View {
+    private func foregroundMediaLayer(canvasWidth: CGFloat) -> some View {
         let time = state.currentTime
         ForEach(story.storyEffects?.mediaObjects?.filter { $0.placement == "foreground" } ?? []) { media in
             let visible = state.mediaObjectVisible(media, at: time)
@@ -373,7 +373,8 @@ public struct StoryCanvasReaderView: View {
                         ? mediaURL(for: media.postMediaId).flatMap { MeeshyConfig.resolveMediaURL($0) }
                         : nil,
                     externalPlayer: media.mediaType == "video" ? state.foregroundVideoPlayers[media.id] : nil,
-                    isEditing: false
+                    isEditing: false,
+                    canvasWidth: canvasWidth
                 )
                 .opacity(state.mediaObjectOpacity(for: media, at: time))
                 .animation(.easeInOut(duration: 0.15), value: state.mediaObjectOpacity(for: media, at: time))
