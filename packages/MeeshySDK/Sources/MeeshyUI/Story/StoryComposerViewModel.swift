@@ -376,6 +376,30 @@ final class StoryComposerViewModel {
         zIndexMap.removeValue(forKey: id)
     }
 
+    func updateElementLanguage(elementId: String, language: String) {
+        var effects = currentEffects
+
+        if var texts = effects.textObjects,
+           let idx = texts.firstIndex(where: { $0.id == elementId }) {
+            texts[idx].sourceLanguage = language
+            effects.textObjects = texts
+        }
+
+        if var medias = effects.mediaObjects,
+           let idx = medias.firstIndex(where: { $0.id == elementId }) {
+            medias[idx].sourceLanguage = language
+            effects.mediaObjects = medias
+        }
+
+        if var audios = effects.audioPlayerObjects,
+           let idx = audios.firstIndex(where: { $0.id == elementId }) {
+            audios[idx].sourceLanguage = language
+            effects.audioPlayerObjects = audios
+        }
+
+        currentEffects = effects
+    }
+
     func duplicateElement(id: String) {
         var effects = currentEffects
         if var text = effects.textObjects?.first(where: { $0.id == id }) {

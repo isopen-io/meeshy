@@ -11,6 +11,7 @@ struct SimpleSegment: Identifiable {
     var duration: Float
     var image: UIImage?
     var waveformSamples: [Float]?
+    var sourceLanguage: String?
 }
 
 // MARK: - Simple Timeline View
@@ -135,17 +136,23 @@ struct SimpleTimelineView: View {
         let width = max(30, CGFloat(segment.duration) * pixelsPerSecond)
         let isSelected = viewModel.selectedElementId == segment.id
 
-        return ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(segment.type.color.opacity(0.5))
+        return ZStack(alignment: .topTrailing) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(segment.type.color.opacity(0.5))
 
-            segmentContent(segment, width: width)
+                segmentContent(segment, width: width)
 
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .strokeBorder(
-                    isSelected ? MeeshyColors.brandPrimary : theme.textPrimary.opacity(0.1),
-                    lineWidth: isSelected ? 2 : 0.5
-                )
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? MeeshyColors.brandPrimary : theme.textPrimary.opacity(0.1),
+                        lineWidth: isSelected ? 2 : 0.5
+                    )
+            }
+
+            if let lang = segment.sourceLanguage {
+                languageBadge(lang: lang, elementId: segment.id)
+            }
         }
         .frame(width: width, height: segmentHeight - 8)
         .shadow(
@@ -154,6 +161,33 @@ struct SimpleTimelineView: View {
             y: isSelected ? 1 : 0
         )
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    // MARK: - Language Badge
+
+    private func languageBadge(lang: String, elementId: String) -> some View {
+        Menu {
+            ForEach(DetectedLanguage.supported) { language in
+                Button {
+                    viewModel.updateElementLanguage(elementId: elementId, language: language.code)
+                } label: {
+                    HStack {
+                        Text("\(language.flag) \(language.name)")
+                        if language.code == lang || language.id == lang {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text(lang.prefix(2).uppercased())
+                .font(.system(size: 8, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.8)))
+        }
+        .offset(x: -2, y: 2)
     }
 
     // MARK: - Segment Content
@@ -372,7 +406,8 @@ struct SimpleTimelineView: View {
                 name: truncated,
                 type: .text,
                 startTime: text.startTime ?? 0,
-                duration: text.displayDuration ?? slideDur
+                duration: text.displayDuration ?? slideDur,
+                sourceLanguage: text.sourceLanguage
             ))
         }
 
@@ -391,7 +426,8 @@ struct SimpleTimelineView: View {
                 type: trackType,
                 startTime: media.startTime ?? 0,
                 duration: media.duration ?? slideDur,
-                image: img
+                image: img,
+                sourceLanguage: media.sourceLanguage
             ))
         }
 
@@ -403,7 +439,8 @@ struct SimpleTimelineView: View {
                 type: trackType,
                 startTime: audio.startTime ?? 0,
                 duration: audio.duration ?? slideDur,
-                waveformSamples: audio.waveformSamples
+                waveformSamples: audio.waveformSamples,
+                sourceLanguage: audio.sourceLanguage
             ))
         }
 
