@@ -12,14 +12,63 @@ private enum WidgetSharedKeys: Sendable {
     nonisolated static let pendingMarkRead = "pending_mark_read"
 }
 
+// MARK: - Brand Colors (mirrors MeeshyColors from SDK — widget can't import MeeshyUI)
+
+private enum WidgetColors {
+    static let brandPrimaryHex = "6366F1"
+    static let brandDeepHex = "4338CA"
+    static let successHex = "34D399"
+    static let errorHex = "F87171"
+
+    static var brandPrimary: Color { Color(hex: brandPrimaryHex) }
+    static var brandDeep: Color { Color(hex: brandDeepHex) }
+    static var brandGradient: LinearGradient {
+        LinearGradient(colors: [brandPrimary, brandDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+}
+
+// MARK: - Color(hex:) (minimal, widget-only)
+
+private extension Color {
+    init(hex: String) {
+        let h = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        var rgb: UInt64 = 0
+        Scanner(string: h).scanHexInt64(&rgb)
+        self.init(
+            red: Double((rgb >> 16) & 0xFF) / 255,
+            green: Double((rgb >> 8) & 0xFF) / 255,
+            blue: Double(rgb & 0xFF) / 255
+        )
+    }
+}
+
+// MARK: - InitialsAvatar
+
+private struct InitialsAvatar: View {
+    let name: String
+    let accentColor: String
+    let size: CGFloat
+
+    private var initials: String {
+        let words = name.split(separator: " ").prefix(2)
+        if words.isEmpty { return "?" }
+        return words.map { String($0.prefix(1)).uppercased() }.joined()
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color(hex: accentColor))
+            Text(initials)
+                .font(.system(size: size * 0.4, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 // MARK: - Mark-as-Read App Intent (iOS 17+)
-//
-// Invoked from the widget's Button(intent:) without launching the app. The
-// intent runs in the widget extension process, so it:
-//   1. Updates the App Group shared store optimistically (widget refresh is instant).
-//   2. Appends the conversation id to a `pending_mark_read` queue that the main
-//      app flushes on next foreground, since the widget process doesn't hold an
-//      auth token for authenticated REST calls.
+
 @available(iOS 17.0, *)
 struct MarkConversationReadIntent: AppIntent {
     nonisolated static let title: LocalizedStringResource = "Mark conversation as read"
@@ -42,7 +91,6 @@ struct MarkConversationReadIntent: AppIntent {
             return .result()
         }
 
-        // 1. Decrement total + clear per-conversation unread flag in the list.
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let encoder = JSONEncoder()
@@ -59,7 +107,8 @@ struct MarkConversationReadIntent: AppIntent {
                 lastMessage: list[idx].lastMessage,
                 timestamp: list[idx].timestamp,
                 isUnread: false,
-                isPinned: list[idx].isPinned
+                isPinned: list[idx].isPinned,
+                accentColor: list[idx].accentColor
             )
             if let encoded = try? encoder.encode(list) {
                 defaults.set(encoded, forKey: WidgetSharedKeys.conversations)
@@ -69,7 +118,6 @@ struct MarkConversationReadIntent: AppIntent {
             defaults.set(max(0, current - 1), forKey: WidgetSharedKeys.unreadCount)
         }
 
-        // 2. Queue the server-side mark-as-read for the main app to flush.
         var queued = defaults.stringArray(forKey: WidgetSharedKeys.pendingMarkRead) ?? []
         if !queued.contains(conversationId) {
             queued.append(conversationId)
@@ -135,23 +183,24 @@ struct ConversationProvider: TimelineProvider {
     }
 
     private func loadConversations() -> [Conversation] {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app") else {
+        guard let sharedDefaults = UserDefaults(suiteName: WidgetSharedKeys.suiteName),
+              let data = sharedDefaults.data(forKey: WidgetSharedKeys.conversations) else {
             return ConversationEntry.sampleConversations
         }
 
-        if let data = sharedDefaults.data(forKey: "recent_conversations"),
-           let conversations = try? JSONDecoder().decode([Conversation].self, from: data) {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        if let conversations = try? decoder.decode([Conversation].self, from: data) {
             return conversations
         }
-
         return ConversationEntry.sampleConversations
     }
 
     private func getUnreadCount() -> Int {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app") else {
+        guard let sharedDefaults = UserDefaults(suiteName: WidgetSharedKeys.suiteName) else {
             return 0
         }
-        return sharedDefaults.integer(forKey: "unread_count")
+        return sharedDefaults.integer(forKey: WidgetSharedKeys.unreadCount)
     }
 }
 
@@ -169,7 +218,8 @@ struct ConversationEntry: TimelineEntry {
             lastMessage: "Hey, are we still on for lunch?",
             timestamp: Date(),
             isUnread: true,
-            isPinned: true
+            isPinned: true,
+            accentColor: "6366F1"
         ),
         Conversation(
             id: "2",
@@ -178,7 +228,8 @@ struct ConversationEntry: TimelineEntry {
             lastMessage: "Thanks for the files!",
             timestamp: Date().addingTimeInterval(-3600),
             isUnread: false,
-            isPinned: false
+            isPinned: false,
+            accentColor: "4ECDC4"
         )
     ]
 }
@@ -192,6 +243,7 @@ struct Conversation: Codable, Identifiable {
     let timestamp: Date
     let isUnread: Bool
     let isPinned: Bool
+    let accentColor: String
 }
 
 struct FavoriteContact: Codable, Identifiable {
@@ -199,9 +251,13 @@ struct FavoriteContact: Codable, Identifiable {
     let name: String
     let avatar: String
     let status: String
+    let accentColor: String
 }
 
+// ============================================================================
 // MARK: - 1. Recent Conversations Widget
+// ============================================================================
+
 struct RecentConversationsWidget: Widget {
     let kind: String = "RecentConversations"
 
@@ -240,23 +296,27 @@ struct SmallConversationView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "message.fill")
-                    .foregroundColor(.blue)
+                    .foregroundColor(WidgetColors.brandPrimary)
                 Text("\(entry.unreadCount)")
                     .font(.headline)
-                    .foregroundColor(.blue)
+                    .foregroundColor(WidgetColors.brandPrimary)
                 Spacer()
             }
 
             if let first = entry.conversations.first {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(first.contactName)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
-                    Text(first.lastMessage)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
+                HStack(spacing: 8) {
+                    InitialsAvatar(name: first.contactName, accentColor: first.accentColor, size: 28)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(first.contactName)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                        Text(first.lastMessage)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
                 }
             }
 
@@ -276,14 +336,14 @@ struct MediumConversationView: View {
             HStack {
                 Label(String(localized: "widget.conversations", defaultValue: "Conversations"), systemImage: "message.fill")
                     .font(.headline)
-                    .foregroundColor(.blue)
+                    .foregroundColor(WidgetColors.brandPrimary)
                 Spacer()
                 if entry.unreadCount > 0 {
                     Text("\(entry.unreadCount) unread")
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.2))
+                        .background(WidgetColors.brandPrimary.opacity(0.2))
                         .cornerRadius(8)
                 }
             }
@@ -303,10 +363,7 @@ struct MediumConversationView: View {
         HStack(spacing: 8) {
             Link(destination: URL(string: "meeshy://conversation/\(conversation.id)")!) {
                 HStack(spacing: 8) {
-                    Image(systemName: conversation.contactAvatar)
-                        .font(.title3)
-                        .foregroundColor(.blue)
-                        .frame(width: 30, height: 30)
+                    InitialsAvatar(name: conversation.contactName, accentColor: conversation.accentColor, size: 30)
 
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
@@ -330,7 +387,7 @@ struct MediumConversationView: View {
 
                     if conversation.isUnread {
                         Circle()
-                            .fill(Color.blue)
+                            .fill(WidgetColors.brandPrimary)
                             .frame(width: 8, height: 8)
                     }
                 }
@@ -340,7 +397,7 @@ struct MediumConversationView: View {
                 Button(intent: MarkConversationReadIntent(conversationId: conversation.id)) {
                     Image(systemName: "checkmark.circle")
                         .font(.caption)
-                        .foregroundColor(.blue)
+                        .foregroundColor(WidgetColors.brandPrimary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Mark as read")
@@ -357,14 +414,14 @@ struct LargeConversationView: View {
             HStack {
                 Label(String(localized: "widget.recentConversations", defaultValue: "Recent Conversations"), systemImage: "message.fill")
                     .font(.headline)
-                    .foregroundColor(.blue)
+                    .foregroundColor(WidgetColors.brandPrimary)
                 Spacer()
                 if entry.unreadCount > 0 {
                     Text("\(entry.unreadCount) unread")
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.2))
+                        .background(WidgetColors.brandPrimary.opacity(0.2))
                         .cornerRadius(8)
                 }
             }
@@ -372,12 +429,7 @@ struct LargeConversationView: View {
             ForEach(entry.conversations.prefix(5)) { conversation in
                 Link(destination: URL(string: "meeshy://conversation/\(conversation.id)")!) {
                     HStack(spacing: 12) {
-                        Image(systemName: conversation.contactAvatar)
-                            .font(.title2)
-                            .foregroundColor(.blue)
-                            .frame(width: 40, height: 40)
-                            .background(Color.blue.opacity(0.1))
-                            .clipShape(Circle())
+                        InitialsAvatar(name: conversation.contactName, accentColor: conversation.accentColor, size: 40)
 
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
@@ -403,7 +455,7 @@ struct LargeConversationView: View {
 
                         if conversation.isUnread {
                             Circle()
-                                .fill(Color.blue)
+                                .fill(WidgetColors.brandPrimary)
                                 .frame(width: 10, height: 10)
                         }
                     }
@@ -418,7 +470,10 @@ struct LargeConversationView: View {
     }
 }
 
+// ============================================================================
 // MARK: - 2. Unread Count Widget
+// ============================================================================
+
 struct UnreadCountWidget: Widget {
     let kind: String = "UnreadCount"
 
@@ -481,11 +536,7 @@ struct SmallUnreadView: View {
             }
         }
         .containerBackground(for: .widget) {
-            LinearGradient(
-                colors: [Color.blue, Color.blue.opacity(0.7)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            WidgetColors.brandGradient
         }
         .widgetURL(URL(string: "meeshy://conversations/unread"))
     }
@@ -540,7 +591,10 @@ struct InlineUnreadView: View {
     }
 }
 
+// ============================================================================
 // MARK: - 3. Quick Reply Widget
+// ============================================================================
+
 struct QuickReplyWidget: Widget {
     let kind: String = "QuickReply"
 
@@ -562,15 +616,14 @@ struct QuickReplyWidgetView: View {
             HStack {
                 Label(String(localized: "widget.quickReply", defaultValue: "Quick Reply"), systemImage: "text.bubble.fill")
                     .font(.headline)
-                    .foregroundColor(.blue)
+                    .foregroundColor(WidgetColors.brandPrimary)
                 Spacer()
             }
 
             if let conversation = entry.conversations.first(where: { $0.isUnread }) ?? entry.conversations.first {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: conversation.contactAvatar)
-                            .foregroundColor(.blue)
+                    HStack(spacing: 8) {
+                        InitialsAvatar(name: conversation.contactName, accentColor: conversation.accentColor, size: 24)
                         Text(conversation.contactName)
                             .font(.subheadline)
                             .fontWeight(.semibold)
@@ -583,7 +636,7 @@ struct QuickReplyWidgetView: View {
                         .padding(.vertical, 4)
 
                     HStack(spacing: 8) {
-                        QuickReplyButton(text: "👍", conversationId: conversation.id)
+                        QuickReplyButton(text: "\u{1F44D}", conversationId: conversation.id)
                         QuickReplyButton(text: "OK", conversationId: conversation.id)
                         QuickReplyButton(text: "Thanks!", conversationId: conversation.id)
                         QuickReplyButton(text: "Call me", conversationId: conversation.id)
@@ -608,13 +661,16 @@ struct QuickReplyButton: View {
                 .font(.caption)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.blue.opacity(0.15))
+                .background(WidgetColors.brandPrimary.opacity(0.15))
                 .cornerRadius(12)
         }
     }
 }
 
+// ============================================================================
 // MARK: - 4. Favorite Contacts Widget
+// ============================================================================
+
 struct FavoriteContactsWidget: Widget {
     let kind: String = "FavoriteContacts"
 
@@ -645,12 +701,16 @@ struct FavoriteContactsProvider: TimelineProvider {
     }
 
     private func loadFavorites() -> [FavoriteContact] {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app"),
-              let data = sharedDefaults.data(forKey: "favorite_contacts"),
-              let contacts = try? JSONDecoder().decode([FavoriteContact].self, from: data) else {
+        guard let sharedDefaults = UserDefaults(suiteName: WidgetSharedKeys.suiteName),
+              let data = sharedDefaults.data(forKey: "favorite_contacts") else {
             return FavoriteContactsEntry.sampleContacts
         }
-        return contacts
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        if let contacts = try? decoder.decode([FavoriteContact].self, from: data) {
+            return contacts
+        }
+        return FavoriteContactsEntry.sampleContacts
     }
 }
 
@@ -659,10 +719,10 @@ struct FavoriteContactsEntry: TimelineEntry {
     let contacts: [FavoriteContact]
 
     static let sampleContacts: [FavoriteContact] = [
-        FavoriteContact(id: "1", name: "Mom", avatar: "person.circle.fill", status: "Online"),
-        FavoriteContact(id: "2", name: "John", avatar: "person.circle.fill", status: "Away"),
-        FavoriteContact(id: "3", name: "Sarah", avatar: "person.circle.fill", status: "Online"),
-        FavoriteContact(id: "4", name: "Team", avatar: "person.3.fill", status: "3 members")
+        FavoriteContact(id: "1", name: "Mom", avatar: "person.circle.fill", status: "Online", accentColor: "34D399"),
+        FavoriteContact(id: "2", name: "John", avatar: "person.circle.fill", status: "Away", accentColor: "6366F1"),
+        FavoriteContact(id: "3", name: "Sarah", avatar: "person.circle.fill", status: "Online", accentColor: "F39C12"),
+        FavoriteContact(id: "4", name: "Team", avatar: "person.3.fill", status: "3 members", accentColor: "4ECDC4")
     ]
 }
 
@@ -688,26 +748,15 @@ struct FavoriteContactsWidgetView: View {
                     Link(destination: URL(string: "meeshy://contact/\(contact.id)")!) {
                         VStack(spacing: 4) {
                             ZStack(alignment: .bottomTrailing) {
-                                Image(systemName: contact.avatar)
-                                    .font(.title2)
-                                    .foregroundColor(.white)
-                                    .frame(width: 50, height: 50)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [.blue, .purple],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .clipShape(Circle())
+                                InitialsAvatar(name: contact.name, accentColor: contact.accentColor, size: 50)
 
                                 if contact.status == "Online" {
                                     Circle()
-                                        .fill(Color.green)
+                                        .fill(Color(hex: WidgetColors.successHex))
                                         .frame(width: 12, height: 12)
                                         .overlay(
                                             Circle()
-                                                .stroke(Color.white, lineWidth: 2)
+                                                .stroke(Color(.systemBackground), lineWidth: 2)
                                         )
                                 }
                             }

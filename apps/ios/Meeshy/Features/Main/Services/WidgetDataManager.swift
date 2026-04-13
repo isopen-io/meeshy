@@ -12,6 +12,7 @@ struct WidgetConversation: Codable, Identifiable {
     let timestamp: Date
     let isUnread: Bool
     let isPinned: Bool
+    let accentColor: String
 }
 
 struct WidgetFavoriteContact: Codable, Identifiable {
@@ -19,6 +20,7 @@ struct WidgetFavoriteContact: Codable, Identifiable {
     let name: String
     let avatar: String
     let status: String
+    let accentColor: String
 }
 
 // MARK: - WidgetDataManager
@@ -61,13 +63,12 @@ final class WidgetDataManager: NotificationWidgetSink {
                 WidgetConversation(
                     id: conv.id,
                     contactName: conv.name,
-                    contactAvatar: conv.participantAvatarURL != nil
-                        ? "person.crop.circle.fill"
-                        : (conv.type == .group ? "person.3.fill" : "person.circle.fill"),
+                    contactAvatar: conv.type == .group ? "person.3.fill" : "person.circle.fill",
                     lastMessage: formatLastMessage(conv),
                     timestamp: conv.lastMessageAt,
                     isUnread: conv.unreadCount > 0,
-                    isPinned: conv.isPinned
+                    isPinned: conv.isPinned,
+                    accentColor: conv.accentColor
                 )
             }
 
@@ -86,8 +87,9 @@ final class WidgetDataManager: NotificationWidgetSink {
                 WidgetFavoriteContact(
                     id: conv.id,
                     name: conv.name,
-                    avatar: conv.participantAvatarURL != nil ? "person.crop.circle.fill" : "person.circle.fill",
-                    status: conv.lastSeenText ?? "Offline"
+                    avatar: "person.circle.fill",
+                    status: conv.lastSeenText ?? "Offline",
+                    accentColor: conv.accentColor
                 )
             }
 

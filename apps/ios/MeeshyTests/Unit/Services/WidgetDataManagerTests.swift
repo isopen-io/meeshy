@@ -3,10 +3,6 @@ import XCTest
 
 final class WidgetDataManagerTests: XCTestCase {
 
-    // WidgetDataManager uses app group UserDefaults and WidgetKit.
-    // We test the data models (WidgetConversation, WidgetFavoriteContact) and
-    // the formatLastMessage logic indirectly through encoding.
-
     // MARK: - WidgetConversation Data Model
 
     func test_widgetConversation_encodesAndDecodes() throws {
@@ -17,7 +13,8 @@ final class WidgetDataManagerTests: XCTestCase {
             lastMessage: "Hey there!",
             timestamp: Date(timeIntervalSince1970: 1700000000),
             isUnread: true,
-            isPinned: false
+            isPinned: false,
+            accentColor: "6366F1"
         )
 
         let encoder = JSONEncoder()
@@ -34,6 +31,7 @@ final class WidgetDataManagerTests: XCTestCase {
         XCTAssertEqual(decoded.lastMessage, "Hey there!")
         XCTAssertTrue(decoded.isUnread)
         XCTAssertFalse(decoded.isPinned)
+        XCTAssertEqual(decoded.accentColor, "6366F1")
     }
 
     func test_widgetConversation_identifiableById() {
@@ -44,7 +42,8 @@ final class WidgetDataManagerTests: XCTestCase {
             lastMessage: "",
             timestamp: Date(),
             isUnread: false,
-            isPinned: true
+            isPinned: true,
+            accentColor: "4ECDC4"
         )
 
         XCTAssertEqual(conversation.id, "unique-id")
@@ -57,7 +56,8 @@ final class WidgetDataManagerTests: XCTestCase {
             id: "fav1",
             name: "Charlie",
             avatar: "person.crop.circle.fill",
-            status: "Online"
+            status: "Online",
+            accentColor: "34D399"
         )
 
         let data = try JSONEncoder().encode(contact)
@@ -67,6 +67,7 @@ final class WidgetDataManagerTests: XCTestCase {
         XCTAssertEqual(decoded.name, "Charlie")
         XCTAssertEqual(decoded.avatar, "person.crop.circle.fill")
         XCTAssertEqual(decoded.status, "Online")
+        XCTAssertEqual(decoded.accentColor, "34D399")
     }
 
     func test_widgetFavoriteContact_identifiableById() {
@@ -74,7 +75,8 @@ final class WidgetDataManagerTests: XCTestCase {
             id: "contact-id",
             name: "Dana",
             avatar: "person.fill",
-            status: "Offline"
+            status: "Offline",
+            accentColor: "6366F1"
         )
 
         XCTAssertEqual(contact.id, "contact-id")
@@ -84,8 +86,8 @@ final class WidgetDataManagerTests: XCTestCase {
 
     func test_multipleWidgetConversations_encodeAsArray() throws {
         let conversations = [
-            WidgetConversation(id: "1", contactName: "A", contactAvatar: "", lastMessage: "a", timestamp: Date(), isUnread: false, isPinned: false),
-            WidgetConversation(id: "2", contactName: "B", contactAvatar: "", lastMessage: "b", timestamp: Date(), isUnread: true, isPinned: true)
+            WidgetConversation(id: "1", contactName: "A", contactAvatar: "", lastMessage: "a", timestamp: Date(), isUnread: false, isPinned: false, accentColor: "6366F1"),
+            WidgetConversation(id: "2", contactName: "B", contactAvatar: "", lastMessage: "b", timestamp: Date(), isUnread: true, isPinned: true, accentColor: "4ECDC4")
         ]
 
         let encoder = JSONEncoder()
@@ -98,5 +100,6 @@ final class WidgetDataManagerTests: XCTestCase {
         XCTAssertEqual(decoded.count, 2)
         XCTAssertEqual(decoded[0].contactName, "A")
         XCTAssertEqual(decoded[1].contactName, "B")
+        XCTAssertEqual(decoded[0].accentColor, "6366F1")
     }
 }
