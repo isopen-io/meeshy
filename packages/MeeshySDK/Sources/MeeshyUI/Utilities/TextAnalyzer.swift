@@ -82,18 +82,37 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
         languageOverride ?? language
     }
 
+    /// Word count threshold: once the user has typed this many words,
+    /// lock the detected language and stop re-analyzing.
+    private let wordCountThreshold = 10
+
     public func analyze(text: String) {
         debounceTimer?.invalidate()
 
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
             sentiment = .neutral
             if !isLanguageLocked { language = nil; languageConfidence = 0 }
+            return
+        }
+
+        // Stop language analysis after threshold words
+        if isLanguageLocked {
+            // Still update sentiment even after language is locked
+            debounceTimer = Timer.scheduledTimer(withTimeInterval: debounceInterval, repeats: false) { [weak self] _ in
+                self?.updateSentimentOnly(text: trimmed)
+            }
             return
         }
 
         debounceTimer = Timer.scheduledTimer(withTimeInterval: debounceInterval, repeats: false) { [weak self] _ in
             self?.performAnalysis(text: text)
         }
+    }
+
+    private func updateSentimentOnly(text: String) {
+        let score = computeSentiment(text: text.lowercased())
+        DispatchQueue.main.async { self.sentiment = SentimentLevel.from(score: score) }
     }
 
     public func setLanguageOverride(_ lang: DetectedLanguage?) {
@@ -120,6 +139,9 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
 
         guard !isLanguageLocked else { return }
 
+        let wordCount = cleaned.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }.count
+
         recognizer.reset()
         recognizer.processString(cleaned)
         if let dominant = recognizer.dominantLanguage {
@@ -129,7 +151,8 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
             DispatchQueue.main.async {
                 self.language = DetectedLanguage.find(code: langCode)
                 self.languageConfidence = confidence
-                if confidence > 0.8 {
+                // Lock after 10 words (enough signal) or high confidence
+                if wordCount >= self.wordCountThreshold || confidence > 0.8 {
                     self.isLanguageLocked = true
                 }
             }

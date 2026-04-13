@@ -116,7 +116,7 @@ struct ThemedMessageBubble: View {
 
     private var otherBubbleColor: String {
         let senderHex = message.senderColor ?? contactColor
-        return DynamicColorGenerator.blendTwo(senderHex, weight1: 0.30, "6366F1", weight2: 0.70)
+        return DynamicColorGenerator.blendTwo(senderHex, weight1: 0.30, MeeshyColors.brandPrimaryHex, weight2: 0.70)
     }
 
     var visualAttachments: [MessageAttachment] { // internal for cross-file extension access
@@ -583,7 +583,7 @@ struct ThemedMessageBubble: View {
                             .background(bubbleBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 18))
                             .shadow(
-                                color: Color(hex: message.isMe ? "6366F1" : otherBubbleColor).opacity(message.isMe ? 0.3 : 0.2),
+                                color: (message.isMe ? MeeshyColors.brandPrimary : Color(hex: otherBubbleColor)).opacity(message.isMe ? 0.3 : 0.2),
                                 radius: 6,
                                 y: 3
                             )
@@ -1412,7 +1412,7 @@ struct ThemedMessageBubble: View {
             .fill(
                 message.isMe ?
                 LinearGradient(
-                    colors: [Color(hex: "6366F1"), Color(hex: "4338CA")],
+                    colors: [MeeshyColors.brandPrimary, MeeshyColors.brandDeep],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ) :
@@ -1448,7 +1448,7 @@ struct ThemedMessageBubble: View {
             AudioMediaView(
                 attachment: attachment,
                 message: message,
-                contactColor: contactColor,
+                contactColor: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
                 visualAttachments: visualAttachments,
                 theme: theme,
                 transcription: transcription,
@@ -1473,12 +1473,12 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Audio Bubble Background
     private var audioBubbleBackground: some View {
-        let accent = Color(hex: contactColor)
+        let audioAccent = Color(hex: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor)
         return RoundedRectangle(cornerRadius: 20)
-            .fill(isDark ? accent.opacity(0.15) : accent.opacity(0.08))
+            .fill(isDark ? audioAccent.opacity(0.15) : audioAccent.opacity(0.08))
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 1)
+                    .stroke(audioAccent.opacity(isDark ? 0.25 : 0.15), lineWidth: 1)
             )
     }
 

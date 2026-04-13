@@ -625,6 +625,7 @@ class ConversationViewModel: ObservableObject {
             let newOnly = freshMessages.filter { !existingIds.contains($0.id) }
             if !newOnly.isEmpty {
                 messages = (existing + newOnly).sorted { $0.createdAt < $1.createdAt }
+                newMessageAppended += 1
             }
             await CacheCoordinator.shared.messages.save(messages, for: conversationId)
         } catch {

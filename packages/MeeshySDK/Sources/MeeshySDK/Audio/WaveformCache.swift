@@ -137,7 +137,7 @@ public actor WaveformCache {
                 let int16Ptr = ptr.bindMemory(to: Int16.self)
                 for sample in int16Ptr {
                     let bucketIndex = min(globalSampleIndex / estimatedBucketSize, count - 1)
-                    buckets[bucketIndex] += Float(abs(sample)) / Float(Int16.max)
+                    buckets[bucketIndex] += Float(abs(Int32(sample))) / Float(Int16.max)
                     bucketCounts[bucketIndex] += 1
                     globalSampleIndex += 1
                 }

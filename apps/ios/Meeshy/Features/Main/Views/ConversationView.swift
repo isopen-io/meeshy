@@ -95,8 +95,19 @@ struct ConversationComposerState {
     var uploadProgress: UploadQueueProgress? = nil
     var showLocationPicker = false
     
-    // Language (source language for outgoing messages — initialized onAppear from keyboard detection)
-    var selectedLanguage: String = "fr"
+    // Language (source language for outgoing messages)
+    // Priority: keyboard layout > system language > "fr" fallback
+    var selectedLanguage: String = {
+        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
+            let code = String(kbd.prefix(2))
+            if LanguageOption.defaults.contains(where: { $0.code == code }) { return code }
+        }
+        if let sysLang = Locale.current.language.languageCode?.identifier,
+           LanguageOption.defaults.contains(where: { $0.code == sysLang }) {
+            return sysLang
+        }
+        return "fr"
+    }()
 
     // Reply & Edit
     var pendingReplyReference: ReplyReference? = nil
@@ -589,8 +600,15 @@ struct ConversationView: View {
             }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
+                // Language priority: keyboard layout > system language > current default
                 if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
-                    composerState.selectedLanguage = String(kbd.prefix(2))
+                    let code = String(kbd.prefix(2))
+                    if LanguageOption.defaults.contains(where: { $0.code == code }) {
+                        composerState.selectedLanguage = code
+                    }
+                } else if let sysLang = Locale.current.language.languageCode?.identifier,
+                          LanguageOption.defaults.contains(where: { $0.code == sysLang }) {
+                    composerState.selectedLanguage = sysLang
                 }
                 let draft = DraftStore.shared.load(for: viewModel.conversationId)
                 if !draft.isEmpty && messageText.isEmpty { messageText = draft }
@@ -865,19 +883,18 @@ struct ConversationView: View {
                 }
                 .padding(.horizontal, 16)
             }
+            .defaultScrollAnchor(.bottom)
             .onChange(of: viewModel.isLoadingInitial) { wasLoading, isLoading in
-                if wasLoading && !isLoading, let last = viewModel.messages.last {
+                if wasLoading && !isLoading, !viewModel.messages.isEmpty {
                     viewModel.markProgrammaticScroll()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        withAnimation(.easeOut(duration: 0.4)) { proxy.scrollTo(last.id, anchor: .bottom) }
-                    }
+                    proxy.scrollTo("bottom_spacer", anchor: .bottom)
                 }
             }
             .onChange(of: viewModel.newMessageAppended) { _, _ in
                 guard let lastMsg = viewModel.messages.last else { return }
                 if scrollState.isNearBottom || lastMsg.isMe {
                     viewModel.markProgrammaticScroll()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { proxy.scrollTo(lastMsg.id, anchor: .bottom) }
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { proxy.scrollTo("bottom_spacer", anchor: .bottom) }
                     if scrollState.isNearBottom && !lastMsg.isMe {
                         viewModel.markAsRead()
                     }
