@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import PhotosUI
 import PencilKit
 import UniformTypeIdentifiers
@@ -93,8 +94,12 @@ public struct StoryComposerView: View {
 
     @State private var showAudioDocumentPicker = false
     @State private var showVoiceRecorderSheet = false
-    @State private var storyLanguage: String = AuthManager.shared.currentUser?.systemLanguage ?? "fr"
-    @State private var showLanguagePicker = false
+    @State private var storyLanguage: String = {
+        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
+            return String(kbd.prefix(2))
+        }
+        return AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+    }()
     @State private var showFilterSheet = false
     @State private var showTransitionSheet = false
     @State private var audioEditorItem: AudioEditorItemWrapper?
@@ -449,7 +454,6 @@ public struct StoryComposerView: View {
                 .frame(maxWidth: .infinity)
 
             HStack(spacing: 8) {
-                storyLanguageChip
                 previewButton
                 publishButton
                 overflowMenu
@@ -499,26 +503,6 @@ public struct StoryComposerView: View {
         }
     }
 
-    private var storyLanguageChip: some View {
-        Button {
-            showLanguagePicker = true
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 3) {
-                Image(systemName: "globe")
-                    .font(.system(size: 11, weight: .medium))
-                Text((Locale.current.localizedString(forLanguageCode: storyLanguage) ?? storyLanguage).prefix(3).uppercased())
-                    .font(.system(size: 11, weight: .bold))
-            }
-            .foregroundColor(.white.opacity(0.9))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(Color.white.opacity(0.2)))
-        }
-        .sheet(isPresented: $showLanguagePicker) {
-            StoryLanguagePickerView(selectedLanguage: $storyLanguage)
-        }
-    }
 
     private var publishButton: some View {
         Button { publishAllSlides() } label: {
