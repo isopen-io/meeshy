@@ -286,6 +286,12 @@ public struct ParticipantUnbannedEvent: Decodable, Sendable {
     public let userId: String
 }
 
+public struct ConversationClosedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let closedBy: String
+    public let closedAt: String
+}
+
 public struct MessageConsumedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
@@ -526,6 +532,7 @@ public protocol MessageSocketProviding: Sendable {
     var participantSelfLeft: PassthroughSubject<ParticipantLeftEvent, Never> { get }
     var participantBanned: PassthroughSubject<ParticipantBannedEvent, Never> { get }
     var participantUnbanned: PassthroughSubject<ParticipantUnbannedEvent, Never> { get }
+    var conversationClosed: PassthroughSubject<ConversationClosedEvent, Never> { get }
     var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
     var conversationStatsReceived: PassthroughSubject<ConversationStatsEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
@@ -622,6 +629,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
     public let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
     public let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
+    public let conversationClosed = PassthroughSubject<ConversationClosedEvent, Never>()
 
     // Combine publishers — user preferences
     public let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
@@ -1245,6 +1253,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(ParticipantUnbannedEvent.self, from: data) { [weak self] event in
                 self?.participantUnbanned.send(event)
+            }
+        }
+
+        socket.on("conversation:closed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationClosedEvent.self, from: data) { [weak self] event in
+                self?.conversationClosed.send(event)
             }
         }
 

@@ -109,6 +109,8 @@ public struct APIConversation: Decodable, Sendable {
     public let currentUserRole: String?
     public let currentUserJoinedAt: Date?
     public let createdAt: Date
+    public let closedAt: Date?
+    public let closedBy: String?
 
     public init(
         id: String, type: String, identifier: String? = nil, title: String? = nil,
@@ -121,7 +123,8 @@ public struct APIConversation: Decodable, Sendable {
         userPreferences: [APIConversationPreferences]? = nil, unreadCount: Int? = nil,
         updatedAt: Date? = nil, encryptionMode: String? = nil,
         currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil,
-        createdAt: Date
+        createdAt: Date,
+        closedAt: Date? = nil, closedBy: String? = nil
     ) {
         self.id = id; self.type = type; self.identifier = identifier; self.title = title
         self.description = description; self.avatar = avatar; self.banner = banner
@@ -134,6 +137,7 @@ public struct APIConversation: Decodable, Sendable {
         self.updatedAt = updatedAt; self.encryptionMode = encryptionMode
         self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt
         self.createdAt = createdAt
+        self.closedAt = closedAt; self.closedBy = closedBy
     }
 }
 
@@ -167,7 +171,7 @@ public struct UpdateConversationResponse: Decodable, Sendable {
             participants: nil, lastMessage: nil, recentMessages: nil,
             userPreferences: nil, unreadCount: nil, updatedAt: updatedAt,
             encryptionMode: nil, currentUserRole: nil, currentUserJoinedAt: nil,
-            createdAt: createdAt
+            createdAt: createdAt, closedAt: nil, closedBy: nil
         )
     }
 }
@@ -273,6 +277,8 @@ extension APIConversation {
             participantUserId: otherParticipant?.userId,
             participantUsername: participantUsername,
             participantAvatarURL: participantAvatar,
+            closedAt: closedAt,
+            closedBy: closedBy,
             currentUserRole: currentRole,
             currentUserJoinedAt: currentUserJoinedAt,
             reaction: prefs?.reaction

@@ -44,6 +44,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
     let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
+    let conversationClosed = PassthroughSubject<ConversationClosedEvent, Never>()
 
     var isConnected: Bool = false
     var connectionState: ConnectionState = .disconnected

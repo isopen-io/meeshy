@@ -130,6 +130,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var participantAvatarURL: String? = nil
     public var lastSeenAt: Date? = nil
 
+    public var closedAt: Date? = nil
+    public var closedBy: String? = nil
+
     public var currentUserRole: String? = nil
     public var currentUserJoinedAt: Date? = nil
     public var reaction: String? = nil
@@ -212,6 +215,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, defaultWriteRole: String? = nil, slowModeSeconds: Int? = nil, autoTranslateEnabled: Bool? = nil, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
+                closedAt: Date? = nil, closedBy: String? = nil,
                 currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil, reaction: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
                 theme: ConversationContext.ConversationTheme = .general,
@@ -225,6 +229,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.defaultWriteRole = defaultWriteRole; self.slowModeSeconds = slowModeSeconds; self.autoTranslateEnabled = autoTranslateEnabled
         self.isPinned = isPinned; self.sectionId = sectionId; self.isMuted = isMuted
         self.participantUserId = participantUserId; self.participantUsername = participantUsername; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
+        self.closedAt = closedAt; self.closedBy = closedBy
         self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt; self.reaction = reaction
         self.unreadCount = unreadCount; self.lastMessagePreview = lastMessagePreview
         self.lastMessageAttachments = lastMessageAttachments
