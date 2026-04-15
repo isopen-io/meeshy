@@ -341,10 +341,10 @@ struct TimelinePanel: View {
         }
 
         if !mediaTracks.isEmpty {
-            groups.append(TrackGroup(id: "media", label: "MEDIA", icon: "photo.on.rectangle", tracks: mediaTracks))
+            groups.append(TrackGroup(id: "media", label: "CONTENU", icon: "photo.on.rectangle", tracks: mediaTracks))
         }
         if !overlayTracks.isEmpty {
-            groups.append(TrackGroup(id: "overlay", label: "OVERLAY", icon: "square.on.square.fill", tracks: overlayTracks))
+            groups.append(TrackGroup(id: "overlay", label: "EFFETS", icon: "square.on.square.fill", tracks: overlayTracks))
         }
         return groups
     }
