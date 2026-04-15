@@ -591,19 +591,40 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         );
 
         // Diffuser le statut de lecture via Socket.IO
+        // Emit to the conversation room AND each registered participant's user
+        // room so message authors still receive updates when they've navigated
+        // away from the conversation view. Socket.IO deduplicates per-socket
+        // delivery when multiple rooms are chained on a single emit call.
         try {
-          const summary = await readStatusService.getLatestMessageSummary(message.conversationId);
           const socketIOManager = socketIOHandler.getManager();
           if (socketIOManager) {
-            const room = ROOMS.conversation(message.conversationId);
-            (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
+            const [summary, activeParticipants] = await Promise.all([
+              readStatusService.getLatestMessageSummary(message.conversationId),
+              prisma.participant.findMany({
+                where: { conversationId: message.conversationId, isActive: true },
+                select: { userId: true }
+              })
+            ]);
+            const payload = {
               conversationId: message.conversationId,
               participantId: participant.id,
               userId,
               type: 'read',
               updatedAt: new Date(),
               summary
-            });
+            };
+            const io = (socketIOManager as any).io;
+            const convRoom = ROOMS.conversation(message.conversationId);
+            let emitter: any = io.to(convRoom);
+            const seenRooms = new Set<string>([convRoom]);
+            for (const p of activeParticipants) {
+              if (!p.userId) continue;
+              const userRoom = ROOMS.user(p.userId);
+              if (seenRooms.has(userRoom)) continue;
+              seenRooms.add(userRoom);
+              emitter = emitter.to(userRoom);
+            }
+            emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
           }
         } catch (socketError) {
           console.error('[MESSAGES] Erreur lors de la diffusion Socket.IO:', socketError);
