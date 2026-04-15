@@ -366,6 +366,24 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             .store(in: &socketSubscriptions)
 
+        // Conversation closed
+        messageSocket.conversationClosed
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task {
+                    await self.cache.conversations.update(for: "list") { conversations in
+                        var updated = conversations
+                        if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
+                            updated[idx].closedAt = ISO8601DateFormatter().date(from: event.closedAt)
+                            updated[idx].closedBy = event.closedBy
+                        }
+                        return updated
+                    }
+                    self._conversationsDidChange.send()
+                }
+            }
+            .store(in: &socketSubscriptions)
+
         // Reconnect -> delta sync
         messageSocket.didReconnect
             .sink { [weak self] in

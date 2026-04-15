@@ -76,6 +76,8 @@ public struct ConversationSettingsView: View {
             Button("Supprimer", role: .destructive) {
                 Task {
                     try? await ConversationService.shared.deleteForMe(conversationId: viewModel.conversationId)
+                    NotificationCoordinator.shared.removeConversation(viewModel.conversationId)
+                    await CacheCoordinator.shared.conversations.invalidateAll()
                     onLeft?()
                     dismiss()
                 }
