@@ -10,6 +10,7 @@ public struct ConversationSettingsView: View {
 
     @State private var avatarItem: PhotosPickerItem? = nil
     @State private var bannerItem: PhotosPickerItem? = nil
+    @State private var showDeleteForMeAlert = false
 
     public var onUpdated: ((MeeshyConversation) -> Void)? = nil
     public var onLeft: (() -> Void)? = nil
@@ -46,9 +47,7 @@ public struct ConversationSettingsView: View {
 
                         membersSection
 
-                        if viewModel.currentUserRole.hasMinimumRole(.admin) {
-                            dangerSection
-                        }
+                        dangerSection
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 16)
@@ -72,6 +71,18 @@ public struct ConversationSettingsView: View {
         } message: {
             Text(String(localized: "conversation.settings.leave.confirm.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .module))
         }
+        .alert("Supprimer pour moi ?", isPresented: $showDeleteForMeAlert) {
+            Button("Annuler", role: .cancel) {}
+            Button("Supprimer", role: .destructive) {
+                Task {
+                    try? await ConversationService.shared.deleteForMe(conversationId: viewModel.conversationId)
+                    onLeft?()
+                    dismiss()
+                }
+            }
+        } message: {
+            Text("Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes.")
+        }
         .alert(String(localized: "conversation.settings.delete.confirm.title", defaultValue: "Supprimer la conversation", bundle: .module), isPresented: $viewModel.showDeleteConversation) {
             Button(String(localized: "conversation.settings.delete.button", defaultValue: "Supprimer", bundle: .module), role: .destructive) {
                 Task {
@@ -82,7 +93,7 @@ public struct ConversationSettingsView: View {
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.settings.delete.confirm.message", defaultValue: "Cette action est irreversible. La conversation et tous ses messages seront supprimes pour tous les membres.", bundle: .module))
+            Text("Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire.")
         }
         .entityImagePickerFlow(pickerItem: $avatarItem, context: .avatar, accentColor: viewModel.accentColor, maxSizeKB: 500) { data in
             Task { await viewModel.uploadCompressedAvatar(data) }
@@ -481,13 +492,28 @@ public struct ConversationSettingsView: View {
         VStack(spacing: 12) {
             sectionHeader(String(localized: "conversation.settings.section.danger", defaultValue: "Zone dangereuse", bundle: .module))
 
+            Button(role: .destructive) {
+                showDeleteForMeAlert = true
+            } label: {
+                HStack {
+                    Image(systemName: "eye.slash")
+                    Text("Supprimer pour moi")
+                }
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(MeeshyColors.error)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(MeeshyColors.error.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
             if viewModel.currentUserRole == .creator {
                 Button {
                     viewModel.showDeleteConversation = true
                 } label: {
                     HStack {
                         Image(systemName: "trash.fill")
-                        Text(String(localized: "conversation.settings.delete.label", defaultValue: "Supprimer la conversation", bundle: .module))
+                        Text("Supprimer pour tous")
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(MeeshyColors.error)
