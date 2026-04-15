@@ -4,44 +4,43 @@ import MeeshySDK
 // MARK: - Track Type
 
 enum TrackType: String {
-    case bgVideo, bgImage, drawing, bgAudio, fgImage, fgVideo, fgAudio, text
+    case video, image, drawing, audio, text
+
+    // Legacy aliases for backward compat with existing code paths
+    static let bgVideo = TrackType.video
+    static let bgImage = TrackType.image
+    static let bgAudio = TrackType.audio
+    static let fgImage = TrackType.image
+    static let fgVideo = TrackType.video
+    static let fgAudio = TrackType.audio
 
     var icon: String {
         switch self {
-        case .bgVideo:  return "tv.fill"
-        case .bgImage:  return "photo.fill"
+        case .video:    return "video.fill"
+        case .image:    return "photo"
         case .drawing:  return "pencil.tip"
-        case .bgAudio:  return "music.note"
-        case .fgImage:  return "photo"
-        case .fgVideo:  return "video.fill"
-        case .fgAudio:  return "waveform"
+        case .audio:    return "waveform"
         case .text:     return "textformat"
         }
     }
 
     var color: Color {
         switch self {
-        case .bgVideo:  return MeeshyColors.indigo700
-        case .bgImage:  return MeeshyColors.indigo600
+        case .video:    return MeeshyColors.indigo500
+        case .image:    return MeeshyColors.indigo400
         case .drawing:  return MeeshyColors.indigo500
-        case .bgAudio:  return MeeshyColors.indigo500
-        case .fgImage:  return MeeshyColors.indigo400
-        case .fgVideo:  return MeeshyColors.indigo400
-        case .fgAudio:  return MeeshyColors.indigo300
+        case .audio:    return MeeshyColors.indigo300
         case .text:     return MeeshyColors.indigo200
         }
     }
 
     var sortOrder: Int {
         switch self {
-        case .bgVideo:  return 0
-        case .bgImage:  return 1
+        case .image:    return 0
+        case .video:    return 1
         case .drawing:  return 2
-        case .bgAudio:  return 3
-        case .fgImage:  return 4
-        case .fgVideo:  return 5
-        case .fgAudio:  return 6
-        case .text:     return 7
+        case .audio:    return 3
+        case .text:     return 4
         }
     }
 }

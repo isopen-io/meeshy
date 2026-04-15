@@ -217,15 +217,15 @@ final class StoryComposerViewModel {
     var canAddMedia: Bool { mediaCount < 10 }
     var canAddImage: Bool {
         canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.mediaType == "image" && $0.placement == "foreground" }.count ?? 0) < 5
+        (currentEffects.mediaObjects?.filter { $0.mediaType == "image" }.count ?? 0) < 5
     }
     var canAddVideo: Bool {
         canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.mediaType == "video" && $0.placement == "foreground" }.count ?? 0) < 4
+        (currentEffects.mediaObjects?.filter { $0.mediaType == "video" }.count ?? 0) < 4
     }
     var canAddAudio: Bool {
         canAddMedia &&
-        (currentEffects.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0) < 5
+        (currentEffects.audioPlayerObjects?.count ?? 0) < 5
     }
 
     // MARK: - Slide Management
@@ -315,13 +315,13 @@ final class StoryComposerViewModel {
     }
 
     @discardableResult
-    func addMediaObject(type: String, placement: String = "foreground") -> StoryMediaObject? {
+    func addMediaObject(type: String) -> StoryMediaObject? {
         guard canAddMedia else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
         let obj = StoryMediaObject(
             postMediaId: "",
             mediaType: type,
-            placement: placement,
+            placement: "media",
             x: center.x,
             y: center.y,
             scale: 1.0,
@@ -340,12 +340,12 @@ final class StoryComposerViewModel {
     }
 
     @discardableResult
-    func addAudioObject(placement: String = "foreground") -> StoryAudioPlayerObject? {
+    func addAudioObject() -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
         let obj = StoryAudioPlayerObject(
             postMediaId: "",
-            placement: placement,
+            placement: "overlay",
             x: center.x,
             y: min(0.9, center.y + 0.15),
             volume: 1.0,
@@ -448,33 +448,6 @@ final class StoryComposerViewModel {
 
     func sendToBack(id: String) {
         zIndexMap[id] = 0
-    }
-
-    // MARK: - Placement Toggle (fond <-> front)
-
-    func isMediaBackground(id: String) -> Bool {
-        currentEffects.mediaObjects?.first(where: { $0.id == id })?.placement == "background"
-    }
-
-    func toggleMediaPlacement(id: String) {
-        var effects = currentEffects
-        guard var medias = effects.mediaObjects,
-              let idx = medias.firstIndex(where: { $0.id == id }) else { return }
-
-        let current = medias[idx].placement
-        medias[idx].placement = current == "background" ? "foreground" : "background"
-
-        // Reset position to center when moving to foreground
-        if medias[idx].placement == "foreground" {
-            let center = CGPoint(x: 0.5, y: 0.5)
-            medias[idx].x = center.x
-            medias[idx].y = center.y
-            medias[idx].scale = 1.0
-            medias[idx].rotation = 0
-        }
-
-        effects.mediaObjects = medias
-        currentEffects = effects
     }
 
     // MARK: - Tool Actions

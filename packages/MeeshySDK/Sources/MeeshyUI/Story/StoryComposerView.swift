@@ -765,7 +765,7 @@ public struct StoryComposerView: View {
                 .padding(.horizontal, 16)
             }
 
-            mediaElementList(placement: "background")
+            mediaElementList()
         }
         .padding(.vertical, 12)
     }
@@ -810,7 +810,7 @@ public struct StoryComposerView: View {
         )
         .frame(maxHeight: 280)
 
-        audioElementList(placement: "background")
+        audioElementList()
         } // VStack bgAudioPanel
     }
 
@@ -867,7 +867,7 @@ public struct StoryComposerView: View {
             }
             .padding(.horizontal, 16)
 
-            mediaElementList(placement: "foreground")
+            mediaElementList()
         }
         .padding(.vertical, 10)
     }
@@ -899,7 +899,7 @@ public struct StoryComposerView: View {
             }
             .padding(.horizontal, 16)
 
-            audioElementList(placement: "foreground")
+            audioElementList()
         }
         .padding(.vertical, 10)
     }
@@ -907,8 +907,8 @@ public struct StoryComposerView: View {
     // MARK: - Element Lists
 
     @ViewBuilder
-    private func mediaElementList(placement: String) -> some View {
-        let items = viewModel.currentEffects.mediaObjects?.filter { $0.placement == placement } ?? []
+    private func mediaElementList() -> some View {
+        let items = viewModel.currentEffects.mediaObjects ?? []
         return Group {
             if !items.isEmpty {
                 VStack(spacing: 4) {
@@ -973,8 +973,8 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func audioElementList(placement: String) -> some View {
-        let items = viewModel.currentEffects.audioPlayerObjects?.filter { $0.placement == placement } ?? []
+    private func audioElementList() -> some View {
+        let items = viewModel.currentEffects.audioPlayerObjects ?? []
         return Group {
             if !items.isEmpty {
                 VStack(spacing: 4) {
@@ -1222,7 +1222,7 @@ public struct StoryComposerView: View {
                 if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
 
                 // Add as background media object in effects
-                if let obj = viewModel.addMediaObject(type: "video", placement: "background") {
+                if let obj = viewModel.addMediaObject(type: "video") {
                     viewModel.loadedVideoURLs[obj.id] = tempURL
                     if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
                     if obj.id != objectId {
@@ -1370,7 +1370,7 @@ public struct StoryComposerView: View {
         Task {
             let samples = (try? await WaveformGenerator.shared.generateSamples(from: url)) ?? []
             await MainActor.run {
-                if let obj = viewModel.addAudioObject(placement: "background") {
+                if let obj = viewModel.addAudioObject() {
                     viewModel.loadedAudioURLs[obj.id] = url
                     var effects = viewModel.currentEffects
                     if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == obj.id }) {

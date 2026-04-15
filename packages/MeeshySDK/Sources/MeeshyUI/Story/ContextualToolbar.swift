@@ -169,21 +169,16 @@ struct ContextualToolbar: View {
     }
 
     private var fgMediaCount: Int {
-        viewModel.currentEffects.mediaObjects?
-            .filter { $0.placement == "foreground" }
-            .count ?? 0
+        viewModel.currentEffects.mediaObjects?.count ?? 0
     }
 
     private var fgAudioCount: Int {
-        viewModel.currentEffects.audioPlayerObjects?
-            .filter { $0.placement == "foreground" }
-            .count ?? 0
+        viewModel.currentEffects.audioPlayerObjects?.count ?? 0
     }
 
     private var bgMediaCount: Int {
-        viewModel.currentEffects.mediaObjects?
-            .filter { $0.placement == "background" }
-            .count ?? 0
+        // First media object acts as background — show count of those used as bg
+        (viewModel.currentEffects.mediaObjects?.isEmpty == false) ? 1 : 0
     }
 
     private var hasDrawing: Bool {

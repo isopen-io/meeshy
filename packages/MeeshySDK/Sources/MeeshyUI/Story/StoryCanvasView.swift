@@ -120,13 +120,11 @@ struct StoryCanvasView: View {
                 // Layer 0: Background color / gradient
                 backgroundLayer
 
-                // Layer 1: Classic background image (gesture-manipulable)
+                // Layer 1: Classic background image (gesture-manipulable, when no media objects)
                 backgroundMediaLayer
 
-                // Layer 2: Unified media layer — single ForEach over ALL media objects
-                // Background elements render full-bleed at zIndex(-1), foreground at their zIndex.
-                // Single identity domain = no AVPlayer destruction on placement toggle.
-                foregroundMediaLayer(interactive: !isFondToolActive && !isDrawingActive)
+                // Layer 2: ALL media objects — first fills canvas as background, rest positioned
+                mediaLayer(interactive: !isFondToolActive && !isDrawingActive)
 
                 // Layer 3: Drawing overlay (PKCanvasView — UIKit via UIViewRepresentable)
                 drawingLayer
@@ -215,13 +213,13 @@ struct StoryCanvasView: View {
         }
     }
 
-    // MARK: - Background Media Layer (classic selectedImage only)
+    // MARK: - Background Media Layer (classic selectedImage only — shown when no media objects)
 
     @ViewBuilder
     private var backgroundMediaLayer: some View {
         // Classic selectedImage (flat background — from bgMedia panel picker)
-        // Only shown when no StoryMediaObject has placement == "background"
-        if !mediaObjects.contains(where: { $0.placement == "background" }),
+        // Only shown when no StoryMediaObject exists (first media object takes over as bg)
+        if mediaObjects.isEmpty,
            let image = filteredImage ?? selectedImage {
             Image(uiImage: image)
                 .resizable()
@@ -351,30 +349,27 @@ struct StoryCanvasView: View {
         }
     }
 
-    // MARK: - Unified Media Layer (single ForEach — preserves AVPlayer across placement changes)
+    // MARK: - Unified Media Layer (first = fill-canvas background, rest = positioned)
 
     @ViewBuilder
-    private func foregroundMediaLayer(interactive: Bool) -> some View {
-        // Single ForEach over ALL media objects — SwiftUI tracks identity by stable id,
-        // so toggling placement between "background" and "foreground" does NOT destroy/recreate
-        // the view (and its AVPlayer). Rendering style is conditional on placement.
-        ForEach(mediaObjects, id: \.id) { obj in
-            let isBg = obj.placement == "background"
+    private func mediaLayer(interactive: Bool) -> some View {
+        ForEach(Array(mediaObjects.enumerated()), id: \.element.id) { index, obj in
+            let isFirst = index == 0
 
             if isElementVisible(startTime: obj.startTime, duration: obj.duration) {
-                if isBg {
-                    // Background rendering: full-bleed, behind everything, with bg gestures
-                    backgroundMediaElement(obj: obj)
+                if isFirst {
+                    // First media fills canvas as background
+                    firstMediaElement(obj: obj)
                 } else {
-                    // Foreground rendering: positioned, draggable, with edit overlays
-                    foregroundMediaElement(obj: obj, interactive: interactive)
+                    // Subsequent media: positioned, draggable
+                    positionedMediaElement(obj: obj, interactive: interactive)
                 }
             }
         }
     }
 
     @ViewBuilder
-    private func backgroundMediaElement(obj: StoryMediaObject) -> some View {
+    private func firstMediaElement(obj: StoryMediaObject) -> some View {
         Group {
             if obj.mediaType == "image", let image = viewModel.loadedImages[obj.id] {
                 Image(uiImage: image)
@@ -411,7 +406,7 @@ struct StoryCanvasView: View {
     }
 
     @ViewBuilder
-    private func foregroundMediaElement(obj: StoryMediaObject, interactive: Bool) -> some View {
+    private func positionedMediaElement(obj: StoryMediaObject, interactive: Bool) -> some View {
         DraggableMediaView(
             mediaObject: mediaObjectBinding(for: obj.id),
             image: viewModel.loadedImages[obj.id],
@@ -460,11 +455,11 @@ struct StoryCanvasView: View {
         .zIndex(Double(viewModel.zIndex(for: obj.id)))
     }
 
-    // MARK: - Foreground Audio Layer
+    // MARK: - Audio Layer (all audio players rendered on top)
 
     @ViewBuilder
     private func foregroundAudioLayer(interactive: Bool) -> some View {
-        ForEach(audioPlayerObjects.filter({ $0.placement == "foreground" }), id: \.id) { obj in
+        ForEach(audioPlayerObjects, id: \.id) { obj in
             if isElementVisible(startTime: obj.startTime, duration: obj.duration) {
                 StoryAudioPlayerView(
                     audioObject: audioObjectBinding(for: obj.id),

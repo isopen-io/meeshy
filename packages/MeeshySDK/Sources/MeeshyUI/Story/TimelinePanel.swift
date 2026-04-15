@@ -330,21 +330,21 @@ struct TimelinePanel: View {
 
     private var groupedTracks: [TrackGroup] {
         var groups: [TrackGroup] = []
-        var bgTracks: [Int] = []
-        var fgTracks: [Int] = []
+        var mediaTracks: [Int] = []
+        var overlayTracks: [Int] = []
 
         for (i, t) in tracks.enumerated() {
             switch t.type {
-            case .bgVideo, .bgImage, .drawing, .bgAudio: bgTracks.append(i)
-            case .fgImage, .fgVideo, .fgAudio, .text: fgTracks.append(i)
+            case .image, .video, .drawing: mediaTracks.append(i)
+            case .audio, .text: overlayTracks.append(i)
             }
         }
 
-        if !bgTracks.isEmpty {
-            groups.append(TrackGroup(id: "bg", label: "FOND", icon: "square.stack.fill", tracks: bgTracks))
+        if !mediaTracks.isEmpty {
+            groups.append(TrackGroup(id: "media", label: "MEDIA", icon: "photo.on.rectangle", tracks: mediaTracks))
         }
-        if !fgTracks.isEmpty {
-            groups.append(TrackGroup(id: "fg", label: "FRONT", icon: "square.on.square.fill", tracks: fgTracks))
+        if !overlayTracks.isEmpty {
+            groups.append(TrackGroup(id: "overlay", label: "OVERLAY", icon: "square.on.square.fill", tracks: overlayTracks))
         }
         return groups
     }
@@ -522,7 +522,7 @@ struct TimelinePanel: View {
 
     private func isEditableTrack(_ track: TimelineTrack) -> Bool {
         switch track.type {
-        case .fgImage, .bgImage, .fgVideo, .bgVideo, .fgAudio, .bgAudio: return true
+        case .image, .video, .audio: return true
         case .text, .drawing: return false
         }
     }
@@ -648,37 +648,33 @@ struct TimelinePanel: View {
 
         if viewModel.hasBackgroundImage {
             result.append(TimelineTrack(
-                id: "bg-image-main", name: String(localized: "story.timeline.bgImage", defaultValue: "Image Fond", bundle: .module), type: .bgImage,
+                id: "bg-image-main", name: String(localized: "story.timeline.bgImage", defaultValue: "Image Fond", bundle: .module), type: .image,
                 startTime: 0, duration: nil,
                 volume: nil, loop: false,
                 fadeIn: nil, fadeOut: nil
             ))
         }
 
-        if let bgVid = effects.mediaObjects?.first(where: {
-            $0.placement == "background" && $0.mediaType == "video"
-        }) {
-            let bgVidURL = viewModel.loadedVideoURLs[bgVid.id]
-            result.append(TimelineTrack(
-                id: bgVid.id, name: String(localized: "story.timeline.bgVideo", defaultValue: "Video BG", bundle: .module), type: .bgVideo,
-                startTime: bgVid.startTime ?? 0, duration: bgVid.duration,
-                volume: bgVid.volume, loop: bgVid.loop ?? false,
-                fadeIn: bgVid.fadeIn, fadeOut: bgVid.fadeOut,
-                videoURL: bgVidURL,
-                mediaDuration: mediaDurationCache[bgVid.id] ?? intrinsicDuration(url: bgVidURL)
-            ))
-        }
-
-        for bgImg in effects.mediaObjects?.filter({
-            $0.placement == "background" && $0.mediaType == "image"
-        }) ?? [] {
-            result.append(TimelineTrack(
-                id: bgImg.id, name: String(localized: "story.timeline.bgImageElement", defaultValue: "Image BG", bundle: .module), type: .bgImage,
-                startTime: bgImg.startTime ?? 0, duration: bgImg.duration,
-                volume: nil, loop: false,
-                fadeIn: bgImg.fadeIn, fadeOut: bgImg.fadeOut,
-                image: viewModel.loadedImages[bgImg.id]
-            ))
+        for media in effects.mediaObjects ?? [] {
+            if media.mediaType == "video" {
+                let vidURL = viewModel.loadedVideoURLs[media.id]
+                result.append(TimelineTrack(
+                    id: media.id, name: String(localized: "story.timeline.video", defaultValue: "Video", bundle: .module), type: .video,
+                    startTime: media.startTime ?? 0, duration: media.duration,
+                    volume: media.volume, loop: media.loop ?? false,
+                    fadeIn: media.fadeIn, fadeOut: media.fadeOut,
+                    videoURL: vidURL,
+                    mediaDuration: mediaDurationCache[media.id] ?? intrinsicDuration(url: vidURL)
+                ))
+            } else {
+                result.append(TimelineTrack(
+                    id: media.id, name: String(localized: "story.timeline.image", defaultValue: "Image", bundle: .module), type: .image,
+                    startTime: media.startTime ?? 0, duration: media.duration,
+                    volume: nil, loop: false,
+                    fadeIn: media.fadeIn, fadeOut: media.fadeOut,
+                    image: viewModel.loadedImages[media.id]
+                ))
+            }
         }
 
         if viewModel.drawingData != nil {
@@ -692,7 +688,7 @@ struct TimelinePanel: View {
 
         if effects.backgroundAudioId != nil {
             result.append(TimelineTrack(
-                id: "bg-audio", name: String(localized: "story.timeline.bgAudio", defaultValue: "Audio BG", bundle: .module), type: .bgAudio,
+                id: "bg-audio", name: String(localized: "story.timeline.bgAudio", defaultValue: "Audio BG", bundle: .module), type: .audio,
                 startTime: Float(effects.backgroundAudioStart ?? 0),
                 duration: effects.backgroundAudioEnd.map { Float($0) },
                 volume: effects.backgroundAudioVolume ?? 1.0, loop: true,
@@ -700,53 +696,15 @@ struct TimelinePanel: View {
             ))
         }
 
-        for bgAudio in effects.audioPlayerObjects?.filter({ $0.placement == "background" }) ?? [] {
-            let bgAudURL = viewModel.loadedAudioURLs[bgAudio.id]
+        for audio in effects.audioPlayerObjects ?? [] {
+            let audURL = viewModel.loadedAudioURLs[audio.id]
             result.append(TimelineTrack(
-                id: bgAudio.id, name: String(localized: "story.timeline.bgAudio", defaultValue: "Audio BG", bundle: .module), type: .bgAudio,
-                startTime: bgAudio.startTime ?? 0, duration: bgAudio.duration,
-                volume: bgAudio.volume, loop: bgAudio.loop ?? true,
-                fadeIn: bgAudio.fadeIn, fadeOut: bgAudio.fadeOut,
-                waveformSamples: bgAudio.waveformSamples,
-                mediaDuration: mediaDurationCache[bgAudio.id] ?? intrinsicDuration(url: bgAudURL)
-            ))
-        }
-
-        for img in effects.mediaObjects?.filter({
-            $0.placement == "foreground" && $0.mediaType == "image"
-        }) ?? [] {
-            result.append(TimelineTrack(
-                id: img.id, name: String(localized: "story.timeline.image", defaultValue: "Image", bundle: .module), type: .fgImage,
-                startTime: img.startTime ?? 0, duration: img.duration,
-                volume: nil, loop: false,
-                fadeIn: img.fadeIn, fadeOut: img.fadeOut,
-                image: viewModel.loadedImages[img.id]
-            ))
-        }
-
-        for vid in effects.mediaObjects?.filter({
-            $0.placement == "foreground" && $0.mediaType == "video"
-        }) ?? [] {
-            let vidURL = viewModel.loadedVideoURLs[vid.id]
-            result.append(TimelineTrack(
-                id: vid.id, name: String(localized: "story.timeline.video", defaultValue: "Video", bundle: .module), type: .fgVideo,
-                startTime: vid.startTime ?? 0, duration: vid.duration,
-                volume: vid.volume, loop: vid.loop ?? false,
-                fadeIn: vid.fadeIn, fadeOut: vid.fadeOut,
-                videoURL: vidURL,
-                mediaDuration: mediaDurationCache[vid.id] ?? intrinsicDuration(url: vidURL)
-            ))
-        }
-
-        for aud in effects.audioPlayerObjects?.filter({ $0.placement == "foreground" }) ?? [] {
-            let audURL = viewModel.loadedAudioURLs[aud.id]
-            result.append(TimelineTrack(
-                id: aud.id, name: String(localized: "story.timeline.audio", defaultValue: "Audio", bundle: .module), type: .fgAudio,
-                startTime: aud.startTime ?? 0, duration: aud.duration,
-                volume: aud.volume, loop: aud.loop ?? false,
-                fadeIn: aud.fadeIn, fadeOut: aud.fadeOut,
-                waveformSamples: aud.waveformSamples,
-                mediaDuration: mediaDurationCache[aud.id] ?? intrinsicDuration(url: audURL)
+                id: audio.id, name: String(localized: "story.timeline.audio", defaultValue: "Audio", bundle: .module), type: .audio,
+                startTime: audio.startTime ?? 0, duration: audio.duration,
+                volume: audio.volume, loop: audio.loop ?? false,
+                fadeIn: audio.fadeIn, fadeOut: audio.fadeOut,
+                waveformSamples: audio.waveformSamples,
+                mediaDuration: mediaDurationCache[audio.id] ?? intrinsicDuration(url: audURL)
             ))
         }
 

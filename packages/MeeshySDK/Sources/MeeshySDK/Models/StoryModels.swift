@@ -201,12 +201,12 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var id: String
     public var postMediaId: String      // référence PostMedia en DB
     public var mediaType: String        // "image" | "video"
-    public var placement: String        // "foreground" | "background"
-    public var x: CGFloat              // normalisé 0–1 (ignoré si background)
+    public var placement: String        // kept for backward compat; no longer drives rendering
+    public var x: CGFloat              // normalisé 0–1
     public var y: CGFloat
     public var scale: CGFloat
     public var rotation: CGFloat
-    public var volume: Float           // 0.0–1.0 (vidéos foreground uniquement)
+    public var volume: Float           // 0.0–1.0
 
     // Timeline timing
     public var startTime: Float?            // offset en secondes (défaut 0)
@@ -222,7 +222,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
-                mediaType: String = "image", placement: String = "foreground",
+                mediaType: String = "image", placement: String = "media",
                 x: CGFloat = 0.5, y: CGFloat = 0.5,
                 scale: CGFloat = 1.0, rotation: CGFloat = 0,
                 volume: Float = 1.0,
@@ -244,8 +244,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
 public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var id: String
     public var postMediaId: String      // référence PostMedia en DB
-    public var placement: String        // "foreground" | "background"
-    public var x: CGFloat              // normalisé 0–1 (foreground uniquement)
+    public var placement: String        // kept for backward compat; no longer drives rendering
+    public var x: CGFloat              // normalisé 0–1
     public var y: CGFloat
     public var volume: Float           // 0.0–1.0
     public var waveformSamples: [Float] // ~80 samples extraits à la composition
@@ -264,7 +264,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
-                placement: String = "foreground",
+                placement: String = "overlay",
                 x: CGFloat = 0.5, y: CGFloat = 0.8,
                 volume: Float = 1.0, waveformSamples: [Float] = [],
                 startTime: Float? = nil, duration: Float? = nil,

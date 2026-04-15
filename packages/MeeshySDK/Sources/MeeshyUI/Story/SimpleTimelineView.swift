@@ -195,7 +195,7 @@ struct SimpleTimelineView: View {
     @ViewBuilder
     private func segmentContent(_ segment: SimpleSegment, width: CGFloat) -> some View {
         switch segment.type {
-        case .fgImage, .bgImage:
+        case .image:
             if let img = segment.image {
                 Image(uiImage: img)
                     .resizable()
@@ -211,7 +211,7 @@ struct SimpleTimelineView: View {
                     .padding(.horizontal, 4)
             }
 
-        case .fgVideo, .bgVideo:
+        case .video:
             HStack(spacing: 3) {
                 Image(systemName: segment.type.icon)
                     .font(.system(size: 10, weight: .semibold))
@@ -222,7 +222,7 @@ struct SimpleTimelineView: View {
             .foregroundStyle(theme.textPrimary)
             .padding(.horizontal, 4)
 
-        case .fgAudio, .bgAudio:
+        case .audio:
             if let samples = segment.waveformSamples, !samples.isEmpty {
                 waveformView(samples: samples)
             } else {
@@ -412,12 +412,7 @@ struct SimpleTimelineView: View {
         }
 
         for media in effects.mediaObjects ?? [] {
-            let trackType: TrackType
-            if media.mediaType == "video" {
-                trackType = media.placement == "background" ? .bgVideo : .fgVideo
-            } else {
-                trackType = media.placement == "background" ? .bgImage : .fgImage
-            }
+            let trackType: TrackType = media.mediaType == "video" ? .video : .image
 
             let img = viewModel.loadedImages[media.id]
             result.append(SimpleSegment(
@@ -432,11 +427,10 @@ struct SimpleTimelineView: View {
         }
 
         for audio in effects.audioPlayerObjects ?? [] {
-            let trackType: TrackType = audio.placement == "background" ? .bgAudio : .fgAudio
             result.append(SimpleSegment(
                 id: audio.id,
                 name: "Audio",
-                type: trackType,
+                type: .audio,
                 startTime: audio.startTime ?? 0,
                 duration: audio.duration ?? slideDur,
                 waveformSamples: audio.waveformSamples,

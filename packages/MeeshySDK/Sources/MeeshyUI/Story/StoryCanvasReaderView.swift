@@ -138,7 +138,7 @@ public struct StoryCanvasReaderView: View {
 
     @ViewBuilder
     private var backgroundMediaLayer: some View {
-        if let bgMedia = story.storyEffects?.mediaObjects?.first(where: { $0.placement == "background" }) {
+        if let bgMedia = story.storyEffects?.mediaObjects?.first {
             if bgMedia.mediaType == "image" {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId) {
                     let thumbHash = story.media.first(where: { $0.id == bgMedia.postMediaId })?.thumbHash ?? resolvedThumbHash
@@ -358,12 +358,13 @@ public struct StoryCanvasReaderView: View {
         }
     }
 
-    // MARK: - Foreground Media Layer (timing-aware visibility + volume fade)
+    // MARK: - Positioned Media Layer (timing-aware visibility + volume fade, skips first = bg)
 
     @ViewBuilder
     private func foregroundMediaLayer(canvasWidth: CGFloat) -> some View {
         let time = state.currentTime
-        ForEach(story.storyEffects?.mediaObjects?.filter { $0.placement == "foreground" } ?? []) { media in
+        let allMedia = story.storyEffects?.mediaObjects ?? []
+        ForEach(allMedia.dropFirst()) { media in
             let visible = state.mediaObjectVisible(media, at: time)
             if visible {
                 DraggableMediaView(
@@ -382,12 +383,12 @@ public struct StoryCanvasReaderView: View {
         }
     }
 
-    // MARK: - Foreground Audio Layer (timing-aware visibility)
+    // MARK: - Audio Layer (timing-aware visibility, all audio players on top)
 
     @ViewBuilder
     private var foregroundAudioLayer: some View {
         let time = state.currentTime
-        ForEach(story.storyEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" } ?? []) { audio in
+        ForEach(story.storyEffects?.audioPlayerObjects ?? []) { audio in
             let visible = state.audioObjectVisible(audio, at: time)
             if visible {
                 StoryAudioPlayerView(
@@ -659,7 +660,8 @@ private final class ReaderState: ObservableObject {
 
     func loadForegroundImages(story: StoryItem, preloadedImages: [String: UIImage] = [:]) async {
         guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
-        let foregroundImages = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "image" }
+        // Skip first media (rendered as background), load images for rest
+        let foregroundImages = Array(mediaObjects.dropFirst()).filter { $0.mediaType == "image" }
 
         // Phase 1: Synchronous — populate from preloaded + disk cache (instant)
         var needsNetworkLoad: [(id: String, resolved: String)] = []
@@ -914,7 +916,8 @@ private final class ReaderState: ObservableObject {
     func startForegroundVideos(story: StoryItem, preloadedVideoURLs: [String: URL] = [:]) {
         currentStoryRef = story
         guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
-        let videoObjects = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "video" }
+        // Skip first media (rendered as background), start videos for rest
+        let videoObjects = Array(mediaObjects.dropFirst()).filter { $0.mediaType == "video" }
         for media in videoObjects {
             if let preloaded = preloadedVideoURLs[media.id] {
                 registerPendingVideoStart(media: media, url: preloaded)
@@ -1003,8 +1006,7 @@ private final class ReaderState: ObservableObject {
     /// Returns the latest effective end time among all foreground audio elements.
     /// Used to determine if a video should loop because audio outlasts it.
     private func maxForegroundAudioEndTime() -> Double {
-        guard let audioObjects = currentStoryRef?.storyEffects?.audioPlayerObjects?
-            .filter({ $0.placement == "foreground" }) else { return 0 }
+        guard let audioObjects = currentStoryRef?.storyEffects?.audioPlayerObjects else { return 0 }
         var maxEnd: Double = 0
         for audio in audioObjects {
             let start = Double(audio.startTime ?? 0)
@@ -1112,7 +1114,7 @@ private final class ReaderState: ObservableObject {
 
     func startForegroundAudios(story: StoryItem, preloadedAudioURLs: [String: URL] = [:]) {
         guard let audioObjects = story.storyEffects?.audioPlayerObjects else { return }
-        let foregroundAudios = audioObjects.filter { $0.placement == "foreground" }
+        let foregroundAudios = audioObjects
         for audio in foregroundAudios {
             if let preloaded = preloadedAudioURLs[audio.id] {
                 registerPendingAudioStart(audio: audio, url: preloaded)

@@ -52,8 +52,9 @@ struct SlideMiniPreview: View {
 
     @ViewBuilder
     private func bgMediaImage(in size: CGSize) -> some View {
-        if let bgMedia = effects.mediaObjects?
-            .first(where: { $0.placement == "background" && $0.mediaType == "image" }),
+        // First media object fills canvas as background
+        if let bgMedia = effects.mediaObjects?.first,
+           bgMedia.mediaType == "image",
            let img = loadedImages[bgMedia.id] {
             Image(uiImage: img)
                 .resizable()
@@ -82,8 +83,9 @@ struct SlideMiniPreview: View {
 
     @ViewBuilder
     private func foregroundMediaLayer(in size: CGSize) -> some View {
-        let fgMedia = effects.mediaObjects?.filter { $0.placement == "foreground" } ?? []
-        ForEach(fgMedia) { media in
+        // Skip first media (rendered as background), show rest as positioned
+        let positionedMedia = Array((effects.mediaObjects ?? []).dropFirst())
+        ForEach(positionedMedia) { media in
             foregroundMediaItem(media, in: size)
         }
     }
@@ -165,7 +167,7 @@ struct SlideMiniPreview: View {
     @ViewBuilder
     private func bgColorDot(in size: CGSize) -> some View {
         let hasBgImage = bgImage != nil
-            || effects.mediaObjects?.contains(where: { $0.placement == "background" && loadedImages[$0.id] != nil }) == true
+            || effects.mediaObjects?.first.flatMap { loadedImages[$0.id] } != nil
         if hasBgImage, let bg = effects.background {
             VStack {
                 Spacer()

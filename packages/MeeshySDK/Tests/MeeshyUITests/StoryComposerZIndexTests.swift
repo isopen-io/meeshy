@@ -46,8 +46,8 @@ final class StoryComposerZIndexTests: XCTestCase {
     @MainActor
     func test_newElement_alwaysAbovePrevious() {
         let vm = StoryComposerViewModel()
-        let first = vm.addMediaObject(type: "image", placement: "background")
-        let second = vm.addMediaObject(type: "image", placement: "foreground")
+        let first = vm.addMediaObject(type: "image")
+        let second = vm.addMediaObject(type: "image")
 
         let firstZ = vm.zIndex(for: first!.id)
         let secondZ = vm.zIndex(for: second!.id)
