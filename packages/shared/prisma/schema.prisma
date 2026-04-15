@@ -300,6 +300,9 @@ model Conversation {
   banner        String?
   communityId   String?  @db.ObjectId
   isActive      Boolean  @default(true)
+  /// Conversation closed for all — no one can write, messages stay readable
+  closedAt  DateTime?
+  closedBy  String?   @db.ObjectId
   /// Denormalized member count for performance
   memberCount   Int      @default(0)
   lastMessageAt DateTime @default(now())
@@ -472,6 +475,8 @@ model Participant {
   joinedAt     DateTime  @default(now())
   leftAt       DateTime?
   bannedAt     DateTime?
+  /// Permanent personal deletion — conversation hidden forever for this user
+  deletedForMe DateTime?
 
   /// Per-conversation display name override
   nickname String?
