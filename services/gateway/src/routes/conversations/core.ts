@@ -154,7 +154,8 @@ export function registerCoreRoutes(
         participants: {
           some: {
             userId: userId,
-            isActive: true
+            isActive: true,
+            deletedForMe: null
           }
         },
         isActive: true
@@ -1123,10 +1124,21 @@ export function registerCoreRoutes(
       }
 
       // Marquer la conversation comme inactive plutôt que de la supprimer
+      const now = new Date()
       await prisma.conversation.update({
         where: { id: conversationId },
-        data: { isActive: false }
+        data: { isActive: false, closedAt: now, closedBy: userId }
       });
+
+      // Broadcast closure to all members
+      const socketIOManager = (fastify as any).socketIOHandler?.getManager?.()
+      const io = socketIOManager?.io || ((fastify as any).socketIOHandler as any)?.io
+      if (io) {
+        io.to(ROOMS.conversation(conversationId)).emit(
+          SERVER_EVENTS.CONVERSATION_CLOSED,
+          { conversationId, closedBy: userId, closedAt: now.toISOString() }
+        )
+      }
 
       return sendSuccess(reply, { message: 'Conversation supprimée avec succès' });
 
