@@ -7,6 +7,7 @@ import { registerParticipantsRoutes } from './participants';
 import { registerSharingRoutes } from './sharing';
 import { registerSearchRoutes } from './search';
 import { registerLeaveRoutes } from './leave';
+import { registerDeleteForMeRoutes } from './delete-for-me';
 import { registerBanRoutes } from './ban';
 import { registerStatsRoutes } from './stats';
 import { registerThreadsRoutes } from './threads';
@@ -41,6 +42,7 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   registerSharingRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerSearchRoutes(fastify, prisma, requiredAuth);
   registerLeaveRoutes(fastify, prisma, optionalAuth, requiredAuth);
+  registerDeleteForMeRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerBanRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerStatsRoutes(fastify, prisma, requiredAuth);
   registerThreadsRoutes(fastify, prisma, requiredAuth);
