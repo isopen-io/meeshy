@@ -124,6 +124,7 @@ export const SERVER_EVENTS = {
   CONVERSATION_UPDATED: 'conversation:updated',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
+  CONVERSATION_CLOSED: 'conversation:closed',
   CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   /**
