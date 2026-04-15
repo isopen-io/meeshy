@@ -15,6 +15,7 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     var messageTranscriptions: [String: MessageTranscription] = [:]
     var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
     var activeLiveLocations: [ActiveLiveLocation] = []
+    var isConversationClosed: Bool = false
 
     private var _messageIdIndex: [String: Int]?
 

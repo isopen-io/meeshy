@@ -15,6 +15,7 @@ protocol ConversationSocketDelegate: AnyObject {
     var messageTranscriptions: [String: MessageTranscription] { get set }
     var messageTranslatedAudios: [String: [MessageTranslatedAudio]] { get set }
     var activeLiveLocations: [ActiveLiveLocation] { get set }
+    var isConversationClosed: Bool { get set }
 
     /// O(1) index lookup by message ID (backed by dictionary)
     func messageIndex(for id: String) -> Int?
@@ -495,6 +496,16 @@ final class ConversationSocketHandler {
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
                 delegate.activeLiveLocations.removeAll { $0.userId == event.userId }
+            }
+            .store(in: &cancellables)
+
+        // Conversation closed
+        socketManager.conversationClosed
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let delegate = self?.delegate else { return }
+                delegate.isConversationClosed = true
             }
             .store(in: &cancellables)
     }

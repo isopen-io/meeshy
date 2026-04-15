@@ -259,6 +259,7 @@ struct ConversationView: View {
             isDirect: conversation?.type == .direct,
             participantUserId: conversation?.participantUserId,
             memberJoinedAt: conversation?.currentUserJoinedAt,
+            closedAt: conversation?.closedAt,
             anonymousSession: anonymousSession
         ))
     }
@@ -398,6 +399,21 @@ struct ConversationView: View {
             .padding(.top, 16)
             .padding(.bottom, 8)
         }
+    }
+
+    // MARK: - Closed Conversation Banner
+
+    private var closedConversationBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "lock.fill")
+                .foregroundColor(.secondary)
+            Text("Cette conversation a ete fermee")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(.ultraThinMaterial)
     }
 
     // MARK: - Empty Conversation State
@@ -730,7 +746,11 @@ struct ConversationView: View {
                         .frame(height: 260)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    themedComposer
+                    if viewModel.isConversationClosed {
+                        closedConversationBanner
+                    } else {
+                        themedComposer
+                    }
                 }
                 .background(.ultraThinMaterial)
                 .ignoresSafeArea(.container, edges: .bottom)

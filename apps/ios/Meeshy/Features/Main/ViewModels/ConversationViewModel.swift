@@ -101,6 +101,9 @@ class ConversationViewModel: ObservableObject {
     /// When true, onAppear prefetch triggers are suppressed.
     @Published var isProgrammaticScroll = false
 
+    /// True when the conversation has been closed (no more messages can be sent)
+    @Published var isConversationClosed = false
+
     /// Selected ephemeral duration for next message
     @Published var ephemeralDuration: EphemeralDuration?
 
@@ -493,6 +496,7 @@ class ConversationViewModel: ObservableObject {
         isDirect: Bool = false,
         participantUserId: String? = nil,
         memberJoinedAt: Date? = nil,
+        closedAt: Date? = nil,
         anonymousSession: AnonymousSessionContext? = nil,
         authManager: AuthManaging = AuthManager.shared,
         messageService: MessageServiceProviding = MessageService.shared,
@@ -507,6 +511,7 @@ class ConversationViewModel: ObservableObject {
         self.initialUnreadCount = unreadCount
         self.isDirect = isDirect
         self.participantUserId = participantUserId
+        self.isConversationClosed = closedAt != nil
         self.authManager = authManager
         self.messageService = messageService
         self.conversationService = conversationService
