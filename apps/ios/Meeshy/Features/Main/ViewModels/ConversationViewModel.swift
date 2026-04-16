@@ -655,7 +655,14 @@ class ConversationViewModel: ObservableObject {
 
             if !newOnly.isEmpty || didUpdateStatus {
                 messages = merged
-                await CacheCoordinator.shared.messages.save(messages, for: conversationId)
+                // Atomic merge to cache: preserve any socket messages that arrived
+                // between the REST fetch and now so they are never silently dropped.
+                let snapshot = messages
+                await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
+                    let snapshotIds = Set(snapshot.map(\.id))
+                    let fromCacheOnly = cached.filter { !snapshotIds.contains($0.id) }
+                    return (snapshot + fromCacheOnly).sorted { $0.createdAt < $1.createdAt }
+                }
             }
         } catch {
             // Silent refresh failure — cached data is already displayed

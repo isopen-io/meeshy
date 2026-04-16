@@ -184,8 +184,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             if let mentionedUsers = response.meta?.mentionedUsers {
                 UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
             }
-            let messages = response.data.map { $0.toMessage(currentUserId: userId) }
-            await cache.messages.save(messages, for: conversationId)
+            let freshMessages = response.data.map { $0.toMessage(currentUserId: userId) }
+            // Atomic merge: keep any messages that arrived via socket between the
+            // REST request and this write, so they are never silently overwritten.
+            await cache.messages.mergeUpdate(for: conversationId) { existing in
+                let freshIds = Set(freshMessages.map(\.id))
+                let fromCacheOnly = existing.filter { !freshIds.contains($0.id) }
+                return (freshMessages + fromCacheOnly).sorted { $0.createdAt < $1.createdAt }
+            }
             _messagesDidChange.send(conversationId)
         } catch {
             Self.logger.error("[SyncEngine] ensureMessages error: \(error.localizedDescription)")
@@ -200,12 +206,13 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let userId = await currentUserId()
             let olderMessages = response.data.map { $0.toMessage(currentUserId: userId) }
 
-            let existing = await cache.messages.load(for: conversationId).value ?? []
-            let existingIds = Set(existing.map(\.id))
-            let newOnly = olderMessages.filter { !existingIds.contains($0.id) }
-            let merged = newOnly + existing
-
-            await cache.messages.save(merged, for: conversationId)
+            // Atomic merge: prepend older messages without overwriting any
+            // messages that arrived via socket between the REST fetch and now.
+            await cache.messages.mergeUpdate(for: conversationId) { existing in
+                let existingIds = Set(existing.map(\.id))
+                let newOnly = olderMessages.filter { !existingIds.contains($0.id) }
+                return newOnly + existing
+            }
             _messagesDidChange.send(conversationId)
         } catch {
             Self.logger.error("[SyncEngine] fetchOlderMessages error: \(error.localizedDescription)")
