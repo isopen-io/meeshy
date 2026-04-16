@@ -36,7 +36,6 @@ struct ConversationOverlayState {
     var overlayMessage: Message? = nil
     var showOverlayMenu = false
     var longPressEnabled = false
-    var showMessageDetailSheet = false
     var detailSheetMessage: Message? = nil
     var detailSheetInitialTab: DetailTab? = nil
     var quickReactionMessageId: String? = nil
@@ -68,6 +67,12 @@ struct ConversationScrollState {
     var editingPendingAttachmentId: String? = nil
     var videoToEdit: URL? = nil
     var audioToEdit: URL? = nil
+}
+
+struct PreviewMedia: Identifiable {
+    let id = UUID()
+    let url: URL
+    let type: String?
 }
 
 struct ConversationComposerState {
@@ -115,8 +120,7 @@ struct ConversationComposerState {
     var editingOriginalContent: String? = nil
 
     // Reply attachment preview
-    var previewMediaURL: URL? = nil
-    var previewMediaType: String? = nil
+    var previewMedia: PreviewMedia? = nil
 
     // Misc Pickers
     var showContactPicker = false
@@ -540,56 +544,49 @@ struct ConversationView: View {
                     senderInfoMap: viewModel.mediaSenderInfoMap
                 )
             }
-            .fullScreenCover(isPresented: Binding(
-                get: { composerState.previewMediaURL != nil },
-                set: { if !$0 { composerState.previewMediaURL = nil; composerState.previewMediaType = nil } }
-            )) {
-                if let url = composerState.previewMediaURL {
-                    switch composerState.previewMediaType {
-                    case "video":
-                        VideoFullscreenPlayer(urlString: url.absoluteString, speed: .x1_0)
-                    case "audio":
-                        VideoFullscreenPlayer(urlString: url.absoluteString, speed: .x1_0)
-                    default:
-                        ImageFullscreen(imageUrl: url, accentColor: accentColor)
-                    }
+            .fullScreenCover(item: $composerState.previewMedia) { media in
+                switch media.type {
+                case "video":
+                    VideoFullscreenPlayer(urlString: media.url.absoluteString, speed: .x1_0)
+                case "audio":
+                    VideoFullscreenPlayer(urlString: media.url.absoluteString, speed: .x1_0)
+                default:
+                    ImageFullscreen(imageUrl: media.url, accentColor: accentColor)
                 }
             }
-            .sheet(isPresented: $overlayState.showMessageDetailSheet) {
-                if let msg = overlayState.detailSheetMessage {
-                    MessageDetailSheet(
-                        message: msg,
-                        contactColor: conversation?.accentColor ?? "#FF2E63",
-                        conversationId: viewModel.conversationId,
-                        initialTab: overlayState.detailSheetInitialTab,
-                        canDelete: msg.isMe || isCurrentUserAdminOrMod,
-                        textTranslations: viewModel.messageTranslations[msg.id] ?? [],
-                        transcription: viewModel.messageTranscriptions[msg.id],
-                        translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
-                        onSelectTranslation: { translation in
-                            viewModel.setActiveTranslation(for: msg.id, translation: translation)
-                        },
-                        onSelectAudioLanguage: { langCode in
-                            viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
-                        },
-                        onRequestTranslation: { messageId, lang in
-                            MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
-                        },
-                        onReact: { emoji in
-                            viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
-                        },
-                        onReport: { type, reason in
-                            Task {
-                                let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
-                                if success { HapticFeedback.success() }
-                                else { HapticFeedback.error() }
-                            }
-                        },
-                        onDelete: {
-                            Task { await viewModel.deleteMessage(messageId: msg.id) }
+            .sheet(item: $overlayState.detailSheetMessage) { msg in
+                MessageDetailSheet(
+                    message: msg,
+                    contactColor: conversation?.accentColor ?? "#FF2E63",
+                    conversationId: viewModel.conversationId,
+                    initialTab: overlayState.detailSheetInitialTab,
+                    canDelete: msg.isMe || isCurrentUserAdminOrMod,
+                    textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                    transcription: viewModel.messageTranscriptions[msg.id],
+                    translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                    onSelectTranslation: { translation in
+                        viewModel.setActiveTranslation(for: msg.id, translation: translation)
+                    },
+                    onSelectAudioLanguage: { langCode in
+                        viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
+                    },
+                    onRequestTranslation: { messageId, lang in
+                        MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
+                    },
+                    onReact: { emoji in
+                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                    },
+                    onReport: { type, reason in
+                        Task {
+                            let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
+                            if success { HapticFeedback.success() }
+                            else { HapticFeedback.error() }
                         }
-                    )
-                }
+                    },
+                    onDelete: {
+                        Task { await viewModel.deleteMessage(messageId: msg.id) }
+                    }
+                )
             }
     }
 

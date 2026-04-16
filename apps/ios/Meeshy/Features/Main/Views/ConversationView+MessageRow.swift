@@ -78,17 +78,17 @@ extension ConversationView {
                         let target = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? msg
                         overlayState.detailSheetMessage = target
                         overlayState.detailSheetInitialTab = .react
-                        overlayState.showMessageDetailSheet = true
+
                     },
                     onShowInfo: {
                         overlayState.detailSheetMessage = msg
                         overlayState.detailSheetInitialTab = .views
-                        overlayState.showMessageDetailSheet = true
+
                     },
                     onShowReactions: { messageId in
                         overlayState.detailSheetMessage = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? msg
                         overlayState.detailSheetInitialTab = .reactions
-                        overlayState.showMessageDetailSheet = true
+
                     },
                     onReplyTap: { messageId in
                         overlayState.replyThreadParentId = messageId
@@ -123,7 +123,7 @@ extension ConversationView {
                     onShowTranslationDetail: { messageId in
                         overlayState.detailSheetMessage = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? msg
                         overlayState.detailSheetInitialTab = .language
-                        overlayState.showMessageDetailSheet = true
+
                     },
                     allAudioItems: viewModel.allAudioItems,
                     onScrollToMessage: { messageId in
@@ -684,7 +684,6 @@ extension ConversationView {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 overlayState.detailSheetMessage = msg
                 overlayState.detailSheetInitialTab = .react
-                overlayState.showMessageDetailSheet = true
             }
         } label: {
             Image(systemName: "plus")

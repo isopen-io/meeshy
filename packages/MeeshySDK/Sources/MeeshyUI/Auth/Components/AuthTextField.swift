@@ -14,7 +14,7 @@ public struct AuthTextField: View {
     @State private var isShowingPassword = false
     @State private var validationError: String?
     @FocusState private var isFocused: Bool
-    @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var theme = ThemeManager.shared
 
     public init(title: String, icon: String, text: Binding<String>,
                 isSecure: Bool = false, keyboardType: UIKeyboardType = .default,

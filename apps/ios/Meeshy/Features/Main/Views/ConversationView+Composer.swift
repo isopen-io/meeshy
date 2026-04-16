@@ -369,8 +369,7 @@ extension ConversationView {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .onTapGesture {
                     if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
-                        composerState.previewMediaURL = url
-                        composerState.previewMediaType = "image"
+                        composerState.previewMedia = PreviewMedia(url: url, type: "image")
                     }
                 }
             }
@@ -391,8 +390,7 @@ extension ConversationView {
                 }
                 .onTapGesture {
                     if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
-                        composerState.previewMediaURL = url
-                        composerState.previewMediaType = "video"
+                        composerState.previewMedia = PreviewMedia(url: url, type: "video")
                     }
                 }
             } else {
@@ -427,8 +425,7 @@ extension ConversationView {
             )
             .onTapGesture {
                 if let thumbUrl = reply.attachmentThumbnailUrl, let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
-                    composerState.previewMediaURL = url
-                    composerState.previewMediaType = "audio"
+                    composerState.previewMedia = PreviewMedia(url: url, type: "audio")
                 }
             }
 

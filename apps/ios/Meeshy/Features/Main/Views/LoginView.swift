@@ -5,7 +5,7 @@ import MeeshyUI
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
-    @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var theme = ThemeManager.shared
 
     // Normal login form state
     @State private var username = ""

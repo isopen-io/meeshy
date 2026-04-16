@@ -47,17 +47,16 @@ extension iPadRootView {
                     .presentationDragIndicator(.visible)
             }
             .fullScreenCover(isPresented: $showStoryViewerFromConv) {
-                if let userId = selectedStoryUserIdFromConv {
-                    StoryViewerContainer(
-                        viewModel: storyViewModel,
-                        userId: userId,
-                        isPresented: $showStoryViewerFromConv,
-                        onReplyToStory: { replyContext in
-                            showStoryViewerFromConv = false
-                            handleStoryReply(replyContext)
-                        }
-                    )
-                }
+                StoryViewerContainer(
+                    viewModel: storyViewModel,
+                    userId: selectedStoryUserIdFromConv,
+                    isPresented: $showStoryViewerFromConv,
+                    onReplyToStory: { replyContext in
+                        showStoryViewerFromConv = false
+                        handleStoryReply(replyContext)
+                    },
+                    presentationSource: "iPadRootView.conv"
+                )
             }
             .fullScreenCover(isPresented: Binding(
                 get: { callManager.callState.isActive },
