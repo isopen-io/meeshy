@@ -16,6 +16,7 @@ protocol ConversationSocketDelegate: AnyObject {
     var messageTranslatedAudios: [String: [MessageTranslatedAudio]] { get set }
     var activeLiveLocations: [ActiveLiveLocation] { get set }
     var isConversationClosed: Bool { get set }
+    var pendingServerIds: [String: String] { get set }
 
     /// O(1) index lookup by message ID (backed by dictionary)
     func messageIndex(for id: String) -> Int?
