@@ -20,6 +20,9 @@ private actor MockMutableStore: MutableCacheStore {
     func update(for key: String, mutate: @Sendable ([TestItem]) -> [TestItem]) async {
         storage[key] = mutate(storage[key] ?? [])
     }
+    func mergeUpdate(for key: String, mutate: @Sendable ([TestItem]) -> [TestItem]) async {
+        storage[key] = mutate(storage[key] ?? [])
+    }
     func invalidate(for key: String) async { storage.removeValue(forKey: key) }
     func invalidateAll() async { storage.removeAll() }
 }
