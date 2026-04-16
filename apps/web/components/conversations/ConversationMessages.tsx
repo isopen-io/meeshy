@@ -108,6 +108,9 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   
   // Ref pour tracker si c'est le premier chargement
   const isFirstLoadRef = useRef(true);
+
+  // Ref pour tracker l'ID du message le plus récent (détection nouveaux vs anciens)
+  const lastNewestMessageIdRef = useRef<string | null>(null);
   
   // Ref pour tracker si l'utilisateur est en train de consulter l'historique
   const isUserScrollingHistoryRef = useRef(false);
@@ -295,6 +298,10 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   useEffect(() => {
     if (isFirstLoadRef.current && messages.length > 0 && !isLoadingMessages) {
       isFirstLoadRef.current = false;
+      // Synchroniser les refs pour empêcher l'effet "nouveaux messages" de se déclencher
+      // dans le même cycle de rendu (cause principale de la boucle de scroll infinie)
+      previousMessageCountRef.current = messages.length;
+      lastNewestMessageIdRef.current = messages[0]?.id ?? null;
 
       requestAnimationFrame(() => {
         if (scrollDirection === 'down') {
@@ -326,16 +333,21 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       }
     }, 200);
 
+    let lastKnownScrollHeight = 0;
+
     const interval = setInterval(() => {
       if (!active || userInteracted) return;
       const container = scrollAreaRef.current;
       if (!container || container.scrollHeight <= container.clientHeight) return;
 
+      // Ne re-scroller que si le scrollHeight a changé (contenu async chargé)
+      // Évite les snaps inutiles qui causent du jitter visuel
+      if (container.scrollHeight === lastKnownScrollHeight) return;
+      lastKnownScrollHeight = container.scrollHeight;
+
       const maxScroll = container.scrollHeight - container.clientHeight;
       if (container.scrollTop < maxScroll - 10) {
         container.scrollTop = container.scrollHeight;
-        // Mettre à jour le bouton scroll-to-bottom (le scroll programmatique
-        // déclenche l'événement scroll, mais on force aussi par sécurité)
         setShowScrollButton(false);
       }
     }, 150);
@@ -369,52 +381,49 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       // Scénario 2 : NE PAS scroller si on est en train de charger des messages anciens
       if (isLoadingMore) {
         previousMessageCountRef.current = currentCount;
+        lastNewestMessageIdRef.current = messages[0]?.id ?? null;
         return;
       }
 
-      // Détecter si c'est un nouveau message (ajouté à la fin)
-      if (currentCount > previousCount) {
-        const lastMessage = messages[messages.length - 1];
+      // Détecter si c'est un NOUVEAU message (pas un chargement d'anciens)
+      // messages[0] = le plus récent (tri DESC), vérifier que son ID a changé
+      const newestMessage = messages[0];
+      const isNewMessageArrived = currentCount > previousCount &&
+        newestMessage?.id !== lastNewestMessageIdRef.current;
 
-        // AMÉLIORATION: Toujours scroller sur NOTRE propre message (envoi)
-        const lastSenderUserId = getSenderUserId(lastMessage?.sender as Record<string, unknown>) ?? (lastMessage?.sender as any)?.id;
-        if (lastMessage && lastSenderUserId === currentUser?.id) {
-          // En mode scrollDirection='down' (BubbleStream), scroller vers le haut
+      if (isNewMessageArrived) {
+        const senderUserId = getSenderUserId(newestMessage?.sender as Record<string, unknown>) ?? (newestMessage?.sender as any)?.id;
+        if (newestMessage && senderUserId === currentUser?.id) {
+          // Toujours scroller sur NOTRE propre message (envoi)
           if (scrollDirection === 'down') {
-            scrollToTop(true); // true = avec animation fluide
+            scrollToTop(true);
           } else {
-            scrollToBottom(true); // true = avec animation fluide
+            scrollToBottom(true);
           }
         } else {
-          // AMÉLIORATION: Pour les messages reçus, scroller si l'utilisateur est proche du bas
+          // Pour les messages reçus, scroller seulement si l'utilisateur est proche du bas/haut
           if (scrollDirection === 'down') {
-            // En BubbleStream, vérifier si l'utilisateur est proche du haut
             const container = scrollAreaRef.current;
             if (container && container.scrollTop < 300) {
-              scrollToTop(true); // Animation fluide pour les messages reçus
-            } else {
+              scrollToTop(true);
             }
           } else {
-            // Mode classique : vérifier si l'utilisateur est en bas
-            // CORRECTION: Vérifier directement le container au lieu d'utiliser la fonction callback
             const container = scrollAreaRef.current;
             if (container) {
               const { scrollTop, scrollHeight, clientHeight } = container;
               const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
               const userIsAtBottom = distanceFromBottom < 150;
-
-
               if (userIsAtBottom) {
-                scrollToBottom(true); // Animation fluide pour les messages reçus
-              } else {
+                scrollToBottom(true);
               }
             }
           }
         }
       }
 
-      // Mettre à jour le compteur
+      // Mettre à jour les refs de tracking
       previousMessageCountRef.current = currentCount;
+      lastNewestMessageIdRef.current = newestMessage?.id ?? null;
     }
   }, [messages.length, currentUser?.id, scrollDirection, scrollToBottom, scrollToTop, isLoadingMore, scrollAreaRef]);
 
