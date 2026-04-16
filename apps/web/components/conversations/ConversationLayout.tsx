@@ -628,12 +628,15 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       );
 
       if (ackResponse?.success) {
-        // Upgrade optimistic: set server ID if available, always clear optimistic markers
-        // The full server message will arrive via message:new and replace this entry by ID
-        updateMessage(optimistic.id, (prev) => {
-          const { _tempId, _localStatus, _sendPayload, ...clean } = prev as any;
-          return { ...clean, ...(ackResponse.messageId ? { id: ackResponse.messageId } : {}) } as Message;
-        });
+        // Marquer comme envoyé et stocker le messageId serveur pour la déduplication.
+        // NE PAS changer l'id ni supprimer _tempId/_localStatus ici — cela causerait un
+        // changement de React key (flash visuel). Le remplacement complet se fera
+        // atomiquement quand message:new arrivera via handleNewMessage.
+        updateMessage(optimistic.id, (prev) => ({
+          ...prev,
+          _localStatus: 'sent' as const,
+          ...(ackResponse.messageId ? { _serverMessageId: ackResponse.messageId } : {}),
+        }));
       } else {
         markMessageFailed(optimistic._tempId);
       }
@@ -713,10 +716,13 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
         forwardedFromConversationId,
       );
       if (result?.success) {
-        updateMessage(optimistic.id, (prev) => {
-          const { _tempId, _localStatus, _sendPayload, ...clean } = prev as any;
-          return { ...clean, ...(result.messageId ? { id: result.messageId } : {}) } as Message;
-        });
+        // Même pattern que handleSendMessage : ne pas changer l'id,
+        // stocker le messageId serveur pour la déduplication par handleNewMessage.
+        updateMessage(optimistic.id, (prev) => ({
+          ...prev,
+          _localStatus: 'sent' as const,
+          ...(result.messageId ? { _serverMessageId: result.messageId } : {}),
+        }));
       } else {
         markMessageFailed(optimistic._tempId);
       }

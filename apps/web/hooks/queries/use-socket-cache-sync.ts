@@ -83,9 +83,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
           for (const page of old.pages) {
             for (const m of page.messages) {
               if (m.id === message.id) return old; // already have this server message
-              // If own message:new arrives while optimistic is still 'sending', replace it
-              // Match by closest createdAt timestamp (within 5s window) instead of content
-              // to avoid cross-replacing when multiple identical messages are sending
+
+              // Dédup par _serverMessageId : le ACK a stocké le messageId serveur
+              // sur le message optimiste (sans changer son id/key React).
+              // Quand le broadcast arrive, on remplace atomiquement.
+              if (isOwnMessage && (m as any)._serverMessageId === message.id) {
+                optimisticTempId = (m as any)._tempId ?? m.id;
+                break;
+              }
+
+              // Fallback : dédup par timestamp pour le cas où le broadcast
+              // arrive AVANT le ACK (optimiste encore en status 'sending')
               if (isOwnMessage && isOptimisticMessage(m) && m._localStatus === 'sending') {
                 const timeDiff = Math.abs(
                   new Date(message.createdAt).getTime() - new Date(m.createdAt).getTime()
@@ -96,17 +104,24 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                 }
               }
             }
+            if (optimisticTempId) break;
           }
 
-          // Replace optimistic if found (prevents duplicate when message:new arrives before ACK)
+          // Replace optimistic if found (prevents duplicate)
           if (optimisticTempId) {
+            const targetTempId = optimisticTempId;
             return {
               ...old,
               pages: old.pages.map(page => ({
                 ...page,
-                messages: page.messages.map(m =>
-                  isOptimisticMessage(m) && m._tempId === optimisticTempId ? message : m
-                ),
+                messages: page.messages.map(m => {
+                  const mTempId = (m as any)._tempId ?? null;
+                  const mServerId = (m as any)._serverMessageId ?? null;
+                  if (mTempId === targetTempId || mServerId === message.id) {
+                    return message;
+                  }
+                  return m;
+                }),
               })),
             };
           }

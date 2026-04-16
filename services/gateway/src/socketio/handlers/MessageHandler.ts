@@ -440,10 +440,14 @@ export class MessageHandler {
       }
 
       const room = ROOMS.conversation(normalizedId);
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
-
       if (senderSocket) {
+        // Exclure le sender du broadcast room, puis lui envoyer directement.
+        // Avant ce fix, io.to(room) incluait le sender ET senderSocket.emit()
+        // l'envoyait une 2e fois → le client recevait message:new en double.
+        senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
         senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+      } else {
+        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
       }
 
       // Mettre à jour unread counts

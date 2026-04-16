@@ -154,6 +154,28 @@ final class ConversationSocketHandler {
                 Task { [weak self] in
                     guard let self, let delegate = self.delegate else { return }
 
+                    // Remplacement atomique d'un message optimiste propre :
+                    // L'API response a stocké le serverId dans pendingServerIds
+                    // sans changer l'id (évite le flash SwiftUI).
+                    // Quand le broadcast message:new arrive, on fait le remplacement complet.
+                    if apiMsg.senderId == userId,
+                       let tempId = delegate.pendingServerIds.first(where: { $0.value == apiMsg.id })?.key,
+                       let idx = delegate.messageIndex(for: tempId) {
+                        var msg = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
+                        var msgArray = [msg]
+                        await delegate.decryptMessagesIfNeeded(&msgArray)
+                        msg = msgArray[0]
+                        await MainActor.run {
+                            delegate.messages[idx] = msg
+                            delegate.pendingServerIds.removeValue(forKey: tempId)
+                        }
+                        // Persister le remplacement : le tempId est remplacé par le serverId
+                        // dans le cache, le message survivra à la navigation.
+                        let updatedSnapshot = await MainActor.run { delegate.messages }
+                        await CacheCoordinator.shared.messages.save(updatedSnapshot, for: convId)
+                        return
+                    }
+
                     if delegate.containsMessage(id: apiMsg.id) {
                         if apiMsg.senderId == userId,
                            let socketAttachments = apiMsg.attachments, !socketAttachments.isEmpty,
