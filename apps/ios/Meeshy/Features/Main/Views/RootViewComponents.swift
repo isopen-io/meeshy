@@ -311,16 +311,15 @@ struct ThemedFeedOverlay: View {
             viewModel.unsubscribeFromSocketEvents()
         }
         .fullScreenCover(isPresented: $showStoryViewer) {
-            if let userId = selectedStoryUserId {
-                StoryViewerContainer(
-                    viewModel: storyViewModel,
-                    userId: userId,
-                    isPresented: $showStoryViewer
-                )
-                .environmentObject(router)
-                .environmentObject(statusViewModel)
-                .environmentObject(conversationListViewModel)
-            }
+            StoryViewerContainer(
+                viewModel: storyViewModel,
+                userId: selectedStoryUserId,
+                isPresented: $showStoryViewer,
+                presentationSource: "FeedOverlay"
+            )
+            .environmentObject(router)
+            .environmentObject(statusViewModel)
+            .environmentObject(conversationListViewModel)
         }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
