@@ -11,6 +11,7 @@ import {
 } from '@meeshy/shared/types/attachment';
 import jwt from 'jsonwebtoken';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
+import { ThumbHashGenerator } from '../../services/attachments/ThumbHashGenerator';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'TusHandler' });
@@ -159,6 +160,17 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
         logger.warn('[TUS] Thumbnail generation failed:', err);
       }
 
+      // Generate thumbHash for visual media (images/videos)
+      // Client may provide thumbHash via TUS metadata; backend generates as fallback
+      let thumbHash: string | null = upload.metadata?.thumbhash || null;
+      if (!thumbHash && (attachmentType === 'image' || attachmentType === 'video')) {
+        try {
+          thumbHash = await ThumbHashGenerator.generate(destPath, mimeType);
+        } catch (err) {
+          logger.warn('[TUS] ThumbHash generation failed:', err);
+        }
+      }
+
       const uploadContext = upload.metadata?.uploadcontext;
       const isPostMedia = uploadContext === 'post' || uploadContext === 'story' || uploadContext === 'status';
 
@@ -176,6 +188,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
             fileUrl,
             thumbnailPath: thumbnailRelPath || null,
             thumbnailUrl: thumbnailUrl || null,
+            thumbHash,
             width: metadata.width || null,
             height: metadata.height || null,
             duration: metadata.duration || null,
@@ -196,6 +209,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
             fileUrl,
             thumbnailPath: thumbnailRelPath || null,
             thumbnailUrl: thumbnailUrl || null,
+            thumbHash,
             width: metadata.width || null,
             height: metadata.height || null,
             duration: metadata.duration || null,
@@ -229,6 +243,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
               fileSize,
               fileUrl,
               thumbnailUrl,
+              thumbHash,
               width: metadata.width,
               height: metadata.height,
               duration: metadata.duration,

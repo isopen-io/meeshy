@@ -254,8 +254,9 @@ extension FeedView {
 
                 for attachment in attachments where attachment.type != .audio {
                     if let fileURL = mediaFiles[attachment.id] {
+                        let thumbHash = pendingThumbnails[attachment.id]?.toThumbHash()
                         let result = try await uploader.uploadFile(
-                            fileURL: fileURL, mimeType: attachment.mimeType, token: token, uploadContext: "post"
+                            fileURL: fileURL, mimeType: attachment.mimeType, token: token, uploadContext: "post", thumbHash: thumbHash
                         )
                         uploadedIds.append(result.id)
                         try? FileManager.default.removeItem(at: fileURL)
@@ -1139,7 +1140,8 @@ struct FeedComposerSheet: View {
                 var uploadedIds: [String] = []
                 for attachment in attachments {
                     if let fileURL = mediaFiles[attachment.id] {
-                        let result = try await uploader.uploadFile(fileURL: fileURL, mimeType: attachment.mimeType, token: token, uploadContext: "post")
+                        let thumbHash = pendingThumbnails[attachment.id]?.toThumbHash()
+                        let result = try await uploader.uploadFile(fileURL: fileURL, mimeType: attachment.mimeType, token: token, uploadContext: "post", thumbHash: thumbHash)
                         uploadedIds.append(result.id)
                         try? FileManager.default.removeItem(at: fileURL)
                     }
