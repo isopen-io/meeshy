@@ -4,8 +4,8 @@ import MeeshySDK
 
 public struct MeeshyForgotPasswordView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var authManager = AuthManager.shared
-    @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var authManager = AuthManager.shared
+    @StateObject private var theme = ThemeManager.shared
 
     @State private var mode: RecoveryMode = .email
     @State private var email = ""
