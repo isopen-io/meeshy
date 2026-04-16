@@ -143,6 +143,11 @@ class ConversationViewModel: ObservableObject {
     private var savedCursor: String?
     private var savedHasOlder: Bool = true
 
+    // Mapping tempId → serverId pour les messages optimistes en attente de broadcast socket.
+    // Permet au socket handler de remplacer atomiquement le message optimiste
+    // sans flash visuel (le changement d'id ne se fait qu'une seule fois).
+    var pendingServerIds: [String: String] = [:]
+
     // MARK: - O(1) Message Index
 
     private var _messageIdIndex: [String: Int]?
@@ -162,7 +167,7 @@ class ConversationViewModel: ObservableObject {
     }
 
     func containsMessage(id: String) -> Bool {
-        messageIdIndex[id] != nil
+        messageIdIndex[id] != nil || pendingServerIds.values.contains(id)
     }
 
     // MARK: - Date-Grouped Messages
@@ -813,12 +818,14 @@ class ConversationViewModel: ObservableObject {
 
         await syncEngine.fetchOlderMessages(for: conversationId, before: beforeValue)
 
-        // Reload from cache
+        // Reload from cache, preserving any socket-delivered messages not yet cached
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         if let data = cached.value {
             let previousCount = messages.count
-            messages = data
-            hasOlderMessages = data.count > previousCount
+            let cacheIds = Set(data.map(\.id))
+            let memoryOnly = messages.filter { !cacheIds.contains($0.id) }
+            messages = (data + memoryOnly).sorted { $0.createdAt < $1.createdAt }
+            hasOlderMessages = messages.count > previousCount
             prefetchRecentMedia()
         }
 
@@ -1033,32 +1040,14 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId, request: body
             )
 
-            // Replace temp message with server version, preserving local attachments
+            // Marquer comme envoyé sans changer l'id — évite le flash SwiftUI
+            // (ForEach utilise message.id comme clé, un changement d'id cause un
+            // unmount/remount du composant). Le remplacement complet se fera
+            // atomiquement quand message:new arrivera via le socket handler.
             if let idx = messageIndex(for: tempId) {
-                messages[idx] = Message(
-                    id: responseData.id,
-                    conversationId: conversationId,
-                    senderId: currentUserId,
-                    content: text,
-                    messageType: optimisticMessageType,
-                    replyToId: replyToId,
-                    expiresAt: resolvedExpiresAt,
-                    effects: {
-                        var e = pendingEffects
-                        if resolvedIsViewOnce { e.flags.insert(.viewOnce) }
-                        if resolvedBlur == true { e.flags.insert(.blurred) }
-                        if resolvedExpiresAt != nil { e.flags.insert(.ephemeral) }
-                        return e
-                    }(),
-                    maxViewOnceCount: resolvedMaxViewOnceCount,
-                    viewOnceCount: 0,
-                    createdAt: responseData.createdAt,
-                    updatedAt: responseData.createdAt,
-                    attachments: resolvedAttachments,
-                    replyTo: replyRef,
-                    deliveryStatus: .sent,
-                    isMe: true
-                )
+                messages[idx].deliveryStatus = .sent
+                messages[idx].updatedAt = responseData.createdAt
+                pendingServerIds[tempId] = responseData.id
             }
 
             // Move conversation to top of list immediately (optimistic)

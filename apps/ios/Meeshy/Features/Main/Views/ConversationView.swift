@@ -890,7 +890,13 @@ struct ConversationView: View {
                     withAnimation(.easeOut(duration: 0.3)) { viewModel.firstUnreadMessageId = nil }
                 }
             }
-            .onDisappear { scrollState.isNearBottom = false }
+            .onDisappear {
+                // Ne pas basculer isNearBottom pendant un scroll programmatique —
+                // les animations spring causent des micro-rebonds qui font
+                // apparaître/disparaître l'ancre, provoquant une boucle de scroll infinie.
+                guard !viewModel.isProgrammaticScroll else { return }
+                scrollState.isNearBottom = false
+            }
 
         Color.clear.frame(height: composerHeight).id("bottom_spacer")
     }
@@ -914,6 +920,8 @@ struct ConversationView: View {
             .onChange(of: viewModel.newMessageAppended) { _, _ in
                 guard let lastMsg = viewModel.messages.last else { return }
                 if scrollState.isNearBottom || lastMsg.isMe {
+                    // Éviter les animations spring concurrentes qui causent la boucle de scroll
+                    guard !viewModel.isProgrammaticScroll else { return }
                     viewModel.markProgrammaticScroll()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { proxy.scrollTo("bottom_spacer", anchor: .bottom) }
                     if scrollState.isNearBottom && !lastMsg.isMe {
