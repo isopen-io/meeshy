@@ -625,14 +625,45 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId, offset: 0, limit: 30, includeReplies: true
             )
             let freshMessages = await processAPIMessages(response.data)
-            let existing = messages
-            let existingIds = Set(existing.map(\.id))
+            let freshById = Dictionary(uniqueKeysWithValues: freshMessages.map { ($0.id, $0) })
+            let existingIds = Set(messages.map(\.id))
             let newOnly = freshMessages.filter { !existingIds.contains($0.id) }
+
+            // Merge fresh delivery status into existing own messages. REST returns
+            // authoritative deliveredCount/readCount computed from cursors, which
+            // closes the gap when read-status:updated events were missed (e.g.
+            // the user was offline or navigated out of the conversation before
+            // the recipient's ack landed).
+            var didUpdateStatus = false
+            var merged = messages.map { existing -> Message in
+                guard existing.isMe, let fresh = freshById[existing.id] else { return existing }
+                guard fresh.deliveryStatus.isBetterThan(existing.deliveryStatus) else { return existing }
+                var updated = existing
+                updated.deliveryStatus = fresh.deliveryStatus
+                updated.deliveredCount = fresh.deliveredCount
+                updated.readCount = fresh.readCount
+                updated.deliveredToAllAt = fresh.deliveredToAllAt ?? existing.deliveredToAllAt
+                updated.readByAllAt = fresh.readByAllAt ?? existing.readByAllAt
+                didUpdateStatus = true
+                return updated
+            }
+
             if !newOnly.isEmpty {
-                messages = (existing + newOnly).sorted { $0.createdAt < $1.createdAt }
+                merged = (merged + newOnly).sorted { $0.createdAt < $1.createdAt }
                 newMessageAppended += 1
             }
-            await CacheCoordinator.shared.messages.save(messages, for: conversationId)
+
+            if !newOnly.isEmpty || didUpdateStatus {
+                messages = merged
+                // Atomic merge to cache: preserve any socket messages that arrived
+                // between the REST fetch and now so they are never silently dropped.
+                let snapshot = messages
+                await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
+                    let snapshotIds = Set(snapshot.map(\.id))
+                    let fromCacheOnly = cached.filter { !snapshotIds.contains($0.id) }
+                    return (snapshot + fromCacheOnly).sorted { $0.createdAt < $1.createdAt }
+                }
+            }
         } catch {
             // Silent refresh failure — cached data is already displayed
         }
@@ -726,12 +757,35 @@ class ConversationViewModel: ObservableObject {
                     let cached = await CacheCoordinator.shared.messages.load(for: targetId)
                     switch cached {
                     case .fresh(let data, _), .stale(let data, _):
-                        // Merge: add new messages from cache, keep pending optimistic messages
                         let currentIds = Set(self.messages.map(\.id))
                         let newFromCache = data.filter { !currentIds.contains($0.id) }
-                        guard !newFromCache.isEmpty else { break }
-                        self.messages = (self.messages + newFromCache).sorted { $0.createdAt < $1.createdAt }
-                        self.prefetchRecentMedia()
+                        let cachedById = Dictionary(uniqueKeysWithValues: data.map { ($0.id, $0) })
+
+                        // Merge delivery-status updates from cache into existing own
+                        // messages. This covers read-status:updated events that
+                        // SyncEngine applied to the cache while the view was not
+                        // the active listener (e.g. user was on the list view or
+                        // another conversation when Bob's ack landed).
+                        var didUpdateStatus = false
+                        let mergedExisting = self.messages.map { existing -> Message in
+                            guard existing.isMe, let cached = cachedById[existing.id] else { return existing }
+                            guard cached.deliveryStatus.isBetterThan(existing.deliveryStatus) else { return existing }
+                            var updated = existing
+                            updated.deliveryStatus = cached.deliveryStatus
+                            updated.deliveredCount = cached.deliveredCount
+                            updated.readCount = cached.readCount
+                            updated.deliveredToAllAt = cached.deliveredToAllAt ?? existing.deliveredToAllAt
+                            updated.readByAllAt = cached.readByAllAt ?? existing.readByAllAt
+                            didUpdateStatus = true
+                            return updated
+                        }
+
+                        if !newFromCache.isEmpty {
+                            self.messages = (mergedExisting + newFromCache).sorted { $0.createdAt < $1.createdAt }
+                            self.prefetchRecentMedia()
+                        } else if didUpdateStatus {
+                            self.messages = mergedExisting
+                        }
                     case .expired, .empty:
                         break
                     }

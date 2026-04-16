@@ -208,20 +208,12 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Émettre événement Socket.IO seulement si l'utilisateur permet les read receipts
       if (shouldShowReadReceipts) {
         try {
-          const summary = await readStatusService.getLatestMessageSummary(conversationId);
-          const socketIOHandler = fastify.socketIOHandler;
-          const socketIOManager = socketIOHandler.getManager();
-          if (socketIOManager) {
-            const room = ROOMS.conversation(conversationId);
-            (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
-              conversationId,
-              participantId: membership.id,
-              userId,
-              type: 'read',
-              updatedAt: new Date(),
-              summary
-            });
-          }
+          await broadcastReadStatusUpdate(fastify, prisma, readStatusService, {
+            conversationId,
+            participantId: membership.id,
+            userId,
+            type: 'read'
+          });
         } catch (socketError) {
           console.error('[MessageReadStatus] Erreur lors de la diffusion Socket.IO:', socketError);
           // Ne pas faire échouer la requête si Socket.IO échoue
@@ -288,20 +280,12 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Émettre événement Socket.IO seulement si l'utilisateur permet les read receipts
       if (shouldShowReadReceipts) {
         try {
-          const summary = await readStatusService.getLatestMessageSummary(conversationId);
-          const socketIOHandler = fastify.socketIOHandler;
-          const socketIOManager = socketIOHandler.getManager();
-          if (socketIOManager) {
-            const room = ROOMS.conversation(conversationId);
-            (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
-              conversationId,
-              participantId: membership.id,
-              userId,
-              type: 'received',
-              updatedAt: new Date(),
-              summary
-            });
-          }
+          await broadcastReadStatusUpdate(fastify, prisma, readStatusService, {
+            conversationId,
+            participantId: membership.id,
+            userId,
+            type: 'received'
+          });
         } catch (socketError) {
           console.error('[MessageReadStatus] Erreur lors de la diffusion Socket.IO:', socketError);
         }
@@ -320,4 +304,69 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       });
     }
   });
+}
+
+/**
+ * Broadcast a `read-status:updated` event to the conversation room AND every
+ * active participant's user room.
+ *
+ * Historically, this event was only sent to the conversation room. That caused
+ * message authors to miss delivery/read receipts whenever they were not
+ * actively viewing the conversation (e.g. returned to the conversation list
+ * after sending). Since the iOS/web clients leave the conversation room on
+ * view dismiss, their own sent messages' checkmarks would remain stuck on
+ * "sent" until they reopened the conversation.
+ *
+ * Emitting to the union of rooms via a single chained `.to(...).to(...).emit(...)`
+ * call ensures Socket.IO deduplicates delivery per socket, so clients in both
+ * rooms still receive the event exactly once.
+ */
+async function broadcastReadStatusUpdate(
+  fastify: FastifyInstance,
+  prisma: FastifyInstance['prisma'],
+  readStatusService: MessageReadStatusService,
+  args: {
+    conversationId: string;
+    participantId: string;
+    userId: string;
+    type: 'read' | 'received';
+  }
+): Promise<void> {
+  const socketIOHandler = fastify.socketIOHandler;
+  const socketIOManager = socketIOHandler?.getManager?.();
+  if (!socketIOManager) return;
+
+  const [summary, activeParticipants] = await Promise.all([
+    readStatusService.getLatestMessageSummary(args.conversationId),
+    prisma.participant.findMany({
+      where: { conversationId: args.conversationId, isActive: true },
+      select: { userId: true }
+    })
+  ]);
+
+  const payload = {
+    conversationId: args.conversationId,
+    participantId: args.participantId,
+    userId: args.userId,
+    type: args.type,
+    updatedAt: new Date(),
+    summary
+  };
+
+  const io = (socketIOManager as any).io;
+  const convRoom = ROOMS.conversation(args.conversationId);
+
+  // Chain rooms so Socket.IO delivers the event at most once per socket,
+  // even if a socket belongs to both the conversation room and a user room.
+  let emitter: any = io.to(convRoom);
+  const seenRooms = new Set<string>([convRoom]);
+  for (const p of activeParticipants) {
+    if (!p.userId) continue;
+    const userRoom = ROOMS.user(p.userId);
+    if (seenRooms.has(userRoom)) continue;
+    seenRooms.add(userRoom);
+    emitter = emitter.to(userRoom);
+  }
+
+  emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
 }
