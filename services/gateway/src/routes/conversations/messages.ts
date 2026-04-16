@@ -157,19 +157,44 @@ export function registerMessagesRoutes(
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
-      const summary = await readStatusService.getLatestMessageSummary(conversationId);
       const socketIOManager = socketIOHandler.getManager?.();
-      if (socketIOManager) {
-        const room = ROOMS.conversation(conversationId);
-        (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
-          conversationId,
-          participantId,
-          userId,
-          type,
-          updatedAt: new Date(),
-          summary
-        });
+      if (!socketIOManager) return;
+
+      // Fetch the summary and the list of active participants' userIds in parallel.
+      // We emit to BOTH the conversation room AND each registered participant's
+      // user room so that message authors receive receipt updates even when they
+      // have navigated away from the conversation view (and thus left the
+      // conversation room). Socket.IO deduplicates delivery per socket when
+      // multiple rooms are chained via `.to(room1).to(room2).emit(...)`.
+      const [summary, activeParticipants] = await Promise.all([
+        readStatusService.getLatestMessageSummary(conversationId),
+        prisma.participant.findMany({
+          where: { conversationId, isActive: true },
+          select: { userId: true }
+        })
+      ]);
+
+      const payload = {
+        conversationId,
+        participantId,
+        userId,
+        type,
+        updatedAt: new Date(),
+        summary
+      };
+
+      const io = (socketIOManager as any).io;
+      const convRoom = ROOMS.conversation(conversationId);
+      let emitter: any = io.to(convRoom);
+      const seenRooms = new Set<string>([convRoom]);
+      for (const p of activeParticipants) {
+        if (!p.userId) continue;
+        const userRoom = ROOMS.user(p.userId);
+        if (seenRooms.has(userRoom)) continue;
+        seenRooms.add(userRoom);
+        emitter = emitter.to(userRoom);
       }
+      emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
     } catch (error) {
       logger.error('Error broadcasting read status:', error);
     }

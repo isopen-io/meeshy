@@ -132,6 +132,28 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         }
     }
 
+    public func mergeUpdate(for key: Key, mutate: @Sendable ([Value]) -> [Value]) async {
+        let existing: [Value]
+        let loadedAt: Date
+        if let l1 = memoryCache[key] {
+            existing = l1.items
+            loadedAt = l1.loadedAt
+        } else if let l2 = readFromL2(for: namespacedKey(key.description)) {
+            existing = l2.items
+            loadedAt = l2.lastFetchedAt
+        } else {
+            existing = []
+            loadedAt = Date()
+        }
+        var mutated = mutate(existing)
+        if let max = policy.maxItemCount, mutated.count > max {
+            mutated = Array(mutated.suffix(max))
+        }
+        memoryCache[key] = L1Entry(items: mutated, loadedAt: loadedAt)
+        touchKey(key)
+        markDirty(key)
+    }
+
     public func invalidate(for key: Key) async {
         memoryCache.removeValue(forKey: key)
         removeFromAccessOrder(key)
