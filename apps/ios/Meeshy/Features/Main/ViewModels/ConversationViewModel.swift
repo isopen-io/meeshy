@@ -823,7 +823,12 @@ class ConversationViewModel: ObservableObject {
         if let data = cached.value {
             let previousCount = messages.count
             let cacheIds = Set(data.map(\.id))
-            let memoryOnly = messages.filter { !cacheIds.contains($0.id) }
+            let memoryOnly = messages.filter { msg in
+                if cacheIds.contains(msg.id) { return false }
+                // Si ce message optimiste a déjà sa version serveur dans le cache, le laisser tomber
+                if let serverId = pendingServerIds[msg.id], cacheIds.contains(serverId) { return false }
+                return true
+            }
             messages = (data + memoryOnly).sorted { $0.createdAt < $1.createdAt }
             hasOlderMessages = messages.count > previousCount
             prefetchRecentMedia()
@@ -999,6 +1004,19 @@ class ConversationViewModel: ObservableObject {
         messages.append(optimisticMessage)
         newMessageAppended += 1
 
+        // Persister le message optimiste en cache pour qu'il survive
+        // si l'utilisateur quitte la conversation avant la confirmation serveur.
+        let convId = conversationId
+        let snapshot = messages
+        Task.detached(priority: .utility) {
+            await CacheCoordinator.shared.messages.mergeUpdate(for: convId) { cached in
+                let cachedIds = Set(cached.map(\.id))
+                let newOnly = snapshot.filter { !cachedIds.contains($0.id) }
+                guard !newOnly.isEmpty else { return cached }
+                return (cached + newOnly).sorted { $0.createdAt < $1.createdAt }
+            }
+        }
+
         do {
             var finalContent: String? = text.isEmpty ? nil : text
             var isEncrypted = false
@@ -1054,6 +1072,12 @@ class ConversationViewModel: ObservableObject {
             let convId = conversationId
             let msgContent = text
             let msgTime = responseData.createdAt
+
+            // Persister le status .sent dans le cache
+            let sentSnapshot = messages
+            Task.detached(priority: .utility) {
+                await CacheCoordinator.shared.messages.save(sentSnapshot, for: convId)
+            }
             Task {
                 await ConversationSyncEngine.shared.updateConversationAfterSend(
                     conversationId: convId, messagePreview: msgContent, messageAt: msgTime
@@ -1079,6 +1103,14 @@ class ConversationViewModel: ObservableObject {
             // Mark optimistic message as sending (retry in progress)
             if let idx = messageIndex(for: tempId) {
                 messages[idx].deliveryStatus = .sending
+            }
+
+            // Persister le message avec status .sending pour qu'il survive
+            // à la navigation (l'utilisateur verra le message avec l'horloge au retour)
+            let errorConvId = conversationId
+            let errorSnapshot = messages
+            Task.detached(priority: .utility) {
+                await CacheCoordinator.shared.messages.save(errorSnapshot, for: errorConvId)
             }
 
             // Enqueue for persistent auto-retry (5 attempts × 10s interval)

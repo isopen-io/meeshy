@@ -169,6 +169,10 @@ final class ConversationSocketHandler {
                             delegate.messages[idx] = msg
                             delegate.pendingServerIds.removeValue(forKey: tempId)
                         }
+                        // Persister le remplacement : le tempId est remplacé par le serverId
+                        // dans le cache, le message survivra à la navigation.
+                        let updatedSnapshot = await MainActor.run { delegate.messages }
+                        await CacheCoordinator.shared.messages.save(updatedSnapshot, for: convId)
                         return
                     }
 
