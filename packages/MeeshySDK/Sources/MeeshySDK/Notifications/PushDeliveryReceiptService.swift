@@ -29,7 +29,7 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
 
     /// Injection point for tests. Production wires through
     /// `ConversationService.shared`.
-    public struct Dependencies {
+    public struct Dependencies: Sendable {
         public var markAsReceived: @Sendable (_ conversationId: String) async throws -> Void
         public var isAuthenticated: @Sendable () -> Bool
 
