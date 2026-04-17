@@ -15,6 +15,57 @@ const BATCH_SIZE = 50;
 const BATCH_DELAY_MS = 1000;
 const MAX_NOTIFICATIONS_IN_EMAIL = 5;
 
+const SYSTEM_NOTIFICATION_LABELS: Record<string, Record<string, { actor: string; content: (meta: Record<string, string> | null) => string }>> = {
+  login_new_device: {
+    fr: {
+      actor: 'Securite',
+      content: (meta) => {
+        const parts = [meta?.deviceName, meta?.deviceOS].filter(Boolean).join(' - ');
+        const loc = meta?.location || '';
+        return parts && loc ? `Nouvelle connexion depuis ${parts} (${loc})` : parts ? `Nouvelle connexion depuis ${parts}` : loc ? `Nouvelle connexion depuis ${loc}` : 'Nouvelle connexion detectee';
+      },
+    },
+    en: {
+      actor: 'Security',
+      content: (meta) => {
+        const parts = [meta?.deviceName, meta?.deviceOS].filter(Boolean).join(' - ');
+        const loc = meta?.location || '';
+        return parts && loc ? `New login from ${parts} (${loc})` : parts ? `New login from ${parts}` : loc ? `New login from ${loc}` : 'New login detected';
+      },
+    },
+  },
+  password_changed: {
+    fr: { actor: 'Securite', content: () => 'Votre mot de passe a ete modifie' },
+    en: { actor: 'Security', content: () => 'Your password was changed' },
+  },
+  two_factor_enabled: {
+    fr: { actor: 'Securite', content: () => 'Double authentification activee' },
+    en: { actor: 'Security', content: () => 'Two-factor authentication enabled' },
+  },
+  two_factor_disabled: {
+    fr: { actor: 'Securite', content: () => 'Double authentification desactivee' },
+    en: { actor: 'Security', content: () => 'Two-factor authentication disabled' },
+  },
+};
+
+function resolveDigestEntry(
+  type: string,
+  actor: Record<string, string> | null,
+  meta: Record<string, string> | null,
+  rawContent: string | null,
+  lang: string,
+): { actorName: string; content: string } {
+  const systemLabel = SYSTEM_NOTIFICATION_LABELS[type];
+  if (systemLabel) {
+    const l = systemLabel[lang] || systemLabel['en'] || Object.values(systemLabel)[0];
+    return { actorName: l.actor, content: l.content(meta) };
+  }
+  return {
+    actorName: actor?.displayName || actor?.username || 'Meeshy',
+    content: rawContent || '',
+  };
+}
+
 function getMillisecondsUntilNextRun(targetHourUTC: number): number {
   const now = new Date();
   const next = new Date(now);
@@ -163,7 +214,7 @@ export class NotificationDigestJob {
     const allUnread = await this.prisma.notification.findMany({
       where: { userId, isRead: false },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, type: true, actor: true, content: true, createdAt: true, delivery: true },
+      select: { id: true, type: true, actor: true, content: true, metadata: true, createdAt: true, delivery: true },
     });
 
     // Filter out already emailed in app code
@@ -175,17 +226,20 @@ export class NotificationDigestJob {
 
     const frontendUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
 
+    const lang = user.systemLanguage || 'en';
     const digestData: NotificationDigestEmailData = {
       to: user.email,
       name: user.displayName || user.username || 'there',
-      language: user.systemLanguage || 'en',
+      language: lang,
       unreadCount: pending.length,
       notifications: recentNotifs.map(n => {
         const actor = n.actor as Record<string, string> | null;
+        const meta = n.metadata as Record<string, string> | null;
+        const { actorName, content } = resolveDigestEntry(n.type, actor, meta, n.content, lang);
         return {
           type: n.type,
-          actorName: actor?.displayName || actor?.username || 'Someone',
-          content: n.content || '',
+          actorName,
+          content,
           createdAt: n.createdAt.toISOString(),
         };
       }),
