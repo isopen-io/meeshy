@@ -74,8 +74,7 @@ struct StoryCanvasView: View {
         viewModel.currentEffects.audioPlayerObjects ?? []
     }
 
-    private var isFondToolActive: Bool { viewModel.isFondToolActive }
-    private var isFrontToolActive: Bool { viewModel.isFrontToolActive }
+    private var isContentToolActive: Bool { viewModel.isContentToolActive }
     private var isDrawingActive: Bool { viewModel.isDrawingActive }
 
     private func isElementVisible(startTime: Float?, duration: Float?) -> Bool {
@@ -124,7 +123,7 @@ struct StoryCanvasView: View {
                 backgroundMediaLayer
 
                 // Layer 2: ALL media objects — first fills canvas as background, rest positioned
-                mediaLayer(interactive: !isFondToolActive && !isDrawingActive)
+                mediaLayer(interactive: !isDrawingActive)
 
                 // Layer 3: Drawing overlay (PKCanvasView — UIKit via UIViewRepresentable)
                 drawingLayer
@@ -232,8 +231,8 @@ struct StoryCanvasView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-                .allowsHitTesting(!isDrawingActive && !isFrontToolActive)
-                .gesture(isDrawingActive || isFrontToolActive ? nil : backgroundImageGesture)
+                .allowsHitTesting(!isDrawingActive)
+                .gesture(isDrawingActive ? nil : backgroundImageGesture)
         }
     }
 
@@ -283,8 +282,8 @@ struct StoryCanvasView: View {
 
     @ViewBuilder
     private func frontElementsGroup(canvasSize: CGSize) -> some View {
-        let dimmed = isFondToolActive
-        let interactive = !isFondToolActive && !isDrawingActive
+        let dimmed = false
+        let interactive = !isDrawingActive
 
         ZStack {
             textObjectsLayer(interactive: interactive)
@@ -381,8 +380,8 @@ struct StoryCanvasView: View {
                         x: imageOffset.width + dragDelta.width,
                         y: imageOffset.height + dragDelta.height
                     )
-                    .allowsHitTesting(!isDrawingActive && !isFrontToolActive)
-                    .gesture(isDrawingActive || isFrontToolActive ? nil : backgroundImageGesture)
+                    .allowsHitTesting(!isDrawingActive)
+                    .gesture(isDrawingActive ? nil : backgroundImageGesture)
             } else if obj.mediaType == "video" {
                 DraggableMediaView(
                     mediaObject: mediaObjectBinding(for: obj.id),
