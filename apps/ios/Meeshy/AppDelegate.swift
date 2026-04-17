@@ -6,7 +6,7 @@ import os
 
 private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
 
-class AppDelegate: NSObject, UIApplicationDelegate {
+class AppDelegate: NSObject, @preconcurrency UIApplicationDelegate {
 
     // MARK: - Application Lifecycle
 
@@ -82,13 +82,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // this delegate returns. We track both the task id and the completion
         // state in a small actor so the expiration handler and the happy
         // path can't race — whichever fires first wins.
-        let state = SilentPushState(completionHandler: completionHandler)
-        let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.silent-push") {
-            Task { await state.expire() }
-        }
-        Task { await state.attach(taskId: taskId) }
-
         Task { @MainActor in
+            let state = SilentPushState(completionHandler: completionHandler)
+            let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.silent-push") {
+                Task { @MainActor in state.expire() }
+            }
+            state.attach(taskId: taskId)
+
             if let unreadTotal {
                 NotificationCoordinator.shared.setInAppNotificationUnread(unreadTotal)
             }
@@ -99,10 +99,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 )
             }
 
-            // Run the three subtasks in parallel: badge/widget sync, delivery
-            // receipt emission, and message cache refresh. None of them throw
-            // — they log and swallow internally — so the group cannot bubble
-            // an error into the completion handler.
             await withTaskGroup(of: Void.self) { group in
                 group.addTask {
                     await NotificationCoordinator.shared.syncNow()
@@ -120,7 +116,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 }
             }
 
-            await state.finish()
+            state.finish()
         }
     }
 
@@ -250,7 +246,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 /// Tiny actor that makes sure `completionHandler(.newData)` is called
 /// exactly once and that `endBackgroundTask` always fires, whether the
 /// OS expiration handler or the happy path finishes first.
-private actor SilentPushState {
+@MainActor
+private final class SilentPushState {
     private var completionHandler: ((UIBackgroundFetchResult) -> Void)?
     private var taskId: UIBackgroundTaskIdentifier = .invalid
     private var didFinish = false
@@ -259,42 +256,35 @@ private actor SilentPushState {
         self.completionHandler = completionHandler
     }
 
-    func attach(taskId: UIBackgroundTaskIdentifier) async {
-        // Rare but possible: if the OS fired the expiration handler before
-        // the attach task hop completed, `didFinish` is already true and
-        // we'd leak the task id. End it immediately in that case.
+    func attach(taskId: UIBackgroundTaskIdentifier) {
         if didFinish {
-            await MainActor.run {
-                UIApplication.shared.endBackgroundTask(taskId)
-            }
+            UIApplication.shared.endBackgroundTask(taskId)
             return
         }
         self.taskId = taskId
     }
 
-    func finish() async {
+    func finish() {
         guard !didFinish else { return }
         didFinish = true
         completionHandler?(.newData)
         completionHandler = nil
-        await endTask()
+        endTask()
     }
 
-    func expire() async {
+    func expire() {
         guard !didFinish else { return }
         didFinish = true
         completionHandler?(.failed)
         completionHandler = nil
-        await endTask()
+        endTask()
     }
 
-    private func endTask() async {
+    private func endTask() {
         guard taskId != .invalid else { return }
         let id = taskId
         taskId = .invalid
-        await MainActor.run {
-            UIApplication.shared.endBackgroundTask(id)
-        }
+        UIApplication.shared.endBackgroundTask(id)
     }
 }
 

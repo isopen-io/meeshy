@@ -42,7 +42,7 @@ public actor MediaSessionCoordinator {
     /// Non-isolated Combine subject so observers can subscribe from any
     /// context without hopping into the actor; the subject itself is
     /// thread-safe.
-    public nonisolated let events = PassthroughSubject<Event, Never>()
+    public nonisolated(unsafe) let events = PassthroughSubject<Event, Never>()
 
     private init() {}
 
@@ -103,7 +103,8 @@ public actor MediaSessionCoordinator {
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
-            Task { await self.handleInterruption(notification) }
+            let event = Self.parseInterruption(notification)
+            Task { await self.forward(event) }
         }
 
         center.addObserver(
@@ -112,47 +113,48 @@ public actor MediaSessionCoordinator {
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
-            Task { await self.handleRouteChange(notification) }
+            let event = Self.parseRouteChange(notification)
+            Task { await self.forward(event) }
         }
     }
 
-    private func handleInterruption(_ notification: Notification) {
+    private func forward(_ event: Event?) {
+        guard let event else { return }
+        logger.info("Audio session event: \(String(describing: event))")
+        events.send(event)
+    }
+
+    private nonisolated static func parseInterruption(_ notification: Notification) -> Event? {
         guard let info = notification.userInfo,
               let rawType = info[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: rawType) else {
-            return
+            return nil
         }
         switch type {
         case .began:
-            logger.info("Audio interruption began")
-            events.send(.interruptionBegan)
+            return .interruptionBegan
         case .ended:
             let optionsRaw = info[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsRaw)
-            if options.contains(.shouldResume) {
-                logger.info("Audio interruption ended — should resume")
-                events.send(.interruptionEndedShouldResume)
-            } else {
-                logger.info("Audio interruption ended — should not resume")
-                events.send(.interruptionEndedShouldNotResume)
-            }
+            return options.contains(.shouldResume)
+                ? .interruptionEndedShouldResume
+                : .interruptionEndedShouldNotResume
         @unknown default:
-            break
+            return nil
         }
     }
 
-    private func handleRouteChange(_ notification: Notification) {
+    private nonisolated static func parseRouteChange(_ notification: Notification) -> Event? {
         guard let info = notification.userInfo,
               let rawReason = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
               let reason = AVAudioSession.RouteChangeReason(rawValue: rawReason) else {
-            return
+            return nil
         }
         switch reason {
         case .oldDeviceUnavailable:
-            logger.info("Route change: old device unavailable")
-            events.send(.routeChangedOldDeviceUnavailable)
+            return .routeChangedOldDeviceUnavailable
         default:
-            events.send(.routeChangedOther)
+            return .routeChangedOther
         }
     }
 }
