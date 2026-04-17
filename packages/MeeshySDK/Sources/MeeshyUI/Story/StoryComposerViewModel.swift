@@ -330,6 +330,9 @@ final class StoryComposerViewModel {
     func addMediaObject(type: String) -> StoryMediaObject? {
         guard canAddMedia else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
+        // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
+        // inclus : resolvedBackgroundMedia retombe sur le 1er existant).
+        let shouldBeBackground = currentEffects.resolvedBackgroundMedia == nil
         let obj = StoryMediaObject(
             postMediaId: "",
             mediaType: type,
@@ -339,6 +342,7 @@ final class StoryComposerViewModel {
             scale: 1.0,
             rotation: 0,
             volume: 1.0,
+            isBackground: shouldBeBackground ? true : nil,
             sourceLanguage: detectedKeyboardLanguage
         )
         var effects = currentEffects
@@ -355,6 +359,9 @@ final class StoryComposerViewModel {
     func addAudioObject() -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
+        // Auto-bascule en background si aucun audio n'est déjà en background
+        // (ni via isBackground=true, ni via le champ legacy backgroundAudioId).
+        let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
         let obj = StoryAudioPlayerObject(
             postMediaId: "",
             placement: "overlay",
@@ -362,6 +369,7 @@ final class StoryComposerViewModel {
             y: min(0.9, center.y + 0.15),
             volume: 1.0,
             waveformSamples: [],
+            isBackground: hasExistingBackgroundAudio ? nil : true,
             sourceLanguage: detectedKeyboardLanguage
         )
         var effects = currentEffects
@@ -442,6 +450,61 @@ final class StoryComposerViewModel {
             selectedElementId = audio.id
         }
         currentEffects = effects
+    }
+
+    // MARK: - Background toggle
+
+    /// Bascule le statut background pour un media visuel OU un audio.
+    /// Contrainte : au plus 1 media visuel en background + 1 audio en background par slide.
+    /// Toggle ON sur un élément → les autres du même type sont repassés en foreground.
+    /// Toggle OFF → l'élément redevient foreground (aucun autre n'est promu automatiquement).
+    func toggleBackground(id: String) {
+        var effects = currentEffects
+
+        if let idx = effects.mediaObjects?.firstIndex(where: { $0.id == id }) {
+            let current = effects.mediaObjects![idx].isBackground == true
+                // Si le media est le background implicite (pas de flag explicite mais
+                // positionné par la règle legacy), on considère qu'il est déjà en bg.
+                || effects.resolvedBackgroundMedia?.id == id
+            let newValue = !current
+            if newValue {
+                for i in effects.mediaObjects!.indices {
+                    effects.mediaObjects![i].isBackground = (i == idx) ? true : false
+                }
+            } else {
+                // Matérialise le flag à `false` pour neutraliser la règle legacy.
+                effects.mediaObjects![idx].isBackground = false
+            }
+            currentEffects = effects
+            return
+        }
+
+        if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == id }) {
+            let current = effects.audioPlayerObjects![idx].isBackground == true
+            let newValue = !current
+            if newValue {
+                for i in effects.audioPlayerObjects!.indices {
+                    effects.audioPlayerObjects![i].isBackground = (i == idx) ? true : false
+                }
+                // Toggle ON sur un audio foreground → on retire aussi le bg legacy pour
+                // éviter d'avoir 2 audios bg qui jouent en parallèle.
+                effects.backgroundAudioId = nil
+                effects.backgroundAudioVolume = nil
+                effects.backgroundAudioStart = nil
+                effects.backgroundAudioEnd = nil
+                effects.backgroundAudioVariants = nil
+            } else {
+                effects.audioPlayerObjects![idx].isBackground = false
+            }
+            currentEffects = effects
+        }
+    }
+
+    /// True si l'élément (media ou audio) est actuellement résolu comme background.
+    func isBackground(id: String) -> Bool {
+        if currentEffects.resolvedBackgroundMedia?.id == id { return true }
+        if currentEffects.resolvedBackgroundAudio?.id == id { return true }
+        return false
     }
 
     // MARK: - Z-Order
