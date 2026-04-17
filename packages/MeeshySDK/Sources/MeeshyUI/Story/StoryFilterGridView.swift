@@ -7,23 +7,14 @@ struct StoryFilterGridView: View {
     @Bindable var viewModel: StoryComposerViewModel
     var previewImage: UIImage?
 
-    private static let filters: [(name: String, ciName: String?)] = [
-        ("Original", nil),
-        ("Vivid", "CIColorControls"),
-        ("N&B", "CIPhotoEffectMono"),
-        ("Chaud", "CITemperatureAndTint"),
-        ("Froid", "CITemperatureAndTint"),
-        ("Vintage", "CIPhotoEffectTransfer"),
-        ("Fade", "CIPhotoEffectFade"),
-        ("Chrome", "CIPhotoEffectChrome"),
-    ]
-
     var body: some View {
         VStack(spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(Self.filters, id: \.name) { filter in
-                        filterThumbnail(filter)
+                    // "Original" = no filter
+                    filterThumbnail(filter: nil, label: "Original")
+                    ForEach(StoryFilter.allCases, id: \.self) { filter in
+                        filterThumbnail(filter: filter, label: filter.displayName)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -37,17 +28,17 @@ struct StoryFilterGridView: View {
     }
 
     @ViewBuilder
-    private func filterThumbnail(_ filter: (name: String, ciName: String?)) -> some View {
-        let isSelected = viewModel.selectedFilter == filter.ciName
+    private func filterThumbnail(filter: StoryFilter?, label: String) -> some View {
+        let isSelected = viewModel.selectedFilter == filter?.rawValue
 
         Button {
-            viewModel.applyFilter(filter.ciName)
+            viewModel.applyFilter(filter?.rawValue)
             HapticFeedback.light()
         } label: {
             VStack(spacing: 4) {
                 Group {
                     if let image = previewImage {
-                        Image(uiImage: applyFilter(to: image, filterName: filter.ciName, filterDisplayName: filter.name))
+                        Image(uiImage: applyFilter(to: image, storyFilter: filter))
                             .resizable()
                             .scaledToFill()
                     } else {
@@ -62,7 +53,7 @@ struct StoryFilterGridView: View {
                         .stroke(isSelected ? MeeshyColors.brandPrimary : Color.clear, lineWidth: 2)
                 )
 
-                Text(filter.name)
+                Text(label)
                     .font(.system(size: 10, weight: isSelected ? .bold : .regular))
                     .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white.opacity(0.7))
             }
@@ -90,21 +81,22 @@ struct StoryFilterGridView: View {
         .padding(.horizontal, 16)
     }
 
-    private func applyFilter(to image: UIImage, filterName: String?, filterDisplayName: String) -> UIImage {
-        guard let filterName, let ciImage = CIImage(image: image) else { return image }
+    private func applyFilter(to image: UIImage, storyFilter: StoryFilter?) -> UIImage {
+        guard let storyFilter, let ciImage = CIImage(image: image) else { return image }
 
         let context = CIContext()
         var outputImage: CIImage?
+        let ciName = storyFilter.ciFilterName
 
-        switch filterName {
+        switch ciName {
         case "CIColorControls":
             let filter = CIFilter.colorControls()
             filter.inputImage = ciImage
             filter.saturation = Float(1.0 + 0.5 * viewModel.filterIntensity)
             outputImage = filter.outputImage
 
-        case "CIPhotoEffectMono", "CIPhotoEffectTransfer", "CIPhotoEffectFade", "CIPhotoEffectChrome":
-            guard let filter = CIFilter(name: filterName) else { return image }
+        case "CIPhotoEffectMono", "CIPhotoEffectTransfer", "CIPhotoEffectFade", "CIPhotoEffectChrome", "CIPhotoEffectProcess":
+            guard let filter = CIFilter(name: ciName) else { return image }
             filter.setValue(ciImage, forKey: kCIInputImageKey)
             outputImage = filter.outputImage
 
@@ -112,7 +104,8 @@ struct StoryFilterGridView: View {
             let filter = CIFilter.temperatureAndTint()
             filter.inputImage = ciImage
             let shift = Float(viewModel.filterIntensity * 2000)
-            filter.neutral = CIVector(x: 6500 + (filterDisplayName == "Chaud" ? CGFloat(shift) : CGFloat(-shift)), y: 0)
+            let direction: CGFloat = storyFilter == .warm ? 1 : -1
+            filter.neutral = CIVector(x: 6500 + direction * CGFloat(shift), y: 0)
             outputImage = filter.outputImage
 
         default:
