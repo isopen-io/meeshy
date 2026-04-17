@@ -3,6 +3,7 @@ import Combine
 import MapKit
 import CoreLocation
 import MeeshyUI
+import os
 
 struct LocationPickerView: View {
     let accentColor: String
@@ -333,8 +334,17 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
         if let loc = userLocation {
             request.region = MKCoordinateRegion(center: loc, latitudinalMeters: 50000, longitudinalMeters: 50000)
         }
+        // `.start` retains its completion closure until the request finishes.
+        // Without `[weak self]` the closure strongly captures `self`, and if
+        // the picker is dismissed while the search is in flight the model
+        // leaks — worse, the implicit main-actor hop can outlive the scene
+        // and write into a zombie `searchResults`. Capture weakly and bail
+        // early if the picker was torn down.
         MKLocalSearch(request: request).start { [weak self] response, _ in
-            self?.searchResults = Array(response?.mapItems.prefix(5) ?? [])
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.searchResults = Array(response?.mapItems.prefix(5) ?? [])
+            }
         }
     }
 
@@ -344,16 +354,27 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
-        Task { @MainActor in
-            userLocation = loc.coordinate
-            if selectedCoordinate == nil {
-                selectedCoordinate = loc.coordinate
-                reverseGeocode(loc.coordinate)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.userLocation = loc.coordinate
+            if self.selectedCoordinate == nil {
+                self.selectedCoordinate = loc.coordinate
+                self.reverseGeocode(loc.coordinate)
             }
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        // A silent no-op here swallows denied permissions, airplane mode and
+        // transient CoreLocation errors. Log so we can diagnose why the
+        // picker never surfaces a result, and clear the pending geocoding
+        // state so the UI does not spin forever.
+        Logger(subsystem: "me.meeshy.app", category: "location")
+            .error("Location manager failed: \(error.localizedDescription, privacy: .public)")
+        Task { @MainActor [weak self] in
+            self?.isGeocoding = false
+        }
+    }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {

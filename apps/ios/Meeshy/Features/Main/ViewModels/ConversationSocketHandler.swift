@@ -162,10 +162,13 @@ final class ConversationSocketHandler {
                     if apiMsg.senderId == userId,
                        let tempId = delegate.pendingServerIds.first(where: { $0.value == apiMsg.id })?.key,
                        let idx = delegate.messageIndex(for: tempId) {
-                        var msg = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
-                        var msgArray = [msg]
+                        let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
+                        var msgArray = [decoded]
                         await delegate.decryptMessagesIfNeeded(&msgArray)
-                        msg = msgArray[0]
+                        // decryptMessagesIfNeeded may drop items on failure; skip the
+                        // replacement instead of crashing on an empty array when the
+                        // app is backgrounded mid-decryption.
+                        guard let msg = msgArray.first else { return }
                         await MainActor.run {
                             delegate.messages[idx] = msg
                             delegate.pendingServerIds.removeValue(forKey: tempId)
@@ -195,11 +198,11 @@ final class ConversationSocketHandler {
 
                     if apiMsg.senderId == userId { return }
 
-                    var msg = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
-                    var msgArray = [msg]
+                    let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
+                    var msgArray = [decoded]
                     await delegate.decryptMessagesIfNeeded(&msgArray)
-                    msg = msgArray[0]
-                    
+                    guard let msg = msgArray.first else { return }
+
                     await MainActor.run {
                         guard !delegate.containsMessage(id: msg.id) else { return }
                         delegate.messages.append(msg)

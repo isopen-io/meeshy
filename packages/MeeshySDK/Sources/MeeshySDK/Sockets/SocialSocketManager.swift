@@ -282,6 +282,32 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         hadPreviousConnection = false
     }
 
+    // MARK: - Background lifecycle
+
+    /// Stops the heartbeat and tears down the socket explicitly so the
+    /// resume path cannot be fooled by a stale `isConnected == true`
+    /// flag. iOS suspension kills the WebSocket silently; without an
+    /// explicit disconnect here, `resumeFromBackground()` would guard on
+    /// the stale flag and never reconnect — the feed would stay dark.
+    public func prepareForBackground() {
+        stopHeartbeat()
+        disconnect()
+    }
+
+    /// Called when the app comes back to `.active`. `prepareForBackground`
+    /// already tore the socket down, so this is a plain reconnect.
+    public func resumeFromBackground() {
+        guard AuthManager.shared.authToken != nil else { return }
+        forceReconnect()
+    }
+
+    /// Unconditionally rebuild the socket. Safe to call from any lifecycle
+    /// hook — used to bypass the stale `isConnected` flag.
+    public func forceReconnect() {
+        disconnect()
+        connect()
+    }
+
     // MARK: - Heartbeat
 
     private func startHeartbeat() {

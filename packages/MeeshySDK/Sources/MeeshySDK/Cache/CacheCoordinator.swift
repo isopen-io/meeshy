@@ -115,6 +115,25 @@ public actor CacheCoordinator {
         subscribeToLifecycle()
     }
 
+    /// Tear the coordinator down after logout so a subsequent login can
+    /// re-run `start()`. Without this, `isStarted` stays `true` across
+    /// sessions: the second call becomes a silent no-op and any future
+    /// resubscribe logic would never attach. `.task { }` in `MeeshyApp`
+    /// only runs once per view lifecycle, so the `onChange(isAuth:)`
+    /// observer is the only entry point that re-initialises the
+    /// coordinator.
+    public func reset() {
+        isStarted = false
+        cancellables.removeAll()
+        currentUserId = ""
+        translationCache.removeAll()
+        translationInsertionOrder.removeAll()
+        transcriptionCache.removeAll()
+        transcriptionInsertionOrder.removeAll()
+        audioTranslationCache.removeAll()
+        audioTranslationInsertionOrder.removeAll()
+    }
+
     private func resolveCurrentUserId() {
         Task { @MainActor in
             if let userId = AuthManager.shared.currentUser?.id {
@@ -203,6 +222,37 @@ public actor CacheCoordinator {
         ) { [weak self] _ in
             guard let self else { return }
             Task { await self.flushAll() }
+        }
+
+        // `willResignActive` fires for brief pre-backgrounding hand-offs
+        // (control center, incoming call) but NOT reliably on full
+        // background → terminate. We also observe `didEnterBackground`
+        // explicitly so dirty cache keys reach disk before the OS freezes
+        // the process, and `willTerminate` as the last-chance hook.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { await self.flushAll() }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willTerminateNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            // Terminate is synchronous from the OS perspective: we have ~5s
+            // before the process is killed. Hop into the actor and wait up
+            // to 4s for the flush to complete so critical writes land on
+            // disk. If the wait times out we still release — the OS will
+            // kill us either way, but we maximise persistence.
+            let semaphore = DispatchSemaphore(value: 0)
+            Task.detached {
+                await self.flushAll()
+                semaphore.signal()
+            }
+            _ = semaphore.wait(timeout: .now() + 4)
         }
 
         NotificationCenter.default.addObserver(

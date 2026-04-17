@@ -8,7 +8,8 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     var conversationsDidChange: AnyPublisher<Void, Never> { get }
     var messagesDidChange: AnyPublisher<String, Never> { get }
 
-    func fullSync() async
+    @discardableResult
+    func fullSync() async -> Bool
     func syncSinceLastCheckpoint() async
     func ensureMessages(for conversationId: String) async
     func fetchOlderMessages(for conversationId: String, before messageId: String) async
@@ -82,8 +83,19 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // MARK: - Full Sync (cold start)
 
-    public func fullSync() async {
-        guard !isSyncing else { return }
+    /// Run a full sync and return whether it completed successfully.
+    ///
+    /// Historically this method swallowed every error and left the caller
+    /// unable to tell if the cache was populated or still empty. That
+    /// produced the "blank conversation list forever" bug on cold start
+    /// when REST was unreachable or the token had expired: the VM would
+    /// flip `isLoading = false`, the view would fall through to the
+    /// empty-state placeholder, and there was no retry surface. Callers
+    /// should now inspect the return value and surface an error UI when
+    /// it's `false`.
+    @discardableResult
+    public func fullSync() async -> Bool {
+        guard !isSyncing else { return true }
         isSyncing = true
         defer { isSyncing = false }
 
@@ -91,6 +103,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         var offset = 0
         let pageSize = 100
         var hasMore = true
+        var succeeded = true
 
         while hasMore {
             do {
@@ -109,11 +122,15 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 offset += page.count
             } catch {
                 Self.logger.error("[SyncEngine] fullSync error: \(error.localizedDescription)")
+                succeeded = false
                 break
             }
         }
 
-        lastSyncTimestamp = Date().addingTimeInterval(-30)
+        if succeeded {
+            lastSyncTimestamp = Date().addingTimeInterval(-30)
+        }
+        return succeeded
     }
 
     // MARK: - Delta Sync (foreground / reconnect)
