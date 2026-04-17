@@ -23,7 +23,7 @@ export function useCommunitiesQuery(options: UseCommunitiesQueryOptions = {}) {
     queryKey: queryKeys.communities.list({ search }),
     queryFn: () => communitiesService.getCommunities({ search }),
     enabled,
-    select: (response) => response.data as Community[],
+    select: (response) => (response.data?.data ?? response.data ?? []) as Community[],
   });
 }
 
@@ -32,7 +32,7 @@ export function useCommunityQuery(id: string | null | undefined) {
     queryKey: queryKeys.communities.detail(id ?? ''),
     queryFn: () => communitiesService.getCommunity(id!),
     enabled: !!id,
-    select: (response) => response.data as Community,
+    select: (response) => (response.data?.data ?? response.data) as Community,
   });
 }
 
@@ -51,7 +51,7 @@ export function useCommunitySearchQuery(
     queryKey: queryKeys.communities.search(query),
     queryFn: () => communitiesService.searchCommunities(query, offset, limit),
     enabled: query.length >= 2,
-    select: (response) => response.data as Community[],
+    select: (response) => (response.data?.data ?? response.data ?? []) as Community[],
   });
 }
 
@@ -60,7 +60,7 @@ export function useCommunityConversationsQuery(communityId: string | null | unde
     queryKey: queryKeys.communities.conversations(communityId ?? ''),
     queryFn: () => communitiesService.getCommunityConversations(communityId!),
     enabled: !!communityId,
-    select: (response) => response.data as Conversation[],
+    select: (response) => (response.data?.data ?? response.data ?? []) as Conversation[],
   });
 }
 
@@ -69,7 +69,7 @@ export function useCommunityMembersQuery(communityId: string | null | undefined)
     queryKey: queryKeys.communities.members(communityId ?? ''),
     queryFn: () => communitiesService.getMembers(communityId!),
     enabled: !!communityId,
-    select: (response) => response.data as CommunityMember[],
+    select: (response) => (response.data?.data ?? response.data) as CommunityMember[],
   });
 }
 
