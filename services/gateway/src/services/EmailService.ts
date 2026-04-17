@@ -79,6 +79,25 @@ export interface SecurityAlertEmailData {
   language?: string;
 }
 
+export interface LoginAlertEmailData {
+  to: string;
+  name: string;
+  language?: string;
+  deviceName: string | null;
+  deviceOS: string | null;
+  appOrBrowser: string | null;
+  location: string | null;
+  ip: string | null;
+  loginTime: Date;
+  timezone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  previousDeviceName: string | null;
+  previousLocation: string | null;
+  previousLoginTime: Date | null;
+  revokeAllUrl: string;
+}
+
 export interface MagicLinkEmailData {
   to: string;
   name: string;
@@ -204,6 +223,21 @@ interface EmailTranslations {
     action2: string;
     action3: string;
   };
+  loginAlert: {
+    subject: string;
+    title: string;
+    intro: string;
+    deviceLabel: string;
+    appLabel: string;
+    locationLabel: string;
+    ipLabel: string;
+    timeLabel: string;
+    previousTitle: string;
+    revokeTitle: string;
+    revokeButton: string;
+    revokeExpiry: string;
+    mapAlt: string;
+  };
   emailChange: {
     subject: string;
     title: string;
@@ -265,6 +299,21 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action2: 'Vérifiez vos appareils connectés',
       action3: "Activez l'authentification à deux facteurs"
     },
+    loginAlert: {
+      subject: 'Nouvelle connexion detectee - Meeshy',
+      title: 'Nouvelle connexion detectee',
+      intro: 'Une connexion a ete effectuee sur votre compte.',
+      deviceLabel: 'Appareil',
+      appLabel: 'Application',
+      locationLabel: 'Localisation',
+      ipLabel: 'Adresse IP',
+      timeLabel: 'Date/heure',
+      previousTitle: 'Derniere connexion connue',
+      revokeTitle: 'Ce n\'est pas vous ?',
+      revokeButton: 'Deconnecter tous mes appareils',
+      revokeExpiry: 'Ce lien expire dans 24 heures.',
+      mapAlt: 'Carte',
+    },
     emailChange: {
       subject: 'Confirmez votre nouvelle adresse email - Meeshy',
       title: 'Changement d\'adresse email',
@@ -323,6 +372,21 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Change your password immediately',
       action2: 'Check your connected devices',
       action3: 'Enable two-factor authentication'
+    },
+    loginAlert: {
+      subject: 'New login detected - Meeshy',
+      title: 'New login detected',
+      intro: 'A login was made to your account.',
+      deviceLabel: 'Device',
+      appLabel: 'Application',
+      locationLabel: 'Location',
+      ipLabel: 'IP address',
+      timeLabel: 'Date/time',
+      previousTitle: 'Previous login',
+      revokeTitle: 'Not you?',
+      revokeButton: 'Disconnect all my devices',
+      revokeExpiry: 'This link expires in 24 hours.',
+      mapAlt: 'Map',
     },
     emailChange: {
       subject: 'Confirm your new email address - Meeshy',
@@ -383,6 +447,21 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action2: 'Verifica tus dispositivos conectados',
       action3: 'Activa la autenticación de dos factores'
     },
+    loginAlert: {
+      subject: 'New login detected - Meeshy',
+      title: 'New login detected',
+      intro: 'A login was made to your account.',
+      deviceLabel: 'Device',
+      appLabel: 'Application',
+      locationLabel: 'Location',
+      ipLabel: 'IP address',
+      timeLabel: 'Date/time',
+      previousTitle: 'Previous login',
+      revokeTitle: 'Not you?',
+      revokeButton: 'Disconnect all my devices',
+      revokeExpiry: 'This link expires in 24 hours.',
+      mapAlt: 'Map',
+    },
     emailChange: {
       subject: 'Confirma tu nueva dirección de correo - Meeshy',
       title: 'Cambio de dirección de correo',
@@ -441,6 +520,21 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Altere sua senha imediatamente',
       action2: 'Verifique seus dispositivos conectados',
       action3: 'Ative a autenticação de dois fatores'
+    },
+    loginAlert: {
+      subject: 'New login detected - Meeshy',
+      title: 'New login detected',
+      intro: 'A login was made to your account.',
+      deviceLabel: 'Device',
+      appLabel: 'Application',
+      locationLabel: 'Location',
+      ipLabel: 'IP address',
+      timeLabel: 'Date/time',
+      previousTitle: 'Previous login',
+      revokeTitle: 'Not you?',
+      revokeButton: 'Disconnect all my devices',
+      revokeExpiry: 'This link expires in 24 hours.',
+      mapAlt: 'Map',
     },
     emailChange: {
       subject: 'Confirme seu novo email - Meeshy',
@@ -501,6 +595,21 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action2: 'Verifica i tuoi dispositivi connessi',
       action3: "Attiva l'autenticazione a due fattori"
     },
+    loginAlert: {
+      subject: 'New login detected - Meeshy',
+      title: 'New login detected',
+      intro: 'A login was made to your account.',
+      deviceLabel: 'Device',
+      appLabel: 'Application',
+      locationLabel: 'Location',
+      ipLabel: 'IP address',
+      timeLabel: 'Date/time',
+      previousTitle: 'Previous login',
+      revokeTitle: 'Not you?',
+      revokeButton: 'Disconnect all my devices',
+      revokeExpiry: 'This link expires in 24 hours.',
+      mapAlt: 'Map',
+    },
     emailChange: {
       subject: 'Conferma il tuo nuovo indirizzo email - Meeshy',
       title: 'Cambio indirizzo email',
@@ -559,6 +668,21 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       action1: 'Ändere sofort dein Passwort',
       action2: 'Überprüfe deine verbundenen Geräte',
       action3: 'Aktiviere die Zwei-Faktor-Authentifizierung'
+    },
+    loginAlert: {
+      subject: 'New login detected - Meeshy',
+      title: 'New login detected',
+      intro: 'A login was made to your account.',
+      deviceLabel: 'Device',
+      appLabel: 'Application',
+      locationLabel: 'Location',
+      ipLabel: 'IP address',
+      timeLabel: 'Date/time',
+      previousTitle: 'Previous login',
+      revokeTitle: 'Not you?',
+      revokeButton: 'Disconnect all my devices',
+      revokeExpiry: 'This link expires in 24 hours.',
+      mapAlt: 'Map',
     },
     emailChange: {
       subject: 'Bestätige deine neue E-Mail-Adresse - Meeshy',
@@ -901,6 +1025,66 @@ export class EmailService {
     const text = `${alert.icon} ${alert.label}\n\n${t.common.greeting} ${data.name},\n\n${details}${actionsText}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'security_alert', trackingLang: data.language });
+  }
+
+  async sendLoginAlertEmail(data: LoginAlertEmailData): Promise<EmailResult> {
+    const t = this.getTranslations(data.language);
+    const locale = this.getLocale(data.language);
+    const la = t.loginAlert;
+
+    const timeFormatted = data.loginTime.toLocaleString(locale, {
+      year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: data.timezone || 'UTC',
+    });
+    const tzLabel = data.timezone || 'UTC';
+
+    const prevTimeFormatted = data.previousLoginTime
+      ? data.previousLoginTime.toLocaleString(locale, {
+          year: 'numeric', month: 'long', day: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+          timeZone: data.timezone || 'UTC',
+        })
+      : null;
+
+    const mapUrl = data.latitude != null && data.longitude != null
+      ? `https://staticmap.openstreetmap.de/staticmap.php?center=${data.latitude},${data.longitude}&zoom=10&size=300x150&markers=${data.latitude},${data.longitude},red-pushpin`
+      : null;
+
+    const detailRow = (icon: string, label: string, value: string | null) =>
+      value ? `<tr><td style="padding:6px 12px;color:#6b7280;white-space:nowrap;vertical-align:top">${icon} ${label}</td><td style="padding:6px 12px;font-weight:600">${value}</td></tr>` : '';
+
+    const detailsHtml = `<table style="width:100%;border-collapse:collapse;margin:16px 0">${detailRow('&#128241;', la.deviceLabel, [data.deviceName, data.deviceOS].filter(Boolean).join(' &middot; '))}${detailRow('&#127760;', la.appLabel, data.appOrBrowser)}${detailRow('&#128205;', la.locationLabel, data.location)}${detailRow('&#127758;', la.ipLabel, data.ip)}${detailRow('&#128336;', la.timeLabel, `${timeFormatted} (${tzLabel})`)}</table>`;
+
+    const mapHtml = mapUrl
+      ? `<div style="margin:16px 0;text-align:center"><img src="${mapUrl}" alt="${la.mapAlt} — ${data.location || ''}" style="border-radius:8px;max-width:100%;height:auto" width="300" height="150"></div>`
+      : '';
+
+    const previousHtml = prevTimeFormatted
+      ? `<div style="border-top:1px dashed #d1d5db;margin:20px 0;padding-top:16px"><p style="font-size:13px;color:#6b7280;margin:0 0 8px;font-weight:600">${la.previousTitle}</p><table style="width:100%;border-collapse:collapse">${detailRow('&#128241;', la.deviceLabel, data.previousDeviceName)}${detailRow('&#128205;', la.locationLabel, data.previousLocation)}${detailRow('&#128336;', la.timeLabel, prevTimeFormatted)}</table></div>`
+      : '';
+
+    const revokeHtml = `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:20px;margin:24px 0;text-align:center"><p style="font-weight:600;color:#991b1b;margin:0 0 12px">&#9888;&#65039; ${la.revokeTitle}</p><a href="${data.revokeAllUrl}" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;font-size:14px">${la.revokeButton}</a><p style="font-size:12px;color:#6b7280;margin:12px 0 0">${la.revokeExpiry}</p></div>`;
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#6366F1 0%,#4338CA 100%)"><h1>&#128274; ${la.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${la.intro}</p>${detailsHtml}${mapHtml}${previousHtml}${revokeHtml}<p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+
+    const detailText = (label: string, value: string | null) =>
+      value ? `  ${label}: ${value}\n` : '';
+    const text = [
+      `${la.title}\n`,
+      `${t.common.greeting} ${data.name},\n`,
+      la.intro, '\n',
+      detailText(la.deviceLabel, [data.deviceName, data.deviceOS].filter(Boolean).join(' - ')),
+      detailText(la.appLabel, data.appOrBrowser),
+      detailText(la.locationLabel, data.location),
+      detailText(la.ipLabel, data.ip),
+      detailText(la.timeLabel, `${timeFormatted} (${tzLabel})`),
+      prevTimeFormatted ? `\n--- ${la.previousTitle} ---\n${detailText(la.deviceLabel, data.previousDeviceName)}${detailText(la.locationLabel, data.previousLocation)}${detailText(la.timeLabel, prevTimeFormatted)}` : '',
+      `\n${la.revokeTitle}\n${data.revokeAllUrl}\n${la.revokeExpiry}\n`,
+      `\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`,
+    ].join('');
+
+    return this.sendEmail({ to: data.to, subject: la.subject, html, text, trackingType: 'login_alert', trackingLang: data.language });
   }
 
   async sendEmailChangeVerification(data: EmailChangeVerificationData): Promise<EmailResult> {
