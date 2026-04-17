@@ -155,7 +155,7 @@ export function registerCoreRoutes(
           some: {
             userId: userId,
             isActive: true,
-            deletedForMe: null
+            NOT: { deletedForMe: { not: null } }
           }
         },
         isActive: true
