@@ -167,10 +167,13 @@ struct MeeshyApp: App {
                         // widget while the app was suspended.
                         Task { await WidgetActionFlusher.shared.flush() }
                     case .background:
-                        handleBackgroundTransition()
-                        // Refresh widgets with the latest coordinator snapshot before
-                        // the OS takes a screenshot of our app switcher preview.
-                        Task { await NotificationCoordinator.shared.syncNow() }
+                        // Delegate the whole background entry to a single
+                        // coordinator guarded by a beginBackgroundTask. The
+                        // coordinator owns the order (stop players → flush
+                        // caches → ack pushes → stop heartbeats → schedule
+                        // BGTasks → sync widgets) and guarantees the task id
+                        // is ended even if a step throws.
+                        Task { await BackgroundTransitionCoordinator.shared.enterBackground() }
                     case .inactive:
                         break
                     @unknown default:
@@ -180,11 +183,19 @@ struct MeeshyApp: App {
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
                     if isAuth {
                         activeGuestSession = nil
-                        // Re-arm the notification coordinator after a logout/login
-                        // cycle. `start()` is idempotent, so the initial launch path
-                        // in AppDelegate is not impacted.
+                        // Re-arm every coordinator after a logout/login cycle.
+                        // `start()` is idempotent-guarded, so without the
+                        // matching `reset()` on the logout branch below the
+                        // second login would be a silent no-op and socket
+                        // publishers would be left without subscribers.
                         NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
                         NotificationCoordinator.shared.start()
+                        Task { await CacheCoordinator.shared.start() }
+                        // `MeeshyApp.task` only runs once per view lifecycle;
+                        // force a fresh socket connection so we don't rely on
+                        // any stale state carried over from a prior session.
+                        MessageSocketManager.shared.forceReconnect()
+                        SocialSocketManager.shared.forceReconnect()
                         Task { await requestPushPermissionIfNeeded() }
                         Task { await NotificationManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
@@ -203,6 +214,9 @@ struct MeeshyApp: App {
                     } else {
                         NotificationManager.shared.reset()
                         NotificationCoordinator.shared.reset()
+                        Task { await CacheCoordinator.shared.reset() }
+                        MessageSocketManager.shared.disconnect()
+                        SocialSocketManager.shared.disconnect()
                     }
                 }
                 .onReceive(pushManager.$pendingNotificationPayload) { payload in
@@ -243,20 +257,13 @@ struct MeeshyApp: App {
 
     private func handleForegroundTransition() async {
         guard authManager.isAuthenticated else { return }
-        await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
-        if !MessageSocketManager.shared.isConnected {
-            MessageSocketManager.shared.connect()
-        }
-        if !SocialSocketManager.shared.isConnected {
-            SocialSocketManager.shared.connect()
-        }
-    }
-
-    private func handleBackgroundTransition() {
-        PlaybackCoordinator.shared.stopAll()
-        guard authManager.isAuthenticated else { return }
-        BackgroundTaskManager.shared.scheduleConversationSync()
-        BackgroundTaskManager.shared.scheduleMessagePrefetch()
+        // Coordinator rearms the sockets (force reconnect), flushes pending
+        // delivery receipts and drives the conversation sync. We do NOT
+        // check `isConnected` here — that flag is unreliable after iOS
+        // suspension because the Socket.IO `disconnect` callback may not
+        // fire when the OS kills the WebSocket. The coordinator forces a
+        // fresh disconnect + connect cycle regardless of the flag state.
+        await BackgroundTransitionCoordinator.shared.resumeFromBackground()
     }
 
     // MARK: - Guest Session Lifecycle

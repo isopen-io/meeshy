@@ -58,6 +58,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     /// Silent / content-available push: refresh unread counts + widgets without UI.
+    ///
+    /// Previously this handler fired `completionHandler(.newData)` synchronously
+    /// before the async work finished, letting iOS freeze the process mid-flight
+    /// and leaving caches + badges stale. We now guard the full flow under a
+    /// `beginBackgroundTask` umbrella and only call the completion handler when
+    /// every subtask is done (or the OS budget is exhausted). This also gives
+    /// us a deterministic place to emit the delivery receipt (double-check
+    /// cursor) so the sender sees their message as "received" even when the
+    /// recipient never foregrounds the app.
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
@@ -66,6 +75,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         let unreadTotal = userInfo["unreadCount"] as? Int
         let convId = userInfo["conversationId"] as? String
         let convUnread = userInfo["conversationUnread"] as? Int
+        let messageId = userInfo["messageId"] as? String
+
+        // Guard the entire async chain with a background task so iOS gives us
+        // the full ~25s budget instead of suspending the process the moment
+        // this delegate returns. We track both the task id and the completion
+        // state in a small actor so the expiration handler and the happy
+        // path can't race — whichever fires first wins.
+        let state = SilentPushState(completionHandler: completionHandler)
+        let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.silent-push") {
+            Task { await state.expire() }
+        }
+        Task { await state.attach(taskId: taskId) }
 
         Task { @MainActor in
             if let unreadTotal {
@@ -77,9 +98,30 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                     unreadCount: convUnread
                 )
             }
-            await NotificationCoordinator.shared.syncNow()
+
+            // Run the three subtasks in parallel: badge/widget sync, delivery
+            // receipt emission, and message cache refresh. None of them throw
+            // — they log and swallow internally — so the group cannot bubble
+            // an error into the completion handler.
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    await NotificationCoordinator.shared.syncNow()
+                }
+                if let convId {
+                    group.addTask {
+                        await PushDeliveryReceiptService.shared.ack(
+                            conversationId: convId,
+                            messageId: messageId
+                        )
+                    }
+                    group.addTask {
+                        await ConversationSyncEngine.shared.ensureMessages(for: convId)
+                    }
+                }
+            }
+
+            await state.finish()
         }
-        completionHandler(.newData)
     }
 
     // MARK: - Universal Links (cold launch)
@@ -202,6 +244,59 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 }
 
 // MARK: - Notification Categories & Actions
+
+// MARK: - Silent Push State
+
+/// Tiny actor that makes sure `completionHandler(.newData)` is called
+/// exactly once and that `endBackgroundTask` always fires, whether the
+/// OS expiration handler or the happy path finishes first.
+private actor SilentPushState {
+    private var completionHandler: ((UIBackgroundFetchResult) -> Void)?
+    private var taskId: UIBackgroundTaskIdentifier = .invalid
+    private var didFinish = false
+
+    init(completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        self.completionHandler = completionHandler
+    }
+
+    func attach(taskId: UIBackgroundTaskIdentifier) async {
+        // Rare but possible: if the OS fired the expiration handler before
+        // the attach task hop completed, `didFinish` is already true and
+        // we'd leak the task id. End it immediately in that case.
+        if didFinish {
+            await MainActor.run {
+                UIApplication.shared.endBackgroundTask(taskId)
+            }
+            return
+        }
+        self.taskId = taskId
+    }
+
+    func finish() async {
+        guard !didFinish else { return }
+        didFinish = true
+        completionHandler?(.newData)
+        completionHandler = nil
+        await endTask()
+    }
+
+    func expire() async {
+        guard !didFinish else { return }
+        didFinish = true
+        completionHandler?(.failed)
+        completionHandler = nil
+        await endTask()
+    }
+
+    private func endTask() async {
+        guard taskId != .invalid else { return }
+        let id = taskId
+        taskId = .invalid
+        await MainActor.run {
+            UIApplication.shared.endBackgroundTask(id)
+        }
+    }
+}
 
 enum MeeshyNotificationCategory: String {
     case message = "MEESHY_MESSAGE"

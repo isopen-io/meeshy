@@ -5,14 +5,41 @@ import os
 // MARK: - AppDatabase
 public final class AppDatabase: @unchecked Sendable {
     public static let shared = AppDatabase()
-    
+
     public let databaseWriter: any DatabaseWriter
+    /// `true` when the on-disk SQLite store could not be opened and we fell
+    /// back to an in-memory queue. Callers that persist long-term data can
+    /// decide to skip writes or surface a warning to the user.
+    public let isEphemeral: Bool
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
-    
+
     private init() {
+        let (writer, ephemeral) = Self.makeWriter()
+        self.databaseWriter = writer
+        self.isEphemeral = ephemeral
+
+        do {
+            try Self.runMigrations(on: writer)
+        } catch {
+            Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+                .error("Migration failed, continuing with ephemeral writer: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Build a GRDB writer that never crashes the host app. On failure we log
+    /// and fall back to an in-memory queue so the L2 cache is degraded but
+    /// the app stays alive — critical when the OS wakes us for a silent push
+    /// or background task and disk access transiently fails.
+    private static func makeWriter() -> (any DatabaseWriter, Bool) {
+        let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
         do {
             let fileManager = FileManager.default
-            let appSupportDir = try fileManager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            let appSupportDir = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
             let directoryURL = appSupportDir.appendingPathComponent("Database", isDirectory: true)
 
             if !fileManager.fileExists(atPath: directoryURL.path) {
@@ -27,11 +54,13 @@ public final class AppDatabase: @unchecked Sendable {
             }
 
             let pool = try DatabasePool(path: databaseURL.path, configuration: configuration)
-            self.databaseWriter = pool
-
-            try Self.runMigrations(on: self.databaseWriter)
+            return (pool, false)
         } catch {
-            fatalError("Failed to initialize GRDB: \(error)")
+            logger.error("Failed to open on-disk GRDB, falling back to in-memory: \(error.localizedDescription, privacy: .public)")
+            // In-memory DatabaseQueue() is trivially constructible; the only
+            // realistic failure would be a hard OOM which the OS handles.
+            let queue = try! DatabaseQueue()  // swiftlint:disable:this force_try
+            return (queue, true)
         }
     }
 
