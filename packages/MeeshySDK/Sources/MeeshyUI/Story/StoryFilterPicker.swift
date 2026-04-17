@@ -133,6 +133,9 @@ public struct StoryFilterPicker: View {
             case .warm:     return [Color(hex: "FF8C42"), Color(hex: "FFD700")]
             case .cool:     return [Color(hex: "4FC3F7"), Color(hex: "0288D1")]
             case .dramatic: return [Color(hex: "1A1A2E"), Color(hex: "16213E")]
+            case .vivid:    return [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")]
+            case .fade:     return [Color(hex: "C4C4C4"), Color(hex: "E8E8E8")]
+            case .chrome:   return [Color(hex: "2C3E50"), Color(hex: "BDC3C7")]
             }
         }()
         LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -175,6 +178,19 @@ public nonisolated struct StoryFilterProcessor {
             output = f?.outputImage
         case .dramatic:
             let f = CIFilter(name: "CIPhotoEffectProcess")
+            f?.setValue(ciImage, forKey: kCIInputImageKey)
+            output = f?.outputImage
+        case .vivid:
+            let f = CIFilter.colorControls()
+            f.inputImage = ciImage
+            f.saturation = 1.5
+            output = f.outputImage
+        case .fade:
+            let f = CIFilter(name: "CIPhotoEffectFade")
+            f?.setValue(ciImage, forKey: kCIInputImageKey)
+            output = f?.outputImage
+        case .chrome:
+            let f = CIFilter(name: "CIPhotoEffectChrome")
             f?.setValue(ciImage, forKey: kCIInputImageKey)
             output = f?.outputImage
         }

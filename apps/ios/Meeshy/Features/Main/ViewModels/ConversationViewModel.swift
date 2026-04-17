@@ -316,6 +316,7 @@ class ConversationViewModel: ObservableObject {
     private let limit = 30
     private var nextMessageCursor: String?
     private var cancellables = Set<AnyCancellable>()
+    private var messagesPersistCancellable: AnyCancellable?
     private var socketHandler: ConversationSocketHandler?
     private var lastOlderPaginationTime: Date = .distantPast
     private var lastNewerPaginationTime: Date = .distantPast
@@ -530,6 +531,16 @@ class ConversationViewModel: ObservableObject {
         )
         handler.delegate = self
         self.socketHandler = handler
+        messagesPersistCancellable = $messages
+            .dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                guard let self, !snapshot.isEmpty else { return }
+                let convId = self.conversationId
+                Task.detached(priority: .utility) {
+                    await CacheCoordinator.shared.messages.save(snapshot, for: convId)
+                }
+            }
         if let session = anonymousSession {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)

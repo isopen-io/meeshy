@@ -1,21 +1,14 @@
 import SwiftUI
 import MeeshySDK
 
-// MARK: - Contextual Toolbar
-
-/// Full-width segmented toggle: FOND / FRONT.
-/// Selecting a segment reveals its tool pills below. Always visible, no tap-to-expand.
 struct ContextualToolbar: View {
     @Bindable var viewModel: StoryComposerViewModel
     @Environment(\.theme) private var theme
-    @State private var selectedGroup: StoryToolGroup = .fond
+    @State private var selectedTab: StoryTab = .contenu
 
     var body: some View {
         VStack(spacing: 10) {
-            // Segmented toggle
             segmentedToggle
-
-            // Tool pills for active group
             toolPills
         }
         .padding(.horizontal, 12)
@@ -23,9 +16,9 @@ struct ContextualToolbar: View {
         .padding(.bottom, 4)
         .onChange(of: viewModel.activeTool) { _, newTool in
             guard let tool = newTool else { return }
-            if selectedGroup != tool.group {
+            if selectedTab != tool.tab {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    selectedGroup = tool.group
+                    selectedTab = tool.tab
                 }
             }
         }
@@ -35,18 +28,18 @@ struct ContextualToolbar: View {
 
     private var segmentedToggle: some View {
         HStack(spacing: 0) {
-            segmentButton(.fond, label: "FOND")
-            segmentButton(.front, label: "FRONT")
+            segmentButton(.contenu, label: String(localized: "story.toolbar.contenu", defaultValue: "CONTENU", bundle: .module))
+            segmentButton(.effets, label: String(localized: "story.toolbar.effets", defaultValue: "EFFETS", bundle: .module))
         }
     }
 
-    private func segmentButton(_ group: StoryToolGroup, label: String) -> some View {
-        let isSelected = selectedGroup == group
+    private func segmentButton(_ tab: StoryTab, label: String) -> some View {
+        let isSelected = selectedTab == tab
 
         return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                selectedGroup = group
-                if viewModel.activeTool?.group != group {
+                selectedTab = tab
+                if viewModel.activeTool?.tab != tab {
                     viewModel.activeTool = nil
                 }
             }
@@ -55,8 +48,8 @@ struct ContextualToolbar: View {
                 Text(label)
                     .font(.system(size: 14, weight: isSelected ? .bold : .regular, design: .rounded))
 
-                if groupBadge(group) > 0 {
-                    Text("\(groupBadge(group))")
+                if tabBadge(tab) > 0 {
+                    Text("\(tabBadge(tab))")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(minWidth: 16, minHeight: 16)
@@ -76,18 +69,18 @@ struct ContextualToolbar: View {
 
     private var toolPills: some View {
         HStack(spacing: 8) {
-            switch selectedGroup {
-            case .fond:
-                toolPill(.bgMedia, icon: "photo.fill", label: String(localized: "story.toolbar.background", defaultValue: "Fond", bundle: .module), badge: bgMediaCount)
+            switch selectedTab {
+            case .contenu:
+                toolPill(.photo, icon: "photo.fill", label: String(localized: "story.toolbar.photo", defaultValue: "Photo", bundle: .module), badge: mediaCount)
                 toolPill(.drawing, icon: "pencil.tip", label: String(localized: "story.toolbar.drawing", defaultValue: "Dessin", bundle: .module), badge: hasDrawing ? 1 : 0)
-                // DISABLED: bgAudio — non fonctionnel
-            case .front:
                 toolPill(.text, icon: "textformat", label: String(localized: "story.toolbar.text", defaultValue: "Texte", bundle: .module), badge: textCount)
-                toolPill(.media, icon: "photo.on.rectangle.angled", label: String(localized: "story.toolbar.media", defaultValue: "Media", bundle: .module), badge: fgMediaCount)
-                toolPill(.audio, icon: "waveform", label: String(localized: "story.toolbar.audio", defaultValue: "Audio", bundle: .module), badge: fgAudioCount)
+                toolPill(.audio, icon: "waveform", label: String(localized: "story.toolbar.audio", defaultValue: "Audio", bundle: .module), badge: audioCount)
+            case .effets:
+                toolPill(.filters, icon: "camera.filters", label: String(localized: "story.toolbar.filters", defaultValue: "Filtres", bundle: .module), badge: viewModel.selectedFilter != nil ? 1 : 0)
+                toolPill(.timeline, icon: "timer", label: String(localized: "story.toolbar.timeline", defaultValue: "Timeline", bundle: .module), badge: 0)
             }
         }
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selectedGroup)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selectedTab)
     }
 
     // MARK: - Tool Pill
@@ -129,8 +122,6 @@ struct ContextualToolbar: View {
         .animation(.easeInOut(duration: 0.15), value: isActive)
     }
 
-    // MARK: - Pill Background
-
     @ViewBuilder
     private func pillBackground(isActive: Bool) -> some View {
         if isActive {
@@ -139,8 +130,6 @@ struct ContextualToolbar: View {
             theme.backgroundTertiary
         }
     }
-
-    // MARK: - Badge
 
     private func badgeView(count: Int) -> some View {
         Text("\(count)")
@@ -151,46 +140,24 @@ struct ContextualToolbar: View {
             .clipShape(Circle())
     }
 
-    // MARK: - Group Badge
+    // MARK: - Badge Counts
 
-    private func groupBadge(_ group: StoryToolGroup) -> Int {
-        switch group {
-        case .fond:
-            return bgMediaCount + (hasDrawing ? 1 : 0)
-        case .front:
-            return textCount + fgMediaCount + fgAudioCount
+    private func tabBadge(_ tab: StoryTab) -> Int {
+        switch tab {
+        case .contenu: return mediaCount + (hasDrawing ? 1 : 0) + textCount + audioCount
+        case .effets: return (viewModel.selectedFilter != nil ? 1 : 0)
         }
     }
 
-    // MARK: - Badge Counts
-
-    private var textCount: Int {
-        viewModel.currentEffects.textObjects?.count ?? 0
-    }
-
-    private var fgMediaCount: Int {
-        viewModel.currentEffects.mediaObjects?.count ?? 0
-    }
-
-    private var fgAudioCount: Int {
-        viewModel.currentEffects.audioPlayerObjects?.count ?? 0
-    }
-
-    private var bgMediaCount: Int {
-        // First media object acts as background — show count of those used as bg
-        (viewModel.currentEffects.mediaObjects?.isEmpty == false) ? 1 : 0
-    }
-
-    private var hasDrawing: Bool {
-        viewModel.drawingData != nil
-    }
-
-    // MARK: - Disabled State
+    private var textCount: Int { viewModel.currentEffects.textObjects?.count ?? 0 }
+    private var mediaCount: Int { viewModel.currentEffects.mediaObjects?.count ?? 0 }
+    private var audioCount: Int { viewModel.currentEffects.audioPlayerObjects?.count ?? 0 }
+    private var hasDrawing: Bool { viewModel.drawingData != nil }
 
     private func isToolDisabled(_ tool: StoryToolMode) -> Bool {
         switch tool {
         case .text: return !viewModel.canAddText
-        case .media: return !viewModel.canAddMedia
+        case .photo: return !viewModel.canAddMedia
         case .audio: return !viewModel.canAddAudio
         default: return false
         }

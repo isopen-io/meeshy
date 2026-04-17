@@ -201,25 +201,33 @@ public struct StoryCanvasReaderView: View {
     @ViewBuilder
     private var filterOverlay: some View {
         if let filter = story.storyEffects?.parsedFilter {
-            filterView(filter)
+            let intensity = story.storyEffects?.filterIntensity ?? 1.0
+            filterView(filter, intensity: intensity)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
         }
     }
 
     @ViewBuilder
-    private func filterView(_ filter: StoryFilter) -> some View {
+    private func filterView(_ filter: StoryFilter, intensity: Double) -> some View {
         switch filter {
         case .vintage:
-            Color.orange.opacity(0.15).blendMode(.multiply)
+            Color.orange.opacity(0.15 * intensity).blendMode(.multiply)
         case .bw:
             Color.gray.opacity(0.001)
+                .saturation(1.0 - intensity)
         case .warm:
-            Color.orange.opacity(0.08).blendMode(.softLight)
+            Color.orange.opacity(0.08 * intensity).blendMode(.softLight)
         case .cool:
-            Color.blue.opacity(0.08).blendMode(.softLight)
+            Color.blue.opacity(0.08 * intensity).blendMode(.softLight)
         case .dramatic:
-            Color.black.opacity(0.2).blendMode(.multiply)
+            Color.black.opacity(0.2 * intensity).blendMode(.multiply)
+        case .vivid:
+            Color.clear.saturation(1.0 + 0.5 * intensity)
+        case .fade:
+            Color.white.opacity(0.15 * intensity).blendMode(.lighten)
+        case .chrome:
+            Color.clear.contrast(1.0 + 0.3 * intensity)
         }
     }
 

@@ -6,32 +6,25 @@ import PencilKit
 // MARK: - Tool Modes
 
 enum StoryToolMode: String, CaseIterable {
-    // Fond
-    case bgMedia
+    // Contenu
+    case photo
     case drawing
-    // DISABLED: bgAudio — non fonctionnel, audio ambiance ne produit rien
-    // case bgAudio
-    // Front
     case text
-    case media
     case audio
-    // DISABLED: filter, effects, timeline — deplacees en menu contextuel par element
-    // case filter
-    // case effects
-    // case timeline
+    // Effets
+    case filters
+    case timeline
 
-    var group: StoryToolGroup {
+    var tab: StoryTab {
         switch self {
-        case .bgMedia, .drawing: return .fond
-        case .text, .media, .audio: return .front
+        case .photo, .drawing, .text, .audio: return .contenu
+        case .filters, .timeline: return .effets
         }
     }
 }
 
-enum StoryToolGroup: String {
-    case fond, front
-    // DISABLED: plus — outils integres contextuellement par element
-    // case plus
+enum StoryTab: String {
+    case contenu, effets
 }
 
 
@@ -103,8 +96,7 @@ final class StoryComposerViewModel {
 
     var activeTool: StoryToolMode?
 
-    var isFondToolActive: Bool { activeTool?.group == .fond }
-    var isFrontToolActive: Bool { activeTool?.group == .front }
+    var isContentToolActive: Bool { activeTool?.tab == .contenu }
 
     // MARK: - Drawing
 
@@ -151,6 +143,26 @@ final class StoryComposerViewModel {
     var timelineAdvanced: Bool = false
     var isMuted: Bool = false
     var hasBackgroundImage: Bool = false
+
+    // MARK: - Filter
+
+    var selectedFilter: String?
+    var filterIntensity: Double = 1.0
+
+    func applyFilter(_ name: String?) {
+        selectedFilter = name
+        var effects = currentEffects
+        effects.filter = name
+        effects.filterIntensity = name != nil ? filterIntensity : nil
+        currentEffects = effects
+    }
+
+    func updateFilterIntensity(_ value: Double) {
+        filterIntensity = value
+        var effects = currentEffects
+        effects.filterIntensity = value
+        currentEffects = effects
+    }
 
     // MARK: - Slide Duration
 
@@ -458,7 +470,7 @@ final class StoryComposerViewModel {
         } else {
             activeTool = tool
         }
-        if tool?.group == .fond {
+        if tool == .drawing {
             selectedElementId = nil
         }
     }

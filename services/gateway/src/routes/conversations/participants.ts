@@ -494,7 +494,7 @@ export function registerParticipantsRoutes(
   // Route pour mettre à jour le rôle d'un participant
   fastify.patch<{
     Params: { id: string; userId: string };
-    Body: { role: 'ADMIN' | 'MODERATOR' | 'MEMBER' };
+    Body: { role: string };
   }>('/conversations/:id/participants/:userId/role', {
     schema: {
       description: 'Update participant role in a conversation - requires creator or admin role',
@@ -512,7 +512,7 @@ export function registerParticipantsRoutes(
         type: 'object',
         required: ['role'],
         properties: {
-          role: { type: 'string', enum: ['ADMIN', 'MODERATOR', 'MEMBER'], description: 'New role for participant' }
+          role: { type: 'string', enum: ['admin', 'moderator', 'member'], description: 'New role for participant' }
         }
       },
       response: {
@@ -544,8 +544,9 @@ export function registerParticipantsRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const currentUserId = authRequest.authContext.userId;
 
-      if (!['ADMIN', 'MODERATOR', 'MEMBER'].includes(role)) {
-        return sendBadRequest(reply, 'Invalid role. Accepted roles are: ADMIN, MODERATOR, MEMBER');
+      const normalizedRole = role.toLowerCase()
+      if (!['admin', 'moderator', 'member'].includes(normalizedRole)) {
+        return sendBadRequest(reply, 'Invalid role. Accepted roles are: admin, moderator, member');
       }
 
       const conversationId = await resolveConversationId(prisma, id);

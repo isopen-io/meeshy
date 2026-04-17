@@ -48,24 +48,33 @@ public enum StoryFilter: String, Codable, CaseIterable, Sendable {
     case warm
     case cool
     case dramatic
+    case vivid
+    case fade
+    case chrome
 
     public var displayName: String {
         switch self {
         case .vintage: return "Vintage"
         case .bw: return "N&B"
-        case .warm: return "Warm"
-        case .cool: return "Cool"
+        case .warm: return "Chaud"
+        case .cool: return "Froid"
         case .dramatic: return "Dramatic"
+        case .vivid: return "Vivid"
+        case .fade: return "Fade"
+        case .chrome: return "Chrome"
         }
     }
 
     public var ciFilterName: String {
         switch self {
         case .vintage: return "CIPhotoEffectTransfer"
-        case .bw: return "CIPhotoEffectNoir"
-        case .warm: return "CIColorControls"
-        case .cool: return "CIColorControls"
+        case .bw: return "CIPhotoEffectMono"
+        case .warm: return "CITemperatureAndTint"
+        case .cool: return "CITemperatureAndTint"
         case .dramatic: return "CIPhotoEffectProcess"
+        case .vivid: return "CIColorControls"
+        case .fade: return "CIPhotoEffectFade"
+        case .chrome: return "CIPhotoEffectChrome"
         }
     }
 }
@@ -416,6 +425,7 @@ public struct StoryEffects: Codable, Sendable {
     public var textColor: String?
     public var textPosition: String?
     public var filter: String?
+    public var filterIntensity: Double?
     public var stickers: [String]?
     public var textAlign: String?
     public var textSize: CGFloat?
@@ -461,7 +471,7 @@ public struct StoryEffects: Codable, Sendable {
     public var musicEndTime: TimeInterval?
 
     public init(background: String? = nil, textStyle: String? = nil, textColor: String? = nil,
-                textPosition: String? = nil, filter: String? = nil, stickers: [String]? = nil,
+                textPosition: String? = nil, filter: String? = nil, filterIntensity: Double? = nil, stickers: [String]? = nil,
                 textAlign: String? = nil, textSize: CGFloat? = nil, textBg: String? = nil, textOffsetY: CGFloat? = nil,
                 stickerObjects: [StorySticker]? = nil, textPositionPoint: StoryTextPosition? = nil,
                 drawingData: Data? = nil,
@@ -476,7 +486,7 @@ public struct StoryEffects: Codable, Sendable {
                 backgroundTransform: StoryBackgroundTransform? = nil,
                 slideDuration: Float? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
-        self.textPosition = textPosition; self.filter = filter; self.stickers = stickers
+        self.textPosition = textPosition; self.filter = filter; self.filterIntensity = filterIntensity; self.stickers = stickers
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
         self.stickerObjects = stickerObjects; self.textPositionPoint = textPositionPoint
         self.drawingData = drawingData

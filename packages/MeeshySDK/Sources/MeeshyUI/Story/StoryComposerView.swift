@@ -674,27 +674,18 @@ public struct StoryComposerView: View {
     @ViewBuilder
     private var activeToolPanel: some View {
         switch viewModel.activeTool {
-        case .bgMedia:
+        case .photo:
             bgMediaPanel
         case .drawing:
             drawingPanel
-        // DISABLED: bgAudio — non fonctionnel
-        // case .bgAudio:
-        //     bgAudioPanel
         case .text:
             textPanel.padding(.bottom, 8)
-        case .media:
-            mediaPanel
         case .audio:
             fgAudioPanel
-        // DISABLED: filter, effects, timeline — deplacees en menu contextuel par element
-        // case .filter:
-        //     StoryFilterPicker(selectedFilter: $selectedFilter, previewImage: selectedImage)
-        //         .padding(.vertical, 12)
-        // case .effects:
-        //     transitionPicker
-        // case .timeline:
-        //     TimelinePanel(viewModel: viewModel)
+        case .filters:
+            StoryFilterGridView(viewModel: viewModel, previewImage: selectedImage)
+        case .timeline:
+            TimelinePanel(viewModel: viewModel)
         case .none:
             EmptyView()
         }

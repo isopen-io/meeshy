@@ -979,7 +979,7 @@ export function registerCoreRoutes(
         where: {
           conversationId: id,
           userId: userId,
-          role: { in: ['CREATOR', 'ADMIN', 'MODERATOR'] },
+          role: { in: ['creator', 'admin', 'moderator'] },
           isActive: true
         }
       });
@@ -993,7 +993,7 @@ export function registerCoreRoutes(
         return sendForbidden(reply, 'The global conversation cannot be modified');
       }
 
-      if (membership?.role === 'MODERATOR') {
+      if (membership?.role === 'moderator') {
         if (defaultWriteRole !== undefined || isAnnouncementChannel !== undefined ||
             slowModeSeconds !== undefined || autoTranslateEnabled !== undefined) {
           return sendForbidden(reply, 'Les modérateurs ne peuvent pas modifier les permissions');
@@ -1114,7 +1114,7 @@ export function registerCoreRoutes(
         where: {
           conversationId: conversationId,
           userId: userId,
-          role: { in: ['CREATOR', 'ADMIN'] },
+          role: { in: ['creator', 'admin'] },
           isActive: true
         }
       });
