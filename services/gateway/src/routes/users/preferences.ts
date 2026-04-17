@@ -439,13 +439,14 @@ export async function getUserStats(fastify: FastifyInstance) {
         fastify.prisma.participant.count({
           where: { userId },
         }),
-        fastify.prisma.message.count({
-          where: {
-            sender: { userId },
+        fastify.prisma.$runCommandRaw({
+          count: 'Message',
+          query: {
+            'sender.userId': userId,
             deletedAt: null,
-            translations: { isSet: true },
+            translations: { $ne: null, $exists: true },
           },
-        }),
+        }).then((r: any) => r.n ?? 0),
         fastify.prisma.friendRequest.count({
           where: { receiverId: userId },
         }),
