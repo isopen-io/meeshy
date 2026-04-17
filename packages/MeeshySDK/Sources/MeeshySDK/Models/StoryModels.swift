@@ -556,13 +556,21 @@ public struct StoryEffects: Codable, Sendable {
 
     // MARK: - Background / Foreground resolution
 
-    /// Retourne le media background résolu (flag explicite sinon fallback legacy sur mediaObjects[0]).
+    /// Retourne le media background résolu.
+    /// - Flag explicite `true` → cet objet.
+    /// - Aucun flag explicite (tous `nil`) → fallback legacy sur `mediaObjects[0]`
+    ///   pour rétro-compatibilité avec les stories pré-`isBackground`.
+    /// - Au moins un flag `false` explicite et aucun `true` → `nil` (l'utilisateur
+    ///   a explicitement retiré le background, on ne le force pas via fallback).
     public var resolvedBackgroundMedia: StoryMediaObject? {
         guard let objects = mediaObjects, !objects.isEmpty else { return nil }
         if let explicit = objects.first(where: { $0.isBackground == true }) {
             return explicit
         }
-        return objects.first
+        if objects.allSatisfy({ $0.isBackground == nil }) {
+            return objects.first
+        }
+        return nil
     }
 
     /// Retourne tous les media foreground résolus (exclut le background déterminé par `resolvedBackgroundMedia`).
@@ -574,14 +582,19 @@ public struct StoryEffects: Codable, Sendable {
         return objects
     }
 
-    /// Retourne l'audio background résolu :
-    /// 1. Premier `audioPlayerObjects` avec `isBackground == true`
-    /// 2. Sinon synthétise un objet depuis les champs legacy `backgroundAudioId/Volume/Start/End`
+    /// Retourne l'audio background résolu.
+    /// - Premier `audioPlayerObjects` avec `isBackground == true` → cet objet.
+    /// - Sinon, si aucun audioPlayerObject n'a de flag explicite (tous `nil`) ET
+    ///   que la story utilise les champs legacy `backgroundAudioId/Volume/Start/End`,
+    ///   synthétise un `StoryAudioPlayerObject` virtuel.
+    /// - Un `isBackground: false` explicite sur un audioPlayerObject signale que
+    ///   l'utilisateur a manipulé les flags — on ne retombe plus sur la synthèse legacy.
     public var resolvedBackgroundAudio: StoryAudioPlayerObject? {
         if let existing = audioPlayerObjects?.first(where: { $0.isBackground == true }) {
             return existing
         }
-        guard let bgId = backgroundAudioId else { return nil }
+        let audiosUntouched = (audioPlayerObjects ?? []).allSatisfy { $0.isBackground == nil }
+        guard audiosUntouched, let bgId = backgroundAudioId else { return nil }
         let start = backgroundAudioStart.map { Float($0) }
         let end = backgroundAudioEnd.map { Float($0) }
         let duration: Float? = {
