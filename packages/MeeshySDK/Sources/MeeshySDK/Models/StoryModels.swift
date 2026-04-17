@@ -416,6 +416,7 @@ public struct StoryEffects: Codable, Sendable {
     public var textColor: String?
     public var textPosition: String?
     public var filter: String?
+    public var filterIntensity: Double?
     public var stickers: [String]?
     public var textAlign: String?
     public var textSize: CGFloat?
@@ -461,7 +462,7 @@ public struct StoryEffects: Codable, Sendable {
     public var musicEndTime: TimeInterval?
 
     public init(background: String? = nil, textStyle: String? = nil, textColor: String? = nil,
-                textPosition: String? = nil, filter: String? = nil, stickers: [String]? = nil,
+                textPosition: String? = nil, filter: String? = nil, filterIntensity: Double? = nil, stickers: [String]? = nil,
                 textAlign: String? = nil, textSize: CGFloat? = nil, textBg: String? = nil, textOffsetY: CGFloat? = nil,
                 stickerObjects: [StorySticker]? = nil, textPositionPoint: StoryTextPosition? = nil,
                 drawingData: Data? = nil,
@@ -476,7 +477,7 @@ public struct StoryEffects: Codable, Sendable {
                 backgroundTransform: StoryBackgroundTransform? = nil,
                 slideDuration: Float? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
-        self.textPosition = textPosition; self.filter = filter; self.stickers = stickers
+        self.textPosition = textPosition; self.filter = filter; self.filterIntensity = filterIntensity; self.stickers = stickers
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
         self.stickerObjects = stickerObjects; self.textPositionPoint = textPositionPoint
         self.drawingData = drawingData
