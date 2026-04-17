@@ -26,8 +26,8 @@ export interface StoryViewersResponse {
 
 class StoryService {
   async getStories(): Promise<Post[]> {
-    const response = await apiService.get<Post[]>('/posts/feed/stories');
-    return response.data ?? [];
+    const response = await apiService.get<{ success: boolean; data: Post[] }>('/posts/feed/stories');
+    return response.data?.data ?? [];
   }
 
   async createStory(data: CreateStoryRequest): Promise<Post> {

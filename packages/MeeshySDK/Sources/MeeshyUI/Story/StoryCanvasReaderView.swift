@@ -138,7 +138,7 @@ public struct StoryCanvasReaderView: View {
 
     @ViewBuilder
     private var backgroundMediaLayer: some View {
-        if let bgMedia = story.storyEffects?.mediaObjects?.first {
+        if let bgMedia = story.storyEffects?.resolvedBackgroundMedia {
             if bgMedia.mediaType == "image" {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId) {
                     let thumbHash = story.media.first(where: { $0.id == bgMedia.postMediaId })?.thumbHash ?? resolvedThumbHash
@@ -371,8 +371,8 @@ public struct StoryCanvasReaderView: View {
     @ViewBuilder
     private func foregroundMediaLayer(canvasWidth: CGFloat) -> some View {
         let time = state.currentTime
-        let allMedia = story.storyEffects?.mediaObjects ?? []
-        ForEach(allMedia.dropFirst()) { media in
+        let foregroundMedia = story.storyEffects?.resolvedForegroundMediaObjects ?? []
+        ForEach(foregroundMedia) { media in
             let visible = state.mediaObjectVisible(media, at: time)
             if visible {
                 DraggableMediaView(
@@ -396,13 +396,14 @@ public struct StoryCanvasReaderView: View {
     @ViewBuilder
     private var foregroundAudioLayer: some View {
         let time = state.currentTime
-        ForEach(story.storyEffects?.audioPlayerObjects ?? []) { audio in
+        ForEach(story.storyEffects?.resolvedForegroundAudioPlayers ?? []) { audio in
             let visible = state.audioObjectVisible(audio, at: time)
             if visible {
                 StoryAudioPlayerView(
                     audioObject: .constant(audio),
                     url: resolvedAudioURL(for: audio),
-                    isEditing: false
+                    isEditing: false,
+                    externalPlayer: state.foregroundAudioPlayers[audio.id]
                 )
                 .opacity(state.audioObjectOpacity(for: audio, at: time))
                 .animation(.easeInOut(duration: 0.15), value: state.audioObjectOpacity(for: audio, at: time))
@@ -463,7 +464,10 @@ private final class ReaderState: ObservableObject {
     private var foregroundLoopers: [String: AVPlayerLooper] = [:]
     private var foregroundLoopObservers: [String: NSObjectProtocol] = [:]
     private var foregroundStopTimers: [String: Timer] = [:]
-    private var foregroundAudioPlayers: [String: AVPlayer] = [:]
+    /// Players audio foreground — un par audio, demarres selon leur startTime.
+    /// Exposes as @Published so `StoryAudioPlayerView` can bind to the parent-owned
+    /// player instead of spawning its own (which would cause duplicate playback).
+    @Published var foregroundAudioPlayers: [String: AVPlayer] = [:]
     private var foregroundAudioObservers: [String: NSObjectProtocol] = [:]
     private var foregroundAudioStopTimers: [String: Timer] = [:]
     /// KVO observers for player readyToPlay — must be stored to avoid premature dealloc
@@ -667,9 +671,9 @@ private final class ReaderState: ObservableObject {
     // MARK: Foreground image loading
 
     func loadForegroundImages(story: StoryItem, preloadedImages: [String: UIImage] = [:]) async {
-        guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
-        // Skip first media (rendered as background), load images for rest
-        let foregroundImages = Array(mediaObjects.dropFirst()).filter { $0.mediaType == "image" }
+        // Charge les images foreground (exclut le media background résolu).
+        let foregroundImages = (story.storyEffects?.resolvedForegroundMediaObjects ?? [])
+            .filter { $0.mediaType == "image" }
 
         // Phase 1: Synchronous — populate from preloaded + disk cache (instant)
         var needsNetworkLoad: [(id: String, resolved: String)] = []
@@ -705,14 +709,17 @@ private final class ReaderState: ObservableObject {
     // MARK: Background audio
 
     func startBackgroundAudio(effects: StoryEffects?, story: StoryItem, userLang: String) {
-        guard let effects else { return }
-        let postMediaId = resolvedBackgroundAudioPostMediaId(effects: effects, userLang: userLang)
-        guard let mediaId = postMediaId ?? effects.backgroundAudioId else { return }
+        guard let effects, let bgAudio = effects.resolvedBackgroundAudio else { return }
 
-        guard let urlString = story.media.first(where: { $0.id == mediaId })?.url,
+        // Résolution langue : si variantes disponibles, prendre celle qui match userLang.
+        let resolvedMediaId = bgAudio.backgroundAudioVariants?
+            .first { $0.language == userLang }?.postMediaId
+            ?? bgAudio.postMediaId
+
+        guard let urlString = story.media.first(where: { $0.id == resolvedMediaId })?.url,
               let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
 
-        let userVolume = effects.backgroundAudioVolume ?? 0.5
+        let userVolume = bgAudio.volume
         targetBackgroundVolume = userVolume
 
         // Cache-first: use prerolled player or local disk file before network stream
@@ -727,7 +734,8 @@ private final class ReaderState: ObservableObject {
         player.volume = userVolume * 0.2  // Demarrer a 20% du volume cible
         backgroundPlayer = player
 
-        if let startTime = effects.backgroundAudioStart {
+        let startTime = bgAudio.startTime.map { TimeInterval($0) }
+        if let startTime {
             player.seek(to: CMTime(seconds: startTime, preferredTimescale: 600))
         }
 
@@ -741,7 +749,7 @@ private final class ReaderState: ObservableObject {
         ) { [weak self] _ in
             guard let self else { return }
             let seekTime: CMTime
-            if let startTime = effects.backgroundAudioStart {
+            if let startTime {
                 seekTime = CMTime(seconds: startTime, preferredTimescale: 600)
             } else {
                 seekTime = .zero
@@ -923,9 +931,9 @@ private final class ReaderState: ObservableObject {
 
     func startForegroundVideos(story: StoryItem, preloadedVideoURLs: [String: URL] = [:]) {
         currentStoryRef = story
-        guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
-        // Skip first media (rendered as background), start videos for rest
-        let videoObjects = Array(mediaObjects.dropFirst()).filter { $0.mediaType == "video" }
+        // Démarre les videos foreground (exclut le media background résolu).
+        let videoObjects = (story.storyEffects?.resolvedForegroundMediaObjects ?? [])
+            .filter { $0.mediaType == "video" }
         for media in videoObjects {
             if let preloaded = preloadedVideoURLs[media.id] {
                 registerPendingVideoStart(media: media, url: preloaded)
@@ -1014,7 +1022,7 @@ private final class ReaderState: ObservableObject {
     /// Returns the latest effective end time among all foreground audio elements.
     /// Used to determine if a video should loop because audio outlasts it.
     private func maxForegroundAudioEndTime() -> Double {
-        guard let audioObjects = currentStoryRef?.storyEffects?.audioPlayerObjects else { return 0 }
+        guard let audioObjects = currentStoryRef?.storyEffects?.resolvedForegroundAudioPlayers else { return 0 }
         var maxEnd: Double = 0
         for audio in audioObjects {
             let start = Double(audio.startTime ?? 0)
@@ -1121,8 +1129,9 @@ private final class ReaderState: ObservableObject {
     // MARK: Foreground audio players (timing-aware start)
 
     func startForegroundAudios(story: StoryItem, preloadedAudioURLs: [String: URL] = [:]) {
-        guard let audioObjects = story.storyEffects?.audioPlayerObjects else { return }
-        let foregroundAudios = audioObjects
+        // Seuls les audios foreground sont démarrés ici — l'audio background (si présent)
+        // est géré séparément par `startBackgroundAudio`.
+        let foregroundAudios = story.storyEffects?.resolvedForegroundAudioPlayers ?? []
         for audio in foregroundAudios {
             if let preloaded = preloadedAudioURLs[audio.id] {
                 registerPendingAudioStart(audio: audio, url: preloaded)
@@ -1196,10 +1205,13 @@ private final class ReaderState: ObservableObject {
             readyObservers[audioId] = player.currentItem?.observe(\.status, options: [.new]) { [weak self, weak player] item, _ in
                 guard item.status == .readyToPlay || item.status == .failed else { return }
                 DispatchQueue.main.async {
-                    self?.readyObservers.removeValue(forKey: audioId)?.invalidate()
+                    // Removal returns the observer only on the first dispatch — subsequent
+                    // KVO fires (e.g. status toggling) will find nil and exit, preventing
+                    // a duplicate play() call.
+                    guard let self, self.readyObservers.removeValue(forKey: audioId) != nil else { return }
                     if item.status == .readyToPlay {
                         player?.play()
-                        self?.foregroundSoundDidStart()
+                        self.foregroundSoundDidStart()
                     }
                 }
             }
@@ -1244,13 +1256,6 @@ private final class ReaderState: ObservableObject {
         player.play()
         backgroundVideoPlayer = player
         return player
-    }
-
-    // MARK: Langue audio de fond
-
-    private func resolvedBackgroundAudioPostMediaId(effects: StoryEffects, userLang: String) -> String? {
-        let variant = effects.backgroundAudioVariants?.first { $0.language == userLang }
-        return variant?.postMediaId ?? effects.backgroundAudioId
     }
 
     // MARK: Socket — post:story-translation-updated

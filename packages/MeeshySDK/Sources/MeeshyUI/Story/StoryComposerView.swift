@@ -835,6 +835,8 @@ public struct StoryComposerView: View {
                     .padding(.vertical, 10)
                 }
             }
+
+            textElementList()
         }
     }
 
@@ -914,12 +916,33 @@ public struct StoryComposerView: View {
 
     private func mediaElementRow(obj: StoryMediaObject) -> some View {
         let isSelected = viewModel.selectedElementId == obj.id
+        let isBackground = viewModel.isBackground(id: obj.id)
         return HStack(spacing: 8) {
             mediaElementThumbnail(obj: obj)
             Text(obj.mediaType == "video" ? String(localized: "story.composer.videoLabel", defaultValue: "Video", bundle: .module) : String(localized: "story.composer.imageLabel", defaultValue: "Image", bundle: .module))
                 .font(.system(size: 12, weight: isSelected ? .bold : .medium))
                 .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
+            if isBackground {
+                Text(String(localized: "story.composer.backgroundBadge", defaultValue: "Fond", bundle: .module))
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(MeeshyColors.indigo950)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Capsule().fill(MeeshyColors.indigo300))
+            }
             Spacer()
+            Button {
+                viewModel.toggleBackground(id: obj.id)
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: isBackground ? "rectangle.fill" : "rectangle")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(isBackground ? MeeshyColors.indigo200 : MeeshyColors.indigo400)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(MeeshyColors.indigo400.opacity(isBackground ? 0.25 : 0.15)))
+            }
+            .accessibilityLabel(isBackground
+                ? String(localized: "story.composer.moveToForeground", defaultValue: "Mettre en premier plan", bundle: .module)
+                : String(localized: "story.composer.moveToBackground", defaultValue: "Mettre en fond", bundle: .module))
             Button {
                 viewModel.selectedElementId = obj.id
                 viewModel.isTimelineVisible = true
@@ -945,6 +968,72 @@ public struct StoryComposerView: View {
         .onTapGesture {
             viewModel.selectedElementId = obj.id
             viewModel.bringToFront(id: obj.id)
+        }
+    }
+
+    // MARK: - Text list (tap row → select + edit in place on canvas)
+
+    @ViewBuilder
+    private func textElementList() -> some View {
+        let items = viewModel.currentEffects.textObjects ?? []
+        if !items.isEmpty {
+            VStack(spacing: 4) {
+                ForEach(items, id: \.id) { obj in
+                    textElementRow(obj: obj)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 4)
+        }
+    }
+
+    private func textElementRow(obj: StoryTextObject) -> some View {
+        let isSelected = viewModel.selectedElementId == obj.id
+        let preview = obj.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? String(localized: "story.composer.emptyText", defaultValue: "Texte vide", bundle: .module)
+            : obj.content
+        return HStack(spacing: 8) {
+            Image(systemName: "textformat")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(MeeshyColors.indigo400)
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
+            Text(preview)
+                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer()
+            Button {
+                viewModel.selectedElementId = obj.id
+                viewModel.isTimelineVisible = true
+            } label: {
+                Image(systemName: "timeline.selection")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.indigo400)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
+            }
+            Button {
+                viewModel.deleteElement(id: obj.id)
+                HapticFeedback.medium()
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(MeeshyColors.error)
+                    .frame(width: 28, height: 28)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Sélection → édition en place sur canvas : handles de drag visibles
+            // + StoryTextEditorView ouvert au-dessus via textPanel.
+            viewModel.selectedElementId = obj.id
+            viewModel.bringToFront(id: obj.id)
+            viewModel.activeTool = .text
+            HapticFeedback.light()
         }
     }
 
@@ -980,6 +1069,7 @@ public struct StoryComposerView: View {
 
     private func audioElementRow(obj: StoryAudioPlayerObject) -> some View {
         let isSelected = viewModel.selectedElementId == obj.id
+        let isBackground = viewModel.isBackground(id: obj.id)
         return HStack(spacing: 8) {
             Image(systemName: "waveform")
                 .font(.system(size: 12, weight: .medium))
@@ -989,7 +1079,27 @@ public struct StoryComposerView: View {
             Text(String(localized: "story.composer.audioLabel", defaultValue: "Audio", bundle: .module))
                 .font(.system(size: 12, weight: isSelected ? .bold : .medium))
                 .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
+            if isBackground {
+                Text(String(localized: "story.composer.backgroundBadge", defaultValue: "Fond", bundle: .module))
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(MeeshyColors.indigo950)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Capsule().fill(MeeshyColors.indigo300))
+            }
             Spacer()
+            Button {
+                viewModel.toggleBackground(id: obj.id)
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: isBackground ? "rectangle.fill" : "rectangle")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(isBackground ? MeeshyColors.indigo200 : MeeshyColors.indigo400)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(MeeshyColors.indigo400.opacity(isBackground ? 0.25 : 0.15)))
+            }
+            .accessibilityLabel(isBackground
+                ? String(localized: "story.composer.moveToForeground", defaultValue: "Mettre en premier plan", bundle: .module)
+                : String(localized: "story.composer.moveToBackground", defaultValue: "Mettre en fond", bundle: .module))
             Button {
                 viewModel.selectedElementId = obj.id
                 viewModel.isTimelineVisible = true
