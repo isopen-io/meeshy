@@ -8,6 +8,7 @@ import { registerLoginRoutes } from './login';
 import { registerRegistrationRoutes } from './register';
 import { registerMagicLinkRoutes } from './magic-link';
 import { registerPhoneTransferRoutes } from './phone-transfer';
+import { registerRevokeAllSessionsRoute } from './revoke-all-sessions';
 
 /**
  * Main entry point for all authentication routes
@@ -47,4 +48,5 @@ export async function authRoutes(fastify: FastifyInstance) {
   registerRegistrationRoutes(context);
   registerMagicLinkRoutes(context);
   registerPhoneTransferRoutes(context);
+  registerRevokeAllSessionsRoute(context);
 }
