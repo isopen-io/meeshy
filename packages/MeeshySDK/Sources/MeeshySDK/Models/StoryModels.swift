@@ -216,6 +216,10 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var scale: CGFloat
     public var rotation: CGFloat
     public var volume: Float           // 0.0–1.0
+    /// Quand true, ce media joue en fond (fullscreen, boucle infinie, sans UI draggable).
+    /// Un seul media peut être en background par slide. Si `nil` à la lecture, on applique
+    /// la règle legacy : le 1er media du tableau est traité comme background.
+    public var isBackground: Bool?
 
     // Timeline timing
     public var startTime: Float?            // offset en secondes (défaut 0)
@@ -227,6 +231,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaType, placement, x, y, scale, rotation, volume
+        case isBackground
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
     }
 
@@ -235,6 +240,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 x: CGFloat = 0.5, y: CGFloat = 0.5,
                 scale: CGFloat = 1.0, rotation: CGFloat = 0,
                 volume: Float = 1.0,
+                isBackground: Bool? = nil,
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
                 sourceLanguage: String? = nil) {
@@ -242,6 +248,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.mediaType = mediaType; self.placement = placement
         self.x = x; self.y = y; self.scale = scale
         self.rotation = rotation; self.volume = volume
+        self.isBackground = isBackground
         self.startTime = startTime; self.duration = duration
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
@@ -258,6 +265,13 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var y: CGFloat
     public var volume: Float           // 0.0–1.0
     public var waveformSamples: [Float] // ~80 samples extraits à la composition
+    /// Quand true, ce player audio joue en fond (boucle infinie, pas de UI pill draggable,
+    /// ducking automatique quand un audio foreground joue). Un seul audio peut être en
+    /// background par slide. Synthétisé au chargement si la story utilise les anciens
+    /// champs `backgroundAudioId/Volume/Start/End`.
+    public var isBackground: Bool?
+    /// Variantes TTS par langue (rattachées à l'audio background historiquement).
+    public var backgroundAudioVariants: [StoryAudioVariant]?
 
     // Timeline timing
     public var startTime: Float?            // offset en secondes (défaut 0)
@@ -269,6 +283,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, placement, x, y, volume, waveformSamples
+        case isBackground, backgroundAudioVariants
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
     }
 
@@ -276,12 +291,16 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 placement: String = "overlay",
                 x: CGFloat = 0.5, y: CGFloat = 0.8,
                 volume: Float = 1.0, waveformSamples: [Float] = [],
+                isBackground: Bool? = nil,
+                backgroundAudioVariants: [StoryAudioVariant]? = nil,
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
                 sourceLanguage: String? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.placement = placement; self.x = x; self.y = y
         self.volume = volume; self.waveformSamples = waveformSamples
+        self.isBackground = isBackground
+        self.backgroundAudioVariants = backgroundAudioVariants
         self.startTime = startTime; self.duration = duration
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
@@ -535,6 +554,66 @@ public struct StoryEffects: Codable, Sendable {
         )]
     }
 
+    // MARK: - Background / Foreground resolution
+
+    /// Indique si le 1er media doit être traité comme background via la règle legacy
+    /// (c.à.d. aucun media n'a `isBackground` explicite).
+    private var usesLegacyMediaBackground: Bool {
+        guard let objects = mediaObjects, !objects.isEmpty else { return false }
+        return !objects.contains { $0.isBackground == true }
+    }
+
+    /// Retourne le media background résolu (flag explicite sinon fallback legacy sur mediaObjects[0]).
+    public var resolvedBackgroundMedia: StoryMediaObject? {
+        guard let objects = mediaObjects, !objects.isEmpty else { return nil }
+        if let explicit = objects.first(where: { $0.isBackground == true }) {
+            return explicit
+        }
+        return objects.first
+    }
+
+    /// Retourne tous les media foreground résolus (exclut le background déterminé par `resolvedBackgroundMedia`).
+    public var resolvedForegroundMediaObjects: [StoryMediaObject] {
+        guard let objects = mediaObjects, !objects.isEmpty else { return [] }
+        if let bg = resolvedBackgroundMedia {
+            return objects.filter { $0.id != bg.id }
+        }
+        return objects
+    }
+
+    /// Retourne l'audio background résolu :
+    /// 1. Premier `audioPlayerObjects` avec `isBackground == true`
+    /// 2. Sinon synthétise un objet depuis les champs legacy `backgroundAudioId/Volume/Start/End`
+    public var resolvedBackgroundAudio: StoryAudioPlayerObject? {
+        if let existing = audioPlayerObjects?.first(where: { $0.isBackground == true }) {
+            return existing
+        }
+        guard let bgId = backgroundAudioId else { return nil }
+        let start = backgroundAudioStart.map { Float($0) }
+        let end = backgroundAudioEnd.map { Float($0) }
+        let duration: Float? = {
+            guard let start, let end, end > start else { return nil }
+            return end - start
+        }()
+        return StoryAudioPlayerObject(
+            id: "legacy-bg-audio",
+            postMediaId: bgId,
+            placement: "background",
+            volume: backgroundAudioVolume ?? 0.5,
+            waveformSamples: [],
+            isBackground: true,
+            backgroundAudioVariants: backgroundAudioVariants,
+            startTime: start,
+            duration: duration,
+            loop: true
+        )
+    }
+
+    /// Retourne uniquement les audios foreground (draggable pills avec UI).
+    public var resolvedForegroundAudioPlayers: [StoryAudioPlayerObject] {
+        (audioPlayerObjects ?? []).filter { $0.isBackground != true }
+    }
+
     public func toJSON() -> [String: Any] {
         var dict: [String: Any] = [:]
         if let bg = background { dict["background"] = bg }
@@ -563,6 +642,7 @@ public struct StoryEffects: Codable, Sendable {
                 var d: [String: Any] = ["id": o.id, "postMediaId": o.postMediaId, "mediaType": o.mediaType,
                  "placement": o.placement, "x": o.x, "y": o.y,
                  "scale": o.scale, "rotation": o.rotation, "volume": o.volume]
+                if let bg = o.isBackground { d["isBackground"] = bg }
                 if let st = o.startTime { d["startTime"] = st }
                 if let dur = o.duration { d["duration"] = dur }
                 if let lp = o.loop { d["loop"] = lp }
@@ -576,6 +656,13 @@ public struct StoryEffects: Codable, Sendable {
                 var d: [String: Any] = ["id": p.id, "postMediaId": p.postMediaId, "placement": p.placement,
                  "x": p.x, "y": p.y, "volume": p.volume,
                  "waveformSamples": p.waveformSamples]
+                if let bg = p.isBackground { d["isBackground"] = bg }
+                if let variants = p.backgroundAudioVariants, !variants.isEmpty {
+                    d["backgroundAudioVariants"] = variants.map { v in
+                        ["postMediaId": v.postMediaId, "language": v.language,
+                         "isAutoGenerated": v.isAutoGenerated] as [String: Any]
+                    }
+                }
                 if let st = p.startTime { d["startTime"] = st }
                 if let dur = p.duration { d["duration"] = dur }
                 if let lp = p.loop { d["loop"] = lp }
