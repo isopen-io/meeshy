@@ -115,6 +115,25 @@ public actor CacheCoordinator {
         subscribeToLifecycle()
     }
 
+    /// Tear the coordinator down after logout so a subsequent login can
+    /// re-run `start()`. Without this, `isStarted` stays `true` across
+    /// sessions: the second call becomes a silent no-op and any future
+    /// resubscribe logic would never attach. `.task { }` in `MeeshyApp`
+    /// only runs once per view lifecycle, so the `onChange(isAuth:)`
+    /// observer is the only entry point that re-initialises the
+    /// coordinator.
+    public func reset() {
+        isStarted = false
+        cancellables.removeAll()
+        currentUserId = ""
+        translationCache.removeAll()
+        translationInsertionOrder.removeAll()
+        transcriptionCache.removeAll()
+        transcriptionInsertionOrder.removeAll()
+        audioTranslationCache.removeAll()
+        audioTranslationInsertionOrder.removeAll()
+    }
+
     private func resolveCurrentUserId() {
         Task { @MainActor in
             if let userId = AuthManager.shared.currentUser?.id {

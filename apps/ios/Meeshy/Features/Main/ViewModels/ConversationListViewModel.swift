@@ -12,6 +12,12 @@ class ConversationListViewModel: ObservableObject {
     @Published var userCategories: [ConversationSection] = []
     @Published var isLoading = false
     @Published private(set) var isLoadingMore = false
+    /// `true` when the last cold-start sync failed and the cache is still
+    /// empty. The view reads this to swap the empty-state placeholder for
+    /// a retryable error panel. We don't reuse `isLoading` because the
+    /// user should see a distinct "failed — tap to retry" affordance, not
+    /// a confusing empty list.
+    @Published private(set) var loadFailed = false
     private var hasMore = true
 
     // MARK: - Reactive Filters & Prepared Data
@@ -374,20 +380,30 @@ class ConversationListViewModel: ObservableObject {
         switch cached {
         case .fresh(let data, _):
             conversations = data
+            loadFailed = false
             lastFetchedAt = Date()
         case .stale(let data, _):
             conversations = data
+            loadFailed = false
             lastFetchedAt = Date()
             Task { [weak self] in await self?.syncEngine.syncSinceLastCheckpoint() }
         case .expired, .empty:
             isLoading = true
-            await syncEngine.fullSync()
+            loadFailed = false
+            let succeeded = await syncEngine.fullSync()
             let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
             if let data = reloaded.value {
                 conversations = data
                 // Full sync just completed: snapshot is authoritative, so reconcile
                 // overrides anything the coordinator tracked from earlier socket events.
                 NotificationCoordinator.shared.reconcileConversationUnreads(data)
+                loadFailed = false
+            } else if !succeeded {
+                // Cache is still empty AND the sync failed. Surface the
+                // failure so the view can offer a retry instead of the
+                // confusing "no conversations" empty state that historically
+                // appeared after a cold start with network issues.
+                loadFailed = true
             }
             lastFetchedAt = Date()
             isLoading = false
@@ -406,12 +422,16 @@ class ConversationListViewModel: ObservableObject {
     func forceRefresh() async {
         invalidateCache()
         isLoading = true
-        await syncEngine.fullSync()
+        loadFailed = false
+        let succeeded = await syncEngine.fullSync()
         let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
         if let data = reloaded.value {
             conversations = data
             // User-triggered full sync: snapshot is authoritative, reconcile counts.
             NotificationCoordinator.shared.reconcileConversationUnreads(data)
+            loadFailed = false
+        } else if !succeeded {
+            loadFailed = true
         }
         lastFetchedAt = Date()
         isLoading = false

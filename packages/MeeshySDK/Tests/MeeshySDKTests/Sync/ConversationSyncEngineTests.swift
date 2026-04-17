@@ -79,6 +79,26 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertEqual(mockConvService.listCallCount, 1)
     }
 
+    func test_fullSync_onSuccess_returnsTrue() async {
+        let pagination = OffsetPagination(total: 0, hasMore: false, limit: 100, offset: 0)
+        let response = OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [], pagination: pagination, error: nil
+        )
+        mockConvService.listResult = .success(response)
+
+        let ok = await engine.fullSync()
+
+        XCTAssertTrue(ok)
+    }
+
+    func test_fullSync_onError_returnsFalse() async {
+        mockConvService.listResult = .failure(MeeshyError.network(.timeout))
+
+        let ok = await engine.fullSync()
+
+        XCTAssertFalse(ok, "Callers must be able to distinguish a failed cold sync so the UI can offer a retry")
+    }
+
     // MARK: - syncSinceLastCheckpoint
 
     func test_syncSinceLastCheckpoint_callsAPIRequest() async {

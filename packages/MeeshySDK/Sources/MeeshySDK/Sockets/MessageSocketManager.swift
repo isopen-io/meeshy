@@ -818,25 +818,33 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // MARK: - Background lifecycle
 
     /// Called when the app transitions to `.background`. We stop the
-    /// heartbeat timer so it cannot fire into an OS-frozen runtime (which
-    /// would either be a no-op or wake the process briefly for nothing),
-    /// but we leave the socket itself in place so silent pushes that arrive
-    /// during the window can still route through it. The OS will tear the
-    /// connection down if it decides the process is idle, and our
-    /// reconnect logic will re-establish it on resume.
+    /// heartbeat timer so it cannot fire into an OS-frozen runtime and we
+    /// explicitly tear down the socket so `isConnected` cannot lie to the
+    /// resume path. iOS suspension silently kills the WebSocket without
+    /// always firing the `disconnect` event — if we trusted
+    /// `isConnected == true` on resume, the guard
+    /// `if !isConnected { connect() }` would never reconnect and the app
+    /// would appear authenticated but receive zero real-time events.
     public func prepareForBackground() {
         stopHeartbeat()
+        disconnect()
     }
 
-    /// Called when the app comes back to `.active`. We restart the
-    /// heartbeat if the socket is still connected, otherwise we reconnect
-    /// so the next send has a live channel.
+    /// Called when the app comes back to `.active`. Since
+    /// `prepareForBackground()` explicitly tore the socket down, this is
+    /// just a plain reconnect — no stale-state decision to make.
     public func resumeFromBackground() {
-        if isConnected {
-            startHeartbeat()
-        } else if AuthManager.shared.authToken != nil {
-            connect()
-        }
+        guard AuthManager.shared.authToken != nil else { return }
+        forceReconnect()
+    }
+
+    /// Tear down and rebuild the socket unconditionally. Use this on
+    /// foreground resume or after a token refresh so we never depend on
+    /// the potentially stale `isConnected` flag. `disconnect()` clears
+    /// the flag and nils the underlying socket; `connect()` rebuilds it.
+    public func forceReconnect() {
+        disconnect()
+        connect()
     }
 
     // MARK: - Heartbeat

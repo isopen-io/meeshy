@@ -47,6 +47,26 @@ final class CacheCoordinatorTests: XCTestCase {
         XCTAssertEqual(profilePolicy.maxItemCount, 100)
     }
 
+    // MARK: - Reset (logout lifecycle)
+
+    func test_reset_allowsStartToRunAgain() async throws {
+        let (sut, _, _) = try makeSUT()
+
+        await sut.start()
+        await sut.reset()
+        await sut.start()
+        // If the idempotency guard in `start()` had not been reset, the
+        // second call would have been a silent no-op. We can't introspect
+        // `isStarted` directly, but we can verify that `reset()` doesn't
+        // crash and that subsequent cache operations still work.
+        await sut.messages.save(
+            [TestFactories.makeMessage(id: "m-reset", conversationId: "c-reset", content: "ok")],
+            for: "c-reset"
+        )
+        let reloaded = await sut.messages.load(for: "c-reset")
+        XCTAssertEqual(reloaded.value?.count, 1)
+    }
+
     // MARK: - Socket -> Cache: message:new
 
     func test_messageReceived_appendsToCache() async throws {

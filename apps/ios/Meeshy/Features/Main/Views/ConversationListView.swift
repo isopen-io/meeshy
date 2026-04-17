@@ -647,7 +647,7 @@ struct ConversationListView: View {
                     ConnectionBanner()
                         .padding(.top, 4)
 
-                    // Sectioned conversation list (skeleton -> content -> empty)
+                    // Sectioned conversation list (skeleton -> content -> empty/error)
                     if conversationViewModel.isLoading && conversationViewModel.filteredConversations.isEmpty {
                         LazyVStack(spacing: 8) {
                             ForEach(0..<8, id: \.self) { index in
@@ -656,6 +656,24 @@ struct ConversationListView: View {
                             }
                         }
                         .padding(.horizontal, 16)
+                        .transition(.opacity)
+                    } else if conversationViewModel.filteredConversations.isEmpty && conversationViewModel.loadFailed {
+                        // Cold-start sync failed AND cache is empty: offer a
+                        // retry instead of the misleading "no conversations"
+                        // placeholder. This is the path users hit after a
+                        // cold start with stale/expired token or network
+                        // issues — previously they were trapped on an empty
+                        // list with no feedback.
+                        EmptyStateView(
+                            icon: "exclamationmark.arrow.triangle.2.circlepath",
+                            title: String(localized: "conversations.error.title", defaultValue: "Impossible de charger les conversations"),
+                            subtitle: String(localized: "conversations.error.subtitle", defaultValue: "Verifiez votre connexion puis reessayez"),
+                            actionLabel: String(localized: "conversations.error.retry", defaultValue: "Reessayer"),
+                            onAction: {
+                                Task { await conversationViewModel.forceRefresh() }
+                            }
+                        )
+                        .padding(.top, 60)
                         .transition(.opacity)
                     } else if conversationViewModel.filteredConversations.isEmpty {
                         EmptyStateView(
