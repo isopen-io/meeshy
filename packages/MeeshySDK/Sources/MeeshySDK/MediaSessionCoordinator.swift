@@ -40,9 +40,10 @@ public actor MediaSessionCoordinator {
     private var observersInstalled = false
 
     /// Non-isolated Combine subject so observers can subscribe from any
-    /// context without hopping into the actor; the subject itself is
-    /// thread-safe.
-    public nonisolated let events = PassthroughSubject<Event, Never>()
+    /// context without hopping into the actor; `PassthroughSubject` is
+    /// documented as thread-safe but lacks a `Sendable` conformance, so
+    /// we opt out of the check explicitly.
+    public nonisolated(unsafe) let events = PassthroughSubject<Event, Never>()
 
     private init() {}
 
