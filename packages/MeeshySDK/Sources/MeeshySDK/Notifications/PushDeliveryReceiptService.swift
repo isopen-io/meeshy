@@ -88,10 +88,7 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
         guard !pending.isEmpty else { return }
         guard deps.isAuthenticated() else {
             // Put it back untouched — we cannot authenticate right now.
-            lock.lock()
-            let current = loadQueueLocked()
-            saveQueueLocked(current + pending)
-            lock.unlock()
+            requeueAppend(pending)
             return
         }
 
@@ -106,13 +103,30 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
         }
 
         if !failed.isEmpty {
-            lock.lock()
-            let current = loadQueueLocked()
             // Preserve order: failures go back to the front, anything that
             // was enqueued in parallel remains at the tail.
-            saveQueueLocked(failed + current)
-            lock.unlock()
+            requeuePrepend(failed)
         }
+    }
+
+    /// Re-append drained items to the tail of whatever is currently queued.
+    /// Kept synchronous so callers inside `async` contexts don't acquire
+    /// `NSLock` across suspension points.
+    private func requeueAppend(_ items: [PendingReceipt]) {
+        lock.lock()
+        defer { lock.unlock() }
+        let current = loadQueueLocked()
+        saveQueueLocked(current + items)
+    }
+
+    /// Re-prepend items to the head of the queue while preserving anything
+    /// enqueued in parallel at the tail. Kept synchronous so callers inside
+    /// `async` contexts don't acquire `NSLock` across suspension points.
+    private func requeuePrepend(_ items: [PendingReceipt]) {
+        lock.lock()
+        defer { lock.unlock() }
+        let current = loadQueueLocked()
+        saveQueueLocked(items + current)
     }
 
     // MARK: - Queue (UserDefaults)
