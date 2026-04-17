@@ -6,6 +6,12 @@ public struct StoryAudioPlayerView: View {
     @Binding public var audioObject: StoryAudioPlayerObject
     public let url: URL?
     public let isEditing: Bool
+    /// Player owned by the parent (ReaderState in viewer mode). When provided,
+    /// this view does NOT create or start an internal player — it only renders
+    /// the UI (waveform + mute button) and observes the external player for progress.
+    /// This prevents the double-playback bug where both ReaderState and this view
+    /// would independently instantiate an AVPlayer for the same audio.
+    public let externalPlayer: AVPlayer?
     public let onDragEnd: () -> Void
 
     @State private var isPlaying = false
@@ -14,7 +20,7 @@ public struct StoryAudioPlayerView: View {
     @GestureState private var dragOffset = CGSize.zero
 
     #if os(iOS)
-    @State private var player: AVPlayer?
+    @State private var internalPlayer: AVPlayer?
     @State private var playerObserver: Any?
     @State private var endObserver: NSObjectProtocol?
     #endif
@@ -22,12 +28,18 @@ public struct StoryAudioPlayerView: View {
     public init(audioObject: Binding<StoryAudioPlayerObject>,
                 url: URL? = nil,
                 isEditing: Bool = false,
+                externalPlayer: AVPlayer? = nil,
                 onDragEnd: @escaping () -> Void = {}) {
         self._audioObject = audioObject
         self.url = url
         self.isEditing = isEditing
+        self.externalPlayer = externalPlayer
         self.onDragEnd = onDragEnd
     }
+
+    #if os(iOS)
+    private var activePlayer: AVPlayer? { externalPlayer ?? internalPlayer }
+    #endif
 
     public var body: some View {
         GeometryReader { geo in
@@ -38,52 +50,61 @@ public struct StoryAudioPlayerView: View {
                 )
                 .gesture(isEditing ? dragGesture(geo: geo) : nil)
                 .onAppear {
-                    if !isEditing { startAutoPlay() }
+                    if isEditing {
+                        // Editor mode: player is created lazily on togglePlayback.
+                    } else if externalPlayer != nil {
+                        // Reader mode with shared player — just attach the progress observer.
+                        attachProgressObserver(to: externalPlayer)
+                        isPlaying = (externalPlayer?.rate ?? 0) > 0
+                    } else {
+                        startAutoPlay()
+                    }
                 }
                 .onDisappear { teardownPlayer() }
                 .onReceive(NotificationCenter.default.publisher(for: .storyComposerMuteCanvas)) { _ in
-                    player?.pause()
+                    // Only internal players (composer preview) should pause here.
+                    // The external (ReaderState) player is controlled by its owner.
+                    guard externalPlayer == nil else { return }
+                    internalPlayer?.pause()
                     if isPlaying { isPlaying = false }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .storyComposerUnmuteCanvas)) { _ in
                     // Ne pas reprendre automatiquement — l'utilisateur relancera manuellement
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .timelineDidStartPlaying)) { _ in
+                    // Composer-only event — skip entirely when ReaderState owns the player.
+                    guard externalPlayer == nil else { return }
                     guard let url else { return }
-                    if player == nil {
+                    if internalPlayer == nil {
                         let newPlayer = AVPlayer(url: url)
                         newPlayer.volume = audioObject.volume
-                        player = newPlayer
+                        internalPlayer = newPlayer
                     }
-                    player?.seek(to: .zero)
-                    player?.play()
+                    internalPlayer?.seek(to: .zero)
+                    internalPlayer?.play()
                     isPlaying = true
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .timelineDidStopPlaying)) { _ in
-                    player?.pause()
+                    guard externalPlayer == nil else { return }
+                    internalPlayer?.pause()
                     isPlaying = false
                 }
         }
     }
 
-    // MARK: - Auto-play (viewer mode)
+    // MARK: - Auto-play (viewer mode, internal player only)
 
     private func startAutoPlay() {
         #if os(iOS)
         guard let url else { return }
 
-        if player == nil {
+        if internalPlayer == nil {
             let newPlayer = AVPlayer(url: url)
             newPlayer.volume = audioObject.volume
             newPlayer.isMuted = isMuted
-            player = newPlayer
+            internalPlayer = newPlayer
 
-            let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-            playerObserver = newPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-                guard let duration = newPlayer.currentItem?.duration.seconds,
-                      duration > 0 else { return }
-                playbackProgress = time.seconds / duration
-            }
+            attachProgressObserver(to: newPlayer)
 
             let shouldLoop = audioObject.loop ?? false
             endObserver = NotificationCenter.default.addObserver(
@@ -102,25 +123,45 @@ public struct StoryAudioPlayerView: View {
             }
         }
 
-        player?.play()
+        internalPlayer?.play()
         isPlaying = true
         #endif
     }
+
+    // MARK: - Progress observer (works for internal or external player)
+
+    #if os(iOS)
+    private func attachProgressObserver(to target: AVPlayer?) {
+        guard let target, playerObserver == nil else { return }
+        let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        playerObserver = target.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak target] time in
+            guard let duration = target?.currentItem?.duration.seconds,
+                  duration > 0 else { return }
+            playbackProgress = time.seconds / duration
+            isPlaying = (target?.rate ?? 0) > 0
+        }
+    }
+    #endif
 
     // MARK: - Teardown
 
     private func teardownPlayer() {
         #if os(iOS)
-        player?.pause()
+        // Remove our progress observer from whichever player it was attached to.
         if let obs = playerObserver {
-            player?.removeTimeObserver(obs)
+            activePlayer?.removeTimeObserver(obs)
             playerObserver = nil
         }
-        if let obs = endObserver {
-            NotificationCenter.default.removeObserver(obs)
-            endObserver = nil
+        // Only the internal player should be paused/dropped here — the external
+        // player is owned by the parent (ReaderState) and has its own lifecycle.
+        if externalPlayer == nil {
+            internalPlayer?.pause()
+            if let obs = endObserver {
+                NotificationCenter.default.removeObserver(obs)
+                endObserver = nil
+            }
+            internalPlayer = nil
         }
-        player = nil
         isPlaying = false
         playbackProgress = 0
         #endif
@@ -222,17 +263,12 @@ public struct StoryAudioPlayerView: View {
             // Mode éditeur : play/pause
             guard let url else { return }
 
-            if player == nil {
+            if internalPlayer == nil {
                 let newPlayer = AVPlayer(url: url)
                 newPlayer.volume = audioObject.volume
-                player = newPlayer
+                internalPlayer = newPlayer
 
-                let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-                playerObserver = newPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-                    guard let duration = newPlayer.currentItem?.duration.seconds,
-                          duration > 0 else { return }
-                    playbackProgress = time.seconds / duration
-                }
+                attachProgressObserver(to: newPlayer)
 
                 endObserver = NotificationCenter.default.addObserver(
                     forName: .AVPlayerItemDidPlayToEndTime,
@@ -251,16 +287,17 @@ public struct StoryAudioPlayerView: View {
                     NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
                 }
                 Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
-                player?.play()
+                internalPlayer?.play()
             } else {
-                player?.pause()
+                internalPlayer?.pause()
             }
         } else {
-            // Mode viewer : mute/unmute uniquement
+            // Mode viewer : mute/unmute uniquement — s'applique au player actif
+            // (externe fourni par ReaderState, ou interne en fallback).
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
             isMuted.toggle()
-            player?.isMuted = isMuted
+            activePlayer?.isMuted = isMuted
         }
         #endif
     }

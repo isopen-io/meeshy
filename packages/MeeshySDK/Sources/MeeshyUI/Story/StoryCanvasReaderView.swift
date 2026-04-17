@@ -402,7 +402,8 @@ public struct StoryCanvasReaderView: View {
                 StoryAudioPlayerView(
                     audioObject: .constant(audio),
                     url: resolvedAudioURL(for: audio),
-                    isEditing: false
+                    isEditing: false,
+                    externalPlayer: state.foregroundAudioPlayers[audio.id]
                 )
                 .opacity(state.audioObjectOpacity(for: audio, at: time))
                 .animation(.easeInOut(duration: 0.15), value: state.audioObjectOpacity(for: audio, at: time))
@@ -463,7 +464,10 @@ private final class ReaderState: ObservableObject {
     private var foregroundLoopers: [String: AVPlayerLooper] = [:]
     private var foregroundLoopObservers: [String: NSObjectProtocol] = [:]
     private var foregroundStopTimers: [String: Timer] = [:]
-    private var foregroundAudioPlayers: [String: AVPlayer] = [:]
+    /// Players audio foreground — un par audio, demarres selon leur startTime.
+    /// Exposes as @Published so `StoryAudioPlayerView` can bind to the parent-owned
+    /// player instead of spawning its own (which would cause duplicate playback).
+    @Published var foregroundAudioPlayers: [String: AVPlayer] = [:]
     private var foregroundAudioObservers: [String: NSObjectProtocol] = [:]
     private var foregroundAudioStopTimers: [String: Timer] = [:]
     /// KVO observers for player readyToPlay — must be stored to avoid premature dealloc
@@ -1196,10 +1200,13 @@ private final class ReaderState: ObservableObject {
             readyObservers[audioId] = player.currentItem?.observe(\.status, options: [.new]) { [weak self, weak player] item, _ in
                 guard item.status == .readyToPlay || item.status == .failed else { return }
                 DispatchQueue.main.async {
-                    self?.readyObservers.removeValue(forKey: audioId)?.invalidate()
+                    // Removal returns the observer only on the first dispatch — subsequent
+                    // KVO fires (e.g. status toggling) will find nil and exit, preventing
+                    // a duplicate play() call.
+                    guard let self, self.readyObservers.removeValue(forKey: audioId) != nil else { return }
                     if item.status == .readyToPlay {
                         player?.play()
-                        self?.foregroundSoundDidStart()
+                        self.foregroundSoundDidStart()
                     }
                 }
             }
