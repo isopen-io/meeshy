@@ -296,8 +296,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
     /// Called when the app comes back to `.active`. `prepareForBackground`
     /// already tore the socket down, so this is a plain reconnect.
+    /// Reads the token from `APIClient` (nonisolated mirror of
+    /// `AuthManager.authToken`) so lifecycle hooks can stay synchronous.
     public func resumeFromBackground() {
-        guard AuthManager.shared.authToken != nil else { return }
+        guard APIClient.shared.authToken != nil else { return }
         forceReconnect()
     }
 

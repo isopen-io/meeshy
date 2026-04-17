@@ -833,8 +833,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// Called when the app comes back to `.active`. Since
     /// `prepareForBackground()` explicitly tore the socket down, this is
     /// just a plain reconnect — no stale-state decision to make.
+    /// Reads the token from `APIClient` (nonisolated mirror of
+    /// `AuthManager.authToken`) to keep this hook callable from any context.
     public func resumeFromBackground() {
-        guard AuthManager.shared.authToken != nil else { return }
+        guard APIClient.shared.authToken != nil else { return }
         forceReconnect()
     }
 
