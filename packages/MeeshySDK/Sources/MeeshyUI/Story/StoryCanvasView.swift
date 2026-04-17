@@ -348,19 +348,19 @@ struct StoryCanvasView: View {
         }
     }
 
-    // MARK: - Unified Media Layer (first = fill-canvas background, rest = positioned)
+    // MARK: - Unified Media Layer (background = fill-canvas, rest = positioned)
 
     @ViewBuilder
     private func mediaLayer(interactive: Bool) -> some View {
-        ForEach(Array(mediaObjects.enumerated()), id: \.element.id) { index, obj in
-            let isFirst = index == 0
-
+        // Resolution base sur le flag isBackground (fallback legacy = premier media).
+        let backgroundId = viewModel.currentEffects.resolvedBackgroundMedia?.id
+        ForEach(mediaObjects, id: \.id) { obj in
             if isElementVisible(startTime: obj.startTime, duration: obj.duration) {
-                if isFirst {
-                    // First media fills canvas as background
+                if obj.id == backgroundId {
+                    // Background media fills canvas
                     firstMediaElement(obj: obj)
                 } else {
-                    // Subsequent media: positioned, draggable
+                    // Foreground media: positioned, draggable
                     positionedMediaElement(obj: obj, interactive: interactive)
                 }
             }
@@ -458,7 +458,10 @@ struct StoryCanvasView: View {
 
     @ViewBuilder
     private func foregroundAudioLayer(interactive: Bool) -> some View {
-        ForEach(audioPlayerObjects, id: \.id) { obj in
+        // Filtre : les audios background (isBackground=true OU synthetise legacy)
+        // n'ont pas de UI visible sur le canvas — seulement de la lecture en fond.
+        let foregroundAudios = viewModel.currentEffects.resolvedForegroundAudioPlayers
+        ForEach(foregroundAudios, id: \.id) { obj in
             if isElementVisible(startTime: obj.startTime, duration: obj.duration) {
                 StoryAudioPlayerView(
                     audioObject: audioObjectBinding(for: obj.id),

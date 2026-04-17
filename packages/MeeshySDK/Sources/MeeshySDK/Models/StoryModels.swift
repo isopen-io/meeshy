@@ -556,13 +556,6 @@ public struct StoryEffects: Codable, Sendable {
 
     // MARK: - Background / Foreground resolution
 
-    /// Indique si le 1er media doit être traité comme background via la règle legacy
-    /// (c.à.d. aucun media n'a `isBackground` explicite).
-    private var usesLegacyMediaBackground: Bool {
-        guard let objects = mediaObjects, !objects.isEmpty else { return false }
-        return !objects.contains { $0.isBackground == true }
-    }
-
     /// Retourne le media background résolu (flag explicite sinon fallback legacy sur mediaObjects[0]).
     public var resolvedBackgroundMedia: StoryMediaObject? {
         guard let objects = mediaObjects, !objects.isEmpty else { return nil }

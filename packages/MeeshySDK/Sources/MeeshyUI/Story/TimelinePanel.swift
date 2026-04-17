@@ -686,17 +686,25 @@ struct TimelinePanel: View {
             ))
         }
 
-        if effects.backgroundAudioId != nil {
+        // Unified audio tracks: background (explicit flag OR legacy-synthesized) + foreground.
+        // Plus de cas special "bg-audio" hardcode : on s'appuie sur resolvedBackgroundAudio.
+        if let bgAudio = effects.resolvedBackgroundAudio {
+            let audURL = viewModel.loadedAudioURLs[bgAudio.id]
             result.append(TimelineTrack(
-                id: "bg-audio", name: String(localized: "story.timeline.bgAudio", defaultValue: "Audio BG", bundle: .module), type: .audio,
-                startTime: Float(effects.backgroundAudioStart ?? 0),
-                duration: effects.backgroundAudioEnd.map { Float($0) },
-                volume: effects.backgroundAudioVolume ?? 1.0, loop: true,
-                fadeIn: nil, fadeOut: nil
+                id: bgAudio.id,
+                name: String(localized: "story.timeline.bgAudio", defaultValue: "Audio BG", bundle: .module),
+                type: .audio,
+                startTime: bgAudio.startTime ?? 0,
+                duration: bgAudio.duration,
+                volume: bgAudio.volume,
+                loop: bgAudio.loop ?? true,
+                fadeIn: bgAudio.fadeIn, fadeOut: bgAudio.fadeOut,
+                waveformSamples: bgAudio.waveformSamples,
+                mediaDuration: mediaDurationCache[bgAudio.id] ?? intrinsicDuration(url: audURL)
             ))
         }
 
-        for audio in effects.audioPlayerObjects ?? [] {
+        for audio in effects.resolvedForegroundAudioPlayers {
             let audURL = viewModel.loadedAudioURLs[audio.id]
             result.append(TimelineTrack(
                 id: audio.id, name: String(localized: "story.timeline.audio", defaultValue: "Audio", bundle: .module), type: .audio,
@@ -727,7 +735,9 @@ struct TimelinePanel: View {
     private func syncTrackToModel(_ track: TimelineTrack) {
         var effects = viewModel.currentEffects
 
-        if track.id == "bg-audio" {
+        // Audio background legacy synthetise (id = "legacy-bg-audio") → ecrit dans les
+        // champs StoryEffects historiques pour garder la retro-compat wire.
+        if track.id == "legacy-bg-audio" {
             effects.backgroundAudioVolume = track.volume
             effects.backgroundAudioStart = TimeInterval(track.startTime)
             if let dur = track.duration { effects.backgroundAudioEnd = TimeInterval(dur) }
