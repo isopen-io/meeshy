@@ -397,15 +397,27 @@ export class NotificationService {
                 select: { email: true, systemLanguage: true, username: true }
               });
               if (user?.email) {
-                this.emailService.sendSecurityAlertEmail({
-                  to: user.email,
-                  name: user.username || 'User',
-                  language: user.systemLanguage || 'fr',
-                  alertType: params.type,
-                  details: params.content.substring(0, 500),
-                }).catch(err => {
-                  notificationLogger.error('Immediate email failed', { error: err, userId: params.userId });
-                });
+                if (params.type === 'login_new_device' && (params as any)._loginAlertData) {
+                  const alertData = (params as any)._loginAlertData;
+                  this.emailService.sendLoginAlertEmail({
+                    to: user.email,
+                    name: user.username || 'User',
+                    language: user.systemLanguage || 'fr',
+                    ...alertData,
+                  }).catch(err => {
+                    notificationLogger.error('Login alert email failed', { error: err, userId: params.userId });
+                  });
+                } else {
+                  this.emailService.sendSecurityAlertEmail({
+                    to: user.email,
+                    name: user.username || 'User',
+                    language: user.systemLanguage || 'fr',
+                    alertType: params.type,
+                    details: params.content.substring(0, 500),
+                  }).catch(err => {
+                    notificationLogger.error('Immediate email failed', { error: err, userId: params.userId });
+                  });
+                }
               }
             }
           }
@@ -1589,6 +1601,8 @@ export class NotificationService {
       model?: string | null;
       os?: string | null;
       osVersion?: string | null;
+      browser?: string | null;
+      browserVersion?: string | null;
     } | null;
     ipAddress?: string;
     geoData?: {
@@ -1596,7 +1610,11 @@ export class NotificationService {
       countryName?: string | null;
       city?: string | null;
       location?: string | null;
+      timezone?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
     } | null;
+    revokeToken?: string;
   }): Promise<Notification | null> {
     const device = params.deviceInfo;
     const geo = params.geoData;
@@ -1605,7 +1623,48 @@ export class NotificationService {
     const deviceOS = device?.os
       ? (device.osVersion ? `${device.os} ${device.osVersion}` : device.os)
       : null;
+    const appOrBrowser = device?.browser
+      ? (device.browserVersion ? `${device.browser} ${device.browserVersion}` : device.browser)
+      : null;
     const location = geo?.location || [geo?.city, geo?.countryName].filter(Boolean).join(', ') || null;
+
+    const apiBase = process.env.API_PUBLIC_URL || 'https://gate.meeshy.me';
+    const revokeAllUrl = params.revokeToken
+      ? `${apiBase}/api/v1/auth/revoke-all-sessions?token=${params.revokeToken}`
+      : `${apiBase}`;
+
+    let previousDeviceName: string | null = null;
+    let previousLocation: string | null = null;
+    let previousLoginTime: Date | null = null;
+
+    try {
+      const { getUserSessions } = await import('../SessionService');
+      const sessions = await getUserSessions(params.recipientUserId);
+      const previous = sessions.find(s => !s.isCurrentSession);
+      if (previous) {
+        previousDeviceName = [previous.browserName, previous.osName].filter(Boolean).join(' - ');
+        previousLocation = previous.location || null;
+        previousLoginTime = previous.lastActivityAt ? new Date(previous.lastActivityAt) : null;
+      }
+    } catch {
+      // Non-blocking — previous session is optional
+    }
+
+    const loginAlertData = {
+      deviceName,
+      deviceOS,
+      appOrBrowser,
+      location,
+      ip: params.ipAddress || null,
+      loginTime: new Date(),
+      timezone: geo?.timezone || null,
+      latitude: geo?.latitude ?? null,
+      longitude: geo?.longitude ?? null,
+      previousDeviceName,
+      previousLocation,
+      previousLoginTime,
+      revokeAllUrl,
+    };
 
     return this.createNotification({
       userId: params.recipientUserId,
@@ -1626,7 +1685,8 @@ export class NotificationService {
         city: geo?.city || null,
         location,
       },
-    });
+      _loginAlertData: loginAlertData,
+    } as any);
   }
 
   // ==============================================

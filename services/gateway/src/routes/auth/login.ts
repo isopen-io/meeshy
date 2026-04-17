@@ -6,6 +6,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types';
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
+import jwt from 'jsonwebtoken';
 import { getRequestContext } from '../../services/GeoIPService';
 import { markSessionTrusted } from '../../services/SessionService';
 import {
@@ -119,11 +120,18 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       if (!session.isTrusted) {
         const notificationService = (fastify as any).notificationService;
         if (notificationService) {
+          const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
+          const revokeToken = jwt.sign(
+            { userId: user.id, action: 'revoke-all' },
+            jwtSecret,
+            { expiresIn: '24h' }
+          );
           notificationService.createLoginNewDeviceNotification({
             recipientUserId: user.id,
             deviceInfo: requestContext.deviceInfo,
             ipAddress: requestContext.ip,
             geoData: requestContext.geoData,
+            revokeToken,
           }).catch((err: unknown) => console.error('[AUTH] Notification error (login_new_device):', err));
         }
       }
@@ -239,11 +247,18 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       if (!session.isTrusted) {
         const notificationService = (fastify as any).notificationService;
         if (notificationService) {
+          const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
+          const revokeToken = jwt.sign(
+            { userId: user.id, action: 'revoke-all' },
+            jwtSecret,
+            { expiresIn: '24h' }
+          );
           notificationService.createLoginNewDeviceNotification({
             recipientUserId: user.id,
             deviceInfo: requestContext.deviceInfo,
             ipAddress: requestContext.ip,
             geoData: requestContext.geoData,
+            revokeToken,
           }).catch((err: unknown) => console.error('[AUTH] Notification error (login_new_device 2FA):', err));
         }
       }
