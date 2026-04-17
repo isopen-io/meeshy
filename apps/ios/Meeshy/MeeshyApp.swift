@@ -167,10 +167,13 @@ struct MeeshyApp: App {
                         // widget while the app was suspended.
                         Task { await WidgetActionFlusher.shared.flush() }
                     case .background:
-                        handleBackgroundTransition()
-                        // Refresh widgets with the latest coordinator snapshot before
-                        // the OS takes a screenshot of our app switcher preview.
-                        Task { await NotificationCoordinator.shared.syncNow() }
+                        // Delegate the whole background entry to a single
+                        // coordinator guarded by a beginBackgroundTask. The
+                        // coordinator owns the order (stop players → flush
+                        // caches → ack pushes → stop heartbeats → schedule
+                        // BGTasks → sync widgets) and guarantees the task id
+                        // is ended even if a step throws.
+                        Task { await BackgroundTransitionCoordinator.shared.enterBackground() }
                     case .inactive:
                         break
                     @unknown default:
@@ -243,20 +246,15 @@ struct MeeshyApp: App {
 
     private func handleForegroundTransition() async {
         guard authManager.isAuthenticated else { return }
-        await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
+        // Coordinator rearms heartbeats, flushes pending delivery receipts
+        // and drives the conversation sync.
+        await BackgroundTransitionCoordinator.shared.resumeFromBackground()
         if !MessageSocketManager.shared.isConnected {
             MessageSocketManager.shared.connect()
         }
         if !SocialSocketManager.shared.isConnected {
             SocialSocketManager.shared.connect()
         }
-    }
-
-    private func handleBackgroundTransition() {
-        PlaybackCoordinator.shared.stopAll()
-        guard authManager.isAuthenticated else { return }
-        BackgroundTaskManager.shared.scheduleConversationSync()
-        BackgroundTaskManager.shared.scheduleMessagePrefetch()
     }
 
     // MARK: - Guest Session Lifecycle

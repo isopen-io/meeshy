@@ -282,6 +282,27 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         hadPreviousConnection = false
     }
 
+    // MARK: - Background lifecycle
+
+    /// Stops the heartbeat timer when the scene backgrounds. The socket
+    /// itself is left connected so posts/stories arrive without waiting
+    /// for reconnect on resume.
+    public func prepareForBackground() {
+        stopHeartbeat()
+    }
+
+    /// Restarts the heartbeat when the scene comes back to `.active`.
+    /// If the OS killed the socket while we were backgrounded, the
+    /// existing reconnect logic has already fired; we just rearm the
+    /// keepalive when appropriate.
+    public func resumeFromBackground() {
+        if isConnected {
+            startHeartbeat()
+        } else if AuthManager.shared.authToken != nil {
+            connect()
+        }
+    }
+
     // MARK: - Heartbeat
 
     private func startHeartbeat() {

@@ -815,6 +815,30 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         hadPreviousConnection = false
     }
 
+    // MARK: - Background lifecycle
+
+    /// Called when the app transitions to `.background`. We stop the
+    /// heartbeat timer so it cannot fire into an OS-frozen runtime (which
+    /// would either be a no-op or wake the process briefly for nothing),
+    /// but we leave the socket itself in place so silent pushes that arrive
+    /// during the window can still route through it. The OS will tear the
+    /// connection down if it decides the process is idle, and our
+    /// reconnect logic will re-establish it on resume.
+    public func prepareForBackground() {
+        stopHeartbeat()
+    }
+
+    /// Called when the app comes back to `.active`. We restart the
+    /// heartbeat if the socket is still connected, otherwise we reconnect
+    /// so the next send has a live channel.
+    public func resumeFromBackground() {
+        if isConnected {
+            startHeartbeat()
+        } else if AuthManager.shared.authToken != nil {
+            connect()
+        }
+    }
+
     // MARK: - Heartbeat
 
     private func startHeartbeat() {

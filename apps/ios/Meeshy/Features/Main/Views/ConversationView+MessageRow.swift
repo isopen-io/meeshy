@@ -679,8 +679,12 @@ extension ConversationView {
 
     private func quickReactionPlusButton(messageId: String, accent: Color) -> some View {
         Button {
-            let msg = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? viewModel.messages.first!
+            let resolved = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? viewModel.messages.first
             closeReactionBar()
+            // The message list can be purged while the reaction bar is still
+            // presented (e.g. cache eviction after a background transition).
+            // Guard before opening the detail sheet to avoid a crash.
+            guard let msg = resolved else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 overlayState.detailSheetMessage = msg
                 overlayState.detailSheetInitialTab = .react

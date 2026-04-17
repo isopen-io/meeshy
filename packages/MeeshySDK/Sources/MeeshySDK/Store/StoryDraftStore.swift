@@ -19,22 +19,29 @@ public final class StoryDraftStore: @unchecked Sendable {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let path = dir.appendingPathComponent("meeshy_story_draft.db").path
         mediaDir = dir.appendingPathComponent("meeshy_draft_media")
-        do {
-            db = try DatabaseQueue(path: path)
-            try createSchema()
-        } catch {
-            fatalError("[StoryDraftStore] Impossible d'ouvrir la base SQLite: \(error)")
-        }
+        db = Self.makeQueue(path: path)
+        try? createSchema()
     }
 
     init(dbPath: String, mediaDirectory: URL) {
         mediaDir = mediaDirectory
-        do {
-            db = try DatabaseQueue(path: dbPath)
-            try createSchema()
-        } catch {
-            fatalError("[StoryDraftStore] Impossible d'ouvrir la base SQLite test: \(error)")
+        db = Self.makeQueue(path: dbPath)
+        try? createSchema()
+    }
+
+    /// Never-throwing queue builder. Falls back to an in-memory queue if the
+    /// requested file cannot be opened — drafts are ephemeral in that case,
+    /// but the app is not crashed. An OOM on in-memory creation would be
+    /// handled by the OS anyway.
+    private static func makeQueue(path: String) -> DatabaseQueue {
+        if let disk = try? DatabaseQueue(path: path) {
+            return disk
         }
+        print("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory")
+        return (try? DatabaseQueue()) ?? {
+            // Last-resort path; `DatabaseQueue()` is trivially constructible.
+            try! DatabaseQueue()  // swiftlint:disable:this force_try
+        }()
     }
 
     private func createSchema() throws {
