@@ -197,10 +197,15 @@ Meeshy is a production-ready messaging platform that enables seamless cross-lang
 
 | Technology | Details | Justification |
 |------------|---------|---------------|
-| **SwiftUI** | iOS 16+ | Modern declarative UI framework with native performance and built-in animations. Provides consistent design language across Apple devices. |
-| **Combine** | Native | Reactive data flow and async handling using Apple's official framework. Seamlessly integrates with SwiftUI for state management. |
-| **MVVM** | Pattern | Separation of concerns with testable ViewModel layer. Standard architecture pattern for SwiftUI applications. |
-| **Socket.io-client** | Swift | Real-time messaging with feature parity to web client. Enables consistent cross-platform communication. |
+| **SwiftUI** | iOS 17+ | Modern declarative UI framework with native performance and built-in animations. Provides consistent design language across Apple devices. |
+| **Swift** | 5.9+ (Swift 6 concurrency) | Full strict concurrency checking enabled. Actors, Sendable, and async/await throughout. |
+| **Combine** | Native | Reactive data flow for Socket.IO events and real-time updates. |
+| **MVVM** | Pattern | Separation of concerns with testable ViewModel layer via protocol-based dependency injection. |
+| **MeeshySDK** | Local SPM | Dual-target Swift SDK (core + UI). Auth, networking, Socket.IO, unified cache (GRDB + disk), models. |
+| **Socket.io-client** | 16.1 | Real-time messaging with feature parity to web client. |
+| **GRDB** | SQLite | L1 dictionary + L2 SQLite cache with dirty tracking, LRU eviction, stale-while-revalidate. |
+| **Kingfisher** | 7.10 | Async image loading with disk + memory caching for avatars and media. |
+| **WhisperKit** | 0.9 | On-device speech recognition for voice messages. |
 
 ### Infrastructure
 
@@ -258,12 +263,15 @@ meeshy/
 │       └── tests/                  # Pytest unit & integration tests
 │
 ├── packages/                       # Shared libraries
-│   └── shared/                     # Cross-service package
-│       ├── prisma/                 # Database schema
-│       │   └── schema.prisma       # MongoDB models (single source)
-│       ├── types/                  # TypeScript definitions
-│       ├── utils/                  # Shared utilities
-│       └── encryption/             # Signal Protocol implementation
+│   ├── shared/                     # Cross-service TypeScript package
+│   │   ├── prisma/                 # Database schema
+│   │   │   └── schema.prisma       # MongoDB models (single source)
+│   │   ├── types/                  # TypeScript definitions
+│   │   ├── utils/                  # Shared utilities
+│   │   └── encryption/             # Signal Protocol implementation
+│   └── MeeshySDK/                  # Swift SDK for iOS
+│       ├── Sources/MeeshySDK/      # Core target (auth, networking, cache, models)
+│       └── Sources/MeeshyUI/       # UI target (SwiftUI components)
 │
 ├── infrastructure/                 # DevOps configuration
 │   ├── docker/
@@ -427,6 +435,13 @@ pnpm lint                   # ESLint all packages
 pnpm type-check             # TypeScript validation
 
 # ─────────────────────────────────────────────────────────────
+# iOS
+# ─────────────────────────────────────────────────────────────
+./apps/ios/meeshy.sh build    # Build only
+./apps/ios/meeshy.sh run      # Build + install + launch + logs
+./apps/ios/meeshy.sh test     # Run unit tests
+
+# ─────────────────────────────────────────────────────────────
 # DOCKER
 # ─────────────────────────────────────────────────────────────
 pnpm docker:up              # Start infrastructure
@@ -443,6 +458,7 @@ pnpm docker:dev             # Start dev infrastructure
 | Level | Framework | Scope | Location |
 |-------|-----------|-------|----------|
 | **Unit** | Jest 30.2.0 / Pytest 8.3.4 | Functions, utilities, services | `services/*/tests/`, `apps/web/__tests__/` |
+| **Unit (iOS)** | XCTest / Swift Testing | ViewModels, services, SDK models | `apps/ios/MeeshyTests/`, `packages/MeeshySDK/Tests/` |
 | **Integration** | Jest / Pytest | API endpoints, middleware | `services/*/__tests__/integration/` |
 | **E2E** | Playwright 1.57.0 | User workflows | `tests/e2e/` |
 | **Component** | React Testing Library | UI components | `apps/web/__tests__/components/` |
