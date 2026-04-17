@@ -173,6 +173,7 @@ struct ConversationView: View {
     @State var scrollState = ConversationScrollState()
     @State var composerHeight: CGFloat = 130
     @State private var keyboardHeight: CGFloat = 0
+    @State private var initialScrollCompleted: Bool = false
 
     @State var typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
@@ -909,13 +910,16 @@ struct ConversationView: View {
             }
             .defaultScrollAnchor(.bottom)
             .onChange(of: viewModel.isLoadingInitial) { wasLoading, isLoading in
-                if wasLoading && !isLoading, !viewModel.messages.isEmpty {
-                    viewModel.markProgrammaticScroll()
-                    proxy.scrollTo("bottom_spacer", anchor: .bottom)
+                guard wasLoading && !isLoading, !viewModel.messages.isEmpty else { return }
+                initialScrollCompleted = false
+                viewModel.markProgrammaticScroll()
+                proxy.scrollTo("bottom_spacer", anchor: .bottom)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    initialScrollCompleted = true
                 }
             }
             .onChange(of: viewModel.newMessageAppended) { _, _ in
-                guard let lastMsg = viewModel.messages.last else { return }
+                guard initialScrollCompleted, let lastMsg = viewModel.messages.last else { return }
                 if scrollState.isNearBottom || lastMsg.isMe {
                     // Éviter les animations spring concurrentes qui causent la boucle de scroll
                     guard !viewModel.isProgrammaticScroll else { return }
@@ -935,10 +939,10 @@ struct ConversationView: View {
                 }
             }
             .onChange(of: composerState.pendingAttachments.count) { _, _ in
-                if scrollState.isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+                if initialScrollCompleted, scrollState.isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
             }
             .onChange(of: audioRecorder.isRecording) { _, _ in
-                if scrollState.isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+                if initialScrollCompleted, scrollState.isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
             }
             .onChange(of: scrollState.scrollToBottomTrigger) { _, _ in
                 viewModel.markProgrammaticScroll()
@@ -964,7 +968,7 @@ struct ConversationView: View {
                 }
             }
             .onChange(of: keyboardHeight) { oldHeight, newHeight in
-                guard newHeight > oldHeight, scrollState.isNearBottom else { return }
+                guard initialScrollCompleted, newHeight > oldHeight, scrollState.isNearBottom else { return }
                 viewModel.markProgrammaticScroll()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                     proxy.scrollTo("bottom_spacer", anchor: .bottom)
@@ -973,7 +977,7 @@ struct ConversationView: View {
             .onChange(of: composerHeight) { oldHeight, newHeight in
                 // Ignore pendant que le clavier est visible : le GeometryReader fire en boucle
                 // pendant l'animation du clavier, ce qui déclencherait plusieurs spring animations.
-                guard keyboardHeight == 0, newHeight > oldHeight + 20, scrollState.isNearBottom else { return }
+                guard initialScrollCompleted, keyboardHeight == 0, newHeight > oldHeight + 20, scrollState.isNearBottom else { return }
                 viewModel.markProgrammaticScroll()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                     proxy.scrollTo("bottom_spacer", anchor: .bottom)
