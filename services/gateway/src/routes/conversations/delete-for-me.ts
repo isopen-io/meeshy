@@ -44,14 +44,14 @@ export function registerDeleteForMeRoutes(
       }
 
       // If caller is CREATOR, transfer ownership
-      if (participant.role === 'CREATOR') {
-        // Try MODERATOR first, then oldest active member
+      if (participant.role === 'creator') {
+        // Try moderator first, then oldest active member
         let successor = await prisma.participant.findFirst({
           where: {
             conversationId,
             isActive: true,
             userId: { not: userId },
-            role: 'MODERATOR',
+            role: 'moderator',
           },
           orderBy: { joinedAt: 'asc' },
         })
@@ -70,7 +70,7 @@ export function registerDeleteForMeRoutes(
         if (successor) {
           await prisma.participant.update({
             where: { id: successor.id },
-            data: { role: 'CREATOR' },
+            data: { role: 'creator' },
           })
 
           const socketIOManager = socketIOHandler?.getManager?.()
@@ -81,7 +81,7 @@ export function registerDeleteForMeRoutes(
               {
                 conversationId,
                 userId: successor.userId,
-                newRole: 'CREATOR',
+                newRole: 'creator',
                 promotedBy: userId,
               }
             )

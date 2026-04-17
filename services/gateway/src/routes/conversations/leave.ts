@@ -43,7 +43,7 @@ export function registerLeaveRoutes(
         return sendNotFound(reply, 'Vous ne participez pas à cette conversation')
       }
 
-      if (participant.role === 'CREATOR') {
+      if (participant.role === 'creator') {
         const otherActiveCount = await prisma.participant.count({
           where: { conversationId: id, isActive: true, userId: { not: userId } },
         })

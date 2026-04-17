@@ -6,10 +6,10 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 
 const ROLE_LEVELS: Record<string, number> = {
-  CREATOR: 40,
-  ADMIN: 30,
-  MODERATOR: 20,
-  MEMBER: 10,
+  creator: 40,
+  admin: 30,
+  moderator: 20,
+  member: 10,
 }
 
 export function registerBanRoutes(
@@ -137,7 +137,7 @@ export function registerBanRoutes(
       }
 
       const currentLevel = ROLE_LEVELS[currentParticipant.role as string] ?? 0
-      if (currentLevel < ROLE_LEVELS['ADMIN']) {
+      if (currentLevel < ROLE_LEVELS['admin']) {
         return sendForbidden(reply, 'Seul un admin ou le créateur peut débannir un participant')
       }
 

@@ -321,7 +321,7 @@ export function registerSharingRoutes(
       // Seuls les admins ou créateurs peuvent modifier le type de conversation
       if (type !== undefined) {
         const isAdmin = membership.user.role === 'ADMIN' || membership.user.role === 'BIGBOSS';
-        const isCreator = membership.role === 'CREATOR';
+        const isCreator = membership.role === 'creator';
         
         if (!isAdmin && !isCreator) {
           return sendForbidden(reply, 'Seuls les administrateurs peuvent modifier le type de conversation');
@@ -461,7 +461,7 @@ export function registerSharingRoutes(
       }
 
       // Vérifier si l'utilisateur est modérateur/admin de la conversation
-      const isModerator = ['CREATOR', 'ADMIN', 'MODERATOR'].includes(membership.role as string);
+      const isModerator = ['creator', 'admin', 'moderator'].includes(membership.role as string);
 
       // Filtrer les liens selon les droits:
       // - Modérateurs: voient TOUS les liens
