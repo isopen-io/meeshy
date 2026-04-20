@@ -625,7 +625,8 @@ struct ConversationView: View {
                         // picks between "Delete for me" and "Delete for
                         // everyone" instead of silently losing the message.
                         overlayState.deleteConfirmMessageId = msg.id
-                    }
+                    },
+                    editRevisions: viewModel.editRevisions(for: msg.id)
                 )
             }
     }
