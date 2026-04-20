@@ -1133,12 +1133,25 @@ struct ConversationView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(alignment: .top, spacing: 4) {
                             Button { composerState.showConversationInfo = true } label: {
-                                Text(conversation?.name ?? "Conversation")
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
-                                    .lineLimit(2)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .multilineTextAlignment(.leading)
+                                HStack(spacing: 6) {
+                                    Text(conversation?.name ?? "Conversation")
+                                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                                        .foregroundColor(.white)
+                                        .lineLimit(2)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .multilineTextAlignment(.leading)
+                                    // Subtle "revalidating" sparkle: shown while we
+                                    // serve stale cache and silently refresh from
+                                    // the server. Disappears as soon as the REST
+                                    // response lands — no blocking spinner.
+                                    if viewModel.isRevalidating {
+                                        Image(systemName: "sparkles")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(.white.opacity(0.85))
+                                            .symbolEffect(.pulse, options: .repeating)
+                                            .accessibilityLabel("Actualisation en arriere-plan")
+                                    }
+                                }
                             }
                             .accessibilityLabel(conversation?.name ?? "Conversation")
                             .accessibilityHint("Ouvre les informations de la conversation")

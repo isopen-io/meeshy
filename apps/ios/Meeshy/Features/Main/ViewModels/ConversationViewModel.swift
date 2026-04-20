@@ -52,6 +52,11 @@ class ConversationViewModel: ObservableObject {
     @Published var isLoadingInitial = false
     @Published var isLoadingOlder = false
     @Published var isLoadingNewer = false
+    /// `true` when we painted stale cache data and a background refresh is
+    /// in flight. Drives the subtle "revalidating" sparkle in the header so
+    /// the user knows fresher data is on its way without seeing a blocking
+    /// spinner (cache-first + stale-while-revalidate discipline).
+    @Published var isRevalidating = false
     @Published var hasOlderMessages = true
     @Published var hasNewerMessages = false
     @Published var isSending = false
@@ -744,9 +749,11 @@ class ConversationViewModel: ObservableObject {
 
         case .stale(let data, _):
             messages = data
+            isRevalidating = true
             Task { [weak self] in
                 guard let self else { return }
                 await self.refreshMessagesFromAPI()
+                await MainActor.run { self.isRevalidating = false }
             }
 
         case .expired, .empty:
