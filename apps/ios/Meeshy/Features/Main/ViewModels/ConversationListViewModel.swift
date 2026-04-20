@@ -318,7 +318,13 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
+                // Random 0-500ms jitter before firing the delta sync so that
+                // a server blip that drops every client simultaneously
+                // doesn't produce a thundering herd of `/conversations?updatedSince=…`
+                // requests the instant the gateway comes back online.
+                let jitter = UInt64.random(in: 0...500_000_000)
                 Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: jitter)
                     await self?.syncEngine.syncSinceLastCheckpoint()
                     await self?.reloadFromCache()
                 }

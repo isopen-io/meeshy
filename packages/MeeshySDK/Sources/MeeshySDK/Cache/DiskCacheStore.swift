@@ -277,6 +277,15 @@ public actor DiskCacheStore: ReadableCacheStore {
         return _imageCache.object(forKey: key)
     }
 
+    /// Hard cap for the decoded bitmap we will keep resident in the NSCache
+    /// (in bytes). A malicious or accidentally-huge image (e.g. 20K×20K JPEG
+    /// that decodes to >1 GB of pixel data) would otherwise blow the NSCache
+    /// budget and trigger a memory warning, evicting everything else. We
+    /// decode to check dimensions, then refuse to cache anything above the
+    /// threshold — the `UIImage` still returns so the caller can display it
+    /// once, but we won't hold onto it.
+    private static let maxCacheableDecodedBytes: Int = 50 * 1024 * 1024 // 50 MB
+
     public func image(for urlString: String) async -> UIImage? {
         let fileKey = Self.fileKey(for: urlString)
 
@@ -286,10 +295,7 @@ public actor DiskCacheStore: ReadableCacheStore {
 
         let result = await load(for: urlString)
         if let data = result.value?.first, let image = UIImage(data: data) {
-            let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-            await MainActor.run {
-                Self._imageCache.setObject(image, forKey: fileKey as NSString, cost: cost)
-            }
+            Self.cacheIfWithinBudget(image, key: fileKey)
             return image
         }
 
@@ -300,13 +306,23 @@ public actor DiskCacheStore: ReadableCacheStore {
                   (200...299).contains(httpResponse.statusCode),
                   let image = UIImage(data: data) else { return nil }
             await save(data, for: urlString)
-            let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-            await MainActor.run {
-                Self._imageCache.setObject(image, forKey: fileKey as NSString, cost: cost)
-            }
+            Self.cacheIfWithinBudget(image, key: fileKey)
             return image
         } catch {
             return nil
+        }
+    }
+
+    /// Centralised NSCache insertion with a size guard so a single oversized
+    /// image never evicts the rest of the in-memory cache. We compute the
+    /// decoded cost once and skip caching when it blows past
+    /// `maxCacheableDecodedBytes` — the caller still gets the `UIImage`, it
+    /// just won't be kept around for the next scroll.
+    private nonisolated static func cacheIfWithinBudget(_ image: UIImage, key: String) {
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+        guard cost > 0, cost <= maxCacheableDecodedBytes else { return }
+        Task { @MainActor in
+            Self._imageCache.setObject(image, forKey: key as NSString, cost: cost)
         }
     }
 

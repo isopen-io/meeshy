@@ -72,12 +72,21 @@ final class BackgroundTaskManager {
     }
 
     func scheduleConversationSync(after delay: TimeInterval? = nil) {
+        // Jitter: ±20% of the base interval. Prevents every device from
+        // waking up at exactly the same second on the minute boundary,
+        // which is the "thundering herd" that takes the gateway down if a
+        // major deploy pushes a simultaneous sync. Random draw is stable
+        // per-call so we don't accidentally shrink an intentionally short
+        // backoff interval.
+        let base = delay ?? Self.normalSyncInterval
+        let jitter = Double.random(in: -0.2...0.2) * base
+        let final = max(30, base + jitter)
         let request = BGAppRefreshTaskRequest(identifier: Self.conversationSyncTaskId)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: delay ?? Self.normalSyncInterval)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: final)
 
         do {
             try BGTaskScheduler.shared.submit(request)
-            logger.info("Conversation sync scheduled in \(Int(delay ?? Self.normalSyncInterval))s")
+            logger.info("Conversation sync scheduled in \(Int(final))s (base=\(Int(base))s)")
         } catch {
             logger.error("Failed to schedule conversation sync: \(error.localizedDescription)")
         }
@@ -86,7 +95,10 @@ final class BackgroundTaskManager {
     func scheduleMessagePrefetch() {
         let request = BGProcessingTaskRequest(identifier: Self.messagePrefetchTaskId)
         request.requiresNetworkConnectivity = true
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
+        // Same ±20% jitter as the sync scheduler so prefetch windows don't
+        // stack up across the whole install base every half-hour.
+        let jitter = Double.random(in: -0.2...0.2) * Self.normalPrefetchInterval
+        request.earliestBeginDate = Date(timeIntervalSinceNow: Self.normalPrefetchInterval + jitter)
 
         do {
             try BGTaskScheduler.shared.submit(request)

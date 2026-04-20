@@ -1525,21 +1525,39 @@ struct ThemedMessageBubble: View {
 }
 
 // MARK: - Equatable (permet .equatable() pour eviter les re-renders superflus)
+//
+// NB: any NEW `var` / `let` added to ThemedMessageBubble that affects the
+// rendered output MUST be mirrored below, otherwise SwiftUI's `.equatable()`
+// fast-path will return `true` for a row that actually changed, producing a
+// stale UI. The inputs included here were picked by walking every `@State`,
+// `ObservedObject`, and `var` the body reads.
 extension ThemedMessageBubble: @MainActor Equatable {
     static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {
         lhs.message.id == rhs.message.id &&
         lhs.message.content == rhs.message.content &&
         lhs.message.deliveryStatus == rhs.message.deliveryStatus &&
+        // MeeshyReaction isn't Equatable in the SDK — signature-compare
+        // by count + emoji+participantId identity so swapping one emoji
+        // for another (same count) still invalidates the cache.
         lhs.message.reactions.count == rhs.message.reactions.count &&
+        lhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }.sorted() ==
+            rhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }.sorted() &&
         lhs.message.attachments.count == rhs.message.attachments.count &&
         lhs.message.isEdited == rhs.message.isEdited &&
         lhs.message.deletedAt == rhs.message.deletedAt &&
         lhs.message.pinnedAt == rhs.message.pinnedAt &&
+        lhs.message.expiresAt == rhs.message.expiresAt &&
+        lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
+        lhs.message.effects.flags.rawValue == rhs.message.effects.flags.rawValue &&
+        lhs.message.deliveredCount == rhs.message.deliveredCount &&
+        lhs.message.readCount == rhs.message.readCount &&
         lhs.contactColor == rhs.contactColor &&
         lhs.isDirect == rhs.isDirect &&
         lhs.isDark == rhs.isDark &&
         lhs.preferredTranslation?.translatedContent == rhs.preferredTranslation?.translatedContent &&
+        lhs.textTranslations.count == rhs.textTranslations.count &&
         lhs.transcription?.text == rhs.transcription?.text &&
+        lhs.translatedAudios.count == rhs.translatedAudios.count &&
         lhs.showAvatar == rhs.showAvatar &&
         lhs.presenceState == rhs.presenceState &&
         lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
@@ -1548,6 +1566,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.isLastReceivedMessage == rhs.isLastReceivedMessage &&
         lhs.activeAudioLanguage == rhs.activeAudioLanguage &&
         lhs.isEditSaving == rhs.isEditSaving &&
-        lhs.hasEditHistory == rhs.hasEditHistory
+        lhs.hasEditHistory == rhs.hasEditHistory &&
+        lhs.highlightSearchTerm == rhs.highlightSearchTerm
     }
 }
