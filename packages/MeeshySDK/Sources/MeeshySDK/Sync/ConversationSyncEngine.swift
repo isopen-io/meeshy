@@ -100,31 +100,131 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         isSyncing = true
         defer { isSyncing = false }
 
-        var allConversations: [MeeshyConversation] = []
-        var offset = 0
         let pageSize = 100
-        var hasMore = true
+        let userId = await currentUserId()
+
+        // Fetch the first page to show something on screen as fast as
+        // possible, then fan out to the remaining pages in parallel. On
+        // 10k-conversation accounts the old sequential loop took 5-10s
+        // before the list was populated; the first-page-first pattern
+        // paints the visible rows in ~300ms and the rest arrives in the
+        // background without blocking the UI.
+        let firstPage: [MeeshyConversation]
+        let totalCount: Int?
+        do {
+            let response = try await conversationService.list(offset: 0, limit: pageSize)
+            firstPage = response.data.map { $0.toConversation(currentUserId: userId) }
+            totalCount = response.pagination?.total
+            await cache.conversations.save(firstPage, for: "list")
+            _conversationsDidChange.send()
+        } catch {
+            Self.logger.error("[SyncEngine] fullSync first-page error: \(error.localizedDescription)")
+            return false
+        }
+
+        // If the first page already returned everything, we're done.
+        let knownTotal: Int? = totalCount ?? (firstPage.count < pageSize ? firstPage.count : nil)
+        if let total = knownTotal, total <= firstPage.count {
+            lastSyncTimestamp = Date().addingTimeInterval(-30)
+            return true
+        }
+
+        // Upper bound on remaining pages. If the backend didn't return a
+        // total count, we fall back to sequential paging from page 2 until
+        // `hasMore` flips false.
+        let remainingPages: [Int]
+        if let total = knownTotal {
+            let totalPages = (total + pageSize - 1) / pageSize
+            remainingPages = Array(1..<totalPages)
+        } else {
+            remainingPages = []
+        }
+
+        var merged = firstPage
         var succeeded = true
 
-        while hasMore {
-            do {
-                let response = try await conversationService.list(offset: offset, limit: pageSize)
-                let userId = await currentUserId()
-                let page = response.data.map { $0.toConversation(currentUserId: userId) }
+        if !remainingPages.isEmpty {
+            // Fan-out: fetch all remaining pages concurrently with a bounded
+            // parallelism (4) so we don't hammer the backend on huge
+            // accounts. Pages are sorted by offset before merging.
+            let service = self.conversationService
+            let pages: [(Int, [MeeshyConversation])] = await withTaskGroup(
+                of: (Int, [MeeshyConversation]?).self,
+                returning: [(Int, [MeeshyConversation])].self
+            ) { group in
+                let maxParallel = 4
+                var launched = 0
+                var collected: [(Int, [MeeshyConversation])] = []
 
-                let existingIds = Set(allConversations.map(\.id))
-                let newItems = page.filter { !existingIds.contains($0.id) }
-                allConversations.append(contentsOf: newItems)
+                while launched < maxParallel && launched < remainingPages.count {
+                    let pageIndex = remainingPages[launched]
+                    group.addTask {
+                        do {
+                            let response = try await service.list(offset: pageIndex * pageSize, limit: pageSize)
+                            let items = response.data.map { $0.toConversation(currentUserId: userId) }
+                            return (pageIndex, items)
+                        } catch {
+                            return (pageIndex, nil)
+                        }
+                    }
+                    launched += 1
+                }
 
-                await cache.conversations.save(allConversations, for: "list")
-                _conversationsDidChange.send()
+                while let result = await group.next() {
+                    if let items = result.1 {
+                        collected.append((result.0, items))
+                    }
+                    if launched < remainingPages.count {
+                        let pageIndex = remainingPages[launched]
+                        group.addTask {
+                            do {
+                                let response = try await service.list(offset: pageIndex * pageSize, limit: pageSize)
+                                let items = response.data.map { $0.toConversation(currentUserId: userId) }
+                                return (pageIndex, items)
+                            } catch {
+                                return (pageIndex, nil)
+                            }
+                        }
+                        launched += 1
+                    }
+                }
+                return collected.sorted { $0.0 < $1.0 }
+            }
 
-                hasMore = response.pagination?.hasMore ?? false
-                offset += page.count
-            } catch {
-                Self.logger.error("[SyncEngine] fullSync error: \(error.localizedDescription)")
+            if pages.count < remainingPages.count {
                 succeeded = false
-                break
+            }
+
+            var uniqueById = Set(merged.map(\.id))
+            for (_, page) in pages {
+                for item in page where !uniqueById.contains(item.id) {
+                    uniqueById.insert(item.id)
+                    merged.append(item)
+                }
+            }
+
+            await cache.conversations.save(merged, for: "list")
+            _conversationsDidChange.send()
+        } else {
+            // No known total count: fall back to sequential paging from page 2.
+            var offset = firstPage.count
+            var hasMore = firstPage.count >= pageSize
+            while hasMore {
+                do {
+                    let response = try await conversationService.list(offset: offset, limit: pageSize)
+                    let page = response.data.map { $0.toConversation(currentUserId: userId) }
+                    let existingIds = Set(merged.map(\.id))
+                    let newItems = page.filter { !existingIds.contains($0.id) }
+                    merged.append(contentsOf: newItems)
+                    await cache.conversations.save(merged, for: "list")
+                    _conversationsDidChange.send()
+                    hasMore = response.pagination?.hasMore ?? false
+                    offset += page.count
+                } catch {
+                    Self.logger.error("[SyncEngine] fullSync tail error: \(error.localizedDescription)")
+                    succeeded = false
+                    break
+                }
             }
         }
 
