@@ -570,6 +570,20 @@ struct ThemedMessageBubble: View {
                                             }
                                     }
 
+                                    // Inline OpenGraph preview for the first URL in
+                                    // the effective (possibly translated) content.
+                                    // The card is self-loading — it triggers its
+                                    // own fetch via `LinkPreviewStore` and renders
+                                    // a skeleton while the metadata streams in.
+                                    if let url = LinkPreviewFetcher.firstURL(in: effectiveContent) {
+                                        LinkPreviewCard(
+                                            urlString: url,
+                                            accentColor: contactColor,
+                                            isDark: isDark
+                                        )
+                                        .padding(.top, 4)
+                                    }
+
                                     secondaryContentView
                                 }
                                 .padding(.horizontal, 14)
