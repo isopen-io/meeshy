@@ -6,6 +6,12 @@ import os
 
 public struct RetryQueueItem: Codable, Identifiable, Sendable {
     public let id: String
+    /// Optimistic message id shown in the UI while the send is being retried.
+    /// Used by ``MessageRetryQueue/retrySucceeded`` and
+    /// ``MessageRetryQueue/retryExhausted`` so active ViewModels can reconcile
+    /// the optimistic row with the server-assigned id (success) or flip it to
+    /// `.failed` (exhausted).
+    public let tempId: String
     public let conversationId: String
     public let content: String
     public let originalLanguage: String
@@ -20,9 +26,12 @@ public struct RetryQueueItem: Codable, Identifiable, Sendable {
         content: String,
         originalLanguage: String = "fr",
         replyToId: String? = nil,
-        attachmentIds: [String]? = nil
+        attachmentIds: [String]? = nil,
+        tempId: String? = nil
     ) {
-        self.id = UUID().uuidString
+        let queueId = UUID().uuidString
+        self.id = queueId
+        self.tempId = tempId ?? "retry_\(queueId)"
         self.conversationId = conversationId
         self.content = content
         self.originalLanguage = originalLanguage
@@ -34,10 +43,34 @@ public struct RetryQueueItem: Codable, Identifiable, Sendable {
     }
 }
 
+// MARK: - Retry Success Payload
+
+/// Emitted when a transient-failure retry finally reaches the server. The
+/// optimistic `tempId` (`"retry_<item.id>"`) and the authoritative `serverId`
+/// let active ViewModels reconcile in-memory state before the socket
+/// `message:new` broadcast arrives, preventing duplicates and messages stuck
+/// in `.sending`.
+public struct RetryQueueSuccess: Sendable {
+    public let tempId: String
+    public let serverId: String
+    public let conversationId: String
+}
+
+/// Emitted when an item is permanently dropped after exhausting its retry
+/// budget. Lets ViewModels flip their optimistic row to `.failed` and show a
+/// "tap to retry" affordance instead of leaving it stuck in `.sending`.
+public struct RetryQueueFailure: Sendable {
+    public let tempId: String
+    public let conversationId: String
+}
+
 // MARK: - Message Retry Queue
 
 public actor MessageRetryQueue {
     public static let shared = MessageRetryQueue()
+
+    public nonisolated let retrySucceeded = PassthroughSubject<RetryQueueSuccess, Never>()
+    public nonisolated let retryExhausted = PassthroughSubject<RetryQueueFailure, Never>()
 
     private static let maxRetries = 5
     private static let retryIntervalSeconds: TimeInterval = 10
@@ -63,9 +96,9 @@ public actor MessageRetryQueue {
         return d
     }()
 
-    public var onRetrySend: ((RetryQueueItem) async -> Bool)?
+    public var onRetrySend: ((RetryQueueItem) async -> String?)?
 
-    public func setRetrySend(_ handler: @escaping @Sendable (RetryQueueItem) async -> Bool) {
+    public func setRetrySend(_ handler: @escaping @Sendable (RetryQueueItem) async -> String?) {
         onRetrySend = handler
     }
 
@@ -107,21 +140,25 @@ public actor MessageRetryQueue {
     private func startRetryLoop() {
         guard retryTask == nil else { return }
         retryTask = Task { [weak self] in
+            defer {
+                Task { [weak self] in await self?.clearRetryTask() }
+            }
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(Self.retryIntervalSeconds * 1_000_000_000))
-                guard let self else { break }
+                guard let self, !Task.isCancelled else { return }
                 await self.retryPending()
-                let remaining = await self.items.filter { $0.retryCount < Self.maxRetries }
-                if remaining.isEmpty { break }
-            }
-            await MainActor.run { [weak self] in
-                Task { await self?.clearRetryTask() }
+                let remaining = await self.pendingRetryableCount
+                if remaining == 0 { return }
             }
         }
     }
 
     private func clearRetryTask() {
         retryTask = nil
+    }
+
+    private var pendingRetryableCount: Int {
+        items.filter { $0.retryCount < Self.maxRetries }.count
     }
 
     private func retryPending() async {
@@ -131,19 +168,39 @@ public actor MessageRetryQueue {
         isRetrying = true
         var toRemove: [String] = []
         var updated = false
+        var successPayloads: [RetryQueueSuccess] = []
+        var exhaustedPayloads: [RetryQueueFailure] = []
 
         for i in items.indices {
-            guard items[i].retryCount < Self.maxRetries else { continue }
-
-            let success = await retrySend(items[i])
-            if success {
+            if items[i].retryCount >= Self.maxRetries {
+                // Exhausted: drop and notify so the UI can surface a failure state.
                 toRemove.append(items[i].id)
+                exhaustedPayloads.append(RetryQueueFailure(
+                    tempId: items[i].tempId,
+                    conversationId: items[i].conversationId
+                ))
+                continue
+            }
+
+            if let serverId = await retrySend(items[i]) {
+                toRemove.append(items[i].id)
+                successPayloads.append(RetryQueueSuccess(
+                    tempId: items[i].tempId,
+                    serverId: serverId,
+                    conversationId: items[i].conversationId
+                ))
                 logger.info("Retry succeeded for message \(self.items[i].id)")
             } else {
                 items[i].retryCount += 1
                 items[i].lastRetryAt = Date()
                 updated = true
                 logger.info("Retry \(self.items[i].retryCount)/\(Self.maxRetries) failed for message \(self.items[i].id)")
+                if items[i].retryCount >= Self.maxRetries {
+                    exhaustedPayloads.append(RetryQueueFailure(
+                        tempId: items[i].tempId,
+                        conversationId: items[i].conversationId
+                    ))
+                }
             }
         }
 
@@ -155,6 +212,17 @@ public actor MessageRetryQueue {
             saveToDisk()
         }
         isRetrying = false
+
+        // Remove optimistic rows from the persisted cache so an inactive
+        // ConversationViewModel doesn't show a ghost `retry_<uuid>` row next
+        // to the authoritative server message that arrives via `message:new`.
+        for payload in successPayloads {
+            await CacheCoordinator.shared.messages.mergeUpdate(for: payload.conversationId) { cached in
+                cached.filter { $0.id != payload.tempId }
+            }
+            retrySucceeded.send(payload)
+        }
+        for payload in exhaustedPayloads { retryExhausted.send(payload) }
     }
 
     public func retryAllNow() async {

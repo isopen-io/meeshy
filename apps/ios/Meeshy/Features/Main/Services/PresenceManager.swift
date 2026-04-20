@@ -38,15 +38,13 @@ final class PresenceManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Clear stale presence on socket disconnect
-        MessageSocketManager.shared.$isConnected
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] connected in
-                if !connected {
-                    self?.presenceMap.removeAll()
-                }
-            }
-            .store(in: &cancellables)
+        // Keep the last-known presence snapshot across brief socket drops
+        // (e.g. iOS background → foreground transition). Wiping the map the
+        // moment `isConnected` flips to false caused all avatars to lose
+        // their online dots during every resume, which felt like the app
+        // "forgot" who was online. The `.away` computed state still kicks in
+        // after 5 min of inactivity, so stale data decays gracefully.
+        // Presence will be refreshed when `user:status` events resume.
 
         // Recalculate every 60s — déclenche un re-render seulement si un utilisateur
         // passe de online → away dans cette fenêtre (lastActiveAt entre 300 et 360s)

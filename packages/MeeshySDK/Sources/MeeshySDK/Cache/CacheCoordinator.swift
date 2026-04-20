@@ -72,6 +72,7 @@ public actor CacheCoordinator {
     private let messageSocket: any MessageSocketProviding
     private let socialSocket: any SocialSocketProviding
     private var cancellables = Set<AnyCancellable>()
+    private var lifecycleObservers: [NSObjectProtocol] = []
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "cache-coordinator")
     private var isStarted = false
     private var currentUserId: String = ""
@@ -125,6 +126,10 @@ public actor CacheCoordinator {
     public func reset() {
         isStarted = false
         cancellables.removeAll()
+        for observer in lifecycleObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        lifecycleObservers.removeAll()
         currentUserId = ""
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
@@ -214,9 +219,9 @@ public actor CacheCoordinator {
 
     // MARK: - Lifecycle
 
-    private nonisolated func subscribeToLifecycle() {
+    private func subscribeToLifecycle() {
         #if canImport(UIKit)
-        NotificationCenter.default.addObserver(
+        let resign = NotificationCenter.default.addObserver(
             forName: UIApplication.willResignActiveNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
@@ -229,7 +234,7 @@ public actor CacheCoordinator {
         // background → terminate. We also observe `didEnterBackground`
         // explicitly so dirty cache keys reach disk before the OS freezes
         // the process, and `willTerminate` as the last-chance hook.
-        NotificationCenter.default.addObserver(
+        let background = NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
@@ -237,7 +242,7 @@ public actor CacheCoordinator {
             Task { await self.flushAll() }
         }
 
-        NotificationCenter.default.addObserver(
+        let terminate = NotificationCenter.default.addObserver(
             forName: UIApplication.willTerminateNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
@@ -255,13 +260,14 @@ public actor CacheCoordinator {
             _ = semaphore.wait(timeout: .now() + 4)
         }
 
-        NotificationCenter.default.addObserver(
+        let memory = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
             guard let self else { return }
             Task { await self.evictUnderMemoryPressure() }
         }
+        lifecycleObservers = [resign, background, terminate, memory]
         #endif
     }
 

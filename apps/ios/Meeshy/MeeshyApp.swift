@@ -120,12 +120,12 @@ struct MeeshyApp: App {
                                 forwardedFromConversationId: item.forwardedFromConversationId,
                                 attachmentIds: item.attachmentIds
                             )
-                            _ = try await MessageService.shared.send(
+                            let response = try await MessageService.shared.send(
                                 conversationId: item.conversationId, request: request
                             )
-                            return true
+                            return response.id
                         } catch {
-                            return false
+                            return nil
                         }
                     }
                     await MessageRetryQueue.shared.setRetrySend { @Sendable item in
@@ -136,12 +136,12 @@ struct MeeshyApp: App {
                                 replyToId: item.replyToId,
                                 attachmentIds: item.attachmentIds
                             )
-                            _ = try await MessageService.shared.send(
+                            let response = try await MessageService.shared.send(
                                 conversationId: item.conversationId, request: request
                             )
-                            return true
+                            return response.id
                         } catch {
-                            return false
+                            return nil
                         }
                     }
                     // Parallelize: friendship hydration + session check are independent

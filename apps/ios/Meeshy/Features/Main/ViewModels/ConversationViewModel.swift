@@ -541,10 +541,52 @@ class ConversationViewModel: ObservableObject {
                     await CacheCoordinator.shared.messages.save(snapshot, for: convId)
                 }
             }
+        subscribeToQueueReconciliation()
         if let session = anonymousSession {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
         }
+    }
+
+    /// Reconcile optimistic messages with their server-assigned ids when the
+    /// OfflineQueue or MessageRetryQueue finally lands the send, and flip rows
+    /// to `.failed` when the retry budget is exhausted. Without this mapping a
+    /// `message:new` socket broadcast arrives with an unknown id and the
+    /// optimistic row would stay stuck in `.sending` forever while a duplicate
+    /// appears.
+    private func subscribeToQueueReconciliation() {
+        OfflineQueue.shared.retrySucceeded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self, payload.conversationId == self.conversationId else { return }
+                self.reconcileQueuedSend(tempId: payload.tempId, serverId: payload.serverId)
+            }
+            .store(in: &cancellables)
+
+        MessageRetryQueue.shared.retrySucceeded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self, payload.conversationId == self.conversationId else { return }
+                self.reconcileQueuedSend(tempId: payload.tempId, serverId: payload.serverId)
+            }
+            .store(in: &cancellables)
+
+        MessageRetryQueue.shared.retryExhausted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self, payload.conversationId == self.conversationId else { return }
+                guard let idx = self.messageIndex(for: payload.tempId) else { return }
+                self.messages[idx].deliveryStatus = .failed
+            }
+            .store(in: &cancellables)
+    }
+
+    private func reconcileQueuedSend(tempId: String, serverId: String) {
+        guard let idx = messageIndex(for: tempId) else { return }
+        messages[idx].deliveryStatus = .sent
+        // The socket handler now matches on `pendingServerIds.value == apiMsg.id`
+        // and performs the atomic id swap when `message:new` arrives.
+        pendingServerIds[tempId] = serverId
     }
 
     deinit {
@@ -906,8 +948,9 @@ class ConversationViewModel: ObservableObject {
             )
             Task { await OfflineQueue.shared.enqueue(queueItem) }
 
+            let offlineTempId = queueItem.tempId
             let offlineMessage = Message(
-                id: "offline_\(queueItem.id)",
+                id: offlineTempId,
                 conversationId: conversationId,
                 senderId: currentUserId,
                 content: text,
@@ -922,6 +965,36 @@ class ConversationViewModel: ObservableObject {
             )
             messages.append(offlineMessage)
             newMessageAppended += 1
+
+            // Persist offline message to cache so it survives navigation and
+            // the row stays visible with the "sending" clock icon until
+            // OfflineQueue.retrySucceeded fires after reconnection.
+            let convId = conversationId
+            let snapshot = messages
+            Task.detached(priority: .utility) {
+                await CacheCoordinator.shared.messages.mergeUpdate(for: convId) { cached in
+                    let cachedIds = Set(cached.map(\.id))
+                    let newOnly = snapshot.filter { !cachedIds.contains($0.id) }
+                    guard !newOnly.isEmpty else { return cached }
+                    return (cached + newOnly).sorted { $0.createdAt < $1.createdAt }
+                }
+            }
+
+            // Bump the conversation preview locally so the list shows the
+            // just-typed message — with the correct author name — even before
+            // the network returns. Without this the preview keeps the previous
+            // author/content while the user waits for connectivity.
+            let previewContent = text
+            let previewAt = offlineMessage.createdAt
+            let senderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
+            Task {
+                await ConversationSyncEngine.shared.updateConversationAfterSend(
+                    conversationId: convId,
+                    messagePreview: previewContent,
+                    messageAt: previewAt,
+                    senderName: senderName
+                )
+            }
 
             Logger.messages.info("Message enqueued for offline delivery")
             return true
@@ -1089,9 +1162,13 @@ class ConversationViewModel: ObservableObject {
             Task.detached(priority: .utility) {
                 await CacheCoordinator.shared.messages.save(sentSnapshot, for: convId)
             }
+            let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
             Task {
                 await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    conversationId: convId, messagePreview: msgContent, messageAt: msgTime
+                    conversationId: convId,
+                    messagePreview: msgContent,
+                    messageAt: msgTime,
+                    senderName: sentSenderName
                 )
             }
 
@@ -1124,13 +1201,16 @@ class ConversationViewModel: ObservableObject {
                 await CacheCoordinator.shared.messages.save(errorSnapshot, for: errorConvId)
             }
 
-            // Enqueue for persistent auto-retry (5 attempts × 10s interval)
+            // Enqueue for persistent auto-retry (5 attempts × 10s interval).
+            // Pass the optimistic tempId so `MessageRetryQueue.retrySucceeded`
+            // and `.retryExhausted` events match the exact row in memory.
             let retryItem = RetryQueueItem(
                 conversationId: conversationId,
                 content: text,
                 originalLanguage: originalLanguage ?? "fr",
                 replyToId: replyToId,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                tempId: tempId
             )
             Task { await MessageRetryQueue.shared.enqueue(retryItem) }
 

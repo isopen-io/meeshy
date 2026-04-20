@@ -6,6 +6,11 @@ import os
 
 public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     public let id: String
+    /// Optimistic message id shown in the UI while the item waits in queue.
+    /// Used by ``OfflineQueue/retrySucceeded`` so active ViewModels can
+    /// reconcile the optimistic row with the server-assigned message id
+    /// before the `message:new` socket broadcast arrives.
+    public let tempId: String
     public let conversationId: String
     public let content: String
     public let replyToId: String?
@@ -20,9 +25,12 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         replyToId: String? = nil,
         forwardedFromId: String? = nil,
         forwardedFromConversationId: String? = nil,
-        attachmentIds: [String]? = nil
+        attachmentIds: [String]? = nil,
+        tempId: String? = nil
     ) {
-        self.id = UUID().uuidString
+        let queueId = UUID().uuidString
+        self.id = queueId
+        self.tempId = tempId ?? "offline_\(queueId)"
         self.conversationId = conversationId
         self.content = content
         self.replyToId = replyToId
@@ -33,10 +41,24 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     }
 }
 
+// MARK: - Retry Success Payload
+
+/// Emitted when an offline-queued message successfully reaches the server after
+/// reconnection. Downstream ViewModels map the optimistic `tempId`
+/// (`"offline_<queueItem.id>"`) to the authoritative `serverId` so the
+/// incoming `message:new` socket event reconciles instead of duplicating.
+public struct OfflineRetrySuccess: Sendable {
+    public let tempId: String
+    public let serverId: String
+    public let conversationId: String
+}
+
 // MARK: - Offline Queue
 
 public actor OfflineQueue {
     public static let shared = OfflineQueue()
+
+    public nonisolated let retrySucceeded = PassthroughSubject<OfflineRetrySuccess, Never>()
 
     private static let maxQueueSize = 100
     private static let queueFileName = "offline_queue.json"
@@ -58,10 +80,14 @@ public actor OfflineQueue {
         return d
     }()
 
-    /// Called when retrying a queued message. Set by the app layer.
-    public var onRetrySend: ((OfflineQueueItem) async -> Bool)?
+    /// Called when retrying a queued message. Returns the server-assigned
+    /// message id on success so the queue can emit a `retrySucceeded` event
+    /// that lets active ViewModels reconcile the optimistic `tempId` with the
+    /// authoritative `serverId` before the socket `message:new` broadcast
+    /// arrives.
+    public var onRetrySend: ((OfflineQueueItem) async -> String?)?
 
-    public func setRetrySend(_ handler: @escaping @Sendable (OfflineQueueItem) async -> Bool) {
+    public func setRetrySend(_ handler: @escaping @Sendable (OfflineQueueItem) async -> String?) {
         onRetrySend = handler
     }
 
@@ -111,11 +137,16 @@ public actor OfflineQueue {
         logger.info("Retrying \(self.items.count) queued messages")
 
         var successIds: [String] = []
+        var successPayloads: [OfflineRetrySuccess] = []
 
         for item in items {
-            let success = await retrySend(item)
-            if success {
+            if let serverId = await retrySend(item) {
                 successIds.append(item.id)
+                successPayloads.append(OfflineRetrySuccess(
+                    tempId: item.tempId,
+                    serverId: serverId,
+                    conversationId: item.conversationId
+                ))
             } else {
                 break
             }
@@ -127,6 +158,17 @@ public actor OfflineQueue {
 
         saveToDisk()
         isRetrying = false
+
+        // Clean the optimistic rows out of the persisted message cache so an
+        // inactive ConversationViewModel (loaded later) doesn't show a ghost
+        // `offline_<uuid>` row alongside the authoritative server message
+        // that arrives via the socket `message:new` broadcast.
+        for payload in successPayloads {
+            await CacheCoordinator.shared.messages.mergeUpdate(for: payload.conversationId) { cached in
+                cached.filter { $0.id != payload.tempId }
+            }
+            retrySucceeded.send(payload)
+        }
 
         if !successIds.isEmpty {
             logger.info("Successfully retried \(successIds.count) messages, \(self.items.count) remaining")

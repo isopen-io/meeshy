@@ -17,7 +17,7 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func startSocketRelay() async
     func stopSocketRelay() async
     func markConversationReadLocally(_ conversationId: String) async
-    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date) async
+    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async
 }
 
 // MARK: - Implementation
@@ -435,12 +435,19 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
         _messagesDidChange.send(msg.conversationId)
 
+        // Preserve the existing author when the broadcast payload omits the
+        // sender envelope (can happen for lightweight socket echoes). Falling
+        // back to `nil` would otherwise wipe the preview author for the whole
+        // list row until the next full sync.
+        let resolvedSenderName = msg.senderName ?? msg.senderUsername
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == msg.conversationId }) {
                 updated[idx].lastMessagePreview = msg.content
                 updated[idx].lastMessageId = msg.id
-                updated[idx].lastMessageSenderName = msg.senderName
+                if let resolvedSenderName, !resolvedSenderName.isEmpty {
+                    updated[idx].lastMessageSenderName = resolvedSenderName
+                }
                 updated[idx].lastMessageAt = msg.createdAt
                 if !isMe {
                     updated[idx].unreadCount += 1
@@ -582,12 +589,20 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         _messagesDidChange.send(event.conversationId)
     }
 
-    public func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date) async {
+    public func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async {
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].lastMessagePreview = messagePreview
                 updated[idx].lastMessageAt = messageAt
+                // Propagate the author so the conversation list renders
+                // "You: <preview>" in groups immediately — previously this
+                // field kept the prior sender until the socket broadcast
+                // echoed back, producing a confusing "Alice: <your msg>"
+                // for a second or two after every send.
+                if let senderName, !senderName.isEmpty {
+                    updated[idx].lastMessageSenderName = senderName
+                }
                 updated[idx].unreadCount = 0
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)
