@@ -1376,6 +1376,69 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Star / Bookmark
+
+    /// Toggle the starred state for a message. Local-only (the backend
+    /// doesn't expose a message-level star endpoint yet); the snapshot
+    /// captured here is what the `StarredMessagesView` renders, so the
+    /// row survives edits, `.local` deletions, and conversation archives
+    /// without needing to re-hydrate the original bubble.
+    @discardableResult
+    func toggleStar(messageId: String, conversationName: String? = nil, conversationAccentColor: String? = nil) -> Bool {
+        guard let idx = messageIndex(for: messageId) else { return false }
+        let msg = messages[idx]
+        let canonicalId = serverId(for: messageId)
+
+        let attachmentKind = msg.attachments.first.map { att -> String in
+            switch att.type {
+            case .image: return "image"
+            case .video: return "video"
+            case .audio: return "audio"
+            case .file: return "file"
+            case .location: return "location"
+            }
+        }
+
+        // Prefer the active translation for the user's preferred language so
+        // the starred preview matches what the user actually read, not the
+        // raw original content.
+        let preview: String = {
+            if let translation = preferredTranslation(for: messageId),
+               !translation.translatedContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return translation.translatedContent
+            }
+            if msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                switch attachmentKind {
+                case "image": return "\u{1F4F7} Photo"
+                case "video": return "\u{1F3AC} Video"
+                case "audio": return "\u{1F3B5} Message vocal"
+                case "file": return "\u{1F4CE} Fichier"
+                case "location": return "\u{1F4CD} Localisation"
+                default: return ""
+                }
+            }
+            return msg.content
+        }()
+
+        let snapshot = StarredMessageSnapshot(
+            id: canonicalId,
+            conversationId: conversationId,
+            conversationName: conversationName,
+            conversationAccentColor: conversationAccentColor,
+            senderUserId: msg.senderUserId,
+            senderName: msg.senderName ?? msg.senderUsername,
+            contentPreview: String(preview.prefix(280)),
+            attachmentKind: attachmentKind,
+            starredAt: Date(),
+            sentAt: msg.createdAt
+        )
+        return StarredMessagesStore.shared.toggle(snapshot)
+    }
+
+    func isStarred(messageId: String) -> Bool {
+        StarredMessagesStore.shared.isStarred(messageId: serverId(for: messageId))
+    }
+
     // MARK: - Toggle Reaction
 
     func toggleReaction(messageId: String, emoji: String) {

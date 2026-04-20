@@ -25,6 +25,7 @@ enum Route: Hashable {
     case dataExport
     case postDetail(String, FeedPost? = nil, showComments: Bool = false)
     case bookmarks
+    case starredMessages
     case friendRequests
     case editProfile
 }
@@ -81,6 +82,8 @@ extension Route {
             return post?.author ?? "Publication"
         case .bookmarks:
             return "Signets"
+        case .starredMessages:
+            return "Messages favoris"
         case .friendRequests:
             return "Demandes d'amis"
         case .editProfile:

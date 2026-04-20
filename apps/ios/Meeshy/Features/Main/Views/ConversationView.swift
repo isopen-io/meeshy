@@ -1239,6 +1239,15 @@ struct ConversationView: View {
                     messageText = msg.content
                 },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
+                onToggleStar: {
+                    _ = viewModel.toggleStar(
+                        messageId: msg.id,
+                        conversationName: conversation?.name,
+                        conversationAccentColor: accentColor
+                    )
+                    HapticFeedback.success()
+                },
+                isStarred: viewModel.isStarred(messageId: msg.id),
                 textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                 transcription: viewModel.messageTranscriptions[msg.id],
                 translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
