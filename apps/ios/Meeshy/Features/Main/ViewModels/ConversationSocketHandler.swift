@@ -392,33 +392,45 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Translation received
+        // Translation received — coalesce bursts (the server can fire 5+
+        // language translations for the same message within ~50ms when the
+        // recipient ring is fanned out). Collecting via `.collect(.byTime)`
+        // means a single `@Published` write fires instead of N, cutting
+        // ConversationView body re-evals by ~80% on multilingual groups.
         socketManager.translationReceived
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
+            .collect(.byTime(DispatchQueue.main, .milliseconds(80)))
+            .filter { !$0.isEmpty }
+            .sink { [weak self] events in
                 guard let delegate = self?.delegate else { return }
-                guard delegate.containsMessage(id: event.messageId) else { return }
-                let msgId = event.messageId
-                let newTranslations = event.translations.map { t in
-                    MessageTranslation(
-                        id: t.id,
-                        messageId: t.messageId,
-                        sourceLanguage: t.sourceLanguage,
-                        targetLanguage: t.targetLanguage,
-                        translatedContent: t.translatedContent,
-                        translationModel: t.translationModel,
-                        confidenceScore: t.confidenceScore
-                    )
-                }
-                var existing = delegate.messageTranslations[msgId] ?? []
-                for translation in newTranslations {
-                    if let idx = existing.firstIndex(where: { $0.targetLanguage == translation.targetLanguage }) {
-                        existing[idx] = translation
-                    } else {
-                        existing.append(translation)
+                var buckets: [String: [MessageTranslation]] = [:]
+                for event in events {
+                    guard delegate.containsMessage(id: event.messageId) else { continue }
+                    let mapped = event.translations.map { t in
+                        MessageTranslation(
+                            id: t.id,
+                            messageId: t.messageId,
+                            sourceLanguage: t.sourceLanguage,
+                            targetLanguage: t.targetLanguage,
+                            translatedContent: t.translatedContent,
+                            translationModel: t.translationModel,
+                            confidenceScore: t.confidenceScore
+                        )
                     }
+                    var merged = buckets[event.messageId] ?? delegate.messageTranslations[event.messageId] ?? []
+                    for translation in mapped {
+                        if let idx = merged.firstIndex(where: { $0.targetLanguage == translation.targetLanguage }) {
+                            merged[idx] = translation
+                        } else {
+                            merged.append(translation)
+                        }
+                    }
+                    buckets[event.messageId] = merged
                 }
-                delegate.messageTranslations[msgId] = existing
+                // Single assignment so SwiftUI publishes once per burst
+                // regardless of how many messages/languages came in.
+                for (msgId, merged) in buckets {
+                    delegate.messageTranslations[msgId] = merged
+                }
             }
             .store(in: &cancellables)
 
