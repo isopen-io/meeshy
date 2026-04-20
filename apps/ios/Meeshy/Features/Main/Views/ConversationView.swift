@@ -182,6 +182,26 @@ struct ConversationView: View {
 
     // MARK: - Composer Height Measurement
 
+    /// Persist the whole compose state (text, inline reply, selected language,
+    /// effects, blur, ephemeral duration) so the user never loses context when
+    /// the app is killed mid-sentence. Empty drafts are purged from
+    /// `UserDefaults` by `DraftStore.save(_:for:)`.
+    private func persistDraft(text: String) {
+        let ref = composerState.pendingReplyReference
+        let draft = MessageDraft(
+            text: text,
+            replyToId: ref?.messageId,
+            replyAuthorName: ref?.authorName,
+            replyPreviewText: ref?.previewText,
+            replyIsMe: ref?.isMe ?? false,
+            selectedLanguage: composerState.selectedLanguage,
+            effectFlags: viewModel.pendingEffects.flags.rawValue,
+            isBlurEnabled: viewModel.isBlurEnabled,
+            ephemeralDurationRawValue: viewModel.ephemeralDuration?.rawValue
+        )
+        DraftStore.shared.save(draft, for: viewModel.conversationId)
+    }
+
     private func updateComposerHeight(_ contentHeight: CGFloat) {
         // N'ajoute la safe area que si le clavier est absent — quand le clavier est visible
         // la safe area bottom passe à 0 et le GeometryReader fire à chaque frame d'animation,
@@ -625,13 +645,44 @@ struct ConversationView: View {
                           LanguageOption.defaults.contains(where: { $0.code == sysLang }) {
                     composerState.selectedLanguage = sysLang
                 }
-                let draft = DraftStore.shared.load(for: viewModel.conversationId)
-                if !draft.isEmpty && messageText.isEmpty { messageText = draft }
+                if messageText.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
+                    messageText = draft.text
+                    // Restore inline reply context from the draft so the user
+                    // sees the same compose chip they left — no hidden state
+                    // transitions on app reopen.
+                    if let replyId = draft.replyToId,
+                       let authorName = draft.replyAuthorName {
+                        composerState.pendingReplyReference = ReplyReference(
+                            messageId: replyId,
+                            authorName: authorName,
+                            previewText: draft.replyPreviewText ?? "",
+                            isMe: draft.replyIsMe
+                        )
+                    }
+                    if let lang = draft.selectedLanguage {
+                        composerState.selectedLanguage = lang
+                    }
+                    if draft.effectFlags != 0 {
+                        viewModel.pendingEffects.flags = MessageEffectFlags(rawValue: draft.effectFlags)
+                    }
+                    if draft.isBlurEnabled {
+                        viewModel.isBlurEnabled = true
+                    }
+                    if let raw = draft.ephemeralDurationRawValue,
+                       let duration = EphemeralDuration(rawValue: raw) {
+                        viewModel.ephemeralDuration = duration
+                    }
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { overlayState.longPressEnabled = true }
             }
             .onChange(of: messageText) { _, newValue in
-                DraftStore.shared.save(newValue, for: viewModel.conversationId)
+                persistDraft(text: newValue)
             }
+            .onChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: messageText) }
+            .onChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: messageText) }
+            .onChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: messageText) }
+            .onChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: messageText) }
+            .onChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: messageText) }
             .onChange(of: scrollState.isNearBottom) { _, _ in
                 if composerState.showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
