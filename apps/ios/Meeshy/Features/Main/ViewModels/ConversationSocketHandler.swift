@@ -155,28 +155,47 @@ final class ConversationSocketHandler {
                 Task { [weak self] in
                     guard let self, let delegate = self.delegate else { return }
 
-                    // Remplacement atomique d'un message optimiste propre :
-                    // L'API response a stocké le serverId dans pendingServerIds
-                    // sans changer l'id (évite le flash SwiftUI).
-                    // Quand le broadcast message:new arrive, on fait le remplacement complet.
+                    // Atomic in-place upgrade of an optimistic row. We DO NOT
+                    // swap the SwiftUI `id` (that would unmount the bubble and
+                    // flash). Instead we mutate the server-derived fields on
+                    // the existing struct so the ForEach key stays the
+                    // optimistic `tempId`. The `pendingServerIds` map stays
+                    // populated for the lifetime of the VM so backend ops
+                    // (delete/edit/react/pin) keep resolving the right server
+                    // id, and cache writes swap to the server id only when
+                    // persisting (see `ConversationViewModel.serverIdMappedSnapshot`).
                     if apiMsg.senderId == userId,
                        let tempId = delegate.pendingServerIds.first(where: { $0.value == apiMsg.id })?.key,
                        let idx = delegate.messageIndex(for: tempId) {
                         let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
                         var msgArray = [decoded]
                         await delegate.decryptMessagesIfNeeded(&msgArray)
-                        // decryptMessagesIfNeeded may drop items on failure; skip the
-                        // replacement instead of crashing on an empty array when the
-                        // app is backgrounded mid-decryption.
-                        guard let msg = msgArray.first else { return }
+                        guard let serverMsg = msgArray.first else { return }
                         await MainActor.run {
-                            delegate.messages[idx] = msg
-                            delegate.pendingServerIds.removeValue(forKey: tempId)
+                            var existing = delegate.messages[idx]
+                            existing.content = serverMsg.content
+                            if serverMsg.deliveryStatus.isBetterThan(existing.deliveryStatus) {
+                                existing.deliveryStatus = serverMsg.deliveryStatus
+                            }
+                            existing.updatedAt = serverMsg.updatedAt
+                            existing.attachments = serverMsg.attachments
+                            existing.reactions = serverMsg.reactions
+                            existing.pinnedAt = serverMsg.pinnedAt
+                            existing.pinnedBy = serverMsg.pinnedBy
+                            existing.deliveredCount = serverMsg.deliveredCount
+                            existing.readCount = serverMsg.readCount
+                            existing.deliveredToAllAt = serverMsg.deliveredToAllAt
+                            existing.readByAllAt = serverMsg.readByAllAt
+                            existing.isEdited = serverMsg.isEdited
+                            existing.editedAt = serverMsg.editedAt
+                            existing.deletedAt = serverMsg.deletedAt
+                            delegate.messages[idx] = existing
+                            // Keep pendingServerIds[tempId] = serverId so future
+                            // backend ops keep resolving correctly until reload.
                         }
-                        // Persister le remplacement : le tempId est remplacé par le serverId
-                        // dans le cache, le message survivra à la navigation.
-                        let updatedSnapshot = await MainActor.run { delegate.messages }
-                        await CacheCoordinator.shared.messages.save(updatedSnapshot, for: convId)
+                        // Persist using server id so a future cold-start REST
+                        // fetch reconciles cleanly without duplicates.
+                        await delegate.persistMessagesUsingServerIds()
                         return
                     }
 

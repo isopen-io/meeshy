@@ -143,10 +143,78 @@ class ConversationViewModel: ObservableObject {
     private var savedCursor: String?
     private var savedHasOlder: Bool = true
 
-    // Mapping tempId → serverId pour les messages optimistes en attente de broadcast socket.
-    // Permet au socket handler de remplacer atomiquement le message optimiste
-    // sans flash visuel (le changement d'id ne se fait qu'une seule fois).
+    // Permanent mapping `optimistic id → server id` for the lifetime of the
+    // ViewModel. The optimistic id (`temp_…` / `offline_…` / `retry_…`) is
+    // the SwiftUI ForEach key for the row — we NEVER swap it in memory so the
+    // bubble doesn't unmount/remount and flash. Backend operations
+    // (delete/edit/react/pin) and cache writes resolve the real server id
+    // through `serverId(for:)`. The mapping survives until the next reload
+    // from cache (which already stores server ids), at which point the
+    // optimistic id disappears naturally.
     var pendingServerIds: [String: String] = [:]
+
+    /// Resolve the authoritative server id for an in-memory message. Falls
+    /// back to the supplied id when no mapping exists (the message id is
+    /// already a server id, e.g. messages received from other users).
+    func serverId(for messageId: String) -> String {
+        pendingServerIds[messageId] ?? messageId
+    }
+
+    /// Persist the current `messages` snapshot to the cache using server ids
+    /// for every reconciled optimistic row, so a future cold-start REST fetch
+    /// reconciles cleanly without producing duplicate `temp_…` / server-id
+    /// pairs. Called after the socket reconciliation in `ConversationSocketHandler`.
+    func persistMessagesUsingServerIds() async {
+        let convId = conversationId
+        let mapping = pendingServerIds
+        let snapshot = messages
+        let rewritten: [Message] = snapshot.map { msg -> Message in
+            guard let serverId = mapping[msg.id] else { return msg }
+            // Message.id is `let` — copy via init with overridden id.
+            return Message(
+                id: serverId,
+                conversationId: msg.conversationId,
+                senderId: msg.senderId,
+                content: msg.content,
+                originalLanguage: msg.originalLanguage,
+                messageType: msg.messageType,
+                messageSource: msg.messageSource,
+                isEdited: msg.isEdited,
+                editedAt: msg.editedAt,
+                deletedAt: msg.deletedAt,
+                replyToId: msg.replyToId,
+                storyReplyToId: msg.storyReplyToId,
+                forwardedFromId: msg.forwardedFromId,
+                forwardedFromConversationId: msg.forwardedFromConversationId,
+                expiresAt: msg.expiresAt,
+                effects: msg.effects,
+                maxViewOnceCount: msg.maxViewOnceCount,
+                viewOnceCount: msg.viewOnceCount,
+                pinnedAt: msg.pinnedAt,
+                pinnedBy: msg.pinnedBy,
+                isEncrypted: msg.isEncrypted,
+                encryptionMode: msg.encryptionMode,
+                createdAt: msg.createdAt,
+                updatedAt: msg.updatedAt,
+                attachments: msg.attachments,
+                reactions: msg.reactions,
+                replyTo: msg.replyTo,
+                forwardedFrom: msg.forwardedFrom,
+                senderName: msg.senderName,
+                senderUsername: msg.senderUsername,
+                senderColor: msg.senderColor,
+                senderAvatarURL: msg.senderAvatarURL,
+                senderUserId: msg.senderUserId,
+                deliveryStatus: msg.deliveryStatus,
+                isMe: msg.isMe,
+                deliveredToAllAt: msg.deliveredToAllAt,
+                readByAllAt: msg.readByAllAt,
+                deliveredCount: msg.deliveredCount,
+                readCount: msg.readCount
+            )
+        }
+        await CacheCoordinator.shared.messages.save(rewritten, for: convId)
+    }
 
     // MARK: - O(1) Message Index
 
@@ -536,10 +604,9 @@ class ConversationViewModel: ObservableObject {
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .sink { [weak self] snapshot in
                 guard let self, !snapshot.isEmpty else { return }
-                let convId = self.conversationId
-                Task.detached(priority: .utility) {
-                    await CacheCoordinator.shared.messages.save(snapshot, for: convId)
-                }
+                // Route through the id-mapping persister so any reconciled
+                // optimistic rows land in cache under their server ids.
+                Task { [weak self] in await self?.persistMessagesUsingServerIds() }
             }
         subscribeToQueueReconciliation()
         if let session = anonymousSession {
@@ -1184,10 +1251,13 @@ class ConversationViewModel: ObservableObject {
             let msgContent = text
             let msgTime = responseData.createdAt
 
-            // Persister le status .sent dans le cache
-            let sentSnapshot = messages
-            Task.detached(priority: .utility) {
-                await CacheCoordinator.shared.messages.save(sentSnapshot, for: convId)
+            // Persist with the authoritative server id so that a future
+            // cold-start REST fetch reconciles without duplicate `temp_…`
+            // / server-id pairs. The in-memory `messages[idx].id` stays as
+            // `tempId` so SwiftUI ForEach keeps a stable key (no flash when
+            // the socket broadcast arrives — see ConversationSocketHandler).
+            Task { [weak self] in
+                await self?.persistMessagesUsingServerIds()
             }
             let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
             Task {
@@ -1220,13 +1290,12 @@ class ConversationViewModel: ObservableObject {
                 messages[idx].deliveryStatus = .sending
             }
 
-            // Persister le message avec status .sending pour qu'il survive
-            // à la navigation (l'utilisateur verra le message avec l'horloge au retour)
-            let errorConvId = conversationId
-            let errorSnapshot = messages
-            Task.detached(priority: .utility) {
-                await CacheCoordinator.shared.messages.save(errorSnapshot, for: errorConvId)
-            }
+            // Persist with the `sending` status so the bubble (with its clock
+            // glyph) survives navigation. The tempId stays in cache because
+            // no server id exists yet — it will be swapped in when
+            // `MessageRetryQueue.retrySucceeded` fires or the row flips to
+            // `.failed` via `retryExhausted`.
+            Task { [weak self] in await self?.persistMessagesUsingServerIds() }
 
             // Enqueue for persistent auto-retry (5 attempts × 10s interval).
             // Pass the optimistic tempId so `MessageRetryQueue.retrySucceeded`
@@ -1310,21 +1379,24 @@ class ConversationViewModel: ObservableObject {
         let participantId = _resolvedParticipantId ?? currentUserId
         let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == participantId }
         let convId = conversationId
+        // Resolve the canonical server id so the queue replays against the
+        // real backend message, not the optimistic in-memory placeholder.
+        let remoteId = serverId(for: messageId)
 
         if alreadyReacted {
             messages[idx].reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
             let item = ReactionQueueItem(
-                messageId: messageId, emoji: emoji, action: .remove, conversationId: convId
+                messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
             )
             Task {
                 await ReactionQueue.shared.enqueue(item)
                 await ReactionQueue.shared.retryAll()
             }
         } else {
-            let reaction = Reaction(messageId: messageId, participantId: participantId, emoji: emoji)
+            let reaction = Reaction(messageId: remoteId, participantId: participantId, emoji: emoji)
             messages[idx].reactions.append(reaction)
             let item = ReactionQueueItem(
-                messageId: messageId, emoji: emoji, action: .add, conversationId: convId
+                messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
             )
             Task {
                 await ReactionQueue.shared.enqueue(item)
@@ -1351,7 +1423,7 @@ class ConversationViewModel: ObservableObject {
         isLoadingReactions = true
         defer { isLoadingReactions = false }
         do {
-            let result = try await reactionService.fetchDetails(messageId: messageId)
+            let result = try await reactionService.fetchDetails(messageId: serverId(for: messageId))
             reactionDetails = result.reactions
         } catch {
             reactionDetails = []
@@ -1368,7 +1440,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            try await messageService.delete(conversationId: conversationId, messageId: messageId)
+            try await messageService.delete(conversationId: conversationId, messageId: serverId(for: messageId))
         } catch {
             // Revert on failure
             if let idx = messageIndex(for: messageId) {
@@ -1419,7 +1491,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].pinnedBy = nil
 
             do {
-                try await messageService.unpin(conversationId: conversationId, messageId: messageId)
+                try await messageService.unpin(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
                 // Revert
                 messages[idx].pinnedAt = Date()
@@ -1432,7 +1504,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].pinnedBy = authManager.currentUser?.id
 
             do {
-                try await messageService.pin(conversationId: conversationId, messageId: messageId)
+                try await messageService.pin(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
                 // Revert
                 messages[idx].pinnedAt = nil
@@ -1447,7 +1519,7 @@ class ConversationViewModel: ObservableObject {
     func consumeViewOnce(messageId: String) async -> Bool {
         do {
             let result = try await messageService.consumeViewOnce(
-                conversationId: conversationId, messageId: messageId
+                conversationId: conversationId, messageId: serverId(for: messageId)
             )
             if let idx = messageIndex(for: messageId) {
                 messages[idx].viewOnceCount = result.viewOnceCount
@@ -1492,7 +1564,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            _ = try await messageService.edit(messageId: messageId, content: trimmed)
+            _ = try await messageService.edit(messageId: serverId(for: messageId), content: trimmed)
         } catch {
             // Revert on failure
             if let idx = messageIndex(for: messageId),
@@ -1508,7 +1580,7 @@ class ConversationViewModel: ObservableObject {
 
     func reportMessage(messageId: String, reportType: String, reason: String?) async -> Bool {
         do {
-            try await reportService.reportMessage(messageId: messageId, reportType: reportType, reason: reason)
+            try await reportService.reportMessage(messageId: serverId(for: messageId), reportType: reportType, reason: reason)
             return true
         } catch {
             self.error = error.localizedDescription
