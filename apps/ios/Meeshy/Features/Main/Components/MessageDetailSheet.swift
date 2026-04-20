@@ -7,7 +7,7 @@ import NaturalLanguage
 // MARK: - DetailTab
 
 enum DetailTab: String, CaseIterable, Identifiable {
-    case language, views, reactions, react, report, delete, forward, sentiment, transcription
+    case language, views, reactions, react, report, delete, forward, sentiment, transcription, edits
 
     var id: String { rawValue }
 
@@ -22,6 +22,7 @@ enum DetailTab: String, CaseIterable, Identifiable {
         case .forward: return "arrowshape.turn.up.forward.fill"
         case .sentiment: return "brain.head.profile"
         case .transcription: return "waveform"
+        case .edits: return "pencil.and.list.clipboard"
         }
     }
 
@@ -36,6 +37,7 @@ enum DetailTab: String, CaseIterable, Identifiable {
         case .forward: return "Transferer"
         case .sentiment: return "Sentiment"
         case .transcription: return "Transcription"
+        case .edits: return "Historique"
         }
     }
 
@@ -50,6 +52,7 @@ enum DetailTab: String, CaseIterable, Identifiable {
         case .forward: return "9B59B6"
         case .sentiment: return "1ABC9C"
         case .transcription: return "8E44AD"
+        case .edits: return "F8B500"
         }
     }
 }
@@ -150,6 +153,10 @@ struct MessageDetailSheet: View {
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
     var externalTabSelection: Binding<DetailTab?>?
+    /// Locally-recorded edit history for this message (see `EditHistoryStore`).
+    /// Only the "Historique" tab consumes it, and the tab hides itself when
+    /// the array is empty — no visual clutter for un-edited messages.
+    var editRevisions: [EditRevision] = []
 
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var envDismiss
@@ -221,6 +228,7 @@ struct MessageDetailSheet: View {
             case .delete: return canDelete
             case .sentiment: return !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case .transcription: return message.attachments.contains { $0.mimeType.hasPrefix("audio/") || $0.mimeType.hasPrefix("video/") }
+            case .edits: return message.isEdited && !editRevisions.isEmpty
             default: return true
             }
         }
@@ -388,6 +396,8 @@ struct MessageDetailSheet: View {
                     sentimentTabContent
                 case .transcription:
                     transcriptionTabContent
+                case .edits:
+                    editsTabContent
                 }
             }
             .id(tab)
@@ -1809,6 +1819,86 @@ struct MessageDetailSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
+    }
+
+    // MARK: - Edits Tab Content
+
+    @ViewBuilder
+    private var editsTabContent: some View {
+        let accent = Color(hex: contactColor)
+        let revisions = editRevisions.sorted { $0.editedAt > $1.editedAt }
+
+        VStack(alignment: .leading, spacing: 14) {
+            timelineBanner(
+                icon: "pencil.and.list.clipboard",
+                text: revisions.isEmpty ? "Aucune modification" : "Historique",
+                detail: revisions.isEmpty ? "Ce message n'a pas ete modifie" : "\(revisions.count) version\(revisions.count > 1 ? "s" : "") precedente\(revisions.count > 1 ? "s" : "")",
+                count: revisions.isEmpty ? nil : "\(revisions.count)",
+                accent: accent
+            )
+
+            if revisions.isEmpty {
+                emptyStateView(
+                    icon: "pencil.slash",
+                    text: "L'historique des modifications apparait ici",
+                    accent: accent
+                )
+            } else {
+                // Current (post-edit) version rendered first so the user
+                // sees the "as-is" content as the anchor, then the
+                // chronological revisions below it.
+                editRevisionRow(
+                    header: "Actuel",
+                    content: message.content,
+                    timestamp: message.editedAt ?? message.updatedAt,
+                    accent: accent,
+                    isCurrent: true
+                )
+
+                ForEach(Array(revisions.enumerated()), id: \.element.id) { index, revision in
+                    editRevisionRow(
+                        header: "Version \(revisions.count - index)",
+                        content: revision.content,
+                        timestamp: revision.editedAt,
+                        accent: accent,
+                        isCurrent: false
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func editRevisionRow(header: String, content: String, timestamp: Date, accent: Color, isCurrent: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(isCurrent ? accent : accent.opacity(0.4))
+                .frame(width: 3)
+                .padding(.vertical, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(header)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(isCurrent ? accent : theme.textSecondary)
+                        .textCase(.uppercase)
+                        .tracking(0.4)
+                    Spacer(minLength: 4)
+                    Text(formatTimeFR(timestamp))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                }
+                Text(content)
+                    .font(.system(size: 14))
+                    .foregroundStyle(theme.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+        )
     }
 
     // MARK: - Transcription Tab Content

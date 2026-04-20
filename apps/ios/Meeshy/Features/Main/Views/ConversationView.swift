@@ -182,6 +182,26 @@ struct ConversationView: View {
 
     // MARK: - Composer Height Measurement
 
+    /// Persist the whole compose state (text, inline reply, selected language,
+    /// effects, blur, ephemeral duration) so the user never loses context when
+    /// the app is killed mid-sentence. Empty drafts are purged from
+    /// `UserDefaults` by `DraftStore.save(_:for:)`.
+    private func persistDraft(text: String) {
+        let ref = composerState.pendingReplyReference
+        let draft = MessageDraft(
+            text: text,
+            replyToId: ref?.messageId,
+            replyAuthorName: ref?.authorName,
+            replyPreviewText: ref?.previewText,
+            replyIsMe: ref?.isMe ?? false,
+            selectedLanguage: composerState.selectedLanguage,
+            effectFlags: viewModel.pendingEffects.flags.rawValue,
+            isBlurEnabled: viewModel.isBlurEnabled,
+            ephemeralDurationRawValue: viewModel.ephemeralDuration?.rawValue
+        )
+        DraftStore.shared.save(draft, for: viewModel.conversationId)
+    }
+
     private func updateComposerHeight(_ contentHeight: CGFloat) {
         // N'ajoute la safe area que si le clavier est absent — quand le clavier est visible
         // la safe area bottom passe à 0 et le GeometryReader fire à chaque frame d'animation,
@@ -514,17 +534,33 @@ struct ConversationView: View {
             .alert("Action sélectionnée", isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
                 Button("OK") { composerState.actionAlert = nil }
             } message: { Text(composerState.actionAlert ?? "") }
-            .alert("Supprimer ce message ?", isPresented: Binding(get: {
-                overlayState.deleteConfirmMessageId != nil
-            }, set: {
-                if !$0 { overlayState.deleteConfirmMessageId = nil }
-            })) {
-                Button("Annuler", role: .cancel) { overlayState.deleteConfirmMessageId = nil }
-                Button("Supprimer", role: .destructive) {
-                    if let msgId = overlayState.deleteConfirmMessageId { Task { await viewModel.deleteMessage(messageId: msgId) } }
+            .confirmationDialog(
+                "Supprimer ce message ?",
+                isPresented: Binding(
+                    get: { overlayState.deleteConfirmMessageId != nil },
+                    set: { if !$0 { overlayState.deleteConfirmMessageId = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: overlayState.deleteConfirmMessageId
+            ) { msgId in
+                // "Delete for everyone" only if the user authored the
+                // message AND the 2-hour window hasn't elapsed — matches
+                // WhatsApp's "Delete for everyone" gating.
+                if let idx = viewModel.messageIndex(for: msgId),
+                   viewModel.canDeleteForEveryone(viewModel.messages[idx]) {
+                    Button("Supprimer pour tout le monde", role: .destructive) {
+                        Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }
+                        overlayState.deleteConfirmMessageId = nil
+                    }
+                }
+                Button("Supprimer pour moi", role: .destructive) {
+                    Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }
                     overlayState.deleteConfirmMessageId = nil
                 }
-            } message: { Text("Cette action est irréversible.") }
+                Button("Annuler", role: .cancel) { overlayState.deleteConfirmMessageId = nil }
+            } message: { _ in
+                Text("La suppression pour tout le monde est disponible pendant 2 h après l'envoi.")
+            }
             .sheet(item: $composerState.forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
                     .presentationDetents([.medium, .large])
@@ -585,8 +621,12 @@ struct ConversationView: View {
                         }
                     },
                     onDelete: {
-                        Task { await viewModel.deleteMessage(messageId: msg.id) }
-                    }
+                        // Route through the confirmation dialog so the user
+                        // picks between "Delete for me" and "Delete for
+                        // everyone" instead of silently losing the message.
+                        overlayState.deleteConfirmMessageId = msg.id
+                    },
+                    editRevisions: viewModel.editRevisions(for: msg.id)
                 )
             }
     }
@@ -625,13 +665,44 @@ struct ConversationView: View {
                           LanguageOption.defaults.contains(where: { $0.code == sysLang }) {
                     composerState.selectedLanguage = sysLang
                 }
-                let draft = DraftStore.shared.load(for: viewModel.conversationId)
-                if !draft.isEmpty && messageText.isEmpty { messageText = draft }
+                if messageText.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
+                    messageText = draft.text
+                    // Restore inline reply context from the draft so the user
+                    // sees the same compose chip they left — no hidden state
+                    // transitions on app reopen.
+                    if let replyId = draft.replyToId,
+                       let authorName = draft.replyAuthorName {
+                        composerState.pendingReplyReference = ReplyReference(
+                            messageId: replyId,
+                            authorName: authorName,
+                            previewText: draft.replyPreviewText ?? "",
+                            isMe: draft.replyIsMe
+                        )
+                    }
+                    if let lang = draft.selectedLanguage {
+                        composerState.selectedLanguage = lang
+                    }
+                    if draft.effectFlags != 0 {
+                        viewModel.pendingEffects.flags = MessageEffectFlags(rawValue: draft.effectFlags)
+                    }
+                    if draft.isBlurEnabled {
+                        viewModel.isBlurEnabled = true
+                    }
+                    if let raw = draft.ephemeralDurationRawValue,
+                       let duration = EphemeralDuration(rawValue: raw) {
+                        viewModel.ephemeralDuration = duration
+                    }
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { overlayState.longPressEnabled = true }
             }
             .onChange(of: messageText) { _, newValue in
-                DraftStore.shared.save(newValue, for: viewModel.conversationId)
+                persistDraft(text: newValue)
             }
+            .onChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: messageText) }
+            .onChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: messageText) }
+            .onChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: messageText) }
+            .onChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: messageText) }
+            .onChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: messageText) }
             .onChange(of: scrollState.isNearBottom) { _, _ in
                 if composerState.showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
@@ -1063,12 +1134,25 @@ struct ConversationView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(alignment: .top, spacing: 4) {
                             Button { composerState.showConversationInfo = true } label: {
-                                Text(conversation?.name ?? "Conversation")
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
-                                    .lineLimit(2)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .multilineTextAlignment(.leading)
+                                HStack(spacing: 6) {
+                                    Text(conversation?.name ?? "Conversation")
+                                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                                        .foregroundColor(.white)
+                                        .lineLimit(2)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .multilineTextAlignment(.leading)
+                                    // Subtle "revalidating" sparkle: shown while we
+                                    // serve stale cache and silently refresh from
+                                    // the server. Disappears as soon as the REST
+                                    // response lands — no blocking spinner.
+                                    if viewModel.isRevalidating {
+                                        Image(systemName: "sparkles")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(.white.opacity(0.85))
+                                            .symbolEffect(.pulse, options: .repeating)
+                                            .accessibilityLabel("Actualisation en arriere-plan")
+                                    }
+                                }
                             }
                             .accessibilityLabel(conversation?.name ?? "Conversation")
                             .accessibilityHint("Ouvre les informations de la conversation")
@@ -1169,6 +1253,15 @@ struct ConversationView: View {
                     messageText = msg.content
                 },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
+                onToggleStar: {
+                    _ = viewModel.toggleStar(
+                        messageId: msg.id,
+                        conversationName: conversation?.name,
+                        conversationAccentColor: accentColor
+                    )
+                    HapticFeedback.success()
+                },
+                isStarred: viewModel.isStarred(messageId: msg.id),
                 textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                 transcription: viewModel.messageTranscriptions[msg.id],
                 translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
@@ -1192,7 +1285,9 @@ struct ConversationView: View {
                     }
                 },
                 onDelete: {
-                    Task { await viewModel.deleteMessage(messageId: msg.id) }
+                    // Show the confirmation dialog so the user can pick
+                    // between local-only and server-broadcast deletion.
+                    overlayState.deleteConfirmMessageId = msg.id
                 },
                 onDeleteAttachment: { attachmentId in
                     Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }

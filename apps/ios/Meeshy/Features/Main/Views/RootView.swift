@@ -194,6 +194,8 @@ struct RootView: View {
                     case .bookmarks:
                         BookmarksView()
                             .navigationBarHidden(true)
+                    case .starredMessages:
+                        StarredMessagesView()
                     case .friendRequests:
                         FriendRequestListView()
                             .navigationBarHidden(true)
@@ -328,6 +330,16 @@ struct RootView: View {
             await statusViewModel.loadStatuses()
             await conversationViewModel.loadConversations()
             await notificationManager.refreshUnreadCount()
+
+            // Cold-start recovery: when the app is launched from a terminated
+            // state by tapping a push, the `.handlePushNotification`
+            // NotificationCenter post may fire before RootView finishes
+            // mounting. Check the pending payload once we're on screen so the
+            // user never lands on the list instead of the target conversation.
+            if let pending = PushNotificationManager.shared.pendingNotificationPayload {
+                handlePushNotificationTap(pending)
+                PushNotificationManager.shared.clearPendingNotification()
+            }
         }
         .fullScreenCover(item: $storyViewerRequest) { request in
             StoryViewerContainer(

@@ -51,14 +51,32 @@ public actor CacheCoordinator {
     private static let maxTranslationCacheEntries = 500
 
     private var translationCache: [String: [TranslationData]] = [:]
+    private var translationTimestamps: [String: Date] = [:]
     private var translationInsertionOrder: [String] = []
+    /// Translations older than this are dropped at read time so stale
+    /// machine output (model updates, content edits that the server
+    /// hasn't reconciled yet, etc.) doesn't linger indefinitely in RAM.
+    /// Matches the `messages` cache `staleTTL` window roughly.
+    private static let translationMaxAge: TimeInterval = 24 * 3600
     private var transcriptionCache: [String: TranscriptionReadyEvent] = [:]
     private var transcriptionInsertionOrder: [String] = []
     private var audioTranslationCache: [String: [AudioTranslationEvent]] = [:]
     private var audioTranslationInsertionOrder: [String] = []
 
     public func cachedTranslations(for messageId: String) -> [TranslationData]? {
-        translationCache[messageId]
+        // TTL enforcement on read: if the entry is older than 24h, drop it so
+        // we don't serve stale machine output when a better translation could
+        // be produced on demand.
+        if let stamp = translationTimestamps[messageId],
+           Date().timeIntervalSince(stamp) > Self.translationMaxAge {
+            translationCache.removeValue(forKey: messageId)
+            translationTimestamps.removeValue(forKey: messageId)
+            if let idx = translationInsertionOrder.firstIndex(of: messageId) {
+                translationInsertionOrder.remove(at: idx)
+            }
+            return nil
+        }
+        return translationCache[messageId]
     }
 
     public func cachedTranscription(for messageId: String) -> TranscriptionReadyEvent? {
@@ -72,6 +90,7 @@ public actor CacheCoordinator {
     private let messageSocket: any MessageSocketProviding
     private let socialSocket: any SocialSocketProviding
     private var cancellables = Set<AnyCancellable>()
+    private var lifecycleObservers: [NSObjectProtocol] = []
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "cache-coordinator")
     private var isStarted = false
     private var currentUserId: String = ""
@@ -125,9 +144,14 @@ public actor CacheCoordinator {
     public func reset() {
         isStarted = false
         cancellables.removeAll()
+        for observer in lifecycleObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        lifecycleObservers.removeAll()
         currentUserId = ""
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
+        translationTimestamps.removeAll()
         transcriptionCache.removeAll()
         transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
@@ -160,6 +184,9 @@ public actor CacheCoordinator {
             }
         }
         translationCache[msgId] = existing
+        // Stamp/refresh the age marker so the TTL reset on every new
+        // broadcast — server-pushed updates keep the entry hot.
+        translationTimestamps[msgId] = Date()
         if isNew {
             translationInsertionOrder.append(msgId)
             evictTranslationCacheIfNeeded()
@@ -195,6 +222,7 @@ public actor CacheCoordinator {
         while translationCache.count > Self.maxTranslationCacheEntries, let oldest = translationInsertionOrder.first {
             translationInsertionOrder.removeFirst()
             translationCache.removeValue(forKey: oldest)
+            translationTimestamps.removeValue(forKey: oldest)
         }
     }
 
@@ -214,9 +242,9 @@ public actor CacheCoordinator {
 
     // MARK: - Lifecycle
 
-    private nonisolated func subscribeToLifecycle() {
+    private func subscribeToLifecycle() {
         #if canImport(UIKit)
-        NotificationCenter.default.addObserver(
+        let resign = NotificationCenter.default.addObserver(
             forName: UIApplication.willResignActiveNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
@@ -229,7 +257,7 @@ public actor CacheCoordinator {
         // background → terminate. We also observe `didEnterBackground`
         // explicitly so dirty cache keys reach disk before the OS freezes
         // the process, and `willTerminate` as the last-chance hook.
-        NotificationCenter.default.addObserver(
+        let background = NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
@@ -237,7 +265,7 @@ public actor CacheCoordinator {
             Task { await self.flushAll() }
         }
 
-        NotificationCenter.default.addObserver(
+        let terminate = NotificationCenter.default.addObserver(
             forName: UIApplication.willTerminateNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
@@ -255,13 +283,14 @@ public actor CacheCoordinator {
             _ = semaphore.wait(timeout: .now() + 4)
         }
 
-        NotificationCenter.default.addObserver(
+        let memory = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
             guard let self else { return }
             Task { await self.evictUnderMemoryPressure() }
         }
+        lifecycleObservers = [resign, background, terminate, memory]
         #endif
     }
 
@@ -297,6 +326,7 @@ public actor CacheCoordinator {
 
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
+        translationTimestamps.removeAll()
         transcriptionCache.removeAll()
         transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
@@ -357,6 +387,7 @@ public actor CacheCoordinator {
         await UserColorCache.shared.invalidateAll()
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
+        translationTimestamps.removeAll()
         transcriptionCache.removeAll()
         transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()

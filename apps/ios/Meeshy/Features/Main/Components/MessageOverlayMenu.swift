@@ -18,6 +18,8 @@ struct MessageOverlayMenu: View {
     var onCopy: (() -> Void)?
     var onEdit: (() -> Void)?
     var onPin: (() -> Void)?
+    var onToggleStar: (() -> Void)?
+    var isStarred: Bool = false
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
@@ -493,6 +495,15 @@ struct MessageOverlayMenu: View {
             label: message.pinnedAt != nil ? "Desepingler" : "Epingler",
             color: "3498DB",
             handler: { dismissThen { onPin?() } }
+        ))
+
+        // Star / bookmark — local-only favourite list (see StarredMessagesView).
+        actions.append(MessageAction(
+            id: "star",
+            icon: isStarred ? "star.slash.fill" : "star.fill",
+            label: isStarred ? "Retirer des favoris" : "Ajouter aux favoris",
+            color: "FBBF24",
+            handler: { dismissThen { onToggleStar?() } }
         ))
 
         if canEdit && hasText {

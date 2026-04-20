@@ -10,14 +10,15 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
 
     @discardableResult
     func fullSync() async -> Bool
-    func syncSinceLastCheckpoint() async
+    @discardableResult
+    func syncSinceLastCheckpoint() async -> Bool
     func ensureMessages(for conversationId: String) async
     func fetchOlderMessages(for conversationId: String, before messageId: String) async
     func cleanupRetentionIfNeeded() async
     func startSocketRelay() async
     func stopSocketRelay() async
     func markConversationReadLocally(_ conversationId: String) async
-    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date) async
+    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async
 }
 
 // MARK: - Implementation
@@ -99,31 +100,131 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         isSyncing = true
         defer { isSyncing = false }
 
-        var allConversations: [MeeshyConversation] = []
-        var offset = 0
         let pageSize = 100
-        var hasMore = true
+        let userId = await currentUserId()
+
+        // Fetch the first page to show something on screen as fast as
+        // possible, then fan out to the remaining pages in parallel. On
+        // 10k-conversation accounts the old sequential loop took 5-10s
+        // before the list was populated; the first-page-first pattern
+        // paints the visible rows in ~300ms and the rest arrives in the
+        // background without blocking the UI.
+        let firstPage: [MeeshyConversation]
+        let totalCount: Int?
+        do {
+            let response = try await conversationService.list(offset: 0, limit: pageSize)
+            firstPage = response.data.map { $0.toConversation(currentUserId: userId) }
+            totalCount = response.pagination?.total
+            await cache.conversations.save(firstPage, for: "list")
+            _conversationsDidChange.send()
+        } catch {
+            Self.logger.error("[SyncEngine] fullSync first-page error: \(error.localizedDescription)")
+            return false
+        }
+
+        // If the first page already returned everything, we're done.
+        let knownTotal: Int? = totalCount ?? (firstPage.count < pageSize ? firstPage.count : nil)
+        if let total = knownTotal, total <= firstPage.count {
+            lastSyncTimestamp = Date().addingTimeInterval(-30)
+            return true
+        }
+
+        // Upper bound on remaining pages. If the backend didn't return a
+        // total count, we fall back to sequential paging from page 2 until
+        // `hasMore` flips false.
+        let remainingPages: [Int]
+        if let total = knownTotal {
+            let totalPages = (total + pageSize - 1) / pageSize
+            remainingPages = Array(1..<totalPages)
+        } else {
+            remainingPages = []
+        }
+
+        var merged = firstPage
         var succeeded = true
 
-        while hasMore {
-            do {
-                let response = try await conversationService.list(offset: offset, limit: pageSize)
-                let userId = await currentUserId()
-                let page = response.data.map { $0.toConversation(currentUserId: userId) }
+        if !remainingPages.isEmpty {
+            // Fan-out: fetch all remaining pages concurrently with a bounded
+            // parallelism (4) so we don't hammer the backend on huge
+            // accounts. Pages are sorted by offset before merging.
+            let service = self.conversationService
+            let pages: [(Int, [MeeshyConversation])] = await withTaskGroup(
+                of: (Int, [MeeshyConversation]?).self,
+                returning: [(Int, [MeeshyConversation])].self
+            ) { group in
+                let maxParallel = 4
+                var launched = 0
+                var collected: [(Int, [MeeshyConversation])] = []
 
-                let existingIds = Set(allConversations.map(\.id))
-                let newItems = page.filter { !existingIds.contains($0.id) }
-                allConversations.append(contentsOf: newItems)
+                while launched < maxParallel && launched < remainingPages.count {
+                    let pageIndex = remainingPages[launched]
+                    group.addTask {
+                        do {
+                            let response = try await service.list(offset: pageIndex * pageSize, limit: pageSize)
+                            let items = response.data.map { $0.toConversation(currentUserId: userId) }
+                            return (pageIndex, items)
+                        } catch {
+                            return (pageIndex, nil)
+                        }
+                    }
+                    launched += 1
+                }
 
-                await cache.conversations.save(allConversations, for: "list")
-                _conversationsDidChange.send()
+                while let result = await group.next() {
+                    if let items = result.1 {
+                        collected.append((result.0, items))
+                    }
+                    if launched < remainingPages.count {
+                        let pageIndex = remainingPages[launched]
+                        group.addTask {
+                            do {
+                                let response = try await service.list(offset: pageIndex * pageSize, limit: pageSize)
+                                let items = response.data.map { $0.toConversation(currentUserId: userId) }
+                                return (pageIndex, items)
+                            } catch {
+                                return (pageIndex, nil)
+                            }
+                        }
+                        launched += 1
+                    }
+                }
+                return collected.sorted { $0.0 < $1.0 }
+            }
 
-                hasMore = response.pagination?.hasMore ?? false
-                offset += page.count
-            } catch {
-                Self.logger.error("[SyncEngine] fullSync error: \(error.localizedDescription)")
+            if pages.count < remainingPages.count {
                 succeeded = false
-                break
+            }
+
+            var uniqueById = Set(merged.map(\.id))
+            for (_, page) in pages {
+                for item in page where !uniqueById.contains(item.id) {
+                    uniqueById.insert(item.id)
+                    merged.append(item)
+                }
+            }
+
+            await cache.conversations.save(merged, for: "list")
+            _conversationsDidChange.send()
+        } else {
+            // No known total count: fall back to sequential paging from page 2.
+            var offset = firstPage.count
+            var hasMore = firstPage.count >= pageSize
+            while hasMore {
+                do {
+                    let response = try await conversationService.list(offset: offset, limit: pageSize)
+                    let page = response.data.map { $0.toConversation(currentUserId: userId) }
+                    let existingIds = Set(merged.map(\.id))
+                    let newItems = page.filter { !existingIds.contains($0.id) }
+                    merged.append(contentsOf: newItems)
+                    await cache.conversations.save(merged, for: "list")
+                    _conversationsDidChange.send()
+                    hasMore = response.pagination?.hasMore ?? false
+                    offset += page.count
+                } catch {
+                    Self.logger.error("[SyncEngine] fullSync tail error: \(error.localizedDescription)")
+                    succeeded = false
+                    break
+                }
             }
         }
 
@@ -135,8 +236,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // MARK: - Delta Sync (foreground / reconnect)
 
-    public func syncSinceLastCheckpoint() async {
-        guard !isSyncing else { return }
+    @discardableResult
+    public func syncSinceLastCheckpoint() async -> Bool {
+        guard !isSyncing else { return true }
         isSyncing = true
         defer { isSyncing = false }
 
@@ -177,8 +279,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             _conversationsDidChange.send()
 
             lastSyncTimestamp = Date().addingTimeInterval(-30)
+            return true
         } catch {
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -435,12 +539,19 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
         _messagesDidChange.send(msg.conversationId)
 
+        // Preserve the existing author when the broadcast payload omits the
+        // sender envelope (can happen for lightweight socket echoes). Falling
+        // back to `nil` would otherwise wipe the preview author for the whole
+        // list row until the next full sync.
+        let resolvedSenderName = msg.senderName ?? msg.senderUsername
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == msg.conversationId }) {
                 updated[idx].lastMessagePreview = msg.content
                 updated[idx].lastMessageId = msg.id
-                updated[idx].lastMessageSenderName = msg.senderName
+                if let resolvedSenderName, !resolvedSenderName.isEmpty {
+                    updated[idx].lastMessageSenderName = resolvedSenderName
+                }
                 updated[idx].lastMessageAt = msg.createdAt
                 if !isMe {
                     updated[idx].unreadCount += 1
@@ -582,12 +693,20 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         _messagesDidChange.send(event.conversationId)
     }
 
-    public func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date) async {
+    public func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async {
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].lastMessagePreview = messagePreview
                 updated[idx].lastMessageAt = messageAt
+                // Propagate the author so the conversation list renders
+                // "You: <preview>" in groups immediately — previously this
+                // field kept the prior sender until the socket broadcast
+                // echoed back, producing a confusing "Alice: <your msg>"
+                // for a second or two after every send.
+                if let senderName, !senderName.isEmpty {
+                    updated[idx].lastMessageSenderName = senderName
+                }
                 updated[idx].unreadCount = 0
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)

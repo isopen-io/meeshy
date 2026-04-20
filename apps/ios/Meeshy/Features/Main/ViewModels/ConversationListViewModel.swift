@@ -308,6 +308,28 @@ class ConversationListViewModel: ObservableObject {
                 self.conversations[index].memberCount += 1
             }
             .store(in: &cancellables)
+
+        // On socket reconnection, pull the delta so the list reflects anything
+        // that changed while the socket was down (renames, new conversations,
+        // archived/deleted, unread counts). Without this the user lands on a
+        // stale list after coming back from background until they pull to
+        // refresh manually.
+        messageSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                // Random 0-500ms jitter before firing the delta sync so that
+                // a server blip that drops every client simultaneously
+                // doesn't produce a thundering herd of `/conversations?updatedSince=…`
+                // requests the instant the gateway comes back online.
+                let jitter = UInt64.random(in: 0...500_000_000)
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: jitter)
+                    await self?.syncEngine.syncSinceLastCheckpoint()
+                    await self?.reloadFromCache()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Typing Cleanup
@@ -646,17 +668,28 @@ class ConversationListViewModel: ObservableObject {
               !previewLoadingInFlight.contains(conversationId) else { return }
         previewLoadingInFlight.insert(conversationId)
         defer { previewLoadingInFlight.remove(conversationId) }
-        let cached = await CacheCoordinator.shared.messages.load(for: conversationId).value ?? []
-        if !cached.isEmpty {
-            previewMessages[conversationId] = Array(cached.suffix(5))
+        let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
+        switch cached {
+        case .fresh(let data, _):
+            previewMessages[conversationId] = Array(data.suffix(5))
             return
+        case .stale(let data, _):
+            previewMessages[conversationId] = Array(data.suffix(5))
+            Task { [weak self] in await self?.refreshPreview(for: conversationId) }
+            return
+        case .expired, .empty:
+            await refreshPreview(for: conversationId)
         }
+    }
+
+    private func refreshPreview(for conversationId: String) async {
         do {
             let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: 5, includeReplies: false
             )
             let userId = currentUserId
-            let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username) }
+            let username = AuthManager.shared.currentUser?.username
+            let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: username) }
             previewMessages[conversationId] = msgs
         } catch { }
     }

@@ -52,6 +52,16 @@ class ConversationViewModel: ObservableObject {
     @Published var isLoadingInitial = false
     @Published var isLoadingOlder = false
     @Published var isLoadingNewer = false
+    /// `true` when we painted stale cache data and a background refresh is
+    /// in flight. Drives the subtle "revalidating" sparkle in the header so
+    /// the user knows fresher data is on its way without seeing a blocking
+    /// spinner (cache-first + stale-while-revalidate discipline).
+    @Published var isRevalidating = false
+    /// Message ids whose `messageService.edit` round-trip is in flight. The
+    /// bubble renders a "Enregistrement…" indicator next to the "Modifie"
+    /// badge while the set contains its id so the user never wonders if
+    /// their edit actually landed.
+    @Published var editInProgress: Set<String> = []
     @Published var hasOlderMessages = true
     @Published var hasNewerMessages = false
     @Published var isSending = false
@@ -143,10 +153,78 @@ class ConversationViewModel: ObservableObject {
     private var savedCursor: String?
     private var savedHasOlder: Bool = true
 
-    // Mapping tempId → serverId pour les messages optimistes en attente de broadcast socket.
-    // Permet au socket handler de remplacer atomiquement le message optimiste
-    // sans flash visuel (le changement d'id ne se fait qu'une seule fois).
+    // Permanent mapping `optimistic id → server id` for the lifetime of the
+    // ViewModel. The optimistic id (`temp_…` / `offline_…` / `retry_…`) is
+    // the SwiftUI ForEach key for the row — we NEVER swap it in memory so the
+    // bubble doesn't unmount/remount and flash. Backend operations
+    // (delete/edit/react/pin) and cache writes resolve the real server id
+    // through `serverId(for:)`. The mapping survives until the next reload
+    // from cache (which already stores server ids), at which point the
+    // optimistic id disappears naturally.
     var pendingServerIds: [String: String] = [:]
+
+    /// Resolve the authoritative server id for an in-memory message. Falls
+    /// back to the supplied id when no mapping exists (the message id is
+    /// already a server id, e.g. messages received from other users).
+    func serverId(for messageId: String) -> String {
+        pendingServerIds[messageId] ?? messageId
+    }
+
+    /// Persist the current `messages` snapshot to the cache using server ids
+    /// for every reconciled optimistic row, so a future cold-start REST fetch
+    /// reconciles cleanly without producing duplicate `temp_…` / server-id
+    /// pairs. Called after the socket reconciliation in `ConversationSocketHandler`.
+    func persistMessagesUsingServerIds() async {
+        let convId = conversationId
+        let mapping = pendingServerIds
+        let snapshot = messages
+        let rewritten: [Message] = snapshot.map { msg -> Message in
+            guard let serverId = mapping[msg.id] else { return msg }
+            // Message.id is `let` — copy via init with overridden id.
+            return Message(
+                id: serverId,
+                conversationId: msg.conversationId,
+                senderId: msg.senderId,
+                content: msg.content,
+                originalLanguage: msg.originalLanguage,
+                messageType: msg.messageType,
+                messageSource: msg.messageSource,
+                isEdited: msg.isEdited,
+                editedAt: msg.editedAt,
+                deletedAt: msg.deletedAt,
+                replyToId: msg.replyToId,
+                storyReplyToId: msg.storyReplyToId,
+                forwardedFromId: msg.forwardedFromId,
+                forwardedFromConversationId: msg.forwardedFromConversationId,
+                expiresAt: msg.expiresAt,
+                effects: msg.effects,
+                maxViewOnceCount: msg.maxViewOnceCount,
+                viewOnceCount: msg.viewOnceCount,
+                pinnedAt: msg.pinnedAt,
+                pinnedBy: msg.pinnedBy,
+                isEncrypted: msg.isEncrypted,
+                encryptionMode: msg.encryptionMode,
+                createdAt: msg.createdAt,
+                updatedAt: msg.updatedAt,
+                attachments: msg.attachments,
+                reactions: msg.reactions,
+                replyTo: msg.replyTo,
+                forwardedFrom: msg.forwardedFrom,
+                senderName: msg.senderName,
+                senderUsername: msg.senderUsername,
+                senderColor: msg.senderColor,
+                senderAvatarURL: msg.senderAvatarURL,
+                senderUserId: msg.senderUserId,
+                deliveryStatus: msg.deliveryStatus,
+                isMe: msg.isMe,
+                deliveredToAllAt: msg.deliveredToAllAt,
+                readByAllAt: msg.readByAllAt,
+                deliveredCount: msg.deliveredCount,
+                readCount: msg.readCount
+            )
+        }
+        await CacheCoordinator.shared.messages.save(rewritten, for: convId)
+    }
 
     // MARK: - O(1) Message Index
 
@@ -182,8 +260,13 @@ class ConversationViewModel: ObservableObject {
 
     var messagesByDate: [DateGroup] {
         if let cached = _messagesByDate { return cached }
+        // Exclude rows the user deleted locally (WhatsApp "Delete for me"
+        // behaviour) so they never reappear across cache reloads, REST
+        // refreshes, or new socket arrivals of older messages.
+        let hiddenIds = LocallyHiddenMessagesStore.shared.allHiddenIds
+        let visible = hiddenIds.isEmpty ? messages : messages.filter { !hiddenIds.contains($0.id) }
         let calendar = Calendar.current
-        let grouped = Dictionary(grouping: messages) { msg -> DateComponents in
+        let grouped = Dictionary(grouping: visible) { msg -> DateComponents in
             calendar.dateComponents([.year, .month, .day], from: msg.createdAt)
         }
         let result = grouped.map { (comps, msgs) in
@@ -536,15 +619,83 @@ class ConversationViewModel: ObservableObject {
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .sink { [weak self] snapshot in
                 guard let self, !snapshot.isEmpty else { return }
-                let convId = self.conversationId
-                Task.detached(priority: .utility) {
-                    await CacheCoordinator.shared.messages.save(snapshot, for: convId)
-                }
+                // Route through the id-mapping persister so any reconciled
+                // optimistic rows land in cache under their server ids.
+                Task { [weak self] in await self?.persistMessagesUsingServerIds() }
             }
+        subscribeToQueueReconciliation()
         if let session = anonymousSession {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
         }
+    }
+
+    /// Reconcile optimistic messages with their server-assigned ids when the
+    /// OfflineQueue or MessageRetryQueue finally lands the send, and flip rows
+    /// to `.failed` when the retry budget is exhausted. Without this mapping a
+    /// `message:new` socket broadcast arrives with an unknown id and the
+    /// optimistic row would stay stuck in `.sending` forever while a duplicate
+    /// appears.
+    private func subscribeToQueueReconciliation() {
+        OfflineQueue.shared.retrySucceeded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self, payload.conversationId == self.conversationId else { return }
+                self.reconcileQueuedSend(tempId: payload.tempId, serverId: payload.serverId)
+            }
+            .store(in: &cancellables)
+
+        MessageRetryQueue.shared.retrySucceeded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self, payload.conversationId == self.conversationId else { return }
+                self.reconcileQueuedSend(tempId: payload.tempId, serverId: payload.serverId)
+            }
+            .store(in: &cancellables)
+
+        MessageRetryQueue.shared.retryExhausted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self, payload.conversationId == self.conversationId else { return }
+                guard let idx = self.messageIndex(for: payload.tempId) else { return }
+                self.messages[idx].deliveryStatus = .failed
+            }
+            .store(in: &cancellables)
+
+        // ReactionQueue: roll back the optimistic heart/reaction if the
+        // server permanently rejects (404/409/410). We ignore `.succeeded`
+        // because the `reaction:added` / `reaction:removed` socket broadcast
+        // keeps every client in sync — nothing extra to do here.
+        ReactionQueue.shared.retryExhausted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self, payload.conversationId == self.conversationId else { return }
+                guard let idx = self.messageIndex(for: payload.messageId) else { return }
+                let participantId = self._resolvedParticipantId ?? self.currentUserId
+                switch payload.action {
+                case .add:
+                    self.messages[idx].reactions.removeAll {
+                        $0.emoji == payload.emoji && $0.participantId == participantId
+                    }
+                case .remove:
+                    if !self.messages[idx].reactions.contains(where: {
+                        $0.emoji == payload.emoji && $0.participantId == participantId
+                    }) {
+                        self.messages[idx].reactions.append(
+                            Reaction(messageId: payload.messageId, participantId: participantId, emoji: payload.emoji)
+                        )
+                    }
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func reconcileQueuedSend(tempId: String, serverId: String) {
+        guard let idx = messageIndex(for: tempId) else { return }
+        messages[idx].deliveryStatus = .sent
+        // The socket handler now matches on `pendingServerIds.value == apiMsg.id`
+        // and performs the atomic id swap when `message:new` arrives.
+        pendingServerIds[tempId] = serverId
     }
 
     deinit {
@@ -603,9 +754,11 @@ class ConversationViewModel: ObservableObject {
 
         case .stale(let data, _):
             messages = data
+            isRevalidating = true
             Task { [weak self] in
                 guard let self else { return }
                 await self.refreshMessagesFromAPI()
+                await MainActor.run { self.isRevalidating = false }
             }
 
         case .expired, .empty:
@@ -906,8 +1059,9 @@ class ConversationViewModel: ObservableObject {
             )
             Task { await OfflineQueue.shared.enqueue(queueItem) }
 
+            let offlineTempId = queueItem.tempId
             let offlineMessage = Message(
-                id: "offline_\(queueItem.id)",
+                id: offlineTempId,
                 conversationId: conversationId,
                 senderId: currentUserId,
                 content: text,
@@ -922,6 +1076,36 @@ class ConversationViewModel: ObservableObject {
             )
             messages.append(offlineMessage)
             newMessageAppended += 1
+
+            // Persist offline message to cache so it survives navigation and
+            // the row stays visible with the "sending" clock icon until
+            // OfflineQueue.retrySucceeded fires after reconnection.
+            let convId = conversationId
+            let snapshot = messages
+            Task.detached(priority: .utility) {
+                await CacheCoordinator.shared.messages.mergeUpdate(for: convId) { cached in
+                    let cachedIds = Set(cached.map(\.id))
+                    let newOnly = snapshot.filter { !cachedIds.contains($0.id) }
+                    guard !newOnly.isEmpty else { return cached }
+                    return (cached + newOnly).sorted { $0.createdAt < $1.createdAt }
+                }
+            }
+
+            // Bump the conversation preview locally so the list shows the
+            // just-typed message — with the correct author name — even before
+            // the network returns. Without this the preview keeps the previous
+            // author/content while the user waits for connectivity.
+            let previewContent = text
+            let previewAt = offlineMessage.createdAt
+            let senderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
+            Task {
+                await ConversationSyncEngine.shared.updateConversationAfterSend(
+                    conversationId: convId,
+                    messagePreview: previewContent,
+                    messageAt: previewAt,
+                    senderName: senderName
+                )
+            }
 
             Logger.messages.info("Message enqueued for offline delivery")
             return true
@@ -1084,14 +1268,21 @@ class ConversationViewModel: ObservableObject {
             let msgContent = text
             let msgTime = responseData.createdAt
 
-            // Persister le status .sent dans le cache
-            let sentSnapshot = messages
-            Task.detached(priority: .utility) {
-                await CacheCoordinator.shared.messages.save(sentSnapshot, for: convId)
+            // Persist with the authoritative server id so that a future
+            // cold-start REST fetch reconciles without duplicate `temp_…`
+            // / server-id pairs. The in-memory `messages[idx].id` stays as
+            // `tempId` so SwiftUI ForEach keeps a stable key (no flash when
+            // the socket broadcast arrives — see ConversationSocketHandler).
+            Task { [weak self] in
+                await self?.persistMessagesUsingServerIds()
             }
+            let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
             Task {
                 await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    conversationId: convId, messagePreview: msgContent, messageAt: msgTime
+                    conversationId: convId,
+                    messagePreview: msgContent,
+                    messageAt: msgTime,
+                    senderName: sentSenderName
                 )
             }
 
@@ -1116,21 +1307,23 @@ class ConversationViewModel: ObservableObject {
                 messages[idx].deliveryStatus = .sending
             }
 
-            // Persister le message avec status .sending pour qu'il survive
-            // à la navigation (l'utilisateur verra le message avec l'horloge au retour)
-            let errorConvId = conversationId
-            let errorSnapshot = messages
-            Task.detached(priority: .utility) {
-                await CacheCoordinator.shared.messages.save(errorSnapshot, for: errorConvId)
-            }
+            // Persist with the `sending` status so the bubble (with its clock
+            // glyph) survives navigation. The tempId stays in cache because
+            // no server id exists yet — it will be swapped in when
+            // `MessageRetryQueue.retrySucceeded` fires or the row flips to
+            // `.failed` via `retryExhausted`.
+            Task { [weak self] in await self?.persistMessagesUsingServerIds() }
 
-            // Enqueue for persistent auto-retry (5 attempts × 10s interval)
+            // Enqueue for persistent auto-retry (5 attempts × 10s interval).
+            // Pass the optimistic tempId so `MessageRetryQueue.retrySucceeded`
+            // and `.retryExhausted` events match the exact row in memory.
             let retryItem = RetryQueueItem(
                 conversationId: conversationId,
                 content: text,
                 originalLanguage: originalLanguage ?? "fr",
                 replyToId: replyToId,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                tempId: tempId
             )
             Task { await MessageRetryQueue.shared.enqueue(retryItem) }
 
@@ -1195,6 +1388,69 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Star / Bookmark
+
+    /// Toggle the starred state for a message. Local-only (the backend
+    /// doesn't expose a message-level star endpoint yet); the snapshot
+    /// captured here is what the `StarredMessagesView` renders, so the
+    /// row survives edits, `.local` deletions, and conversation archives
+    /// without needing to re-hydrate the original bubble.
+    @discardableResult
+    func toggleStar(messageId: String, conversationName: String? = nil, conversationAccentColor: String? = nil) -> Bool {
+        guard let idx = messageIndex(for: messageId) else { return false }
+        let msg = messages[idx]
+        let canonicalId = serverId(for: messageId)
+
+        let attachmentKind = msg.attachments.first.map { att -> String in
+            switch att.type {
+            case .image: return "image"
+            case .video: return "video"
+            case .audio: return "audio"
+            case .file: return "file"
+            case .location: return "location"
+            }
+        }
+
+        // Prefer the active translation for the user's preferred language so
+        // the starred preview matches what the user actually read, not the
+        // raw original content.
+        let preview: String = {
+            if let translation = preferredTranslation(for: messageId),
+               !translation.translatedContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return translation.translatedContent
+            }
+            if msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                switch attachmentKind {
+                case "image": return "\u{1F4F7} Photo"
+                case "video": return "\u{1F3AC} Video"
+                case "audio": return "\u{1F3B5} Message vocal"
+                case "file": return "\u{1F4CE} Fichier"
+                case "location": return "\u{1F4CD} Localisation"
+                default: return ""
+                }
+            }
+            return msg.content
+        }()
+
+        let snapshot = StarredMessageSnapshot(
+            id: canonicalId,
+            conversationId: conversationId,
+            conversationName: conversationName,
+            conversationAccentColor: conversationAccentColor,
+            senderUserId: msg.senderUserId,
+            senderName: msg.senderName ?? msg.senderUsername,
+            contentPreview: String(preview.prefix(280)),
+            attachmentKind: attachmentKind,
+            starredAt: Date(),
+            sentAt: msg.createdAt
+        )
+        return StarredMessagesStore.shared.toggle(snapshot)
+    }
+
+    func isStarred(messageId: String) -> Bool {
+        StarredMessagesStore.shared.isStarred(messageId: serverId(for: messageId))
+    }
+
     // MARK: - Toggle Reaction
 
     func toggleReaction(messageId: String, emoji: String) {
@@ -1202,28 +1458,29 @@ class ConversationViewModel: ObservableObject {
 
         let participantId = _resolvedParticipantId ?? currentUserId
         let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == participantId }
+        let convId = conversationId
+        // Resolve the canonical server id so the queue replays against the
+        // real backend message, not the optimistic in-memory placeholder.
+        let remoteId = serverId(for: messageId)
 
         if alreadyReacted {
-            let snapshot = messages[idx].reactions
             messages[idx].reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
-            Task { [weak self] in
-                do {
-                    try await self?.reactionService.remove(messageId: messageId, emoji: emoji)
-                } catch {
-                    guard let self, let currentIdx = self.messageIndex(for: messageId) else { return }
-                    self.messages[currentIdx].reactions = snapshot
-                }
+            let item = ReactionQueueItem(
+                messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
+            )
+            Task {
+                await ReactionQueue.shared.enqueue(item)
+                await ReactionQueue.shared.retryAll()
             }
         } else {
-            let reaction = Reaction(messageId: messageId, participantId: participantId, emoji: emoji)
+            let reaction = Reaction(messageId: remoteId, participantId: participantId, emoji: emoji)
             messages[idx].reactions.append(reaction)
-            Task { [weak self] in
-                do {
-                    try await self?.reactionService.add(messageId: messageId, emoji: emoji)
-                } catch {
-                    guard let self, let currentIdx = self.messageIndex(for: messageId) else { return }
-                    self.messages[currentIdx].reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
-                }
+            let item = ReactionQueueItem(
+                messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
+            )
+            Task {
+                await ReactionQueue.shared.enqueue(item)
+                await ReactionQueue.shared.retryAll()
             }
         }
 
@@ -1246,7 +1503,7 @@ class ConversationViewModel: ObservableObject {
         isLoadingReactions = true
         defer { isLoadingReactions = false }
         do {
-            let result = try await reactionService.fetchDetails(messageId: messageId)
+            let result = try await reactionService.fetchDetails(messageId: serverId(for: messageId))
             reactionDetails = result.reactions
         } catch {
             reactionDetails = []
@@ -1255,21 +1512,47 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Delete Message
 
-    func deleteMessage(messageId: String) async {
-        // Optimistic: mark as deleted locally
-        if let idx = messageIndex(for: messageId) {
-            messages[idx].deletedAt = Date()
-            messages[idx].content = ""
-        }
+    /// Matches the WhatsApp semantics: `local` hides the message for this
+    /// device only (no server round-trip), `everyone` soft-deletes on the
+    /// backend and broadcasts `message:deleted` to all recipients. The UI
+    /// gates the `everyone` option on sender+time-window rules via
+    /// `canDeleteForEveryone(_:)`.
+    enum DeleteMode {
+        case local
+        case everyone
+    }
 
-        do {
-            try await messageService.delete(conversationId: conversationId, messageId: messageId)
-        } catch {
-            // Revert on failure
+    func canDeleteForEveryone(_ message: Message, window: TimeInterval = 2 * 3600) -> Bool {
+        guard message.isMe else { return false }
+        guard let sentAt = message.createdAt as Date? else { return false }
+        return Date().timeIntervalSince(sentAt) <= window
+    }
+
+    func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
+        switch mode {
+        case .local:
+            // Optimistic: hide locally and rebuild the date groups without
+            // this message. Reversible via LocallyHiddenMessagesStore so an
+            // "Undo" affordance could reinstate the row without a network
+            // round-trip.
+            LocallyHiddenMessagesStore.shared.hide(messageId)
             if let idx = messageIndex(for: messageId) {
-                messages[idx].deletedAt = nil
+                messages.remove(at: idx)
             }
-            self.error = error.localizedDescription
+        case .everyone:
+            // Optimistic: mark as deleted locally + blank content
+            if let idx = messageIndex(for: messageId) {
+                messages[idx].deletedAt = Date()
+                messages[idx].content = ""
+            }
+            do {
+                try await messageService.delete(conversationId: conversationId, messageId: serverId(for: messageId))
+            } catch {
+                if let idx = messageIndex(for: messageId) {
+                    messages[idx].deletedAt = nil
+                }
+                self.error = error.localizedDescription
+            }
         }
     }
 
@@ -1314,7 +1597,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].pinnedBy = nil
 
             do {
-                try await messageService.unpin(conversationId: conversationId, messageId: messageId)
+                try await messageService.unpin(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
                 // Revert
                 messages[idx].pinnedAt = Date()
@@ -1327,7 +1610,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].pinnedBy = authManager.currentUser?.id
 
             do {
-                try await messageService.pin(conversationId: conversationId, messageId: messageId)
+                try await messageService.pin(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
                 // Revert
                 messages[idx].pinnedAt = nil
@@ -1342,7 +1625,7 @@ class ConversationViewModel: ObservableObject {
     func consumeViewOnce(messageId: String) async -> Bool {
         do {
             let result = try await messageService.consumeViewOnce(
-                conversationId: conversationId, messageId: messageId
+                conversationId: conversationId, messageId: serverId(for: messageId)
             )
             if let idx = messageIndex(for: messageId) {
                 messages[idx].viewOnceCount = result.viewOnceCount
@@ -1378,32 +1661,57 @@ class ConversationViewModel: ObservableObject {
         let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        // Optimistic update
+        // Optimistic update — snapshot the prior content so we can revert on
+        // failure AND record it in the edit history store for the "View
+        // edits" affordance (the backend does not expose edit history).
         var originalContent: String?
         if let idx = messageIndex(for: messageId) {
             originalContent = messages[idx].content
+            if messages[idx].content != trimmed {
+                EditHistoryStore.shared.recordRevision(
+                    messageId: serverId(for: messageId),
+                    previousContent: messages[idx].content
+                )
+            }
             messages[idx].content = trimmed
             messages[idx].isEdited = true
         }
 
+        editInProgress.insert(messageId)
+        defer { editInProgress.remove(messageId) }
+
         do {
-            _ = try await messageService.edit(messageId: messageId, content: trimmed)
+            _ = try await messageService.edit(messageId: serverId(for: messageId), content: trimmed)
         } catch {
-            // Revert on failure
+            // Revert on failure — both the in-memory content AND the history
+            // entry we just wrote (so the user doesn't see a phantom
+            // revision that never actually reached the server).
             if let idx = messageIndex(for: messageId),
                let original = originalContent {
                 messages[idx].content = original
                 messages[idx].isEdited = false
+                EditHistoryStore.shared.removeHistory(for: serverId(for: messageId))
             }
             self.error = error.localizedDescription
         }
+    }
+
+    /// History of prior revisions for a message, for the MessageDetailSheet
+    /// "View edits" list. Resolves through `serverId(for:)` so the history
+    /// keyed on the canonical id survives tempId → serverId reconciliation.
+    func editRevisions(for messageId: String) -> [EditRevision] {
+        EditHistoryStore.shared.revisions(for: serverId(for: messageId))
+    }
+
+    func isEditSaving(messageId: String) -> Bool {
+        editInProgress.contains(messageId)
     }
 
     // MARK: - Report Message
 
     func reportMessage(messageId: String, reportType: String, reason: String?) async -> Bool {
         do {
-            try await reportService.reportMessage(messageId: messageId, reportType: reportType, reason: reason)
+            try await reportService.reportMessage(messageId: serverId(for: messageId), reportType: reportType, reason: reason)
             return true
         } catch {
             self.error = error.localizedDescription
