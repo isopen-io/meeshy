@@ -4,7 +4,7 @@ import MeeshySDK
 
 // MARK: - User Presence
 
-struct UserPresence {
+struct UserPresence: Codable {
     let isOnline: Bool
     let lastActiveAt: Date?
 
@@ -21,12 +21,25 @@ struct UserPresence {
 final class PresenceManager: ObservableObject {
     static let shared = PresenceManager()
 
-    @Published var presenceMap: [String: UserPresence] = [:]
+    @Published var presenceMap: [String: UserPresence] = [:] {
+        didSet { schedulePersist() }
+    }
 
     private var cancellables = Set<AnyCancellable>()
     nonisolated(unsafe) private var recalcTimer: Timer?
+    nonisolated(unsafe) private var persistTask: Task<Void, Never>?
+
+    private static let persistFileName = "presence_map.json"
+    private static let persistMaxAge: TimeInterval = 24 * 3600 // 24h
+    private static let persistDebounce: TimeInterval = 1.5
 
     private init() {
+        // Hydrate from disk BEFORE subscribing so the first render frame shows
+        // the last-known online dots instead of "everyone is offline" — the
+        // iMessage/WhatsApp feel requires the state to appear instantly even
+        // on a cold start before the first `user:status` event lands.
+        presenceMap = Self.loadFromDisk()
+
         // Subscribe to user:status events from socket
         MessageSocketManager.shared.userStatusChanged
             .receive(on: DispatchQueue.main)
@@ -86,5 +99,60 @@ final class PresenceManager: ObservableObject {
     deinit {
         recalcTimer?.invalidate()
         recalcTimer = nil
+        persistTask?.cancel()
+    }
+
+    // MARK: - Disk Persistence
+
+    /// Debounce writes so a burst of `user:status` events during reconnect
+    /// doesn't hammer the filesystem. 1.5s is short enough that backgrounding
+    /// immediately after still captures the latest state via
+    /// `UIApplication.didEnterBackgroundNotification`.
+    private nonisolated func schedulePersist() {
+        persistTask?.cancel()
+        persistTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.persistDebounce * 1_000_000_000))
+            guard !Task.isCancelled, let self else { return }
+            self.persistToDisk()
+        }
+    }
+
+    private func persistToDisk() {
+        let snapshot = presenceMap
+        Task.detached(priority: .utility) {
+            Self.writeToDisk(snapshot)
+        }
+    }
+
+    private static var persistURL: URL {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: cacheDir.path) {
+            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        }
+        return cacheDir.appendingPathComponent(persistFileName)
+    }
+
+    private static func writeToDisk(_ map: [String: UserPresence]) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(map) else { return }
+        try? data.write(to: persistURL, options: .atomic)
+    }
+
+    private static func loadFromDisk() -> [String: UserPresence] {
+        let url = persistURL
+        guard FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url) else { return [:] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let map = try? decoder.decode([String: UserPresence].self, from: data) else { return [:] }
+        // Drop entries older than 24h — claiming someone is online based on
+        // day-old data would be actively wrong, but a 15-min gap is fine and
+        // still avoids the "all offline on cold start" flash.
+        let cutoff = Date().addingTimeInterval(-persistMaxAge)
+        return map.filter { _, presence in
+            (presence.lastActiveAt ?? .distantPast) >= cutoff
+        }
     }
 }
