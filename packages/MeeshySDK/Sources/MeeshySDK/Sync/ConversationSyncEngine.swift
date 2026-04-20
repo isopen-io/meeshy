@@ -10,7 +10,8 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
 
     @discardableResult
     func fullSync() async -> Bool
-    func syncSinceLastCheckpoint() async
+    @discardableResult
+    func syncSinceLastCheckpoint() async -> Bool
     func ensureMessages(for conversationId: String) async
     func fetchOlderMessages(for conversationId: String, before messageId: String) async
     func cleanupRetentionIfNeeded() async
@@ -135,8 +136,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // MARK: - Delta Sync (foreground / reconnect)
 
-    public func syncSinceLastCheckpoint() async {
-        guard !isSyncing else { return }
+    @discardableResult
+    public func syncSinceLastCheckpoint() async -> Bool {
+        guard !isSyncing else { return true }
         isSyncing = true
         defer { isSyncing = false }
 
@@ -177,8 +179,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             _conversationsDidChange.send()
 
             lastSyncTimestamp = Date().addingTimeInterval(-30)
+            return true
         } catch {
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")
+            return false
         }
     }
 

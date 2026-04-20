@@ -144,6 +144,29 @@ struct MeeshyApp: App {
                             return nil
                         }
                     }
+                    await ReactionQueue.shared.setRetry { @Sendable item in
+                        do {
+                            switch item.action {
+                            case .add:
+                                try await ReactionService.shared.add(
+                                    messageId: item.messageId, emoji: item.emoji
+                                )
+                            case .remove:
+                                try await ReactionService.shared.remove(
+                                    messageId: item.messageId, emoji: item.emoji
+                                )
+                            }
+                            return .succeeded
+                        } catch APIError.serverError(let code, _) where code == 404 || code == 409 || code == 410 {
+                            // Treat 404/410 (message gone) and 409 (state
+                            // conflict: already reacted / already removed) as
+                            // terminal — keeping the item in the queue would
+                            // bounce forever.
+                            return .dropped
+                        } catch {
+                            return .transient
+                        }
+                    }
                     // Parallelize: friendship hydration + session check are independent
                     async let friendshipHydration: () = FriendshipCache.shared.hydrate()
                     async let sessionCheck: () = authManager.checkExistingSession()

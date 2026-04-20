@@ -579,6 +579,33 @@ class ConversationViewModel: ObservableObject {
                 self.messages[idx].deliveryStatus = .failed
             }
             .store(in: &cancellables)
+
+        // ReactionQueue: roll back the optimistic heart/reaction if the
+        // server permanently rejects (404/409/410). We ignore `.succeeded`
+        // because the `reaction:added` / `reaction:removed` socket broadcast
+        // keeps every client in sync — nothing extra to do here.
+        ReactionQueue.shared.retryExhausted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self, payload.conversationId == self.conversationId else { return }
+                guard let idx = self.messageIndex(for: payload.messageId) else { return }
+                let participantId = self._resolvedParticipantId ?? self.currentUserId
+                switch payload.action {
+                case .add:
+                    self.messages[idx].reactions.removeAll {
+                        $0.emoji == payload.emoji && $0.participantId == participantId
+                    }
+                case .remove:
+                    if !self.messages[idx].reactions.contains(where: {
+                        $0.emoji == payload.emoji && $0.participantId == participantId
+                    }) {
+                        self.messages[idx].reactions.append(
+                            Reaction(messageId: payload.messageId, participantId: participantId, emoji: payload.emoji)
+                        )
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func reconcileQueuedSend(tempId: String, serverId: String) {
@@ -1282,28 +1309,26 @@ class ConversationViewModel: ObservableObject {
 
         let participantId = _resolvedParticipantId ?? currentUserId
         let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == participantId }
+        let convId = conversationId
 
         if alreadyReacted {
-            let snapshot = messages[idx].reactions
             messages[idx].reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
-            Task { [weak self] in
-                do {
-                    try await self?.reactionService.remove(messageId: messageId, emoji: emoji)
-                } catch {
-                    guard let self, let currentIdx = self.messageIndex(for: messageId) else { return }
-                    self.messages[currentIdx].reactions = snapshot
-                }
+            let item = ReactionQueueItem(
+                messageId: messageId, emoji: emoji, action: .remove, conversationId: convId
+            )
+            Task {
+                await ReactionQueue.shared.enqueue(item)
+                await ReactionQueue.shared.retryAll()
             }
         } else {
             let reaction = Reaction(messageId: messageId, participantId: participantId, emoji: emoji)
             messages[idx].reactions.append(reaction)
-            Task { [weak self] in
-                do {
-                    try await self?.reactionService.add(messageId: messageId, emoji: emoji)
-                } catch {
-                    guard let self, let currentIdx = self.messageIndex(for: messageId) else { return }
-                    self.messages[currentIdx].reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
-                }
+            let item = ReactionQueueItem(
+                messageId: messageId, emoji: emoji, action: .add, conversationId: convId
+            )
+            Task {
+                await ReactionQueue.shared.enqueue(item)
+                await ReactionQueue.shared.retryAll()
             }
         }
 
