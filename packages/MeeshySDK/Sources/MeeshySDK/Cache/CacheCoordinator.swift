@@ -51,14 +51,32 @@ public actor CacheCoordinator {
     private static let maxTranslationCacheEntries = 500
 
     private var translationCache: [String: [TranslationData]] = [:]
+    private var translationTimestamps: [String: Date] = [:]
     private var translationInsertionOrder: [String] = []
+    /// Translations older than this are dropped at read time so stale
+    /// machine output (model updates, content edits that the server
+    /// hasn't reconciled yet, etc.) doesn't linger indefinitely in RAM.
+    /// Matches the `messages` cache `staleTTL` window roughly.
+    private static let translationMaxAge: TimeInterval = 24 * 3600
     private var transcriptionCache: [String: TranscriptionReadyEvent] = [:]
     private var transcriptionInsertionOrder: [String] = []
     private var audioTranslationCache: [String: [AudioTranslationEvent]] = [:]
     private var audioTranslationInsertionOrder: [String] = []
 
     public func cachedTranslations(for messageId: String) -> [TranslationData]? {
-        translationCache[messageId]
+        // TTL enforcement on read: if the entry is older than 24h, drop it so
+        // we don't serve stale machine output when a better translation could
+        // be produced on demand.
+        if let stamp = translationTimestamps[messageId],
+           Date().timeIntervalSince(stamp) > Self.translationMaxAge {
+            translationCache.removeValue(forKey: messageId)
+            translationTimestamps.removeValue(forKey: messageId)
+            if let idx = translationInsertionOrder.firstIndex(of: messageId) {
+                translationInsertionOrder.remove(at: idx)
+            }
+            return nil
+        }
+        return translationCache[messageId]
     }
 
     public func cachedTranscription(for messageId: String) -> TranscriptionReadyEvent? {
@@ -133,6 +151,7 @@ public actor CacheCoordinator {
         currentUserId = ""
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
+        translationTimestamps.removeAll()
         transcriptionCache.removeAll()
         transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
@@ -165,6 +184,9 @@ public actor CacheCoordinator {
             }
         }
         translationCache[msgId] = existing
+        // Stamp/refresh the age marker so the TTL reset on every new
+        // broadcast — server-pushed updates keep the entry hot.
+        translationTimestamps[msgId] = Date()
         if isNew {
             translationInsertionOrder.append(msgId)
             evictTranslationCacheIfNeeded()
@@ -200,6 +222,7 @@ public actor CacheCoordinator {
         while translationCache.count > Self.maxTranslationCacheEntries, let oldest = translationInsertionOrder.first {
             translationInsertionOrder.removeFirst()
             translationCache.removeValue(forKey: oldest)
+            translationTimestamps.removeValue(forKey: oldest)
         }
     }
 
@@ -303,6 +326,7 @@ public actor CacheCoordinator {
 
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
+        translationTimestamps.removeAll()
         transcriptionCache.removeAll()
         transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
@@ -363,6 +387,7 @@ public actor CacheCoordinator {
         await UserColorCache.shared.invalidateAll()
         translationCache.removeAll()
         translationInsertionOrder.removeAll()
+        translationTimestamps.removeAll()
         transcriptionCache.removeAll()
         transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
