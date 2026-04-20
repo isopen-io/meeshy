@@ -40,6 +40,13 @@ struct ThemedMessageBubble: View {
     var isLastReceivedMessage: Bool = false
     var mentionDisplayNames: [String: String] = [:]
     var highlightSearchTerm: String? = nil
+    /// `true` while the server edit round-trip is in flight. Drives the
+    /// "Enregistrement..." badge next to the "modifie" indicator so the
+    /// user never wonders whether their edit landed.
+    var isEditSaving: Bool = false
+    /// `true` when we have a locally-recorded edit history available for
+    /// the "View edits" affordance in the detail sheet.
+    var hasEditHistory: Bool = false
 
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
@@ -920,11 +927,29 @@ struct ThemedMessageBubble: View {
             : theme.textSecondary.opacity(0.5)
 
         return HStack(spacing: 3) {
-            Image(systemName: "pencil")
-                .font(.system(size: 8, weight: .semibold))
-            Text("modifie")
-                .font(.system(size: 9, weight: .medium))
-                .italic()
+            if isEditSaving {
+                // Saving feedback: arrow-spin glyph instead of pencil so the
+                // user sees their edit is still propagating to the server.
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 8, weight: .semibold))
+                    .symbolEffect(.rotate, options: .repeating)
+                Text("Enregistrement…")
+                    .font(.system(size: 9, weight: .medium))
+                    .italic()
+            } else {
+                Image(systemName: "pencil")
+                    .font(.system(size: 8, weight: .semibold))
+                Text("modifie")
+                    .font(.system(size: 9, weight: .medium))
+                    .italic()
+                if hasEditHistory {
+                    // Dot affordance hinting the detail sheet shows history.
+                    Circle()
+                        .fill(metaColor)
+                        .frame(width: 3, height: 3)
+                        .opacity(0.7)
+                }
+            }
         }
         .foregroundColor(metaColor)
     }

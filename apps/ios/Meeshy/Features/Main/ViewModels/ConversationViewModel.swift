@@ -57,6 +57,11 @@ class ConversationViewModel: ObservableObject {
     /// the user knows fresher data is on its way without seeing a blocking
     /// spinner (cache-first + stale-while-revalidate discipline).
     @Published var isRevalidating = false
+    /// Message ids whose `messageService.edit` round-trip is in flight. The
+    /// bubble renders a "Enregistrement…" indicator next to the "Modifie"
+    /// badge while the set contains its id so the user never wonders if
+    /// their edit actually landed.
+    @Published var editInProgress: Set<String> = []
     @Published var hasOlderMessages = true
     @Published var hasNewerMessages = false
     @Published var isSending = false
@@ -1656,25 +1661,50 @@ class ConversationViewModel: ObservableObject {
         let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        // Optimistic update
+        // Optimistic update — snapshot the prior content so we can revert on
+        // failure AND record it in the edit history store for the "View
+        // edits" affordance (the backend does not expose edit history).
         var originalContent: String?
         if let idx = messageIndex(for: messageId) {
             originalContent = messages[idx].content
+            if messages[idx].content != trimmed {
+                EditHistoryStore.shared.recordRevision(
+                    messageId: serverId(for: messageId),
+                    previousContent: messages[idx].content
+                )
+            }
             messages[idx].content = trimmed
             messages[idx].isEdited = true
         }
 
+        editInProgress.insert(messageId)
+        defer { editInProgress.remove(messageId) }
+
         do {
             _ = try await messageService.edit(messageId: serverId(for: messageId), content: trimmed)
         } catch {
-            // Revert on failure
+            // Revert on failure — both the in-memory content AND the history
+            // entry we just wrote (so the user doesn't see a phantom
+            // revision that never actually reached the server).
             if let idx = messageIndex(for: messageId),
                let original = originalContent {
                 messages[idx].content = original
                 messages[idx].isEdited = false
+                EditHistoryStore.shared.removeHistory(for: serverId(for: messageId))
             }
             self.error = error.localizedDescription
         }
+    }
+
+    /// History of prior revisions for a message, for the MessageDetailSheet
+    /// "View edits" list. Resolves through `serverId(for:)` so the history
+    /// keyed on the canonical id survives tempId → serverId reconciliation.
+    func editRevisions(for messageId: String) -> [EditRevision] {
+        EditHistoryStore.shared.revisions(for: serverId(for: messageId))
+    }
+
+    func isEditSaving(messageId: String) -> Bool {
+        editInProgress.contains(messageId)
     }
 
     // MARK: - Report Message

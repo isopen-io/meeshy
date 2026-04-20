@@ -133,7 +133,9 @@ extension ConversationView {
                     isLastInGroup: isLastInGroup,
                     isLastReceivedMessage: isLastReceived,
                     mentionDisplayNames: viewModel.mentionDisplayNames,
-                    highlightSearchTerm: viewModel.currentSearchQuery
+                    highlightSearchTerm: viewModel.currentSearchQuery,
+                    isEditSaving: viewModel.isEditSaving(messageId: msg.id),
+                    hasEditHistory: !viewModel.editRevisions(for: msg.id).isEmpty
                 )
                 .equatable()
                 .onLongPressGesture(minimumDuration: 0.5) {
