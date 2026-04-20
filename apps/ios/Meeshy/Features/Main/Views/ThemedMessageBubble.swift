@@ -40,6 +40,13 @@ struct ThemedMessageBubble: View {
     var isLastReceivedMessage: Bool = false
     var mentionDisplayNames: [String: String] = [:]
     var highlightSearchTerm: String? = nil
+    /// `true` while the server edit round-trip is in flight. Drives the
+    /// "Enregistrement..." badge next to the "modifie" indicator so the
+    /// user never wonders whether their edit landed.
+    var isEditSaving: Bool = false
+    /// `true` when we have a locally-recorded edit history available for
+    /// the "View edits" affordance in the detail sheet.
+    var hasEditHistory: Bool = false
 
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
@@ -563,6 +570,20 @@ struct ThemedMessageBubble: View {
                                             }
                                     }
 
+                                    // Inline OpenGraph preview for the first URL in
+                                    // the effective (possibly translated) content.
+                                    // The card is self-loading — it triggers its
+                                    // own fetch via `LinkPreviewStore` and renders
+                                    // a skeleton while the metadata streams in.
+                                    if let url = LinkPreviewFetcher.firstURL(in: effectiveContent) {
+                                        LinkPreviewCard(
+                                            urlString: url,
+                                            accentColor: contactColor,
+                                            isDark: isDark
+                                        )
+                                        .padding(.top, 4)
+                                    }
+
                                     secondaryContentView
                                 }
                                 .padding(.horizontal, 14)
@@ -920,11 +941,29 @@ struct ThemedMessageBubble: View {
             : theme.textSecondary.opacity(0.5)
 
         return HStack(spacing: 3) {
-            Image(systemName: "pencil")
-                .font(.system(size: 8, weight: .semibold))
-            Text("modifie")
-                .font(.system(size: 9, weight: .medium))
-                .italic()
+            if isEditSaving {
+                // Saving feedback: arrow-spin glyph instead of pencil so the
+                // user sees their edit is still propagating to the server.
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 8, weight: .semibold))
+                    .symbolEffect(.rotate, options: .repeating)
+                Text("Enregistrement…")
+                    .font(.system(size: 9, weight: .medium))
+                    .italic()
+            } else {
+                Image(systemName: "pencil")
+                    .font(.system(size: 8, weight: .semibold))
+                Text("modifie")
+                    .font(.system(size: 9, weight: .medium))
+                    .italic()
+                if hasEditHistory {
+                    // Dot affordance hinting the detail sheet shows history.
+                    Circle()
+                        .fill(metaColor)
+                        .frame(width: 3, height: 3)
+                        .opacity(0.7)
+                }
+            }
         }
         .foregroundColor(metaColor)
     }
@@ -1486,24 +1525,48 @@ struct ThemedMessageBubble: View {
 }
 
 // MARK: - Equatable (permet .equatable() pour eviter les re-renders superflus)
+//
+// NB: any NEW `var` / `let` added to ThemedMessageBubble that affects the
+// rendered output MUST be mirrored below, otherwise SwiftUI's `.equatable()`
+// fast-path will return `true` for a row that actually changed, producing a
+// stale UI. The inputs included here were picked by walking every `@State`,
+// `ObservedObject`, and `var` the body reads.
 extension ThemedMessageBubble: @MainActor Equatable {
     static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {
         lhs.message.id == rhs.message.id &&
         lhs.message.content == rhs.message.content &&
         lhs.message.deliveryStatus == rhs.message.deliveryStatus &&
+        // MeeshyReaction isn't Equatable in the SDK — signature-compare
+        // by count + emoji+participantId identity so swapping one emoji
+        // for another (same count) still invalidates the cache.
         lhs.message.reactions.count == rhs.message.reactions.count &&
+        lhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }.sorted() ==
+            rhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }.sorted() &&
         lhs.message.attachments.count == rhs.message.attachments.count &&
+        lhs.message.isEdited == rhs.message.isEdited &&
+        lhs.message.deletedAt == rhs.message.deletedAt &&
+        lhs.message.pinnedAt == rhs.message.pinnedAt &&
+        lhs.message.expiresAt == rhs.message.expiresAt &&
+        lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
+        lhs.message.effects.flags.rawValue == rhs.message.effects.flags.rawValue &&
+        lhs.message.deliveredCount == rhs.message.deliveredCount &&
+        lhs.message.readCount == rhs.message.readCount &&
         lhs.contactColor == rhs.contactColor &&
         lhs.isDirect == rhs.isDirect &&
         lhs.isDark == rhs.isDark &&
         lhs.preferredTranslation?.translatedContent == rhs.preferredTranslation?.translatedContent &&
+        lhs.textTranslations.count == rhs.textTranslations.count &&
         lhs.transcription?.text == rhs.transcription?.text &&
+        lhs.translatedAudios.count == rhs.translatedAudios.count &&
         lhs.showAvatar == rhs.showAvatar &&
         lhs.presenceState == rhs.presenceState &&
         lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
         lhs.senderStoryRingState == rhs.senderStoryRingState &&
         lhs.isLastInGroup == rhs.isLastInGroup &&
         lhs.isLastReceivedMessage == rhs.isLastReceivedMessage &&
-        lhs.activeAudioLanguage == rhs.activeAudioLanguage
+        lhs.activeAudioLanguage == rhs.activeAudioLanguage &&
+        lhs.isEditSaving == rhs.isEditSaving &&
+        lhs.hasEditHistory == rhs.hasEditHistory &&
+        lhs.highlightSearchTerm == rhs.highlightSearchTerm
     }
 }

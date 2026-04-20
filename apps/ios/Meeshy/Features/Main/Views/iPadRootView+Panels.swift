@@ -110,6 +110,8 @@ extension iPadRootView {
                         case .bookmarks:
             BookmarksView()
                                 .navigationBarHidden(true)
+        case .starredMessages:
+            StarredMessagesView()
         case .friendRequests:
             FriendRequestListView()
                                 .navigationBarHidden(true)

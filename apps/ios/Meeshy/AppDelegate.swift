@@ -368,6 +368,12 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
                     try? await ConversationService.shared.markRead(
                         conversationId: conversationId
                     )
+                    // Dismiss any banners still showing for this conversation in
+                    // Notification Center so the badge stays aligned with the
+                    // coordinator's count (otherwise the user sees the banner
+                    // linger after they already marked it read from the lock
+                    // screen action).
+                    removeDeliveredNotifications(for: conversationId)
                 }
             case MeeshyNotificationAction.reply.rawValue:
                 if let replyText,
@@ -402,5 +408,23 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         }
 
         completionHandler()
+    }
+
+    // MARK: - Notification Hygiene
+
+    /// Remove any already-delivered banners that belong to the given
+    /// conversation. Without this, after a user taps "Mark as read" on the
+    /// lock-screen action the message-new banner still sits in Notification
+    /// Center, so the coordinator's badge count and the visible banner stack
+    /// drift (user sees 0 unread but a banner for that conversation).
+    fileprivate nonisolated func removeDeliveredNotifications(for conversationId: String) {
+        let center = UNUserNotificationCenter.current()
+        center.getDeliveredNotifications { notifications in
+            let matching = notifications
+                .filter { ($0.request.content.userInfo["conversationId"] as? String) == conversationId }
+                .map(\.request.identifier)
+            guard !matching.isEmpty else { return }
+            center.removeDeliveredNotifications(withIdentifiers: matching)
+        }
     }
 }

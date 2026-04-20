@@ -441,6 +441,19 @@ struct SettingsView: View {
         settingsSection(title: "Outils", icon: "wrench.and.screwdriver.fill", color: "2ECC71") {
             Button {
                 HapticFeedback.light()
+                router.push(.starredMessages)
+            } label: {
+                settingsRow(icon: "star.fill", title: "Messages favoris", color: "FBBF24") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Messages favoris")
+            .accessibilityHint("Ouvre la liste des messages mis en favoris")
+
+            Button {
+                HapticFeedback.light()
                 showStats = true
             } label: {
                 settingsRow(icon: "chart.bar.fill", title: "Statistiques", color: "4ECDC4") {
