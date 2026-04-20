@@ -1518,6 +1518,9 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.message.deliveryStatus == rhs.message.deliveryStatus &&
         lhs.message.reactions.count == rhs.message.reactions.count &&
         lhs.message.attachments.count == rhs.message.attachments.count &&
+        lhs.message.isEdited == rhs.message.isEdited &&
+        lhs.message.deletedAt == rhs.message.deletedAt &&
+        lhs.message.pinnedAt == rhs.message.pinnedAt &&
         lhs.contactColor == rhs.contactColor &&
         lhs.isDirect == rhs.isDirect &&
         lhs.isDark == rhs.isDark &&
@@ -1529,6 +1532,8 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.senderStoryRingState == rhs.senderStoryRingState &&
         lhs.isLastInGroup == rhs.isLastInGroup &&
         lhs.isLastReceivedMessage == rhs.isLastReceivedMessage &&
-        lhs.activeAudioLanguage == rhs.activeAudioLanguage
+        lhs.activeAudioLanguage == rhs.activeAudioLanguage &&
+        lhs.isEditSaving == rhs.isEditSaving &&
+        lhs.hasEditHistory == rhs.hasEditHistory
     }
 }
