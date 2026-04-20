@@ -250,8 +250,13 @@ class ConversationViewModel: ObservableObject {
 
     var messagesByDate: [DateGroup] {
         if let cached = _messagesByDate { return cached }
+        // Exclude rows the user deleted locally (WhatsApp "Delete for me"
+        // behaviour) so they never reappear across cache reloads, REST
+        // refreshes, or new socket arrivals of older messages.
+        let hiddenIds = LocallyHiddenMessagesStore.shared.allHiddenIds
+        let visible = hiddenIds.isEmpty ? messages : messages.filter { !hiddenIds.contains($0.id) }
         let calendar = Calendar.current
-        let grouped = Dictionary(grouping: messages) { msg -> DateComponents in
+        let grouped = Dictionary(grouping: visible) { msg -> DateComponents in
             calendar.dateComponents([.year, .month, .day], from: msg.createdAt)
         }
         let result = grouped.map { (comps, msgs) in
@@ -1432,21 +1437,47 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Delete Message
 
-    func deleteMessage(messageId: String) async {
-        // Optimistic: mark as deleted locally
-        if let idx = messageIndex(for: messageId) {
-            messages[idx].deletedAt = Date()
-            messages[idx].content = ""
-        }
+    /// Matches the WhatsApp semantics: `local` hides the message for this
+    /// device only (no server round-trip), `everyone` soft-deletes on the
+    /// backend and broadcasts `message:deleted` to all recipients. The UI
+    /// gates the `everyone` option on sender+time-window rules via
+    /// `canDeleteForEveryone(_:)`.
+    enum DeleteMode {
+        case local
+        case everyone
+    }
 
-        do {
-            try await messageService.delete(conversationId: conversationId, messageId: serverId(for: messageId))
-        } catch {
-            // Revert on failure
+    func canDeleteForEveryone(_ message: Message, window: TimeInterval = 2 * 3600) -> Bool {
+        guard message.isMe else { return false }
+        guard let sentAt = message.createdAt as Date? else { return false }
+        return Date().timeIntervalSince(sentAt) <= window
+    }
+
+    func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
+        switch mode {
+        case .local:
+            // Optimistic: hide locally and rebuild the date groups without
+            // this message. Reversible via LocallyHiddenMessagesStore so an
+            // "Undo" affordance could reinstate the row without a network
+            // round-trip.
+            LocallyHiddenMessagesStore.shared.hide(messageId)
             if let idx = messageIndex(for: messageId) {
-                messages[idx].deletedAt = nil
+                messages.remove(at: idx)
             }
-            self.error = error.localizedDescription
+        case .everyone:
+            // Optimistic: mark as deleted locally + blank content
+            if let idx = messageIndex(for: messageId) {
+                messages[idx].deletedAt = Date()
+                messages[idx].content = ""
+            }
+            do {
+                try await messageService.delete(conversationId: conversationId, messageId: serverId(for: messageId))
+            } catch {
+                if let idx = messageIndex(for: messageId) {
+                    messages[idx].deletedAt = nil
+                }
+                self.error = error.localizedDescription
+            }
         }
     }
 

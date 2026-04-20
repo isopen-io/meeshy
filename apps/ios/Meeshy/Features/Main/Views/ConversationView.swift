@@ -534,17 +534,33 @@ struct ConversationView: View {
             .alert("Action sélectionnée", isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
                 Button("OK") { composerState.actionAlert = nil }
             } message: { Text(composerState.actionAlert ?? "") }
-            .alert("Supprimer ce message ?", isPresented: Binding(get: {
-                overlayState.deleteConfirmMessageId != nil
-            }, set: {
-                if !$0 { overlayState.deleteConfirmMessageId = nil }
-            })) {
-                Button("Annuler", role: .cancel) { overlayState.deleteConfirmMessageId = nil }
-                Button("Supprimer", role: .destructive) {
-                    if let msgId = overlayState.deleteConfirmMessageId { Task { await viewModel.deleteMessage(messageId: msgId) } }
+            .confirmationDialog(
+                "Supprimer ce message ?",
+                isPresented: Binding(
+                    get: { overlayState.deleteConfirmMessageId != nil },
+                    set: { if !$0 { overlayState.deleteConfirmMessageId = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: overlayState.deleteConfirmMessageId
+            ) { msgId in
+                // "Delete for everyone" only if the user authored the
+                // message AND the 2-hour window hasn't elapsed — matches
+                // WhatsApp's "Delete for everyone" gating.
+                if let idx = viewModel.messageIndex(for: msgId),
+                   viewModel.canDeleteForEveryone(viewModel.messages[idx]) {
+                    Button("Supprimer pour tout le monde", role: .destructive) {
+                        Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }
+                        overlayState.deleteConfirmMessageId = nil
+                    }
+                }
+                Button("Supprimer pour moi", role: .destructive) {
+                    Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }
                     overlayState.deleteConfirmMessageId = nil
                 }
-            } message: { Text("Cette action est irréversible.") }
+                Button("Annuler", role: .cancel) { overlayState.deleteConfirmMessageId = nil }
+            } message: { _ in
+                Text("La suppression pour tout le monde est disponible pendant 2 h après l'envoi.")
+            }
             .sheet(item: $composerState.forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
                     .presentationDetents([.medium, .large])
@@ -605,7 +621,10 @@ struct ConversationView: View {
                         }
                     },
                     onDelete: {
-                        Task { await viewModel.deleteMessage(messageId: msg.id) }
+                        // Route through the confirmation dialog so the user
+                        // picks between "Delete for me" and "Delete for
+                        // everyone" instead of silently losing the message.
+                        overlayState.deleteConfirmMessageId = msg.id
                     }
                 )
             }
@@ -1243,7 +1262,9 @@ struct ConversationView: View {
                     }
                 },
                 onDelete: {
-                    Task { await viewModel.deleteMessage(messageId: msg.id) }
+                    // Show the confirmation dialog so the user can pick
+                    // between local-only and server-broadcast deletion.
+                    overlayState.deleteConfirmMessageId = msg.id
                 },
                 onDeleteAttachment: { attachmentId in
                     Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
