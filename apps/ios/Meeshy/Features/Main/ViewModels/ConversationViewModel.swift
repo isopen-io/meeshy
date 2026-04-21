@@ -795,6 +795,11 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
+        // Arm socket subscriptions now that messages are loaded — deferred
+        // from SocketHandler.init to avoid 10-16ms of synchronous Combine
+        // subscription setup blocking the first render.
+        socketHandler?.armSocketSubscriptions()
+
         // Mark conversation as read + received (fire-and-forget)
         markAsRead()
         markAsReceived()

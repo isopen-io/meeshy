@@ -695,7 +695,7 @@ struct ConversationView: View {
                         viewModel.ephemeralDuration = duration
                     }
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { overlayState.longPressEnabled = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { overlayState.longPressEnabled = true }
             }
             .onChange(of: messageText) { _, newValue in
                 persistDraft(text: newValue)
@@ -987,7 +987,7 @@ struct ConversationView: View {
                 initialScrollCompleted = false
                 viewModel.markProgrammaticScroll()
                 proxy.scrollTo("bottom_spacer", anchor: .bottom)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     initialScrollCompleted = true
                 }
             }

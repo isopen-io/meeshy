@@ -68,10 +68,14 @@ final class ConversationSocketHandler {
         self.currentUserId = currentUserId
         self.messageSocket = messageSocket
         joinRoom()
-        subscribeToSocket()
-        subscribeToReconnect()
         NotificationManager.shared.onConversationOpened(conversationId)
         NotificationCoordinator.shared.markConversationRead(conversationId)
+    }
+
+    func armSocketSubscriptions() {
+        guard cancellables.isEmpty else { return }
+        subscribeToSocket()
+        subscribeToReconnect()
     }
 
     deinit {
