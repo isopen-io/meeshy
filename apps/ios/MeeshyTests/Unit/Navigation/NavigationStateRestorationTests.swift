@@ -13,7 +13,6 @@ import MeeshySDK
 // - Persist to UserDefaults or a file on .background scene phase
 // - Restore on app launch before first view appears
 
-@MainActor
 final class NavigationStateRestorationTests: XCTestCase {
 
     private func makeConversation(id: String = "000000000000000000000001") -> Conversation {

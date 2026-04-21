@@ -390,3 +390,6 @@ Each active development directory has a `decisions.md` file documenting key arch
 - `services/translator/decisions.md` - ML models, TTS backends, worker pool, package manager decisions
 - `packages/shared/decisions.md` - Type system, validation, events, database, API format decisions
 - `packages/MeeshySDK/decisions.md` - Dual-target, networking, sockets, cache, auth decisions
+
+## Quality Gate
+Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

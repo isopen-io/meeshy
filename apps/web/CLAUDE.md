@@ -130,3 +130,6 @@ A crash in message list MUST NOT crash the conversation list.
 
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (state management, data fetching, routing, auth, WebSocket, styling, i18n, build, encryption, audio/media, URL config) avec contexte, alternatives rejetes et consquences.
+
+## Quality Gate
+Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

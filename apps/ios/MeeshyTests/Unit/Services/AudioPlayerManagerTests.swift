@@ -1,7 +1,6 @@
 import XCTest
 @testable import Meeshy
 
-@MainActor
 final class AudioPlayerManagerTests: XCTestCase {
 
     private func makeSUT() -> AudioPlayerManager {

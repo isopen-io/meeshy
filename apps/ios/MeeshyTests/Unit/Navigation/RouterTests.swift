@@ -2,7 +2,6 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-@MainActor
 final class RouterTests: XCTestCase {
 
     // MARK: - Factory

@@ -4,7 +4,6 @@ import MeeshySDK
 @testable import Meeshy
 
 /// Integration test: message with translations -> preferredTranslation resolves -> display
-@MainActor
 final class TranslationFlowTests: XCTestCase {
 
     // MARK: - Helpers

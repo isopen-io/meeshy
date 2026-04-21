@@ -2,7 +2,6 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-@MainActor
 final class APIServiceTests: XCTestCase {
 
     private func makeMockClient() -> MockAPIClientForApp {

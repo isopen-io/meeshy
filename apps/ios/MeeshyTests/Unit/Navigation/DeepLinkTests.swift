@@ -333,7 +333,6 @@ final class DeepLinkParserTests: XCTestCase {
 
 // MARK: - DeepLinkRouter Tests
 
-@MainActor
 final class DeepLinkRouterTests: XCTestCase {
 
     private func makeSUT() -> DeepLinkRouter { DeepLinkRouter() }
@@ -508,7 +507,6 @@ final class DeepLinkRouterTests: XCTestCase {
 
 // MARK: - DeepLinkRouter chatLink Tests
 
-@MainActor
 final class DeepLinkRouterChatLinkTests: XCTestCase {
 
     private func makeSUT() -> DeepLinkRouter { DeepLinkRouter() }

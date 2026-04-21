@@ -2,7 +2,6 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
-@MainActor
 final class ContactsListViewModelTests: XCTestCase {
 
     private func makeSUT(currentUserId: String = "me") -> (sut: ContactsListViewModel, mock: MockFriendService) {

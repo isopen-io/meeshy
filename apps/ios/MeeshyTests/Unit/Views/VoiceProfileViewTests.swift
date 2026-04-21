@@ -1,7 +1,6 @@
 import XCTest
 @testable import Meeshy
 
-@MainActor
 final class VoiceProfileViewTests: XCTestCase {
 
     func test_wizardView_initializes_withAccentColor() {

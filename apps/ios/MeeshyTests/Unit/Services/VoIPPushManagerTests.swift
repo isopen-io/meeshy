@@ -1,7 +1,6 @@
 import XCTest
 @testable import Meeshy
 
-@MainActor
 final class VoIPPushManagerTests: XCTestCase {
 
     // VoIPPushManager is tightly coupled to PushKit (PKPushRegistry).

@@ -69,8 +69,8 @@ public struct RetryQueueFailure: Sendable {
 public actor MessageRetryQueue {
     public static let shared = MessageRetryQueue()
 
-    public nonisolated let retrySucceeded = PassthroughSubject<RetryQueueSuccess, Never>()
-    public nonisolated let retryExhausted = PassthroughSubject<RetryQueueFailure, Never>()
+    public nonisolated let retrySucceeded = SendablePassthrough<RetryQueueSuccess>()
+    public nonisolated let retryExhausted = SendablePassthrough<RetryQueueFailure>()
 
     private static let maxRetries = 5
     private static let retryIntervalSeconds: TimeInterval = 10

@@ -889,3 +889,6 @@ L'app iOS (`apps/ios/`) ne contient que :
 - Les Views/ecrans de l'app
 - Les models purement locaux a l'app (ex: `SearchResultItem`, etats UI)
 - La navigation, le theming, et la configuration app
+
+## Quality Gate
+Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

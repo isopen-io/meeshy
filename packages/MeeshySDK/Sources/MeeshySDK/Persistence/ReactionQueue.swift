@@ -68,8 +68,8 @@ public struct ReactionQueueFailure: Sendable {
 public actor ReactionQueue {
     public static let shared = ReactionQueue()
 
-    public nonisolated let retrySucceeded = PassthroughSubject<ReactionQueueSuccess, Never>()
-    public nonisolated let retryExhausted = PassthroughSubject<ReactionQueueFailure, Never>()
+    public nonisolated let retrySucceeded = SendablePassthrough<ReactionQueueSuccess>()
+    public nonisolated let retryExhausted = SendablePassthrough<ReactionQueueFailure>()
 
     private static let maxQueueSize = 500
     private static let queueFileName = "reaction_queue.json"

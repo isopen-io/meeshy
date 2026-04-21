@@ -3,7 +3,6 @@ import Combine
 @testable import Meeshy
 import MeeshySDK
 
-@MainActor
 final class PostDetailViewModelTests: XCTestCase {
 
     // MARK: - Factory

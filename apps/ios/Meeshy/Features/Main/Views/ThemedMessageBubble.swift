@@ -946,7 +946,8 @@ struct ThemedMessageBubble: View {
                 // user sees their edit is still propagating to the server.
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.system(size: 8, weight: .semibold))
-                    .symbolEffect(.rotate, options: .repeating)
+                    .rotationEffect(.degrees(isEditSaving ? 360 : 0))
+                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isEditSaving)
                 Text("Enregistrement…")
                     .font(.system(size: 9, weight: .medium))
                     .italic()

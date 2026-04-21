@@ -54,3 +54,6 @@ Le service utilise `LangGraph` pour gérer le flux de décision:
 
 ---
 *Dernière mise à jour: Mars 2026*
+
+## Quality Gate
+Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

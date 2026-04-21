@@ -3,7 +3,6 @@ import MeeshySDK
 @testable import Meeshy
 
 /// Integration test: create slides -> upload -> publish -> visible
-@MainActor
 final class StoryPublishFlowTests: XCTestCase {
 
     // MARK: - Helpers

@@ -90,7 +90,7 @@ final class LinkPreviewStore: ObservableObject {
         }
     }
 
-    private static func fileURL(_ fileName: String) -> URL {
+    private nonisolated static func fileURL(_ fileName: String) -> URL {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {

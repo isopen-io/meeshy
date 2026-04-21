@@ -172,3 +172,6 @@ pytest tests/ -v --cov=src            # With coverage
 
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (FastAPI, Faster-Whisper, NLLB-200, multi-backend TTS, ZeroMQ, worker pool, Redis fallback, OpenVoice V2, uv, singletons, config, audio pipeline) avec contexte, alternatives rejetes et consquences.
+
+## Quality Gate
+Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

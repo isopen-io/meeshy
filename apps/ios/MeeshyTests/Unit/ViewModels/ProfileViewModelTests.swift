@@ -6,7 +6,6 @@
 import XCTest
 @testable import Meeshy
 
-@MainActor
 final class ProfileViewModelTests: XCTestCase {
     var sut: ProfileViewModel!
 

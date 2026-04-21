@@ -58,7 +58,7 @@ public struct OfflineRetrySuccess: Sendable {
 public actor OfflineQueue {
     public static let shared = OfflineQueue()
 
-    public nonisolated let retrySucceeded = PassthroughSubject<OfflineRetrySuccess, Never>()
+    public nonisolated let retrySucceeded = SendablePassthrough<OfflineRetrySuccess>()
 
     private static let maxQueueSize = 100
     private static let queueFileName = "offline_queue.json"

@@ -2,7 +2,6 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
-@MainActor
 final class GlobalSearchViewModelTests: XCTestCase {
 
     // MARK: - Properties

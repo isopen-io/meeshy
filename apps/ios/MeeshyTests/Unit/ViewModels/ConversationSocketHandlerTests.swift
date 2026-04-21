@@ -60,11 +60,16 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
         // no-op in tests
     }
+
+    var pendingServerIds: [String: String] = [:]
+
+    func persistMessagesUsingServerIds() async {
+        // no-op in tests
+    }
 }
 
 // MARK: - Tests
 
-@MainActor
 final class ConversationSocketHandlerTests: XCTestCase {
 
     private let conversationId = "000000000000000000000099"

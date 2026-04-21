@@ -1,7 +1,6 @@
 import XCTest
 @testable import Meeshy
 
-@MainActor
 final class ConversationLockManagerTests: XCTestCase {
 
     private var manager: ConversationLockManager!

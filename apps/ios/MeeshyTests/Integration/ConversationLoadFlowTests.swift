@@ -3,7 +3,6 @@ import MeeshySDK
 @testable import Meeshy
 
 /// Integration test: cache has data -> displayed immediately -> API refresh -> updated silently
-@MainActor
 final class ConversationLoadFlowTests: XCTestCase {
 
     // MARK: - Helpers

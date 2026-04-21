@@ -28,6 +28,7 @@ protocol ConversationSocketDelegate: AnyObject {
     func handleParticipantRoleUpdated(participantId: String, newRole: String)
     func syncMissedMessages() async
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async
+    func persistMessagesUsingServerIds() async
 }
 
 // MARK: - ConversationSocketHandler

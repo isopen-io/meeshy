@@ -125,3 +125,6 @@ make docker-start       # Full Docker Compose (dev)
 make docker-start-local # Docker with HTTPS (local)
 make test               # Run all tests
 ```
+
+## Quality Gate
+Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

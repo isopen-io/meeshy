@@ -29,8 +29,8 @@ final class PresenceManager: ObservableObject {
     nonisolated(unsafe) private var recalcTimer: Timer?
     nonisolated(unsafe) private var persistTask: Task<Void, Never>?
 
-    private static let persistFileName = "presence_map.json"
-    private static let persistMaxAge: TimeInterval = 24 * 3600 // 24h
+    private nonisolated static let persistFileName = "presence_map.json"
+    private nonisolated static let persistMaxAge: TimeInterval = 24 * 3600 // 24h
     private static let persistDebounce: TimeInterval = 1.5
 
     private init() {
@@ -124,7 +124,7 @@ final class PresenceManager: ObservableObject {
         }
     }
 
-    private static var persistURL: URL {
+    private nonisolated static var persistURL: URL {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
@@ -133,7 +133,7 @@ final class PresenceManager: ObservableObject {
         return cacheDir.appendingPathComponent(persistFileName)
     }
 
-    private static func writeToDisk(_ map: [String: UserPresence]) {
+    private nonisolated static func writeToDisk(_ map: [String: UserPresence]) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(map) else { return }

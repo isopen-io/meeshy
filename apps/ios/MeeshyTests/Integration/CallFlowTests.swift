@@ -4,7 +4,6 @@ import MeeshySDK
 @testable import Meeshy
 
 /// Integration test: initiate -> offer -> answer -> connected -> end -> cleanup
-@MainActor
 final class CallFlowTests: XCTestCase {
 
     // MARK: - Helpers

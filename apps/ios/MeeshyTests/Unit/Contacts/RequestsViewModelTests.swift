@@ -2,7 +2,6 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
-@MainActor
 final class RequestsViewModelTests: XCTestCase {
 
     private func makeSUT() -> (sut: RequestsViewModel, mock: MockFriendService) {

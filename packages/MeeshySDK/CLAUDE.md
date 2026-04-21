@@ -335,3 +335,6 @@ swift test --filter MeeshySDKTests   # Tests SDK uniquement
 5. **Modles Decodable** avec CodingKeys explicites
 6. **Conversion API -> Domain** via extensions `toDomain()`
 7. **Consulter `decisions.md`** pour les choix architecturaux et leurs justifications
+
+## Quality Gate
+Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

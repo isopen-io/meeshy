@@ -157,7 +157,16 @@
 		D4E5F6A7B8C9D0E1F2A3B4D8 /* iPadRootView+Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4D7 /* iPadRootView+Navigation.swift */; };
 		D4E5F6A7B8C9D0E1F2A3B4D9 /* iPadRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* iPadRootView.swift */; };
 		D5A1B2C3E4F506A7B8C9D0E2 /* DraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1B2C3E4F506A7B8C9D0E1 /* DraftStore.swift */; };
+		EHS0020020020020020001 /* EditHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EHS0010010010010010001 /* EditHistoryStore.swift */; };
+		LHM0020020020020020001 /* LocallyHiddenMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */; };
+		SMS0020020020020020001 /* StarredMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMS0010010010010010001 /* StarredMessagesStore.swift */; };
+		LPS0020020020020020001 /* LinkPreviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPS0010010010010010001 /* LinkPreviewStore.swift */; };
+		LPC0020020020020020001 /* LinkPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPC0010010010010010001 /* LinkPreviewCard.swift */; };
+		SMV0020020020020020001 /* StarredMessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMV0010010010010010001 /* StarredMessagesView.swift */; };
 		D5A1B2C3E4F506A7B8C9D0E4 /* DraftStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */; };
+		EHST02002002002002001 /* EditHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EHST01001001001001001 /* EditHistoryStoreTests.swift */; };
+		LHMT02002002002002001 /* LocallyHiddenMessagesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */; };
+		SMST02002002002002001 /* StarredMessagesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMST01001001001001001 /* StarredMessagesStoreTests.swift */; };
 		D90603ED4F5C335BE9FA78D9 /* BlockedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F573D0F41F068B1CDCAB79C6 /* BlockedViewModel.swift */; };
 		D974F1384869B32923B076E7 /* StoryViewerContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8B729437578B76EC6727BF0 /* StoryViewerContainer.swift */; };
 		DD0100000000004F01 /* ConversationDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0100000000003F01 /* ConversationDashboardView.swift */; };
@@ -510,7 +519,16 @@
 		D4E5F6A7B8C9D0E1F2A3B4D5 /* iPadRootView+Overlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Overlays.swift"; sourceTree = "<group>"; };
 		D4E5F6A7B8C9D0E1F2A3B4D7 /* iPadRootView+Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Navigation.swift"; sourceTree = "<group>"; };
 		D5A1B2C3E4F506A7B8C9D0E1 /* DraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStore.swift; sourceTree = "<group>"; };
+		EHS0010010010010010001 /* EditHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditHistoryStore.swift; sourceTree = "<group>"; };
+		LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocallyHiddenMessagesStore.swift; sourceTree = "<group>"; };
+		SMS0010010010010010001 /* StarredMessagesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStore.swift; sourceTree = "<group>"; };
+		LPS0010010010010010001 /* LinkPreviewStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewStore.swift; sourceTree = "<group>"; };
+		LPC0010010010010010001 /* LinkPreviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewCard.swift; sourceTree = "<group>"; };
+		SMV0010010010010010001 /* StarredMessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesView.swift; sourceTree = "<group>"; };
 		D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStoreTests.swift; sourceTree = "<group>"; };
+		EHST01001001001001001 /* EditHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditHistoryStoreTests.swift; sourceTree = "<group>"; };
+		LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocallyHiddenMessagesStoreTests.swift; sourceTree = "<group>"; };
+		SMST01001001001001001 /* StarredMessagesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStoreTests.swift; sourceTree = "<group>"; };
 		D6E7F8091A2B3C4D5E6F7081 /* ReplyThreadOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyThreadOverlay.swift; sourceTree = "<group>"; };
 		DA190704EDDA2E1CA660F898 /* OnboardingStepViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingStepViews.swift; sourceTree = "<group>"; };
 		DD0100000000003F01 /* ConversationDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDashboardView.swift; sourceTree = "<group>"; };
@@ -726,6 +744,7 @@
 				LANG001A001A001A001A0001 /* LanguagePickerSheet.swift */,
 				CC4000000000001F40 /* ContactCardView.swift */,
 				MEFF00000000001F01 /* MessageEffectModifiers.swift */,
+					LPC0010010010010010001 /* LinkPreviewCard.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -908,6 +927,7 @@
 				25AD7697AD569462191E395F /* DataExportView.swift */,
 				00B3D9B4A2850060E2C9470D /* FloatingCallPillView.swift */,
 				823B2865CE9642B487B0FC22 /* VideoFilterControlView.swift */,
+					SMV0010010010010010001 /* StarredMessagesView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -944,6 +964,10 @@
 				LGCT0100000001F001 /* Logger+Categories.swift */,
 				PS3900000000001F39 /* ParticipantService.swift */,
 				D5A1B2C3E4F506A7B8C9D0E1 /* DraftStore.swift */,
+					EHS0010010010010010001 /* EditHistoryStore.swift */,
+					LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */,
+					SMS0010010010010010001 /* StarredMessagesStore.swift */,
+					LPS0010010010010010001 /* LinkPreviewStore.swift */,
 				17FD2C4BEA6C9C218634F16B /* CallTranscriptionService.swift */,
 				AA5D13830922E297A0AF6C50 /* VideoFilterPipeline.swift */,
 				CFCF53B6AD169522F7F20047 /* ThermalStateMonitor.swift */,
@@ -1208,6 +1232,9 @@
 				5FEFAB456AD3F85FCBCDC078 /* PresenceManagerTests.swift */,
 				1DBCE13E5C724D3BCB34B45B /* APIServiceTests.swift */,
 				D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */,
+					EHST01001001001001001 /* EditHistoryStoreTests.swift */,
+					LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */,
+					SMST01001001001001001 /* StarredMessagesStoreTests.swift */,
 				AUPL0001000100010001002 /* AudioPlayerManagerTests.swift */,
 				AURC0001000100010001002 /* AudioRecorderManagerTests.swift */,
 				CAET000100010001000100F0 /* CallAudioEffectsServiceTests.swift */,
@@ -1600,6 +1627,12 @@
 				EDD817AE0118AEBF9FE37640 /* E2EEService.swift in Sources */,
 				42662443FBC51E2F08ABE46F /* UserProfileViewModel.swift in Sources */,
 				D5A1B2C3E4F506A7B8C9D0E2 /* DraftStore.swift in Sources */,
+					EHS0020020020020020001 /* EditHistoryStore.swift in Sources */,
+					LHM0020020020020020001 /* LocallyHiddenMessagesStore.swift in Sources */,
+					SMS0020020020020020001 /* StarredMessagesStore.swift in Sources */,
+					LPS0020020020020020001 /* LinkPreviewStore.swift in Sources */,
+					LPC0020020020020020001 /* LinkPreviewCard.swift in Sources */,
+					SMV0020020020020020001 /* StarredMessagesView.swift in Sources */,
 				447EB12B85279B3E448C2456 /* BlockedTab.swift in Sources */,
 				D90603ED4F5C335BE9FA78D9 /* BlockedViewModel.swift in Sources */,
 				44C6640DF69BEB3FF362DE4A /* ContactsHubView.swift in Sources */,
@@ -1665,6 +1698,9 @@
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,
 				D240F5AC635D4F38FD26A6A1 /* APIServiceTests.swift in Sources */,
 				D5A1B2C3E4F506A7B8C9D0E4 /* DraftStoreTests.swift in Sources */,
+					EHST02002002002002001 /* EditHistoryStoreTests.swift in Sources */,
+					LHMT02002002002002001 /* LocallyHiddenMessagesStoreTests.swift in Sources */,
+					SMST02002002002002001 /* StarredMessagesStoreTests.swift in Sources */,
 				AUPL0001000100010001001 /* AudioPlayerManagerTests.swift in Sources */,
 				AURC0001000100010001001 /* AudioRecorderManagerTests.swift in Sources */,
 				MCAE000100010001000100B0 /* MockCallAudioEffectsService.swift in Sources */,

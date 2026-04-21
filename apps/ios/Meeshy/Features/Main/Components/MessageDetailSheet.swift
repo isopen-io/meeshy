@@ -201,7 +201,7 @@ struct MessageDetailSheet: View {
     // Views sub-filter
     @State private var viewsFilter: ViewsFilter = .sent
 
-    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab? = nil, canDelete: Bool = false, actions: [MessageAction]? = nil, textTranslations: [MessageTranslation] = [], transcription: MessageTranscription? = nil, translatedAudios: [MessageTranslatedAudio] = [], onSelectTranslation: ((MessageTranslation?) -> Void)? = nil, onSelectAudioLanguage: ((String?) -> Void)? = nil, onRequestTranslation: ((String, String) -> Void)? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil, externalTabSelection: Binding<DetailTab?>? = nil) {
+    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab? = nil, canDelete: Bool = false, actions: [MessageAction]? = nil, textTranslations: [MessageTranslation] = [], transcription: MessageTranscription? = nil, translatedAudios: [MessageTranslatedAudio] = [], onSelectTranslation: ((MessageTranslation?) -> Void)? = nil, onSelectAudioLanguage: ((String?) -> Void)? = nil, onRequestTranslation: ((String, String) -> Void)? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil, externalTabSelection: Binding<DetailTab?>? = nil, editRevisions: [EditRevision] = []) {
         self.message = message
         self.contactColor = contactColor
         self.conversationId = conversationId
@@ -219,6 +219,7 @@ struct MessageDetailSheet: View {
         self.onReport = onReport
         self.onDelete = onDelete
         self.externalTabSelection = externalTabSelection
+        self.editRevisions = editRevisions
         _selectedTab = State(initialValue: initialTab ?? .language)
     }
 
@@ -1150,7 +1151,7 @@ struct MessageDetailSheet: View {
 
     // MARK: - Shared Views Components
 
-    private func timelineBanner(icon: String, text: String, detail: String, count: String, accent: Color) -> some View {
+    private func timelineBanner(icon: String, text: String, detail: String, count: String? = nil, accent: Color) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
@@ -1167,15 +1168,17 @@ struct MessageDetailSheet: View {
 
             Spacer()
 
-            Text(count)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundColor(accent)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule()
-                        .fill(accent.opacity(0.12))
-                )
+            if let count {
+                Text(count)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill(accent.opacity(0.12))
+                    )
+            }
         }
         .padding(12)
         .background(

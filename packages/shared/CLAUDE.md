@@ -124,3 +124,6 @@ npm run build   # TypeScript → dist/ (ESM + declarations + source maps)
 
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (TypeScript strict, branded types, type vs interface, Socket.IO events, GatewayMessage vs UIMessage, Zod, encryption DI, ESM, langues, rles, MongoDB/Prisma, API response) avec contexte, alternatives rejetes et consquences.
+
+## Quality Gate
+Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.
