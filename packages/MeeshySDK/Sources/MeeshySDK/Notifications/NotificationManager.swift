@@ -146,6 +146,9 @@ public final class NotificationManager: ObservableObject {
             return
         }
 
+        // Keep FriendshipCache in sync with real-time friend request events
+        updateFriendshipCacheIfNeeded(event)
+
         // The unread counter reflects what the *server* thinks — increment it
         // regardless of local prefs so the coordinator stays aligned with the
         // authoritative count. Local prefs only gate the TOAST surface.
@@ -161,6 +164,20 @@ public final class NotificationManager: ObservableObject {
             focus: focus
         ) {
             showToast(event)
+        }
+    }
+
+    private func updateFriendshipCacheIfNeeded(_ event: SocketNotificationEvent) {
+        switch event.notificationType {
+        case .friendRequest:
+            guard let senderId = event.senderId,
+                  let requestId = event.context?.friendRequestId else { return }
+            FriendshipCache.shared.didReceiveRequest(from: senderId, requestId: requestId)
+        case .friendAccepted:
+            guard let accepterId = event.senderId else { return }
+            FriendshipCache.shared.didAcceptRequest(from: accepterId)
+        default:
+            break
         }
     }
 

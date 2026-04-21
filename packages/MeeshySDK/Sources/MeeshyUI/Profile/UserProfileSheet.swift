@@ -133,6 +133,9 @@ public struct UserProfileSheet: View {
         .task {
             await resolveInitialState()
         }
+        .onReceive(FriendshipCache.shared.objectWillChange) { _ in
+            resolveConnectionStatus()
+        }
     }
 
     // MARK: - Banner
@@ -345,7 +348,6 @@ public struct UserProfileSheet: View {
         switch cacheResult {
         case .fresh(let cached, _):
             if let profile = cached.first { internalFullUser = profile }
-            return
         case .stale(let cached, _):
             if let profile = cached.first { internalFullUser = profile }
             await fetchAndCacheProfile(identifier)
@@ -353,6 +355,7 @@ public struct UserProfileSheet: View {
             internalIsLoading = internalFullUser == nil
             await fetchAndCacheProfile(identifier)
         }
+        resolveConnectionStatus()
     }
 
     private func fetchAndCacheProfile(_ idOrUsername: String) async {
