@@ -5,7 +5,9 @@ import MeeshySDK
 struct CreateTrackingLinkView: View {
     let onCreate: (TrackingLink) -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @State private var name: String = ""
     @State private var destinationUrl: String = ""
     @State private var campaign: String = ""
@@ -92,7 +94,7 @@ struct CreateTrackingLinkView: View {
             TextField("ex: summer24 (6 chars min)", text: $customToken)
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 10)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
+                    .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
                 .foregroundColor(theme.textPrimary)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -129,7 +131,7 @@ struct CreateTrackingLinkView: View {
             TextField(placeholder, text: text)
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 10)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
+                    .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
                 .foregroundColor(theme.textPrimary)
         }
     }

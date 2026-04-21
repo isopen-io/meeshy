@@ -7,7 +7,9 @@ struct StatusBarView: View {
     var onAddStatus: () -> Void
     var onTapStatus: ((StatusEntry) -> Void)?
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @State private var selectedPopover: StatusEntry?
 
     var body: some View {

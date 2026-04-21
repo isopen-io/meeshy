@@ -9,7 +9,9 @@ struct LocationPickerView: View {
     let accentColor: String
     let onSelect: (CLLocationCoordinate2D, String?) -> Void
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = LocationPickerModel()
     @State private var searchText = ""
     @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)

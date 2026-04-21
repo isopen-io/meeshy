@@ -6,7 +6,9 @@ import MessageUI
 
 struct DiscoverTab: View {
     @ObservedObject var viewModel: DiscoverViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var router: Router
 

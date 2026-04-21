@@ -11,7 +11,9 @@ struct ForwardPickerSheet: View {
     let onDismiss: () -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     @State private var conversations: [Conversation] = []
@@ -121,7 +123,7 @@ struct ForwardPickerSheet: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(theme.mode.isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
+        .background(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
     }
 
     @ViewBuilder

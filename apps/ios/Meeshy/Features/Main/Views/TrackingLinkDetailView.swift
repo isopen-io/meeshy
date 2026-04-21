@@ -5,7 +5,9 @@ import MeeshySDK
 struct TrackingLinkDetailView: View {
     let link: TrackingLink
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel: TrackingDetailViewModel
     @State private var copiedFeedback = false
     @State private var showDeleteConfirm = false
@@ -182,7 +184,7 @@ struct TrackingLinkDetailView: View {
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16)
-            .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+            .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 1)))
     }
 
@@ -223,7 +225,7 @@ struct TrackingLinkDetailView: View {
                 }
             }
             .background(RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
+                .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
         }
     }
 
@@ -280,7 +282,7 @@ struct TrackingLinkDetailView: View {
                 infoRow("Créé le", value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
             }
             .background(RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
+                .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
         }
     }
 

@@ -5,7 +5,9 @@ import MeeshyUI
 
 struct ContactsListTab: View {
     @ObservedObject var viewModel: ContactsListViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
 

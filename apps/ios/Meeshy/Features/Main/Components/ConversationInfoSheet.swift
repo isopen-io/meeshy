@@ -14,7 +14,9 @@ struct ConversationInfoSheet: View {
     let messages: [Message]
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la fiche conversation.
     private var presenceManager: PresenceManager { PresenceManager.shared }
@@ -152,14 +154,14 @@ struct ConversationInfoSheet: View {
                 .ignoresSafeArea()
 
             Circle()
-                .fill(accent.opacity(theme.mode.isDark ? 0.06 : 0.04))
+                .fill(accent.opacity(isDark ? 0.06 : 0.04))
                 .frame(width: 300, height: 300)
                 .blur(radius: 80)
                 .offset(x: -60, y: -120)
                 .ignoresSafeArea()
 
             Circle()
-                .fill(accent.opacity(theme.mode.isDark ? 0.04 : 0.02))
+                .fill(accent.opacity(isDark ? 0.04 : 0.02))
                 .frame(width: 200, height: 200)
                 .blur(radius: 60)
                 .offset(x: 100, y: 80)
@@ -496,7 +498,7 @@ struct ConversationInfoSheet: View {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                    .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -554,7 +556,7 @@ struct ConversationInfoSheet: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(accent.opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .fill(accent.opacity(isDark ? 0.12 : 0.08))
             )
         }
         .padding(.horizontal, 20)
@@ -728,7 +730,7 @@ struct ConversationInfoSheet: View {
                 .padding(.horizontal, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(accent.opacity(theme.mode.isDark ? 0.08 : 0.05))
+                        .fill(accent.opacity(isDark ? 0.08 : 0.05))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
@@ -814,7 +816,7 @@ struct ConversationInfoSheet: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(accent.opacity(theme.mode.isDark ? 0.2 : 0.12))
+                    .fill(accent.opacity(isDark ? 0.2 : 0.12))
                     .frame(width: 36, height: 36)
 
                 Image(systemName: "pin.fill")
@@ -938,7 +940,7 @@ struct ConversationInfoSheet: View {
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(theme.mode.isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
+                        .fill(isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
                 )
             }
             .padding(.horizontal, 20)
@@ -973,7 +975,7 @@ struct ConversationInfoSheet: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: color).opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .fill(Color(hex: color).opacity(isDark ? 0.12 : 0.08))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -1152,7 +1154,7 @@ struct ConversationInfoSheet: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "EF4444").opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .fill(Color(hex: "EF4444").opacity(isDark ? 0.12 : 0.08))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(Color(hex: "EF4444").opacity(0.2), lineWidth: 1)

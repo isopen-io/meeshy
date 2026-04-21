@@ -3,7 +3,9 @@ import Combine
 import MeeshySDK
 
 struct CommunityLinksView: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = CommunityLinksViewModel()
 
     @Environment(\.dismiss) private var dismiss

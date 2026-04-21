@@ -7,7 +7,9 @@ struct StatsTimelineChart: View {
     let timeline: [TimelinePoint]
     let color: String
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         Chart {

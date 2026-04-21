@@ -158,7 +158,9 @@ struct MessageDetailSheet: View {
     /// the array is empty — no visual clutter for un-edited messages.
     var editRevisions: [EditRevision] = []
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @Environment(\.dismiss) private var envDismiss
     @State private var selectedTab: DetailTab?
     @State private var actionGridAppeared = false
@@ -315,11 +317,11 @@ struct MessageDetailSheet: View {
             return false
         }()
         let fillOpacity = isActive
-            ? (theme.mode.isDark ? 0.40 : 0.35)
-            : (theme.mode.isDark ? 0.25 : 0.15)
+            ? (isDark ? 0.40 : 0.35)
+            : (isDark ? 0.25 : 0.15)
         let trailOpacity = isActive
-            ? (theme.mode.isDark ? 0.25 : 0.18)
-            : (theme.mode.isDark ? 0.12 : 0.06)
+            ? (isDark ? 0.25 : 0.18)
+            : (isDark ? 0.12 : 0.06)
 
         return Button {
             switch item {
@@ -459,7 +461,7 @@ struct MessageDetailSheet: View {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(originalColor.opacity(theme.mode.isDark ? 0.08 : 0.05))
+                    .fill(originalColor.opacity(isDark ? 0.08 : 0.05))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(originalColor.opacity(0.15), lineWidth: 0.5)
@@ -516,7 +518,7 @@ struct MessageDetailSheet: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(langColor.opacity(theme.mode.isDark ? 0.08 : 0.05))
+                        .fill(langColor.opacity(isDark ? 0.08 : 0.05))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(langColor.opacity(0.2), lineWidth: 0.5)
@@ -527,7 +529,7 @@ struct MessageDetailSheet: View {
 
             // Divider
             Rectangle()
-                .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
                 .frame(height: 0.5)
 
             // Language list
@@ -654,7 +656,7 @@ struct MessageDetailSheet: View {
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(isSelected
-                        ? langColor.opacity(theme.mode.isDark ? 0.08 : 0.05)
+                        ? langColor.opacity(isDark ? 0.08 : 0.05)
                         : Color.clear)
             )
         }
@@ -802,7 +804,7 @@ struct MessageDetailSheet: View {
                         .padding(.vertical, 1)
                         .background(
                             Capsule()
-                                .fill(isSelected ? accent.opacity(0.15) : theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                .fill(isSelected ? accent.opacity(0.15) : isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
                         )
                 }
             }
@@ -810,7 +812,7 @@ struct MessageDetailSheet: View {
             .padding(.vertical, 7)
             .background(
                 Capsule()
-                    .fill(isSelected ? accent.opacity(0.15) : theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+                    .fill(isSelected ? accent.opacity(0.15) : isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
             )
             .overlay(
                 Capsule()
@@ -851,7 +853,7 @@ struct MessageDetailSheet: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+                    .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .stroke(accent.opacity(0.1), lineWidth: 0.5)
@@ -912,7 +914,7 @@ struct MessageDetailSheet: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
+                    .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
             )
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
@@ -987,7 +989,7 @@ struct MessageDetailSheet: View {
 
     private var metaDivider: some View {
         Rectangle()
-            .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+            .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
             .frame(height: 0.5)
             .padding(.leading, 38)
     }
@@ -1183,7 +1185,7 @@ struct MessageDetailSheet: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(accent.opacity(theme.mode.isDark ? 0.06 : 0.04))
+                .fill(accent.opacity(isDark ? 0.06 : 0.04))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(accent.opacity(0.12), lineWidth: 0.5)
@@ -1234,7 +1236,7 @@ struct MessageDetailSheet: View {
             HStack(spacing: 8) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(accent.opacity(theme.mode.isDark ? 0.15 : 0.1))
+                        .fill(accent.opacity(isDark ? 0.15 : 0.1))
                         .frame(width: 32, height: 32)
                     Image(systemName: icon)
                         .font(.system(size: 13, weight: .semibold))
@@ -1328,7 +1330,7 @@ struct MessageDetailSheet: View {
                                 .padding(.vertical, 2)
                                 .background(
                                     Capsule()
-                                        .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                        .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
                                 )
                         }
                     }
@@ -1339,10 +1341,10 @@ struct MessageDetailSheet: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
+                .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04), lineWidth: 0.5)
+                        .stroke(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04), lineWidth: 0.5)
                 )
         )
     }
@@ -1448,7 +1450,7 @@ struct MessageDetailSheet: View {
                 Capsule()
                     .fill(isSelected
                           ? Color(hex: contactColor).opacity(0.15)
-                          : theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                          : isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
             )
             .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textSecondary)
         }
@@ -1548,7 +1550,7 @@ struct MessageDetailSheet: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
                         )
                 }
             }
@@ -1900,7 +1902,7 @@ struct MessageDetailSheet: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
         )
     }
 
@@ -1961,7 +1963,7 @@ struct MessageDetailSheet: View {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(langColor.opacity(theme.mode.isDark ? 0.08 : 0.05))
+                    .fill(langColor.opacity(isDark ? 0.08 : 0.05))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(langColor.opacity(0.15), lineWidth: 0.5)
@@ -1978,7 +1980,7 @@ struct MessageDetailSheet: View {
             // Word-by-word segments
             if !segments.isEmpty {
                 Rectangle()
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
                     .frame(height: 0.5)
 
                 FlowLayout(spacing: 0) {
@@ -1999,7 +2001,7 @@ struct MessageDetailSheet: View {
                 .padding(8)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.mode.isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
+                        .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
                 )
 
                 if let speakerCount = transcription.speakerCount, speakerCount > 1 {
@@ -2045,7 +2047,7 @@ struct MessageDetailSheet: View {
                 .padding(10)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
+                        .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                 )
             }
 
@@ -2092,7 +2094,7 @@ struct MessageDetailSheet: View {
     private func translatedAudioTranscriptions(accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Rectangle()
-                .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
                 .frame(height: 0.5)
 
             HStack(spacing: 6) {
@@ -2147,7 +2149,7 @@ struct MessageDetailSheet: View {
                 .padding(10)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(langColor.opacity(theme.mode.isDark ? 0.06 : 0.03))
+                        .fill(langColor.opacity(isDark ? 0.06 : 0.03))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
                                 .stroke(langColor.opacity(0.12), lineWidth: 0.5)

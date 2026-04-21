@@ -203,7 +203,9 @@ struct UniversalComposerBar: View {
     @State var attachRotation: Double = 0
     @State var typeWave: Bool = false
 
-    @ObservedObject var theme = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
+    var isDark: Bool { colorScheme == .dark }
+    var theme: ThemeManager { ThemeManager.shared }
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
@@ -576,7 +578,7 @@ struct UniversalComposerBar: View {
         }
         .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
             LanguagePickerSheet(
-                style: theme.mode.isDark ? .dark : .light,
+                style: isDark ? .dark : .light,
                 onSelect: { lang in
                     let detected = DetectedLanguage.find(code: lang.id) ??
                         DetectedLanguage(id: lang.id, code: lang.id, flag: lang.flag, name: lang.name)
@@ -991,7 +993,7 @@ struct UniversalComposerBar: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(style == .dark ? Color.black.opacity(0.3) : theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
+                .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(Color(hex: "FF6B6B").opacity(0.2), lineWidth: 0.5)
@@ -1197,7 +1199,7 @@ extension UniversalComposerBar {
         }
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(style == .dark ? Color.black.opacity(0.3) : theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
+                .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 0.5)

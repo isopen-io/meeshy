@@ -5,7 +5,9 @@ import MeeshyUI
 
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
 
     private let accentColor = "45B7D1"
 
@@ -85,7 +87,7 @@ struct AboutView: View {
     private var appHeaderSection: some View {
         VStack(spacing: 12) {
             AnimatedLogoView(
-                color: theme.mode.isDark ? .white : Color(hex: "1C1917"),
+                color: isDark ? .white : Color(hex: "1C1917"),
                 lineWidth: 10,
                 continuous: true
             )

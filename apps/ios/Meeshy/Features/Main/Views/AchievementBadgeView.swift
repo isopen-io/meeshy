@@ -5,7 +5,9 @@ import MeeshySDK
 struct AchievementBadgeView: View {
     let achievement: Achievement
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         VStack(spacing: 8) {

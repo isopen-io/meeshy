@@ -47,7 +47,7 @@ extension ConversationView {
                     message: msg,
                     contactColor: accentColor,
                     isDirect: isDirect,
-                    isDark: theme.mode.isDark,
+                    isDark: isDark,
                     transcription: viewModel.messageTranscriptions[msg.id],
                     translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
                     textTranslations: viewModel.messageTranslations[msg.id] ?? [],
@@ -352,7 +352,7 @@ extension ConversationView {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                    .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
             )
 
             if viewModel.isSearching {
@@ -464,7 +464,7 @@ extension ConversationView {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.white.opacity(0.8))
+                .fill(isDark ? Color.white.opacity(0.06) : Color.white.opacity(0.8))
         )
         .contentShape(Rectangle())
     }
@@ -833,10 +833,10 @@ extension ConversationView {
             .padding(.vertical, 4)
             .background(
                 Capsule()
-                    .fill(accent.opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .fill(accent.opacity(isDark ? 0.12 : 0.08))
                     .overlay(
                         Capsule()
-                            .stroke(accent.opacity(theme.mode.isDark ? 0.2 : 0.12), lineWidth: 0.5)
+                            .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
                     )
             )
         }

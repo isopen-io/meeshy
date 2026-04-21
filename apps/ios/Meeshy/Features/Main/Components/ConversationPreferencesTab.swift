@@ -38,7 +38,9 @@ struct ConversationPreferencesTab: View {
     let participants: [PaginatedParticipant]
     let accentColor: String
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -414,7 +416,7 @@ struct ConversationPreferencesTab: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                        .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
@@ -528,7 +530,7 @@ struct ConversationPreferencesTab: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                        .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
@@ -559,7 +561,7 @@ struct ConversationPreferencesTab: View {
                     }
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.white)
+                            .fill(isDark ? Color.white.opacity(0.06) : Color.white)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
@@ -625,7 +627,7 @@ struct ConversationPreferencesTab: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(
-                                Capsule().fill(Color(hex: "3B82F6").opacity(theme.mode.isDark ? 0.15 : 0.1))
+                                Capsule().fill(Color(hex: "3B82F6").opacity(isDark ? 0.15 : 0.1))
                             )
                         }
                     }
@@ -653,7 +655,7 @@ struct ConversationPreferencesTab: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                        .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
@@ -684,7 +686,7 @@ struct ConversationPreferencesTab: View {
                     }
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.white)
+                            .fill(isDark ? Color.white.opacity(0.06) : Color.white)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)

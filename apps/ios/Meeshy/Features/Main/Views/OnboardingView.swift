@@ -19,15 +19,15 @@ private struct OnboardingPage: Identifiable {
 // MARK: - Onboarding View
 
 struct OnboardingView: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @Binding var hasCompletedOnboarding: Bool
 
     @State private var currentPage = 0
     @State private var animateIcon = false
 
     private let logger = Logger(subsystem: "me.meeshy.app", category: "onboarding")
-
-    private var isDark: Bool { theme.mode.isDark }
 
     private let pages: [OnboardingPage] = [
         OnboardingPage(

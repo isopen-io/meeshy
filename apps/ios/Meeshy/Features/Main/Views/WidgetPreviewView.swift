@@ -8,7 +8,9 @@ import os
 
 struct WidgetPreviewView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
 
@@ -64,7 +66,7 @@ struct WidgetPreviewView: View {
                 .padding(.top, 12)
             }
             .background(
-                MeeshyColors.mainBackgroundGradient(isDark: theme.mode.isDark)
+                MeeshyColors.mainBackgroundGradient(isDark: isDark)
                     .ignoresSafeArea()
             )
             .navigationTitle("Tableau de bord")
@@ -204,7 +206,7 @@ struct WidgetPreviewView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(
-                            MeeshyColors.glassBorderGradient(isDark: theme.mode.isDark),
+                            MeeshyColors.glassBorderGradient(isDark: isDark),
                             lineWidth: 1
                         )
                 )
@@ -332,7 +334,7 @@ struct WidgetPreviewView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(
-                            MeeshyColors.glassBorderGradient(isDark: theme.mode.isDark),
+                            MeeshyColors.glassBorderGradient(isDark: isDark),
                             lineWidth: 1
                         )
                 )
@@ -451,7 +453,7 @@ struct WidgetPreviewView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(
-                            MeeshyColors.glassBorderGradient(isDark: theme.mode.isDark),
+                            MeeshyColors.glassBorderGradient(isDark: isDark),
                             lineWidth: 1
                         )
                 )
@@ -493,7 +495,7 @@ struct WidgetPreviewView: View {
             .frame(width: 110)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .stroke(Color(hex: color).opacity(0.2), lineWidth: 1)
@@ -532,11 +534,11 @@ struct WidgetPreviewView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(
-                            MeeshyColors.glassBorderGradient(isDark: theme.mode.isDark),
+                            MeeshyColors.glassBorderGradient(isDark: isDark),
                             lineWidth: 0.5
                         )
                 )

@@ -6,10 +6,11 @@ import MeeshyUI
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var router: Router
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var authManager = AuthManager.shared
     @ObservedObject private var prefs = UserPreferencesManager.shared
-    @Environment(\.colorScheme) private var systemColorScheme
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
 
     @State private var showLogoutConfirm = false
     @State private var showPrivacySettings = false
@@ -234,7 +235,7 @@ struct SettingsView: View {
                             HapticFeedback.light()
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 theme.preference = pref
-                                theme.syncWithSystem(systemColorScheme)
+                                theme.syncWithSystem(colorScheme)
                             }
                             syncThemeToPrefs(pref)
                         } label: {

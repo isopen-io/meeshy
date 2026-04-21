@@ -5,7 +5,9 @@ import MeeshySDK
 struct ShareLinkDetailView: View {
     let link: MyShareLink
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @State private var isActive: Bool
     @State private var showDeleteConfirm = false
     @State private var copiedFeedback = false
@@ -168,7 +170,7 @@ struct ShareLinkDetailView: View {
                 }
             }
             .background(RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
+                .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
         }
     }
 

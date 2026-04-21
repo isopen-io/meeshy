@@ -1542,8 +1542,8 @@ extension ThemedMessageBubble: @MainActor Equatable {
         // by count + emoji+participantId identity so swapping one emoji
         // for another (same count) still invalidates the cache.
         lhs.message.reactions.count == rhs.message.reactions.count &&
-        lhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }.sorted() ==
-            rhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }.sorted() &&
+        Set(lhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }) ==
+            Set(rhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }) &&
         lhs.message.attachments.count == rhs.message.attachments.count &&
         lhs.message.isEdited == rhs.message.isEdited &&
         lhs.message.deletedAt == rhs.message.deletedAt &&

@@ -31,7 +31,9 @@ struct MessageOverlayMenu: View {
     var onDelete: (() -> Void)?
     var onDeleteAttachment: ((String) -> Void)?
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @State private var isVisible = false
     @State private var dragOffset: CGFloat = 0
     @State private var forceTab: DetailTab? = nil
@@ -106,7 +108,6 @@ struct MessageOverlayMenu: View {
 
     private var emojiQuickBar: some View {
         let topEmojis = EmojiUsageTracker.topEmojis(count: 6, defaults: defaultEmojis)
-        let isDark = theme.mode.isDark
         return EmojiReactionPicker(
             quickEmojis: topEmojis,
             style: isDark ? .dark : .light,
@@ -238,7 +239,6 @@ struct MessageOverlayMenu: View {
 
     private var previewTextBubble: some View {
         let accent = Color(hex: contactColor)
-        let isDark = theme.mode.isDark
         let truncated = message.content.count > previewCharLimit
             ? String(message.content.prefix(previewCharLimit)) + "..."
             : message.content
@@ -352,7 +352,7 @@ struct MessageOverlayMenu: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
         )
     }
 
@@ -450,7 +450,7 @@ struct MessageOverlayMenu: View {
                 bottomTrailingRadius: 0,
                 topTrailingRadius: 20
             )
-            .fill(theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.7))
+            .fill(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.7))
         )
         .overlay(
             UnevenRoundedRectangle(
@@ -460,7 +460,7 @@ struct MessageOverlayMenu: View {
                 topTrailingRadius: 20
             )
             .stroke(
-                theme.mode.isDark
+                isDark
                     ? Color.white.opacity(0.12)
                     : Color.black.opacity(0.06),
                 lineWidth: 0.5
@@ -570,7 +570,9 @@ private struct PreviewAudioPlayer: View {
     let attachment: MessageAttachment
     let contactColor: String
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @StateObject private var player = OverlayAudioPlayer()
 
     private var accent: Color { Color(hex: contactColor) }
@@ -670,7 +672,7 @@ private struct PreviewAudioPlayer: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
         )
         .onDisappear { player.stop() }
     }
@@ -682,7 +684,9 @@ private struct PreviewVideoPlayer: View {
     let attachment: MessageAttachment
     let contactColor: String
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @StateObject private var player = OverlayAudioPlayer()
     @State private var showThumbnail = true
 
@@ -793,7 +797,7 @@ private struct PreviewVideoPlayer: View {
         .padding(.vertical, 8)
         .background(
             UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 0)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
         )
     }
 

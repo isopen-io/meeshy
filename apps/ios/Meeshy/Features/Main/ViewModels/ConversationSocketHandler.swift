@@ -381,15 +381,21 @@ final class ConversationSocketHandler {
                 let newStatus: Message.DeliveryStatus = summary.readCount > 0 ? .read
                     : summary.deliveredCount > 0 ? .delivered : .sent
 
-                for i in delegate.messages.indices.reversed() {
-                    guard delegate.messages[i].isMe else { continue }
-                    let current = delegate.messages[i].deliveryStatus
+                var snapshot = delegate.messages
+                var didChange = false
+                for i in snapshot.indices.reversed() {
+                    guard snapshot[i].isMe else { continue }
+                    let current = snapshot[i].deliveryStatus
                     guard current != .read else { break }
                     if newStatus.isBetterThan(current) {
-                        delegate.messages[i].deliveryStatus = newStatus
-                        delegate.messages[i].deliveredCount = summary.deliveredCount
-                        delegate.messages[i].readCount = summary.readCount
+                        snapshot[i].deliveryStatus = newStatus
+                        snapshot[i].deliveredCount = summary.deliveredCount
+                        snapshot[i].readCount = summary.readCount
+                        didChange = true
                     }
+                }
+                if didChange {
+                    delegate.messages = snapshot
                 }
             }
             .store(in: &cancellables)

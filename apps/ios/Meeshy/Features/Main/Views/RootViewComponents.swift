@@ -13,7 +13,9 @@ struct ThemedFloatingButton: View {
     var badge: Int = 0
     let action: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @State private var isPressed = false
 
     var body: some View {
@@ -148,7 +150,9 @@ struct ThemedActionButton: View {
 
 // MARK: - Themed Feed Overlay
 struct ThemedFeedOverlay: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = FeedViewModel()
     @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
@@ -170,14 +174,14 @@ struct ThemedFeedOverlay: View {
                 theme.backgroundGradient
 
                 Circle()
-                    .fill(Color(hex: "4ECDC4").opacity(theme.mode.isDark ? 0.1 : 0.06))
+                    .fill(Color(hex: "4ECDC4").opacity(isDark ? 0.1 : 0.06))
                     .frame(width: 300, height: 300)
                     .blur(radius: 80)
                     .offset(x: -80, y: -100)
                     .floating(range: 20, duration: 5.0)
 
                 Circle()
-                    .fill(MeeshyColors.error.opacity(theme.mode.isDark ? 0.1 : 0.06))
+                    .fill(MeeshyColors.error.opacity(isDark ? 0.1 : 0.06))
                     .frame(width: 250, height: 250)
                     .blur(radius: 70)
                     .offset(x: 100, y: 200)
@@ -356,7 +360,9 @@ struct ThemedFeedComposer: View {
     @Binding var text: String
     @FocusState var isFocused: Bool
     var onOpenComposerWithAttachment: ((String) -> Void)?
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @ObservedObject private var authManager = AuthManager.shared
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var showAttachmentMenu = false
@@ -568,7 +574,9 @@ struct ThemedFeedComposer: View {
 // MARK: - Themed Feed Card
 struct ThemedFeedCard: View {
     let item: FeedItem
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @State private var isLiked = false
     @State private var isBookmarked = false
     @State private var showCopiedToast = false
@@ -653,7 +661,7 @@ struct ThemedFeedCard: View {
                     RoundedRectangle(cornerRadius: 18)
                         .stroke(theme.border(tint: item.color), lineWidth: 1)
                 )
-                .shadow(color: Color(hex: item.color).opacity(theme.mode.isDark ? 0.15 : 0.1), radius: 8, y: 4)
+                .shadow(color: Color(hex: item.color).opacity(isDark ? 0.15 : 0.1), radius: 8, y: 4)
         )
     }
 

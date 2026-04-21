@@ -5,7 +5,9 @@ import MeeshySDK
 // MARK: - ShareLinksView
 
 struct ShareLinksView: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = ShareLinksViewModel()
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @State private var showCreate = false

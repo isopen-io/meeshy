@@ -42,7 +42,9 @@ struct AddParticipantSheet: View {
     let onAdded: () -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var searchQuery = ""
     @State private var searchResults: [UserSearchResult] = []

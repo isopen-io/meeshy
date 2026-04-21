@@ -13,7 +13,9 @@ struct ConversationDashboardView: View {
     let accentColor: String
     let participants: [PaginatedParticipant]
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var chartPeriod: ChartPeriod = .week
     @State private var agentAnalysis: ConversationAnalysis?
@@ -154,7 +156,7 @@ struct ConversationDashboardView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
                                 .background(
-                                    Capsule().fill(accent.opacity(theme.mode.isDark ? 0.12 : 0.08))
+                                    Capsule().fill(accent.opacity(isDark ? 0.12 : 0.08))
                                 )
                         }
                     }
@@ -170,7 +172,7 @@ struct ConversationDashboardView: View {
                                 .padding(.vertical, 3)
                                 .background(
                                     Capsule()
-                                        .fill(accent.opacity(theme.mode.isDark ? 0.08 : 0.05))
+                                        .fill(accent.opacity(isDark ? 0.08 : 0.05))
                                 )
                         }
                     }
@@ -209,7 +211,7 @@ struct ConversationDashboardView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(
-            Capsule().fill(color.opacity(theme.mode.isDark ? 0.12 : 0.08))
+            Capsule().fill(color.opacity(isDark ? 0.12 : 0.08))
         )
     }
 
@@ -393,7 +395,7 @@ struct ConversationDashboardView: View {
         }
         .padding(3)
         .background(
-            Capsule().fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+            Capsule().fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
         )
     }
 
@@ -478,7 +480,7 @@ struct ConversationDashboardView: View {
                         .padding(.vertical, 6)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(accent.opacity(theme.mode.isDark ? 0.04 : 0.02))
+                                .fill(accent.opacity(isDark ? 0.04 : 0.02))
                         )
                     }
 
@@ -504,7 +506,7 @@ struct ConversationDashboardView: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(theme.mode.isDark ? Color.white.opacity(0.02) : Color.black.opacity(0.01))
+                        .fill(isDark ? Color.white.opacity(0.02) : Color.black.opacity(0.01))
                 )
                 .overlay(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2)
@@ -527,7 +529,7 @@ struct ConversationDashboardView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
-            Capsule().fill(accent.opacity(theme.mode.isDark ? 0.08 : 0.05))
+            Capsule().fill(accent.opacity(isDark ? 0.08 : 0.05))
         )
     }
 
@@ -816,7 +818,7 @@ struct ConversationDashboardView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.035) : Color.white.opacity(0.9))
+                .fill(isDark ? Color.white.opacity(0.035) : Color.white.opacity(0.9))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)

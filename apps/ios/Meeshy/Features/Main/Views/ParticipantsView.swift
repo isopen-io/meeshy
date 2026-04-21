@@ -12,7 +12,9 @@ struct ParticipantsView: View {
     let currentUserRole: String?
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la liste de participants.
     private var presenceManager: PresenceManager { PresenceManager.shared }
@@ -428,7 +430,7 @@ struct ParticipantsView: View {
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(MeeshyColors.error.opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
             )
         }
         .padding(.horizontal, 20)

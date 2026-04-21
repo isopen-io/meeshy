@@ -514,7 +514,9 @@ struct FeedComposerSheet: View {
     var quotePost: FeedPost? = nil
     let onDismiss: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @ObservedObject private var authManager = AuthManager.shared
     @State private var composerText = ""
     @FocusState private var isFocused: Bool
@@ -750,7 +752,7 @@ struct FeedComposerSheet: View {
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.15 : 1))
+                                .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
                                 .overlay(
                                     Capsule()
                                         .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
@@ -778,8 +780,7 @@ struct FeedComposerSheet: View {
                         let langCode = newLocale.language.languageCode?.identifier ?? newLocale.identifier
                         composerLanguage = langCode
                     }
-                ),
-                theme: theme
+                )
             )
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))

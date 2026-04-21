@@ -146,7 +146,9 @@ struct ConversationView: View {
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var theme = ThemeManager.shared
+    var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) var colorScheme
+    var isDark: Bool { colorScheme == .dark }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la conversation. La présence est rafraîchie via les refreshs naturels.
     var presenceManager: PresenceManager { PresenceManager.shared }
@@ -366,7 +368,7 @@ struct ConversationView: View {
             Text(formatDateSection(for: date))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(
-                    theme.mode.isDark
+                    isDark
                         ? Color(hex: accentColor).opacity(0.85)
                         : Color(hex: accentColor)
                 )
@@ -377,14 +379,14 @@ struct ConversationView: View {
                 .background(
                     Capsule()
                         .fill(
-                            theme.mode.isDark
+                            isDark
                                 ? Color(hex: accentColor).opacity(0.12)
                                 : Color(hex: accentColor).opacity(0.08)
                         )
                         .overlay(
                             Capsule()
                                 .stroke(
-                                    Color(hex: accentColor).opacity(theme.mode.isDark ? 0.2 : 0.15),
+                                    Color(hex: accentColor).opacity(isDark ? 0.2 : 0.15),
                                     lineWidth: 0.5
                                 )
                         )
@@ -418,7 +420,7 @@ struct ConversationView: View {
             .padding(.horizontal, 16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(theme.mode.isDark ? Color.black.opacity(0.4) : Color(UIColor.systemBackground).opacity(0.6))
+                    .fill(isDark ? Color.black.opacity(0.4) : Color(UIColor.systemBackground).opacity(0.6))
             )
             .padding(.horizontal, 24)
             .padding(.top, 16)
@@ -807,7 +809,7 @@ struct ConversationView: View {
                     }
                     if composerState.showTextEmojiPicker {
                         EmojiKeyboardPanel(
-                            style: theme.mode.isDark ? .dark : .light,
+                            style: isDark ? .dark : .light,
                             onSelect: { emoji in
                                 composerState.emojiToInject = emoji
                             }
@@ -1222,7 +1224,7 @@ struct ConversationView: View {
                 conversationId: viewModel.conversationId,
                 parentMessageId: parentId,
                 accentColor: accentColor,
-                isDark: theme.mode.isDark,
+                isDark: isDark,
                 allMessages: viewModel.messages,
                 translationResolver: { messageId in
                     viewModel.preferredTranslation(for: messageId)?.translatedContent

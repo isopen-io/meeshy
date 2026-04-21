@@ -39,7 +39,9 @@ struct StoryViewerView: View {
     // Per-story draft storage
     @State var storyDrafts: [String: StoryDraft] = [:]
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
 
     /// Durée dynamique du slide courant — max(5, durée max des médias vidéo/audio).
     @State var computedStoryDuration: Double = 5.0 // internal for cross-file extension access

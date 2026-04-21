@@ -6,7 +6,9 @@ import MeeshyUI
 struct ConnectionBanner: View {
     @ObservedObject private var socketManager = MessageSocketManager.shared
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @State private var dotPhase: Int = 0
     @State private var showAfterDelay = false
     private let dotTimer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()

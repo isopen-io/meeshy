@@ -3,7 +3,9 @@ import Combine
 import MeeshySDK
 
 struct TrackingLinksView: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = TrackingLinksViewModel()
     @State private var showCreate = false
 

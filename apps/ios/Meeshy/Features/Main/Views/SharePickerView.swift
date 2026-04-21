@@ -22,7 +22,9 @@ struct SharePickerView: View {
     var onShareToConversation: ((Conversation, SharedContentType) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
@@ -108,7 +110,7 @@ struct SharePickerView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(theme.mode.isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
+        .background(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
     }
 
     @ViewBuilder
@@ -196,7 +198,7 @@ struct SharePickerView: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
         )
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

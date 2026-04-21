@@ -6,7 +6,9 @@ struct ReportMessageSheet: View {
     let accentColor: String
     let onSubmit: (String, String?) -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
     @State private var selectedType: ReportType? = nil
     @State private var reason = ""

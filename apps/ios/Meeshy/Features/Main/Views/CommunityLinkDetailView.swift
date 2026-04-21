@@ -5,7 +5,9 @@ import MeeshySDK
 struct CommunityLinkDetailView: View {
     let link: CommunityLink
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @State private var copiedFeedback = false
 
     var body: some View {
@@ -114,7 +116,7 @@ struct CommunityLinkDetailView: View {
                 infoRow("Créé le", value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
             }
             .background(RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
+                .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
         }
     }
 

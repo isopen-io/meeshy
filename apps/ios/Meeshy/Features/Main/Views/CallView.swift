@@ -8,7 +8,9 @@ import os
 
 struct CallView: View {
     @ObservedObject var callManager = CallManager.shared
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var transcriptionService = CallTranscriptionService()
     @State private var pulseScale: CGFloat = 1.0
     @State private var showControls = true

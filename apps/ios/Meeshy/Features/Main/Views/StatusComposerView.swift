@@ -34,7 +34,9 @@ struct StatusComposerView: View {
     var viaUsername: String? = nil
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
 
     @State private var selectedEmoji: String?
     @State private var statusText = ""

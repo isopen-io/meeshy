@@ -11,7 +11,9 @@ struct ContactCardView: View {
     let accentColor: String
     var onTap: (() -> Void)? = nil
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         Button {

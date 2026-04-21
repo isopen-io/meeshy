@@ -6,7 +6,9 @@ import MeeshyUI
 
 struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var authManager = AuthManager.shared
 
     @State private var displayName: String = ""

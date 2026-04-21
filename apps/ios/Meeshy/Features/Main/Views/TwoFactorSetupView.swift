@@ -4,7 +4,9 @@ import MeeshySDK
 import MeeshyUI
 
 struct TwoFactorSetupView: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @ObservedObject var viewModel: TwoFactorViewModel
 
     let onComplete: () -> Void
@@ -363,7 +365,9 @@ struct TwoFactorSetupView: View {
 // MARK: - Two-Factor Disable View
 
 struct TwoFactorDisableView: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @ObservedObject var viewModel: TwoFactorViewModel
 
     let onComplete: () -> Void
@@ -500,7 +504,9 @@ struct TwoFactorDisableView: View {
 // MARK: - Two-Factor Backup Codes View
 
 struct TwoFactorBackupCodesView: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @ObservedObject var viewModel: TwoFactorViewModel
 
     let onDismiss: () -> Void

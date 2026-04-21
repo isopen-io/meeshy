@@ -8,7 +8,9 @@ import MeeshyUI
 struct AudioPostComposerView: View {
     let onPublish: (URL, String, MobileTranscriptionPayload?) -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var audioRecorder = AudioRecorderManager()
     @State private var transcription: OnDeviceTranscription?
     @State private var isTranscribing = false
@@ -256,7 +258,7 @@ struct AudioPostComposerView: View {
             .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.12 : 0.8))
+                    .fill(MeeshyColors.indigo100.opacity(isDark ? 0.12 : 0.8))
                     .overlay(
                         Capsule()
                             .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
@@ -267,8 +269,7 @@ struct AudioPostComposerView: View {
         .opacity(phase == .recording || phase == .transcribing ? 0.5 : 1)
         .sheet(isPresented: $showLanguagePicker) {
             AudioLanguagePickerView(
-                selectedLocale: $selectedLocale,
-                theme: theme
+                selectedLocale: $selectedLocale
             )
         }
     }
@@ -392,7 +393,9 @@ private struct WaveformView: View {
 
 struct AudioLanguagePickerView: View {
     @Binding var selectedLocale: Locale
-    @ObservedObject var theme: ThemeManager
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
 

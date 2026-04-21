@@ -7,7 +7,9 @@ import MeeshySDK
 struct CreateShareLinkView: View {
     let onCreate: (CreatedShareLink) -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -366,12 +368,12 @@ struct CreateShareLinkView: View {
     // MARK: - Helpers UI
 
     private var rowBackground: some View {
-        theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03)
+        isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03)
     }
 
     private var divider: some View {
         Divider()
-            .background(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+            .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
     }
 
     private func formSection<Content: View>(
@@ -520,7 +522,9 @@ private struct ConversationPickerSheet: View {
     @Binding var selected: Conversation?
     @Binding var isPresented: Bool
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @State private var search: String = ""
 
     private var filtered: [Conversation] {

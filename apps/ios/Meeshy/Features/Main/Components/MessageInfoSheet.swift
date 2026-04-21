@@ -40,7 +40,9 @@ struct MessageInfoSheet: View {
     let message: Message
     let contactColor: String
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var appearAnimation = false
     @State private var receipts: [ParticipantReceipt] = []
@@ -137,14 +139,14 @@ struct MessageInfoSheet: View {
 
             // Ambient accent glow
             Circle()
-                .fill(accentColor.opacity(theme.mode.isDark ? 0.06 : 0.04))
+                .fill(accentColor.opacity(isDark ? 0.06 : 0.04))
                 .frame(width: 300, height: 300)
                 .blur(radius: 80)
                 .offset(x: -60, y: -120)
                 .ignoresSafeArea()
 
             Circle()
-                .fill(accentColor.opacity(theme.mode.isDark ? 0.04 : 0.02))
+                .fill(accentColor.opacity(isDark ? 0.04 : 0.02))
                 .frame(width: 200, height: 200)
                 .blur(radius: 60)
                 .offset(x: 100, y: 80)
@@ -345,7 +347,7 @@ struct MessageInfoSheet: View {
                     .frame(width: 32, height: 32)
                     .background(
                         Circle()
-                            .fill(accentColor.opacity(theme.mode.isDark ? 0.15 : 0.1))
+                            .fill(accentColor.opacity(isDark ? 0.15 : 0.1))
                     )
 
                 // Content text
@@ -434,7 +436,7 @@ struct MessageInfoSheet: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(
-                        theme.mode.isDark
+                        isDark
                             ? Color.white.opacity(0.03)
                             : Color.white.opacity(0.5)
                     )
@@ -444,8 +446,8 @@ struct MessageInfoSheet: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                accentColor.opacity(theme.mode.isDark ? 0.2 : 0.12),
-                                Color.white.opacity(theme.mode.isDark ? 0.06 : 0.3)
+                                accentColor.opacity(isDark ? 0.2 : 0.12),
+                                Color.white.opacity(isDark ? 0.06 : 0.3)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -454,7 +456,7 @@ struct MessageInfoSheet: View {
                     )
             )
             .shadow(
-                color: Color.black.opacity(theme.mode.isDark ? 0.15 : 0.04),
+                color: Color.black.opacity(isDark ? 0.15 : 0.04),
                 radius: 8,
                 y: 4
             )

@@ -4,7 +4,9 @@ import MeeshySDK
 
 struct AffiliateView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = AffiliateViewModel()
     @State private var showCreateSheet = false
 

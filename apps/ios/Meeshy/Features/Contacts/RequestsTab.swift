@@ -5,7 +5,9 @@ import MeeshyUI
 
 struct RequestsTab: View {
     @ObservedObject var viewModel: RequestsViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     @State private var activeFilter: RequestFilter = .received

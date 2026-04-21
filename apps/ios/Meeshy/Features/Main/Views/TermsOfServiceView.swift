@@ -5,7 +5,9 @@ import MeeshyUI
 
 struct TermsOfServiceView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
 
     @State private var selectedLanguage = "fr"
 

@@ -134,7 +134,9 @@ struct iPadLeftColumnHeader: View {
     var onNotificationsTap: (() -> Void)?
     var onSettingsTap: (() -> Void)?
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -160,7 +162,7 @@ struct iPadLeftColumnHeader: View {
                     .padding(.vertical, 6)
                     .background(
                         Capsule()
-                            .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.15 : 1))
+                            .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
                     )
                 }
             }
@@ -215,7 +217,9 @@ struct iPadLeftColumnHeader: View {
 struct iPadResizableHandle: View {
     @Binding var ratio: CGFloat
     let screenWidth: CGFloat
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @State private var isDragging = false
 
     private let minRatio: CGFloat = 0.30
@@ -225,11 +229,11 @@ struct iPadResizableHandle: View {
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.08))
+                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.08))
                 .frame(width: 1)
 
             RoundedRectangle(cornerRadius: 2)
-                .fill(isDragging ? MeeshyColors.indigo400 : (theme.mode.isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)))
+                .fill(isDragging ? MeeshyColors.indigo400 : (isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)))
                 .frame(width: 4, height: 36)
                 .animation(.easeInOut(duration: 0.15), value: isDragging)
         }

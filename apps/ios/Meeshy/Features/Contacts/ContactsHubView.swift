@@ -4,7 +4,9 @@ import MeeshySDK
 import MeeshyUI
 
 struct ContactsHubView: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
     @State private var scrollOffset: CGFloat = 0
     @State private var selectedTab: ContactsTab

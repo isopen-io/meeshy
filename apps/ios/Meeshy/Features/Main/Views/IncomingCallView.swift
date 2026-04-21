@@ -7,7 +7,9 @@ import MeeshyUI
 
 struct IncomingCallView: View {
     @ObservedObject var callManager = CallManager.shared
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @State private var ringScale: CGFloat = 0.8
     @State private var ringOpacity: Double = 1.0
     @State private var avatarBounce: Bool = false

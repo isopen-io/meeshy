@@ -8,7 +8,9 @@ struct ThreadView: View {
     let conversationId: String
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var replyText = ""
     @State private var replies: [MeeshyMessage] = []
@@ -224,7 +226,7 @@ struct ThreadView: View {
             .padding(.horizontal, 16)
         }
         .padding(.vertical, 10)
-        .background(theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
+        .background(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
     }
 
     // MARK: - Actions

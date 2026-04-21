@@ -8,7 +8,9 @@ struct StatusBubbleOverlay: View {
     @Binding var isPresented: Bool
     var onRepublish: ((StatusEntry) -> Void)? = nil
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var audioPlayer = AudioPlayerManager()
     @State private var appearAnimation = false
 

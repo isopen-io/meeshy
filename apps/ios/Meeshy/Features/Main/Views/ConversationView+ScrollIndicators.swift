@@ -247,7 +247,6 @@ extension ConversationView {
     // MARK: - Inline Typing Indicator (shown after last message)
 
     var inlineTypingIndicator: some View {
-        let isDark = theme.mode.isDark
         let accent = Color(hex: accentColor)
 
         return HStack(spacing: 6) {

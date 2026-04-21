@@ -3,7 +3,8 @@ import Combine
 import MeeshyUI
 
 struct OfflineBanner: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         HStack(spacing: 8) {

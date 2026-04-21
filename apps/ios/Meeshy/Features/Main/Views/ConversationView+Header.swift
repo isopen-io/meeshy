@@ -16,7 +16,7 @@ extension ConversationView {
                 memberCount: conversation?.memberCount ?? 2,
                 accentHex: accentColor,
                 secondaryHex: secondaryColor,
-                isDarkMode: theme.mode.isDark
+                isDarkMode: isDark
             )
         )
     }
