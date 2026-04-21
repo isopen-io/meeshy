@@ -306,6 +306,29 @@ final class GRDBCacheStoreTests: XCTestCase {
         }
     }
 
+    // MARK: - Encryption
+
+    func test_saveAndLoad_withEncryption_roundTrips() async throws {
+        let db = try makeDB()
+        let policy = CachePolicy(ttl: .hours(1), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
+        let store = GRDBCacheStore<String, CacheTestItem>(
+            policy: policy,
+            db: db,
+            namespace: "enc_test",
+            encrypted: true
+        )
+        let items = [CacheTestItem(id: "1", name: "Secret")]
+        await store.save(items, for: "key1")
+        let result = await store.load(for: "key1")
+        switch result {
+        case .fresh(let loaded, _):
+            XCTAssertEqual(loaded.count, 1)
+            XCTAssertEqual(loaded[0].name, "Secret")
+        default:
+            XCTFail("Expected .fresh, got \(result)")
+        }
+    }
+
     // MARK: - Concurrent access
 
     func test_concurrentSaveAndLoad_doesNotCrash() async throws {

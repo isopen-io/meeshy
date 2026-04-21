@@ -92,6 +92,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate
+        sut.armSocketSubscriptions()
         return (sut, delegate, messageSocket)
     }
 
@@ -622,5 +623,29 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(delegate.syncMissedCalled)
+    }
+
+    // MARK: - armSocketSubscriptions idempotency
+
+    func test_armSocketSubscriptions_calledTwice_doesNotDuplicate() async throws {
+        let socket = MockMessageSocket()
+        let sut = ConversationSocketHandler(
+            conversationId: conversationId,
+            currentUserId: currentUserId,
+            messageSocket: socket
+        )
+        let delegate = MockConversationSocketDelegate()
+        sut.delegate = delegate
+        sut.armSocketSubscriptions()
+        sut.armSocketSubscriptions()
+
+        let apiMsg = makeAPIMessage(id: "duptest", senderId: otherUserId, content: "Once")
+        socket.simulateMessage(apiMsg)
+
+        await Task.yield()
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(delegate.messages.count, 1, "Should receive message only once despite double armSocketSubscriptions()")
+        XCTAssertEqual(delegate.newMessageAppended, 1)
     }
 }

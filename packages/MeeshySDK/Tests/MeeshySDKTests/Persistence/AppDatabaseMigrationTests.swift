@@ -200,4 +200,22 @@ final class AppDatabaseMigrationTests: XCTestCase {
         // Running migrations again on the same db should not error
         XCTAssertNoThrow(try AppDatabase.runMigrations(on: db1))
     }
+
+    // MARK: - v5 migration: translation_cache table
+
+    func test_v5Migration_createsTranslationCacheTable() throws {
+        let db = try migratedDatabase()
+        try db.read { db in
+            let exists = try db.tableExists("translation_cache")
+            XCTAssertTrue(exists, "translation_cache table should exist after v5 migration")
+        }
+    }
+
+    func test_v5Migration_translationCacheHasCompoundPK() throws {
+        let db = try migratedDatabase()
+        try db.read { db in
+            let pk = try db.primaryKey("translation_cache")
+            XCTAssertEqual(pk.columns, ["messageId", "targetLanguage"])
+        }
+    }
 }
