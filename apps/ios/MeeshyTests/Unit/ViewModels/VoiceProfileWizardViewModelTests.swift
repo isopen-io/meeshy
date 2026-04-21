@@ -2,6 +2,7 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
+@MainActor
 final class VoiceProfileWizardViewModelTests: XCTestCase {
 
     // MARK: - Factory

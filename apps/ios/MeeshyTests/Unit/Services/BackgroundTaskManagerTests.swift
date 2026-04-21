@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class BackgroundTaskManagerTests: XCTestCase {
 
     // BackgroundTaskManager is tightly coupled to BGTaskScheduler.

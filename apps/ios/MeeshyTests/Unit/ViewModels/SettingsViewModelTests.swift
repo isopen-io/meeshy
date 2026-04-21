@@ -6,6 +6,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class SettingsViewModelTests: XCTestCase {
     var sut: SettingsViewModel!
 

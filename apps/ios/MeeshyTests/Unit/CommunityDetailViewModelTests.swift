@@ -4,6 +4,7 @@ import MeeshySDK
 import SwiftUI
 import MeeshyUI
 
+@MainActor
 final class CommunityDetailViewModelTests: XCTestCase {
     
     func testInitialState() {

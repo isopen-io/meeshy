@@ -6,6 +6,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class MediaPickerViewModelTests: XCTestCase {
     var sut: MediaPickerViewModel!
 

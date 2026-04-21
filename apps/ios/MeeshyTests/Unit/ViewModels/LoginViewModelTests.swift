@@ -8,6 +8,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class LoginViewModelTests: XCTestCase {
     var sut: LoginViewModel!
     var mockAuthService: MockAuthService!

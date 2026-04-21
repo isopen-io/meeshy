@@ -4,6 +4,7 @@ import MeeshySDK
 @testable import Meeshy
 
 /// Integration test: offline -> operations queued -> reconnect -> flush
+@MainActor
 final class OfflineFlowTests: XCTestCase {
 
     // MARK: - Offline Queue Item Creation

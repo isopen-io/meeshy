@@ -8,6 +8,7 @@ import MeeshySDK
 // Tab-like switching is managed by Router.push() for top-level hub routes.
 // This file tests that switching between hub routes works correctly.
 
+@MainActor
 final class TabNavigationTests: XCTestCase {
 
     // MARK: - Hub Route Switching

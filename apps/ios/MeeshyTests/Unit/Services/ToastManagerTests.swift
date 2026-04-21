@@ -2,6 +2,7 @@ import XCTest
 import MeeshyUI
 @testable import Meeshy
 
+@MainActor
 final class ToastManagerTests: XCTestCase {
 
     // ToastManager is a singleton with @MainActor. We test the public API

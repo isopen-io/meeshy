@@ -4,6 +4,7 @@ import MeeshySDK
 @testable import Meeshy
 
 /// Integration test: sendMessage -> optimistic update -> confirmation -> finalized
+@MainActor
 final class MessageSendFlowTests: XCTestCase {
 
     // MARK: - Helpers

@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class CallTranscriptionServiceTests: XCTestCase {
 
     // MARK: - Factory
@@ -160,6 +161,7 @@ final class CallTranscriptionServiceTests: XCTestCase {
 
 // MARK: - TranscriptionSegment Data Model Tests
 
+@MainActor
 final class TranscriptionSegmentTests: XCTestCase {
 
     func test_segment_storesAllProperties() {
@@ -215,6 +217,7 @@ final class TranscriptionSegmentTests: XCTestCase {
 
 // MARK: - TranscriptionCapabilityLevel Tests
 
+@MainActor
 final class TranscriptionCapabilityLevelTests: XCTestCase {
 
     func test_ordering_noneIsLessThanBasic() {
@@ -239,6 +242,7 @@ final class TranscriptionCapabilityLevelTests: XCTestCase {
 
 // MARK: - TranscriptionPermission Tests
 
+@MainActor
 final class TranscriptionPermissionTests: XCTestCase {
 
     func test_equatable() {
@@ -249,6 +253,7 @@ final class TranscriptionPermissionTests: XCTestCase {
 
 // MARK: - TranscriptionError Tests
 
+@MainActor
 final class TranscriptionErrorTests: XCTestCase {
 
     func test_permissionDenied_hasDescription() {

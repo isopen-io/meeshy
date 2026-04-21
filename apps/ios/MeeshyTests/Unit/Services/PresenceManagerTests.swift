@@ -2,6 +2,7 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class PresenceManagerTests: XCTestCase {
 
     // Use typealias to disambiguate the app's UserPresence from the SDK's

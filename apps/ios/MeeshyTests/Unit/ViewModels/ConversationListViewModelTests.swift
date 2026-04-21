@@ -3,6 +3,7 @@ import Combine
 import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class ConversationListViewModelTests: XCTestCase {
 
     // MARK: - Factory

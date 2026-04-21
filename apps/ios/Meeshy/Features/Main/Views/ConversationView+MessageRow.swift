@@ -1,6 +1,7 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 nonisolated(unsafe) private var searchDebounceKey: UInt8 = 0
 
@@ -135,7 +136,8 @@ extension ConversationView {
                     mentionDisplayNames: viewModel.mentionDisplayNames,
                     highlightSearchTerm: viewModel.currentSearchQuery,
                     isEditSaving: viewModel.isEditSaving(messageId: msg.id),
-                    hasEditHistory: !viewModel.editRevisions(for: msg.id).isEmpty
+                    hasEditHistory: !viewModel.editRevisions(for: msg.id).isEmpty,
+                    activeVideoURL: SharedAVPlayerManager.shared.isPlaying ? SharedAVPlayerManager.shared.activeURL : nil
                 )
                 .equatable()
                 .onLongPressGesture(minimumDuration: 0.5) {

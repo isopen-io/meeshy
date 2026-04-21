@@ -3,6 +3,7 @@ import MeeshySDK
 @testable import Meeshy
 
 /// Integration test: login -> token stored -> API uses token -> logout -> token cleared
+@MainActor
 final class AuthFlowTests: XCTestCase {
 
     // MARK: - Helpers

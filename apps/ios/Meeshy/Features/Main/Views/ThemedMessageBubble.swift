@@ -47,6 +47,7 @@ struct ThemedMessageBubble: View {
     /// `true` when we have a locally-recorded edit history available for
     /// the "View edits" affordance in the detail sheet.
     var hasEditHistory: Bool = false
+    var activeVideoURL: String? = nil
 
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
@@ -65,7 +66,7 @@ struct ThemedMessageBubble: View {
 
     @State var fullscreenLocationAttachment: MessageAttachment? = nil
     var theme: ThemeManager { ThemeManager.shared } // non-observed — isDark drives re-renders
-    @ObservedObject private var videoPlayerManager = SharedAVPlayerManager.shared
+    // Video player state passed as primitive to avoid @ObservedObject on singleton in leaf view
 
     // Ephemeral timer state
     @State private var ephemeralSecondsRemaining: TimeInterval = 0
@@ -139,8 +140,8 @@ struct ThemedMessageBubble: View {
     }
 
     private var isVideoPlaying: Bool {
-        videoPlayerManager.isPlaying &&
-        visualAttachments.contains(where: { $0.type == .video && $0.fileUrl == videoPlayerManager.activeURL })
+        activeVideoURL != nil &&
+        visualAttachments.contains(where: { $0.type == .video && $0.fileUrl == activeVideoURL })
     }
 
     private var hasTextOrNonMediaContent: Bool {
