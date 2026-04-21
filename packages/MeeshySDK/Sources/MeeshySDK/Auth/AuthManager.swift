@@ -68,7 +68,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     private var activeUserId: String? {
         get { UserDefaults.standard.string(forKey: activeUserIdUDKey) }
-        set { UserDefaults.standard.set(newValue, forKey: activeUserIdUDKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: activeUserIdUDKey)
+            UserDefaults(suiteName: "group.me.meeshy.app")?.set(newValue, forKey: activeUserIdUDKey)
+        }
     }
 
     // MARK: - Token Access

@@ -105,15 +105,15 @@ public actor CacheCoordinator {
         self.socialSocket = socialSocket
         self.db = db
 
-        self.conversations = GRDBCacheStore(policy: .conversations, db: db, namespace: "conv")
-        self.messages = GRDBCacheStore(policy: .messages, db: db, namespace: "msg")
+        self.conversations = GRDBCacheStore(policy: .conversations, db: db, namespace: "conv", encrypted: true)
+        self.messages = GRDBCacheStore(policy: .messages, db: db, namespace: "msg", encrypted: true)
         self.participants = GRDBCacheStore(policy: .participants, db: db, namespace: "part")
-        self.profiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "prof")
+        self.profiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "prof", encrypted: true)
         self.feed = GRDBCacheStore(policy: .feedPosts, db: db, namespace: "feed")
         self.comments = GRDBCacheStore(policy: .comments, db: db, namespace: "comments")
         self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories")
         self.stats = GRDBCacheStore(policy: .userStats, db: db, namespace: "stats")
-        self.notifications = GRDBCacheStore(policy: .notifications, db: db, namespace: "notif")
+        self.notifications = GRDBCacheStore(policy: .notifications, db: db, namespace: "notif", encrypted: true)
         self.affiliateTokens = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "affil")
         self.shareLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "slinks")
         self.trackingLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "tlinks")

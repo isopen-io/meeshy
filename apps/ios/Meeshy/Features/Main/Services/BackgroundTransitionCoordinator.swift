@@ -80,6 +80,9 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
 
     func resumeFromBackground() async {
         logger.info("Foreground resume starting")
+        await withBudget("nse.consumePending") {
+            await NSEPendingMessageConsumer.shared.consumeAll()
+        }
         await withBudget("sockets.resume") {
             MessageSocketManager.shared.resumeFromBackground()
             SocialSocketManager.shared.resumeFromBackground()

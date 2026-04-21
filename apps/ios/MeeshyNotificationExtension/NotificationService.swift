@@ -29,6 +29,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         applyBadge(to: bestAttemptContent)
         applyThreading(to: bestAttemptContent)
         updateSharedUnreadCount(from: bestAttemptContent.userInfo)
+        prefetchMessageData(from: bestAttemptContent.userInfo)
 
         if let imageURLString = bestAttemptContent.userInfo["imageURL"] as? String,
            let imageURL = URL(string: imageURLString) {
@@ -134,6 +135,26 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         } else if let strCount = userInfo["unreadCount"] as? String, let parsed = Int(strCount) {
             defaults.set(max(parsed, 0), forKey: "unread_count")
         }
+    }
+
+    // MARK: - Message Prefetch
+
+    /// Fire-and-forget prefetch of the message data from the REST API.
+    /// The result is written to the App Group container so the main app
+    /// can merge it into the GRDB cache on foreground resume, giving the
+    /// user instant access to the message without a network round-trip.
+    private func prefetchMessageData(from userInfo: [AnyHashable: Any]) {
+        guard let conversationId = userInfo["conversationId"] as? String,
+              let messageId = userInfo["messageId"] as? String,
+              !conversationId.isEmpty, !messageId.isEmpty else { return }
+
+        let apiBase = (userInfo["apiBaseURL"] as? String) ?? "https://gate.meeshy.me"
+
+        NSEDataSync.syncMessage(
+            conversationId: conversationId,
+            messageId: messageId,
+            apiBaseURL: apiBase
+        ) { _ in }
     }
 
     // MARK: - Attachments

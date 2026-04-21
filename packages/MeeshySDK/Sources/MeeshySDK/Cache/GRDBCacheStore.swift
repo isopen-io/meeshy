@@ -11,6 +11,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     private let db: any DatabaseWriter
     private let maxL1Keys: Int
     private let namespace: String
+    private let encrypted: Bool
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb-cache-store")
 
     private var memoryCache: [Key: L1Entry] = [:]
@@ -24,11 +25,12 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         var loadedAt: Date
     }
 
-    public init(policy: CachePolicy, db: any DatabaseWriter, namespace: String = "", maxL1Keys: Int = 20) {
+    public init(policy: CachePolicy, db: any DatabaseWriter, namespace: String = "", maxL1Keys: Int = 20, encrypted: Bool = false) {
         self.policy = policy
         self.db = db
         self.namespace = namespace
         self.maxL1Keys = maxL1Keys
+        self.encrypted = encrypted
     }
 
     private func namespacedKey(_ key: String) -> String {
@@ -243,13 +245,15 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     private nonisolated func writeToL2(_ items: [Value], for keyStr: String) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
+        let encrypt = encrypted
         do {
             try db.write { db in
                 try CacheEntry.filter(Column("key") == keyStr).deleteAll(db)
 
                 let now = Date()
                 for item in items {
-                    let data = try encoder.encode(item)
+                    let json = try encoder.encode(item)
+                    let data = encrypt ? (DatabaseEncryption.shared.encrypt(json) ?? json) : json
                     let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
                     try entry.save(db)
                 }
@@ -265,6 +269,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     private nonisolated func readFromL2(for keyStr: String) -> (items: [Value], lastFetchedAt: Date)? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
+        let encrypt = encrypted
         do {
             return try db.read { db in
                 guard let meta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db) else {
@@ -274,11 +279,12 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                 let entries = try CacheEntry.filter(Column("key") == keyStr).fetchAll(db)
                 guard !entries.isEmpty else { return nil }
 
-                let items: [Value] = try entries.compactMap { entry in
-                    try decoder.decode(Value.self, from: entry.encodedData)
+                let items: [Value] = entries.compactMap { entry in
+                    let raw = encrypt ? (DatabaseEncryption.shared.decrypt(entry.encodedData) ?? entry.encodedData) : entry.encodedData
+                    return try? decoder.decode(Value.self, from: raw)
                 }
 
-                return (items, meta.lastFetchedAt)
+                return items.isEmpty ? nil : (items, meta.lastFetchedAt)
             }
         } catch {
             logger.error("Failed to load from L2 for key \(keyStr): \(error)")
@@ -311,6 +317,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     private nonisolated func flushKeyToL2(keyStr: String, items: [Value]) -> Bool {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
+        let encrypt = encrypted
         do {
             try db.write { db in
                 let existingIds = try String.fetchAll(db, sql: "SELECT itemId FROM cache_entries WHERE key = ?", arguments: [keyStr])
@@ -323,7 +330,8 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
 
                 let now = Date()
                 for item in items {
-                    let data = try encoder.encode(item)
+                    let json = try encoder.encode(item)
+                    let data = encrypt ? (DatabaseEncryption.shared.encrypt(json) ?? json) : json
                     let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
                     try entry.save(db)
                 }
