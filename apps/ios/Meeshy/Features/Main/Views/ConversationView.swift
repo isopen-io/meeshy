@@ -913,9 +913,7 @@ struct ConversationView: View {
         if viewModel.isLoadingInitial && viewModel.messages.isEmpty {
             ForEach(0..<6, id: \.self) { index in
                 SkeletonMessageBubble(index: index)
-                    .staggeredAppear(index: index, baseDelay: 0.04)
             }
-            .transition(.opacity)
         } else if viewModel.messages.isEmpty && !viewModel.isLoadingInitial {
             conversationEmptyState
         } else {
@@ -956,20 +954,18 @@ struct ConversationView: View {
 
         Color.clear.frame(height: 1).id("near_bottom_anchor")
             .onAppear {
+                guard initialScrollCompleted else { return }
                 scrollState.isNearBottom = true; scrollState.unreadBadgeCount = 0; viewModel.lastUnreadMessage = nil
                 if viewModel.firstUnreadMessageId != nil {
                     withAnimation(.easeOut(duration: 0.3)) { viewModel.firstUnreadMessageId = nil }
                 }
             }
             .onDisappear {
-                // Ne pas basculer isNearBottom pendant un scroll programmatique —
-                // les animations spring causent des micro-rebonds qui font
-                // apparaître/disparaître l'ancre, provoquant une boucle de scroll infinie.
-                guard !viewModel.isProgrammaticScroll else { return }
+                guard initialScrollCompleted, !viewModel.isProgrammaticScroll else { return }
                 scrollState.isNearBottom = false
             }
 
-        Color.clear.frame(height: composerHeight).id("bottom_spacer")
+        Color.clear.frame(height: max(composerHeight, 60)).id("bottom_spacer")
     }
 
     @ViewBuilder
@@ -984,12 +980,13 @@ struct ConversationView: View {
             .defaultScrollAnchor(.bottom)
             .onChange(of: viewModel.isLoadingInitial) { wasLoading, isLoading in
                 guard wasLoading && !isLoading, !viewModel.messages.isEmpty else { return }
-                initialScrollCompleted = false
+                // .defaultScrollAnchor(.bottom) handles the initial positioning —
+                // a redundant proxy.scrollTo here causes visible micro-scroll jitter
+                // because the layout hasn't stabilized yet when the onChange fires.
+                // We only mark programmatic scroll to suppress the near_bottom_anchor
+                // onDisappear toggle during the initial layout pass.
                 viewModel.markProgrammaticScroll()
-                proxy.scrollTo("bottom_spacer", anchor: .bottom)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    initialScrollCompleted = true
-                }
+                initialScrollCompleted = true
             }
             .onChange(of: viewModel.newMessageAppended) { _, _ in
                 guard initialScrollCompleted, let lastMsg = viewModel.messages.last else { return }
