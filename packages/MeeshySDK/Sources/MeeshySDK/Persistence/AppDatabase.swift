@@ -46,7 +46,28 @@ public final class AppDatabase: @unchecked Sendable {
                 try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
             }
 
+            // Apply iOS Data Protection: the SQLite file and its directory are
+            // encrypted by the OS when the device is locked. This is equivalent
+            // to `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` for the
+            // Keychain — the DB is readable after the first unlock each boot
+            // (required for background tasks and NSE) but fully encrypted at
+            // rest and excluded from unencrypted backups.
+            try (directoryURL as NSURL).setResourceValue(
+                URLFileProtection.completeUntilFirstUserAuthentication,
+                forKey: .fileProtectionKey
+            )
+
             let databaseURL = directoryURL.appendingPathComponent("meeshy.sqlite")
+
+            // Mark the database file itself (if it already exists) with the
+            // same protection level so pre-existing installs pick up the
+            // encryption retroactively.
+            if fileManager.fileExists(atPath: databaseURL.path) {
+                try (databaseURL as NSURL).setResourceValue(
+                    URLFileProtection.completeUntilFirstUserAuthentication,
+                    forKey: .fileProtectionKey
+                )
+            }
 
             var configuration = Configuration()
             configuration.prepareDatabase { db in
@@ -133,6 +154,17 @@ public final class AppDatabase: @unchecked Sendable {
         migrator.registerMigration("v4_drop_legacy_tables") { db in
             try db.drop(table: "conversations")
             try db.drop(table: "messages")
+        }
+
+        migrator.registerMigration("v5_translation_cache") { db in
+            try db.create(table: "translation_cache") { t in
+                t.column("messageId", .text).notNull()
+                t.column("targetLanguage", .text).notNull()
+                t.column("encodedData", .blob).notNull()
+                t.column("cachedAt", .datetime).notNull()
+                t.primaryKey(["messageId", "targetLanguage"])
+            }
+            try db.create(index: "idx_translation_cache_messageId", on: "translation_cache", columns: ["messageId"])
         }
 
         try migrator.migrate(writer)

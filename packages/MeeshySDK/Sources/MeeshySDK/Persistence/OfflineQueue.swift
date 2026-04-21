@@ -139,7 +139,11 @@ public actor OfflineQueue {
         var successIds: [String] = []
         var successPayloads: [OfflineRetrySuccess] = []
 
-        for item in items {
+        for (index, item) in items.enumerated() {
+            if index > 0 {
+                let jitter = UInt64(Double.random(in: 100...500) * 1_000_000)
+                try? await Task.sleep(nanoseconds: jitter)
+            }
             if let serverId = await retrySend(item) {
                 successIds.append(item.id)
                 successPayloads.append(OfflineRetrySuccess(
@@ -208,7 +212,7 @@ public actor OfflineQueue {
     private func saveToDisk() {
         do {
             let data = try encoder.encode(items)
-            try data.write(to: queueFileURL, options: .atomic)
+            try data.write(to: queueFileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         } catch {
             logger.error("Failed to save offline queue: \(error.localizedDescription)")
         }

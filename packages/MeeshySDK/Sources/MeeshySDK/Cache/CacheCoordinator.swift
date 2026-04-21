@@ -89,6 +89,7 @@ public actor CacheCoordinator {
 
     private let messageSocket: any MessageSocketProviding
     private let socialSocket: any SocialSocketProviding
+    nonisolated let db: any DatabaseWriter
     private var cancellables = Set<AnyCancellable>()
     private var lifecycleObservers: [NSObjectProtocol] = []
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "cache-coordinator")
@@ -102,6 +103,7 @@ public actor CacheCoordinator {
     ) {
         self.messageSocket = messageSocket
         self.socialSocket = socialSocket
+        self.db = db
 
         self.conversations = GRDBCacheStore(policy: .conversations, db: db, namespace: "conv")
         self.messages = GRDBCacheStore(policy: .messages, db: db, namespace: "msg")
@@ -337,40 +339,67 @@ public actor CacheCoordinator {
 
     // MARK: - Translation Cache Persistence
 
-    private static let translationCacheKey = "meeshy_cache_translations"
-    private static let transcriptionCacheKey = "meeshy_cache_transcriptions"
-    private static let audioTranslationCacheKey = "meeshy_cache_audio_translations"
-
     private func persistTranslationCaches() {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(translationCache) {
-            UserDefaults.standard.set(data, forKey: Self.translationCacheKey)
-        }
-        if let data = try? encoder.encode(transcriptionCache) {
-            UserDefaults.standard.set(data, forKey: Self.transcriptionCacheKey)
-        }
-        if let data = try? encoder.encode(audioTranslationCache) {
-            UserDefaults.standard.set(data, forKey: Self.audioTranslationCacheKey)
+        let snapshot = translationCache
+        let timestamps = translationTimestamps
+        do {
+            try db.write { db in
+                try TranslationCacheRecord.deleteAll(db)
+                let now = Date()
+                for (msgId, translations) in snapshot {
+                    let cachedAt = timestamps[msgId] ?? now
+                    for translation in translations {
+                        let data = try encoder.encode(translation)
+                        let record = TranslationCacheRecord(
+                            messageId: msgId,
+                            targetLanguage: translation.targetLanguage,
+                            encodedData: data,
+                            cachedAt: cachedAt
+                        )
+                        try record.save(db)
+                    }
+                }
+            }
+        } catch {
+            logger.error("Failed to persist translation cache to GRDB: \(error)")
         }
     }
 
     private func loadTranslationCaches() {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        if let data = UserDefaults.standard.data(forKey: Self.translationCacheKey),
-           let decoded = try? decoder.decode([String: [TranslationData]].self, from: data) {
-            translationCache = decoded
-        }
-        if let data = UserDefaults.standard.data(forKey: Self.transcriptionCacheKey),
-           let decoded = try? decoder.decode([String: TranscriptionReadyEvent].self, from: data) {
-            transcriptionCache = decoded
-        }
-        if let data = UserDefaults.standard.data(forKey: Self.audioTranslationCacheKey),
-           let decoded = try? decoder.decode([String: [AudioTranslationEvent]].self, from: data) {
-            audioTranslationCache = decoded
+        let cutoff = Date().addingTimeInterval(-Self.translationMaxAge)
+        do {
+            let records: [TranslationCacheRecord] = try db.read { db in
+                try TranslationCacheRecord
+                    .filter(Column("cachedAt") > cutoff)
+                    .fetchAll(db)
+            }
+            var loaded: [String: [TranslationData]] = [:]
+            var stamps: [String: Date] = [:]
+            var order: [String] = []
+            for record in records {
+                let translation = try decoder.decode(TranslationData.self, from: record.encodedData)
+                loaded[record.messageId, default: []].append(translation)
+                if stamps[record.messageId] == nil {
+                    stamps[record.messageId] = record.cachedAt
+                    order.append(record.messageId)
+                }
+            }
+            translationCache = loaded
+            translationTimestamps = stamps
+            translationInsertionOrder = order
+        } catch {
+            logger.error("Failed to load translation cache from GRDB: \(error)")
         }
         logger.info("Loaded translation caches: \(self.translationCache.count) translations, \(self.transcriptionCache.count) transcriptions, \(self.audioTranslationCache.count) audio translations")
+
+        // One-time cleanup: remove legacy UserDefaults keys
+        UserDefaults.standard.removeObject(forKey: "meeshy_cache_translations")
+        UserDefaults.standard.removeObject(forKey: "meeshy_cache_transcriptions")
+        UserDefaults.standard.removeObject(forKey: "meeshy_cache_audio_translations")
     }
 
     public func invalidateAll() async {
@@ -392,8 +421,10 @@ public actor CacheCoordinator {
         transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
         audioTranslationInsertionOrder.removeAll()
-        UserDefaults.standard.removeObject(forKey: Self.translationCacheKey)
-        UserDefaults.standard.removeObject(forKey: Self.transcriptionCacheKey)
-        UserDefaults.standard.removeObject(forKey: Self.audioTranslationCacheKey)
+        clearTranslationCacheDB()
+    }
+
+    private nonisolated func clearTranslationCacheDB() {
+        try? db.write { db in try TranslationCacheRecord.deleteAll(db) }
     }
 }

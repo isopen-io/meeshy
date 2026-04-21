@@ -103,7 +103,7 @@ public struct UserStatusEvent: Decodable, Sendable {
 
 // MARK: - Translation Event Data
 
-public struct TranslationData: Codable, Sendable {
+public struct TranslationData: Codable, Sendable, CacheIdentifiable {
     public let id: String
     public let messageId: String
     public let sourceLanguage: String

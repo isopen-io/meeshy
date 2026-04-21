@@ -13,8 +13,10 @@ struct SectionHeaderView: View {
     var isDropTarget: Bool = false
     let onToggle: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isTapped = false
+
+    private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         Button(action: {
@@ -37,7 +39,7 @@ struct SectionHeaderView: View {
                         .animation(.easeInOut(duration: 0.4), value: isExpanded)
 
                     Circle()
-                        .fill(Color(hex: section.color).opacity(isDropTarget ? 0.5 : (theme.mode.isDark ? 0.25 : 0.18)))
+                        .fill(Color(hex: section.color).opacity(isDropTarget ? 0.5 : (isDark ? 0.25 : 0.18)))
                         .frame(width: 32, height: 32)
                         .scaleEffect(isDropTarget ? 1.15 : (isTapped ? 1.2 : 1.0))
 
@@ -51,7 +53,7 @@ struct SectionHeaderView: View {
                 // Section name
                 Text(section.name)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(isDropTarget ? Color(hex: section.color) : theme.textPrimary)
+                    .foregroundColor(isDropTarget ? Color(hex: section.color) : (isDark ? Color(hex: "EEF2FF") : Color(hex: "1E1B4B")))
 
                 // Count badge
                 Text("\(count)")
@@ -61,7 +63,7 @@ struct SectionHeaderView: View {
                     .padding(.vertical, 3)
                     .background(
                         Capsule()
-                            .fill(Color(hex: section.color).opacity(isDropTarget ? 0.4 : (theme.mode.isDark ? 0.2 : 0.15)))
+                            .fill(Color(hex: section.color).opacity(isDropTarget ? 0.4 : (isDark ? 0.2 : 0.15)))
                     )
                     .scaleEffect(isTapped ? 1.1 : 1.0)
                     .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isTapped)
@@ -88,7 +90,7 @@ struct SectionHeaderView: View {
             .padding(.horizontal, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isDropTarget ? Color(hex: section.color).opacity(theme.mode.isDark ? 0.15 : 0.1) : (isExpanded ? Color(hex: section.color).opacity(0.04) : Color.clear))
+                    .fill(isDropTarget ? Color(hex: section.color).opacity(isDark ? 0.15 : 0.1) : (isExpanded ? Color(hex: section.color).opacity(0.04) : Color.clear))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
@@ -111,8 +113,10 @@ struct ConversationPreviewView: View {
     let conversation: Conversation
     var cachedMessages: [Message] = []
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
     @StateObject private var previewRouter = Router()
+
+    private var isDark: Bool { colorScheme == .dark }
 
     private var accentColor: String { conversation.accentColor }
     private var secondaryColor: String { conversation.colorPalette.secondary }
@@ -133,7 +137,7 @@ struct ConversationPreviewView: View {
                     HStack(spacing: 6) {
                         Text(conversation.name)
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundColor(isDark ? Color(hex: "EEF2FF") : Color(hex: "1E1B4B"))
                             .lineLimit(1)
 
                         if conversation.isPinned {
@@ -145,7 +149,7 @@ struct ConversationPreviewView: View {
                         if conversation.isMuted {
                             Image(systemName: "bell.slash.fill")
                                 .font(.system(size: 9))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundColor(isDark ? Color(hex: "818CF8").opacity(0.5) : Color(hex: "6366F1").opacity(0.4))
                         }
                     }
 
@@ -191,7 +195,13 @@ struct ConversationPreviewView: View {
             }
             .padding(14)
             .background(
-                theme.surfaceGradient(tint: accentColor)
+                LinearGradient(
+                        colors: [
+                            Color(hex: accentColor).opacity(isDark ? 0.15 : 0.08),
+                            Color(hex: accentColor).opacity(isDark ? 0.045 : 0.024)
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
                     .overlay(
                         Rectangle()
                             .fill(
@@ -254,17 +264,22 @@ struct ConversationPreviewView: View {
 
     private var previewBackground: some View {
         ZStack {
-            theme.backgroundGradient
+            LinearGradient(
+                    colors: isDark
+                        ? [Color(hex: "09090B"), Color(hex: "0F0D19"), Color(hex: "13111C")]
+                        : [Color(hex: "FFFFFF"), Color(hex: "FAFAFF"), Color(hex: "F8F7FF")],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
 
             // Accent colored orbs (smaller for preview)
             Circle()
-                .fill(Color(hex: accentColor).opacity(theme.mode.isDark ? 0.1 : 0.06))
+                .fill(Color(hex: accentColor).opacity(isDark ? 0.1 : 0.06))
                 .frame(width: 200, height: 200)
                 .blur(radius: 60)
                 .offset(x: 80, y: -80)
 
             Circle()
-                .fill(Color(hex: secondaryColor).opacity(theme.mode.isDark ? 0.08 : 0.05))
+                .fill(Color(hex: secondaryColor).opacity(isDark ? 0.08 : 0.05))
                 .frame(width: 150, height: 150)
                 .blur(radius: 50)
                 .offset(x: -60, y: 100)
@@ -276,7 +291,6 @@ struct ConversationPreviewView: View {
 struct ThemedCommunityCard: View {
     let community: Community
     var action: (() -> Void)? = nil
-    @ObservedObject private var theme = ThemeManager.shared
     @State private var isPressed = false
     @State private var displayColor: String
     @State private var displayEmoji: String
@@ -376,7 +390,7 @@ struct ThemedFilterChip: View {
     let isSelected: Bool
     let action: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: {
@@ -393,7 +407,7 @@ struct ThemedFilterChip: View {
                         .fill(
                             isSelected ?
                             AnyShapeStyle(LinearGradient(colors: [Color(hex: color), Color(hex: color).opacity(0.85)], startPoint: .leading, endPoint: .trailing)) :
-                            AnyShapeStyle(Color(hex: color).opacity(theme.mode.isDark ? 0.4 : 0.3))
+                            AnyShapeStyle(Color(hex: color).opacity(colorScheme == .dark ? 0.4 : 0.3))
                         )
                         .overlay(
                             Capsule()
@@ -409,7 +423,7 @@ struct ThemedFilterChip: View {
 // MARK: - Tag Chip Component
 struct TagChip: View {
     let tag: ConversationTag
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Text(tag.name)
@@ -419,7 +433,7 @@ struct TagChip: View {
             .padding(.vertical, 3)
             .background(
                 Capsule()
-                    .fill(Color(hex: tag.color).opacity(theme.mode.isDark ? 0.25 : 0.18))
+                    .fill(Color(hex: tag.color).opacity(colorScheme == .dark ? 0.25 : 0.18))
                     .overlay(
                         Capsule()
                             .stroke(Color(hex: tag.color).opacity(0.4), lineWidth: 0.5)

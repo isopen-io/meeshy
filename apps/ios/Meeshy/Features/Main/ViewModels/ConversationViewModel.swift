@@ -421,6 +421,23 @@ class ConversationViewModel: ObservableObject {
     private var currentUsername: String? { authManager.currentUser?.username }
     private var _resolvedParticipantId: String?
 
+    // Token bucket rate limiter for reaction spam prevention.
+    // Allows burst of 10, refills at 3 tokens/second.
+    private var reactionTokens: Double = 10
+    private var reactionLastRefill: Date = Date()
+    private static let reactionMaxTokens: Double = 10
+    private static let reactionRefillRate: Double = 3
+
+    private func consumeReactionToken() -> Bool {
+        let now = Date()
+        let elapsed = now.timeIntervalSince(reactionLastRefill)
+        reactionTokens = min(Self.reactionMaxTokens, reactionTokens + elapsed * Self.reactionRefillRate)
+        reactionLastRefill = now
+        guard reactionTokens >= 1 else { return false }
+        reactionTokens -= 1
+        return true
+    }
+
     // MARK: - Mention Display Names (username → displayName) — cached
 
     private var _mentionDisplayNames: [String: String]?
@@ -1454,6 +1471,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Toggle Reaction
 
     func toggleReaction(messageId: String, emoji: String) {
+        guard consumeReactionToken() else { return }
         guard let idx = messageIndex(for: messageId) else { return }
 
         let participantId = _resolvedParticipantId ?? currentUserId

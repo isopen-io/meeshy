@@ -238,7 +238,7 @@ public actor ReactionQueue {
     private func saveToDisk() {
         do {
             let data = try encoder.encode(items)
-            try data.write(to: queueFileURL, options: .atomic)
+            try data.write(to: queueFileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         } catch {
             logger.error("Failed to save reaction queue: \(error.localizedDescription)")
         }

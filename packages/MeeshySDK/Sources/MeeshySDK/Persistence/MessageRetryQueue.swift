@@ -73,7 +73,8 @@ public actor MessageRetryQueue {
     public nonisolated let retryExhausted = SendablePassthrough<RetryQueueFailure>()
 
     private static let maxRetries = 5
-    private static let retryIntervalSeconds: TimeInterval = 10
+    private static let baseRetryInterval: TimeInterval = 2
+    private static let maxRetryInterval: TimeInterval = 30
     private static let maxQueueSize = 100
     private static let maxAgeSeconds: TimeInterval = 7 * 24 * 3600 // 7 days
     private static let queueFileName = "message_retry_queue.json"
@@ -137,18 +138,28 @@ public actor MessageRetryQueue {
 
     // MARK: - Retry Loop
 
+    private static func retryDelay(attempt: Int) -> TimeInterval {
+        let exponential = baseRetryInterval * pow(2.0, Double(min(attempt, 6)))
+        let jitter = Double.random(in: 0...1)
+        return min(exponential + jitter, maxRetryInterval)
+    }
+
     private func startRetryLoop() {
         guard retryTask == nil else { return }
         retryTask = Task { [weak self] in
             defer {
                 Task { [weak self] in await self?.clearRetryTask() }
             }
+            var attempt = 0
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(Self.retryIntervalSeconds * 1_000_000_000))
+                let delay = Self.retryDelay(attempt: attempt)
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 guard let self, !Task.isCancelled else { return }
+                let beforeCount = await self.items.count
                 await self.retryPending()
                 let remaining = await self.pendingRetryableCount
                 if remaining == 0 { return }
+                attempt = beforeCount == remaining ? attempt + 1 : 0
             }
         }
     }
@@ -270,7 +281,7 @@ public actor MessageRetryQueue {
     private func saveToDisk() {
         do {
             let data = try encoder.encode(items)
-            try data.write(to: queueFileURL, options: .atomic)
+            try data.write(to: queueFileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         } catch {
             logger.error("Failed to save retry queue: \(error.localizedDescription)")
         }

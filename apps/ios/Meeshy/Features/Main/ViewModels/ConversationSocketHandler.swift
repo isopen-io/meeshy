@@ -41,10 +41,19 @@ final class ConversationSocketHandler {
     private let messageSocket: MessageSocketProviding
     weak var delegate: ConversationSocketDelegate?
 
+    // Message deduplication: sliding window of recently seen message IDs
+    // to prevent duplicates when REST refresh and socket broadcast deliver
+    // the same message during reconnection.
+    private static let dedupWindowSize = 1000
+    private var recentMessageIds: Set<String> = []
+    private var recentMessageIdOrder: [String] = []
+
     // Typing emission state
     nonisolated(unsafe) private var typingTimer: Timer?
+    nonisolated(unsafe) private var typingIdleTimer: Timer?
     nonisolated(unsafe) private var isEmittingTyping = false
     private static let typingDebounceInterval: TimeInterval = 3.0
+    private static let typingReemitInterval: TimeInterval = 3.0
     private static let typingSafetyTimeout: TimeInterval = 15.0
     nonisolated(unsafe) private var typingSafetyTimers: [String: Timer] = [:]
 
@@ -71,10 +80,26 @@ final class ConversationSocketHandler {
             NotificationManager.shared.onConversationClosed()
         }
         typingTimer?.invalidate()
+        typingIdleTimer?.invalidate()
         if isEmittingTyping {
             MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
         }
         typingSafetyTimers.values.forEach { $0.invalidate() }
+    }
+
+    // MARK: - Deduplication
+
+    private func markSeen(_ messageId: String) {
+        guard recentMessageIds.insert(messageId).inserted else { return }
+        recentMessageIdOrder.append(messageId)
+        while recentMessageIdOrder.count > Self.dedupWindowSize {
+            let oldest = recentMessageIdOrder.removeFirst()
+            recentMessageIds.remove(oldest)
+        }
+    }
+
+    private func wasSeen(_ messageId: String) -> Bool {
+        recentMessageIds.contains(messageId)
     }
 
     // MARK: - Room Management
@@ -93,8 +118,18 @@ final class ConversationSocketHandler {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
             startTypingEmission()
+            resetIdleTimer()
         } else {
             stopTypingEmission()
+        }
+    }
+
+    private func resetIdleTimer() {
+        typingIdleTimer?.invalidate()
+        typingIdleTimer = Timer.scheduledTimer(withTimeInterval: Self.typingDebounceInterval, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.stopTypingEmission()
+            }
         }
     }
 
@@ -108,9 +143,10 @@ final class ConversationSocketHandler {
             messageSocket.emitTypingStart(conversationId: conversationId)
         }
 
-        typingTimer = Timer.scheduledTimer(withTimeInterval: Self.typingDebounceInterval, repeats: false) { [weak self] _ in
+        typingTimer = Timer.scheduledTimer(withTimeInterval: Self.typingReemitInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.stopTypingEmission()
+                guard let self, self.isEmittingTyping else { return }
+                self.messageSocket.emitTypingStart(conversationId: self.conversationId)
             }
         }
     }
@@ -118,6 +154,8 @@ final class ConversationSocketHandler {
     func stopTypingEmission() {
         typingTimer?.invalidate()
         typingTimer = nil
+        typingIdleTimer?.invalidate()
+        typingIdleTimer = nil
 
         guard isEmittingTyping else { return }
         isEmittingTyping = false
@@ -217,6 +255,9 @@ final class ConversationSocketHandler {
                     }
 
                     if apiMsg.senderId == userId { return }
+
+                    if self.wasSeen(apiMsg.id) { return }
+                    self.markSeen(apiMsg.id)
 
                     let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
                     var msgArray = [decoded]
