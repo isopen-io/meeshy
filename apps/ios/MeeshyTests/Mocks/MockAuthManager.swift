@@ -2,7 +2,6 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-@MainActor
 final class MockAuthManager: AuthManaging {
 
     // MARK: - State

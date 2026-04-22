@@ -2,9 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-@MainActor
 final class MockMessageService: MessageServiceProviding {
-    nonisolated init() {}
 
     // MARK: - Stubbing
 

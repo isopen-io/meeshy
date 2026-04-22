@@ -14,9 +14,7 @@ private let stubComment: APIPostComment = JSONStub.decode("""
 {"id":"comment-stub","content":"stub","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"stub"}}
 """)
 
-@MainActor
 final class MockPostService: PostServiceProviding {
-    nonisolated init() {}
 
     // MARK: - Stubbing
 

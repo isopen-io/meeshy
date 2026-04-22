@@ -2,9 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-@MainActor
 final class MockPreferenceService: PreferenceServiceProviding {
-    nonisolated init() {}
 
     // MARK: - Stubbing
 

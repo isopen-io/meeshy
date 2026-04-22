@@ -1,9 +1,7 @@
 import Foundation
 import MeeshySDK
 
-@MainActor
 final class MockTwoFactorService: TwoFactorServiceProviding {
-    nonisolated init() {}
 
     // MARK: - Stubbing
 

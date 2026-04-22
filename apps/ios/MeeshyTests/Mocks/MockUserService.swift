@@ -24,9 +24,7 @@ private let emptySearchResponse: OffsetPaginatedAPIResponse<[UserSearchResult]> 
 {"success":true,"data":[],"pagination":null,"error":null}
 """)
 
-@MainActor
 final class MockUserService: UserServiceProviding {
-    nonisolated init() {}
 
     // MARK: - Stubbing
 

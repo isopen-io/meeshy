@@ -9,45 +9,44 @@ final class DraftStoreTests: XCTestCase {
         return store
     }
 
-    func test_load_emptyStore_returnsEmptyString() {
+    func test_load_emptyStore_returnsNil() {
         let sut = makeSUT()
-        let result = sut.load(for: "conv123")
-        XCTAssertEqual(result, "")
+        XCTAssertNil(sut.load(for: "conv123"))
     }
 
     func test_save_thenLoad_returnsSavedDraft() {
         let sut = makeSUT()
         sut.save("Hello draft", for: "conv123")
-        XCTAssertEqual(sut.load(for: "conv123"), "Hello draft")
+        XCTAssertEqual(sut.loadText(for: "conv123"), "Hello draft")
     }
 
     func test_save_emptyString_removesDraft() {
         let sut = makeSUT()
         sut.save("Hello", for: "conv123")
         sut.save("", for: "conv123")
-        XCTAssertEqual(sut.load(for: "conv123"), "")
+        XCTAssertNil(sut.load(for: "conv123"))
     }
 
     func test_save_whitespaceOnly_removesDraft() {
         let sut = makeSUT()
         sut.save("Hello", for: "conv123")
         sut.save("   ", for: "conv123")
-        XCTAssertEqual(sut.load(for: "conv123"), "")
+        XCTAssertNil(sut.load(for: "conv123"))
     }
 
     func test_multipleConversations_isolatedDrafts() {
         let sut = makeSUT()
         sut.save("Draft A", for: "conv1")
         sut.save("Draft B", for: "conv2")
-        XCTAssertEqual(sut.load(for: "conv1"), "Draft A")
-        XCTAssertEqual(sut.load(for: "conv2"), "Draft B")
+        XCTAssertEqual(sut.loadText(for: "conv1"), "Draft A")
+        XCTAssertEqual(sut.loadText(for: "conv2"), "Draft B")
     }
 
     func test_remove_clearsDraftForConversation() {
         let sut = makeSUT()
         sut.save("Draft", for: "conv1")
         sut.remove(for: "conv1")
-        XCTAssertEqual(sut.load(for: "conv1"), "")
+        XCTAssertNil(sut.load(for: "conv1"))
     }
 
     func test_clearAll_removesAllDrafts() {
@@ -55,8 +54,8 @@ final class DraftStoreTests: XCTestCase {
         sut.save("A", for: "conv1")
         sut.save("B", for: "conv2")
         sut.clearAll()
-        XCTAssertEqual(sut.load(for: "conv1"), "")
-        XCTAssertEqual(sut.load(for: "conv2"), "")
+        XCTAssertNil(sut.load(for: "conv1"))
+        XCTAssertNil(sut.load(for: "conv2"))
     }
 
     func test_hasDraft_returnsTrueWhenDraftExists() {
@@ -72,7 +71,7 @@ final class DraftStoreTests: XCTestCase {
         let sut = makeSUT()
         sut.save("First", for: "conv1")
         sut.save("Second", for: "conv1")
-        XCTAssertEqual(sut.load(for: "conv1"), "Second")
+        XCTAssertEqual(sut.loadText(for: "conv1"), "Second")
     }
 
     // MARK: - Remove Non-Existent
@@ -80,7 +79,7 @@ final class DraftStoreTests: XCTestCase {
     func test_remove_nonExistentConversation_doesNotCrash() {
         let sut = makeSUT()
         sut.remove(for: "doesNotExist")
-        XCTAssertEqual(sut.load(for: "doesNotExist"), "")
+        XCTAssertNil(sut.load(for: "doesNotExist"))
     }
 
     // MARK: - Clear All Isolation
@@ -109,7 +108,7 @@ final class DraftStoreTests: XCTestCase {
     func test_save_preservesInternalWhitespace() {
         let sut = makeSUT()
         sut.save("Hello   world", for: "conv1")
-        XCTAssertEqual(sut.load(for: "conv1"), "Hello   world")
+        XCTAssertEqual(sut.loadText(for: "conv1"), "Hello   world")
     }
 
     // MARK: - Newlines
@@ -118,6 +117,6 @@ final class DraftStoreTests: XCTestCase {
         let sut = makeSUT()
         sut.save("Draft", for: "conv1")
         sut.save("\n\n\n", for: "conv1")
-        XCTAssertEqual(sut.load(for: "conv1"), "")
+        XCTAssertNil(sut.load(for: "conv1"))
     }
 }

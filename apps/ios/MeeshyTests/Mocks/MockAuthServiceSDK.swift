@@ -2,9 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-@MainActor
 final class MockAuthServiceSDK: AuthServiceProviding, @unchecked Sendable {
-    nonisolated init() {}
 
     // MARK: - Stubbing
 

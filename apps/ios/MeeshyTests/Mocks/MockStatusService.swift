@@ -10,9 +10,7 @@ private let stubStatusPost: APIPost = JSONStub.decode("""
 {"id":"status-stub","type":"STATUS","content":"stub","moodEmoji":"\u{1F60A}","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"stub"}}
 """)
 
-@MainActor
 final class MockStatusService: StatusServiceProviding {
-    nonisolated init() {}
 
     // MARK: - Stubbing
 

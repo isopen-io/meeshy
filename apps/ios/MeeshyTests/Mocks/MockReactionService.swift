@@ -2,9 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-@MainActor
 final class MockReactionService: ReactionServiceProviding {
-    nonisolated init() {}
 
     // MARK: - Stubbing
 

@@ -2,9 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-@MainActor
 final class MockVoiceProfileService: VoiceProfileServiceProviding, @unchecked Sendable {
-    nonisolated init() {}
 
     // MARK: - Stubbing
 
