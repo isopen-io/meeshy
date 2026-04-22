@@ -100,7 +100,17 @@ export async function configRoutes(fastify: FastifyInstance, prisma: PrismaClien
 
   fastify.post('/api/agent/config/:conversationId/stop', async (req) => {
     const { conversationId } = req.params as { conversationId: string };
-    await redis.set(`agent:scan-stop:${conversationId}`, '1', 'EX', 60);
+    // 1) Set the Redis stop flag so any in-flight graph run bails out at the next node boundary.
+    // 2) Clear the DB scan marker immediately so the admin UI flips to PLAY on the next refresh —
+    //    without this, users see stale STOP/<node> badges until the current node finishes or
+    //    until staleness (3 min) kicks in on the read side.
+    await Promise.all([
+      redis.set(`agent:scan-stop:${conversationId}`, '1', 'EX', 60),
+      prisma.agentConfig.updateMany({
+        where: { conversationId },
+        data: { scanStartedAt: null, currentNode: null },
+      }),
+    ]);
     return { success: true };
   });
 

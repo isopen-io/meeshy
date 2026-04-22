@@ -570,11 +570,15 @@ export class MongoPersistence {
     return [...byUser.entries()].map(([userId, stats]) => ({ userId, ...stats }));
   }
 
-  async updateScanStatus(conversationId: string, isScanning: boolean, currentNode?: string | null) {
+  /**
+   * Update the in-flight scan marker. Pass a Date to start, null to clear.
+   * `scanStartedAt=null` is the definitive "not scanning" state.
+   */
+  async updateScanStatus(conversationId: string, scanStartedAt: Date | null, currentNode: string | null) {
     return this.prisma.agentConfig.upsert({
       where: { conversationId },
-      create: { conversationId, isScanning, currentNode },
-      update: { isScanning, currentNode },
+      create: { conversationId, scanStartedAt, currentNode },
+      update: { scanStartedAt, currentNode },
     });
   }
 

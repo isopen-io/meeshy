@@ -2971,8 +2971,10 @@ model AgentConfig {
   conversationId           String   @db.ObjectId
   /// Enabled by default for all conversations (Animator)
   enabled                  Boolean  @default(true)
-  /// Currently being scanned/processed by the agent service
-  isScanning               Boolean  @default(false)
+  /// Set at scan start and refreshed at each LangGraph node boundary ("time since last
+  /// progress"). Cleared to null when the scan finishes or is stopped. Treated as "not
+  /// running" once it is older than SCAN_STALE_MS (3 min) — see @meeshy/shared types/agent.ts.
+  scanStartedAt            DateTime?
   /// Current node/step in the agent workflow (LangGraph node)
   currentNode              String?
   configuredBy             String?  @db.ObjectId

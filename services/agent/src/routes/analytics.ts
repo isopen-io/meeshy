@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { RedisStateManager } from '../memory/redis-state';
 import type { MongoPersistence } from '../memory/mongo-persistence';
 import { detectActivity } from '../scheduler/activity-detector';
+import { isScanActive } from '@meeshy/shared/types/agent';
 
 type AnalyticsDeps = {
   stateManager: RedisStateManager;
@@ -33,8 +34,8 @@ export async function analyticsRoutes(fastify: FastifyInstance, deps: AnalyticsD
         toneProfiles,
         cachedMessageCount: messages.length,
         activity,
-        isScanning: config?.isScanning ?? false,
-        currentNode: config?.currentNode ?? null,
+        isScanning: isScanActive(config?.scanStartedAt),
+        currentNode: isScanActive(config?.scanStartedAt) ? (config?.currentNode ?? null) : null,
         analytics: analytics
           ? {
               messagesSent: analytics.messagesSent,

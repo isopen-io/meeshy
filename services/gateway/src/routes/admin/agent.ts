@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { listArchetypes, getArchetype } from '@meeshy/shared/agent/archetypes';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { isScanActive } from '@meeshy/shared/types/agent';
 import { logError } from '../../utils/logger';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../../utils/response';
@@ -406,8 +407,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           maxMessagesPerUserPer10Min: config?.maxMessagesPerUserPer10Min ?? null,
           createdAt: config?.createdAt ?? null,
           updatedAt: config?.updatedAt ?? null,
-          isScanning: config?.isScanning ?? false,
-          currentNode: config?.currentNode ?? null,
+          isScanning: isScanActive(config?.scanStartedAt),
+          currentNode: isScanActive(config?.scanStartedAt) ? (config?.currentNode ?? null) : null,
           controlledUserIds: mergedUserIds,
           analytics: analytics
             ? {
@@ -1011,7 +1012,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         }),
         fastify.prisma.agentConfig.findUnique({
           where: { conversationId },
-          select: { isScanning: true, currentNode: true },
+          select: { scanStartedAt: true, currentNode: true },
         }),
       ]);
 
@@ -1035,8 +1036,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           summary: summaryRaw ?? '',
           toneProfiles,
           cachedMessageCount: messages.length,
-          isScanning: agentConfig?.isScanning ?? false,
-          currentNode: agentConfig?.currentNode ?? null,
+          isScanning: isScanActive(agentConfig?.scanStartedAt),
+          currentNode: isScanActive(agentConfig?.scanStartedAt) ? (agentConfig?.currentNode ?? null) : null,
           analytics: analytics
             ? {
                 messagesSent: analytics.messagesSent,
@@ -1275,19 +1276,33 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       response: { 200: successDataResponse, ...stdErrorsWithNotFound },
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const client = ensureAgentClient(reply);
-    if (!client) return;
-
     try {
       const { conversationId } = request.params as { conversationId: string };
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
 
-      await client.stopScan(conversationId);
+      // Clear the DB marker FIRST, unconditionally. This unsticks stale STOP/<node> badges
+      // even when the agent service is crashed / unreachable / not configured, and gives
+      // the admin UI instant feedback on the next refresh. The agent service will also
+      // clear it (idempotent) when it observes the stop flag via Redis.
+      await fastify.prisma.agentConfig.updateMany({
+        where: { conversationId },
+        data: { scanStartedAt: null, currentNode: null },
+      });
+
+      if (!agentClient) {
+        return sendSuccess(reply, { conversationId, stopped: true, agentUnavailable: true });
+      }
+
+      try {
+        await agentClient.stopScan(conversationId);
+      } catch (error) {
+        if (error instanceof AgentUnavailableError) {
+          return sendSuccess(reply, { conversationId, stopped: true, agentUnavailable: true });
+        }
+        throw error;
+      }
       return sendSuccess(reply, { conversationId, stopped: true });
     } catch (error) {
-      if (error instanceof AgentUnavailableError) {
-        return sendError(reply, 502, 'Agent service unavailable');
-      }
       logError(fastify.log, 'Error stopping scan:', error);
       return sendInternalError(reply, 'Erreur serveur');
     }
