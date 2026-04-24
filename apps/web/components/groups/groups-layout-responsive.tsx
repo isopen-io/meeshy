@@ -129,8 +129,12 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
         const data = result.success ? result.data : result;
         setGroups(Array.isArray(data) ? data : []);
       } else if (response.status === 401) {
-        authManager.clearAllSessions();
-        router.push('/');
+        // 401 on the groups endpoint must NOT trigger a logout — the
+        // global ApiService layer owns the refresh flow and the session
+        // is only cleared by explicit user logout. Show an empty list
+        // and let the user retry.
+        console.warn('Groups API returned 401 — keeping session, showing empty list');
+        setGroups([]);
       } else {
         console.error('Groups API error:', response.status, response.statusText);
       }

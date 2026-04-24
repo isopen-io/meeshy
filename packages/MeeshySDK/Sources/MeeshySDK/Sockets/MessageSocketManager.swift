@@ -1080,17 +1080,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
         }
 
-        socket.on(clientEvent: .error) { [weak self] data, _ in
+        socket.on(clientEvent: .error) { data, _ in
+            // Log but NEVER force a logout from a socket error. Loose string
+            // matching on error payloads produced false positives that kicked
+            // the user out on transient failures. Socket.IO's built-in
+            // reconnect loop will retry; the APIClient 401 path (which calls
+            // `AuthManager.handleUnauthorized`) is the only place that can
+            // trigger a silent token refresh, and even that preserves the
+            // session on failure.
             Logger.socket.error("MessageSocket error: \(data)")
-            let errorStr = data.compactMap { "\($0)" }.joined(separator: " ")
-            if errorStr.contains("token") || errorStr.contains("auth") || errorStr.contains("JWT") || errorStr.contains("expired") || errorStr.contains("401") {
-                Logger.socket.warning("MessageSocket auth error — stopping reconnection")
-                self?.manager?.reconnects = false
-                self?.disconnect()
-                Task { @MainActor in
-                    AuthManager.shared.handleUnauthorized()
-                }
-            }
         }
 
         // --- Message events ---

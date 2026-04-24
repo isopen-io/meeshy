@@ -1,6 +1,5 @@
 'use client';
 
-import { isPublicRoute } from '@/utils/route-utils';
 import { io } from 'socket.io-client';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
@@ -72,8 +71,10 @@ export class ConnectionService {
     if (!token && !sessionToken) return null;
 
     if (token && isJWTExpired(token)) {
-      logger.warn('[Socket] JWT expired, skipping connection — will reconnect after refresh');
-      this.handleAuthenticationFailure('token expired');
+      // Skip this connect attempt and let the REST API 401 path trigger a
+      // silent refresh. The session stays in place — only explicit logout
+      // can clear credentials.
+      logger.warn('[Socket]', 'JWT expired, skipping connection — will reconnect after refresh');
       return null;
     }
 
@@ -158,27 +159,14 @@ export class ConnectionService {
   }
 
   private handleConnectionError(error: any): void {
+    // Log only — NEVER clear the session from a socket error. Loose string
+    // matching on error payloads previously produced false positives that
+    // kicked users out on transient failures. Socket.IO's own reconnect loop
+    // takes over; the REST 401 path handles silent token refresh (and even
+    // there, the session is preserved on failure). The user stays signed in
+    // until they explicitly press "Logout".
     const errorMessage = error?.message || error?.error || 'Connection error';
-    if (errorMessage.includes('auth') || errorMessage.includes('token') || errorMessage.includes('session') || errorMessage.includes('JWT') || errorMessage.includes('expired')) {
-      if (this.state.socket) {
-        this.state.socket.io.opts.reconnection = false;
-      }
-      this.handleAuthenticationFailure(errorMessage);
-    }
-  }
-
-  private async handleAuthenticationFailure(errorMessage: string): Promise<void> {
-    if (this.isAppUpdating) return;
-    const isAuthRequiredError = errorMessage.includes('Authentification requise') || errorMessage.includes('token');
-    if (!isAuthRequiredError) return;
-
-    authManager.clearAllSessions();
-    if (typeof window !== 'undefined') {
-      const pathname = window.location.pathname;
-      if (pathname !== '/login' && !isPublicRoute(pathname)) {
-        window.location.href = '/login';
-      }
-    }
+    logger.warn('[Socket] connection error', { errorMessage });
   }
 
   joinConversation(conversationOrId: any): void {

@@ -42,9 +42,6 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private let keychain = KeychainManager.shared
     private let authService = AuthService.shared
 
-    /// Maximum token age before requiring fresh login (1 year).
-    private let tokenMaxAge: TimeInterval = 365 * 24 * 60 * 60
-
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
     private var isRefreshing = false
 
@@ -248,16 +245,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         guard let userId = activeUserId else { return }
 
-        // Reject tokens older than 1 year
-        let savedAtTimestamp = UserDefaults.standard.double(forKey: tokenDateUDKey(for: userId))
-        if savedAtTimestamp > 0,
-           Date().timeIntervalSince(Date(timeIntervalSince1970: savedAtTimestamp)) > tokenMaxAge {
-            clearActiveSession(userId: userId)
-            return
-        }
-
+        // Session is persistent: only explicit logout() clears tokens.
+        // Stale tokens stay put — `attemptTokenRefresh` handles renewal when
+        // the network is available, and the UI serves cached content otherwise.
         guard let token = keychain.load(forKey: tokenKey(for: userId)) else {
-            clearActiveSession(userId: userId)
+            // Keychain truly empty for this user. Leave savedAccounts intact
+            // so re-login is one tap away, but we cannot restore a session.
+            activeUserId = nil
             return
         }
 
@@ -271,20 +265,17 @@ public final class AuthManager: ObservableObject, AuthManaging {
         APIClient.shared.authToken = token
         isAuthenticated = true
 
-        // Background revalidation (stale-while-revalidate for auth)
+        // Background revalidation (stale-while-revalidate for auth).
+        // Any failure — including server-side auth errors — is silent: the
+        // cached session stays active so the user never faces an involuntary
+        // logout. If the token is truly dead, `attemptTokenRefresh` runs on
+        // the next 401 and, on failure, also preserves the session.
         Task { [weak self] in
             do {
                 let user = try await AuthService.shared.me()
                 await self?.updateUserAfterRevalidation(user, userId: userId)
-            } catch let error as MeeshyError {
-                switch error {
-                case .auth:
-                    self?.clearActiveSession(userId: userId)
-                case .network, .server, .message, .media, .unknown:
-                    break
-                }
             } catch {
-                // Non-MeeshyError — preserve session
+                // Preserve session in every error case (auth/network/server).
             }
         }
     }
@@ -295,9 +286,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
         guard !isRefreshing else { return }
         guard let userId = activeUserId,
               let token = keychain.load(forKey: tokenKey(for: userId)) else {
-            currentUser = nil
-            isAuthenticated = false
-            APIClient.shared.authToken = nil
+            // No token available to refresh. We do NOT wipe `currentUser` or
+            // flip `isAuthenticated` — only explicit logout() does that. The
+            // user keeps seeing cached content; the next successful network
+            // call or manual refresh will repair the state.
             return
         }
 
@@ -368,28 +360,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
         do {
             let data = try await authService.refreshToken(token)
             applySession(token: data.token, user: data.user)
-        } catch let error as MeeshyError {
-            switch error {
-            case .auth:
-                clearActiveSession(userId: userId)
-            case .network, .server, .message, .media, .unknown:
-                break
-            }
         } catch {
-            // Non-MeeshyError (e.g. CancellationError) — preserve session
+            // Preserve the session in EVERY failure mode (auth / network /
+            // server / cancellation). Only explicit logout() is allowed to
+            // clear credentials — the app degrades gracefully and retries
+            // refresh on the next 401.
         }
-    }
-
-    private func clearActiveSession(userId: String) {
-        keychain.delete(forKey: tokenKey(for: userId))
-        keychain.delete(forKey: userKey(for: userId))
-        UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
-        // Keep saved account visible — user can re-authenticate without typing username.
-        // Only explicit logout() removes from savedAccounts.
-        activeUserId = nil
-        currentUser = nil
-        isAuthenticated = false
-        APIClient.shared.authToken = nil
     }
 
     // MARK: - Saved Accounts persistence
