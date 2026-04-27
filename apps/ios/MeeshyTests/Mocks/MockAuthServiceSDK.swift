@@ -111,7 +111,7 @@ final class MockAuthServiceSDK: AuthServiceProviding, @unchecked Sendable {
         return try await MainActor.run { try checkAvailabilityResult.get() }
     }
 
-    nonisolated func refreshToken(_ currentToken: String) async throws -> LoginResponseData {
+    nonisolated func refreshToken(_ currentToken: String, sessionToken: String?) async throws -> LoginResponseData {
         await MainActor.run { refreshTokenCallCount += 1 }
         return try await MainActor.run { try refreshTokenResult.get() }
     }

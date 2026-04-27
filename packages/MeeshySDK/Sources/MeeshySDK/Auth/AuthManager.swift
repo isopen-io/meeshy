@@ -59,6 +59,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     private func tokenKey(for userId: String) -> String { "meeshy_token_\(userId)" }
     private func userKey(for userId: String) -> String { "meeshy_user_\(userId)" }
+    private func sessionTokenKey(for userId: String) -> String { "meeshy_session_token_\(userId)" }
     private func tokenDateUDKey(for userId: String) -> String { "meeshy_token_date_\(userId)" }
 
     // MARK: - Active user
@@ -115,7 +116,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.login(username: username, password: password)
-            applySession(token: data.token, user: data.user)
+            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -133,7 +134,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.register(request: request)
-            applySession(token: data.token, user: data.user)
+            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -169,7 +170,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.validateMagicLink(token: token)
-            applySession(token: data.token, user: data.user)
+            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -211,6 +212,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         Task { await authService.logout() }
 
         keychain.delete(forKey: tokenKey(for: userId))
+        keychain.delete(forKey: sessionTokenKey(for: userId))
         keychain.delete(forKey: userKey(for: userId))
         UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
         removeFromSavedAccounts(userId: userId)
@@ -225,6 +227,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     public func removeSavedAccount(userId: String) {
         keychain.delete(forKey: tokenKey(for: userId))
+        keychain.delete(forKey: sessionTokenKey(for: userId))
         keychain.delete(forKey: userKey(for: userId))
         UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
         removeFromSavedAccounts(userId: userId)
@@ -245,17 +248,18 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         guard let userId = activeUserId else { return }
 
-        // Session is persistent: only explicit logout() clears tokens.
-        // Stale tokens stay put — `attemptTokenRefresh` handles renewal when
-        // the network is available, and the UI serves cached content otherwise.
         guard let token = keychain.load(forKey: tokenKey(for: userId)) else {
-            // Keychain truly empty for this user. Leave savedAccounts intact
-            // so re-login is one tap away, but we cannot restore a session.
+            // Keychain empty for this user. Saved accounts stay intact so
+            // re-login is one tap, but we have no session to restore.
             activeUserId = nil
+            isAuthenticated = false
             return
         }
 
-        // Show cached user immediately — authenticate from cache before any network call
+        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
+
+        // Show cached user immediately — authenticate from cache before any
+        // network call so the UI never blanks on app launch.
         if let userJSON = keychain.load(forKey: userKey(for: userId)),
            let userData = userJSON.data(using: .utf8),
            let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) {
@@ -265,17 +269,35 @@ public final class AuthManager: ObservableObject, AuthManaging {
         APIClient.shared.authToken = token
         isAuthenticated = true
 
-        // Background revalidation (stale-while-revalidate for auth).
-        // Any failure — including server-side auth errors — is silent: the
-        // cached session stays active so the user never faces an involuntary
-        // logout. If the token is truly dead, `attemptTokenRefresh` runs on
-        // the next 401 and, on failure, also preserves the session.
+        // Proactive refresh: if the JWT is expired or near-expiry AND we have
+        // a long-lived sessionToken, mint a new JWT BEFORE other API calls
+        // race in and trip the 401 path. With the gateway's sliding-window
+        // semantics this also extends the session another 365 days, so an
+        // active user is renewed indefinitely.
+        if isCurrentTokenExpired, let sessionToken = sessionToken {
+            isRefreshing = true
+            await attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
+            isRefreshing = false
+        }
+
+        // Background revalidation (stale-while-revalidate for the user
+        // profile). Auth failures here surface a re-auth state so the user
+        // can sign in again — the saved account is preserved, just the
+        // password (or biometric) is needed.
         Task { [weak self] in
             do {
                 let user = try await AuthService.shared.me()
                 await self?.updateUserAfterRevalidation(user, userId: userId)
+            } catch let error as MeeshyError {
+                switch error {
+                case .auth:
+                    await self?.requireReauthentication(userId: userId)
+                case .network, .server, .message, .media, .unknown:
+                    // Transient — keep session, retry on next 401 / launch.
+                    break
+                }
             } catch {
-                // Preserve session in every error case (auth/network/server).
+                // Cancellation / unknown — preserve session.
             }
         }
     }
@@ -284,28 +306,39 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     public func handleUnauthorized() {
         guard !isRefreshing else { return }
-        guard let userId = activeUserId,
-              let token = keychain.load(forKey: tokenKey(for: userId)) else {
-            // No token available to refresh. We do NOT wipe `currentUser` or
-            // flip `isAuthenticated` — only explicit logout() does that. The
-            // user keeps seeing cached content; the next successful network
-            // call or manual refresh will repair the state.
+        guard let userId = activeUserId else {
+            // No active user at all — nothing to refresh, no state to clear.
+            return
+        }
+
+        let token = keychain.load(forKey: tokenKey(for: userId))
+        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
+
+        // We need at least ONE credential to attempt a refresh.
+        guard token != nil || sessionToken != nil else {
+            // Credentials disappeared from keychain (rare: device migration,
+            // keychain reset). The user can't recover silently → surface the
+            // re-auth screen. The saved account stays so it's still one-tap.
+            requireReauthentication(userId: userId)
             return
         }
 
         isRefreshing = true
         Task {
-            await attemptTokenRefresh(token: token, userId: userId)
+            await attemptTokenRefresh(token: token ?? "", sessionToken: sessionToken, userId: userId)
             isRefreshing = false
         }
     }
 
     // MARK: - Internal session helpers
 
-    private func applySession(token: String, user: MeeshyUser) {
+    private func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
         let userId = user.id
 
         try? keychain.save(token, forKey: tokenKey(for: userId))
+        if let sessionToken = sessionToken, !sessionToken.isEmpty {
+            try? keychain.save(sessionToken, forKey: sessionTokenKey(for: userId))
+        }
         saveUserToKeychain(user, userId: userId)
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: tokenDateUDKey(for: userId))
 
@@ -315,6 +348,22 @@ public final class AuthManager: ObservableObject, AuthManaging {
         upsertSavedAccount(from: user)
         currentUser = user
         isAuthenticated = true
+    }
+
+    /// Soft re-auth signal: the server told us the session is genuinely
+    /// invalid (revoked, expired beyond the sliding window, account
+    /// disabled). We clear the active token + sessionToken so the API
+    /// client stops sending dead credentials and flip `isAuthenticated`
+    /// to false so the UI can prompt for re-login. The saved account is
+    /// preserved — the user just needs to enter their password again.
+    private func requireReauthentication(userId: String) {
+        keychain.delete(forKey: tokenKey(for: userId))
+        keychain.delete(forKey: sessionTokenKey(for: userId))
+        UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
+        activeUserId = nil
+        currentUser = nil
+        isAuthenticated = false
+        APIClient.shared.authToken = nil
     }
 
     private func saveUserToKeychain(_ user: MeeshyUser, userId: String) {
@@ -356,15 +405,24 @@ public final class AuthManager: ObservableObject, AuthManaging {
         self.updateSavedAccountActivity(from: user)
     }
 
-    private func attemptTokenRefresh(token: String, userId: String) async {
+    private func attemptTokenRefresh(token: String, sessionToken: String?, userId: String) async {
         do {
-            let data = try await authService.refreshToken(token)
-            applySession(token: data.token, user: data.user)
+            let data = try await authService.refreshToken(token, sessionToken: sessionToken)
+            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+        } catch let error as MeeshyError {
+            switch error {
+            case .auth:
+                // The server refuses both the JWT and the sessionToken — the
+                // session is genuinely invalid (revoked / expired beyond the
+                // sliding window / account disabled). Surface the re-auth
+                // screen; saved account is kept so it's still one-tap.
+                requireReauthentication(userId: userId)
+            case .network, .server, .message, .media, .unknown:
+                // Transient — preserve session, the next 401 will retry.
+                break
+            }
         } catch {
-            // Preserve the session in EVERY failure mode (auth / network /
-            // server / cancellation). Only explicit logout() is allowed to
-            // clear credentials — the app degrades gracefully and retries
-            // refresh on the next 401.
+            // Cancellation / unknown — preserve session.
         }
     }
 

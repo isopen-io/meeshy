@@ -13,7 +13,7 @@ public protocol AuthServiceProviding: Sendable {
     func verifyEmailWithCode(code: String, email: String) async throws
     func resendVerificationEmail(email: String) async throws
     func checkAvailability(username: String?, email: String?, phone: String?) async throws -> AvailabilityResponse
-    func refreshToken(_ currentToken: String) async throws -> LoginResponseData
+    func refreshToken(_ currentToken: String, sessionToken: String?) async throws -> LoginResponseData
     func me() async throws -> MeeshyUser
     func logout() async
 }
@@ -156,9 +156,9 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
 
     // MARK: - Refresh Token
 
-    public func refreshToken(_ currentToken: String) async throws -> LoginResponseData {
-        let body = RefreshTokenRequest(token: currentToken)
-        let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/refresh-token", body: body)
+    public func refreshToken(_ currentToken: String, sessionToken: String? = nil) async throws -> LoginResponseData {
+        let body = RefreshTokenRequest(token: currentToken, sessionToken: sessionToken)
+        let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/refresh", body: body)
         return response.data
     }
 
