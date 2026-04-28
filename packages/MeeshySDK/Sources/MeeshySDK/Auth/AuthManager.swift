@@ -311,21 +311,20 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return
         }
 
-        let token = keychain.load(forKey: tokenKey(for: userId))
-        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
-
-        // We need at least ONE credential to attempt a refresh.
-        guard token != nil || sessionToken != nil else {
-            // Credentials disappeared from keychain (rare: device migration,
-            // keychain reset). The user can't recover silently → surface the
-            // re-auth screen. The saved account stays so it's still one-tap.
+        // The gateway needs a parseable JWT to extract the userId for the
+        // trusted-session lookup (sessionToken alone isn't enough). In normal
+        // flow, login/refresh always store the JWT and sessionToken together,
+        // so a missing JWT means keychain corruption — surface re-auth.
+        guard let token = keychain.load(forKey: tokenKey(for: userId)) else {
             requireReauthentication(userId: userId)
             return
         }
 
+        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
+
         isRefreshing = true
         Task {
-            await attemptTokenRefresh(token: token ?? "", sessionToken: sessionToken, userId: userId)
+            await attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
             isRefreshing = false
         }
     }
