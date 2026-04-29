@@ -88,6 +88,11 @@ export const SERVER_EVENTS = {
   USER_STATUS: 'user:status',
   CONVERSATION_JOINED: 'conversation:joined',
   CONVERSATION_LEFT: 'conversation:left',
+  /** Server emits when a `conversation:join` is rejected (banned, not a
+   * member, conversation deleted, etc.). Carries the conversationId so
+   * clients can route the error to the right ViewModel and purge stale
+   * cache entries. */
+  CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
   NOTIFICATION: 'notification',

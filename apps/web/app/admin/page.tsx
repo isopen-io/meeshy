@@ -82,8 +82,10 @@ const AdminDashboard: React.FC = () => {
 
         // Vérifier la réponse utilisateur
         if (!userResponse.ok) {
-          authManager.clearAllSessions();
-          router.push('/login');
+          // Do NOT clear the session on an admin profile fetch failure —
+          // only explicit logout is allowed to wipe credentials. Redirect
+          // home; the user stays signed in and can retry later.
+          router.push('/');
           return;
         }
 

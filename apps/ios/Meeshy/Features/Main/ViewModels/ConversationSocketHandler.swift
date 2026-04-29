@@ -29,6 +29,11 @@ protocol ConversationSocketDelegate: AnyObject {
     func syncMissedMessages() async
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async
     func persistMessagesUsingServerIds() async
+    /// Server rejected `conversation:join` — purge per-conversation cache,
+    /// flip the access-revoked flag so the View dismisses, surface a toast.
+    /// Mirrors the REST 403 path so socket and HTTP failures converge on
+    /// the same UX.
+    func handleSocketAccessRevoked(reason: String?)
 }
 
 // MARK: - ConversationSocketHandler
@@ -283,6 +288,18 @@ final class ConversationSocketHandler {
 
                     // mark-as-received is handled globally by ConversationListViewModel
                 }
+            }
+            .store(in: &cancellables)
+
+        // Conversation join refused by the server (banned, no longer member,
+        // never a member, conversation deleted, etc.). The ViewModel reuses
+        // the REST 403 path: purge per-conversation cache + flip the
+        // accessRevoked flag so the View dismisses with a toast.
+        socketManager.conversationJoinError
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.delegate?.handleSocketAccessRevoked(reason: event.message)
             }
             .store(in: &cancellables)
 

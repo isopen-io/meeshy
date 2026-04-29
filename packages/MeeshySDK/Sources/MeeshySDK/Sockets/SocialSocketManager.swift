@@ -376,17 +376,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             Logger.socket.info("SocialSocket reconnect attempt \(attempt)")
         }
 
-        socket.on(clientEvent: .error) { [weak self] data, _ in
+        socket.on(clientEvent: .error) { data, _ in
+            // Log but NEVER force a logout from a socket error. Loose string
+            // matching on error payloads produced false positives that kicked
+            // the user out on transient failures. Socket.IO's built-in
+            // reconnect loop will retry; only APIClient 401 can trigger a
+            // silent token refresh, and even that preserves the session.
             Logger.socket.error("SocialSocket error: \(data)")
-            let errorStr = data.compactMap { "\($0)" }.joined(separator: " ")
-            if errorStr.contains("token") || errorStr.contains("auth") || errorStr.contains("JWT") || errorStr.contains("expired") || errorStr.contains("401") {
-                Logger.socket.warning("SocialSocket auth error — stopping reconnection")
-                self?.manager?.reconnects = false
-                self?.disconnect()
-                Task { @MainActor in
-                    AuthManager.shared.handleUnauthorized()
-                }
-            }
         }
 
         // --- Post events ---

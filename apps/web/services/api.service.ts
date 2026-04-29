@@ -1,4 +1,3 @@
-import { isPublicRoute } from '@/utils/route-utils';
 import { buildApiUrl } from '@/lib/config';
 import { getGeolocationHeaders } from '@/lib/geolocation';
 import { isJWTExpired } from '@/utils/auth';
@@ -132,29 +131,11 @@ class ApiService {
     this.refreshPromise = (async () => {
       try {
         const response = await authService.refreshToken();
-
-        if (response.success) {
-          return true;
-        }
-
-        authManager.clearAllSessions();
-
-        if (typeof window !== 'undefined') {
-          const pathname = window.location.pathname;
-          if (pathname !== '/login' && !isPublicRoute(pathname)) {
-            window.location.href = '/login?expired=true';
-          }
-        }
-
-        return false;
-      } catch (error) {
-        authManager.clearAllSessions();
-        if (typeof window !== 'undefined') {
-          const pathname = window.location.pathname;
-          if (pathname !== '/login' && !isPublicRoute(pathname)) {
-            window.location.href = '/login?expired=true';
-          }
-        }
+        return !!response.success;
+      } catch {
+        // Session persists across refresh failures. Only an explicit
+        // user-initiated logout may clear credentials. Cached data keeps
+        // the UI alive and the next 401 will retry the refresh silently.
         return false;
       } finally {
         this.isRefreshing = false;

@@ -126,7 +126,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
   // POST /refresh - Refresh JWT token
   fastify.post('/refresh', {
     schema: {
-      description: 'Refresh an existing JWT token to get a new one',
+      description: 'Refresh an existing JWT token to get a new one. Supports indefinite session renewal: passing a long-lived sessionToken (returned by /auth/login) lets the server issue a fresh JWT even when the current one is expired, and slides the session expiration forward (sliding window).',
       tags: ['auth'],
       summary: 'Refresh token',
       body: refreshTokenRequestSchema,
@@ -139,8 +139,10 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
             data: {
               type: 'object',
               properties: {
+                user: userSchema,
                 token: { type: 'string', description: 'New JWT token' },
-                expiresIn: { type: 'number', description: 'Token expiration in seconds' }
+                sessionToken: { type: 'string', description: 'Same session token (rotated forward in TTL)' },
+                expiresIn: { type: 'number', description: 'JWT expiration in seconds' }
               }
             }
           }
@@ -156,9 +158,10 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const { token, sessionToken } = validatedData;
 
       let decoded = authService.verifyToken(token);
+      let activeSession: { id: string; userId: string; expiresAt: Date } | null = null;
 
-      if (!decoded && sessionToken) {
-        const jwtPayload = jwt.decode(token) as { userId?: string } | null;
+      if (sessionToken) {
+        const jwtPayload = (decoded ?? jwt.decode(token)) as { userId?: string } | null;
         if (jwtPayload?.userId) {
           const hashedSession = crypto.createHash('sha256').update(sessionToken).digest('hex');
           const session = await context.prisma.userSession.findFirst({
@@ -168,11 +171,16 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
               isValid: true,
               isTrusted: true,
               expiresAt: { gt: new Date() }
-            }
+            },
+            select: { id: true, userId: true, expiresAt: true }
           });
           if (session) {
-            decoded = jwtPayload as any;
-            logger.info('Token refresh via trusted session', { userId: jwtPayload.userId });
+            activeSession = session;
+            // If the JWT was already invalid/expired, accept the session as proof of identity.
+            if (!decoded) {
+              decoded = jwtPayload as any;
+              logger.info('Token refresh via trusted session', { userId: jwtPayload.userId });
+            }
           }
         }
       }
@@ -195,10 +203,33 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       const newToken = authService.generateToken(user);
 
+      // Sliding window: extend the trusted session another full cycle on every
+      // successful refresh and bump lastActiveAt. As long as the user opens the
+      // app at least once per session lifetime (365d for mobile), the session
+      // never expires — the same sessionToken stays valid indefinitely.
+      if (activeSession) {
+        const now = new Date();
+        const SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+        const nextExpiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+        await context.prisma.userSession.update({
+          where: { id: activeSession.id },
+          data: {
+            expiresAt: nextExpiresAt,
+            lastActiveAt: now
+          }
+        }).catch((err: unknown) => {
+          logger.warn('Failed to slide session expiresAt on refresh', { err });
+        });
+      }
+
+      const permissions = authService.getUserPermissions(user as any);
+
       reply.send({
         success: true,
         data: {
+          user: formatUserResponse(user, permissions),
           token: newToken,
+          sessionToken: sessionToken ?? undefined,
           expiresIn: 24 * 60 * 60
         }
       });

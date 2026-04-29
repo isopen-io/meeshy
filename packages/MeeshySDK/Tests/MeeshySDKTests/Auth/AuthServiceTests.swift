@@ -539,14 +539,14 @@ final class AuthServiceTests: XCTestCase {
     func testRefreshTokenSuccess() async throws {
         let loginData = makeLoginResponseData(token: "refreshed-token")
         let response = APIResponse(success: true, data: loginData, error: nil)
-        mock.stub("/auth/refresh-token", result: response)
+        mock.stub("/auth/refresh", result: response)
 
-        let result = try await service.refreshToken("old-token")
+        let result = try await service.refreshToken("old-token", sessionToken: "session-abc")
 
         XCTAssertEqual(result.token, "refreshed-token")
         XCTAssertEqual(result.user.username, "testuser")
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/refresh-token")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/refresh")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
@@ -554,7 +554,7 @@ final class AuthServiceTests: XCTestCase {
         mock.errorToThrow = MeeshyError.auth(.sessionExpired)
 
         do {
-            _ = try await service.refreshToken("expired")
+            _ = try await service.refreshToken("expired", sessionToken: nil)
             XCTFail("Expected error to be thrown")
         } catch let error as MeeshyError {
             if case .auth(.sessionExpired) = error {

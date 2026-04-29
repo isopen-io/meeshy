@@ -114,6 +114,12 @@ class ConversationViewModel: ObservableObject {
     /// True when the conversation has been closed (no more messages can be sent)
     @Published var isConversationClosed = false
 
+    /// True when the server has revoked access to this conversation (user
+    /// removed from the participants list, group disbanded, etc.). The
+    /// view must dismiss itself when this flips so the user cannot keep
+    /// viewing/sending into a conversation they no longer belong to.
+    @Published var accessRevoked: Bool = false
+
     /// Selected ephemeral duration for next message
     @Published var ephemeralDuration: EphemeralDuration?
 
@@ -786,6 +792,15 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
+        // If the refresh discovered we no longer have access, the View is
+        // already dismissing via the `accessRevoked` observer — skip the
+        // socket arming, mark-as-read calls, and media prefetch which would
+        // all just fire 403s of their own.
+        if accessRevoked {
+            isLoadingInitial = false
+            return
+        }
+
         // Calculate first unread message position
         if initialUnreadCount > 0 && messages.count >= initialUnreadCount {
             let unreadStartIndex = messages.count - initialUnreadCount
@@ -855,9 +870,34 @@ class ConversationViewModel: ObservableObject {
                     return (snapshot + fromCacheOnly).sorted { $0.createdAt < $1.createdAt }
                 }
             }
+        } catch let error as MeeshyError {
+            if case .forbidden(let reason) = error {
+                // The server told us we no longer have access to this
+                // conversation (kicked, group dissolved, etc.). Purge the
+                // stale cache entries for this conversationId so the
+                // previous messages cannot be redisplayed on a later open
+                // and signal the View to dismiss.
+                await handleAccessRevoked(reason: reason)
+                return
+            }
+            // Other server/network/unknown errors are transient — keep the
+            // cached data on screen, the user retries on reload.
         } catch {
-            // Silent refresh failure — cached data is already displayed
+            // Cancellation / unknown — keep cached data displayed.
         }
+    }
+
+    /// Per-conversation cache scrub run when the server returns 403 on a
+    /// messages fetch. Wipes only this conversation's footprint — other
+    /// conversations the user still has access to remain hot.
+    private func handleAccessRevoked(reason: String?) async {
+        await CacheCoordinator.shared.messages.invalidate(for: conversationId)
+        await CacheCoordinator.shared.conversations.invalidate(for: conversationId)
+        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+
+        messages = []
+        error = reason ?? "Vous n'avez plus acces a cette conversation"
+        accessRevoked = true
     }
 
     // MARK: - Media Prefetch
@@ -2178,5 +2218,14 @@ extension ConversationViewModel: ConversationSocketDelegate {
         Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
         _topActiveMembers = nil
         objectWillChange.send()
+    }
+
+    /// Bridge for `ConversationSocketHandler` — reuses the same purge +
+    /// dismiss path as the REST 403 case so socket-rejected joins look
+    /// identical to API-rejected loads from the user's perspective.
+    func handleSocketAccessRevoked(reason: String?) {
+        Task { [weak self] in
+            await self?.handleAccessRevoked(reason: reason)
+        }
     }
 }
