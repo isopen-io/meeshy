@@ -715,6 +715,16 @@ struct ConversationView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
                 }
             }
+            .onChange(of: viewModel.accessRevoked) { _, revoked in
+                // Server signalled the user no longer has access to this
+                // conversation (kicked, group deleted, blocked, etc.). The
+                // ViewModel has already wiped per-conversation cache and
+                // local message state. We dismiss the screen here and
+                // surface a toast so the user knows why.
+                guard revoked else { return }
+                ToastManager.shared.showError(viewModel.error ?? "Vous n'avez plus acces a cette conversation")
+                dismiss()
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
                 guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
                 keyboardHeight = frame.height

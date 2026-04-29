@@ -234,13 +234,14 @@ final class APIErrorTests: XCTestCase {
         }
     }
 
-    func testFromAPIErrorServerError403ConvertsToAuthAccountLocked() {
+    func testFromAPIErrorServerError403ConvertsToForbidden() {
         let converted = MeeshyError.from(APIError.serverError(403, "Forbidden"))
 
-        guard case .auth(.accountLocked) = converted else {
-            XCTFail("Expected .auth(.accountLocked), got \(converted)")
+        guard case .forbidden(let reason) = converted else {
+            XCTFail("Expected .forbidden, got \(converted)")
             return
         }
+        XCTAssertEqual(reason, "Forbidden")
     }
 
     func testFromAPIErrorServerError500ConvertsToServer() {

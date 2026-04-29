@@ -298,7 +298,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 switch error {
                 case .auth:
                     await self?.requireReauthentication(userId: userId)
-                case .network, .server, .message, .media, .unknown:
+                case .network, .server, .message, .media, .forbidden, .unknown:
                     // Transient — keep session, retry on next 401 / launch.
                     break
                 }
@@ -443,8 +443,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 // sliding window / account disabled). Surface the re-auth
                 // screen; saved account is kept so it's still one-tap.
                 requireReauthentication(userId: userId)
-            case .network, .server, .message, .media, .unknown:
-                // Transient — preserve session, the next 401 will retry.
+            case .network, .server, .message, .media, .forbidden, .unknown:
+                // Transient or scoped (resource 403) — preserve session,
+                // the next 401 will retry the refresh.
                 break
             }
         } catch {

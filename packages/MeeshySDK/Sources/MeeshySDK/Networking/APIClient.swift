@@ -306,7 +306,13 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                     }
 
                     if statusCode == 403 {
-                        throw MeeshyError.auth(.accountLocked)
+                        // Resource-level forbidden. NOT an auth/session
+                        // problem (the JWT is valid) — surfaced as a
+                        // distinct case so AuthManager doesn't treat it
+                        // as a logout signal. Callers handle access loss
+                        // per-feature (e.g. purge a stale conversation
+                        // and dismiss its view).
+                        throw MeeshyError.forbidden(reason: errorMsg)
                     }
 
                     if statusCode == 429 {
