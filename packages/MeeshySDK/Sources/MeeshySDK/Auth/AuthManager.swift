@@ -259,11 +259,17 @@ public final class AuthManager: ObservableObject, AuthManaging {
         let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
 
         // Show cached user immediately — authenticate from cache before any
-        // network call so the UI never blanks on app launch.
+        // network call so the UI never blanks on app launch. If the cached
+        // JSON is corrupt or stale (schema migration etc.) we drop the entry
+        // so the next launch starts clean and the background revalidation
+        // below repopulates it from the server.
         if let userJSON = keychain.load(forKey: userKey(for: userId)),
-           let userData = userJSON.data(using: .utf8),
-           let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) {
-            currentUser = user
+           let userData = userJSON.data(using: .utf8) {
+            if let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) {
+                currentUser = user
+            } else {
+                keychain.delete(forKey: userKey(for: userId))
+            }
         }
 
         APIClient.shared.authToken = token
@@ -333,6 +339,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     private func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
         let userId = user.id
+        // Capture BEFORE we mutate state. If we were already authenticated
+        // when applySession runs, this is a token rotation (refresh) — the
+        // sockets need to be torn down and reconnected with the new JWT.
+        // The `onChange(isAuthenticated:)` observer in MeeshyApp would
+        // otherwise miss this transition because the boolean stays true
+        // throughout the rotation.
+        let isTokenRotation = isAuthenticated && activeUserId == userId
 
         try? keychain.save(token, forKey: tokenKey(for: userId))
         if let sessionToken = sessionToken, !sessionToken.isEmpty {
@@ -347,6 +360,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         upsertSavedAccount(from: user)
         currentUser = user
         isAuthenticated = true
+
+        if isTokenRotation {
+            MessageSocketManager.shared.forceReconnect()
+            SocialSocketManager.shared.forceReconnect()
+        }
     }
 
     /// Soft re-auth signal: the server told us the session is genuinely
@@ -399,6 +417,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
     }
 
     private func updateUserAfterRevalidation(_ user: MeeshyUser, userId: String) {
+        // Server-side deactivation (admin disable, account deletion, etc.)
+        // arrives as `isActive: false` on a 200 /auth/me response. The token
+        // is still cryptographically valid but the account is dead — surface
+        // a re-auth screen so the user knows and so the app stops issuing
+        // calls on a zombie session.
+        if user.isActive == false {
+            requireReauthentication(userId: userId)
+            return
+        }
         saveUserToKeychain(user, userId: userId)
         self.currentUser = user
         self.updateSavedAccountActivity(from: user)

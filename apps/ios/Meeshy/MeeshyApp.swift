@@ -214,6 +214,14 @@ struct MeeshyApp: App {
                         NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
                         NotificationCoordinator.shared.start()
                         Task { await CacheCoordinator.shared.start() }
+                        // Re-hydrate the friendship cache for the now-active
+                        // user. `MeeshyApp.task` only hydrates once per view
+                        // lifecycle, so without this call an account switch
+                        // (logout A → login B) would leave B with A's friend
+                        // graph until the next cold start.
+                        if !FriendshipCache.shared.isHydrated {
+                            Task { await FriendshipCache.shared.hydrate() }
+                        }
                         // `MeeshyApp.task` only runs once per view lifecycle;
                         // force a fresh socket connection so we don't rely on
                         // any stale state carried over from a prior session.
@@ -237,6 +245,14 @@ struct MeeshyApp: App {
                     } else {
                         NotificationManager.shared.reset()
                         NotificationCoordinator.shared.reset()
+                        // Clear the in-memory friendship graph BEFORE the
+                        // cache purge so any view that re-renders during the
+                        // transition can't read user A's friend list.
+                        FriendshipCache.shared.clear()
+                        // `reset()` purges every disk-backed store (GRDB +
+                        // media) — required because the stores are not
+                        // namespaced by userId and would otherwise expose
+                        // user A's data to user B on the next login.
                         Task { await CacheCoordinator.shared.reset() }
                         MessageSocketManager.shared.disconnect()
                         SocialSocketManager.shared.disconnect()
@@ -305,6 +321,14 @@ struct MeeshyApp: App {
 
     private func handleGuestDeepLink(_ link: DeepLink?) {
         guard let link else { return }
+        // Hold the link until the session check finishes. Otherwise an
+        // incoming join/chat link would activate a guest session BEFORE
+        // `checkExistingSession` flips `isAuthenticated` to true, leaving
+        // the user stranded in an anonymous flow even though they have a
+        // valid token. The `.task` block below re-invokes this method
+        // after `hasCheckedSession = true`, so the link survives in
+        // `deepLinkRouter.pendingDeepLink` and is processed then.
+        guard hasCheckedSession else { return }
         guard !authManager.isAuthenticated else { return }
         switch link {
         case .joinLink(let id), .chatLink(let id):
