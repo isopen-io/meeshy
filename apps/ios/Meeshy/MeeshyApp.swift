@@ -249,6 +249,13 @@ struct MeeshyApp: App {
                         // cache purge so any view that re-renders during the
                         // transition can't read user A's friend list.
                         FriendshipCache.shared.clear()
+                        // Wipe the Signal/E2EE material — IdentityKey,
+                        // SignedPreKey, per-peer SymmetricKeys, peer list.
+                        // Without this, user B logging in next would
+                        // generate a public bundle from user A's leftover
+                        // IdentityKey and upload it under their own
+                        // account — a hard cross-account identity leak.
+                        Task { await SessionManager.shared.clearSessions() }
                         // `reset()` purges every disk-backed store (GRDB +
                         // media) — required because the stores are not
                         // namespaced by userId and would otherwise expose
