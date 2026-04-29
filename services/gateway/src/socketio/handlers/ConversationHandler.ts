@@ -32,10 +32,20 @@ export class ConversationHandler {
    * Gère l'événement conversation:join
    */
   async handleConversationJoin(socket: Socket, data: { conversationId: string }): Promise<void> {
+    // Resolve early so we can attach the conversationId to every error
+    // emission. The client uses it to route the error to the right
+    // ViewModel and purge stale cache entries.
+    const requestedId = (data && typeof data === 'object' && 'conversationId' in data)
+      ? String((data as { conversationId: unknown }).conversationId ?? '')
+      : '';
     try {
       const schemaValidation = validateSocketEvent(SocketConversationJoinSchema, data);
       if (schemaValidation.success === false) {
-        socket.emit(SERVER_EVENTS.ERROR, { message: schemaValidation.error });
+        socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+          conversationId: requestedId,
+          reason: 'invalid_payload',
+          message: schemaValidation.error,
+        });
         return;
       }
       const validated = schemaValidation.data;
@@ -48,12 +58,39 @@ export class ConversationHandler {
       const userId = this.socketToUser.get(socket.id);
 
       if (userId) {
-        const bannedParticipant = await this.prisma.participant.findFirst({
-          where: { conversationId: normalizedId, userId, bannedAt: { not: null } },
-          select: { id: true },
+        // Membership check: a user can only join a conversation they are
+        // an active participant of. Banned and removed participants are
+        // both rejected here so the client knows to purge its local
+        // cache and dismiss any open view of the conversation.
+        const participant = await this.prisma.participant.findFirst({
+          where: { conversationId: normalizedId, userId },
+          select: { id: true, bannedAt: true, leftAt: true, isActive: true },
         });
-        if (bannedParticipant) {
-          socket.emit(SERVER_EVENTS.ERROR, { message: 'Vous êtes banni de cette conversation' });
+
+        if (!participant) {
+          socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+            conversationId: validated.conversationId,
+            reason: 'not_a_member',
+            message: 'Vous n\'êtes pas membre de cette conversation',
+          });
+          return;
+        }
+
+        if (participant.bannedAt) {
+          socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+            conversationId: validated.conversationId,
+            reason: 'banned',
+            message: 'Vous êtes banni de cette conversation',
+          });
+          return;
+        }
+
+        if (participant.leftAt || participant.isActive === false) {
+          socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+            conversationId: validated.conversationId,
+            reason: 'no_longer_member',
+            message: 'Vous n\'êtes plus membre de cette conversation',
+          });
           return;
         }
       }
@@ -71,6 +108,11 @@ export class ConversationHandler {
       }
     } catch (error) {
       console.error('[CONVERSATION_JOIN] Erreur:', error);
+      socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+        conversationId: requestedId,
+        reason: 'server_error',
+        message: 'Erreur serveur lors du join',
+      });
     }
   }
 

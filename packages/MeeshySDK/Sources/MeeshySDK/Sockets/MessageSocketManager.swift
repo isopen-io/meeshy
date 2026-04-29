@@ -241,6 +241,17 @@ public struct ConversationParticipationEvent: Decodable, Sendable {
     public let userId: String
 }
 
+/// Server-rejected `conversation:join` carrying the offending conversationId
+/// so the client can route the failure to the right ViewModel and purge any
+/// stale cache entries. `reason` is a stable machine-readable code:
+/// `not_a_member`, `banned`, `no_longer_member`, `invalid_payload`,
+/// `server_error`. `message` is a localized, human-readable description.
+public struct ConversationJoinErrorEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let reason: String?
+    public let message: String?
+}
+
 public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
@@ -526,6 +537,7 @@ public protocol MessageSocketProviding: Sendable {
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
     var attachmentStatusUpdated: PassthroughSubject<AttachmentStatusUpdatedEvent, Never> { get }
     var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
+    var conversationJoinError: PassthroughSubject<ConversationJoinErrorEvent, Never> { get }
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
     var conversationUpdated: PassthroughSubject<ConversationUpdatedEvent, Never> { get }
@@ -619,6 +631,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — conversation participation
     public let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
+    public let conversationJoinError = PassthroughSubject<ConversationJoinErrorEvent, Never>()
     public let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
 
     // Combine publishers — participant role
@@ -1241,6 +1254,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(ConversationParticipationEvent.self, from: data) { [weak self] event in
                 self?.conversationJoined.send(event)
+            }
+        }
+
+        socket.on("conversation:join-error") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationJoinErrorEvent.self, from: data) { [weak self] event in
+                self?.conversationJoinError.send(event)
             }
         }
 

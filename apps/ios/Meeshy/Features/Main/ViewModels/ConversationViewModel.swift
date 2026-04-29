@@ -2219,4 +2219,13 @@ extension ConversationViewModel: ConversationSocketDelegate {
         _topActiveMembers = nil
         objectWillChange.send()
     }
+
+    /// Bridge for `ConversationSocketHandler` — reuses the same purge +
+    /// dismiss path as the REST 403 case so socket-rejected joins look
+    /// identical to API-rejected loads from the user's perspective.
+    func handleSocketAccessRevoked(reason: String?) {
+        Task { [weak self] in
+            await self?.handleAccessRevoked(reason: reason)
+        }
+    }
 }
