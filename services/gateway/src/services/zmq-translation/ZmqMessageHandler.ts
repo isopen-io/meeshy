@@ -256,13 +256,21 @@ export class ZmqMessageHandler extends EventEmitter {
 
     this.stats.translationCompleted++;
 
-    // Émettre l'événement avec toutes les informations
-    this.emit('translationCompleted', {
+    const payload = {
       taskId: event.taskId,
       result: event.result,
       targetLanguage: event.targetLanguage,
       metadata: event.metadata || {}
-    });
+    };
+
+    // Emit the global event for legacy listeners (message translation pipeline,
+    // tests). Also emit a per-messageId scoped event so per-story listeners can
+    // subscribe narrowly (`translationCompleted:${messageId}`) instead of
+    // filtering every global event with O(stories × global_events) overhead.
+    this.emit('translationCompleted', payload);
+    if (event.result?.messageId) {
+      this.emit(`translationCompleted:${event.result.messageId}`, payload);
+    }
   }
 
   /**

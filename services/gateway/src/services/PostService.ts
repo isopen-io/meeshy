@@ -261,8 +261,16 @@ export class PostService {
       const expectedCount = targetLanguages.length;
       let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
+      // Subscribe to the per-messageId scoped event instead of the global
+      // `translationCompleted`. Avoids O(active_stories × global_events) filter
+      // overhead — previously every translation across the entire gateway
+      // (messages, comments, etc.) fanned out to every active story listener
+      // which then filtered by messageId. With 100 active stories and 1000
+      // messages/min that was ~100k listener invocations/min.
+      const scopedEvent = `translationCompleted:${storyMessageId}`;
+
       const removeListener = () => {
-        zmqClient.off('translationCompleted', handleResult);
+        zmqClient.off(scopedEvent, handleResult);
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
           timeoutHandle = null;
@@ -270,6 +278,8 @@ export class PostService {
       };
 
       const handleResult = async (event: { taskId: string; result: { messageId: string; translatedText: string; confidenceScore?: number; translatorModel?: string }; targetLanguage: string; metadata: Record<string, unknown> }) => {
+        // The scoped event guarantees messageId match, but keep the guard for
+        // defense in depth (the event payload is reused).
         if (event.result.messageId !== storyMessageId) return;
 
         // Reject malformed `targetLanguage` before interpolating into the
@@ -306,7 +316,7 @@ export class PostService {
         }
       };
 
-      zmqClient.on('translationCompleted', handleResult);
+      zmqClient.on(scopedEvent, handleResult);
 
       // 4. Envoyer la requête ZMQ
       try {
