@@ -452,9 +452,98 @@ export class MessageHandler {
 
       // Mettre à jour unread counts
       await this._updateUnreadCounts(message, normalizedId);
+
+      // Auto-mark delivered for online recipients so the sender's checkmark
+      // upgrades from "sent" (✓) to "delivered" (✓✓ gray) immediately, even
+      // when the recipient is connected but viewing another conversation.
+      // Without this, MESSAGE_NEW only reaches sockets in the conversation
+      // room, so an online recipient outside the conversation never triggers
+      // mark-as-received and the sender stays stuck at a single checkmark.
+      this._autoDeliverToOnlineRecipients(message, normalizedId).catch((err) => {
+        console.warn('[AUTO_DELIVERED] background failure:', err);
+      });
     } catch (error) {
       console.error('[BROADCAST] Erreur:', error);
     }
+  }
+
+  /**
+   * Marque un message comme "delivered" pour chaque destinataire en ligne
+   * (ayant une socket active), respecte la préférence `showReadReceipts` de
+   * chaque destinataire, puis émet UN seul `read-status:updated` consolidé
+   * vers la conversation room et chaque user room afin que l'expéditeur
+   * voie passer son indicateur à "delivered" sans devoir attendre une
+   * action manuelle du destinataire.
+   */
+  private async _autoDeliverToOnlineRecipients(
+    message: Message,
+    conversationId: string
+  ): Promise<void> {
+    const senderId = message.senderId;
+    if (!senderId) return;
+
+    const participants = await this.prisma.participant.findMany({
+      where: { conversationId, isActive: true, id: { not: senderId } },
+      select: { id: true, userId: true }
+    });
+
+    const onlineRecipients = participants.filter(
+      (p) => p.userId && this.connectedUsers.has(p.userId)
+    );
+    if (onlineRecipients.length === 0) return;
+
+    const { PrivacyPreferencesService } = await import('../../services/PrivacyPreferencesService.js');
+    const privacyService = new PrivacyPreferencesService(this.prisma);
+
+    let didMarkAny = false;
+    let firstAcker: { id: string; userId: string } | null = null;
+
+    for (const recipient of onlineRecipients) {
+      if (!recipient.userId) continue;
+      const allowsReceipts = await privacyService.shouldShowReadReceipts(recipient.userId, false);
+      if (!allowsReceipts) continue;
+      try {
+        await this.readStatusService.markMessagesAsReceived(
+          recipient.id,
+          conversationId,
+          message.id
+        );
+        didMarkAny = true;
+        if (!firstAcker) firstAcker = { id: recipient.id, userId: recipient.userId };
+      } catch (err) {
+        console.warn('[AUTO_DELIVERED] markAsReceived failed:', err);
+      }
+    }
+
+    if (!didMarkAny || !firstAcker) return;
+
+    const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
+
+    const payload = {
+      conversationId,
+      participantId: firstAcker.id,
+      userId: firstAcker.userId,
+      type: 'received' as const,
+      updatedAt: new Date(),
+      summary
+    };
+
+    const allParticipants = await this.prisma.participant.findMany({
+      where: { conversationId, isActive: true },
+      select: { userId: true }
+    });
+
+    const convRoom = ROOMS.conversation(conversationId);
+    let emitter: ReturnType<SocketIOServer['to']> = this.io.to(convRoom);
+    const seen = new Set<string>([convRoom]);
+    for (const p of allParticipants) {
+      if (!p.userId) continue;
+      const userRoom = ROOMS.user(p.userId);
+      if (seen.has(userRoom)) continue;
+      seen.add(userRoom);
+      emitter = emitter.to(userRoom);
+    }
+    emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
   }
 
   /**
