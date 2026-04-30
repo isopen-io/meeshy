@@ -987,16 +987,40 @@ struct ConversationView: View {
                 }
                 .padding(.horizontal, 16)
             }
-            .defaultScrollAnchor(.bottom)
+            // Hide the *populated* scroll until we've explicitly anchored
+            // at the bottom on first paint — without this the user briefly
+            // sees the oldest messages at the top before our scrollTo runs.
+            // Skeleton/empty-state (rendered while messages is empty) stays
+            // visible so loading still has a placeholder.
+            .opacity(initialScrollCompleted || viewModel.messages.isEmpty ? 1 : 0)
             .onChange(of: viewModel.isLoadingInitial) { wasLoading, isLoading in
-                guard wasLoading && !isLoading, !viewModel.messages.isEmpty else { return }
-                // .defaultScrollAnchor(.bottom) handles the initial positioning —
-                // a redundant proxy.scrollTo here causes visible micro-scroll jitter
-                // because the layout hasn't stabilized yet when the onChange fires.
-                // We only mark programmatic scroll to suppress the near_bottom_anchor
-                // onDisappear toggle during the initial layout pass.
+                guard wasLoading && !isLoading else { return }
+                // Empty conversation — nothing to scroll. Reveal the
+                // (empty-state) view and exit so the opacity gate never
+                // gets stuck at 0.
+                guard !viewModel.messages.isEmpty else {
+                    initialScrollCompleted = true
+                    return
+                }
+                // Anchor to bottom WITHOUT animation. We deliberately avoid
+                // .defaultScrollAnchor(.bottom): it keeps re-anchoring as
+                // bubble heights grow asynchronously (audio placeholder ->
+                // player swap, transcriptions/translations populating after
+                // the API refresh), which renders to the user as the scroll
+                // "repeating indefinitely" on conversation open.
                 viewModel.markProgrammaticScroll()
+                proxy.scrollTo("bottom_spacer", anchor: .bottom)
                 initialScrollCompleted = true
+
+                // Single delayed re-anchor to absorb the bulk of async
+                // layout settling (audio caching ~1s, late translation
+                // payloads, etc.). One-shot — never periodic — so the
+                // scroll cannot oscillate.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    guard scrollState.isNearBottom else { return }
+                    viewModel.markProgrammaticScroll()
+                    proxy.scrollTo("bottom_spacer", anchor: .bottom)
+                }
             }
             .onChange(of: viewModel.newMessageAppended) { _, _ in
                 guard initialScrollCompleted, let lastMsg = viewModel.messages.last else { return }
