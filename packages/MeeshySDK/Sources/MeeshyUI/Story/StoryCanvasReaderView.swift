@@ -63,7 +63,7 @@ public struct StoryCanvasReaderView: View {
                 stickerLayer(size: canvas)
                 textLayer(size: canvas)
                 textObjectsLayer(size: canvas)
-                foregroundMediaLayer(canvasWidth: canvas.width)
+                foregroundMediaLayer()
                 foregroundAudioLayer
             }
             .frame(width: canvas.width, height: canvas.height)
@@ -369,15 +369,12 @@ public struct StoryCanvasReaderView: View {
     // MARK: - Positioned Media Layer (timing-aware visibility + volume fade, skips first = bg)
 
     @ViewBuilder
-    private func foregroundMediaLayer(canvasWidth: CGFloat) -> some View {
+    private func foregroundMediaLayer() -> some View {
         let time = state.currentTime
         let foregroundMedia = story.storyEffects?.resolvedForegroundMediaObjects ?? []
         ForEach(foregroundMedia) { media in
             let visible = state.mediaObjectVisible(media, at: time)
             if visible {
-                let ratio = state.mediaAspectRatios[media.id]
-                    ?? state.loadedImages[media.id].map { $0.size.width / max(1, $0.size.height) }
-                    ?? 1.0
                 DraggableMediaView(
                     mediaObject: .constant(media),
                     image: state.loadedImages[media.id],
@@ -386,8 +383,7 @@ public struct StoryCanvasReaderView: View {
                         : nil,
                     externalPlayer: media.mediaType == "video" ? state.foregroundVideoPlayers[media.id] : nil,
                     isEditing: false,
-                    canvasWidth: canvasWidth,
-                    naturalAspectRatio: ratio,
+                    naturalAspectRatio: state.mediaAspectRatios[media.id],
                     onAspectRatioResolved: { resolved in
                         state.mediaAspectRatios[media.id] = resolved
                     }

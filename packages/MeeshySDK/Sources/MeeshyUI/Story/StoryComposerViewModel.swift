@@ -147,34 +147,29 @@ final class StoryComposerViewModel {
 
     // MARK: - Active Drag State (for alignment guides + warnings)
 
-    /// ID of the foreground element currently being dragged. Used by the canvas to render
-    /// alignment guides (centerlines, thirds) and safe-zone warnings only while interaction
-    /// is in progress.
-    var activeDragElementId: String?
-
-    /// Live normalized position of the dragged element (0–1). Updated during the drag for
-    /// the alignment-guide overlay; `nil` when no drag is active.
-    var activeDragPosition: CGPoint?
-
-    /// Live normalized size of the dragged element (width/height in 0–1). Used to determine
-    /// if the element's bounding box exits the safe zone (visibility warning).
-    var activeDragSize: CGSize?
-
-    func beginDrag(elementId: String, position: CGPoint, size: CGSize) {
-        activeDragElementId = elementId
-        activeDragPosition = position
-        activeDragSize = size
+    /// Snapshot of the foreground element being dragged. Held as a single optional struct
+    /// to keep id / position / size in sync — three independent properties would invite
+    /// inconsistent intermediate states. `nil` when no drag is active.
+    struct ActiveDrag: Equatable {
+        let elementId: String
+        var position: CGPoint
+        var size: CGSize
     }
 
-    func updateDrag(position: CGPoint, size: CGSize) {
-        activeDragPosition = position
-        activeDragSize = size
+    var activeDrag: ActiveDrag?
+
+    func beginDrag(elementId: String, position: CGPoint, size: CGSize) {
+        activeDrag = ActiveDrag(elementId: elementId, position: position, size: size)
+    }
+
+    func updateDrag(position: CGPoint) {
+        guard var current = activeDrag, current.position != position else { return }
+        current.position = position
+        activeDrag = current
     }
 
     func endDrag() {
-        activeDragElementId = nil
-        activeDragPosition = nil
-        activeDragSize = nil
+        activeDrag = nil
     }
 
     // MARK: - Timeline
@@ -295,9 +290,22 @@ final class StoryComposerViewModel {
 
     func removeSlide(at index: Int) {
         guard slides.count > 1, slides.indices.contains(index) else { return }
-        let slideId = slides[index].id
+        let slide = slides[index]
+        let slideId = slide.id
+        let mediaIds = (slide.effects.mediaObjects ?? []).map(\.id)
+        let audioIds = (slide.effects.audioPlayerObjects ?? []).map(\.id)
         slides.remove(at: index)
         slideImages.removeValue(forKey: slideId)
+        for id in mediaIds {
+            loadedImages.removeValue(forKey: id)
+            loadedVideoURLs.removeValue(forKey: id)
+            mediaAspectRatios.removeValue(forKey: id)
+            zIndexMap.removeValue(forKey: id)
+        }
+        for id in audioIds {
+            loadedAudioURLs.removeValue(forKey: id)
+            zIndexMap.removeValue(forKey: id)
+        }
         if currentSlideIndex >= slides.count {
             currentSlideIndex = slides.count - 1
         }

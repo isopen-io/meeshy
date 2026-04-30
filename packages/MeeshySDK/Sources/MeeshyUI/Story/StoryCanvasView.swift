@@ -198,30 +198,25 @@ struct StoryCanvasView: View {
 
     // MARK: - Editing guides overlay (safe zone + alignment + warnings)
 
-    /// Calque non-interactif affichant les reperes d'edition (safe zone, snap lines,
-    /// avertissement hors-zone) au-dessus de tous les elements. Visible uniquement en
-    /// mode edition (pas pendant le dessin) et masque pendant la lecture timeline.
     @ViewBuilder
     private func editingGuidesOverlay(canvasSize: CGSize) -> some View {
-        let isInComposerEdit = !isDrawingActive && !viewModel.isTimelinePlaying
-        if isInComposerEdit {
-            let isDragging = viewModel.activeDragElementId != nil
-            let dragPos = viewModel.activeDragPosition
-            let outOfBounds: Bool = {
-                guard let pos = dragPos, let size = viewModel.activeDragSize else { return false }
-                let bbox = CGRect(
-                    x: pos.x - size.width / 2,
-                    y: pos.y - size.height / 2,
-                    width: size.width,
-                    height: size.height
-                )
-                return StorySafeZone.isOutOfBounds(bbox)
-            }()
-
+        if !isDrawingActive, !viewModel.isTimelinePlaying {
+            let drag = viewModel.activeDrag
             ZStack {
-                SafeZoneOverlay(canvasSize: canvasSize, isDragging: isDragging)
-                AlignmentGuidesOverlay(canvasSize: canvasSize, dragPosition: dragPos)
-                OutOfBoundsWarningOverlay(canvasSize: canvasSize, isOutOfBounds: outOfBounds)
+                SafeZoneOverlay(canvasSize: canvasSize, isDragging: drag != nil)
+                if let drag {
+                    AlignmentGuidesOverlay(canvasSize: canvasSize, dragPosition: drag.position)
+                    let bbox = CGRect(
+                        x: drag.position.x - drag.size.width / 2,
+                        y: drag.position.y - drag.size.height / 2,
+                        width: drag.size.width,
+                        height: drag.size.height
+                    )
+                    OutOfBoundsWarningOverlay(
+                        canvasSize: canvasSize,
+                        isOutOfBounds: StorySafeZone.isOutOfBounds(bbox)
+                    )
+                }
             }
             .frame(width: canvasSize.width, height: canvasSize.height)
         }
@@ -419,18 +414,12 @@ struct StoryCanvasView: View {
                     .allowsHitTesting(!isDrawingActive)
                     .gesture(isDrawingActive ? nil : backgroundImageGesture)
             } else if obj.mediaType == "video" {
-                // Background video : fills canvas (resizeAspect on the inner player would
-                // letterbox here, but the outer .frame(maxWidth/maxHeight: .infinity) +
-                // .clipped() crops to canvas bounds). Aspect ratio still resolved so any
-                // future foreground-mode promotion has the correct natural size.
                 DraggableMediaView(
                     mediaObject: mediaObjectBinding(for: obj.id),
                     image: nil,
                     videoURL: viewModel.loadedVideoURLs[obj.id],
                     isEditing: true,
-                    canvasWidth: viewModel.canvasSize.width,
-                    canvasHeightHint: viewModel.canvasSize.height,
-                    naturalAspectRatio: aspectRatioFor(obj: obj),
+                    naturalAspectRatio: viewModel.mediaAspectRatios[obj.id],
                     onAspectRatioResolved: { ratio in
                         viewModel.setAspectRatio(ratio, for: obj.id)
                     },
@@ -449,18 +438,6 @@ struct StoryCanvasView: View {
         .zIndex(-1)
     }
 
-    /// Renvoie l'aspect ratio (w/h) connu pour ce media — d'abord depuis le cache du
-    /// ViewModel, sinon depuis l'image deja chargee, sinon `1.0` (sera resolu async).
-    private func aspectRatioFor(obj: StoryMediaObject) -> CGFloat {
-        if let cached = viewModel.mediaAspectRatios[obj.id], cached > 0 {
-            return cached
-        }
-        if let image = viewModel.loadedImages[obj.id], image.size.height > 0 {
-            return image.size.width / image.size.height
-        }
-        return 1.0
-    }
-
     @ViewBuilder
     private func positionedMediaElement(obj: StoryMediaObject, interactive: Bool) -> some View {
         DraggableMediaView(
@@ -468,17 +445,15 @@ struct StoryCanvasView: View {
             image: viewModel.loadedImages[obj.id],
             videoURL: viewModel.loadedVideoURLs[obj.id],
             isEditing: interactive,
-            canvasWidth: viewModel.canvasSize.width,
-            canvasHeightHint: viewModel.canvasSize.height,
-            naturalAspectRatio: aspectRatioFor(obj: obj),
+            naturalAspectRatio: viewModel.mediaAspectRatios[obj.id],
             onAspectRatioResolved: { ratio in
                 viewModel.setAspectRatio(ratio, for: obj.id)
             },
             onDragStarted: { pos, size in
                 viewModel.beginDrag(elementId: obj.id, position: pos, size: size)
             },
-            onDragChanged: { pos, size in
-                viewModel.updateDrag(position: pos, size: size)
+            onDragChanged: { pos in
+                viewModel.updateDrag(position: pos)
             },
             onDragCommitted: {
                 viewModel.endDrag()
