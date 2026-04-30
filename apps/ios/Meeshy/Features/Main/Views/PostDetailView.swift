@@ -101,6 +101,9 @@ struct PostDetailView: View {
         VStack(spacing: 0) {
             navBar
 
+            // Connection status banner (banner manages its own socket observation)
+            ConnectionBanner()
+
             if let post = displayPost {
                 ScrollViewReader { scrollProxy in
                 ScrollView(showsIndicators: false) {
