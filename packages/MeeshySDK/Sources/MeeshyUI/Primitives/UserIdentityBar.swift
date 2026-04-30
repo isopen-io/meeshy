@@ -303,6 +303,11 @@ public struct UserIdentityBar: View {
     @ViewBuilder
     private func deliveryView(for status: MeeshyMessage.DeliveryStatus) -> some View {
         let secondaryColor = tintColor ?? theme.textSecondary
+        // `.read` MUST contrast against `.delivered`. On tinted (own-message)
+        // bubbles the tintColor is already used by `.delivered`, so reusing it
+        // here would render the two states identically. We force full-opacity
+        // white on tinted bubbles and the indigo400 brand accent otherwise.
+        let readColor: Color = tintColor != nil ? .white : MeeshyColors.readReceipt
         switch status {
         case .sending:
             Image(systemName: "clock")
@@ -325,13 +330,14 @@ public struct UserIdentityBar: View {
         case .read:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 11, weight: .black))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 11, weight: .black))
                     .offset(x: 4)
             }
-            .foregroundColor(tintColor != nil ? tintColor! : MeeshyColors.readReceipt)
-            .frame(width: 16)
+            .foregroundColor(readColor)
+            .frame(width: 17)
+            .accessibilityLabel("Read")
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 10))
