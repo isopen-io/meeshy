@@ -185,14 +185,15 @@ public struct StoryComposerView: View {
         _ loadedImages: [String: UIImage],
         _ loadedVideoURLs: [String: URL],
         _ loadedAudioURLs: [String: URL],
-        _ originalLanguage: String?
+        _ originalLanguage: String?,
+        _ visibility: String
     ) -> Void
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
     public init(
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -1491,7 +1492,7 @@ public struct StoryComposerView: View {
         let snapshot = snapshotAllSlides()
         clearAllDrafts()
         HapticFeedback.success()
-        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage)
+        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility)
     }
 
     private func snapshotAllSlides() -> (slides: [StorySlide], bgImages: [String: UIImage]) {

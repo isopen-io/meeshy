@@ -173,8 +173,14 @@ export class SocialEventsHandler {
   // ==============================================
 
   async broadcastStoryCreated(story: Post, authorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(authorId);
-    this.emitToFriends(friendIds, authorId, SERVER_EVENTS.STORY_CREATED, { story });
+    // Honor `visibility` / `visibilityUserIds` like `broadcastStatusCreated` —
+    // previously this always fanned out to ALL friends, leaking ONLY/EXCEPT
+    // stories via the realtime event payload even though the REST list was
+    // correctly filtered.
+    const visibility = (story as any).visibility ?? 'PUBLIC';
+    const visibilityUserIds = (story as any).visibilityUserIds ?? [];
+    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_CREATED, { story });
   }
 
   broadcastStoryViewed(data: StoryViewedEventData, storyAuthorId: string): void {
