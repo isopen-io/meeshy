@@ -54,6 +54,14 @@ struct StoryViewerContainer: View {
             } else {
                 loadingOverlay
             }
+
+            // Connection status banner (banner manages its own socket observation)
+            VStack {
+                ConnectionBanner()
+                    .padding(.top, 8)
+                Spacer()
+            }
+            .allowsHitTesting(false)
         }
         .task(id: uid) {
             timedOut = false

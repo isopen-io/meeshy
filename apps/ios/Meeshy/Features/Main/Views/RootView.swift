@@ -111,6 +111,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
                     case .communityDetail(let communityId):
                         CommunityDetailView(
                             communityId: communityId,
@@ -131,6 +132,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
                     case .communityCreate:
                         CommunityCreateView(
                             onCreated: { community in
@@ -164,6 +166,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
                         .onDisappear {
                             Task { await notificationManager.refreshUnreadCount() }
                         }

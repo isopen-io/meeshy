@@ -643,10 +643,6 @@ struct ConversationListView: View {
                         showStatusComposer = true
                     })
 
-                    // Connection status banner (banner manages its own socket observation)
-                    ConnectionBanner()
-                        .padding(.top, 4)
-
                     // Sectioned conversation list (skeleton -> content -> empty/error)
                     if conversationViewModel.isLoading && conversationViewModel.filteredConversations.isEmpty {
                         LazyVStack(spacing: 8) {
