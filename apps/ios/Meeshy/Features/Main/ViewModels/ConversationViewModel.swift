@@ -871,17 +871,32 @@ class ConversationViewModel: ObservableObject {
                 }
             }
         } catch let error as MeeshyError {
-            if case .forbidden(let reason) = error {
-                // The server told us we no longer have access to this
-                // conversation (kicked, group dissolved, etc.). Purge the
-                // stale cache entries for this conversationId so the
-                // previous messages cannot be redisplayed on a later open
-                // and signal the View to dismiss.
+            switch error {
+            case .forbidden(let reason):
+                // 403: still authenticated, but no longer authorised on
+                // THIS resource (kicked, group dissolved, blocked, etc.).
                 await handleAccessRevoked(reason: reason)
                 return
+            case .server(404, let message), .server(410, let message):
+                // 404/410: the conversation no longer exists (deleted by
+                // owner, expired share-link target, hard-purged on the
+                // server side). Same effect as a revoked access from the
+                // user's perspective — the cached messages can no longer
+                // be displayed, and we must dismiss the view rather than
+                // leave stale content on screen for a conversation that
+                // is gone. Without this branch the catch-all would treat
+                // it as transient and the user would see ghost messages.
+                await handleAccessRevoked(
+                    reason: message.isEmpty
+                        ? String(localized: "Cette conversation n'existe plus", defaultValue: "Cette conversation n'existe plus")
+                        : message
+                )
+                return
+            default:
+                // Other server / network / unknown errors are transient —
+                // keep cached data on screen, user retries on reload.
+                break
             }
-            // Other server/network/unknown errors are transient — keep the
-            // cached data on screen, the user retries on reload.
         } catch {
             // Cancellation / unknown — keep cached data displayed.
         }
