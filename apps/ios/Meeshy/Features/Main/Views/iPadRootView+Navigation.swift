@@ -32,11 +32,13 @@ extension iPadRootView {
         case .chatLink:
             break
         case .conversation(let id):
-            let conv = Conversation(
-                id: id, identifier: id, type: .group,
-                title: nil, lastMessageAt: Date(), createdAt: Date(), updatedAt: Date()
-            )
-            openConversation(conv)
+            // Validate the conversation exists BEFORE opening. Otherwise a
+            // deep link to a deleted/unknown conversation lands the user on
+            // an empty pane with no recovery, and re-firing the same URL
+            // (e.g. from a web redirect that retries on every render) keeps
+            // recreating the same empty view — perceived as an infinite
+            // loop.
+            navigateToConversationById(id)
         case .magicLink:
             break
         }

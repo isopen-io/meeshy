@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Header } from '@/components/layout/Header';
@@ -50,25 +50,36 @@ export default function JoinConversationPage() {
   } = useConversationJoin(linkId);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const autoAnonymous = urlParams.get('anonymous');
-
-      if (autoAnonymous === 'true' && !currentUser) {
-        setShowAnonymousForm(true);
-      }
-
-      // On iOS/Android, attempt to open the native app via custom URL scheme.
-      // If the app is installed it will intercept; otherwise nothing happens
-      // and the user stays on the web join page.
-      const ua = navigator.userAgent;
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
-      if (isMobile && linkId && urlParams.get('noredirect') !== '1') {
-        const appUrl = `meeshy://join/${linkId}`;
-        window.location.href = appUrl;
-      }
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const autoAnonymous = urlParams.get('anonymous');
+    if (autoAnonymous === 'true' && !currentUser) {
+      setShowAnonymousForm(true);
     }
-  }, [currentUser, setShowAnonymousForm, linkId]);
+  }, [currentUser, setShowAnonymousForm]);
+
+  // Attempt to open the native app once per linkId. Re-firing the
+  // meeshy:// scheme on every render (auth check completing, window focus
+  // events, etc.) bounces the user back into the iOS app every time they
+  // return to Safari — an infinite loop when the conversation or share
+  // link does not exist and the iOS app has nowhere to land. Pinning the
+  // attempt to a ref keyed by linkId keeps a single-shot redirect.
+  const lastRedirectedLinkIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!linkId) return;
+    if (lastRedirectedLinkIdRef.current === linkId) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('noredirect') === '1') return;
+
+    const ua = navigator.userAgent;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+    if (!isMobile) return;
+
+    lastRedirectedLinkIdRef.current = linkId;
+    window.location.href = `meeshy://join/${linkId}`;
+  }, [linkId]);
 
   const handleJoinConversation = useCallback(async () => {
     const anonymousSession = typeof window !== 'undefined'

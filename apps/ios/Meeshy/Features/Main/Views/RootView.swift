@@ -453,7 +453,7 @@ struct RootView: View {
                 showSharePicker = true
             }
         }
-        .sheet(isPresented: $showJoinFlow) {
+        .sheet(isPresented: $showJoinFlow, onDismiss: { joinFlowIdentifier = nil }) {
             if let identifier = joinFlowIdentifier {
                 JoinFlowSheet(identifier: identifier) { joinResponse in
                     handleJoinSuccess(joinResponse)
@@ -498,11 +498,13 @@ struct RootView: View {
             break
 
         case .conversation(let id):
-            let conv = Conversation(
-                id: id, identifier: id, type: .group,
-                title: nil, lastMessageAt: Date(), createdAt: Date(), updatedAt: Date()
-            )
-            router.navigateToConversation(conv)
+            // Validate the conversation exists BEFORE navigating. Pushing a
+            // placeholder Conversation for an id that the server doesn't
+            // know lands the user on an empty screen with no recovery —
+            // worse, returning to that screen via an external link re-fires
+            // the deep link and recreates the empty view, looking like an
+            // infinite loop to the user.
+            navigateToConversationById(id)
 
         case .magicLink:
             break

@@ -33,7 +33,7 @@ extension iPadRootView {
             .onChange(of: router.pendingShareContent != nil) { _, hasContent in
                 if hasContent { showSharePicker = true }
             }
-            .sheet(isPresented: $showJoinFlow) {
+            .sheet(isPresented: $showJoinFlow, onDismiss: { joinFlowIdentifier = nil }) {
                 if let identifier = joinFlowIdentifier {
                     JoinFlowSheet(identifier: identifier) { joinResponse in
                         handleJoinSuccess(joinResponse)
