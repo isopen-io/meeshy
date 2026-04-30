@@ -76,7 +76,7 @@ public struct DraggableMediaView: View {
     }
 
     private var isVideoElement: Bool {
-        mediaObject.mediaType == "video"
+        mediaObject.kind == .video
     }
 
     private var currentX: CGFloat { baseX ?? mediaObject.x }

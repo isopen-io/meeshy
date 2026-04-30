@@ -417,7 +417,7 @@ struct StoryCanvasView: View {
     @ViewBuilder
     private func firstMediaElement(obj: StoryMediaObject) -> some View {
         Group {
-            if obj.mediaType == "image", let image = viewModel.loadedImages[obj.id] {
+            if obj.kind == .image, let image = viewModel.loadedImages[obj.id] {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -429,7 +429,7 @@ struct StoryCanvasView: View {
                     )
                     .allowsHitTesting(!isDrawingActive)
                     .gesture(isDrawingActive ? nil : backgroundImageGesture)
-            } else if obj.mediaType == "video" {
+            } else if obj.kind == .video {
                 DraggableMediaView(
                     mediaObject: mediaObjectBinding(for: obj.id),
                     image: nil,
@@ -448,7 +448,7 @@ struct StoryCanvasView: View {
         .clipped()
         .canvasContextMenu(
             elementId: obj.id,
-            elementType: obj.mediaType == "video" ? .video : .image,
+            elementType: obj.kind == .video ? .video : .image,
             viewModel: viewModel
         )
         .zIndex(-1)
@@ -504,7 +504,7 @@ struct StoryCanvasView: View {
         }
         .canvasContextMenu(
             elementId: obj.id,
-            elementType: obj.mediaType == "video" ? .video : .image,
+            elementType: obj.kind == .video ? .video : .image,
             viewModel: viewModel
         )
         .gesture(

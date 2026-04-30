@@ -919,7 +919,7 @@ public struct StoryComposerView: View {
         let isBackground = viewModel.isBackground(id: obj.id)
         return HStack(spacing: 8) {
             mediaElementThumbnail(obj: obj)
-            Text(obj.mediaType == "video" ? String(localized: "story.composer.videoLabel", defaultValue: "Video", bundle: .module) : String(localized: "story.composer.imageLabel", defaultValue: "Image", bundle: .module))
+            Text(obj.kind == .video ? String(localized: "story.composer.videoLabel", defaultValue: "Video", bundle: .module) : String(localized: "story.composer.imageLabel", defaultValue: "Image", bundle: .module))
                 .font(.system(size: 12, weight: isSelected ? .bold : .medium))
                 .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
             if isBackground {
@@ -1045,7 +1045,7 @@ public struct StoryComposerView: View {
                 .frame(width: 32, height: 32)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         } else {
-            Image(systemName: obj.mediaType == "video" ? "video.fill" : "photo")
+            Image(systemName: obj.kind == .video ? "video.fill" : "photo")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(MeeshyColors.indigo400)
                 .frame(width: 32, height: 32)
@@ -1323,7 +1323,7 @@ public struct StoryComposerView: View {
                 if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
 
                 // Add as background media object in effects
-                if let obj = viewModel.addMediaObject(type: "video") {
+                if let obj = viewModel.addMediaObject(kind: .video) {
                     viewModel.loadedVideoURLs[obj.id] = tempURL
                     if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
                     if obj.id != objectId {
@@ -1355,14 +1355,14 @@ public struct StoryComposerView: View {
     private func handleForegroundMediaSelection(from item: PhotosPickerItem?) {
         guard let item else { return }
         let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
-        addForegroundMedia(from: item, type: isVideo ? "video" : "image")
+        addForegroundMedia(from: item, kind: isVideo ? .video : .image)
     }
 
-    private func addForegroundMedia(from item: PhotosPickerItem?, type: String) {
+    private func addForegroundMedia(from item: PhotosPickerItem?, kind: StoryMediaKind) {
         guard let item else { return }
         isLoadingMedia = true
         mediaLoadProgress = 0
-        mediaLoadLabel = type == "video"
+        mediaLoadLabel = kind == .video
             ? String(localized: "story.composer.loadingVideo", defaultValue: "Chargement de la video...", bundle: .module)
             : String(localized: "story.composer.loadingImage", defaultValue: "Chargement de l'image...", bundle: .module)
         Task {
@@ -1372,7 +1372,7 @@ public struct StoryComposerView: View {
                 mediaLoadLabel = ""
             }
             let objectId = UUID().uuidString
-            if type == "video" {
+            if kind == .video {
                 guard let data = try? await item.loadTransferable(type: Data.self) else { return }
                 mediaLoadProgress = 0.3
                 let ext = item.supportedContentTypes
@@ -1395,7 +1395,7 @@ public struct StoryComposerView: View {
                     await MainActor.run {
                         viewModel.loadedVideoURLs[objectId] = tempURL
                         if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
-                        if let obj = viewModel.addMediaObject(type: "video") {
+                        if let obj = viewModel.addMediaObject(kind: .video) {
                             viewModel.loadedVideoURLs[obj.id] = tempURL
                             if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
                             if obj.id != objectId {
@@ -1417,7 +1417,7 @@ public struct StoryComposerView: View {
                       let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else { return }
                 mediaLoadProgress = 1.0
                 await MainActor.run {
-                    if let obj = viewModel.addMediaObject(type: "image") {
+                    if let obj = viewModel.addMediaObject(kind: .image) {
                         viewModel.loadedImages[obj.id] = image
                     }
                 }
@@ -1460,7 +1460,7 @@ public struct StoryComposerView: View {
         let mediaObj = viewModel.currentEffects.mediaObjects?.first(where: { $0.id == elementId })
         guard let mediaObj else { return }
 
-        if mediaObj.mediaType == "video", let url = viewModel.loadedVideoURLs[elementId] {
+        if mediaObj.kind == .video, let url = viewModel.loadedVideoURLs[elementId] {
             editingElementVideo = EditingMediaVideo(elementId: elementId, url: url)
         } else if let image = viewModel.loadedImages[elementId] {
             editingElementImage = EditingMediaImage(elementId: elementId, image: image)

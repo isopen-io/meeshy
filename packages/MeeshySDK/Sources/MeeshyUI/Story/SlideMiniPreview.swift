@@ -54,7 +54,7 @@ struct SlideMiniPreview: View {
     private func bgMediaImage(in size: CGSize) -> some View {
         // First media object fills canvas as background
         if let bgMedia = effects.mediaObjects?.first,
-           bgMedia.mediaType == "image",
+           bgMedia.kind == .image,
            let img = loadedImages[bgMedia.id] {
             Image(uiImage: img)
                 .resizable()

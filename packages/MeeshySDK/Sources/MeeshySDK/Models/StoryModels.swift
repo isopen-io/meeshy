@@ -204,12 +204,22 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     }
 }
 
+// MARK: - Story Media Kind
+
+/// Type-safe wrapper around `StoryMediaObject.mediaType`. The underlying field stays
+/// `String` for forward compatibility with API extensions and existing drafts on disk;
+/// callers should compare via `.kind == .video` rather than the raw string.
+public enum StoryMediaKind: String, Codable, Sendable {
+    case image
+    case video
+}
+
 // MARK: - Story Media Object (image/vidéo sur canvas)
 
 public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var id: String
     public var postMediaId: String      // référence PostMedia en DB
-    public var mediaType: String        // "image" | "video"
+    public var mediaType: String        // raw string, see `kind` for type-safe access
     public var placement: String        // kept for backward compat; no longer drives rendering
     public var x: CGFloat              // normalisé 0–1
     public var y: CGFloat
@@ -253,6 +263,29 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
     }
+
+    /// Convenience init that takes a typed `StoryMediaKind` instead of a raw string.
+    public init(id: String = UUID().uuidString, postMediaId: String = "",
+                kind: StoryMediaKind, placement: String = "media",
+                x: CGFloat = 0.5, y: CGFloat = 0.5,
+                scale: CGFloat = 1.0, rotation: CGFloat = 0,
+                volume: Float = 1.0,
+                isBackground: Bool? = nil,
+                startTime: Float? = nil, duration: Float? = nil,
+                loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
+                sourceLanguage: String? = nil) {
+        self.init(id: id, postMediaId: postMediaId,
+                  mediaType: kind.rawValue, placement: placement,
+                  x: x, y: y, scale: scale, rotation: rotation,
+                  volume: volume, isBackground: isBackground,
+                  startTime: startTime, duration: duration,
+                  loop: loop, fadeIn: fadeIn, fadeOut: fadeOut,
+                  sourceLanguage: sourceLanguage)
+    }
+
+    /// Type-safe view on `mediaType`. Returns `nil` if the persisted value is unrecognized
+    /// (forward compat with future API kinds).
+    public var kind: StoryMediaKind? { StoryMediaKind(rawValue: mediaType) }
 }
 
 // MARK: - Story Audio Player Object (player waveform sur canvas)

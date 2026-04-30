@@ -268,11 +268,11 @@ final class StoryComposerViewModel {
     var canAddMedia: Bool { mediaCount < 10 }
     var canAddImage: Bool {
         canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.mediaType == "image" }.count ?? 0) < 5
+        (currentEffects.mediaObjects?.filter { $0.kind == .image }.count ?? 0) < 5
     }
     var canAddVideo: Bool {
         canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.mediaType == "video" }.count ?? 0) < 4
+        (currentEffects.mediaObjects?.filter { $0.kind == .video }.count ?? 0) < 4
     }
     var canAddAudio: Bool {
         canAddMedia &&
@@ -379,7 +379,7 @@ final class StoryComposerViewModel {
     }
 
     @discardableResult
-    func addMediaObject(type: String) -> StoryMediaObject? {
+    func addMediaObject(kind: StoryMediaKind) -> StoryMediaObject? {
         guard canAddMedia else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
         // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
@@ -387,7 +387,7 @@ final class StoryComposerViewModel {
         let shouldBeBackground = currentEffects.resolvedBackgroundMedia == nil
         let obj = StoryMediaObject(
             postMediaId: "",
-            mediaType: type,
+            kind: kind,
             placement: "media",
             x: center.x,
             y: center.y,

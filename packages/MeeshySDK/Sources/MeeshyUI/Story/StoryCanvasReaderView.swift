@@ -139,12 +139,12 @@ public struct StoryCanvasReaderView: View {
     @ViewBuilder
     private var backgroundMediaLayer: some View {
         if let bgMedia = story.storyEffects?.resolvedBackgroundMedia {
-            if bgMedia.mediaType == "image" {
+            if bgMedia.kind == .image {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId) {
                     let thumbHash = story.media.first(where: { $0.id == bgMedia.postMediaId })?.thumbHash ?? resolvedThumbHash
                     backgroundImageView(urlStr: urlStr, thumbHash: thumbHash)
                 }
-            } else if bgMedia.mediaType == "video" {
+            } else if bgMedia.kind == .video {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId),
                    let url = MeeshyConfig.resolveMediaURL(urlStr) {
                     let player = state.ensureBackgroundVideoPlayer(url: url, muted: true)
@@ -378,10 +378,10 @@ public struct StoryCanvasReaderView: View {
                 DraggableMediaView(
                     mediaObject: .constant(media),
                     image: state.loadedImages[media.id],
-                    videoURL: media.mediaType == "video"
+                    videoURL: media.kind == .video
                         ? mediaURL(for: media.postMediaId).flatMap { MeeshyConfig.resolveMediaURL($0) }
                         : nil,
-                    externalPlayer: media.mediaType == "video" ? state.foregroundVideoPlayers[media.id] : nil,
+                    externalPlayer: media.kind == .video ? state.foregroundVideoPlayers[media.id] : nil,
                     isEditing: false,
                     naturalAspectRatio: state.mediaAspectRatios[media.id],
                     onAspectRatioResolved: { resolved in
@@ -679,7 +679,7 @@ private final class ReaderState: ObservableObject {
     func loadForegroundImages(story: StoryItem, preloadedImages: [String: UIImage] = [:]) async {
         // Charge les images foreground (exclut le media background résolu).
         let foregroundImages = (story.storyEffects?.resolvedForegroundMediaObjects ?? [])
-            .filter { $0.mediaType == "image" }
+            .filter { $0.kind == .image }
 
         // Phase 1: Synchronous — populate from preloaded + disk cache (instant)
         var needsNetworkLoad: [(id: String, resolved: String)] = []
@@ -939,7 +939,7 @@ private final class ReaderState: ObservableObject {
         currentStoryRef = story
         // Démarre les videos foreground (exclut le media background résolu).
         let videoObjects = (story.storyEffects?.resolvedForegroundMediaObjects ?? [])
-            .filter { $0.mediaType == "video" }
+            .filter { $0.kind == .video }
         for media in videoObjects {
             if let preloaded = preloadedVideoURLs[media.id] {
                 registerPendingVideoStart(media: media, url: preloaded)

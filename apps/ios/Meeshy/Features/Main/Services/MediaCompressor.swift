@@ -3,6 +3,7 @@ import AVFoundation
 import UIKit
 import ImageIO
 import VideoToolbox
+import MeeshySDK
 import os
 
 struct CompressedImageResult {
@@ -152,13 +153,7 @@ actor MediaCompressor {
             throw CompressionError.noVideoTrack
         }
 
-        let naturalSize = try await videoTrack.load(.naturalSize)
-        let transform = try await videoTrack.load(.preferredTransform)
-        let isPortrait = abs(transform.b) == 1 && abs(transform.c) == 1
-        let sourceSize = isPortrait
-            ? CGSize(width: naturalSize.height, height: naturalSize.width)
-            : naturalSize
-
+        let sourceSize = try await videoTrack.naturalDisplaySize()
         let targetSize = fitSize(sourceSize, within: context.maxVideoResolution)
         let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
         let targetFPS = min(nominalFrameRate, 30)

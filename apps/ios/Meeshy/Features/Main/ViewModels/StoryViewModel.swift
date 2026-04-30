@@ -349,14 +349,14 @@ class StoryViewModel: ObservableObject {
         if var mediaObjects = updatedEffects.mediaObjects {
             for i in mediaObjects.indices where mediaObjects[i].postMediaId.isEmpty {
                 let obj = mediaObjects[i]
-                if obj.mediaType == "video", let videoURL = loadedVideoURLs[obj.id] {
+                if obj.kind == .video, let videoURL = loadedVideoURLs[obj.id] {
                     let result = try await uploader.uploadFile(
                         fileURL: videoURL, mimeType: "video/mp4",
                         token: token, uploadContext: "story"
                     )
                     mediaObjects[i].postMediaId = result.id
                     foregroundMediaIds.append(result.id)
-                } else if obj.mediaType == "image", let uiImage = loadedImages[obj.id] {
+                } else if obj.kind == .image, let uiImage = loadedImages[obj.id] {
                     let fgThumbHash = uiImage.toThumbHash()
                     let compressed = await MediaCompressor.shared.compressImage(uiImage)
                     let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
@@ -473,14 +473,14 @@ class StoryViewModel: ObservableObject {
                         for i in mediaObjects.indices where mediaObjects[i].postMediaId.isEmpty {
                             guard !Task.isCancelled else { return }
                             let obj = mediaObjects[i]
-                            if obj.mediaType == "video", let videoURL = upload.loadedVideoURLs[obj.id] {
+                            if obj.kind == .video, let videoURL = upload.loadedVideoURLs[obj.id] {
                                 let result = try await uploader.uploadFile(
                                     fileURL: videoURL, mimeType: "video/mp4",
                                     token: token, uploadContext: "story"
                                 )
                                 mediaObjects[i].postMediaId = result.id
                                 foregroundMediaIds.append(result.id)
-                            } else if obj.mediaType == "image", let uiImage = upload.loadedImages[obj.id] {
+                            } else if obj.kind == .image, let uiImage = upload.loadedImages[obj.id] {
                                 let fgThumbHash = uiImage.toThumbHash()
                                 let compressed = await MediaCompressor.shared.compressImage(uiImage)
                                 let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"

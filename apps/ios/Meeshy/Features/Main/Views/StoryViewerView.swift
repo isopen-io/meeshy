@@ -939,7 +939,7 @@ struct StoryViewerView: View {
         if effects.backgroundAudioId != nil { return true }
         if let audioObjs = effects.audioPlayerObjects, !audioObjs.isEmpty { return true }
         if let mediaObjs = effects.mediaObjects {
-            if mediaObjs.contains(where: { $0.mediaType == "video" }) { return true }
+            if mediaObjs.contains(where: { $0.kind == .video }) { return true }
         }
         return false
     }
