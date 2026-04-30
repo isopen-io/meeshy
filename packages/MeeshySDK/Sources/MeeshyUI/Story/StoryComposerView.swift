@@ -1260,6 +1260,13 @@ public struct StoryComposerView: View {
             offsetY: bt.offsetY != 0 ? bt.offsetY : nil,
             rotation: bt.rotation != 0 ? bt.rotation : nil
         )
+        // Voice fields are NOT a function of the composer's @State — they live
+        // entirely on `viewModel.currentEffects` (set by the voice recorder /
+        // TTS pipeline). Re-emitting them here ensures `buildEffects()` is the
+        // FULL slide snapshot and not a partial overwrite. Same for
+        // `backgroundAudioVariants` (TTS variants per language). Without this,
+        // every slide-switch + sync wiped the voice payload.
+        let current = viewModel.currentEffects
         return StoryEffects(
             background: bgHex,
             filter: selectedFilter?.rawValue,
@@ -1271,11 +1278,14 @@ public struct StoryComposerView: View {
             backgroundAudioVolume: selectedAudioId != nil ? audioVolume : nil,
             backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil,
             backgroundAudioEnd: selectedAudioId != nil && audioTrimEnd > 0 ? audioTrimEnd : nil,
+            voiceAttachmentId: current.voiceAttachmentId,
+            voiceTranscriptions: current.voiceTranscriptions,
             opening: openingEffect,
             closing: closingEffect,
-            textObjects: viewModel.currentEffects.textObjects,
-            mediaObjects: viewModel.currentEffects.mediaObjects,
-            audioPlayerObjects: viewModel.currentEffects.audioPlayerObjects,
+            textObjects: current.textObjects,
+            mediaObjects: current.mediaObjects,
+            audioPlayerObjects: current.audioPlayerObjects,
+            backgroundAudioVariants: current.backgroundAudioVariants,
             backgroundTransform: bgTransform.isIdentity ? nil : bgTransform,
             slideDuration: Float(viewModel.currentSlideDuration)
         )

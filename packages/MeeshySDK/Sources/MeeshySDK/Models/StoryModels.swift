@@ -148,6 +148,12 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var rotation: CGFloat       // degrés
     public var translations: [String: String]?  // { "en": "Hello", "es": "Hola", ... }
     public var sourceLanguage: String?
+    /// Z-order persistent — controle l'ordre de superposition entre composer et reader.
+    /// Auparavant l'ordre etait conserve dans une map memoire-only `zIndexMap` du
+    /// ViewModel, ecrasee a chaque selectSlide. Resultat : l'ordre de superposition
+    /// disparaissait au switch de slide ET le reader rendait dans l'ordre du tableau,
+    /// sans tenir compte des promotions `bringToFront`.
+    public var zIndex: Int?
 
     // Style per-objet (tous optionnels pour backward compat JSON existant)
     public var textStyle: String?      // "bold"|"neon"|"typewriter"|"handwriting"|"classic"
@@ -163,7 +169,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var fadeOut: Float?              // animation de sortie (secondes)
 
     enum CodingKeys: String, CodingKey {
-        case id, content, x, y, scale, rotation, translations, sourceLanguage
+        case id, content, x, y, scale, rotation, translations, sourceLanguage, zIndex
         case textStyle, textColor, textSize, textAlign, textBg
         case startTime, displayDuration, fadeIn, fadeOut
     }
@@ -230,6 +236,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     /// Un seul media peut être en background par slide. Si `nil` à la lecture, on applique
     /// la règle legacy : le 1er media du tableau est traité comme background.
     public var isBackground: Bool?
+    /// Z-order persistent (cf. `StoryTextObject.zIndex`).
+    public var zIndex: Int?
 
     // Timeline timing
     public var startTime: Float?            // offset en secondes (défaut 0)
@@ -241,7 +249,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaType, placement, x, y, scale, rotation, volume
-        case isBackground
+        case isBackground, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
     }
 
@@ -305,6 +313,8 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var isBackground: Bool?
     /// Variantes TTS par langue (rattachées à l'audio background historiquement).
     public var backgroundAudioVariants: [StoryAudioVariant]?
+    /// Z-order persistent (cf. `StoryTextObject.zIndex`).
+    public var zIndex: Int?
 
     // Timeline timing
     public var startTime: Float?            // offset en secondes (défaut 0)
@@ -316,7 +326,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, placement, x, y, volume, waveformSamples
-        case isBackground, backgroundAudioVariants
+        case isBackground, backgroundAudioVariants, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
     }
 
@@ -366,11 +376,13 @@ public struct StorySticker: Codable, Identifiable, Sendable {
     public var y: CGFloat
     public var scale: CGFloat
     public var rotation: CGFloat
+    /// Z-order persistent (cf. `StoryTextObject.zIndex`).
+    public var zIndex: Int?
 
     public init(id: String = UUID().uuidString, emoji: String, x: CGFloat = 0.5, y: CGFloat = 0.5,
-                scale: CGFloat = 1.0, rotation: CGFloat = 0) {
+                scale: CGFloat = 1.0, rotation: CGFloat = 0, zIndex: Int? = nil) {
         self.id = id; self.emoji = emoji; self.x = x; self.y = y
-        self.scale = scale; self.rotation = rotation
+        self.scale = scale; self.rotation = rotation; self.zIndex = zIndex
     }
 }
 

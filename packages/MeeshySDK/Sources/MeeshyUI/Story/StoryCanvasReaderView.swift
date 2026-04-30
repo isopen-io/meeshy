@@ -324,6 +324,7 @@ public struct StoryCanvasReaderView: View {
                     .opacity(opacity)
                     .rotationEffect(.degrees(obj.rotation))
                     .position(x: obj.x * size.width, y: obj.y * size.height)
+                    .zIndex(Double(obj.zIndex ?? 0))
                     .allowsHitTesting(false)
                     .animation(.easeInOut(duration: 0.15), value: opacity)
             }
@@ -343,6 +344,7 @@ public struct StoryCanvasReaderView: View {
                         x: sticker.x * size.width,
                         y: sticker.y * size.height
                     )
+                    .zIndex(Double(sticker.zIndex ?? 0))
                     .allowsHitTesting(false)
             }
         } else if let emojiStrings = story.storyEffects?.stickers, !emojiStrings.isEmpty {
@@ -380,6 +382,7 @@ public struct StoryCanvasReaderView: View {
                     }
                 )
                 .opacity(state.mediaObjectOpacity(for: media, at: time))
+                .zIndex(Double(media.zIndex ?? 0))
                 .animation(.easeInOut(duration: 0.15), value: state.mediaObjectOpacity(for: media, at: time))
             }
         }
@@ -400,6 +403,7 @@ public struct StoryCanvasReaderView: View {
                     externalPlayer: state.foregroundAudioPlayers[audio.id]
                 )
                 .opacity(state.audioObjectOpacity(for: audio, at: time))
+                .zIndex(Double(audio.zIndex ?? 0))
                 .animation(.easeInOut(duration: 0.15), value: state.audioObjectOpacity(for: audio, at: time))
             }
         }

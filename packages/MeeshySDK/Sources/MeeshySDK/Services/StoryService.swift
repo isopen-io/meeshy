@@ -32,7 +32,12 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     }
 
     public func react(storyId: String, emoji: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(storyId)/like", method: "POST")
+        // Auparavant l'emoji etait ignore — toutes les reactions iOS arrivaient au
+        // gateway sans body, ce qui faisait defaulter `LikeSchema` sur ❤️. Resultat :
+        // l'utilisateur tapait sur n'importe quel emoji de la palette, le serveur
+        // enregistrait toujours un coeur. On envoie maintenant l'emoji explicite.
+        let body = LikeRequest(emoji: emoji)
+        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/posts/\(storyId)/like", body: body)
     }
 
     public func comment(storyId: String, content: String) async throws -> APIPostComment {

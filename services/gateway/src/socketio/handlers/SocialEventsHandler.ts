@@ -183,6 +183,24 @@ export class SocialEventsHandler {
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_CREATED, { story });
   }
 
+  /// Emitted when an author edits a published story (PUT /posts/:id). Mirrors
+  /// `broadcastStoryCreated`'s visibility filtering — only viewers who can
+  /// currently see the story receive the update.
+  async broadcastStoryUpdated(story: Post, authorId: string): Promise<void> {
+    const visibility = (story as any).visibility ?? 'PUBLIC';
+    const visibilityUserIds = (story as any).visibilityUserIds ?? [];
+    const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, { story });
+  }
+
+  /// Emitted when an author deletes a story. Sent to all friends (we don't have
+  /// the visibility metadata anymore — and over-broadcasting a deletion is safe:
+  /// recipients who never had the story silently ignore it).
+  async broadcastStoryDeleted(storyId: string, authorId: string): Promise<void> {
+    const friendIds = await this.getFriendIds(authorId);
+    this.emitToFriends(friendIds, authorId, SERVER_EVENTS.STORY_DELETED, { storyId, authorId });
+  }
+
   broadcastStoryViewed(data: StoryViewedEventData, storyAuthorId: string): void {
     // Seul l'auteur de la story doit voir les vues
     this.emitToUser(storyAuthorId, SERVER_EVENTS.STORY_VIEWED, data);

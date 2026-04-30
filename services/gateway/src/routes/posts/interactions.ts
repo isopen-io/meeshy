@@ -35,16 +35,27 @@ export function registerInteractionRoutes(
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
 
-      // Broadcast like via Socket.IO
+      // Broadcast like via Socket.IO. Stories use a private `story:reacted`
+      // event aimed only at the author — previously they fanned out as
+      // `post:liked` to ALL friends (privacy leak: a reaction to a private
+      // story was advertised to the author's entire feed).
       const socialEvents = fastify.socialEvents;
       if (socialEvents && post.authorId) {
-        socialEvents.broadcastPostLiked({
-          postId,
-          userId: authContext.registeredUser.id,
-          emoji,
-          likeCount: post.likeCount,
-          reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-        }, post.authorId).catch(() => {});
+        if (post.type === 'STORY') {
+          socialEvents.broadcastStoryReacted({
+            storyId: postId,
+            userId: authContext.registeredUser.id,
+            emoji,
+          }, post.authorId);
+        } else {
+          socialEvents.broadcastPostLiked({
+            postId,
+            userId: authContext.registeredUser.id,
+            emoji,
+            likeCount: post.likeCount,
+            reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
+          }, post.authorId).catch(() => {});
+        }
       }
 
       // Create notification for post author

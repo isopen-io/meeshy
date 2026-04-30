@@ -328,9 +328,33 @@ final class StoryComposerViewModel {
         selectedElementId = nil
         activeTool = nil
         currentSlideIndex = index
-        zIndexMap = [:]
-        nextZIndex = 1
+        rehydrateZIndexMapFromSlide()
         restoreBackgroundTransform()
+    }
+
+    /// Rebuild `zIndexMap` from the current slide's persisted `zIndex` fields. The map
+    /// is the in-memory cache for `bringToFront` ordering during composer edits;
+    /// hydrating from the model means an element promoted on slide 0 retains its
+    /// front-position when the user comes back from slide 1. `nextZIndex` advances
+    /// past the highest persisted value so newly-promoted elements still rise above.
+    private func rehydrateZIndexMapFromSlide() {
+        var map: [String: Int] = [:]
+        var maxZ = 0
+        let effects = currentEffects
+        for obj in (effects.textObjects ?? []) {
+            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+        }
+        for obj in (effects.mediaObjects ?? []) {
+            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+        }
+        for obj in (effects.audioPlayerObjects ?? []) {
+            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+        }
+        for obj in (effects.stickerObjects ?? []) {
+            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+        }
+        zIndexMap = map
+        nextZIndex = maxZ + 1
     }
 
     func moveSlide(from source: Int, to destination: Int) {
@@ -569,13 +593,37 @@ final class StoryComposerViewModel {
         zIndexMap[id] ?? 0
     }
 
+    /// Promote an element to the front. Persists the value into the slide's effects so
+    /// the order survives slide-switches AND publish (the reader applies the same
+    /// `zIndex` modifier for WYSIWYG playback). Previously the map was in-memory only,
+    /// so re-entering slide N showed elements in array-order with no memory of past
+    /// `bringToFront` actions.
     func bringToFront(id: String) {
-        zIndexMap[id] = nextZIndex
+        let z = nextZIndex
+        zIndexMap[id] = z
         nextZIndex += 1
+        persistZIndex(z, for: id)
     }
 
     func sendToBack(id: String) {
         zIndexMap[id] = 0
+        persistZIndex(0, for: id)
+    }
+
+    private func persistZIndex(_ z: Int, for id: String) {
+        var effects = currentEffects
+        if var texts = effects.textObjects, let i = texts.firstIndex(where: { $0.id == id }) {
+            texts[i].zIndex = z; effects.textObjects = texts
+        } else if var medias = effects.mediaObjects, let i = medias.firstIndex(where: { $0.id == id }) {
+            medias[i].zIndex = z; effects.mediaObjects = medias
+        } else if var audios = effects.audioPlayerObjects, let i = audios.firstIndex(where: { $0.id == id }) {
+            audios[i].zIndex = z; effects.audioPlayerObjects = audios
+        } else if var stickers = effects.stickerObjects, let i = stickers.firstIndex(where: { $0.id == id }) {
+            stickers[i].zIndex = z; effects.stickerObjects = stickers
+        } else {
+            return  // Sticker handled by view-level state — caller patches via onUpdate
+        }
+        currentEffects = effects
     }
 
     // MARK: - Tool Actions

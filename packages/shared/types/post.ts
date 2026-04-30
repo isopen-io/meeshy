@@ -153,6 +153,15 @@ export interface StoryCreatedEventData {
   readonly story: Post;
 }
 
+export interface StoryUpdatedEventData {
+  readonly story: Post;
+}
+
+export interface StoryDeletedEventData {
+  readonly storyId: string;
+  readonly authorId: string;
+}
+
 export interface StoryViewedEventData {
   readonly storyId: string;
   readonly viewerId: string;
