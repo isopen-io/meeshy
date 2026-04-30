@@ -568,29 +568,27 @@ extension StoryViewerView {
             return
         }
 
-        // Durées des médias foreground (vidéo + audio) — startTime + duration = end time
-        if let mediaObjects = effects?.mediaObjects {
-            for obj in mediaObjects where obj.placement == "foreground" {
-                let startOffset = Double(obj.startTime ?? 0)
-                if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
-                   let dur = feedMedia.duration, dur > 0 {
-                    maxDuration = max(maxDuration, startOffset + Double(dur))
-                } else if let objDur = obj.duration {
-                    maxDuration = max(maxDuration, startOffset + Double(objDur))
-                }
+        // Durées des médias foreground (composer écrit `placement: "media"`, jamais
+        // `"foreground"` — le filtre legacy laissait passer aucun élément, écrasant la
+        // durée à 5s pour toute vidéo > 5s). On s'aligne sur les accesseurs partagés.
+        for obj in effects?.resolvedForegroundMediaObjects ?? [] {
+            let startOffset = Double(obj.startTime ?? 0)
+            if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
+               let dur = feedMedia.duration, dur > 0 {
+                maxDuration = max(maxDuration, startOffset + Double(dur))
+            } else if let objDur = obj.duration {
+                maxDuration = max(maxDuration, startOffset + Double(objDur))
             }
         }
 
-        // Durées des audio players foreground — startTime + duration = end time
-        if let audioObjects = effects?.audioPlayerObjects {
-            for obj in audioObjects where obj.placement == "foreground" {
-                let startOffset = Double(obj.startTime ?? 0)
-                if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
-                   let dur = feedMedia.duration, dur > 0 {
-                    maxDuration = max(maxDuration, startOffset + Double(dur))
-                } else if let objDur = obj.duration {
-                    maxDuration = max(maxDuration, startOffset + Double(objDur))
-                }
+        // Durées des audio players foreground — même correctif.
+        for obj in effects?.resolvedForegroundAudioPlayers ?? [] {
+            let startOffset = Double(obj.startTime ?? 0)
+            if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
+               let dur = feedMedia.duration, dur > 0 {
+                maxDuration = max(maxDuration, startOffset + Double(dur))
+            } else if let objDur = obj.duration {
+                maxDuration = max(maxDuration, startOffset + Double(objDur))
             }
         }
 

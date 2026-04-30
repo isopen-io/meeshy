@@ -21,6 +21,10 @@ public extension Notification.Name {
 public struct StoryCanvasReaderView: View {
     public let story: StoryItem
     public let preferredLanguage: String?
+    /// Chaine de langues preferees pour la resolution Prisme (systemLanguage →
+    /// regionalLanguage → customDestinationLanguage). Si nil, on retombe sur
+    /// `preferredLanguage` (1 element). Voir CLAUDE.md "Prisme Linguistique".
+    public let preferredContentLanguages: [String]?
     /// Assets préchargés localement (mode preview — avant publication).
     /// En mode viewer normal, ces dicts sont vides et les URLs sont résolues depuis story.media.
     public let preloadedImages: [String: UIImage]
@@ -31,15 +35,26 @@ public struct StoryCanvasReaderView: View {
     @StateObject private var state: ReaderState
 
     public init(story: StoryItem, preferredLanguage: String? = nil,
+                preferredContentLanguages: [String]? = nil,
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:]) {
         self.story = story
         self.preferredLanguage = preferredLanguage
+        self.preferredContentLanguages = preferredContentLanguages
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
         self._state = StateObject(wrappedValue: ReaderState(story: story))
+    }
+
+    /// Chaine de resolution finale : array si fourni, sinon preferredLanguage en
+    /// element unique, sinon vide. Le caller normal (StoryViewerView) injecte la
+    /// chaine complete depuis `MeeshyUser.preferredContentLanguages`.
+    private var resolvedLanguageChain: [String] {
+        if let chain = preferredContentLanguages, !chain.isEmpty { return chain }
+        if let lang = preferredLanguage { return [lang] }
+        return []
     }
 
     /// Computes the largest 9:16 canvas that fits within the available space.
@@ -83,7 +98,7 @@ public struct StoryCanvasReaderView: View {
             state.startBackgroundAudio(
                 effects: story.storyEffects,
                 story: story,
-                userLang: preferredLanguage ?? "fr"
+                preferredLanguages: resolvedLanguageChain
             )
             state.startForegroundVideos(story: story, preloadedVideoURLs: preloadedVideoURLs)
             state.startForegroundAudios(story: story, preloadedAudioURLs: preloadedAudioURLs)
@@ -297,12 +312,11 @@ public struct StoryCanvasReaderView: View {
 
     @ViewBuilder
     private func textObjectsLayer(size: CGSize) -> some View {
-        let lang = preferredLanguage ?? "fr"
         let time = state.currentTime
         ForEach(state.textObjects) { obj in
             let opacity = state.textObjectOpacity(for: obj, at: time)
             if opacity > 0 {
-                let content = resolvedText(for: obj, userLang: lang)
+                let content = resolvedText(for: obj)
                 let style = obj.parsedTextStyle
                 let colorHex = obj.textColor ?? "FFFFFF"
                 let fontSize = obj.resolvedSize
@@ -416,10 +430,17 @@ public struct StoryCanvasReaderView: View {
 
     // MARK: - Helpers
 
-    private func resolvedText(for obj: StoryTextObject, userLang: String) -> String {
-        obj.translations?[userLang]
-            ?? obj.translations?["en"]
-            ?? obj.content
+    /// Resout le texte selon le Prisme : on essaie chaque langue de la chaine
+    /// preferee dans l'ordre, sinon on retombe sur l'original. Pas de fallback
+    /// implicite vers l'anglais — l'absence de traduction signifie que le contenu
+    /// est deja dans la langue de l'utilisateur OU qu'aucune traduction n'a ete
+    /// generee. Voir CLAUDE.md "Prisme Linguistique".
+    private func resolvedText(for obj: StoryTextObject) -> String {
+        guard let translations = obj.translations else { return obj.content }
+        for lang in resolvedLanguageChain {
+            if let translated = translations[lang] { return translated }
+        }
+        return obj.content
     }
 
     /// Résout l'URL d'un media par son postMediaId depuis les médias legacy du StoryItem.
@@ -714,13 +735,16 @@ private final class ReaderState: ObservableObject {
 
     // MARK: Background audio
 
-    func startBackgroundAudio(effects: StoryEffects?, story: StoryItem, userLang: String) {
+    func startBackgroundAudio(effects: StoryEffects?, story: StoryItem, preferredLanguages: [String]) {
         guard let effects, let bgAudio = effects.resolvedBackgroundAudio else { return }
 
-        // Résolution langue : si variantes disponibles, prendre celle qui match userLang.
-        let resolvedMediaId = bgAudio.backgroundAudioVariants?
-            .first { $0.language == userLang }?.postMediaId
-            ?? bgAudio.postMediaId
+        // Resolution Prisme : on essaie chaque langue de la chaine preferee dans
+        // l'ordre, sinon on retombe sur la variante originale (postMediaId direct).
+        let variants = bgAudio.backgroundAudioVariants ?? []
+        let resolvedMediaId: String = preferredLanguages
+            .lazy
+            .compactMap { lang in variants.first { $0.language == lang }?.postMediaId }
+            .first ?? bgAudio.postMediaId
 
         guard let urlString = story.media.first(where: { $0.id == resolvedMediaId })?.url,
               let url = MeeshyConfig.resolveMediaURL(urlString) else { return }

@@ -1262,6 +1262,7 @@ public struct StoryComposerView: View {
         return StoryEffects(
             background: bgHex,
             filter: selectedFilter?.rawValue,
+            filterIntensity: selectedFilter != nil ? viewModel.filterIntensity : nil,
             stickers: stickerObjects.isEmpty ? nil : stickerObjects.map(\.emoji),
             stickerObjects: stickerObjects.isEmpty ? nil : stickerObjects,
             drawingData: viewModel.drawingData,
@@ -1498,6 +1499,12 @@ public struct StoryComposerView: View {
         let idx = viewModel.currentSlideIndex
         if idx < slides.count {
             slides[idx].effects = buildEffects()
+        }
+        // Propage la duree authoritative de chaque slide vers effects.slideDuration —
+        // sinon les slides jamais activees (donc jamais passees par buildEffects)
+        // gardent un slideDuration nil et le viewer retombe sur le minimum 5s.
+        for i in slides.indices {
+            slides[i].effects.slideDuration = Float(slides[i].duration)
         }
         // Compute composite thumbHash for each slide (bg + text + media + stickers)
         for i in slides.indices {

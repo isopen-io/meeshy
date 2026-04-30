@@ -788,12 +788,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
 
     /// Résout le contenu dans la langue préférée via le Prisme Linguistique.
     /// Retourne la traduction si disponible, sinon le contenu original.
+    /// Pas de fallback implicite vers l'anglais — l'absence de traduction signifie
+    /// que le contenu est deja dans la langue de l'utilisateur OU qu'aucune
+    /// traduction n'a ete generee. Voir CLAUDE.md "Prisme Linguistique".
     public func resolvedContent(preferredLanguage: String?) -> String? {
         guard let lang = preferredLanguage,
               let translations = translations, !translations.isEmpty else { return content }
-        return translations.first { $0.language == lang }?.content
-            ?? translations.first { $0.language == "en" }?.content
-            ?? content
+        return translations.first { $0.language == lang }?.content ?? content
     }
 
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,

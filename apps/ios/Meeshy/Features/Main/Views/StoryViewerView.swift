@@ -259,6 +259,7 @@ struct StoryViewerView: View {
             // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
                 StoryCanvasReaderView(story: outgoing, preferredLanguage: resolvedViewerLanguage,
+                                      preferredContentLanguages: resolvedViewerLanguageChain,
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs)
@@ -272,6 +273,7 @@ struct StoryViewerView: View {
             // === Layers 2–4: Canvas pixel-perfect (media + filter + text + stickers) ===
             if let story = currentStory {
                 StoryCanvasReaderView(story: story, preferredLanguage: resolvedViewerLanguage,
+                                      preferredContentLanguages: resolvedViewerLanguageChain,
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs)
@@ -928,8 +930,18 @@ struct StoryViewerView: View {
         return group.stories[currentStoryIndex]
     }
 
+    /// Premier element de la chaine Prisme — utilise pour les API single-string
+    /// (audio variants legacy, contenu de message, etc.). Pour la resolution complete
+    /// on passe `resolvedViewerLanguageChain` au reader.
     private var resolvedViewerLanguage: String? {
-        AuthManager.shared.currentUser?.systemLanguage
+        resolvedViewerLanguageChain.first
+    }
+
+    /// Chaine complete : systemLanguage → regionalLanguage → customDestinationLanguage → "fr"
+    /// (cf. `MeeshyUser.preferredContentLanguages`). Utilisee par le reader pour resoudre
+    /// les traductions selon le Prisme Linguistique.
+    private var resolvedViewerLanguageChain: [String] {
+        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
     }
 
     var storyHasAudioOrVideo: Bool {
