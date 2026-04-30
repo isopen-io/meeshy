@@ -193,3 +193,37 @@ struct OutOfBoundsWarningOverlay: View {
         .allowsHitTesting(false)
     }
 }
+
+// MARK: - Filter overlay (shared composer + reader)
+
+/// Applique un blend SwiftUI correspondant a un `StoryFilter` avec intensite. Utilise
+/// par le reader (lecture seule) ET par le composer pour garantir un rendu
+/// pixel-identique entre les deux modes — auparavant le composer n'appliquait le
+/// filtre qu'au `selectedImage` legacy, donc une story avec media de fond + filtre
+/// montrait un canvas non-filtre dans le composer mais filtre dans le viewer.
+struct StoryFilterOverlayView: View {
+    let filter: StoryFilter
+    let intensity: Double
+
+    var body: some View {
+        switch filter {
+        case .vintage:
+            Color.orange.opacity(0.15 * intensity).blendMode(.multiply)
+        case .bw:
+            Color.gray.opacity(0.001)
+                .saturation(1.0 - intensity)
+        case .warm:
+            Color.orange.opacity(0.08 * intensity).blendMode(.softLight)
+        case .cool:
+            Color.blue.opacity(0.08 * intensity).blendMode(.softLight)
+        case .dramatic:
+            Color.black.opacity(0.2 * intensity).blendMode(.multiply)
+        case .vivid:
+            Color.clear.saturation(1.0 + 0.5 * intensity)
+        case .fade:
+            Color.white.opacity(0.15 * intensity).blendMode(.lighten)
+        case .chrome:
+            Color.clear.contrast(1.0 + 0.3 * intensity)
+        }
+    }
+}

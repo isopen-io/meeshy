@@ -125,6 +125,14 @@ struct StoryCanvasView: View {
                 // Layer 2: ALL media objects — first fills canvas as background, rest positioned
                 mediaLayer(interactive: !isDrawingActive)
 
+                // Layer 2.5 : Filter overlay au-dessus des media de fond, sous les
+                // elements de premier plan — match du reader pour assurer le WYSIWYG.
+                // Auparavant le filtre n'etait applique que sur le `selectedImage`
+                // legacy, donc une story avec un media de fond et un filtre montrait
+                // un canvas non-filtre dans le composer mais filtre dans le viewer.
+                composerFilterOverlay
+                    .allowsHitTesting(false)
+
                 // Layer 3: Drawing overlay (PKCanvasView — UIKit via UIViewRepresentable)
                 drawingLayer
 
@@ -242,6 +250,17 @@ struct StoryCanvasView: View {
     }
 
     // MARK: - Background Media Layer (classic selectedImage only — shown when no media objects)
+
+    /// Overlay de filtre du composer — miroir de `StoryCanvasReaderView.filterOverlay`.
+    /// Applique le meme blend (vintage / bw / warm / cool / dramatic / vivid / etc.) avec
+    /// la meme `filterIntensity` pour un rendu pixel-identique entre composer et viewer.
+    @ViewBuilder
+    private var composerFilterOverlay: some View {
+        if let filter = selectedFilter {
+            StoryFilterOverlayView(filter: filter, intensity: viewModel.filterIntensity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
 
     @ViewBuilder
     private var backgroundMediaLayer: some View {

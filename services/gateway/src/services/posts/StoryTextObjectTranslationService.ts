@@ -53,10 +53,11 @@ export class StoryTextObjectTranslationService {
     try {
       log.info('StoryTextObject translation completed — persisting', { postId, textObjectIndex });
 
-      // Read authorId to know which feed room to notify
+      // Read post + author to know which feed rooms to notify (author + viewers
+      // who can see this post per its visibility).
       const post = await this.prisma.post.findUnique({
         where: { id: postId },
-        select: { authorId: true },
+        select: { authorId: true, visibility: true, visibilityUserIds: true },
       });
 
       if (!post) {
@@ -100,10 +101,49 @@ export class StoryTextObjectTranslationService {
         translations,
       };
 
-      this.io.to(ROOMS.feed(post.authorId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, eventData);
+      // Broadcast to both the author's feed room (so they see translations land
+      // in their own composer/preview) AND to viewers who can see the post.
+      // Previously only the author was notified, so live viewers stayed on the
+      // untranslated text until they refreshed.
+      const recipientIds = await this.resolveBroadcastRecipients(post.authorId, post.visibility, post.visibilityUserIds);
+      for (const userId of recipientIds) {
+        this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, eventData);
+      }
 
     } catch (err: unknown) {
       log.error('handleTranslationCompleted failed', err, { postId, textObjectIndex });
     }
+  }
+
+  /// Returns the set of user IDs whose feed room should receive the translation
+  /// update — author + visibility-filtered friends. Mirrors the broadcast logic
+  /// of `SocialEventsHandler.getVisibilityFilteredRecipients` so live and cached
+  /// viewers see the same content.
+  private async resolveBroadcastRecipients(
+    authorId: string,
+    visibility: string,
+    visibilityUserIds: string[],
+  ): Promise<string[]> {
+    const recipients = new Set<string>([authorId]);
+    if (visibility === 'ONLY') {
+      for (const id of visibilityUserIds) recipients.add(id);
+      return [...recipients];
+    }
+
+    try {
+      const friendRequests = await this.prisma.friendRequest.findMany({
+        where: { status: 'accepted', OR: [{ senderId: authorId }, { receiverId: authorId }] },
+        select: { senderId: true, receiverId: true },
+      });
+      const friendIds = friendRequests.flatMap((fr) => [fr.senderId, fr.receiverId])
+        .filter((id) => id !== authorId);
+      const excluded = new Set(visibility === 'EXCEPT' ? visibilityUserIds : []);
+      for (const id of friendIds) {
+        if (!excluded.has(id)) recipients.add(id);
+      }
+    } catch {
+      // Friend lookup failures degrade to author-only broadcast (safe default).
+    }
+    return [...recipients];
   }
 }
