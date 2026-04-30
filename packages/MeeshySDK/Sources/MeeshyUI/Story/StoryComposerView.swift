@@ -1372,6 +1372,12 @@ public struct StoryComposerView: View {
 
     private func addForegroundMedia(from item: PhotosPickerItem?, kind: StoryMediaKind) {
         guard let item else { return }
+        // Capture the slide ID at the START of the picker flow. PhotosPicker's
+        // `loadTransferable` is async (1-3s for a video) and the user can switch
+        // slides mid-load — without this pin, the media gets appended to whichever
+        // slide happens to be active when the awaits resolve, which is a silent
+        // data-loss race (audit F2).
+        let targetSlideId = viewModel.currentSlide.id
         isLoadingMedia = true
         mediaLoadProgress = 0
         mediaLoadLabel = kind == .video
@@ -1407,7 +1413,7 @@ public struct StoryComposerView: View {
                     await MainActor.run {
                         viewModel.loadedVideoURLs[objectId] = tempURL
                         if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
-                        if let obj = viewModel.addMediaObject(kind: .video) {
+                        if let obj = viewModel.addMediaObject(kind: .video, toSlideId: targetSlideId) {
                             viewModel.loadedVideoURLs[obj.id] = tempURL
                             if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
                             if obj.id != objectId {
@@ -1415,7 +1421,7 @@ public struct StoryComposerView: View {
                                 viewModel.loadedImages.removeValue(forKey: objectId)
                             }
                             if let dur = mediaDuration {
-                                viewModel.autoExtendDuration(forElementEnd: dur)
+                                viewModel.autoExtendDuration(forElementEnd: dur, slideId: targetSlideId)
                             }
                         }
                     }
@@ -1429,7 +1435,7 @@ public struct StoryComposerView: View {
                       let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else { return }
                 mediaLoadProgress = 1.0
                 await MainActor.run {
-                    if let obj = viewModel.addMediaObject(kind: .image) {
+                    if let obj = viewModel.addMediaObject(kind: .image, toSlideId: targetSlideId) {
                         viewModel.loadedImages[obj.id] = image
                     }
                 }

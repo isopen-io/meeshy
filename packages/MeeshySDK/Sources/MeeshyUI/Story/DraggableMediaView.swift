@@ -33,6 +33,9 @@ public struct DraggableMediaView: View {
     @State private var playerLooper: AVPlayerLooper?
     @State private var isPlaying: Bool = false
     @State private var dragInitialized: Bool = false
+    /// In-flight aspect-ratio resolution task. Held so we can `cancel()` on URL
+    /// change or view disappear and avoid landing a stale ratio.
+    @State private var aspectRatioTask: Task<Void, Never>?
 
     @State private var baseX: CGFloat?
     @State private var baseY: CGFloat?
@@ -126,6 +129,8 @@ public struct DraggableMediaView: View {
                     if externalPlayer == nil {
                         teardownInternalPlayer()
                     }
+                    aspectRatioTask?.cancel()
+                    aspectRatioTask = nil
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .storyComposerMuteCanvas)) { _ in
                     internalPlayer?.isMuted = true
@@ -383,12 +388,19 @@ public struct DraggableMediaView: View {
               let resolveCallback = onAspectRatioResolved
         else { return }
 
-        Task.detached(priority: .userInitiated) {
+        // Cancel any in-flight resolution for a previous URL — without this, rapid
+        // video swaps (composer flipping between clips) could land last-completed
+        // ratio AFTER the latest URL took effect, painting the wrong proportions.
+        aspectRatioTask?.cancel()
+        aspectRatioTask = Task.detached(priority: .userInitiated) {
             do {
                 guard let size = try await AVURLAsset.naturalDisplaySize(of: url),
                       size.width > 0, size.height > 0 else { return }
+                try Task.checkCancellation()
                 let ratio = size.width / size.height
                 await MainActor.run { resolveCallback(ratio) }
+            } catch is CancellationError {
+                // Expected when a fresher URL arrived; drop quietly.
             } catch {
                 // Silent failure — the media keeps its 1:1 fallback ratio.
             }

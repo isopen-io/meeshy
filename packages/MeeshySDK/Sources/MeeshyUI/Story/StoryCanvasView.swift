@@ -23,6 +23,10 @@ struct StoryCanvasView: View {
     @GestureState private var pinchDelta: CGFloat = 1.0
     @GestureState private var rotationDelta: Angle = .zero
     @State private var filteredImage: UIImage?
+    /// In-flight filter render task. Cancelled on filter change / image change /
+    /// view disappear so a slow filter operation can't paint a stale result over
+    /// a faster one (last-writer-wins race).
+    @State private var filterTask: Task<Void, Never>?
 
     private var imageScale: CGFloat {
         get { viewModel.backgroundTransform.scale }
@@ -184,13 +188,23 @@ struct StoryCanvasView: View {
                 object: nil
             )
         }
+        .onDisappear {
+            filterTask?.cancel()
+            filterTask = nil
+        }
     }
 
     private func updateFilteredImage() {
         let filter = selectedFilter
         let source = selectedImage
-        Task.detached(priority: .userInitiated) {
+        // Cancel any in-flight filter render before kicking off a new one.
+        // Without cancellation, rapid filter switches could complete out-of-order
+        // and paint a stale result (e.g., user picks vintage → bw → vintage in
+        // 200ms; the slower bw landing last would briefly overwrite vintage).
+        filterTask?.cancel()
+        filterTask = Task.detached(priority: .userInitiated) {
             let result = source.map { StoryFilterProcessor.apply(filter, to: $0) }
+            if Task.isCancelled { return }
             await MainActor.run { filteredImage = result }
         }
     }

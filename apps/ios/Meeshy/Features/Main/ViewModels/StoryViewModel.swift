@@ -52,6 +52,12 @@ class StoryViewModel: ObservableObject {
         let loadedAudioURLs: [String: URL]
         let originalLanguage: String?
         let visibility: String
+        /// IDs of slide-Posts already created server-side. Tracked so that:
+        /// (a) `retryUpload()` skips them (otherwise a partial-failure retry creates
+        ///     duplicate slides — what was previously committed plus the same again),
+        /// (b) `cancelUpload()` can DELETE them (otherwise a 5-slide story that
+        ///     fails at slide 3 leaves slides 1-2 visible to friends as orphans).
+        var publishedPostIds: [String] = []
 
         enum UploadPhase: Sendable {
             case uploading
@@ -448,10 +454,19 @@ class StoryViewModel: ObservableObject {
             let uploader = TusUploadManager(baseURL: baseURL)
             let slideCount = upload.slides.count
             let slideShare = 1.0 / Double(max(1, slideCount))
+            // On retry, skip slides whose Posts already exist server-side. Without
+            // this, a partial-failure retry recreated the early slides and the
+            // user ended up with duplicates (e.g., slide 0 published twice).
+            let alreadyPublishedCount = upload.publishedPostIds.count
 
             do {
                 for (slideIdx, slide) in upload.slides.enumerated() {
                     guard !Task.isCancelled else { return }
+                    if slideIdx < alreadyPublishedCount {
+                        // Already committed during a previous attempt.
+                        activeUpload?.progress = Double(slideIdx + 1) * slideShare
+                        continue
+                    }
                     let baseProgress = Double(slideIdx) * slideShare
 
                     var uploadResult: TusUploadResult? = nil
@@ -534,6 +549,10 @@ class StoryViewModel: ObservableObject {
                         mediaIds: allMediaIds.isEmpty ? nil : allMediaIds
                     )
 
+                    // Track committed slide IDs so a later cancel/failure can delete
+                    // orphans and a retry can skip them.
+                    activeUpload?.publishedPostIds.append(post.id)
+
                     let media = buildFeedMedia(from: post, fallback: uploadResult)
                     let newItem = StoryItem(
                         id: post.id, content: post.content, media: media,
@@ -570,6 +589,18 @@ class StoryViewModel: ObservableObject {
     func cancelUpload() {
         if let upload = activeUpload {
             cleanupUploadTempFiles(upload)
+            // Delete any slides that were committed before the user cancelled —
+            // otherwise a 5-slide story cancelled at slide 3 leaves slides 1-2
+            // visible to friends as orphan stories that don't fit any slideshow.
+            // Fire-and-forget on a detached task; don't block the cancel UX.
+            let orphans = upload.publishedPostIds
+            if !orphans.isEmpty {
+                Task.detached { [storyService = self.storyService] in
+                    for postId in orphans {
+                        try? await storyService.delete(storyId: postId)
+                    }
+                }
+            }
         }
         uploadTask?.cancel()
         uploadTask = nil

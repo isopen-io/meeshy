@@ -117,14 +117,24 @@ final class StoryComposerViewModel {
         var rotation: Double = 0
     }
     var backgroundTransform: BackgroundTransform = BackgroundTransform()
-    private var backgroundTransformCache: [Int: BackgroundTransform] = [:]
+    /// Per-slide background transform cache, keyed by `slide.id` rather than its index.
+    /// Index keying broke after slide reordering or removal: deleting slide 0 promoted
+    /// slide 1's content to position 0 but `restoreBackgroundTransform()` would still
+    /// load the old slide 0's transform (now stranded at key `0`). Using the stable
+    /// slide ID survives any reorder/insert/remove operation.
+    private var backgroundTransformCache: [String: BackgroundTransform] = [:]
 
     func saveBackgroundTransform() {
-        backgroundTransformCache[currentSlideIndex] = backgroundTransform
+        guard let id = slides[safe: currentSlideIndex]?.id else { return }
+        backgroundTransformCache[id] = backgroundTransform
     }
 
     func restoreBackgroundTransform() {
-        backgroundTransform = backgroundTransformCache[currentSlideIndex] ?? BackgroundTransform()
+        guard let id = slides[safe: currentSlideIndex]?.id else {
+            backgroundTransform = BackgroundTransform()
+            return
+        }
+        backgroundTransform = backgroundTransformCache[id] ?? BackgroundTransform()
     }
 
     // MARK: - Media Storage (pre-publication)
@@ -215,9 +225,20 @@ final class StoryComposerViewModel {
         }
     }
 
-    func autoExtendDuration(forElementEnd end: Float) {
-        if end > currentSlideDuration {
-            currentSlideDuration = min(600, end + 0.5)
+    func autoExtendDuration(forElementEnd end: Float, slideId: String? = nil) {
+        // Target the slide that owns the element, NOT the currently-visible one.
+        // Without this, a video added to slide 0 while the user is on slide 1
+        // (PhotosPicker async race) would extend slide 1's duration.
+        let targetIndex: Int = {
+            if let id = slideId, let idx = slides.firstIndex(where: { $0.id == id }) {
+                return idx
+            }
+            return currentSlideIndex
+        }()
+        guard slides.indices.contains(targetIndex) else { return }
+        let current = Float(slides[targetIndex].duration)
+        if end > current {
+            slides[targetIndex].duration = TimeInterval(min(600, end + 0.5))
         }
     }
 
@@ -296,6 +317,7 @@ final class StoryComposerViewModel {
         let audioIds = (slide.effects.audioPlayerObjects ?? []).map(\.id)
         slides.remove(at: index)
         slideImages.removeValue(forKey: slideId)
+        backgroundTransformCache.removeValue(forKey: slideId)
         for id in mediaIds {
             loadedImages.removeValue(forKey: id)
             loadedVideoURLs.removeValue(forKey: id)
@@ -403,12 +425,25 @@ final class StoryComposerViewModel {
     }
 
     @discardableResult
-    func addMediaObject(kind: StoryMediaKind) -> StoryMediaObject? {
+    func addMediaObject(kind: StoryMediaKind, toSlideId: String? = nil) -> StoryMediaObject? {
         guard canAddMedia else { return nil }
+        // Resolve the target slide. If the caller pinned a specific id (e.g., the
+        // PhotosPicker started on slide 0 and the user switched to slide 1 mid-load),
+        // honour it — without this guard, the new media object would be appended to
+        // whichever slide happened to be active when the async task resolved.
+        let targetSlideIndex: Int = {
+            if let id = toSlideId, let idx = slides.firstIndex(where: { $0.id == id }) {
+                return idx
+            }
+            return currentSlideIndex
+        }()
+        guard slides.indices.contains(targetSlideIndex) else { return nil }
+
         let center = CGPoint(x: 0.5, y: 0.5)
+        var targetEffects = slides[targetSlideIndex].effects
         // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
         // inclus : resolvedBackgroundMedia retombe sur le 1er existant).
-        let shouldBeBackground = currentEffects.resolvedBackgroundMedia == nil
+        let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil
         let obj = StoryMediaObject(
             postMediaId: "",
             kind: kind,
@@ -421,13 +456,16 @@ final class StoryComposerViewModel {
             isBackground: shouldBeBackground ? true : nil,
             sourceLanguage: detectedKeyboardLanguage
         )
-        var effects = currentEffects
-        var medias = effects.mediaObjects ?? []
+        var medias = targetEffects.mediaObjects ?? []
         medias.append(obj)
-        effects.mediaObjects = medias
-        currentEffects = effects
-        selectedElementId = obj.id
-        bringToFront(id: obj.id)
+        targetEffects.mediaObjects = medias
+        slides[targetSlideIndex].effects = targetEffects
+        // Selection / z-index state is composer-global; only mutate it when we're
+        // actually adding to the currently-visible slide so the UI doesn't jump.
+        if targetSlideIndex == currentSlideIndex {
+            selectedElementId = obj.id
+            bringToFront(id: obj.id)
+        }
         return obj
     }
 

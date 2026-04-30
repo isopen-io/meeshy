@@ -190,8 +190,13 @@ struct StoryViewerView: View {
         .onDisappear {
             timerCancellable?.cancel()
             StoryMediaCoordinator.shared.deactivate()
-            StoryMediaLoader.shared.clearThumbnailCache()
-            StoryMediaLoader.shared.clearPlayerCache()
+            // Don't aggressively `clearThumbnailCache()` / `clearPlayerCache()` here.
+            // Both caches use LRU + size budgets, plus `StoryMediaLoader.init()`
+            // listens to memory-warning notifications to drop them under pressure.
+            // Eagerly evicting on every viewer dismiss defeated the prefetch
+            // benefit when the user immediately re-opened the tray (audit C1/C3 +
+            // the perf-audit observation that 6 prerolled players were torn down
+            // right after the user finished tapping through them).
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
