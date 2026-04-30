@@ -67,13 +67,27 @@ export default function ChatLinkPage() {
   }, [id, t]);
 
   useEffect(() => {
-    if (error && !isLoading) {
-      if (id && id.startsWith('mshy_')) {
-        router.push(`/join/${id}`);
-      } else {
-        router.push('/');
-      }
+    if (!error || isLoading) return;
+    if (typeof window === 'undefined') return;
+
+    if (!id || !id.startsWith('mshy_')) {
+      router.push('/');
+      return;
     }
+
+    // /chat/[id] failure used to unconditionally bounce to /join/[id].
+    // When the link is also dead on /join/[id] AND the iOS scheme handler
+    // takes over, the user lives in a triangle: Safari /chat → Safari
+    // /join → meeshy:// (iOS app shows error) → user dismisses → Safari
+    // reloads /join → /chat link re-tapped → infinite. Guard the bounce
+    // with a one-shot sessionStorage flag keyed by id so a second
+    // landing on /chat/[id] for the same id renders the inline error
+    // instead of re-firing the redirect.
+    const sessionKey = `meeshy:chat-bounced:${id}`;
+    if (sessionStorage.getItem(sessionKey) === '1') return;
+
+    sessionStorage.setItem(sessionKey, '1');
+    router.push(`/join/${id}`);
   }, [error, isLoading, id, router]);
 
   if (isLoading) {

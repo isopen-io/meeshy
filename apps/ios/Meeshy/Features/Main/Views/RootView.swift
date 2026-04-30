@@ -422,7 +422,15 @@ struct RootView: View {
             }
         }
         .onOpenURL { url in
-            router.handleDeepLink(url)
+            // Only the share intent flows through Router here — every other
+            // destination (joinLink/chatLink/conversation/magicLink) is
+            // already routed via MeeshyApp's `.onOpenURL` → DeepLinkRouter →
+            // pendingDeepLink → handleDeepLink. Letting Router.handleDeepLink
+            // process those a second time double-fires the API call and
+            // races the navigation with the pendingDeepLink path.
+            if case .share = DeepLinkParser.parse(url) {
+                router.handleDeepLink(url)
+            }
         }
         .sheet(item: $router.deepLinkProfileUser) { user in
             UserProfileSheet(

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button, Card, Badge, LanguageOrb, PageHeader, Avatar, Skeleton } from '@/components/v2';
 import { useNotificationsV2 } from '@/hooks/v2';
+import { safeInternalPath } from '@/utils/safe-redirect';
 
 function NotificationSkeleton() {
   return (
@@ -98,9 +99,15 @@ export default function V2NotificationsPage() {
 
   const handleNotificationClick = async (notificationId: string, actionUrl?: string) => {
     await markAsRead(notificationId);
-    if (actionUrl) {
-      window.location.href = actionUrl;
-    }
+    if (!actionUrl) return;
+    // Notification action URLs are internal navigation targets
+    // (`/conversations/X`, `/posts/Y`, etc.). Some notifications are
+    // triggered by other users (mentions, replies), so the field is
+    // partially user-controlled. Clamp to a same-origin path to keep
+    // a malformed/malicious value from redirecting off-domain.
+    const safe = safeInternalPath(actionUrl);
+    if (safe === '/' && actionUrl !== '/') return;
+    window.location.href = safe;
   };
 
   return (

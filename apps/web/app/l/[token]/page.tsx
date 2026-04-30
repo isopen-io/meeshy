@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { buildApiUrl } from '@/lib/config';
+import { safeExternalUrl } from '@/utils/safe-redirect';
 
 // =============================================================================
 // Détection de la source sociale
@@ -233,8 +234,13 @@ export default function TrackingLinkPage() {
 
         if (response.ok) {
           const result = await response.json();
-          const originalUrl = result.data?.originalUrl || result.originalUrl;
+          const rawOriginalUrl = result.data?.originalUrl || result.originalUrl;
           const clickId = result.data?.clickId;
+
+          // Validate the destination BEFORE wiring up beacons. A
+          // tracking-link owner cannot supply javascript:/data:/file: —
+          // those would turn this redirector into an XSS amplifier.
+          const originalUrl = safeExternalUrl(rawOriginalUrl);
 
           if (originalUrl) {
             if (clickId) {

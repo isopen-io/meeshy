@@ -8,6 +8,7 @@ import { LargeLogo } from '@/components/branding';
 import { magicLinkService } from '@/services/magic-link.service';
 import { SESSION_STORAGE_KEYS } from '@/services/auth-manager.service';
 import { CheckCircle, XCircle, Loader2, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { safeInternalPath } from '@/utils/safe-redirect';
 
 // rememberDevice is now retrieved server-side for security (no more sessionStorage)
 
@@ -91,10 +92,12 @@ function MagicLinkValidateContent() {
           setState('success');
           toast.success(t('login.success.loginSuccess'));
 
-          // Redirection avec rechargement complet pour s'assurer que l'état auth est chargé
+          // Redirection avec rechargement complet pour s'assurer que l'état auth est chargé.
+          // returnUrl is attacker-controlled (URL search param) — clamp it
+          // to a same-origin path so a phisher cannot ride this redirect
+          // off-domain after the victim authenticates.
           setTimeout(() => {
-            const redirectUrl = returnUrl || '/dashboard';
-            window.location.href = redirectUrl;
+            window.location.href = safeInternalPath(returnUrl, '/dashboard');
           }, 1500);
         } else {
           setState('error');
@@ -115,7 +118,7 @@ function MagicLinkValidateContent() {
   };
 
   const handleGoTo2FA = () => {
-    router.push(`/auth/verify-2fa${returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''}`);
+    router.push(`/auth/verify-2fa?returnUrl=${encodeURIComponent(safeInternalPath(returnUrl, '/'))}`);
   };
 
   const handleRequestNewLink = () => {
