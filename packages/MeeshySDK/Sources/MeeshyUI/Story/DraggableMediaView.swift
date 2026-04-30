@@ -19,9 +19,29 @@ public struct DraggableMediaView: View {
     /// Defaults to 393pt (iPhone 14 Pro reference width).
     public var canvasWidth: CGFloat = 393
 
+    /// Actual canvas height in points — used to size media along its longest axis.
+    /// Defaults to 698pt (canvasWidth * 16/9, matches StoryCanvasReaderView.canvasSize).
+    public var canvasHeightHint: CGFloat = 698
+
+    /// Aspect ratio (width/height) of the source media. Defaults to `1.0` (square) when
+    /// unknown (e.g., video before the asset is loaded). Once known, the media renders in
+    /// its natural proportions and `scale` becomes a uniform multiplier.
+    public var naturalAspectRatio: CGFloat = 1.0
+
+    /// Callback fired when the natural aspect ratio is detected from a video asset (async).
+    /// The composer caches this in the ViewModel so the next render uses the correct ratio.
+    public var onAspectRatioResolved: ((CGFloat) -> Void)?
+
+    /// Live drag tracking — fired when the user starts/moves/ends a drag. Used by the
+    /// parent canvas to render alignment guides + visibility warnings while dragging.
+    public var onDragChanged: ((_ position: CGPoint, _ size: CGSize) -> Void)?
+    public var onDragStarted: ((_ position: CGPoint, _ size: CGSize) -> Void)?
+    public var onDragCommitted: (() -> Void)?
+
     @State private var internalPlayer: AVQueuePlayer?
     @State private var playerLooper: AVPlayerLooper?
     @State private var isPlaying: Bool = false
+    @State private var dragInitialized: Bool = false
 
     // Local state snapshots: read from binding once, then only update on gesture end.
     // This prevents parent re-renders from resetting the visual position mid-gesture.
@@ -44,6 +64,12 @@ public struct DraggableMediaView: View {
                 externalPlayer: AVPlayer? = nil,
                 isEditing: Bool = false,
                 canvasWidth: CGFloat = 393,
+                canvasHeightHint: CGFloat = 698,
+                naturalAspectRatio: CGFloat = 1.0,
+                onAspectRatioResolved: ((CGFloat) -> Void)? = nil,
+                onDragStarted: ((CGPoint, CGSize) -> Void)? = nil,
+                onDragChanged: ((CGPoint, CGSize) -> Void)? = nil,
+                onDragCommitted: (() -> Void)? = nil,
                 onDragEnd: @escaping () -> Void = {},
                 onTapToFront: (() -> Void)? = nil,
                 onTogglePlay: ((String) -> Void)? = nil) {
@@ -53,6 +79,12 @@ public struct DraggableMediaView: View {
         self.externalPlayer = externalPlayer
         self.isEditing = isEditing
         self.canvasWidth = canvasWidth
+        self.canvasHeightHint = canvasHeightHint
+        self.naturalAspectRatio = naturalAspectRatio
+        self.onAspectRatioResolved = onAspectRatioResolved
+        self.onDragStarted = onDragStarted
+        self.onDragChanged = onDragChanged
+        self.onDragCommitted = onDragCommitted
         self.onDragEnd = onDragEnd
         self.onTapToFront = onTapToFront
         self.onTogglePlay = onTogglePlay
@@ -83,6 +115,7 @@ public struct DraggableMediaView: View {
                     } else if externalPlayer != nil {
                         isPlaying = externalPlayer?.rate ?? 0 > 0
                     }
+                    resolveVideoAspectRatioIfNeeded()
                 }
                 .onChange(of: geo.size) { _, newSize in
                     canvasSize = newSize
@@ -92,6 +125,7 @@ public struct DraggableMediaView: View {
                         teardownInternalPlayer()
                         setupInternalPlayer(url: url)
                     }
+                    resolveVideoAspectRatioIfNeeded()
                 }
                 .onChange(of: mediaObject.id) { _, _ in
                     syncBaseFromBinding()
@@ -136,20 +170,55 @@ public struct DraggableMediaView: View {
 
     // MARK: - Content with conditional gestures
 
-    private var baseMediaSize: CGFloat { canvasWidth * 0.4 }
+    /// Aspect-aware base media size : computes the dimensions of the media's frame
+    /// at scale=1, preserving its natural aspect ratio and fitting within ~65% of the
+    /// canvas's shorter dimension on its longest axis.
+    ///
+    /// - Portrait media (ratio < 1) → height = 0.65 * shortDim, width derived from ratio
+    /// - Landscape media (ratio > 1) → width = 0.65 * shortDim, height derived from ratio
+    /// - Square media (ratio = 1) → side = 0.5 * shortDim
+    ///
+    /// Cross-viewport behavior : `shortDim = min(canvasWidth, canvasHeight)`, so a portrait
+    /// photo at scale=1 takes ~65% of canvas height on iPhone, iPad, and web (canvas is
+    /// always 9:16 — `shortDim` is always the canvas width). This is the proportional
+    /// "présentable" baseline the user asked for.
+    private func baseMediaSize(canvasWidth: CGFloat, canvasHeight: CGFloat) -> CGSize {
+        let shortDim = min(canvasWidth, canvasHeight)
+        let ratio = max(0.1, min(10, naturalAspectRatio))
+        let portraitTarget = shortDim * 0.65
+        let landscapeTarget = shortDim * 0.65
+        let squareTarget = shortDim * 0.5
+
+        if abs(ratio - 1.0) < 0.05 {
+            return CGSize(width: squareTarget, height: squareTarget)
+        }
+        if ratio < 1.0 {
+            // Portrait : longest axis = height
+            return CGSize(width: portraitTarget * ratio, height: portraitTarget)
+        }
+        // Landscape : longest axis = width
+        return CGSize(width: landscapeTarget, height: landscapeTarget / ratio)
+    }
 
     @ViewBuilder
     private func mediaContentWithGestures(canvasWidth: CGFloat, canvasHeight: CGFloat) -> some View {
         let effectiveScale = isEditing ? currentScale * gestureScale : currentScale
         let effectiveRotation = isEditing ? currentRotation + gestureRotation.degrees : currentRotation
-        let scaledSize = baseMediaSize * effectiveScale
+        let baseSize = baseMediaSize(canvasWidth: canvasWidth, canvasHeight: canvasHeight)
+        let scaledWidth = baseSize.width * effectiveScale
+        let scaledHeight = baseSize.height * effectiveScale
+
+        // Normalized bbox of the element — fed into the drag callbacks so the parent
+        // can compute alignment guides + safe-zone warnings from current dimensions.
+        let normWidth = scaledWidth / max(1, canvasWidth)
+        let normHeight = scaledHeight / max(1, canvasHeight)
 
         if isEditing {
             mediaContentBase
-                .frame(width: baseMediaSize, height: baseMediaSize)
+                .frame(width: baseSize.width, height: baseSize.height)
                 .scaleEffect(effectiveScale)
                 .rotationEffect(.degrees(effectiveRotation))
-                .frame(width: scaledSize, height: scaledSize)
+                .frame(width: scaledWidth, height: scaledHeight)
                 .contentShape(Rectangle())
                 .position(
                     x: currentX * canvasWidth + dragOffset.width,
@@ -159,14 +228,15 @@ public struct DraggableMediaView: View {
                 // Combined primary gesture — claims touch exclusively, preventing
                 // parent canvas gestures from firing when touching this element.
                 .gesture(
-                    dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight)
+                    dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight,
+                                normWidth: normWidth, normHeight: normHeight)
                         .simultaneously(with: pinchGesture)
                         .simultaneously(with: rotateGesture)
                 )
                 .overlay {
                     if isVideoElement, activePlayer != nil {
                         videoPlayPauseOverlay
-                            .frame(width: scaledSize, height: scaledSize)
+                            .frame(width: scaledWidth, height: scaledHeight)
                             .position(
                                 x: currentX * canvasWidth + dragOffset.width,
                                 y: currentY * canvasHeight + dragOffset.height
@@ -178,10 +248,10 @@ public struct DraggableMediaView: View {
                 }
         } else {
             mediaContent
-                .frame(width: baseMediaSize, height: baseMediaSize)
+                .frame(width: baseSize.width, height: baseSize.height)
                 .scaleEffect(currentScale)
                 .rotationEffect(.degrees(currentRotation))
-                .frame(width: scaledSize, height: scaledSize)
+                .frame(width: scaledWidth, height: scaledHeight)
                 .contentShape(Rectangle())
                 .position(
                     x: currentX * canvasWidth,
@@ -193,18 +263,33 @@ public struct DraggableMediaView: View {
 
     // MARK: - Gestures
 
-    private func dragGesture(canvasWidth: CGFloat, canvasHeight: CGFloat) -> some Gesture {
+    private func dragGesture(canvasWidth: CGFloat, canvasHeight: CGFloat,
+                             normWidth: CGFloat, normHeight: CGFloat) -> some Gesture {
         DragGesture()
             .updating($dragOffset) { value, state, _ in
                 state = value.translation
             }
+            .onChanged { value in
+                let nx = min(1, max(0, currentX + value.translation.width / canvasWidth))
+                let ny = min(1, max(0, currentY + value.translation.height / canvasHeight))
+                let size = CGSize(width: normWidth, height: normHeight)
+                if !dragInitialized {
+                    dragInitialized = true
+                    onDragStarted?(CGPoint(x: nx, y: ny), size)
+                }
+                onDragChanged?(CGPoint(x: nx, y: ny), size)
+            }
             .onEnded { value in
-                let newX = min(1, max(0, currentX + value.translation.width / canvasWidth))
-                let newY = min(1, max(0, currentY + value.translation.height / canvasHeight))
-                baseX = newX
-                baseY = newY
-                mediaObject.x = newX
-                mediaObject.y = newY
+                // Compute raw position, then apply soft snap to alignment targets.
+                let rawX = min(1, max(0, currentX + value.translation.width / canvasWidth))
+                let rawY = min(1, max(0, currentY + value.translation.height / canvasHeight))
+                let snapped = StoryAlignmentSnap.apply(to: CGPoint(x: rawX, y: rawY))
+                baseX = snapped.x
+                baseY = snapped.y
+                mediaObject.x = snapped.x
+                mediaObject.y = snapped.y
+                dragInitialized = false
+                onDragCommitted?()
                 onDragEnd()
             }
     }
@@ -236,6 +321,10 @@ public struct DraggableMediaView: View {
     }
 
     // MARK: - Media content (without video overlay — used in editing mode)
+    //
+    // `.scaledToFit` (vs. `.scaledToFill`) preserves the media's natural aspect ratio
+    // without cropping. Combined with the aspect-aware frame from `baseMediaSize(...)`,
+    // the visible content matches the source proportions on every viewport.
 
     private var mediaContentBase: some View {
         ZStack {
@@ -245,7 +334,7 @@ public struct DraggableMediaView: View {
             } else if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -261,7 +350,7 @@ public struct DraggableMediaView: View {
             } else if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -345,9 +434,48 @@ public struct DraggableMediaView: View {
         internalPlayer = nil
         isPlaying = false
     }
+
+    // MARK: - Video aspect-ratio resolution (async, off-main)
+
+    /// Resolves the natural aspect ratio of a video asset and reports it back to the
+    /// parent. Only fires when `naturalAspectRatio` is still at its default (1.0) AND
+    /// a video URL is available — avoids unnecessary asset loads. Once the parent caches
+    /// the ratio, subsequent renders use the correct proportions.
+    private func resolveVideoAspectRatioIfNeeded() {
+        guard isVideoElement,
+              abs(naturalAspectRatio - 1.0) < 0.01,
+              let url = videoURL,
+              let resolveCallback = onAspectRatioResolved
+        else { return }
+
+        Task.detached(priority: .userInitiated) {
+            let asset = AVURLAsset(url: url)
+            do {
+                let tracks = try await asset.loadTracks(withMediaType: .video)
+                guard let track = tracks.first else { return }
+                let size = try await track.load(.naturalSize)
+                let transform = try await track.load(.preferredTransform)
+                // Apply the transform's rotation to get the displayed dimensions.
+                let displayed = size.applying(transform)
+                let w = abs(displayed.width)
+                let h = abs(displayed.height)
+                guard w > 0, h > 0 else { return }
+                let ratio = w / h
+                await MainActor.run {
+                    resolveCallback(ratio)
+                }
+            } catch {
+                // Silent failure — the media keeps its 1:1 fallback ratio.
+            }
+        }
+    }
 }
 
 // MARK: - Inline AVPlayerLayer (GPU-composited, replaces SwiftUI VideoPlayer)
+//
+// `.resizeAspect` preserves the natural aspect ratio (no cropping) — paired with the
+// aspect-aware frame from `baseMediaSize(...)`, the video renders pixel-accurate to
+// its source on every viewport.
 
 private struct _InlineVideoLayer: UIViewRepresentable {
     let player: AVPlayer
@@ -355,7 +483,7 @@ private struct _InlineVideoLayer: UIViewRepresentable {
     func makeUIView(context: Context) -> _InlinePlayerView {
         let view = _InlinePlayerView()
         view.playerLayer.player = player
-        view.playerLayer.videoGravity = .resizeAspectFill
+        view.playerLayer.videoGravity = .resizeAspect
         return view
     }
 

@@ -133,6 +133,50 @@ final class StoryComposerViewModel {
     var loadedVideoURLs: [String: URL] = [:]
     var loadedAudioURLs: [String: URL] = [:]
 
+    // MARK: - Media Aspect Ratios (render-time only, not persisted)
+
+    /// Natural aspect ratio (width/height) for each loaded media object, keyed by mediaObject.id.
+    /// Computed from UIImage.size or AVAsset track size. Used to render media in its natural
+    /// proportions instead of forcing a square frame. When unknown, `1.0` is used as fallback.
+    var mediaAspectRatios: [String: CGFloat] = [:]
+
+    func setAspectRatio(_ ratio: CGFloat, for mediaId: String) {
+        guard ratio.isFinite, ratio > 0 else { return }
+        mediaAspectRatios[mediaId] = ratio
+    }
+
+    // MARK: - Active Drag State (for alignment guides + warnings)
+
+    /// ID of the foreground element currently being dragged. Used by the canvas to render
+    /// alignment guides (centerlines, thirds) and safe-zone warnings only while interaction
+    /// is in progress.
+    var activeDragElementId: String?
+
+    /// Live normalized position of the dragged element (0–1). Updated during the drag for
+    /// the alignment-guide overlay; `nil` when no drag is active.
+    var activeDragPosition: CGPoint?
+
+    /// Live normalized size of the dragged element (width/height in 0–1). Used to determine
+    /// if the element's bounding box exits the safe zone (visibility warning).
+    var activeDragSize: CGSize?
+
+    func beginDrag(elementId: String, position: CGPoint, size: CGSize) {
+        activeDragElementId = elementId
+        activeDragPosition = position
+        activeDragSize = size
+    }
+
+    func updateDrag(position: CGPoint, size: CGSize) {
+        activeDragPosition = position
+        activeDragSize = size
+    }
+
+    func endDrag() {
+        activeDragElementId = nil
+        activeDragPosition = nil
+        activeDragSize = nil
+    }
+
     // MARK: - Timeline
 
     var isTimelineVisible: Bool = false
@@ -393,6 +437,7 @@ final class StoryComposerViewModel {
         loadedImages.removeValue(forKey: id)
         loadedVideoURLs.removeValue(forKey: id)
         loadedAudioURLs.removeValue(forKey: id)
+        mediaAspectRatios.removeValue(forKey: id)
         zIndexMap.removeValue(forKey: id)
     }
 

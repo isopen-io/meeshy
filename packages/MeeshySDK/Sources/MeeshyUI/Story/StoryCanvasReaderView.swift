@@ -375,6 +375,9 @@ public struct StoryCanvasReaderView: View {
         ForEach(foregroundMedia) { media in
             let visible = state.mediaObjectVisible(media, at: time)
             if visible {
+                let ratio = state.mediaAspectRatios[media.id]
+                    ?? state.loadedImages[media.id].map { $0.size.width / max(1, $0.size.height) }
+                    ?? 1.0
                 DraggableMediaView(
                     mediaObject: .constant(media),
                     image: state.loadedImages[media.id],
@@ -383,7 +386,11 @@ public struct StoryCanvasReaderView: View {
                         : nil,
                     externalPlayer: media.mediaType == "video" ? state.foregroundVideoPlayers[media.id] : nil,
                     isEditing: false,
-                    canvasWidth: canvasWidth
+                    canvasWidth: canvasWidth,
+                    naturalAspectRatio: ratio,
+                    onAspectRatioResolved: { resolved in
+                        state.mediaAspectRatios[media.id] = resolved
+                    }
                 )
                 .opacity(state.mediaObjectOpacity(for: media, at: time))
                 .animation(.easeInOut(duration: 0.15), value: state.mediaObjectOpacity(for: media, at: time))
@@ -451,6 +458,9 @@ private extension View {
 private final class ReaderState: ObservableObject {
     @Published var textObjects: [StoryTextObject]
     @Published var loadedImages: [String: UIImage] = [:]
+    /// Aspect ratios (width/height) detected for foreground media — populated
+    /// asynchronously for videos and synchronously from `UIImage.size` for images.
+    @Published var mediaAspectRatios: [String: CGFloat] = [:]
     /// Players vidéo foreground — un par média, démarrés selon leur startTime.
     @Published var foregroundVideoPlayers: [String: AVPlayer] = [:]
     /// Elapsed time since playback started (seconds). Drives timing-based visibility.
