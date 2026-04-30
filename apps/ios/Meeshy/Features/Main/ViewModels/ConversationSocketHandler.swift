@@ -34,6 +34,12 @@ protocol ConversationSocketDelegate: AnyObject {
     /// Mirrors the REST 403 path so socket and HTTP failures converge on
     /// the same UX.
     func handleSocketAccessRevoked(reason: String?)
+
+    /// Mark the conversation as read. Called from the socket handler when an
+    /// inbound message arrives while this conversation is on screen so the
+    /// sender's checkmark upgrades from `.delivered` to `.read` without
+    /// waiting for a navigation cycle.
+    func markAsRead()
 }
 
 // MARK: - ConversationSocketHandler
@@ -284,6 +290,16 @@ final class ConversationSocketHandler {
                             delegate.typingUsernames.removeAll { $0 == senderName }
                             self.clearTypingSafetyTimer(for: senderName)
                         }
+
+                        // The handler is only subscribed while this conversation is on
+                        // screen, so an incoming message means the recipient is actively
+                        // looking at it — fire `mark-as-read` so the sender's checkmark
+                        // upgrades from `.delivered` (gray ✓✓) to `.read` (purple ✓✓)
+                        // without waiting for the user to navigate away and back.
+                        // markAsRead is idempotent (REST endpoint dedups within 2s and
+                        // the cache update is local-first), so calling it per inbound
+                        // message is safe.
+                        delegate.markAsRead()
                     }
 
                     // mark-as-received is handled globally by ConversationListViewModel
