@@ -56,6 +56,18 @@ enum DeepLinkParser {
         }
     }
 
+    /// `true` when the URL is a Meeshy route the app knows how to handle.
+    /// Used by `AppDelegate.application(_:continue:)` to decide whether to
+    /// claim a Universal Link (return `true`) or let iOS fall back to
+    /// Safari (return `false`). A `.external` parse result means the URL
+    /// is not for us — never claim it.
+    static func isMeeshyDeepLink(_ url: URL) -> Bool {
+        if case .external = parse(url) {
+            return false
+        }
+        return true
+    }
+
     // MARK: - Private
 
     private static func parseCustomScheme(_ url: URL) -> DeepLinkDestination {
@@ -164,31 +176,34 @@ final class DeepLinkRouter: ObservableObject {
         let meeshyHosts = ["meeshy.me", "www.meeshy.me", "app.meeshy.me"]
         guard meeshyHosts.contains(host) else { return handleCustomScheme(url: url) }
 
-        let pathComponents = url.pathComponents.filter { $0 != "/" }
+        // Filter out empty path segments so that `//join/X` or `/./join/X`
+        // collapse to the same shape as `/join/X`. The previous filter
+        // only stripped literal "/" entries, leaving empty strings from
+        // double-slashes in place and shifting `pathComponents[1]` to
+        // an empty identifier.
+        let pathComponents = url.pathComponents.filter { !$0.isEmpty && $0 != "/" }
 
         guard !pathComponents.isEmpty else { return false }
 
         switch pathComponents[0] {
         case "join", "l":
-            guard pathComponents.count >= 2 else { return false }
-            let identifier = pathComponents[1]
+            guard let identifier = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .joinLink(identifier: identifier)
             return true
 
         case "chat":
-            guard pathComponents.count >= 2 else { return false }
-            pendingDeepLink = .chatLink(identifier: pathComponents[1])
+            guard let identifier = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+            pendingDeepLink = .chatLink(identifier: identifier)
             return true
 
         case "auth":
             guard pathComponents.count >= 3, pathComponents[1] == "magic-link" else { return false }
-            let token = pathComponents[2]
+            guard let token = nonEmptyIdentifier(at: 2, in: pathComponents) else { return false }
             pendingDeepLink = .magicLink(token: token)
             return true
 
         case "c", "conversation":
-            guard pathComponents.count >= 2 else { return false }
-            let conversationId = pathComponents[1]
+            guard let conversationId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .conversation(id: conversationId)
             return true
 
@@ -197,40 +212,53 @@ final class DeepLinkRouter: ObservableObject {
         }
     }
 
+    /// Return the path component at `index` only if it is a non-empty,
+    /// non-whitespace string. Used to keep the `pendingDeepLink` from
+    /// being populated with `""` or `" "` for malformed URLs like
+    /// `/join/%20` or `/c//`, both of which would later fail server-side
+    /// with an opaque 404 — we'd rather refuse them up front so the
+    /// caller (AppDelegate / .onOpenURL) can fall back appropriately.
+    private func nonEmptyIdentifier(at index: Int, in components: [String]) -> String? {
+        guard components.indices.contains(index) else { return nil }
+        let trimmed = components[index].trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     // MARK: - Custom URL Scheme (meeshy://)
 
     private func handleCustomScheme(url: URL) -> Bool {
-        guard url.scheme == "meeshy" else { return false }
+        guard url.scheme?.lowercased() == "meeshy" else { return false }
 
-        let host = url.host ?? ""
-        let pathComponents = url.pathComponents.filter { $0 != "/" }
+        // Lowercase the host so `meeshy://Join/X` (autocorrect-capitalised
+        // by some keyboards) routes the same as `meeshy://join/X`.
+        let host = (url.host ?? "").lowercased()
+        // Same empty-segment cleanup as the Universal Link branch above.
+        let pathComponents = url.pathComponents.filter { !$0.isEmpty && $0 != "/" }
 
         switch host {
         case "join":
-            guard !pathComponents.isEmpty else { return false }
-            pendingDeepLink = .joinLink(identifier: pathComponents[0])
+            guard let identifier = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .joinLink(identifier: identifier)
             return true
 
         case "chat":
-            guard !pathComponents.isEmpty else { return false }
-            pendingDeepLink = .chatLink(identifier: pathComponents[0])
+            guard let identifier = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .chatLink(identifier: identifier)
             return true
 
         case "auth":
-            guard pathComponents.count >= 1 else { return false }
-            if pathComponents[0] == "magic-link" {
-                let token = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                    .queryItems?.first(where: { $0.name == "token" })?.value
-                if let token {
-                    pendingDeepLink = .magicLink(token: token)
-                    return true
-                }
+            guard !pathComponents.isEmpty, pathComponents[0] == "magic-link" else { return false }
+            let rawToken = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "token" })?.value
+            guard let token = rawToken?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty else {
+                return false
             }
-            return false
+            pendingDeepLink = .magicLink(token: token)
+            return true
 
         case "conversation":
-            guard !pathComponents.isEmpty else { return false }
-            pendingDeepLink = .conversation(id: pathComponents[0])
+            guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .conversation(id: conversationId)
             return true
 
         default:

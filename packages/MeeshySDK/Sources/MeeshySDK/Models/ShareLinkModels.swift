@@ -91,6 +91,17 @@ public struct AnonymousJoinResponse: Decodable {
     public let id: String
 }
 
+// MARK: - Authenticated Join Response
+
+/// Response returned by `POST /conversations/join/:linkId` when an already
+/// authenticated user activates a share link. The gateway is idempotent —
+/// existing members get the same shape as fresh joins, so callers can
+/// always navigate to `conversationId` without pre-checking membership.
+public struct JoinAuthenticatedResponse: Decodable, Sendable {
+    public let conversationId: String
+    public let message: String?
+}
+
 public struct AnonymousParticipant: Decodable, Sendable {
     public let id: String
     public let username: String

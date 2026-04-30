@@ -8,6 +8,7 @@ import { LargeLogo } from '@/components/branding';
 import { twoFactorService } from '@/services/two-factor.service';
 import { SESSION_STORAGE_KEYS } from '@/services/auth-manager.service';
 import { ShieldCheck, KeyRound, ArrowLeft } from 'lucide-react';
+import { safeInternalPath } from '@/utils/safe-redirect';
 
 // Composants inline légers
 const SimpleCard = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
@@ -181,9 +182,10 @@ function Verify2FAPageContent() {
 
         toast.success(t('login.success.loginSuccess'));
 
-        // Redirection avec rechargement complet pour s'assurer que l'état auth est chargé
-        const redirectUrl = returnUrl || '/dashboard';
-        window.location.href = redirectUrl;
+        // returnUrl is attacker-controlled (URL search param) — clamp to
+        // a same-origin path so a phisher cannot ride this redirect
+        // off-domain after the victim completes 2FA.
+        window.location.href = safeInternalPath(returnUrl, '/dashboard');
       } else {
         setError(response.error || t('twoFactor.verify.errors.invalidCode'));
         setIsLoading(false);

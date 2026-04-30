@@ -26,33 +26,54 @@ extension iPadRootView {
     func handleDeepLink(_ deepLink: DeepLink?) {
         guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
         switch deepLink {
-        case .joinLink(let identifier):
-            joinFlowIdentifier = identifier
-            showJoinFlow = true
-        case .chatLink:
-            break
+        case .joinLink(let identifier), .chatLink(let identifier):
+            // iPadRootView only mounts when authenticated, so we never
+            // want the anonymous join sheet here — that flow is owned by
+            // MeeshyApp.handleGuestDeepLink for the unauthenticated
+            // branch. For authenticated users we resolve the share link
+            // server-side: the gateway is idempotent, so an existing
+            // member gets the same payload as a fresh join and we can
+            // navigate to the canonical conversationId either way.
+            joinViaShareLink(identifier: identifier)
         case .conversation(let id):
-            let conv = Conversation(
-                id: id, identifier: id, type: .group,
-                title: nil, lastMessageAt: Date(), createdAt: Date(), updatedAt: Date()
-            )
-            openConversation(conv)
+            // Validate the conversation exists BEFORE opening. Otherwise a
+            // deep link to a deleted/unknown conversation lands the user on
+            // an empty pane with no recovery, and re-firing the same URL
+            // (e.g. from a web redirect that retries on every render) keeps
+            // recreating the same empty view — perceived as an infinite
+            // loop.
+            navigateToConversationById(id)
         case .magicLink:
             break
         }
     }
 
-    func handleJoinSuccess(_ response: AnonymousJoinResponse) {
-        let conv = Conversation(
-            id: response.conversation.id,
-            identifier: response.conversation.id,
-            type: response.conversation.type.lowercased() == "group" ? .group : .direct,
-            title: response.conversation.title,
-            lastMessageAt: Date(),
-            createdAt: Date(),
-            updatedAt: Date()
-        )
-        openConversation(conv)
+    func joinViaShareLink(identifier: String) {
+        Task {
+            do {
+                let response = try await ShareLinkService.shared.joinAuthenticated(linkId: identifier)
+                navigateToConversationById(response.conversationId)
+            } catch let error as MeeshyError {
+                let message: String
+                switch error {
+                case .server(404, _):
+                    message = String(localized: "Lien introuvable", defaultValue: "Lien introuvable")
+                case .server(410, let msg):
+                    message = msg.isEmpty
+                        ? String(localized: "Ce lien n'est plus actif", defaultValue: "Ce lien n'est plus actif")
+                        : msg
+                case .forbidden(let reason):
+                    message = reason ?? String(localized: "Acces refuse a cette conversation", defaultValue: "Acces refuse a cette conversation")
+                default:
+                    message = error.errorDescription ?? String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
+                }
+                ToastManager.shared.showError(message)
+            } catch {
+                ToastManager.shared.showError(
+                    String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
+                )
+            }
+        }
     }
 
     // MARK: - Notification Handlers

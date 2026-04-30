@@ -45,6 +45,21 @@ public final class ShareLinkService: @unchecked Sendable {
         return response.data
     }
 
+    // MARK: - Join as Authenticated User
+
+    /// Join (or re-resolve) a conversation via a share link as an
+    /// authenticated user. Returns the canonical conversationId — the
+    /// gateway is idempotent: an existing member gets the same response
+    /// as a fresh join, so callers don't have to pre-check membership.
+    public func joinAuthenticated(linkId: String) async throws -> JoinAuthenticatedResponse {
+        struct EmptyBody: Encodable {}
+        let response: APIResponse<JoinAuthenticatedResponse> = try await api.post(
+            endpoint: "/conversations/join/\(linkId)",
+            body: EmptyBody()
+        )
+        return response.data
+    }
+
     // MARK: - Leave Anonymous Session
 
     public func leaveAnonymousSession(sessionToken: String) async throws {
