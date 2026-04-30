@@ -62,8 +62,15 @@ export default function JoinConversationPage() {
   // meeshy:// scheme on every render (auth check completing, window focus
   // events, etc.) bounces the user back into the iOS app every time they
   // return to Safari — an infinite loop when the conversation or share
-  // link does not exist and the iOS app has nowhere to land. Pinning the
-  // attempt to a ref keyed by linkId keeps a single-shot redirect.
+  // link does not exist and the iOS app has nowhere to land.
+  //
+  // Three guards stack:
+  //   - in-memory ref: blocks repeats within the same component instance
+  //   - sessionStorage: survives Safari page reloads triggered by the iOS
+  //     app coming to foreground / memory pressure on the tab
+  //   - ?noredirect=1 URL flag: stamped into the URL via replaceState so
+  //     even a hard reload from history sees the guard, and so the user
+  //     can manually retry by clearing the flag from the URL
   const lastRedirectedLinkIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -73,11 +80,21 @@ export default function JoinConversationPage() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('noredirect') === '1') return;
 
+    const sessionKey = `meeshy:join-redirected:${linkId}`;
+    if (sessionStorage.getItem(sessionKey) === '1') return;
+
     const ua = navigator.userAgent;
     const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
     if (!isMobile) return;
 
     lastRedirectedLinkIdRef.current = linkId;
+    sessionStorage.setItem(sessionKey, '1');
+    urlParams.set('noredirect', '1');
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}?${urlParams.toString()}`
+    );
     window.location.href = `meeshy://join/${linkId}`;
   }, [linkId]);
 
