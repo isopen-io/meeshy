@@ -272,6 +272,14 @@ export class PostService {
       const handleResult = async (event: { taskId: string; result: { messageId: string; translatedText: string; confidenceScore?: number; translatorModel?: string }; targetLanguage: string; metadata: Record<string, unknown> }) => {
         if (event.result.messageId !== storyMessageId) return;
 
+        // Reject malformed `targetLanguage` before interpolating into the
+        // raw Mongo `$set` field path. A value like `"a.b.$inject"` would
+        // otherwise let a compromised translator write arbitrary fields.
+        if (!/^[a-z]{2,5}$/.test(event.targetLanguage)) {
+          log.warn('StoryTranslation: rejected malformed targetLanguage', { postId, targetLanguage: event.targetLanguage });
+          return;
+        }
+
         try {
           await (this.prisma as any).$runCommandRaw({
             update: 'Post',

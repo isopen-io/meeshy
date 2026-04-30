@@ -121,6 +121,49 @@ export async function messageValidationHook(
 }
 
 /**
+ * Rate-limit configs pour les routes Posts/Stories.
+ *
+ * Avant : aucune limite par route → un utilisateur authentifie pouvait spammer
+ * /posts (creation), /:id/like, /:id/view, /:id/comments via plusieurs sessions
+ * en restant sous le plafond global de 300 req/min/IP. Plus important : chaque
+ * creation de story declenche 10 requetes ZMQ vers le translator (1 par langue
+ * cible hardcodee), donc 10 stories/min = 100 requetes ZMQ/min/utilisateur.
+ *
+ * Limites :
+ * - POST /posts (create) : 10/min — un utilisateur normal poste rarement
+ * - POST /posts/:id/like : 30/min — accommoder le toggle rapide
+ * - POST /posts/:id/view : 60/min — un viewer parcourt vite plusieurs stories
+ * - POST /posts/:id/comments : 20/min
+ * - POST /posts/impressions/batch : 10/min — par lot de 50 ids max
+ */
+export function createPostRouteRateLimitConfig(
+  type: 'create' | 'like' | 'view' | 'comment' | 'impression'
+): object {
+  const configs = {
+    create: { max: 10, label: 'create' },
+    like: { max: 30, label: 'like' },
+    view: { max: 60, label: 'view' },
+    comment: { max: 20, label: 'comment' },
+    impression: { max: 10, label: 'impression' },
+  };
+  const cfg = configs[type];
+  return {
+    max: cfg.max,
+    timeWindow: '1 minute',
+    keyGenerator: (request: FastifyRequest) => {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const id = authContext?.userId ?? `ip:${request.ip}`;
+      return `posts:${cfg.label}:${id}`;
+    },
+    errorResponseBuilder: () => ({
+      success: false,
+      error: `Trop de requetes (posts/${cfg.label}). Veuillez patienter.`,
+      statusCode: 429,
+    }),
+  };
+}
+
+/**
  * Rate limiter pour les endpoints Signal Protocol
  *
  * SECURITY: Protège contre:

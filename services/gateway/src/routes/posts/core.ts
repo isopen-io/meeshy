@@ -7,6 +7,7 @@ import { PostTranslationService } from '../../services/posts/PostTranslationServ
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
+import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,
@@ -18,6 +19,7 @@ export function registerCoreRoutes(
   // POST /posts — Create a new post
   fastify.post('/posts', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('create') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;

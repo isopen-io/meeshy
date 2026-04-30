@@ -6,6 +6,7 @@ import { PostService } from '../../services/PostService';
 import { LikeSchema, RepostSchema, PostParams } from './types';
 import { sendSuccess } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
+import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -17,6 +18,7 @@ export function registerInteractionRoutes(
   // POST /posts/:postId/like
   fastify.post('/posts/:postId/like', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('like') },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -140,6 +142,7 @@ export function registerInteractionRoutes(
   // POST /posts/:postId/view
   fastify.post('/posts/:postId/view', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('view') },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -224,6 +227,7 @@ export function registerInteractionRoutes(
       }
     },
     preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('impression') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;

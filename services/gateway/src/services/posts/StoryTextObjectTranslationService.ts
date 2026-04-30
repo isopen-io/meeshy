@@ -64,12 +64,25 @@ export class StoryTextObjectTranslationService {
         return;
       }
 
+      // Validate textObjectIndex — non-negative integer only, prevents `$inject`-style
+      // tricks if a malicious translator response forges this field.
+      if (!Number.isInteger(textObjectIndex) || textObjectIndex < 0 || textObjectIndex > 1000) {
+        log.warn('rejected malformed textObjectIndex', { postId, textObjectIndex });
+        return;
+      }
+
       // Build $set fields for each translated language using MongoDB dot-notation.
-      // This avoids a full read-merge-write and the Prisma InputJsonValue type constraints.
+      // Each language code is sanitized before interpolation to prevent field-path
+      // injection via a compromised translator returning e.g. `"a.$set.foo"`.
       const setFields: Record<string, string> = {};
       for (const [lang, text] of Object.entries(translations)) {
+        if (!/^[a-z]{2,5}$/.test(lang)) {
+          log.warn('rejected malformed language code', { postId, textObjectIndex, lang });
+          continue;
+        }
         setFields[`storyEffects.textObjects.${textObjectIndex}.translations.${lang}`] = text;
       }
+      if (Object.keys(setFields).length === 0) return;
 
       await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
         update: 'Post',
