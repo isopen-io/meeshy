@@ -155,12 +155,16 @@ export class RedisDeliveryQueue {
     let safeSlotFound = false;
 
     while (!safeSlotFound) {
-      const inWindow = sorted.filter((t) => t >= candidate && t <= candidate + windowMs);
-      if (inWindow.length < max) {
+      // Any already-scheduled message within ±windowMs of `candidate` could share a 10-min
+      // sliding window with it, so we count both past and future scheduled times. The old
+      // forward-only check (`t >= candidate`) silently dropped past messages whenever
+      // Date.now() advanced between enqueues, letting the rate cap leak under fast bursts.
+      const conflicting = sorted.filter((t) => t >= candidate - windowMs && t <= candidate + windowMs);
+      if (conflicting.length < max) {
         safeSlotFound = true;
       } else {
-        const windowOldest = inWindow.sort((a, b) => a - b)[inWindow.length - max];
-        candidate = windowOldest + windowMs + 1000;
+        const blockingTime = conflicting[conflicting.length - max];
+        candidate = blockingTime + windowMs + 1000;
         safeSlotFound = true;
       }
     }

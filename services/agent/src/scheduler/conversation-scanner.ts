@@ -291,21 +291,34 @@ export class ConversationScanner {
 
   private async processConversation(conv: EligibleConversation, trigger: 'auto' | 'manual' = 'auto'): Promise<boolean> {
     const { conversationId } = conv;
-    await this.persistence.updateScanStatus(conversationId, true, 'starting');
+    await this.persistence.updateScanStatus(conversationId, new Date(), 'starting');
     const tracer = new ScanTracer(conversationId, trigger);
     this.tracerRef.current = tracer;
+
+    try {
+      return await this.runScan(conv, tracer);
+    } finally {
+      // Guarantee scan status is cleared on EVERY exit path — successful completion,
+      // early return, thrown exception, or interruption. Without this, an unhandled
+      // exception after graph.invoke (e.g. deliveryQueue.enqueue failure) would leave
+      // `scanStartedAt` set and stick the UI on STOP/<node> until the next scan cycle.
+      await this.persistence.updateScanStatus(conversationId, null, null).catch((err) => {
+        console.error(`[Scanner] Failed to clear scan status for conv=${conversationId}:`, err);
+      });
+      this.tracerRef.current = null;
+    }
+  }
+
+  private async runScan(conv: EligibleConversation, tracer: ScanTracer): Promise<boolean> {
+    const { conversationId } = conv;
 
     const activity = await detectActivity(this.persistence, conversationId);
 
     if (activity.shouldSkip) {
       console.log(`[Scanner] Skipping conv=${conversationId}: ${activity.reason}`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      await Promise.all([
-        this.persistence.createScanLog(tracer.finalize()).catch(err =>
-          console.error(`[Scanner] Error persisting scan log:`, err)),
-        this.persistence.updateScanStatus(conversationId, false, null),
-      ]);
-      this.tracerRef.current = null;
+      await this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
       return false;
     }
 
@@ -456,12 +469,8 @@ export class ConversationScanner {
     if (controlledUsers.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no controlled users`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      await Promise.all([
-        this.persistence.createScanLog(tracer.finalize()).catch(err =>
-          console.error(`[Scanner] Error persisting scan log:`, err)),
-        this.persistence.updateScanStatus(conversationId, false, null),
-      ]);
-      this.tracerRef.current = null;
+      await this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
       return false;
     }
 
@@ -474,12 +483,8 @@ export class ConversationScanner {
     if (availableUsers.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: all controlled users on cooldown`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      await Promise.all([
-        this.persistence.createScanLog(tracer.finalize()).catch(err =>
-          console.error(`[Scanner] Error persisting scan log:`, err)),
-        this.persistence.updateScanStatus(conversationId, false, null),
-      ]);
-      this.tracerRef.current = null;
+      await this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
       return false;
     }
     controlledUsers = availableUsers;
@@ -509,12 +514,8 @@ export class ConversationScanner {
     if (effectiveMessages.length === 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: no messages`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      await Promise.all([
-        this.persistence.createScanLog(tracer.finalize()).catch(err =>
-          console.error(`[Scanner] Error persisting scan log:`, err)),
-        this.persistence.updateScanStatus(conversationId, false, null),
-      ]);
-      this.tracerRef.current = null;
+      await this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
       return false;
     }
 
@@ -550,12 +551,8 @@ export class ConversationScanner {
     if (todayStats.usersActive >= maxUsersToday) {
       console.log(`[Scanner] User budget exhausted for conv=${conversationId}: ${todayStats.usersActive}/${maxUsersToday} users today`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      await Promise.all([
-        this.persistence.createScanLog(tracer.finalize()).catch(err =>
-          console.error(`[Scanner] Error persisting scan log:`, err)),
-        this.persistence.updateScanStatus(conversationId, false, null),
-      ]);
-      this.tracerRef.current = null;
+      await this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
       return false;
     }
 
@@ -567,12 +564,8 @@ export class ConversationScanner {
     if (scheduledActions.length >= effectiveBudgetRemaining && effectiveBudgetRemaining > 0) {
       console.log(`[Scanner] Skipping conv=${conversationId}: ${scheduledActions.length} actions already scheduled (budget: ${effectiveBudgetRemaining})`);
       tracer.setOutcome({ outcome: 'skipped', messagesSent: 0, reactionsSent: 0, messagesRejected: 0, userIdsUsed: [] });
-      await Promise.all([
-        this.persistence.createScanLog(tracer.finalize()).catch(err =>
-          console.error(`[Scanner] Error persisting scan log:`, err)),
-        this.persistence.updateScanStatus(conversationId, false, null),
-      ]);
-      this.tracerRef.current = null;
+      await this.persistence.createScanLog(tracer.finalize()).catch(err =>
+        console.error(`[Scanner] Error persisting scan log:`, err));
       return false;
     }
 
@@ -584,7 +577,10 @@ export class ConversationScanner {
         if (stopped) {
           throw new Error('Scan interrupted by user');
         }
-        await this.persistence.updateScanStatus(conversationId, true, node);
+        // Refresh scanStartedAt at each node boundary so it tracks "time since last progress".
+        // A hung node pushes age past SCAN_STALE_MS and the read path flips to PLAY; a scan
+        // moving smoothly through nodes stays fresh end-to-end.
+        await this.persistence.updateScanStatus(conversationId, new Date(), node);
       };
 
       result = await this.graph.invoke({
@@ -649,10 +645,8 @@ export class ConversationScanner {
       await Promise.all([
         this.persistence.createScanLog(tracer.finalize()).catch(err =>
           console.error(`[Scanner] Error persisting scan log:`, err)),
-        this.persistence.updateScanStatus(conversationId, false, null),
         this.redis.del(stopFlagKey),
       ]);
-      this.tracerRef.current = null;
       return false;
     }
 
@@ -762,12 +756,8 @@ export class ConversationScanner {
       messagesRejected: 0,
       userIdsUsed: [...new Set(msgActions.map((a) => (a as any).asUserId).filter(Boolean))],
     });
-    await Promise.all([
-      this.persistence.createScanLog(tracer.finalize()).catch(err =>
-        console.error(`[Scanner] Error persisting scan log:`, err)),
-      this.persistence.updateScanStatus(conversationId, false, null),
-    ]);
-    this.tracerRef.current = null;
+    await this.persistence.createScanLog(tracer.finalize()).catch(err =>
+      console.error(`[Scanner] Error persisting scan log:`, err));
 
     return true;
   }
