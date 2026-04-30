@@ -1,6 +1,13 @@
 import SwiftUI
 import MeeshySDK
 
+// MARK: - Shared style
+
+extension StrokeStyle {
+    /// Canonical dashed border for story-canvas indicators (safe zone, zoom hint, etc.).
+    static let storyDashed = StrokeStyle(lineWidth: 1, dash: [4, 4])
+}
+
 // MARK: - Safe Zone
 
 enum StorySafeZone {
@@ -82,7 +89,7 @@ struct SafeZoneOverlay: View {
 
         ZStack {
             RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                .strokeBorder(style: .storyDashed)
                 .foregroundStyle(MeeshyColors.indigo300.opacity(isDragging ? 0.7 : 0.25))
                 .frame(width: rect.width, height: rect.height)
                 .position(x: rect.midX, y: rect.midY)

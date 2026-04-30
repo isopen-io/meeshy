@@ -143,10 +143,8 @@ struct StoryCanvasView: View {
             .clipped()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(
-                RoundedRectangle(cornerRadius: 2)
-                    .strokeBorder(
-                        style: StrokeStyle(lineWidth: 1, dash: [6, 4])
-                    )
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(style: .storyDashed)
                     .foregroundStyle(MeeshyColors.indigo400.opacity(viewModel.isCanvasZoomed ? 0.6 : 0))
                     .allowsHitTesting(false)
                     .animation(.easeInOut(duration: 0.3), value: viewModel.isCanvasZoomed)
@@ -344,6 +342,15 @@ struct StoryCanvasView: View {
                         viewModel.selectedElementId = obj.id
                         onEditText?(obj.id)
                     },
+                    onDragStarted: { pos, size in
+                        viewModel.beginDrag(elementId: obj.id, position: pos, size: size)
+                    },
+                    onDragChanged: { pos in
+                        viewModel.updateDrag(position: pos)
+                    },
+                    onDragCommitted: {
+                        viewModel.endDrag()
+                    },
                     onDragEnd: {}
                 )
                 .opacity(elementOpacity(startTime: obj.startTime, duration: obj.displayDuration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
@@ -372,6 +379,15 @@ struct StoryCanvasView: View {
                 },
                 onRemove: {
                     stickerObjects.removeAll { $0.id == sticker.id }
+                },
+                onDragStarted: { pos, size in
+                    viewModel.beginDrag(elementId: sticker.id, position: pos, size: size)
+                },
+                onDragChanged: { pos in
+                    viewModel.updateDrag(position: pos)
+                },
+                onDragCommitted: {
+                    viewModel.endDrag()
                 }
             )
             .allowsHitTesting(interactive)
@@ -592,16 +608,26 @@ public struct DraggableSticker: View {
     public let canvasSize: CGSize
     public var onUpdate: (StorySticker) -> Void
     public var onRemove: () -> Void
+    public var onDragStarted: ((_ position: CGPoint, _ size: CGSize) -> Void)?
+    public var onDragChanged: ((CGPoint) -> Void)?
+    public var onDragCommitted: (() -> Void)?
 
     @State private var currentScale: CGFloat = 1
     @State private var currentRotation: Angle = .zero
     @State private var showDeleteButton = false
+    @State private var dragInitialized: Bool = false
 
     public init(sticker: StorySticker, canvasSize: CGSize,
                 onUpdate: @escaping (StorySticker) -> Void,
-                onRemove: @escaping () -> Void) {
+                onRemove: @escaping () -> Void,
+                onDragStarted: ((CGPoint, CGSize) -> Void)? = nil,
+                onDragChanged: ((CGPoint) -> Void)? = nil,
+                onDragCommitted: (() -> Void)? = nil) {
         self.sticker = sticker; self.canvasSize = canvasSize
         self.onUpdate = onUpdate; self.onRemove = onRemove
+        self.onDragStarted = onDragStarted
+        self.onDragChanged = onDragChanged
+        self.onDragCommitted = onDragCommitted
     }
 
     public var body: some View {
@@ -634,6 +660,14 @@ public struct DraggableSticker: View {
         }
     }
 
+    /// Emoji bbox is roughly font-size × font-size (em-square). Normalize against the
+    /// canvas dimensions so the parent can run safe-zone checks in 0–1 space.
+    private var normalizedSize: CGSize {
+        guard canvasSize.width > 0, canvasSize.height > 0 else { return .zero }
+        let side = 50 * sticker.scale * currentScale
+        return CGSize(width: side / canvasSize.width, height: side / canvasSize.height)
+    }
+
     private var dragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
@@ -642,6 +676,17 @@ public struct DraggableSticker: View {
                 var updated = sticker
                 updated.x = newX; updated.y = newY
                 onUpdate(updated)
+
+                let pos = CGPoint(x: newX, y: newY)
+                if !dragInitialized {
+                    dragInitialized = true
+                    onDragStarted?(pos, normalizedSize)
+                }
+                onDragChanged?(pos)
+            }
+            .onEnded { _ in
+                dragInitialized = false
+                onDragCommitted?()
             }
     }
 
