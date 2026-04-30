@@ -30,7 +30,7 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
             .navigationBarHidden(true)
-            .safeAreaInset(edge: .top) { ConnectionBanner() }
+            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
         case .communityDetail(let communityId):
             CommunityDetailView(
                 communityId: communityId,
@@ -51,7 +51,7 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
             .navigationBarHidden(true)
-            .safeAreaInset(edge: .top) { ConnectionBanner() }
+            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
         case .communityCreate:
             CommunityCreateView(
                 onCreated: { community in
@@ -84,7 +84,7 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
                         .navigationBarHidden(true)
-            .safeAreaInset(edge: .top) { ConnectionBanner() }
+            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
             .onDisappear {
                 Task { await notificationManager.refreshUnreadCount() }
             }
