@@ -11,7 +11,7 @@ import { ThemeProvider, QueryProvider } from "@/components/providers";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { ClientOnly } from "@/components/common/client-only";
 import { MessageViewProvider } from "@/hooks/use-message-view-state";
-import { defaultFont, getAllFontVariables } from "@/lib/fonts";
+import { getAllFontVariables } from "@/lib/fonts";
 import { CriticalPreloader } from "@/components/common/CriticalPreloader";
 import { CallManager } from "@/components/video-call";
 import { TabNotificationManager } from "@/components/common/TabNotificationManager";

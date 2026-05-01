@@ -4,9 +4,7 @@ import { memo, useCallback, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Trash2, AlertTriangle, FileText, Heart, Paperclip, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { Message } from '@meeshy/shared/types';
 import type { BubbleMessage } from './types';
 import { useI18n } from '@/hooks/useI18n';
 
@@ -59,7 +57,7 @@ export const DeleteConfirmationView = memo(function DeleteConfirmationView({
   // Calculer les éléments qui seront supprimés
   const translationCount = message.translations?.length || 0;
   const attachmentCount = message.attachments?.length || 0;
-  const reactionCount = (message as any).reactions?.length || 0;
+  const reactionCount = (message as unknown).reactions?.length || 0;
 
   // Tronquer le contenu pour l'aperçu
   // Si le message est vide mais a des attachments, afficher les noms des fichiers
@@ -103,7 +101,7 @@ export const DeleteConfirmationView = memo(function DeleteConfirmationView({
           {/* Preview minimal */}
           <div className="p-3 bg-white/60 dark:bg-black/20 rounded-lg border border-red-300 dark:border-red-700">
             <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2">
-              "{previewContent}"
+              &quot;{previewContent}&quot;
             </p>
           </div>
 
@@ -219,7 +217,7 @@ export const DeleteConfirmationView = memo(function DeleteConfirmationView({
                 "text-sm leading-relaxed",
                 isOwnMessage ? "text-gray-900" : "text-gray-700 dark:text-gray-300"
               )}>
-                "{previewContent}"
+                &quot;{previewContent}&quot;
               </p>
               
               {/* Additional Content Summary */}

@@ -15,7 +15,6 @@ import {
   Loader2
 } from 'lucide-react';
 import { User } from '@/types';
-import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
 import { apiService } from '@/services/api.service';
 import { getUserInitials } from '@/utils/user';
@@ -35,7 +34,6 @@ export function InviteUserModal({
   currentParticipants,
   onUserInvited 
 }: InviteUserModalProps) {
-  const { t } = useI18n('conversations');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -106,8 +104,8 @@ export function InviteUserModal({
       const results = await Promise.all(invitePromises);
 
       // Vérifier les résultats
-      const successfulInvites = results.filter(r => (r.data as any)?.success);
-      const failedInvites = results.filter(r => !(r.data as any)?.success);
+      const successfulInvites = results.filter(r => (r.data as unknown)?.success);
+      const failedInvites = results.filter(r => !(r.data as unknown)?.success);
 
       if (successfulInvites.length > 0) {
         toast.success(`${successfulInvites.length} utilisateur(s) invité(s) avec succès`);

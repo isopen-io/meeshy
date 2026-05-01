@@ -259,7 +259,7 @@ export function TranslationMonitor({
                       </div>
                     </div>
                     <div>
-                      <p className="text-blue-700 text-sm">File d'attente</p>
+                      <p className="text-blue-700 text-sm">File d&apos;attente</p>
                       <p className="text-2xl font-bold text-blue-900">{metrics.queueSize}</p>
                     </div>
                   </div>

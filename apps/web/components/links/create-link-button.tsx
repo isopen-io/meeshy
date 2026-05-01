@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Link2 } from 'lucide-react';
 import { CreateLinkModalV2 as CreateLinkModal } from '@/components/conversations/create-link-modal';
-import { toast } from 'sonner';
 
 interface CreateLinkButtonProps {
   onLinkCreated?: () => void;

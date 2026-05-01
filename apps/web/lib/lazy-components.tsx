@@ -150,7 +150,7 @@ export function preloadOnHover(componentName: string) {
   if (preloadedModules.has(componentName)) return Promise.resolve();
   preloadedModules.add(componentName);
 
-  const preloadMap: Record<string, () => Promise<any>> = {
+  const preloadMap: Record<string, () => Promise<unknown>> = {
     'create-conversation': () => import('@/components/conversations/create-conversation-modal'),
     'config-modal': () => import('@/components/settings/config-modal'),
     'login-form': () => import('@/components/auth/login-form'),
@@ -169,7 +169,7 @@ export function preloadOnHover(componentName: string) {
  * Map des routes vers leurs modules à précharger
  * Inclut les composants principaux de chaque page
  */
-const routePreloadMap: Record<string, () => Promise<any>[]> = {
+const routePreloadMap: Record<string, () => Promise<unknown>[]> = {
   '/dashboard': () => [
     import('@/app/dashboard/page'),
   ],
@@ -245,7 +245,7 @@ interface WithLazyLoadingOptions {
   name?: string;
 }
 
-export function withLazyLoading<T extends ComponentType<any>>(
+export function withLazyLoading<T extends ComponentType<unknown>>(
   importFn: () => Promise<{ default: T }>,
   options: WithLazyLoadingOptions = {}
 ) {

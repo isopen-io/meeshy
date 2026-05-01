@@ -62,7 +62,7 @@ export function RankingFilters({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Type d'entité
+                Type d&apos;entité
               </label>
               <Select value={entityType} onValueChange={onEntityTypeChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">

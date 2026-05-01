@@ -246,7 +246,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                         )}
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1 leading-snug">
-                        {(message as any).originalContent || message.content}
+                        {(message as unknown).originalContent || message.content}
                       </p>
                     </div>
                   </button>
@@ -514,7 +514,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
               className="flex items-center gap-2 cursor-pointer"
             >
               <HelpCircle className="h-4 w-4" />
-              <span>Besoin d'aide</span>
+              <span>Besoin d&apos;aide</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

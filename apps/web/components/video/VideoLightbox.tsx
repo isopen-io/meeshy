@@ -45,8 +45,6 @@ export function VideoLightbox({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const videoRef = useRef<HTMLVideoElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const animationFrameRef = useRef<number | null>(null);
   const touchStartX = useRef<number>(0);
   const touchEndX = useRef<number>(0);
 
@@ -110,9 +108,6 @@ export function VideoLightbox({
   }, [isOpen]);
 
   const currentVideo = videos[currentIndex];
-  const canGoPrevious = currentIndex > 0;
-  const canGoNext = currentIndex < videos.length - 1;
-
   const goToPrevious = useCallback(() => {
     if (videos.length > 1) {
       // Navigation circulaire
@@ -154,7 +149,7 @@ export function VideoLightbox({
     if (!videoRef.current) return;
 
     try {
-      const doc = document as any;
+      const doc = document as unknown;
       const isInFullscreen = !!(
         doc.fullscreenElement ||
         doc.webkitFullscreenElement ||
@@ -164,7 +159,7 @@ export function VideoLightbox({
 
       if (!isInFullscreen) {
         // Entrer en mode plein écran - essayer toutes les variantes
-        const element = videoRef.current as any;
+        const element = videoRef.current as unknown;
         if (element.requestFullscreen) {
           await element.requestFullscreen();
         } else if (element.webkitRequestFullscreen) {
@@ -205,7 +200,7 @@ export function VideoLightbox({
   // Écouter les changements de plein écran - Version cross-browser compatible
   useEffect(() => {
     const handleFullscreenChange = () => {
-      const doc = document as any;
+      const doc = document as unknown;
       const isInFullscreen = !!(
         doc.fullscreenElement ||
         doc.webkitFullscreenElement ||

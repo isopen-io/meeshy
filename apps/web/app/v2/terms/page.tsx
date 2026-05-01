@@ -17,7 +17,7 @@ export default function V2TermsPage() {
             </Button>
           </Link>
           <h1 className="text-xl font-semibold" style={{ fontFamily: theme.fonts.display, color: theme.colors.charcoal }}>
-            Conditions d'utilisation
+            Conditions d&apos;utilisation
           </h1>
         </div>
       </header>
@@ -28,7 +28,7 @@ export default function V2TermsPage() {
             className="text-3xl font-bold mb-6"
             style={{ fontFamily: theme.fonts.display, color: theme.colors.charcoal }}
           >
-            Conditions Générales d'Utilisation
+            Conditions Générales d&apos;Utilisation
           </h1>
 
           <p className="text-sm mb-8" style={{ color: theme.colors.textMuted }}>
@@ -44,8 +44,8 @@ export default function V2TermsPage() {
                 1. Acceptation des conditions
               </h2>
               <p className="mb-4 leading-relaxed" style={{ color: theme.colors.textSecondary }}>
-                En utilisant Meeshy, vous acceptez d'être lié par ces conditions d'utilisation.
-                Si vous n'acceptez pas ces conditions, veuillez ne pas utiliser notre service.
+                En utilisant Meeshy, vous acceptez d&apos;être lié par ces conditions d&apos;utilisation.
+                Si vous n&apos;acceptez pas ces conditions, veuillez ne pas utiliser notre service.
               </p>
             </section>
 
@@ -88,15 +88,15 @@ export default function V2TermsPage() {
                 className="text-xl font-semibold mb-4"
                 style={{ fontFamily: theme.fonts.display, color: theme.colors.charcoal }}
               >
-                4. Conduite de l'utilisateur
+                4. Conduite de l&apos;utilisateur
               </h2>
               <p className="mb-4 leading-relaxed" style={{ color: theme.colors.textSecondary }}>
                 Vous acceptez de ne pas utiliser Meeshy pour :
               </p>
               <ul className="list-disc pl-6 mb-4 space-y-2" style={{ color: theme.colors.textSecondary }}>
                 <li>Envoyer du contenu illégal, offensant ou nuisible</li>
-                <li>Harceler ou intimider d'autres utilisateurs</li>
-                <li>Usurper l'identité d'une autre personne</li>
+                <li>Harceler ou intimider d&apos;autres utilisateurs</li>
+                <li>Usurper l&apos;identité d&apos;une autre personne</li>
                 <li>Distribuer des logiciels malveillants</li>
                 <li>Violer les droits de propriété intellectuelle</li>
               </ul>

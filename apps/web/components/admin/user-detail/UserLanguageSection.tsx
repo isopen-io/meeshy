@@ -8,7 +8,7 @@ import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
 
 interface UserLanguageSectionProps {
-  user: any;
+  user: unknown;
   userId: string;
   onUpdate: () => void;
 }
@@ -65,7 +65,7 @@ export function UserLanguageSection({
   const handleSave = async () => {
     try {
       setSaving(true);
-      const response = await apiService.patch<AdminApiResponse<any>>(`/admin/users/${userId}`, {
+      const response = await apiService.patch<AdminApiResponse<unknown>>(`/admin/users/${userId}`, {
         systemLanguage: formData.systemLanguage,
         regionalLanguage: formData.regionalLanguage || null,
         customDestinationLanguage: formData.customDestinationLanguage || null
@@ -76,7 +76,7 @@ export function UserLanguageSection({
         setEditing(false);
         onUpdate();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors de la mise à jour');
     } finally {
       setSaving(false);
@@ -145,7 +145,7 @@ export function UserLanguageSection({
                 ))}
               </select>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Langue principale de l'interface
+                Langue principale de l&apos;interface
               </p>
             </div>
 

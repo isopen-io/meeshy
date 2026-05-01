@@ -10,7 +10,6 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -41,10 +40,10 @@ export function DocumentSettings() {
     updatePreferences,
   } = usePreferences('accessibility');
 
-  const preferences = preferencesData as any;
+  const preferences = preferencesData as unknown;
 
   const updateField = <K extends string>(field: K, value: unknown) => {
-    updatePreferences({ [field]: value } as any);
+    updatePreferences({ [field]: value } as unknown);
   };
 
   // Memoize loading state

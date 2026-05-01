@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface ResponsiveTabItem {
   value: string;
@@ -32,7 +32,7 @@ export function ResponsiveTabs({
   value,
   onValueChange,
   className,
-  mobileBreakpoint = 'lg'
+  _mobileBreakpoint = 'lg'
 }: ResponsiveTabsProps) {
   const [internalValue, setInternalValue] = useState(defaultValue || items[0]?.value || '');
   const currentValue = value || internalValue;
@@ -94,7 +94,7 @@ export function ResponsiveTabsWithContent({
   value,
   onValueChange,
   className,
-  mobileBreakpoint = 'lg',
+  _mobileBreakpoint = 'lg',
   children
 }: ResponsiveTabsProps & { children?: React.ReactNode }) {
   const [internalValue, setInternalValue] = useState(defaultValue || items[0]?.value || '');

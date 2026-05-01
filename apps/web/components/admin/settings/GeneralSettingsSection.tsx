@@ -25,7 +25,7 @@ export function GeneralSettingsSection({
           <Settings className="h-6 w-6 text-slate-600 dark:text-slate-400" />
           <div className="flex-1">
             <CardTitle>Configuration générale</CardTitle>
-            <CardDescription>Paramètres globaux de l'application</CardDescription>
+            <CardDescription>Paramètres globaux de l&apos;application</CardDescription>
           </div>
           <Badge variant="outline">
             {implementedCount}/{settings.length} implémentés

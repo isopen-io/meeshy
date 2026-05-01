@@ -21,7 +21,7 @@ interface MessagesDisplayProps {
   emptyStateDescription?: string;
   reverseOrder?: boolean;
   className?: string;
-  onTranslation?: (messageId: string, translations: any[]) => void;
+  onTranslation?: (messageId: string, translations: unknown[]) => void;
   onEditMessage?: (messageId: string, newContent: string, originalLanguage: string) => Promise<void>;
   onDeleteMessage?: (messageId: string) => Promise<void>;
   onReplyMessage?: (message: Message) => void;
@@ -57,7 +57,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   emptyStateDescription = "Soyez le premier à publier !",
   reverseOrder = false,
   className = "",
-  onTranslation,
+  _onTranslation,
   onEditMessage,
   onDeleteMessage,
   onReplyMessage,
@@ -72,7 +72,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   onCancelMessage,
   addTranslatingState,
   isTranslating,
-  containerRef,
+  _containerRef,
   onLoadMore,
   hasMore = false,
   isLoadingMore = false
@@ -95,7 +95,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   const [localTranslatingStates, setLocalTranslatingStates] = useState<Set<string>>(new Set());
 
   // Fonction pour déterminer la langue d'affichage préférée pour un message
-  const getPreferredDisplayLanguage = useCallback((message: any): string => {
+  const getPreferredDisplayLanguage = useCallback((message: unknown): string => {
     
     // Si le message est dans la langue de l'utilisateur, l'afficher tel quel
     if (message.originalLanguage === userLanguage) {
@@ -104,7 +104,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
     
     // Chercher une traduction dans la langue de l'utilisateur
     const translationsArray = Array.isArray(message.translations) ? message.translations : [];
-    const userLanguageTranslation = translationsArray.find((t: any) =>
+    const userLanguageTranslation = translationsArray.find((t: unknown) =>
       (t.language || t.targetLanguage) === userLanguage
     );
     
@@ -151,9 +151,8 @@ export const MessagesDisplay = memo(function MessagesDisplay({
       const message = messages.find(m => m.id === messageId);
       const sourceLanguage = message?.originalLanguage || 'fr';
 
-
       // Utiliser 'basic' comme modèle par défaut si non spécifié
-      const result = await messageTranslationService.requestTranslation({
+      const _result = await messageTranslationService.requestTranslation({
         messageId,
         targetLanguage,
         sourceLanguage,
@@ -163,7 +162,6 @@ export const MessagesDisplay = memo(function MessagesDisplay({
       // NOTE: Ne pas simuler de traduction !
       // La vraie traduction sera reçue via WebSocket (événement MESSAGE_TRANSLATION)
       // et traitée par le callback onTranslation du composant parent
-      
       
       // Garder l'état "isTranslating" actif jusqu'à réception de la vraie traduction via WebSocket
       // L'état sera désactivé dans le callback onTranslation quand la traduction arrivera
@@ -228,7 +226,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
     // Transform messages to match BubbleMessage expected format
     // Single-pass: filter invalid/duplicate IDs and transform in one loop
     const seenIds = new Set<string>();
-    const transformedMessages: typeof messagesToUse extends (infer T)[] ? (T & { id: string; originalContent: any; originalLanguage: string; translations: any[]; readStatus: any[] })[] : never = [];
+    const transformedMessages: typeof messagesToUse extends (infer T)[] ? (T & { id: string; originalContent: unknown; originalLanguage: string; translations: unknown[]; readStatus: unknown[] })[] : never = [];
     for (const message of messagesToUse) {
       if (!message || message.id === undefined || message.id === null) continue;
       const idStr = String(message.id).trim();
@@ -237,10 +235,10 @@ export const MessagesDisplay = memo(function MessagesDisplay({
       transformedMessages.push({
         ...message,
         id: idStr,
-        originalContent: (message as any).content,
-        originalLanguage: (message as any).originalLanguage || 'fr',
-        translations: (message as any).translations || [],
-        readStatus: (message as any).readStatus || (message as any).status || [],
+        originalContent: (message as unknown).content,
+        originalLanguage: (message as unknown).originalLanguage || 'fr',
+        translations: (message as unknown).translations || [],
+        readStatus: (message as unknown).readStatus || (message as unknown).status || [],
       });
     }
 
@@ -250,7 +248,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   // Initialiser l'état d'affichage pour les nouveaux messages
   useEffect(() => {
     setMessageDisplayStates(prev => {
-      const newStates: Record<string, any> = { ...prev };
+      const newStates: Record<string, unknown> = { ...prev };
       let hasChanges = false;
 
       displayMessages.forEach(message => {
@@ -284,7 +282,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
         // Si le message n'est pas dans la langue utilisateur et qu'une traduction est disponible
         if (message.originalLanguage !== userLanguage) {
           const translationsArray = Array.isArray(message.translations) ? message.translations : [];
-          const userLanguageTranslation = translationsArray.find((t: any) =>
+          const userLanguageTranslation = translationsArray.find((t: unknown) =>
             (t.language || t.targetLanguage) === userLanguage
           );
           
@@ -361,15 +359,15 @@ export const MessagesDisplay = memo(function MessagesDisplay({
         const isFirstInGroup = !prevSenderId || prevSenderId !== senderId;
         const isLastInGroup = !nextSenderId || nextSenderId !== senderId;
 
-        const localStatus = (message as any)._localStatus as string | undefined;
-        const tempId = (message as any)._tempId as string | undefined;
+        const localStatus = (message as unknown)._localStatus as string | undefined;
+        const tempId = (message as unknown)._tempId as string | undefined;
         const isSending = localStatus === 'sending';
         const isFailed = localStatus === 'failed';
 
         return (
           <div key={message.id} className={isSending || isFailed ? 'opacity-70' : undefined}>
             <BubbleMessage
-              message={message as any}
+              message={message as unknown}
               currentUser={currentUser}
               userLanguage={userLanguage}
               usedLanguages={usedLanguages}
@@ -394,9 +392,9 @@ export const MessagesDisplay = memo(function MessagesDisplay({
             {isFailed && tempId && onRetryMessage && onCancelMessage && (
               <FailedMessageBar
                 tempId={tempId}
-                content={message.content || (message as any).originalContent || ''}
+                content={message.content || (message as unknown).originalContent || ''}
                 originalLanguage={message.originalLanguage || 'fr'}
-                replyToId={(message as any).replyToId}
+                replyToId={(message as unknown).replyToId}
                 onRetry={onRetryMessage}
                 onCancel={onCancelMessage}
                 t={t}

@@ -106,25 +106,25 @@ export const AttachmentLightboxes = React.memo(function AttachmentLightboxes({
       />
 
       <PDFLightboxSimple
-        attachment={pdfLightboxAttachment as any}
+        attachment={pdfLightboxAttachment as unknown}
         isOpen={pdfLightboxOpen}
         onClose={onPdfLightboxClose}
       />
 
       <MarkdownLightbox
-        attachment={markdownLightboxAttachment as any}
+        attachment={markdownLightboxAttachment as unknown}
         isOpen={markdownLightboxOpen}
         onClose={onMarkdownLightboxClose}
       />
 
       <TextLightbox
-        attachment={textLightboxAttachment as any}
+        attachment={textLightboxAttachment as unknown}
         isOpen={textLightboxOpen}
         onClose={onTextLightboxClose}
       />
 
       <PPTXLightbox
-        attachment={pptxLightboxAttachment as any}
+        attachment={pptxLightboxAttachment as unknown}
         isOpen={pptxLightboxOpen}
         onClose={onPptxLightboxClose}
       />

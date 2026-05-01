@@ -30,7 +30,7 @@ export function SettingsAlerts() {
             <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
             <div className="flex-1">
               <h4 className="font-semibold text-blue-900 dark:text-blue-100 text-sm">
-                Variables d'environnement
+                Variables d&apos;environnement
               </h4>
               <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
                 Les paramètres marqués avec un badge ENV sont configurés via

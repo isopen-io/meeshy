@@ -6,16 +6,14 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User } from '@/types';
-import { FileText, Download, Upload, FolderOpen, HardDrive } from 'lucide-react';
-import { useI18n } from '@/hooks/use-i18n';
+import { Download, Upload, FolderOpen, HardDrive } from 'lucide-react';
 
 interface DocumentSettingsProps {
   user?: User | null;
   onUserUpdate?: (updatedUser: Partial<User>) => void;
 }
 
-export default function DocumentSettings({ user, onUserUpdate }: DocumentSettingsProps) {
-  const { t } = useI18n('settings');
+export default function DocumentSettings({ _user }: DocumentSettingsProps) {
   const [settings, setSettings] = useState({
     autoDownloadDocs: false,
     maxFileSize: 50,
@@ -31,7 +29,7 @@ export default function DocumentSettings({ user, onUserUpdate }: DocumentSetting
     warnLargeFiles: true
   });
 
-  const updateSetting = (key: string, value: any) => {
+  const updateSetting = (key: string, value: unknown) => {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 

@@ -20,7 +20,7 @@ const TRANSLATION_LANGUAGES = SUPPORTED_LANGUAGES.filter(l => l.supportsTranslat
 interface EditMessageViewProps {
   message: Message & {
     originalLanguage: string;
-    translations?: any[];
+    translations?: unknown[];
     originalContent: string;
   };
   isOwnMessage: boolean;
@@ -49,13 +49,13 @@ export const EditMessageView = memo(function EditMessageView({
 
   // IMPORTANT: Priorité à message.conversationId (toujours un ObjectId valide du backend)
   // Fallback vers conversationId prop seulement si message.conversationId n'existe pas
-  const effectiveConversationId = (message as any).conversationId || conversationId;
+  const effectiveConversationId = (message as unknown).conversationId || conversationId;
 
   // Debug: Log conversationId availability
   useEffect(() => {
     console.log('[EditMessageView] conversationId sources:', {
       fromProp: conversationId,
-      fromMessage: (message as any).conversationId,
+      fromMessage: (message as unknown).conversationId,
       effective: effectiveConversationId,
       messageId: message.id,
       isValidObjectId: effectiveConversationId && /^[a-f\d]{24}$/i.test(effectiveConversationId)

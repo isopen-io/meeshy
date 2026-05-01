@@ -17,7 +17,6 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 // Hooks personnalisés extraits
@@ -46,7 +45,6 @@ import { LoadingState } from '@/components/common/LoadingStates';
 // Services et utils
 import { getAuthToken } from '@/utils/token-utils';
 import { conversationsService } from '@/services';
-import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { detectLanguage } from '@/utils/language-detection';
 import { getMaxMessageLength } from '@/lib/constants/languages';
 
@@ -56,7 +54,7 @@ import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import {
   getUserLanguageChoices,
   type BubbleStreamPageProps,
-  type LanguageChoice
+  type _LanguageChoice
 } from '@/lib/bubble-stream-modules';
 
 const TYPING_STOP_DELAY = 3000; // 3 secondes après la dernière frappe
@@ -78,14 +76,10 @@ export function BubbleStreamPage({
   const { t: tCommon } = useI18n('common');
 
   // Router
-  const router = useRouter();
-
   // Refs
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const messageComposerRef = useRef<any>(null);
+  const messageComposerRef = useRef<unknown>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const hasInitialized = useRef(false);
-  const conversationObjectIdRef = useRef<string | null>(null);
   const currentFocusedConversationRef = useRef<string | null>(null);
 
   // Limite de caractères
@@ -156,7 +150,7 @@ export function BubbleStreamPage({
   // États de base
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [detectedLanguage, setDetectedLanguage] = useState<string>('fr');
+  const [, setDetectedLanguage] = useState<string>('fr');
   const [userLanguage, setUserLanguage] = useState<string>(resolveUserPreferredLanguage());
   const [selectedInputLanguage, setSelectedInputLanguage] = useState<string>(user.systemLanguage || 'fr');
   const [activeUsers, setActiveUsers] = useState<User[]>(initialParticipants || []);
@@ -191,8 +185,8 @@ export function BubbleStreamPage({
     attachmentIds,
     attachmentMimeTypes,
     handleAttachmentsChange,
-    searchQuery,
-    setSearchQuery,
+    _searchQuery,
+    _setSearchQuery,
     location,
     trendingHashtags,
   } = useStreamUI({
@@ -220,7 +214,7 @@ export function BubbleStreamPage({
   // Hook de traduction (NOUVEAU - extrait)
   const {
     addTranslatingState,
-    removeTranslatingState,
+    _removeTranslatingState,
     isTranslating,
     handleTranslation,
   } = useStreamTranslation({
@@ -240,7 +234,7 @@ export function BubbleStreamPage({
       conversationIdentifier: conversationId,
       willFilter: currentConversationObjectId && message.conversationId !== currentConversationObjectId,
       messageContent: message.content?.substring(0, 50),
-      messageSender: (message.sender as any)?.username || message.sender?.displayName,
+      messageSender: (message.sender as unknown)?.username || message.sender?.displayName,
       attachments: message.attachments,
       attachmentCount: message.attachments?.length ?? 0,
       messageType: message.messageType,
@@ -581,7 +575,7 @@ export function BubbleStreamPage({
             >
               <ConversationMessages
                 messages={messages}
-                translatedMessages={messages as any}
+                translatedMessages={messages as unknown}
                 isLoadingMessages={isLoadingMessages}
                 isLoadingMore={isLoadingMore}
                 hasMore={hasMore}

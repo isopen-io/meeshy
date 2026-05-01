@@ -1,12 +1,12 @@
 import UIKit
-import UserNotifications
+@preconcurrency import UserNotifications
 import MeeshySDK
 import MeeshyUI
 import os
 
 private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
 
-class AppDelegate: NSObject, @preconcurrency UIApplicationDelegate {
+class AppDelegate: NSObject, UIApplicationDelegate {
 
     // MARK: - Application Lifecycle
 

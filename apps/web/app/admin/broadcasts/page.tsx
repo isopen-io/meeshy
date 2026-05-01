@@ -6,7 +6,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mail, Plus, Search, ChevronLeft, ChevronRight, Eye, Trash2, Send, RefreshCw } from 'lucide-react';
+import { Mail, Plus, ChevronLeft, ChevronRight, Eye, Trash2, RefreshCw } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
@@ -25,8 +25,8 @@ const getStatusBadge = (status: string) => {
 
 export default function AdminBroadcastsPage() {
   const router = useRouter();
-  const [broadcasts, setBroadcasts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [broadcasts, setBroadcasts] = useState<unknown[]>([]);
+  const [, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [stats, setStats] = useState({
     total: 0,

@@ -47,7 +47,6 @@ export const ConversationList = memo(function ConversationList({
   currentUser,
   isLoading,
   isMobile,
-  showConversationList,
   onSelectConversation,
   onShowDetails,
   onCreateConversation,

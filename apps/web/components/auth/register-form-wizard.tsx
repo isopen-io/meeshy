@@ -9,8 +9,6 @@ import { useI18n } from '@/hooks/useI18n';
 import { useBotProtection } from '@/hooks/use-bot-protection';
 import { useAuthFormStore } from '@/stores/auth-form-store';
 import { COUNTRY_CODES } from '@/constants/countries';
-import { authManager } from '@/services/auth-manager.service';
-import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { AccountRecoveryModal } from './account-recovery-modal';
 import { PhoneExistsModal } from './PhoneExistsModal';
 import type { User } from '@/types';
@@ -88,7 +86,7 @@ export function RegisterFormWizard({
   disabled = false,
   linkId,
   onJoinSuccess,
-  formPrefix = 'register-wizard'
+  _formPrefix = 'register-wizard'
 }: RegisterFormWizardProps) {
   const { t, locale } = useI18n('auth');
   const { setIdentifier } = useAuthFormStore();
@@ -115,9 +113,9 @@ export function RegisterFormWizard({
     formData,
     updateFormData,
     currentStep,
-    direction,
+    _direction,
     activeSteps,
-    totalSteps,
+    _totalSteps,
     currentStepData,
     isFirstStep,
     isLastStep,
@@ -140,7 +138,7 @@ export function RegisterFormWizard({
     emailErrorMessage,
     existingAccount,
     checkPhoneAvailability,
-    setUsernameSuggestions,
+    _setUsernameSuggestions,
   } = validation;
 
   // Robust phone validation with libphonenumber-js

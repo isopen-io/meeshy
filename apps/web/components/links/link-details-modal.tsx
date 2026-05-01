@@ -8,7 +8,6 @@ import {
   Link2,
   Users,
   Calendar,
-  Clock,
   Shield,
   Globe,
   Copy,
@@ -23,8 +22,9 @@ import {
   Mail,
   Cake,
   CheckCircle,
-  XCircle
+  XCircle,
 } from 'lucide-react';
+
 import type { ConversationLink, Conversation } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { copyToClipboard } from '@/lib/clipboard';

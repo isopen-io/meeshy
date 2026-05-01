@@ -6,7 +6,8 @@
 
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+
 import { VideoStream } from './VideoStream';
 import { Maximize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -24,7 +25,7 @@ interface DraggableParticipantOverlayProps {
 }
 
 export function DraggableParticipantOverlay({
-  participantId,
+  _participantId,
   stream,
   participantName,
   isAudioEnabled = true,

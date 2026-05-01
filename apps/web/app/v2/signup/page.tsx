@@ -161,7 +161,7 @@ export default function V2SignupPage() {
                   Choisissez votre langue
                 </h1>
                 <p style={{ color: 'var(--gp-text-secondary)' }}>
-                  C'est la langue dans laquelle vous verrez les messages traduits
+                  C&apos;est la langue dans laquelle vous verrez les messages traduits
                 </p>
               </div>
 
@@ -215,7 +215,7 @@ export default function V2SignupPage() {
           <p className="text-xs text-center mt-6" style={{ color: 'var(--gp-text-muted)' }}>
             En creant un compte, vous acceptez nos{' '}
             <Link href="/v2/terms" style={{ color: 'var(--gp-terracotta)' }}>
-              Conditions d'utilisation
+              Conditions d&apos;utilisation
             </Link>
           </p>
         </Card>

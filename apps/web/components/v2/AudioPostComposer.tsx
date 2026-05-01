@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from './Button';
-import { Avatar } from './Avatar';
 import type { MobileTranscription, MobileTranscriptionSegment } from '@/services/posts.service';
 
 // ---------------------------------------------------------------------------
@@ -63,7 +62,6 @@ function getFileExtension(mime: string): string {
 
 function AudioPostComposer({
   open,
-  currentUser,
   onPublish,
   onClose,
   disabled = false,

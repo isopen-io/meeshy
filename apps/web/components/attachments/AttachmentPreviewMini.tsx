@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useMemo, useCallback } from 'react';
-import { FileImage, FileText, Music, Video, File } from 'lucide-react';
+import { FileText, Music, Video, File } from 'lucide-react';
 import { Attachment, getAttachmentType } from '@meeshy/shared/types/attachment';
 import { buildAttachmentsUrls } from '@/utils/attachment-url';
 import { cn } from '@/lib/utils';

@@ -76,7 +76,6 @@ interface ExpandableLinkCardProps {
 
 export function ExpandableLinkCard({
   link,
-  onCopy,
   onEdit,
   onToggle,
   onExtend,

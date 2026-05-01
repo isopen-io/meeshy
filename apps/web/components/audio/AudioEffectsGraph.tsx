@@ -19,7 +19,7 @@ interface AudioEffectsGraphProps {
  * Utilisé dans le panneau d'effets pour visualiser les changements
  */
 export const AudioEffectsGraph = memo<AudioEffectsGraphProps>(({
-  effect,
+  _effect,
   configurations,
   totalDuration,
   visibleCurves,

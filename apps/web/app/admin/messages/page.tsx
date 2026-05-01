@@ -8,21 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  MessageSquare, 
-  ArrowLeft, 
-  Search, 
-  Filter,
-  Calendar,
-  User,
-  Globe,
-  FileText,
-  Image,
-  Video,
-  Music,
-  MapPin,
-  Link
-} from 'lucide-react';
+import { MessageSquare, ArrowLeft, Search, Filter, Calendar, User, Globe, FileText, Image, Video, Music, MapPin } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 
@@ -258,7 +244,7 @@ export default function AdminMessagesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Toutes les périodes</SelectItem>
-                    <SelectItem value="today">Aujourd'hui</SelectItem>
+                    <SelectItem value="today">Aujourd&apos;hui</SelectItem>
                     <SelectItem value="week">Cette semaine</SelectItem>
                     <SelectItem value="month">Ce mois</SelectItem>
                   </SelectContent>

@@ -7,15 +7,13 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User } from '@/types';
 import { Video, Camera, Monitor, Wifi, Settings } from 'lucide-react';
-import { useI18n } from '@/hooks/use-i18n';
 
 interface VideoSettingsProps {
   user?: User | null;
   onUserUpdate?: (updatedUser: Partial<User>) => void;
 }
 
-export default function VideoSettings({ user, onUserUpdate }: VideoSettingsProps) {
-  const { t } = useI18n('settings');
+export default function VideoSettings({ _user }: VideoSettingsProps) {
   const [settings, setSettings] = useState({
     enableVideo: true,
     autoStartVideo: false,
@@ -32,7 +30,7 @@ export default function VideoSettings({ user, onUserUpdate }: VideoSettingsProps
     shareSystemAudio: true
   });
 
-  const updateSetting = (key: string, value: any) => {
+  const updateSetting = (key: string, value: unknown) => {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 

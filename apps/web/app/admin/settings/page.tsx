@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
+
 import dynamic from 'next/dynamic';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';

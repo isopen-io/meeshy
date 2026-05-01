@@ -102,7 +102,7 @@ export default function UserDetailPage() {
         setRoleEdit({ editing: false, role: roleEdit.role, reason: '' });
         loadUserData();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors de la mise à jour du rôle');
     } finally {
       setSaving(false);
@@ -120,7 +120,7 @@ export default function UserDetailPage() {
         toast.success(newStatus ? 'Utilisateur activé' : 'Utilisateur désactivé');
         loadUserData();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors du changement de statut');
     }
   };
@@ -142,7 +142,7 @@ export default function UserDetailPage() {
         toast.success('Mot de passe réinitialisé avec succès');
         setPasswordReset({ open: false, newPassword: '', confirmPassword: '', reason: '' });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors de la réinitialisation du mot de passe');
     } finally {
       setSaving(false);
@@ -158,7 +158,7 @@ export default function UserDetailPage() {
         toast.success('Utilisateur supprimé avec succès');
         router.push('/admin/users');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors de la suppression');
     } finally {
       setSaving(false);
@@ -493,7 +493,7 @@ export default function UserDetailPage() {
                     onClick={() => setDeleteConfirm(true)}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Supprimer l'utilisateur
+                    Supprimer l&apos;utilisateur
                   </Button>
                 ) : (
                   <div className="p-4 border border-red-200 dark:border-red-800 rounded-lg bg-red-50 dark:bg-red-950/30 space-y-3">

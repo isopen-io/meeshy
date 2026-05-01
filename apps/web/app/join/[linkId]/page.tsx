@@ -107,7 +107,7 @@ export default function JoinConversationPage() {
     await joinAsAuthenticated(isAnonymous, sessionToken);
   }, [isAnonymous, joinAsAuthenticated]);
 
-  const handleAuthSuccess = useCallback((user: User, token: string) => {
+  const handleAuthSuccess = useCallback((_user: User, _token: string) => {
     setAuthMode('welcome');
     setTimeout(() => {
       handleJoinConversation();

@@ -87,7 +87,7 @@ export function LightboxRenderers({
 
         return (
           <ImageLightbox
-            images={imageAttachments as any}
+            images={imageAttachments as unknown}
             initialIndex={imageLightboxIndex}
             isOpen={true}
             onClose={onCloseImageLightbox}
@@ -102,7 +102,7 @@ export function LightboxRenderers({
 
         return (
           <VideoLightbox
-            videos={videoAttachments as any}
+            videos={videoAttachments as unknown}
             initialIndex={videoLightboxIndex}
             isOpen={true}
             onClose={onCloseVideoLightbox}
@@ -113,7 +113,7 @@ export function LightboxRenderers({
       {/* Lightbox pour les PDFs */}
       {isMounted && pdfLightboxFile && (
         <PDFLightboxSimple
-          attachment={createAttachment(pdfLightboxFile) as any}
+          attachment={createAttachment(pdfLightboxFile) as unknown}
           isOpen={true}
           onClose={onClosePdfLightbox}
         />
@@ -122,7 +122,7 @@ export function LightboxRenderers({
       {/* Lightbox pour les fichiers texte */}
       {isMounted && textLightboxFile && (
         <TextLightbox
-          attachment={createAttachment(textLightboxFile) as any}
+          attachment={createAttachment(textLightboxFile) as unknown}
           isOpen={true}
           onClose={onCloseTextLightbox}
         />
@@ -131,7 +131,7 @@ export function LightboxRenderers({
       {/* Lightbox pour les fichiers PPTX */}
       {isMounted && pptxLightboxFile && (
         <PPTXLightbox
-          attachment={createAttachment(pptxLightboxFile) as any}
+          attachment={createAttachment(pptxLightboxFile) as unknown}
           isOpen={true}
           onClose={onClosePptxLightbox}
         />
@@ -140,7 +140,7 @@ export function LightboxRenderers({
       {/* Lightbox pour les fichiers Markdown */}
       {isMounted && markdownLightboxFile && (
         <MarkdownLightbox
-          attachment={createAttachment(markdownLightboxFile) as any}
+          attachment={createAttachment(markdownLightboxFile) as unknown}
           isOpen={true}
           onClose={onCloseMarkdownLightbox}
         />

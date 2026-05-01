@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Lock, Unlock, UserCog } from 'lucide-react';
+import { Lock, Unlock } from 'lucide-react';
 import {
   agentAdminService,
   type AgentRoleData,

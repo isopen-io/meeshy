@@ -409,7 +409,7 @@ export default function CheckEmailPage() {
 declare global {
   interface Window {
     hcaptcha?: {
-      render: (container: string | HTMLElement, options: any) => string;
+      render: (container: string | HTMLElement, options: unknown) => string;
       remove: (widgetId: string) => void;
       reset: (widgetId?: string) => void;
       execute: (widgetId?: string) => void;

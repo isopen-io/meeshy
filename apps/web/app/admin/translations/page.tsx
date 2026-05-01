@@ -6,25 +6,9 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  Languages,
-  ArrowLeft,
-  Search,
-  Filter,
-  Calendar,
-  User,
-  Globe,
-  Brain,
-  TrendingUp,
-  Eye,
-  RefreshCw,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle,
-  AlertCircle
-} from 'lucide-react';
+import { Languages, ArrowLeft, Filter, Calendar, User, Globe, Brain, TrendingUp, Eye, RefreshCw, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
+
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
@@ -395,7 +379,7 @@ export default function AdminTranslationsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes les périodes</SelectItem>
-                  <SelectItem value="today">Aujourd'hui</SelectItem>
+                  <SelectItem value="today">Aujourd&apos;hui</SelectItem>
                   <SelectItem value="week">Cette semaine</SelectItem>
                   <SelectItem value="month">Ce mois</SelectItem>
                 </SelectContent>

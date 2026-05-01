@@ -11,7 +11,6 @@ import { AlertTriangle, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 
 export default function GlobalError({
   error,
-  reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
@@ -40,7 +39,7 @@ export default function GlobalError({
       const context = collectErrorContext(error);
       console.error('[Global Error] Complete context:', context);
       sendErrorContext(context).catch(() => {});
-    }).catch((err) => {
+    }).catch((_err) => {
       console.error('[Global Error] Fallback:', {
         message: error.message,
         stack: error.stack,
@@ -66,7 +65,7 @@ export default function GlobalError({
             {/* Titre */}
             <div className="text-center space-y-2">
               <h1 className="text-2xl font-bold text-gray-900">
-                Oups ! Une erreur s'est produite
+                Oups ! Une erreur s&apos;est produite
               </h1>
               <p className="text-gray-600">
                 {isOnline
@@ -115,7 +114,7 @@ export default function GlobalError({
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
               >
                 <RefreshCw className="w-4 h-4" />
-                Recharger l'application
+                Recharger l&apos;application
               </button>
 
               <button

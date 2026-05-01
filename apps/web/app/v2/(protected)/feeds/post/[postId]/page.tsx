@@ -4,18 +4,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
-import {
-  useLikePostMutation,
-  useUnlikePostMutation,
-  useBookmarkPostMutation,
-  useUnbookmarkPostMutation,
-  useDeletePostMutation,
-  useSharePostMutation,
-  useUpdatePostMutation,
-  useRepostMutation,
-  useTranslatePostMutation,
-} from '@/hooks/queries/use-post-mutations';
-import { useCreateCommentMutation, useDeleteCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation } from '@/hooks/queries/use-comment-mutations';
+import { useLikePostMutation, useUnlikePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useDeletePostMutation, useSharePostMutation, useUpdatePostMutation, useRepostMutation } from '@/hooks/queries/use-post-mutations';
+import { useDeleteCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { PostDetail } from '@/components/v2/PostDetail';
@@ -54,8 +44,6 @@ export default function PostDetailPage() {
   const shareMutation = useSharePostMutation();
   const updateMutation = useUpdatePostMutation();
   const repostMutation = useRepostMutation();
-  const translateMutation = useTranslatePostMutation();
-  const createCommentMutation = useCreateCommentMutation();
   const deleteCommentMutation = useDeleteCommentMutation();
   const likeCommentMutation = useLikeCommentMutation();
   const unlikeCommentMutation = useUnlikeCommentMutation();

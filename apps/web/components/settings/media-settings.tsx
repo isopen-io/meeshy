@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Mic, Video, FileText } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Accordion,
   AccordionContent,

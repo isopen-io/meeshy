@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback } from 'react';
+import { memo } from 'react';
 import { Settings, Pin, Bell, BellOff, Archive, Share2, Smile, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {

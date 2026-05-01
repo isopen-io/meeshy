@@ -189,7 +189,7 @@ export default function AdminShareLinksPage() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Gestion des liens de partage</h1>
-              <p className="text-gray-600">Administration des liens d'accès anonyme aux conversations</p>
+              <p className="text-gray-600">Administration des liens d&apos;accès anonyme aux conversations</p>
             </div>
           </div>
           <Button className="flex items-center space-x-2">

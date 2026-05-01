@@ -12,28 +12,10 @@ import {
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import {
-  Link2,
-  Copy,
-  Clock,
-  Users,
-  Eye,
-  FileText,
-  Image,
-  MessageSquare,
-  Settings,
-  Globe,
-  Shield,
-  Calendar,
-  User,
-  CheckCircle,
-  XCircle,
-  MoreHorizontal
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Link2, Copy, Clock, Users, Eye, FileText, Image, MessageSquare, User, CheckCircle, XCircle, MoreHorizontal } from 'lucide-react';
+
 import { copyToClipboard } from '@/lib/clipboard';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
-import { toast } from 'sonner';
 import { authManager } from '@/services/auth-manager.service';
 
 interface ShareLink {

@@ -24,7 +24,6 @@ import {
   Monitor,
   ChevronDown,
   LogOut,
-  Languages
 } from 'lucide-react';
 import { AuthMode } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
@@ -33,7 +32,6 @@ import { useI18n } from '@/hooks/useI18n';
 import { LanguageFlagSelector } from '@/components/translation/language-flag-selector';
 import { LanguageSelector } from '@/components/translation/language-selector';
 import { useLanguageStore, useUser } from '@/stores';
-import { INTERFACE_LANGUAGES } from '@/types/frontend';
 
 interface HeaderProps {
   mode?: 'landing' | 'chat' | 'default';
@@ -46,7 +44,7 @@ interface HeaderProps {
 
 export function Header({
   mode = 'default',
-  authMode = 'welcome',
+  _authMode = 'welcome',
   onAuthModeChange,
   anonymousChatLink,
   conversationTitle,
@@ -72,7 +70,7 @@ export function Header({
     // La langue de l'interface change automatiquement sans reload
   };
 
-  const handleAuthClick = (newMode: AuthMode) => {
+  const _handleAuthClick = (newMode: AuthMode) => {
     if (onAuthModeChange) {
       onAuthModeChange(newMode);
     }

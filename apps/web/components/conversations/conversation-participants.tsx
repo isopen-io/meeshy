@@ -1,23 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { getTagColor } from '@/utils/tag-colors';
 
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Users,
-  Crown,
-  Loader2,
-  Ghost
-} from 'lucide-react';
+import { Loader2, Ghost } from 'lucide-react';
 import { SocketIOUser as User, MemberRole } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import { getUserStatus } from '@/lib/user-status';
@@ -25,8 +11,6 @@ import { useUserStore } from '@/stores/user-store';
 
 /** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
 type ParticipantUser = User & { type?: string; sessionToken?: string; shareLinkId?: string };
-import { conversationsService } from '@/services/conversations.service';
-import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials } from '@/utils/participant-helpers';
@@ -48,16 +32,15 @@ export function ConversationParticipants({
   conversationId,
   participants,
   currentUser,
-  isGroup,
+  _isGroup,
   conversationType = 'group', // Valeur par défaut
   className = "",
   typingUsers = [],
-  conversationTitle,
-  conversationTags = [],
-  conversationCategory
+  _conversationTitle,
+  _conversationTags = [],
+  _conversationCategory
 }: ConversationParticipantsProps) {
   const { t } = useI18n('conversations');
-
 
   // Les typing users sont désormais passés par props pour éviter des abonnements socket multiples
 
@@ -68,8 +51,6 @@ export function ConversationParticipants({
     typingUser.userId !== currentUser.id
   );
 
-
-
   // Store global pour statuts temps reel
   const userStore = useUserStore();
   const _tick = userStore._lastStatusUpdate;
@@ -79,13 +60,11 @@ export function ConversationParticipants({
     const storeUser = p.userId ? userStore.getUserById(p.userId) : undefined;
     return getUserStatus(storeUser || p.user as ParticipantUser) === 'online';
   });
-  const offlineAll = participants.filter(p => {
+  const _offlineAll = participants.filter(p => {
     const storeUser = p.userId ? userStore.getUserById(p.userId) : undefined;
     return getUserStatus(storeUser || p.user as ParticipantUser) !== 'online';
   });
-  const recentActiveParticipants = onlineAll.slice(0, 3);
-
-
+  const _recentActiveParticipants = onlineAll.slice(0, 3);
 
   // Obtenir les noms des utilisateurs qui tapent
   const typingUserNames = usersTypingInChat.map((typingUser: { userId: string; conversationId: string }) => {
@@ -107,7 +86,7 @@ export function ConversationParticipants({
     return participant.role === MemberRole.CREATOR;
   };
 
-  const shouldShowCrown = (participant: Participant): boolean => {
+  const _shouldShowCrown = (participant: Participant): boolean => {
     return conversationType !== 'direct' && isCreator(participant);
   };
 

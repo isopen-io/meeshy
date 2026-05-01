@@ -34,7 +34,6 @@ const REPORT_TYPE_VALUES = [
 
 export const ReportMessageView = memo(function ReportMessageView({
   message,
-  isOwnMessage,
   onReport,
   onCancel,
   isSubmitting = false,

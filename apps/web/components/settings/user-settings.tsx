@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
@@ -767,7 +766,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
     setIsLoading(true);
     try {
       // Exclude language fields (already auto-saved)
-      const { systemLanguage, regionalLanguage, customDestinationLanguage, ...profileData } = formData;
+      const { ...profileData } = formData;
 
       // Appel API pour sauvegarder les modifications
       const response = await fetch(buildApiUrl('/users/me'), {
@@ -1638,9 +1637,9 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                     email: user.email || '',
                     phoneNumber: user.phoneNumber || '',
                     bio: user.bio || '',
-                    systemLanguage: (user as any).systemLanguage || 'en',
-                    regionalLanguage: (user as any).regionalLanguage || '',
-                    customDestinationLanguage: (user as any).customDestinationLanguage || '',
+                    systemLanguage: (user as unknown).systemLanguage || 'en',
+                    regionalLanguage: (user as unknown).regionalLanguage || '',
+                    customDestinationLanguage: (user as unknown).customDestinationLanguage || '',
                   });
                 }
               }}

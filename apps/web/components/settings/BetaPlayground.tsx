@@ -9,20 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Progress } from '@/components/ui/progress';
-import {
-  Cpu,
-  Languages,
-  Mic,
-  Volume2,
-  Zap,
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  Play,
-  Square,
-  Download
-} from 'lucide-react';
+import { Cpu, Languages, Mic, Volume2, Zap, AlertCircle, CheckCircle2, Loader2, Play, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 
@@ -86,12 +73,12 @@ declare global {
   interface Window {
     translation?: {
       canTranslate?: (options: { sourceLanguage: string; targetLanguage: string }) => Promise<string>;
-      createTranslator?: (options: { sourceLanguage: string; targetLanguage: string }) => Promise<any>;
+      createTranslator?: (options: { sourceLanguage: string; targetLanguage: string }) => Promise<unknown>;
     };
     ai?: {
       languageModel?: {
         capabilities?: () => Promise<{ available: string }>;
-        create?: (options?: any) => Promise<any>;
+        create?: (options?: unknown) => Promise<unknown>;
       };
     };
   }
@@ -348,9 +335,9 @@ export function BetaPlayground() {
 
       const startTime = performance.now();
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event: unknown) => {
         const transcript = Array.from(event.results)
-          .map((result: any) => result[0].transcript)
+          .map((result: unknown) => result[0].transcript)
           .join('');
 
         setTranscriptionOutput(transcript);
@@ -379,7 +366,7 @@ export function BetaPlayground() {
         setIsRecording(false);
       };
 
-      recognitionRef.current = recognition as any;
+      recognitionRef.current = recognition as unknown;
       recognition.start();
       setIsRecording(true);
       setTranscriptionMetrics({ ...transcriptionMetrics, status: 'running' });

@@ -40,10 +40,10 @@ export function VideoSettings() {
     updatePreferences,
   } = usePreferences('video');
 
-  const preferences = preferencesData as any;
+  const preferences = preferencesData as unknown;
 
   const updateField = <K extends string>(field: K, value: unknown) => {
-    updatePreferences({ [field]: value } as any);
+    updatePreferences({ [field]: value } as unknown);
   };
 
   // Memoize loading state

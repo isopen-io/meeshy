@@ -12,7 +12,6 @@ import {
 import { ChevronDown } from 'lucide-react';
 import { agentAdminService, type ArchetypeData } from '@/services/agent-admin.service';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 

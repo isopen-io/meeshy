@@ -92,8 +92,8 @@ const ConversationItem = memo(function ConversationItem({
           {conversation.description || 'Aucune description'}
         </p>
         <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-          <span>{(conversation as any)._count?.members || 0} membres</span>
-          <span>{(conversation as any)._count?.messages || 0} messages</span>
+          <span>{(conversation as unknown)._count?.members || 0} membres</span>
+          <span>{(conversation as unknown)._count?.messages || 0} messages</span>
           {conversation.lastMessageAt && (
             <span>
               Dernière activité: {new Date(conversation.lastMessageAt).toLocaleDateString('fr-FR')}

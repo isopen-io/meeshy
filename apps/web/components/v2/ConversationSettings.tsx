@@ -8,7 +8,6 @@ import { Switch } from './Switch';
 import { Avatar } from './Avatar';
 import { Label } from './Label';
 import { Textarea } from './Textarea';
-import { Separator } from './Separator';
 import { RadioGroup, RadioGroupItem } from './RadioGroup';
 
 export interface Participant {
@@ -78,7 +77,6 @@ export function ConversationSettings({
   onAllowAnonymousChange,
   participants,
   onInvite,
-  onParticipantAction,
   stats,
   onMediaClick,
   onLinksClick,

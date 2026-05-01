@@ -16,7 +16,7 @@ interface UseConversationPreferencesReturn {
  * Gère: préférences (pin, mute, archive), catégories, et état collapsed des sections
  */
 export function useConversationPreferences(
-  conversationsLength: number
+  _conversationsLength: number
 ): UseConversationPreferencesReturn {
   // Utiliser le store Zustand pour les préférences
   const store = useConversationPreferencesStore();
@@ -29,7 +29,7 @@ export function useConversationPreferences(
       if (saved) {
         try {
           return new Set(JSON.parse(saved));
-        } catch (e) {
+        } catch (_e) {
           return new Set();
         }
       }

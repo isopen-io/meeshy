@@ -20,7 +20,7 @@ import {
   Download
 } from 'lucide-react';
 import { StatsGrid, TimeSeriesChart, DonutChart, type StatItem } from '@/components/admin/Charts';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function AdminAnalyticsPage() {
   const router = useRouter();
@@ -262,7 +262,7 @@ export default function AdminAnalyticsPage() {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Activité par heure</span>
-                <Badge variant="outline">Aujourd'hui</Badge>
+                <Badge variant="outline">Aujourd&apos;hui</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -354,7 +354,7 @@ export default function AdminAnalyticsPage() {
                       Croissance positive
                     </h4>
                     <p className="text-sm text-green-700 dark:text-green-300">
-                      L'engagement utilisateur est en hausse de 15% cette semaine. Les heures de pointe (18h-21h) montrent une activité record.
+                      L&apos;engagement utilisateur est en hausse de 15% cette semaine. Les heures de pointe (18h-21h) montrent une activité record.
                     </p>
                   </div>
                 </div>

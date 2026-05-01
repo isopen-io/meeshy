@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Sheet,
   SheetContent,
@@ -66,7 +66,7 @@ import { toast } from 'sonner';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import { conversationsService } from '@/services/conversations.service';
 import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
-import type { Conversation, ConversationParticipant, Message, SocketIOUser } from '@meeshy/shared/types';
+import type { Conversation, Message } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
@@ -104,12 +104,11 @@ const ShareLinksSection = lazy(() =>
 // Dialog upload image
 import { ConversationImageUploadDialog } from './conversation-image-upload-dialog';
 
-
 interface ConversationSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversation: Conversation;
-  currentUser?: any; // User from shared/types - optionnel pour compatibilité
+  currentUser?: unknown; // User from shared/types - optionnel pour compatibilité
   conversationParticipants?: Participant[]; // Pour accéder aux données de l'autre utilisateur
   messages?: Message[]; // Pour les stats de langues
   currentUserRole?: string;
@@ -158,16 +157,16 @@ export function ConversationSettingsModal({
     if (otherParticipant?.user) return otherParticipant.user;
 
     // Fallback sur conversation.participants
-    const convParticipants = (conversation as any).participants;
+    const convParticipants = (conversation as unknown).participants;
     if (Array.isArray(convParticipants)) {
-      const other = convParticipants.find((p: any) => p.userId !== safeCurrentUser.id);
+      const other = convParticipants.find((p: unknown) => p.userId !== safeCurrentUser.id);
       if (other?.user) return other.user;
     }
 
     // Fallback sur conversation.participants
-    const members = (conversation as any).participants;
+    const members = (conversation as unknown).participants;
     if (Array.isArray(members)) {
-      const other = members.find((m: any) => m.userId !== safeCurrentUser.id);
+      const other = members.find((m: unknown) => m.userId !== safeCurrentUser.id);
       if (other?.user) return other.user;
     }
 
@@ -192,7 +191,7 @@ export function ConversationSettingsModal({
   }, [isDirect, otherUser, userStore, userStore._lastStatusUpdate]);
 
   // Hooks pour les stats et la gestion des participants
-  const { isAdmin, canModifyImage } = useParticipantManagement(conversation, safeCurrentUser);
+  const { _isAdmin, canModifyImage } = useParticipantManagement(conversation, safeCurrentUser);
   const { messageLanguageStats, activeLanguageStats, activeUsers } = useConversationStats(
     conversation,
     messages,
@@ -221,7 +220,7 @@ export function ConversationSettingsModal({
   }, [router, searchParams]);
 
   // États des préférences utilisateur
-  const [preferences, setPreferences] = useState<UserConversationPreferences | null>(null);
+  const [_preferences, setPreferences] = useState<UserConversationPreferences | null>(null);
   const [isLoadingPrefs, setIsLoadingPrefs] = useState(true);
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
 
@@ -238,7 +237,7 @@ export function ConversationSettingsModal({
   const [convTitle, setConvTitle] = useState(conversation.title || '');
   const [convDescription, setConvDescription] = useState(conversation.description || '');
   const [encryptionMode, setEncryptionMode] = useState<'e2ee' | 'hybrid' | 'server' | ''>(
-    (conversation as any).encryptionMode || ''
+    (conversation as unknown).encryptionMode || ''
   );
 
   // États pour l'édition inline avec X et ✓
@@ -263,7 +262,7 @@ export function ConversationSettingsModal({
       // Reset admin config states
       setConvTitle(conversation.title || '');
       setConvDescription(conversation.description || '');
-      setEncryptionMode((conversation as any).encryptionMode || '');
+      setEncryptionMode((conversation as unknown).encryptionMode || '');
       setEditedTitle(conversation.title || '');
       setEditedDescription(conversation.description || '');
       setIsEditingTitle(false);
@@ -306,7 +305,6 @@ export function ConversationSettingsModal({
       setIsLoadingPrefs(false);
     }
   };
-
 
   // Sauvegarder les préférences utilisateur via le store Zustand
   const savePreferences = async () => {
@@ -421,7 +419,7 @@ export function ConversationSettingsModal({
         const updatedData = { image: imageUrl, avatar: imageUrl };
         await conversationsService.updateConversation(conversation.id, updatedData);
 
-        onConversationUpdate?.(updatedData as any);
+        onConversationUpdate?.(updatedData as unknown);
         toast.success('Image mise à jour');
         setIsImageUploadDialogOpen(false);
       } else {
@@ -446,7 +444,7 @@ export function ConversationSettingsModal({
         const updatedData = { banner: bannerUrl };
         await conversationsService.updateConversation(conversation.id, updatedData);
 
-        onConversationUpdate?.(updatedData as any);
+        onConversationUpdate?.(updatedData as unknown);
         toast.success('Bannière mise à jour');
         setIsBannerUploadDialogOpen(false);
       } else {
@@ -461,7 +459,7 @@ export function ConversationSettingsModal({
   };
 
   // Ajouter un tag
-  const addTag = () => {
+  const _addTag = () => {
     const trimmedTag = newTag.trim().toLowerCase();
     if (trimmedTag && !tags.includes(trimmedTag)) {
       setTags([...tags, trimmedTag]);
@@ -470,7 +468,7 @@ export function ConversationSettingsModal({
   };
 
   // Supprimer un tag
-  const removeTag = (tagToRemove: string) => {
+  const _removeTag = (tagToRemove: string) => {
     setTags(tags.filter(t => t !== tagToRemove));
   };
 
@@ -530,7 +528,7 @@ export function ConversationSettingsModal({
                     </Avatar>
                     <OnlineIndicator
                       isOnline={otherUserStatus === 'online'}
-                      status={otherUserStatus as any}
+                      status={otherUserStatus as unknown}
                       size="md"
                       className="absolute -bottom-0.5 -right-0.5 ring-[3px] ring-white dark:ring-gray-900"
                     />
@@ -999,9 +997,9 @@ export function ConversationSettingsModal({
                         className="relative h-32 cursor-pointer group"
                         onClick={() => conversation.type !== 'direct' && setIsBannerUploadDialogOpen(true)}
                       >
-                        {(conversation as any).bannerImage ? (
+                        {(conversation as unknown).bannerImage ? (
                           <img
-                            src={(conversation as any).bannerImage}
+                            src={(conversation as unknown).bannerImage}
                             alt="Bannière"
                             className="w-full h-full object-cover"
                           />
@@ -1015,7 +1013,7 @@ export function ConversationSettingsModal({
                             <div className="flex flex-col items-center gap-2 text-white">
                               <Upload className="h-6 w-6" />
                               <p className="text-sm font-medium">
-                                {(conversation as any).bannerImage
+                                {(conversation as unknown).bannerImage
                                   ? (t('conversationDetails.changeBanner') || 'Modifier la bannière')
                                   : (t('conversationDetails.uploadBanner') || 'Ajouter une bannière')}
                               </p>
@@ -1024,7 +1022,7 @@ export function ConversationSettingsModal({
                         )}
 
                         {/* Badge type conversation si bannière présente */}
-                        {(conversation as any).bannerImage && conversation.type === 'direct' && (
+                        {(conversation as unknown).bannerImage && conversation.type === 'direct' && (
                           <div className="absolute top-3 right-3">
                             <Badge className="backdrop-blur-sm bg-white/20 text-white border-white/30">
                               Conversation directe
@@ -1211,7 +1209,6 @@ export function ConversationSettingsModal({
                   </motion.div>
                 )}
 
-
                 {/* Sécurité */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -1232,7 +1229,7 @@ export function ConversationSettingsModal({
                     </Label>
                     <Select
                       value={encryptionMode || 'none'}
-                      onValueChange={(v) => setEncryptionMode(v === 'none' ? '' : v as any)}
+                      onValueChange={(v) => setEncryptionMode(v === 'none' ? '' : v as unknown)}
                     >
                       <SelectTrigger className="w-full min-w-0 backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-purple-200/50 dark:border-purple-800/30">
                         <SelectValue />
@@ -1272,12 +1269,12 @@ export function ConversationSettingsModal({
                     </p>
 
                     {/* Badge du mode de chiffrement actuel */}
-                    {(conversation as any).encryptionMode && (
+                    {(conversation as unknown).encryptionMode && (
                       <div className="flex items-center gap-2 pt-2 border-t border-purple-200/30 dark:border-purple-800/20 min-w-0">
                         <span className="text-xs text-purple-700 dark:text-purple-300 flex-shrink-0">Mode actif:</span>
                         <Badge variant="outline" className="gap-1 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 flex-shrink-0">
-                          {getEncryptionIcon((conversation as any).encryptionMode)}
-                          <span className="truncate">{(conversation as any).encryptionMode.toUpperCase()}</span>
+                          {getEncryptionIcon((conversation as unknown).encryptionMode)}
+                          <span className="truncate">{(conversation as unknown).encryptionMode.toUpperCase()}</span>
                         </Badge>
                       </div>
                     )}

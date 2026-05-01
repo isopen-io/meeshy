@@ -2,7 +2,19 @@
 
 import { memo, useState, useCallback, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Search, Languages, CheckCircle2, Loader2, Clock, Zap, Star, Gem, Database, Cpu, ChevronUp, ChevronDown } from 'lucide-react';
+import {
+  X,
+  Search,
+  Languages,
+  CheckCircle2,
+  Loader2,
+  Zap,
+  Star,
+  Gem,
+  Cpu,
+  ChevronUp,
+  ChevronDown,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +30,7 @@ import { fr } from 'date-fns/locale';
 interface LanguageSelectionMessageViewProps {
   message: Message & {
     originalLanguage: string;
-    translations: Array<BubbleTranslation | any>; // Accepte BubbleTranslation ou MessageTranslation du backend
+    translations: Array<BubbleTranslation | unknown>; // Accepte BubbleTranslation ou MessageTranslation du backend
     originalContent: string;
   };
   currentDisplayLanguage: string;
@@ -31,7 +43,7 @@ interface LanguageSelectionMessageViewProps {
 export const LanguageSelectionMessageView = memo(function LanguageSelectionMessageView({
   message,
   currentDisplayLanguage,
-  isTranslating = false,
+  _isTranslating = false,
   onSelectLanguage,
   onRequestTranslation,
   onClose
@@ -62,7 +74,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
   useEffect(() => {
     if (message.translations && message.translations.length > 0) {
       // Pour chaque traduction disponible, retirer la langue de l'état "en cours"
-      message.translations.forEach((translation: any) => {
+      message.translations.forEach((translation: unknown) => {
         const lang = translation.targetLanguage || translation.language;
         if (lang && translatingLanguages.has(lang)) {
           unmarkLanguageAsTranslating(lang);
@@ -114,13 +126,13 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
     return null;
   };
 
-  const getConfidenceColor = (confidence: number) => {
+  const _getConfidenceColor = (confidence: number) => {
     if (confidence >= 0.9) return 'text-green-500';
     if (confidence >= 0.7) return 'text-yellow-500';
     return 'text-red-500';
   };
 
-  const formatTimestamp = (date: Date | string) => {
+  const _formatTimestamp = (date: Date | string) => {
     try {
       const timestamp = new Date(date);
       return formatDistanceToNow(timestamp, { addSuffix: true, locale: fr });
@@ -131,8 +143,8 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
 
   // Grouper les traductions par langue
   const translationsByLanguage = useMemo(() => {
-    const map = new Map<string, any[]>();
-    message.translations.forEach((translation: any) => {
+    const map = new Map<string, unknown[]>();
+    message.translations.forEach((translation: unknown) => {
       // Supporte BubbleTranslation (language) et MessageTranslation (targetLanguage)
       const lang = translation.language || translation.targetLanguage;
       const existing = map.get(lang) || [];
@@ -226,7 +238,6 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
     onSelectLanguage(language);
     onClose();
   }, [onSelectLanguage, onClose]);
-
 
   return (
     <motion.div

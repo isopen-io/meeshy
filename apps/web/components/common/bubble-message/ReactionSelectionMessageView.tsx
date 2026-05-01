@@ -118,7 +118,6 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
   onSelectReaction,
   onClose,
   recentEmojis = ['❤️', '😀', '👍', '😂', '🔥', '🎉', '💯', '✨'],
-  conversationId,
   currentUserId,
   currentAnonymousUserId,
   isAnonymous = false
@@ -164,9 +163,6 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
     
     try {
       // Ajouter la réaction via le hook
-      const success = await addReaction(emoji);
-      
-      
       // Toujours notifier le parent pour fermer la vue
       // Le parent gérera la fermeture via exitMode()
       onSelectReaction(emoji);
@@ -341,7 +337,6 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
           </div>
         </Tabs>
       )}
-
 
       {/* Emoji Grid */}
       <ScrollArea className="h-72 px-4 py-3">

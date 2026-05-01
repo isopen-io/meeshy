@@ -58,7 +58,7 @@ export function SummaryDetails({
   allowedLanguages
 }: SummaryDetailsProps) {
   const { t, locale } = useI18n('modals');
-  const { t: tCommon } = useI18n('common');
+  const { t: _tCommon } = useI18n('common');
 
   return (
     <div className="space-y-6">

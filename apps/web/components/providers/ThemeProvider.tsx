@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useTheme, useAppActions } from '@/stores';
+import { useTheme } from '@/stores';
 import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { logger } from '@/utils/logger';
 
@@ -12,7 +12,6 @@ import { logger } from '@/utils/logger';
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
-  const { setTheme } = useAppActions();
   
   // Appliquer le fix de z-index globalement
   useFixRadixZIndex();

@@ -42,7 +42,7 @@ export function JoinInfo({ conversationLink }: JoinInfoProps) {
     <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('type')}:</span>
-        <Badge variant={getBadgeVariant(conversationLink.conversation?.type) as any}>
+        <Badge variant={getBadgeVariant(conversationLink.conversation?.type) as unknown}>
           {getConversationTypeLabel(conversationLink.conversation?.type)}
         </Badge>
       </div>

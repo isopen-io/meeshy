@@ -101,7 +101,7 @@ interface ConversationViewProps {
   // Handlers - Participants
   onParticipantAdded?: (userId: string) => void;
   onParticipantRemoved?: (userId: string) => void;
-  onLinkCreated?: (link: any) => void;
+  onLinkCreated?: (link: unknown) => void;
 
   // Refs
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -262,7 +262,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
         >
           <ConversationMessages
             messages={messages}
-            translatedMessages={messages as any}
+            translatedMessages={messages as unknown}
             currentUser={currentUser}
             userLanguage={userLanguage}
             usedLanguages={usedLanguages}

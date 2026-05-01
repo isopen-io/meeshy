@@ -63,8 +63,8 @@ export default function V2PrivacyPolicyPage() {
               <ul className="list-disc pl-6 mb-4 space-y-2" style={{ color: theme.colors.textSecondary }}>
                 <li><strong>Informations de compte :</strong> nom, email, photo de profil, langues preferees</li>
                 <li><strong>Messages :</strong> contenu des messages pour la traduction en temps reel</li>
-                <li><strong>Donnees d'utilisation :</strong> statistiques d'utilisation anonymisees</li>
-                <li><strong>Informations techniques :</strong> type d'appareil, adresse IP, navigateur</li>
+                <li><strong>Donnees d&apos;utilisation :</strong> statistiques d&apos;utilisation anonymisees</li>
+                <li><strong>Informations techniques :</strong> type d&apos;appareil, adresse IP, navigateur</li>
               </ul>
             </section>
 

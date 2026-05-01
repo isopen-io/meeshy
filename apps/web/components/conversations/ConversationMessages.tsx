@@ -119,7 +119,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Fonction pour vérifier si l'utilisateur est en bas de la conversation
-  const isUserAtBottom = useCallback(() => {
+  const _isUserAtBottom = useCallback(() => {
     if (!scrollAreaRef.current) return true;
     
     const container = scrollAreaRef.current;
@@ -128,7 +128,6 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
     // Considérer l'utilisateur "en bas" s'il est à moins de 150px du bas
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     const isAtBottom = distanceFromBottom < 150;
-    
     
     return isAtBottom;
   }, []);
@@ -159,7 +158,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   }, []);
 
   // Fonction pour scroller vers un message spécifique
-  const scrollToMessage = useCallback((messageId: string, smooth = true) => {
+  const _scrollToMessage = useCallback((messageId: string, smooth = true) => {
     const messageElement = document.getElementById(`message-${messageId}`);
     if (messageElement) {
       messageElement.scrollIntoView({
@@ -170,7 +169,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   }, []);
 
   // Fonction pour trouver le premier message non lu
-  const findFirstUnreadMessage = useCallback(() => {
+  const _findFirstUnreadMessage = useCallback(() => {
     if (!currentUser) return null;
     
     // Trouver le premier message qui n'a pas été lu par l'utilisateur courant
@@ -178,12 +177,12 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       // Un message est considéré non lu si :
       // 1. Ce n'est pas un message de l'utilisateur courant
       // 2. Il n'a pas de readStatus ou l'utilisateur n'est pas dans readStatus
-      const senderUserId = getSenderUserId(msg.sender as Record<string, unknown>) ?? (msg.sender as any)?.id;
+      const senderUserId = getSenderUserId(msg.sender as Record<string, unknown>) ?? (msg.sender as unknown)?.id;
       if (senderUserId === currentUser.id) return false;
       
-      if (!(msg as any).readStatus || (msg as any).readStatus.length === 0) return true;
+      if (!(msg as unknown).readStatus || (msg as unknown).readStatus.length === 0) return true;
       
-      const userReadStatus = (msg as any).readStatus.find((rs: any) => rs.userId === currentUser.id);
+      const userReadStatus = (msg as unknown).readStatus.find((rs: unknown) => rs.userId === currentUser.id);
       return !userReadStatus || !userReadStatus.readAt;
     });
     
@@ -392,7 +391,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
         newestMessage?.id !== lastNewestMessageIdRef.current;
 
       if (isNewMessageArrived) {
-        const senderUserId = getSenderUserId(newestMessage?.sender as Record<string, unknown>) ?? (newestMessage?.sender as any)?.id;
+        const senderUserId = getSenderUserId(newestMessage?.sender as Record<string, unknown>) ?? (newestMessage?.sender as unknown)?.id;
         if (newestMessage && senderUserId === currentUser?.id) {
           // Toujours scroller sur NOTRE propre message (envoi)
           if (scrollDirection === 'down') {
@@ -426,7 +425,6 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       lastNewestMessageIdRef.current = newestMessage?.id ?? null;
     }
   }, [messages.length, currentUser?.id, scrollDirection, scrollToBottom, scrollToTop, isLoadingMore, scrollAreaRef]);
-
 
   // Choisir l'action du bouton selon la direction
   const handleScrollButtonClick = useCallback(() => {
@@ -492,7 +490,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           onNavigateToMessage={onNavigateToMessage}
           onImageClick={onImageClick}
           conversationType={conversationType || 'direct'}
-          userRole={userRole as any}
+          userRole={userRole as unknown}
           addTranslatingState={addTranslatingState}
           isTranslating={isTranslating}
           onRetryMessage={onRetryMessage}

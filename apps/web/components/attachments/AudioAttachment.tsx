@@ -28,7 +28,7 @@ export const AudioAttachment = React.memo(function AudioAttachment({
 
     // Note: AudioAttachment est déjà spécifique aux audios, pas besoin de vérifier le type
     // L'API retourne MessageAudioTranscription qui n'a pas de champ "type"
-    const transcription = attachment.transcription as any;
+    const transcription = attachment.transcription as unknown;
 
     const text = transcription.transcribedText || transcription.text;
 
@@ -84,7 +84,7 @@ export const AudioAttachment = React.memo(function AudioAttachment({
 
   return (
     <SimpleAudioPlayer
-      attachment={attachment as any}
+      attachment={attachment as unknown}
       messageId={messageId || attachment.messageId}
       initialTranscription={initialTranscription}
       initialTranslations={initialTranslations}

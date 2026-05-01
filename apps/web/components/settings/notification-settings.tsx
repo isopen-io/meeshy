@@ -100,7 +100,7 @@ export function NotificationSettings() {
       try {
         await updatePreferences(updates);
         toast.success('Préférences enregistrées');
-      } catch (err) {
+      } catch (_err) {
         // Error handled by onError callback
       }
     }, 800);
@@ -144,7 +144,7 @@ export function NotificationSettings() {
     try {
       await updatePreferences(NOTIFICATION_PREFERENCE_DEFAULTS);
       toast.success('Préférences réinitialisées');
-    } catch (err) {
+    } catch (_err) {
       // Error handled by onError callback
     }
   }, [updatePreferences]);

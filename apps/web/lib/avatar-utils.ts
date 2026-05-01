@@ -48,7 +48,7 @@ export function getUserInitials(user: User | null | undefined): string {
  * @param message - L'objet message avec sender
  * @returns Les initiales en majuscules
  */
-export function getMessageInitials(message: any): string {
+export function getMessageInitials(message: unknown): string {
   // Utilisateur normal
   if (message.sender) {
     return getUserInitials(message.sender);

@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { Ghost, Image, Lock, LockOpen, Key } from 'lucide-react';
+import { Ghost, Image } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import {
@@ -11,7 +11,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { ParticipantInfo, EncryptionInfo } from './types';
+import type { EncryptionInfo } from './types';
 
 interface HeaderAvatarProps {
   isDirect: boolean;
@@ -64,7 +64,7 @@ export const HeaderAvatar = memo(function HeaderAvatar({
         </Avatar>
         <OnlineIndicator
           isOnline={status === 'online'}
-          status={status as any}
+          status={status as unknown}
           size="md"
           className="absolute -bottom-0.5 -right-0.5 ring-2 ring-card"
         />

@@ -418,7 +418,7 @@ describe('Integration: Full Ranking Flow', () => {
       }
     };
 
-    const { adminService } = require('@/services/admin.service');
+    import { adminService } from '@/services/admin.service';
     adminService.getRankings.mockResolvedValue(mockApiResponse);
 
     const { result } = renderHook(() =>

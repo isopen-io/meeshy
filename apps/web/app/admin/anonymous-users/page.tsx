@@ -8,23 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  ArrowLeft,
-  Search,
-  Users,
-  UserCheck,
-  UserX,
-  Globe,
-  MessageSquare,
-  Calendar,
-  MapPin,
-  Eye,
-  EyeOff,
-  ExternalLink,
-  Shield,
-  Clock,
-  Link2
-} from 'lucide-react';
+import { ArrowLeft, Search, Users, UserCheck, Globe, MessageSquare, Calendar, MapPin, Eye, ExternalLink, Shield, Clock, Link2 } from 'lucide-react';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
@@ -375,7 +360,7 @@ export default function AdminAnonymousUsersPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center space-x-2">
                 <Users className="h-5 w-5" />
-                <span>Détails de l'utilisateur anonyme</span>
+                <span>Détails de l&apos;utilisateur anonyme</span>
               </DialogTitle>
             </DialogHeader>
 
@@ -397,7 +382,7 @@ export default function AdminAnonymousUsersPage() {
                           <p className="text-sm font-semibold">{selectedUser.firstName} {selectedUser.lastName}</p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Nom d'utilisateur</p>
+                          <p className="text-sm font-medium text-gray-500">Nom d&apos;utilisateur</p>
                           <p className="text-sm font-semibold">@{selectedUser.username}</p>
                         </div>
                         <div>
@@ -423,7 +408,7 @@ export default function AdminAnonymousUsersPage() {
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Date d'inscription</p>
+                          <p className="text-sm font-medium text-gray-500">Date d&apos;inscription</p>
                           <p className="text-sm flex items-center space-x-1">
                             <Calendar className="h-3 w-3" />
                             <span>{formatDate(selectedUser.joinedAt)}</span>
@@ -463,7 +448,7 @@ export default function AdminAnonymousUsersPage() {
                           </Badge>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <span className="text-sm font-medium">Envoi d'images</span>
+                          <span className="text-sm font-medium">Envoi d&apos;images</span>
                           <Badge variant={selectedUser.canSendImages ? "default" : "secondary"}>
                             {selectedUser.canSendImages ? 'Autorisé' : 'Refusé'}
                           </Badge>

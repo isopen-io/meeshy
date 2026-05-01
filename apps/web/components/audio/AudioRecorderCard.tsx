@@ -2,7 +2,6 @@
 
 import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Square, Play, Pause, X, Mic, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 // Types pour les métadonnées audio extraites
@@ -205,7 +204,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
       }
 
       // Obtenir le meilleur codec pour le navigateur
-      const { mimeType, browserType } = getBestAudioCodec();
+      const { mimeType } = getBestAudioCodec();
       selectedCodecRef.current = mimeType;
 
       // Contraintes audio UNIVERSELLES pour tous les navigateurs
@@ -292,7 +291,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
       startTimeRef.current = performance.now();
       animationFrameRef.current = requestAnimationFrame(updateTimer);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       setIsInitializing(false);
 
       if (error instanceof DOMException) {
@@ -330,7 +329,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
         if (audioRef.current.ended) {
           audioRef.current.currentTime = 0;
         }
-        audioRef.current.play().catch(error => {
+        audioRef.current.play().catch(_error => {
           toast.error('Erreur lors de la lecture');
           setIsPlaying(false);
         });
@@ -479,7 +478,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
             src={audioUrl}
             preload="auto"
             onEnded={() => setIsPlaying(false)}
-            onError={(e) => {
+            onError={(_e) => {
               setIsPlaying(false);
               toast.error('Erreur de lecture audio');
             }}

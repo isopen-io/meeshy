@@ -11,13 +11,13 @@ import {
   UserPlus,
   UserCheck,
   ExternalLink,
-  MousePointerClick,
   Clock,
   Users,
   ChevronDown,
   ChevronUp,
-  Loader2
+  Loader2,
 } from 'lucide-react';
+
 import { apiService } from '@/services/api.service';
 
 interface ShareLink {

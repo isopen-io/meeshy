@@ -5,7 +5,7 @@ export function getUserDisplayName(user: User | { firstName: string; lastName: s
   return `${user.firstName} ${user.lastName}`.trim() || user.username;
 }
 
-export function formatLastSeen(user: User, t: (key: string, params?: any) => string): string {
+export function formatLastSeen(user: User, t: (key: string, params?: unknown) => string): string {
   if (user.isOnline) return t('status.online');
 
   if (!user.lastActiveAt) {

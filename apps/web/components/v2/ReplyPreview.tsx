@@ -2,7 +2,7 @@
 
 import { HTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
-import { getLanguageColor, theme } from './theme';
+import { getLanguageColor } from './theme';
 
 export type ContentType = 'text' | 'image' | 'audio' | 'video';
 

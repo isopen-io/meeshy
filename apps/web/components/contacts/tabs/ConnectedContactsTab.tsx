@@ -36,7 +36,7 @@ interface ConnectedContactsTabProps {
   currentUserId?: string;
   getUserDisplayName: (user: User) => string;
   onStartConversation: (userId: string) => void;
-  t: (key: string, params?: any) => string;
+  t: (key: string, params?: unknown) => string;
 }
 
 const ConnectedContactsTab = React.memo<ConnectedContactsTabProps>(({

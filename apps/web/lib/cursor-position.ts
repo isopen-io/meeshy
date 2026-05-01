@@ -37,7 +37,7 @@ export function getCursorPosition(
   ];
 
   styles.forEach(style => {
-    (div.style as any)[style] = (computed as any)[style];
+    (div.style as unknown)[style] = (computed as unknown)[style];
   });
 
   // Get textarea position FIRST (before adding div to DOM)
@@ -135,7 +135,7 @@ export function getCursorPositionForFixed(
   ];
 
   styles.forEach(style => {
-    (div.style as any)[style] = (computed as any)[style];
+    (div.style as unknown)[style] = (computed as unknown)[style];
   });
 
   // Get textarea position FIRST (before adding div to DOM)

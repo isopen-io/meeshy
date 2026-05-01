@@ -25,7 +25,7 @@ jest.mock('@/services/message-translation.service', () => ({
 }));
 
 jest.mock('@/components/common/BubbleMessage', () => ({
-  BubbleMessage: ({ message }: { message: any }) => (
+  BubbleMessage: ({ message }: { message: unknown }) => (
     <div data-testid={`bubble-${message.id}`}>{message.content}</div>
   ),
 }));
@@ -90,17 +90,17 @@ const defaultProps = {
 describe('MessagesDisplay', () => {
   describe('memo wrapping', () => {
     it('should not re-render when props are unchanged', () => {
-      let renderCount = 0;
+      const _renderCount = 0;
 
       // Use a wrapper that tracks renders of the memoized component
-      const RenderCounter = React.memo(function RenderCounter() {
+      const _RenderCounter = React.memo(function RenderCounter() {
         renderCount++;
         return null;
       });
 
       // Verify MessagesDisplay is wrapped in memo by checking its type
       // React.memo components have a $$typeof of Symbol.for('react.memo')
-      const componentType = (MessagesDisplay as any);
+      const componentType = (MessagesDisplay as unknown);
       expect(componentType.$$typeof).toBe(Symbol.for('react.memo'));
     });
   });
@@ -109,8 +109,8 @@ describe('MessagesDisplay', () => {
     it('should filter out messages with null/undefined IDs', () => {
       const messages = [
         createMockMessage({ id: 'msg-1', content: 'Valid message' }),
-        createMockMessage({ id: undefined as any, content: 'No ID' }),
-        createMockMessage({ id: null as any, content: 'Null ID' }),
+        createMockMessage({ id: undefined as unknown, content: 'No ID' }),
+        createMockMessage({ id: null as unknown, content: 'Null ID' }),
         createMockMessage({ id: 'msg-2', content: 'Another valid' }),
       ];
 
@@ -164,7 +164,7 @@ describe('MessagesDisplay', () => {
           id: 'msg-1',
           content: 'Test content',
           originalLanguage: 'fr',
-          translations: [{ language: 'en', text: 'Test' }] as any,
+          translations: [{ language: 'en', text: 'Test' }] as unknown,
         }),
       ];
 

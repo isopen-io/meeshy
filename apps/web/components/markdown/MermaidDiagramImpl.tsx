@@ -24,7 +24,7 @@ class MermaidErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(__: Error): ErrorBoundaryState {
     return { hasError: true };
   }
 
@@ -95,7 +95,7 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
         // Cela capture les erreurs sans que mermaid ne les log dans la console
         try {
           await mermaid.parse(chart);
-        } catch (parseErr: any) {
+        } catch (parseErr: unknown) {
           const msg = parseErr?.message || parseErr?.str || '';
           const cleanMsg = msg
             .replace(/mermaid version [\d.]+/g, '')
@@ -113,7 +113,7 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
         const { svg: renderedSvg } = await mermaid.render(id, chart);
         setSvg(renderedSvg);
         setError(null);
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Supprimer les éléments DOM créés par Mermaid en cas d'erreur
         const errorElement = document.getElementById(`dmermaid-${err?.hash || ''}`);
         if (errorElement) {
@@ -187,7 +187,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = (props) => {
             Erreur critique du diagramme Mermaid
           </p>
           <p className="text-xs text-red-700 dark:text-red-400 mt-1">
-            Le diagramme n'a pas pu être rendu. Vérifiez la syntaxe.
+            Le diagramme n&apos;a pas pu être rendu. Vérifiez la syntaxe.
           </p>
         </div>
       </div>

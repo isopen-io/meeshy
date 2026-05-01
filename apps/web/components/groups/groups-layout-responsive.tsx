@@ -10,8 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Users,
   Plus,
@@ -29,7 +29,7 @@ import { toast } from 'sonner';
 import type { Group } from '@meeshy/shared/types';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { cn } from '@/lib/utils';
-import { generateCommunityIdentifier, validateCommunityIdentifier, sanitizeCommunityIdentifier } from '@/utils/community-identifier';
+import { generateCommunityIdentifier, sanitizeCommunityIdentifier } from '@/utils/community-identifier';
 import { authManager } from '@/services/auth-manager.service';
 
 interface GroupsLayoutResponsiveProps {
@@ -39,7 +39,7 @@ interface GroupsLayoutResponsiveProps {
 export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayoutResponsiveProps) {
 
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const _searchParams = useSearchParams();
   const user = useUser(); const isAuthChecking = useIsAuthChecking();
   const { t: tGroups } = useI18n('groups');
 
@@ -71,8 +71,8 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
 
   // États modaux et formulaires
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [_isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [_editingGroup, _setEditingGroup] = useState<Group | null>(null);
 
   // États formulaire
   const [newGroupName, setNewGroupName] = useState('');
@@ -121,7 +121,6 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
       const response = await fetch(buildApiUrl(API_ENDPOINTS.GROUP.LIST), {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
       
       if (response.ok) {
         const result = await response.json();

@@ -54,7 +54,7 @@ export const VideoAttachment = React.memo(function VideoAttachment({
   return (
     <div className="relative">
       <VideoPlayer
-        attachment={videoAttachment as any}
+        attachment={videoAttachment as unknown}
         onOpenLightbox={handleOpenLightbox}
         isOwnMessage={isOwnMessage}
       />

@@ -9,7 +9,7 @@ import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
 
 interface UserPersonalInfoProps {
-  user: any;
+  user: unknown;
   userId: string;
   onUpdate: () => void;
 }
@@ -52,7 +52,7 @@ export function UserPersonalInfoSection({
   const handleSave = async () => {
     try {
       setSaving(true);
-      const response = await apiService.patch<AdminApiResponse<any>>(`/admin/users/${userId}`, {
+      const response = await apiService.patch<AdminApiResponse<unknown>>(`/admin/users/${userId}`, {
         firstName: formData.firstName,
         lastName: formData.lastName,
         displayName: formData.displayName || null,
@@ -65,7 +65,7 @@ export function UserPersonalInfoSection({
         setEditing(false);
         onUpdate();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors de la mise à jour');
     } finally {
       setSaving(false);
@@ -138,7 +138,7 @@ export function UserPersonalInfoSection({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">Nom d'affichage</label>
+              <label className="text-sm font-medium dark:text-gray-200">Nom d&apos;affichage</label>
               <Input
                 value={formData.displayName || ''}
                 onChange={(e) => handleChange('displayName', e.target.value)}
@@ -148,7 +148,7 @@ export function UserPersonalInfoSection({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">Nom d'utilisateur (username)</label>
+              <label className="text-sm font-medium dark:text-gray-200">Nom d&apos;utilisateur (username)</label>
               <Input
                 value={formData.username}
                 onChange={(e) => {
@@ -186,7 +186,7 @@ export function UserPersonalInfoSection({
             </div>
             {user.displayName && (
               <div className="flex items-center text-sm">
-                <span className="w-40 text-gray-600 dark:text-gray-400">Nom d'affichage:</span>
+                <span className="w-40 text-gray-600 dark:text-gray-400">Nom d&apos;affichage:</span>
                 <span className="font-medium dark:text-gray-200">{user.displayName}</span>
               </div>
             )}

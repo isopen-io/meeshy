@@ -14,7 +14,7 @@ export const SystemStatusBanner = memo(function SystemStatusBanner() {
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
 
   useEffect(() => {
-    const handleUpdateAvailable = (event: any) => {
+    const handleUpdateAvailable = (event: unknown) => {
       console.log('[Banner] Update available event received');
       setUpdateRegistration(event.detail.registration);
       setDismissedUpdate(false);

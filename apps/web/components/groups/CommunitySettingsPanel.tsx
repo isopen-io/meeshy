@@ -5,12 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { AlertTriangle, Save, Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import {
-  useUpdateCommunityMutation,
-  useDeleteCommunityMutation,
-  useCheckIdentifierQuery,
-} from '@/hooks/queries';
+import { useUpdateCommunityMutation, useDeleteCommunityMutation } from '@/hooks/queries';
+
 import type { Community, UpdateCommunityData } from '@meeshy/shared/types';
 import { toast } from 'sonner';
 

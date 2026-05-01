@@ -75,7 +75,7 @@ export function MessageSettings() {
         const prefs = 'data' in data ? data.data : data;
         setPreferences(prev => ({ ...prev, ...prefs }));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[MessageSettings] Error loading preferences:', err);
       setError(err.message || t('messages.loadError', 'Erreur lors du chargement des préférences'));
     } finally {
@@ -108,7 +108,7 @@ export function MessageSettings() {
         setPreferences(previousPrefs);
         throw new Error(response.message || 'Erreur lors de l\'enregistrement');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[MessageSettings] Error saving preferences:', err);
       setPreferences(previousPrefs);
       toast.error(err.message || t('messages.saveError', 'Erreur lors de l\'enregistrement'));

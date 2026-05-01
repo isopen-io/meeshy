@@ -123,7 +123,7 @@ export function EditTrackingLinkModal({
 
     try {
       const token = authManager.getAuthToken();
-      const updateData: any = {
+      const updateData: unknown = {
         originalUrl: originalUrl.trim(),
         isActive,
       };

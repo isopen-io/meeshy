@@ -155,7 +155,7 @@ export const AudioEffectsPanel = memo<AudioEffectsPanelProps>(({
                   {/* Informations sur l'effet */}
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Périodes d'activation:</span>
+                      <span className="text-gray-600 dark:text-gray-400">Périodes d&apos;activation:</span>
                       <span className="font-medium text-gray-900 dark:text-gray-100">{segments.length}</span>
                     </div>
 

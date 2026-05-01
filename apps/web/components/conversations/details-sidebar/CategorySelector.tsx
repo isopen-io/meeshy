@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-function isAnonymousUser(user: any): user is Participant {
+function isAnonymousUser(user: unknown): user is Participant {
   return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
 }
 
@@ -40,7 +40,7 @@ interface CategorySelectorProps {
  */
 export function CategorySelector({ conversationId, currentUser, onCategoryUpdated }: CategorySelectorProps) {
   const { t } = useI18n('conversations');
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<unknown[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');

@@ -189,7 +189,7 @@ export default function BetaPlaygroundPage() {
             <div>
               <h4 className="font-medium text-sm mb-2">LLM Edge not available?</h4>
               <p className="text-sm text-muted-foreground">
-                Make sure you're using Chrome Canary and enable the Built-in AI flag at
+                Make sure you&apos;re using Chrome Canary and enable the Built-in AI flag at
                 <code className="mx-1 px-1 py-0.5 bg-muted rounded text-xs">
                   chrome://flags/#optimization-guide-on-device-model
                 </code>
@@ -282,7 +282,7 @@ export function ConditionalBetaPlayground() {
  */
 export function BetaPlaygroundWithAnalytics() {
   // Tracker l'utilisation des features beta
-  const trackBetaUsage = (feature: string, action: string) => {
+  const _trackBetaUsage = (feature: string, action: string) => {
     console.log(`Beta Feature Used: ${feature} - ${action}`);
     // Intégrer votre système d'analytics ici
     // analytics.track('beta_feature_used', { feature, action });

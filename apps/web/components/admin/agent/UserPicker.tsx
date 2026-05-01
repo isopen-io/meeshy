@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import type { SocketIOUser as User } from '@meeshy/shared/types';
 import { Search, Plus, X, Loader2 } from 'lucide-react';
 import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';

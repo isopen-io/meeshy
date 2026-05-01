@@ -35,7 +35,6 @@ interface MessageAttachmentsProps {
 
 export const MessageAttachments = React.memo(function MessageAttachments({
   attachments,
-  onImageClick,
   currentUserId,
   token,
   onAttachmentDeleted,

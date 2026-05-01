@@ -225,7 +225,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
   className = '',
   enableTracking = true,
   onLinkClick,
-  isOwnMessage = false
+  _isOwnMessage = false
 }) => {
   const { theme, resolvedTheme } = useTheme();
   const isDark = theme === 'dark' || resolvedTheme === 'dark';
@@ -317,7 +317,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
         rehypePlugins={[rehypeRaw, rehypeSanitize]}
         components={{
           // Code blocks avec coloration syntaxique
-          code({ node, inline, className, children, ...props }: any) {
+          code({ inline, className, children, ...props }: unknown) {
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
 
@@ -357,7 +357,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
           },
 
           // Liens avec support des mentions et tracking
-          a({ node, href, children, ...props }: any) {
+          a({ href, children, ...props }: unknown) {
             const isMention = href?.startsWith('/u/');
 
             if (isMention) {
@@ -402,7 +402,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
           },
 
           // Paragraphes avec whitespace-pre-wrap
-          p({ node, children, ...props }: any) {
+          p({ children, ...props }: unknown) {
             return (
               <p className="my-1 leading-normal whitespace-pre-wrap" {...props}>
                 {children}
@@ -411,42 +411,42 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
           },
 
           // Headings avec tailles adaptées aux messages
-          h1({ node, children, ...props }: any) {
+          h1({ children, ...props }: unknown) {
             return (
               <h1 className="text-xl sm:text-2xl font-bold my-1 first:mt-0" {...props}>
                 {children}
               </h1>
             );
           },
-          h2({ node, children, ...props }: any) {
+          h2({ children, ...props }: unknown) {
             return (
               <h2 className="text-lg sm:text-xl font-bold my-1 first:mt-0" {...props}>
                 {children}
               </h2>
             );
           },
-          h3({ node, children, ...props }: any) {
+          h3({ children, ...props }: unknown) {
             return (
               <h3 className="text-base sm:text-lg font-bold my-1 first:mt-0" {...props}>
                 {children}
               </h3>
             );
           },
-          h4({ node, children, ...props }: any) {
+          h4({ children, ...props }: unknown) {
             return (
               <h4 className="text-base font-bold my-1 first:mt-0" {...props}>
                 {children}
               </h4>
             );
           },
-          h5({ node, children, ...props }: any) {
+          h5({ children, ...props }: unknown) {
             return (
               <h5 className="text-sm font-bold my-1 first:mt-0" {...props}>
                 {children}
               </h5>
             );
           },
-          h6({ node, children, ...props }: any) {
+          h6({ children, ...props }: unknown) {
             return (
               <h6 className="text-sm font-semibold my-1 first:mt-0" {...props}>
                 {children}
@@ -455,7 +455,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
           },
 
           // Blockquotes
-          blockquote({ node, children, ...props }: any) {
+          blockquote({ children, ...props }: unknown) {
             return (
               <blockquote
                 className="border-l-4 border-gray-300 dark:border-gray-600 pl-4 my-1 italic"
@@ -467,7 +467,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
           },
 
           // Séparateurs horizontaux (---, ***, ___)
-          hr({ node, ...props }: any) {
+          hr({ ...props }: unknown) {
             return (
               <hr
                 className="my-4 border-0 border-t-2 border-gray-300 dark:border-gray-600"
@@ -477,21 +477,21 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
           },
 
           // Listes
-          ul({ node, children, ...props }: any) {
+          ul({ children, ...props }: unknown) {
             return (
               <ul className="list-disc list-outside my-1 pl-5" {...props}>
                 {children}
               </ul>
             );
           },
-          ol({ node, children, ...props }: any) {
+          ol({ children, ...props }: unknown) {
             return (
               <ol className="list-decimal list-outside my-1 pl-5" {...props}>
                 {children}
               </ol>
             );
           },
-          li({ node, children, ...props }: any) {
+          li({ children, ...props }: unknown) {
             return (
               <li className="leading-normal" {...props}>
                 {children}
@@ -500,7 +500,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
           },
 
           // Tables (GitHub Flavored Markdown)
-          table({ node, children, ...props }: any) {
+          table({ children, ...props }: unknown) {
             return (
               <div className="overflow-x-auto my-2">
                 <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-600" {...props}>
@@ -509,7 +509,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
               </div>
             );
           },
-          th({ node, children, ...props }: any) {
+          th({ children, ...props }: unknown) {
             return (
               <th
                 className="border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 px-3 py-2 text-left font-semibold"
@@ -519,7 +519,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
               </th>
             );
           },
-          td({ node, children, ...props }: any) {
+          td({ children, ...props }: unknown) {
             return (
               <td className="border border-gray-300 dark:border-gray-600 px-3 py-2" {...props}>
                 {children}

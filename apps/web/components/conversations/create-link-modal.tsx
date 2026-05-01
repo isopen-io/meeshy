@@ -92,7 +92,7 @@ export function CreateLinkModalV2({
     }
   };
 
-  const getStepTitle = () => {
+  const _getStepTitle = () => {
     switch (wizard.currentStep) {
       case 1:
         return t('createLinkModal.steps.selectConversation');

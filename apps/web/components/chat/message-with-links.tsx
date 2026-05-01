@@ -178,8 +178,6 @@ export function useAutoTrackingLinks(options: {
       }
 
       // Parser le message
-      const parts = parseMessageLinks(message);
-      
       // Pour l'instant, on ne remplace pas automatiquement les liens
       // car cela nécessite une requête API pour chaque lien
       // On peut activer cette fonctionnalité plus tard si nécessaire

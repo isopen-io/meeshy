@@ -44,7 +44,7 @@ export function ConversationsWidget({
       <CardContent>
         <div className="space-y-4">
           {conversations.map((conversation) => {
-            const avatarUrl = (conversation as any).avatar;
+            const avatarUrl = (conversation as unknown).avatar;
             const initials = (conversation.title ?? '').slice(0, 2).toUpperCase();
 
             return (

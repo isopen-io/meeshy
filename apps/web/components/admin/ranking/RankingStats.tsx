@@ -69,7 +69,7 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
                   borderRadius: '8px',
                   color: '#92400e'
                 }}
-                formatter={(value: any) => [formatCount(value), currentCriterion?.label]}
+                formatter={(value: unknown) => [formatCount(value), currentCriterion?.label]}
               />
               <Bar dataKey="value" radius={[0, 8, 8, 0]}>
                 {top10Data.map((entry, index) => (
@@ -129,7 +129,7 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
                   borderRadius: '8px',
                   color: '#92400e'
                 }}
-                formatter={(value: any) => [formatCount(value), currentCriterion?.label]}
+                formatter={(value: unknown) => [formatCount(value), currentCriterion?.label]}
                 labelFormatter={(label) => `Position ${label}`}
               />
               <Area

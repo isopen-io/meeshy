@@ -16,7 +16,7 @@ import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleto
 export default function AdminUsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -57,11 +57,9 @@ export default function AdminUsersPage() {
         adminService.getUsers(offset, pageSize, debouncedSearch, roleFilter, statusFilter)
       ]);
 
-
       // Le backend retourne {success: true, data: {...}}, donc il faut accéder à .data.data
-      const dashboardData = (dashboardResponse.data as any)?.data || dashboardResponse.data;
-      const usersData = (usersResponse.data as any)?.data || usersResponse.data;
-
+      const dashboardData = (dashboardResponse.data as unknown)?.data || dashboardResponse.data;
+      const usersData = (usersResponse.data as unknown)?.data || usersResponse.data;
 
       if (dashboardData) {
         setStats({

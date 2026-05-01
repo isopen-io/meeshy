@@ -15,7 +15,7 @@ const LOG_FILE = path.join(LOG_DIR, 'client-errors.log');
 /**
  * Écrit une erreur dans le fichier de log avec contexte complet
  */
-async function logToFile(errorData: any) {
+async function logToFile(errorData: unknown) {
   try {
     // Créer le dossier logs s'il n'existe pas
     await fs.mkdir(LOG_DIR, { recursive: true });

@@ -7,7 +7,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessageSquare, Loader2, ChevronLeft, ChevronRight, Reply, Globe } from 'lucide-react';
+import { MessageSquare, Loader2, ChevronRight, Reply, Globe } from 'lucide-react';
 import { agentAdminService, type AgentMessageEntry } from '@/services/agent-admin.service';
 import { UserDisplay } from './UserDisplay';
 

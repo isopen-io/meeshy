@@ -92,11 +92,11 @@ export default function NewUserPage() {
 
       const response = await apiService.post('/admin/users', userData);
 
-      if ((response.data as any)?.success) {
+      if ((response.data as unknown)?.success) {
         toast.success('Utilisateur créé avec succès!');
         router.push('/admin/users');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur création utilisateur:', error);
       toast.error(error.message || 'Erreur lors de la création de l\'utilisateur');
     } finally {
@@ -151,7 +151,7 @@ export default function NewUserPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Nom d'utilisateur <span className="text-red-500">*</span>
+                    Nom d&apos;utilisateur <span className="text-red-500">*</span>
                   </label>
                   <Input
                     placeholder="johndoe"
@@ -283,7 +283,7 @@ export default function NewUserPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Nom d'affichage</label>
+                  <label className="text-sm font-medium">Nom d&apos;affichage</label>
                   <Input
                     placeholder="John Doe"
                     value={formData.displayName}
@@ -413,7 +413,7 @@ export default function NewUserPage() {
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
-                  Créer l'utilisateur
+                  Créer l&apos;utilisateur
                 </>
               )}
             </Button>

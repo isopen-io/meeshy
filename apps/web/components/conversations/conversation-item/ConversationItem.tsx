@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback, useEffect, memo } from 'react';
-import { Pin, Globe, Users } from 'lucide-react';
+import { useCallback, memo } from 'react';
+import { Pin } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -11,7 +11,7 @@ import { getTagColor } from '@/utils/tag-colors';
 import { toast } from 'sonner';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
-import { formatConversationDate, formatRelativeDate } from '@/utils/date-format';
+import { formatConversationDate } from '@/utils/date-format';
 import { useUserStore } from '@/stores/user-store';
 import { ConversationItemActions } from './ConversationItemActions';
 import { usePrefetchOnHover } from '@/hooks/use-prefetch-on-hover';
@@ -65,8 +65,6 @@ export const ConversationItem = memo(function ConversationItem({
 
   // Store global des utilisateurs (statuts en temps réel)
   const userStore = useUserStore();
-  const _lastStatusUpdate = userStore._lastStatusUpdate; // Force re-render quand un statut change
-
   // Actions du menu - utilisent le store pour la réactivité
   const handleTogglePin = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -133,7 +131,7 @@ export const ConversationItem = memo(function ConversationItem({
         await navigator.clipboard.writeText(fullMessage);
         toast.success(t('conversationHeader.linkCopied'));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error.name === 'AbortError') {
         return;
       }
@@ -149,7 +147,7 @@ export const ConversationItem = memo(function ConversationItem({
 
     // Stratégie 1: trouver par userId différent du current user
     let otherParticipant = conversation.participants.find(p => {
-      const participantUserId = p.userId ?? (p as any).user?.id;
+      const participantUserId = p.userId ?? (p as unknown).user?.id;
       return participantUserId && participantUserId !== currentUser?.id;
     });
 
@@ -167,11 +165,11 @@ export const ConversationItem = memo(function ConversationItem({
     if (!otherParticipant) return null;
 
     // Return nested user if available, otherwise build user-like object from participant
-    return (otherParticipant as any).user ?? {
+    return (otherParticipant as unknown).user ?? {
       id: otherParticipant.userId,
       displayName: otherParticipant.displayName,
-      username: (otherParticipant as any).nickname ?? otherParticipant.displayName,
-      avatar: (otherParticipant as any).avatar,
+      username: (otherParticipant as unknown).nickname ?? otherParticipant.displayName,
+      avatar: (otherParticipant as unknown).avatar,
     };
   }, [conversation, currentUser]);
 
@@ -186,7 +184,7 @@ export const ConversationItem = memo(function ConversationItem({
     return formatConversationDate(date, { t });
   }, [t]);
 
-  const getSenderName = useCallback((message: any) => {
+  const getSenderName = useCallback((message: unknown) => {
     const sender = message?.sender;
     const isAnonymous = false;
 

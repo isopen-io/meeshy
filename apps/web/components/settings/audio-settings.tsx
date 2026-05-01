@@ -58,10 +58,10 @@ export const AudioSettings = memo(function AudioSettings() {
     updatePreferences,
   } = usePreferences('audio');
 
-  const preferences = preferencesData as any;
+  const preferences = preferencesData as unknown;
 
-  const updateField = <K extends string>(field: K, value: unknown, _options?: { skipOptimistic?: boolean; skipToast?: boolean }) => {
-    updatePreferences({ [field]: value } as any);
+  const updateField = <K extends string>(field: K, value: unknown, __options?: { skipOptimistic?: boolean; skipToast?: boolean }) => {
+    updatePreferences({ [field]: value } as unknown);
     return Promise.resolve(true);
   };
 

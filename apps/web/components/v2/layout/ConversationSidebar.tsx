@@ -12,7 +12,6 @@ import {
   CategoryIcons,
   ThemeToggle,
 } from '@/components/v2';
-import type { TagItem, ConversationItemData } from '@/components/v2';
 import { useConversationsV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 import { useSplitView } from './SplitViewContext';
@@ -339,16 +338,16 @@ export function ConversationSidebar() {
     switch (activeFilter) {
       case 'toutes':
         // No additional filtering — show all non-archived
-        filtered = filtered.filter((conv) => !(conv as any).isArchived);
+        filtered = filtered.filter((conv) => !(conv as unknown).isArchived);
         break;
       case 'public':
-        filtered = filtered.filter((conv) => conv.isGroup && (conv as any).visibility === 'public');
+        filtered = filtered.filter((conv) => conv.isGroup && (conv as unknown).visibility === 'public');
         break;
       case 'groupe':
-        filtered = filtered.filter((conv) => conv.isGroup && (conv as any).visibility !== 'public');
+        filtered = filtered.filter((conv) => conv.isGroup && (conv as unknown).visibility !== 'public');
         break;
       case 'globale':
-        filtered = filtered.filter((conv) => (conv as any).type === 'global' || (conv as any).type === 'broadcast');
+        filtered = filtered.filter((conv) => (conv as unknown).type === 'global' || (conv as unknown).type === 'broadcast');
         break;
       case 'direct':
         filtered = filtered.filter((conv) => !conv.isGroup);
@@ -357,7 +356,7 @@ export function ConversationSidebar() {
         filtered = filtered.filter((conv) => conv.unreadCount > 0);
         break;
       case 'archivee':
-        filtered = filtered.filter((conv) => (conv as any).isArchived);
+        filtered = filtered.filter((conv) => (conv as unknown).isArchived);
         break;
     }
 
@@ -369,13 +368,13 @@ export function ConversationSidebar() {
 
   // Filter counts
   const filterCounts = useMemo<FilterCounts>(() => ({
-    toutes: conversationItems.filter((conv) => !(conv as any).isArchived).length,
-    public: conversationItems.filter((conv) => conv.isGroup && (conv as any).visibility === 'public').length,
-    groupe: conversationItems.filter((conv) => conv.isGroup && (conv as any).visibility !== 'public').length,
-    globale: conversationItems.filter((conv) => (conv as any).type === 'global' || (conv as any).type === 'broadcast').length,
+    toutes: conversationItems.filter((conv) => !(conv as unknown).isArchived).length,
+    public: conversationItems.filter((conv) => conv.isGroup && (conv as unknown).visibility === 'public').length,
+    groupe: conversationItems.filter((conv) => conv.isGroup && (conv as unknown).visibility !== 'public').length,
+    globale: conversationItems.filter((conv) => (conv as unknown).type === 'global' || (conv as unknown).type === 'broadcast').length,
     direct: conversationItems.filter((conv) => !conv.isGroup).length,
     non_lue: conversationItems.filter((conv) => conv.unreadCount > 0).length,
-    archivee: conversationItems.filter((conv) => (conv as any).isArchived).length,
+    archivee: conversationItems.filter((conv) => (conv as unknown).isArchived).length,
   }), [conversationItems]);
 
   // Handle conversation selection

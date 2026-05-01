@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Button, Card, LanguageOrb, MessageBubble, theme, useToast, PageHeader, Switch, Dialog, DialogHeader, DialogBody, DialogFooter, Input, Label, Skeleton } from '@/components/v2';
+import { Button, Card, LanguageOrb, MessageBubble, useToast, PageHeader, Switch, Dialog, DialogHeader, DialogBody, DialogFooter, Input, Label, Skeleton } from '@/components/v2';
 import { useSettingsV2 } from '@/hooks/v2';
 
 // ============================================================================

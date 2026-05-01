@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Phone, Mail, LogIn, UserPlus, ArrowRight, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Phone, Mail, LogIn, UserPlus, ArrowRight, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { phoneTransferService } from '@/services/phone-transfer.service';
 import { useI18n } from '@/hooks/useI18n';
@@ -114,7 +114,7 @@ export function PhoneExistsModal({
       } else {
         toast.error(result.error || t('phoneReset.errors.smsSendFailed'));
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error(t('phoneReset.errors.internalError'));
     } finally {
       setIsLoading(false);
@@ -143,7 +143,7 @@ export function PhoneExistsModal({
       } else {
         toast.error(result.error || t('phoneReset.errors.invalidCode'));
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error(t('phoneReset.errors.internalError'));
     } finally {
       setIsLoading(false);
@@ -163,7 +163,7 @@ export function PhoneExistsModal({
       } else {
         toast.error(result.error || t('phoneReset.errors.resendFailed'));
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error(t('phoneReset.errors.internalError'));
     } finally {
       setIsLoading(false);
@@ -251,7 +251,7 @@ export function PhoneExistsModal({
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
               >
                 <LogIn className="h-4 w-4 mr-2" />
-                C'est mon compte - Me connecter
+                C&apos;est mon compte - Me connecter
               </Button>
 
               {/* Secondary: Continue without phone */}
@@ -261,7 +261,7 @@ export function PhoneExistsModal({
                 className="w-full"
               >
                 <UserPlus className="h-4 w-4 mr-2" />
-                Ce n'est pas mon compte - Continuer sans numéro
+                Ce n&apos;est pas mon compte - Continuer sans numéro
               </Button>
 
               {/* Tertiary: Transfer phone */}

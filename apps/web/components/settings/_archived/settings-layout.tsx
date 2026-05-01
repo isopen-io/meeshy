@@ -233,7 +233,7 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
               <h3 className="text-lg font-medium mb-4">Informations du profil</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Nom d'utilisateur</Label>
+                  <Label>Nom d&apos;utilisateur</Label>
                   <div className="mt-1 p-2 bg-gray-50 rounded-md">
                     {currentUser.username}
                   </div>
@@ -258,8 +258,8 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
               {/* Section Interface - Langues limitées */}
               <div className="space-y-4">
                 <div>
-                  <Label className="text-base font-medium">Langue d'interface</Label>
-                  <p className="text-sm text-gray-500 mb-3">Choisissez la langue de l'interface utilisateur</p>
+                  <Label className="text-base font-medium">Langue d&apos;interface</Label>
+                  <p className="text-sm text-gray-500 mb-3">Choisissez la langue de l&apos;interface utilisateur</p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -420,7 +420,7 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
                     <div>
                       <Label className="text-sm font-medium">Transcrire les audios automatiquement</Label>
                       <p className="text-xs text-gray-500 mt-1">
-                        Convertit automatiquement les messages vocaux en texte lorsqu'aucune transcription n'existe
+                        Convertit automatiquement les messages vocaux en texte lorsqu&apos;aucune transcription n&apos;existe
                       </p>
                     </div>
                   </div>
@@ -453,7 +453,7 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
                     <div className="text-xs text-purple-700">
                       <p className="font-medium mb-1">Transcription locale:</p>
                       <p>
-                        La transcription s'effectue directement sur votre appareil pour préserver votre confidentialité.
+                        La transcription s&apos;effectue directement sur votre appareil pour préserver votre confidentialité.
                         Cela peut consommer plus de batterie et de données mobiles.
                       </p>
                     </div>
@@ -471,7 +471,7 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
                 Traduction automatique
               </h3>
               <p className="text-sm text-gray-500 mb-4">
-                Configurez la traduction automatique dans l'onglet "Langue"
+                Configurez la traduction automatique dans l&apos;onglet &quot;Langue&quot;
               </p>
 
               <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -496,9 +496,9 @@ export function SettingsLayout({ currentUser, initialTab = 'profile' }: Settings
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-medium mb-4">Paramètres d'apparence</h3>
+              <h3 className="text-lg font-medium mb-4">Paramètres d&apos;apparence</h3>
               <p className="text-sm text-gray-500 mb-6">
-                Personnalisez l'apparence de votre interface utilisateur
+                Personnalisez l&apos;apparence de votre interface utilisateur
               </p>
               
               {/* Sélecteur de police avec aperçus visuels */}

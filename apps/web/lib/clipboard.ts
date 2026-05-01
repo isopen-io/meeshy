@@ -37,7 +37,7 @@ export async function copyToClipboard(text: string, inputSelector?: string): Pro
     // Pour iOS, nous devons utiliser setSelectionRange
     try {
       textArea.setSelectionRange(0, text.length);
-    } catch (err) {
+    } catch (_err) {
       // Certains navigateurs ne supportent pas setSelectionRange sur tous les éléments
     }
 
@@ -45,7 +45,7 @@ export async function copyToClipboard(text: string, inputSelector?: string): Pro
     let success = false;
     try {
       success = document.execCommand('copy');
-    } catch (err) {
+    } catch (_err) {
       success = false;
     }
 

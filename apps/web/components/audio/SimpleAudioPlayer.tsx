@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
+
+
 import { Play, Pause, AlertTriangle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
-import type { AudioEffectType } from '@meeshy/shared/types/video-call';
-import type { TranslatedAudioData } from '@meeshy/shared/types';
 
 // Hooks personnalisés
 import { useAudioPlayback } from '@/hooks/use-audio-playback';
@@ -32,8 +32,8 @@ const AudioEffectsPanel = dynamic(
 interface SimpleAudioPlayerProps {
   attachment: UploadedAttachmentResponse;
   messageId?: string;
-  initialTranscription?: { text: string; language: string; confidence?: number; segments?: any[] };
-  initialTranslations?: Record<string, any>; // Structure BD: { "en": { transcription: "...", url: "...", ... }, ... }
+  initialTranscription?: { text: string; language: string; confidence?: number; segments?: unknown[] };
+  initialTranslations?: Record<string, unknown>; // Structure BD: { "en": { transcription: "...", url: "...", ... }, ... }
   className?: string;
   isOwnMessage?: boolean;
 }
@@ -223,7 +223,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
             onPlaybackRateChange={handlePlaybackRateChange}
             selectedLanguage={selectedLanguage}
             setSelectedLanguage={setSelectedLanguage}
-            translatedAudios={translatedAudios as any}
+            translatedAudios={translatedAudios as unknown}
             isLanguageDropdownOpen={isLanguageDropdownOpen}
             setIsLanguageDropdownOpen={setIsLanguageDropdownOpen}
             transcription={transcription}

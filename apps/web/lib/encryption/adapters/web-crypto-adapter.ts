@@ -15,8 +15,6 @@ import type {
 
 const ALGORITHM = 'AES-GCM';
 const KEY_LENGTH = 256; // bits
-const IV_LENGTH = 12; // bytes (96 bits)
-const TAG_LENGTH = 128; // bits
 
 /**
  * Web Crypto Key Wrapper
@@ -34,7 +32,7 @@ class WebCryptoKey implements SharedCryptoKey {
     this.nativeKey = nativeKey;
     this.type = nativeKey.type as 'secret' | 'public' | 'private';
     this.algorithm = typeof nativeKey.algorithm === 'object'
-      ? (nativeKey.algorithm as any).name
+      ? (nativeKey.algorithm as unknown).name
       : nativeKey.algorithm;
     this.extractable = nativeKey.extractable;
     this.usages = nativeKey.usages;

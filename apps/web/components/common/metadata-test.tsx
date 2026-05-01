@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 
 export function MetadataTest() {
   const [url, setUrl] = useState('http://localhost:3100/signup/affiliate/aff_1760904438255_6g0t8ovvkpc');
-  const [metadata, setMetadata] = useState<any>(null);
+  const [metadata, setMetadata] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
 
   const testMetadata = async () => {
@@ -114,7 +114,7 @@ export function MetadataTest() {
 
             {metadata.image && (
               <div className="space-y-2">
-                <Label>Aperçu de l'image</Label>
+                <Label>Aperçu de l&apos;image</Label>
                 <div className="border rounded p-4">
                   <img 
                     src={metadata.image} 

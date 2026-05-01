@@ -4,7 +4,7 @@ import { useConversationPreferencesStore } from '@/stores/conversation-preferenc
 import { userPreferencesService } from '@/services/user-preferences.service';
 import type { HeaderPreferences } from './types';
 
-function isAnonymousUser(user: any): boolean {
+function isAnonymousUser(user: unknown): boolean {
   return user && ('sessionToken' in user || 'shareLinkId' in user);
 }
 
@@ -12,7 +12,7 @@ function isAnonymousUser(user: any): boolean {
  * Hook pour gérer les préférences dans le header de conversation
  * Utilise le store Zustand pour la synchronisation globale
  */
-export function useHeaderPreferences(conversationId: string, currentUser: any, t: (key: string) => string) {
+export function useHeaderPreferences(conversationId: string, currentUser: unknown, t: (key: string) => string) {
   const store = useConversationPreferencesStore();
   const storePrefs = store.preferencesMap.get(conversationId);
   const categories = store.categories;

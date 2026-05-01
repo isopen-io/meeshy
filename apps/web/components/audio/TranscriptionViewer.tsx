@@ -144,7 +144,7 @@ const getSpeakerLabel = (
 /**
  * Obtient l'icône de genre basée sur voiceCharacteristics
  */
-const getGenderIcon = (voiceCharacteristics: any) => {
+const getGenderIcon = (voiceCharacteristics: unknown) => {
   if (!voiceCharacteristics?.classification?.estimated_gender) {
     return UserCircle2;
   }
@@ -165,10 +165,10 @@ const getGenderIcon = (voiceCharacteristics: any) => {
 /**
  * Formate les détails vocaux pour l'affichage dans le tooltip
  */
-const formatVoiceDetails = (voiceCharacteristics: any) => {
+const formatVoiceDetails = (voiceCharacteristics: unknown) => {
   if (!voiceCharacteristics) return null;
 
-  const { pitch, classification, spectral, energy, quality } = voiceCharacteristics;
+  const { pitch, classification, spectral, quality } = voiceCharacteristics;
 
   return {
     pitch: pitch?.mean_hz ? `${Math.round(pitch.mean_hz)} Hz` : 'N/A',
@@ -204,12 +204,11 @@ const formatVoiceDetails = (voiceCharacteristics: any) => {
 export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
   transcription,
   isExpanded,
-  onToggleExpanded,
   currentTime,
   isPlaying,
   selectedLanguage,
   translatedAudios,
-  showScores = false,
+  _showScores = false,
   userAvatar,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -441,7 +440,7 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
                 transcription.senderSpeakerId,
                 speaker.voiceSimilarityScore
               );
-              const { label, isUser } = getSpeakerLabel(
+              const { isUser } = getSpeakerLabel(
                 speaker.sid,
                 speaker.voiceSimilarityScore,
                 transcription.senderSpeakerId

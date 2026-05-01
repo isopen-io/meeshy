@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mic, MicOff, RotateCcw, Check, Loader2 } from 'lucide-react';
+import { Mic, MicOff, RotateCcw, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
 import { useVoiceRecording, MIN_RECORDING_SECONDS, MAX_RECORDING_SECONDS } from '@/hooks/use-voice-recording';

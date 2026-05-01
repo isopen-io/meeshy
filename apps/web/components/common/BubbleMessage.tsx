@@ -25,7 +25,7 @@ interface BubbleMessageProps {
     translations: BubbleTranslation[];
     originalContent: string;
     readStatus?: Array<{ userId: string; readAt: Date }>;
-    attachments?: any[];
+    attachments?: unknown[];
   };
   currentUser: User;
   userLanguage: string;
@@ -78,7 +78,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
 }: BubbleMessageProps) {
   
   const { t } = useI18n();
-  const contentRef = useRef<HTMLDivElement>(null);
+  const _contentRef = useRef<HTMLDivElement>(null);
 
   // State local pour la langue d'affichage (permet la mise à jour immédiate du contenu)
   const [localDisplayLanguage, setLocalDisplayLanguage] = useState<string | null>(null);
@@ -93,8 +93,8 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
   // Hook de virtualization pour ce message spécifique
   const {
     currentMode,
-    currentData,
-    isActive,
+    _currentData,
+    _isActive,
     enterReactionMode,
     enterLanguageMode,
     enterEditMode,
@@ -139,34 +139,34 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
       return message.originalContent || message.content;
     }
     
-    const translation = message.translations.find((t: any) => 
+    const translation = message.translations.find((t: unknown) => 
       (t.language || t.targetLanguage) === effectiveDisplayLanguage
     );
-    return translation ? ((translation as any).content || (translation as any).translatedContent || message.content) : message.content;
+    return translation ? ((translation as unknown).content || (translation as unknown).translatedContent || message.content) : message.content;
   }, [effectiveDisplayLanguage, message.originalLanguage, message.originalContent, message.content, message.translations]);
 
   // Contenu de réponse (pour les messages parents - utilise effectiveDisplayLanguage)
-  const replyToContent = useMemo(() => {
+  const _replyToContent = useMemo(() => {
     if (!message.replyTo) return undefined;
     
-    const replyMessage = message.replyTo as any;
+    const replyMessage = message.replyTo as unknown;
     if (effectiveDisplayLanguage === (replyMessage.originalLanguage || 'fr')) {
       return replyMessage.originalContent || replyMessage.content;
     }
     
-    const translation = replyMessage.translations?.find((t: any) => 
+    const translation = replyMessage.translations?.find((t: unknown) => 
       (t.language || t.targetLanguage) === effectiveDisplayLanguage
     );
     return translation ? (translation.content || translation.translatedContent || replyMessage.content) : replyMessage.content;
   }, [message.replyTo, effectiveDisplayLanguage]);
 
   // Format de date pour les réponses - utilise la fonction utilitaire factorisée
-  const formatReplyDate = useCallback((date: Date | string) => {
+  const _formatReplyDate = useCallback((date: Date | string) => {
     return formatRelativeDate(date, { t });
   }, [t]);
 
   // Actions des vues spécialisées
-  const handleReactionSelect = useCallback((emoji: string) => {
+  const handleReactionSelect = useCallback((_emoji: string) => {
     // L'ajout de réaction se fait via MessageReactions existant
     // La vue se ferme automatiquement
     exitMode();
@@ -206,7 +206,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
     }
   }, [onDeleteMessage, exitMode, t]);
 
-  const handleCopyMessage = useCallback(() => {
+  const _handleCopyMessage = useCallback(() => {
     navigator.clipboard.writeText(currentContent);
     toast.success(t('messageCopied'));
   }, [currentContent, t]);
@@ -239,7 +239,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
           isTranslating={isTranslating}
           translationError={translationError}
           conversationType={conversationType}
-          userRole={userRole as any}
+          userRole={userRole as unknown}
           conversationId={conversationId}
           isAnonymous={isAnonymous}
           currentAnonymousUserId={currentAnonymousUserId}

@@ -108,7 +108,7 @@ export default function AdminTrackingLinksPage() {
       const params: Record<string, unknown> = { limit: pageSize, offset };
       if (linksSearch) params.search = linksSearch;
 
-      const response = await apiService.get<any>(
+      const response = await apiService.get<unknown>(
         '/tracking-links/admin/all',
         params
       );
@@ -187,7 +187,7 @@ export default function AdminTrackingLinksPage() {
         setTokenAvailable(null);
         loadLinks();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error?.response?.status === 409) {
         toast.error('Ce token existe deja');
       } else {
@@ -203,7 +203,7 @@ export default function AdminTrackingLinksPage() {
     setClicksLoading(true);
     try {
       const offset = (clicksPage - 1) * clicksPageSize;
-      const response = await apiService.get<any>(
+      const response = await apiService.get<unknown>(
         `/tracking-links/admin/${token}/clicks`,
         { limit: clicksPageSize, offset }
       );
@@ -356,7 +356,7 @@ export default function AdminTrackingLinksPage() {
                     Source
                     <Tooltip>
                       <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[260px]">Identifie la plateforme d'origine du visiteur. Sert a savoir quel canal genere le plus de trafic.</TooltipContent>
+                      <TooltipContent side="top" className="max-w-[260px]">Identifie la plateforme d&apos;origine du visiteur. Sert a savoir quel canal genere le plus de trafic.</TooltipContent>
                     </Tooltip>
                   </Label>
                   <Input
@@ -371,7 +371,7 @@ export default function AdminTrackingLinksPage() {
                     Medium
                     <Tooltip>
                       <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[260px]">Categorise le type de canal (social, email, bio, paid...). Permet d'analyser quels types de diffusion convertissent le mieux.</TooltipContent>
+                      <TooltipContent side="top" className="max-w-[260px]">Categorise le type de canal (social, email, bio, paid...). Permet d&apos;analyser quels types de diffusion convertissent le mieux.</TooltipContent>
                     </Tooltip>
                   </Label>
                   <Input

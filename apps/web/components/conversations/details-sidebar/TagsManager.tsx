@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 // Helper to detect anonymous users
-function isAnonymousUser(user: any): user is Participant {
+function isAnonymousUser(user: unknown): user is Participant {
   return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
 }
 

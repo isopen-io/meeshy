@@ -14,7 +14,7 @@ interface MessageAttachmentsSectionProps {
     id: string;
     content: string;
     conversationId: string;
-    attachments?: any[];
+    attachments?: unknown[];
   };
   isOwnMessage: boolean;
   isAnonymous: boolean;
@@ -47,7 +47,7 @@ export const MessageAttachmentsSection = memo(function MessageAttachmentsSection
     return message.attachments?.filter(att => !deletedAttachmentIds.includes(att.id)) || [];
   }, [message.attachments, deletedAttachmentIds]);
 
-  const hasAudioAttachments = useMemo(() => {
+  const _hasAudioAttachments = useMemo(() => {
     return visibleAttachments.some(att => getAttachmentType(att.mimeType) === 'audio');
   }, [visibleAttachments]);
 

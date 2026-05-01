@@ -20,15 +20,15 @@ jest.mock('@/components/common/messages-display', () => ({
 }));
 
 jest.mock('@/components/ui/button', () => ({
-  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Button: ({ children, ...props }: unknown) => <button {...props}>{children}</button>,
 }));
 
 jest.mock('@/lib/utils', () => ({
-  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+  cn: (...args: unknown[]) => args.filter(Boolean).join(' '),
 }));
 
 jest.mock('@meeshy/shared/utils/sender-identity', () => ({
-  getSenderUserId: (sender: any) => sender?.id,
+  getSenderUserId: (sender: unknown) => sender?.id,
 }));
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
@@ -112,10 +112,10 @@ describe('ConversationMessages', () => {
 
       let scrollListenerAddCount = 0;
 
-      mockContainer.addEventListener = jest.fn((type: string, listener: any, options?: any) => {
+      mockContainer.addEventListener = jest.fn((type: string, listener: unknown, options?: unknown) => {
         if (type === 'scroll') scrollListenerAddCount++;
         return originalAddEventListener(type, listener, options);
-      }) as any;
+      }) as unknown;
 
       const scrollRef = { current: mockContainer };
 
@@ -123,7 +123,7 @@ describe('ConversationMessages', () => {
         <ConversationMessages
           {...defaultProps}
           hasMore={true}
-          scrollContainerRef={scrollRef as any}
+          scrollContainerRef={scrollRef as unknown}
         />
       );
 
@@ -134,7 +134,7 @@ describe('ConversationMessages', () => {
         <ConversationMessages
           {...defaultProps}
           hasMore={false}
-          scrollContainerRef={scrollRef as any}
+          scrollContainerRef={scrollRef as unknown}
         />
       );
 
@@ -159,7 +159,7 @@ describe('ConversationMessages', () => {
         <ConversationMessages
           {...defaultProps}
           messages={messages1}
-          scrollContainerRef={scrollRef as any}
+          scrollContainerRef={scrollRef as unknown}
         />
       );
 
@@ -169,7 +169,7 @@ describe('ConversationMessages', () => {
         <ConversationMessages
           {...defaultProps}
           messages={messages2}
-          scrollContainerRef={scrollRef as any}
+          scrollContainerRef={scrollRef as unknown}
         />
       );
 

@@ -50,7 +50,7 @@ export interface CreatedLinkData {
 }
 
 // Configuration par défaut pour les liens rapides
-const DEFAULT_LINK_CONFIG = {
+const _DEFAULT_LINK_CONFIG = {
   expirationDays: 7,
   requireAccount: true,
   requireNickname: true,

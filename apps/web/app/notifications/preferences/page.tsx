@@ -7,10 +7,9 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Settings, Bell, Clock, MessageSquare, PhoneMissed, Users, UserPlus } from '@/lib/icons';
-import { AtSign, Heart, Reply } from 'lucide-react';
+import { Settings, Bell, Clock, MessageSquare, PhoneMissed, Users } from '@/lib/icons';
+import { AtSign } from 'lucide-react';
 import { AuthGuard } from '@/components/auth/AuthGuard';
-import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import { API_CONFIG } from '@/lib/config';
 
@@ -63,7 +62,6 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
 };
 
 function NotificationPreferencesContent() {
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
@@ -86,7 +84,7 @@ function NotificationPreferencesContent() {
           const data = await response.json();
           if (data.success && data.data) {
             // Exclure les champs non nécessaires pour l'état local (id, userId, isDefault, timestamps)
-            const { id, userId, isDefault, createdAt, updatedAt, ...prefs } = data.data;
+            const { ...prefs } = data.data;
             setPreferences(prev => ({ ...prev, ...prefs }));
           }
         }
@@ -236,7 +234,7 @@ function NotificationPreferencesContent() {
               <div className="flex items-center justify-between">
                 <Label htmlFor="reply" className="flex flex-col">
                   <span className="font-medium">Réponses</span>
-                  <span className="text-sm text-gray-500">Notifications quand quelqu'un répond à vos messages</span>
+                  <span className="text-sm text-gray-500">Notifications quand quelqu&apos;un répond à vos messages</span>
                 </Label>
                 <Switch
                   id="reply"
@@ -340,7 +338,7 @@ function NotificationPreferencesContent() {
                 Appels et système
               </CardTitle>
               <CardDescription>
-                Gérez les notifications d'appels et système
+                Gérez les notifications d&apos;appels et système
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -383,7 +381,7 @@ function NotificationPreferencesContent() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="dnd">
-                  <span className="font-medium">Activer "Ne pas déranger"</span>
+                  <span className="font-medium">Activer &quot;Ne pas déranger&quot;</span>
                 </Label>
                 <Switch
                   id="dnd"

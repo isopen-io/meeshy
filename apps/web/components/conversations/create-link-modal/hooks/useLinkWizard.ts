@@ -28,7 +28,6 @@ export function useLinkWizard({
   isOpen,
   preGeneratedLink,
   preGeneratedToken,
-  onLinkCreated,
   currentUser,
   conversations,
   selectedConversationId,
@@ -124,7 +123,7 @@ export function useLinkWizard({
           })
         : 'Lien de partage';
 
-      const requestBody: any = {
+      const requestBody: unknown = {
         name: generatedLinkName,
         description: linkSettings.description.trim() || undefined,
         expiresAt: expiresAt.toISOString(),

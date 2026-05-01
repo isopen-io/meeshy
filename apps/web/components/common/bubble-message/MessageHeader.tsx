@@ -1,11 +1,7 @@
 'use client';
 
 import { memo, useState } from 'react';
-import Link from 'next/link';
-import { Ghost } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getUserDisplayName } from '@/utils/user-display-name';
-import { formatRelativeDate } from '@/utils/date-format';
 import { getMessageInitials } from '@/lib/avatar-utils';
 import { cn } from '@/lib/utils';
 import { ImageLightbox } from '@/components/attachments/ImageLightbox';
@@ -24,16 +20,8 @@ interface MessageHeaderProps {
 
 export const MessageHeader = memo(function MessageHeader({
   message,
-  isOwnMessage,
-  t,
 }: MessageHeaderProps) {
   const [showAvatarLightbox, setShowAvatarLightbox] = useState(false);
-
-  const user = message.sender;
-  const username = message.sender?.username;
-  const displayName = getUserDisplayName(user, t('anonymous'));
-  const isAnonymous = false;
-  const avatarUrl = (message.sender as MessageSender)?.avatar;
 
   return (
     <>

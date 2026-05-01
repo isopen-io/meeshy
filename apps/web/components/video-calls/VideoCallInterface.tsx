@@ -99,7 +99,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     const init = async () => {
       try {
         // SAFARI FIX: Check for pre-authorized stream first
-        const preauthorizedStream = (window as any).__preauthorizedMediaStream;
+        const preauthorizedStream = (window as unknown).__preauthorizedMediaStream;
 
         if (preauthorizedStream) {
           logger.info('[VideoCallInterface]', '✅ Using pre-authorized media stream (Safari-compatible)');
@@ -109,7 +109,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
           setLocalStream(preauthorizedStream);
 
           // Clean up the global reference
-          delete (window as any).__preauthorizedMediaStream;
+          delete (window as unknown).__preauthorizedMediaStream;
         } else {
           logger.debug('[VideoCallInterface]', 'No pre-authorized stream, requesting permissions now');
           await initializeLocalStream();
@@ -258,13 +258,13 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         logger.info('[VideoCallInterface]', 'Cleaning up call on unmount/unload - callId: ' + currentCall.id);
         const socket = meeshySocketIOService.getSocket();
         if (socket && socket.connected) {
-          (socket as any).emit(CLIENT_EVENTS.CALL_LEAVE, { callId: currentCall.id });
+          (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId: currentCall.id });
         }
       }
     };
 
     // Handle page refresh/close
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    const handleBeforeUnload = (_e: BeforeUnloadEvent) => {
       cleanup();
       // Don't show confirmation dialog - just cleanup
     };
@@ -285,7 +285,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as any).emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled: newEnabled });
+      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled: newEnabled });
     }
   };
 
@@ -295,7 +295,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as any).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
+      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
     }
   };
 
@@ -307,7 +307,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       if (!videoTrack) return;
 
       const constraints = videoTrack.getConstraints();
-      const currentFacingMode = (constraints as any).facingMode || 'user';
+      const currentFacingMode = (constraints as unknown).facingMode || 'user';
       const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
 
       const newStream = await navigator.mediaDevices.getUserMedia({
@@ -348,7 +348,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as any).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
+      (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
     }
 
     // Reset immediately for instant UI feedback
@@ -419,7 +419,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
 
-    const handleParticipantLeft = (event: any) => {
+    const handleParticipantLeft = (event: unknown) => {
       if (event.callId !== callId) return;
 
       const participantId = event.userId || event.anonymousId;

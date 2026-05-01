@@ -8,9 +8,7 @@ import { Shield, Key, RefreshCw, CheckCircle, AlertTriangle, Lock, ShieldOff, Sh
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { API_CONFIG } from '@/lib/config';
 import { cn } from '@/lib/utils';
-import { authManager } from '@/services/auth-manager.service';
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import {
@@ -34,7 +32,7 @@ export function EncryptionSettings() {
     preferences: encryptionData,
     update: updateEncryption,
     updateLocalSettings,
-    sync: syncEncryption,
+    sync: _syncEncryption,
   } = useEncryptionPreferences();
 
   const isLoading = useUserPreferencesStore(state => state.isLoading);
@@ -113,8 +111,8 @@ export function EncryptionSettings() {
         // Refresh user data to get updated Signal keys
         const userResponse = await apiService.get('/auth/me');
 
-        if (userResponse.success && (userResponse.data as any)?.data?.user) {
-          useAuthStore.getState().setUser((userResponse.data as any).data.user);
+        if (userResponse.success && (userResponse.data as unknown)?.data?.user) {
+          useAuthStore.getState().setUser((userResponse.data as unknown).data.user);
         }
 
         toast.success(t('encryption.status.keysGenerated'));

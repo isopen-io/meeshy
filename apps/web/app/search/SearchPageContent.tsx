@@ -15,17 +15,17 @@ import {
   Search,
   Users,
   MessageSquare,
-  Hash,
   Globe,
   Lock,
   UserPlus,
   X,
-  Check,
   Building,
   MoreVertical,
   UserCheck,
-  Zap
+  Zap,
 } from 'lucide-react';
+
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -444,7 +444,7 @@ export function SearchPageContent() {
               {query && stats.total > 0 && (
                 <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border dark:border-gray-800">
                   <p className="text-sm font-medium text-muted-foreground dark:text-gray-400">
-                    {stats.total} résultat{stats.total > 1 ? 's' : ''} pour "{query}"
+                    {stats.total} résultat{stats.total > 1 ? 's' : ''} pour &quot;{query}&quot;
                   </p>
                 </div>
               )}
