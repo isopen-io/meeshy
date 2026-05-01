@@ -118,7 +118,6 @@
 		CAES000100010001000100B0 /* CallAudioEffectsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAES000100010001000100F0 /* CallAudioEffectsService.swift */; };
 		CAET000100010001000100B0 /* CallAudioEffectsServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAET000100010001000100F0 /* CallAudioEffectsServiceTests.swift */; };
 		CB3100000000002F31 /* ConnectionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3100000000001F31 /* ConnectionBanner.swift */; };
-		CRS00100010001000100B001 /* CrashReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CRS00100010001000100F001 /* CrashReportSheet.swift */; };
 		CC1000000000002F10 /* MediaPlayerContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1000000000001F10 /* MediaPlayerContext.swift */; };
 		CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1700000000001F17 /* MessageOverlayMenu.swift */; };
 		CC1800000000002F18 /* MessageInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1800000000001F18 /* MessageInfoSheet.swift */; };
@@ -132,6 +131,7 @@
 		CC4000000000002F40 /* ContactCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4000000000001F40 /* ContactCardView.swift */; };
 		CC5DF0610487315B178B7FE5 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BB909122D8D9361EC72DF1 /* RootView.swift */; };
 		CDL6001A001A001A001A0001 /* CommunityLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDL6002A002A002A002A0002 /* CommunityLinkDetailView.swift */; };
+		CDM00100010001000100B001 /* CrashDiagnosticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDM00100010001000100F001 /* CrashDiagnosticsManager.swift */; };
 		CE4300000000002F43 /* CallEffectsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE4300000000001F43 /* CallEffectsOverlay.swift */; };
 		CEE3D363209C096087B36241 /* SecurityVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A356FD5DE5874BCEFB9139C4 /* SecurityVerificationView.swift */; };
 		CF236AB810E070AE44B8AE2F /* ThemedMessageBubble+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161B698A5C7ABD5B61A9F071 /* ThemedMessageBubble+Media.swift */; };
@@ -139,6 +139,7 @@
 		CL6001A001A001A001A00001 /* CommunityLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CL6002A002A002A002A00002 /* CommunityLinksView.swift */; };
 		CM3600000000002F36 /* CallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CM3600000000001F36 /* CallManager.swift */; };
 		CPREF0000000004F01 /* ConversationPreferencesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = CPREF0000000003F01 /* ConversationPreferencesTab.swift */; };
+		CRS00100010001000100B001 /* CrashReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CRS00100010001000100F001 /* CrashReportSheet.swift */; };
 		CS6001A001A001A001A00001 /* CreateShareLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CS6002A002A002A002A00002 /* CreateShareLinkView.swift */; };
 		CSHDR001B001B001B001B0002 /* ConversationSocketHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = CSHDR001A001A001A001A0001 /* ConversationSocketHandler.swift */; };
 		CT6001A001A001A001A00001 /* CreateTrackingLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CT6002A002A002A002A00002 /* CreateTrackingLinkView.swift */; };
@@ -151,7 +152,7 @@
 		D26BAE25A2C027F3CA414696 /* ConversationView+MessageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 631E4BD5FAADD58E16760AF9 /* ConversationView+MessageRow.swift */; };
 		D41332567A1DF21830750E35 /* AnonymousSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B907F9065200B3DDB62876DB /* AnonymousSessionStore.swift */; };
 		D470C3569767DC3CE63400CC /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 225CCF2B034C164360E361C4 /* Foundation.framework */; };
-		D489552E7EE1E53C58CE9A5C /* MeeshyWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = F712AE637B0876483E53AA3C /* MeeshyWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D489552E7EE1E53C58CE9A5C /* MeeshyWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F712AE637B0876483E53AA3C /* MeeshyWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D4E5F6A7B8C9D0E1F2A3B4D2 /* iPadRootView+Sheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4D1 /* iPadRootView+Sheets.swift */; };
 		D4E5F6A7B8C9D0E1F2A3B4D4 /* iPadRootView+Panels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4D3 /* iPadRootView+Panels.swift */; };
 		D4E5F6A7B8C9D0E1F2A3B4D6 /* iPadRootView+Overlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4D5 /* iPadRootView+Overlays.swift */; };
@@ -184,7 +185,7 @@
 		E78951D32E58D4C0A1CF3A8F /* AffiliateCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */; };
 		E941B8BFDFFF2E342CA6DCCF /* ConversationViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12EC32EE90955ED041C92F06 /* ConversationViewModelTests.swift */; };
 		EDD817AE0118AEBF9FE37640 /* E2EEService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35C370F515C4807CB86FA5E /* E2EEService.swift */; };
-		EDECFA614C67F4DA7C1164A1 /* MeeshyNotificationExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = D476AE3A97B7291A27F716AD /* MeeshyNotificationExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		EDECFA614C67F4DA7C1164A1 /* MeeshyNotificationExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D476AE3A97B7291A27F716AD /* MeeshyNotificationExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		EDIT002A002A002A002A0002 /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDIT001A001A001A001A0001 /* EditProfileView.swift */; };
 		EE44FF55AA66BB77CC880003 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE44FF55AA66BB77CC880033 /* LoginView.swift */; };
 		EE55FF66AA77BB88CC990041 /* ConversationAnimatedBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */; };
@@ -225,7 +226,6 @@
 		LABR01C1C1C1C1C1C1C10001 /* LiveActivityBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LABR01C1C1C1C1C1C1C10002 /* LiveActivityBridge.swift */; };
 		LANG001A001A001A001A0002 /* LanguagePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = LANG001A001A001A001A0001 /* LanguagePickerSheet.swift */; };
 		LGCT0100000002F001 /* Logger+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = LGCT0100000001F001 /* Logger+Categories.swift */; };
-		CDM00100010001000100B001 /* CrashDiagnosticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDM00100010001000100F001 /* CrashDiagnosticsManager.swift */; };
 		LH6001A001A001A001A00001 /* LinksHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LH6002A002A002A002A00002 /* LinksHubView.swift */; };
 		LHM0020020020020020001 /* LocallyHiddenMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */; };
 		LHMT02002002002002001 /* LocallyHiddenMessagesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */; };
@@ -345,16 +345,16 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		9F6FBAEA8A651A098A8D3B4B /* Embed App Extensions */ = {
+		9F6FBAEA8A651A098A8D3B4B /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				D489552E7EE1E53C58CE9A5C /* MeeshyWidgets.appex in Embed App Extensions */,
-				EDECFA614C67F4DA7C1164A1 /* MeeshyNotificationExtension.appex in Embed App Extensions */,
+				D489552E7EE1E53C58CE9A5C /* MeeshyWidgets.appex in Embed Foundation Extensions */,
+				EDECFA614C67F4DA7C1164A1 /* MeeshyNotificationExtension.appex in Embed Foundation Extensions */,
 			);
-			name = "Embed App Extensions";
+			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -487,7 +487,6 @@
 		CAES000100010001000100F0 /* CallAudioEffectsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioEffectsService.swift; sourceTree = "<group>"; };
 		CAET000100010001000100F0 /* CallAudioEffectsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioEffectsServiceTests.swift; sourceTree = "<group>"; };
 		CB3100000000001F31 /* ConnectionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionBanner.swift; sourceTree = "<group>"; };
-		CRS00100010001000100F001 /* CrashReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CrashReportSheet.swift"; sourceTree = "<group>"; };
 		CC1000000000001F10 /* MediaPlayerContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlayerContext.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleOverlay.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversalComposerBar.swift; sourceTree = "<group>"; };
@@ -506,12 +505,14 @@
 		CC4000000000001F40 /* ContactCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactCardView.swift; sourceTree = "<group>"; };
 		CC44DD55EE66FF7788990011 /* AudioPostComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPostComposerView.swift; sourceTree = "<group>"; };
 		CDL6002A002A002A002A0002 /* CommunityLinkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityLinkDetailView.swift; sourceTree = "<group>"; };
+		CDM00100010001000100F001 /* CrashDiagnosticsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashDiagnosticsManager.swift; sourceTree = "<group>"; };
 		CE4300000000001F43 /* CallEffectsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallEffectsOverlay.swift; sourceTree = "<group>"; };
 		CFCF53B6AD169522F7F20047 /* ThermalStateMonitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThermalStateMonitor.swift; sourceTree = "<group>"; };
 		CHPW001A001A001A001A0001 /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
 		CL6002A002A002A002A00002 /* CommunityLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityLinksView.swift; sourceTree = "<group>"; };
 		CM3600000000001F36 /* CallManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManager.swift; sourceTree = "<group>"; };
 		CPREF0000000003F01 /* ConversationPreferencesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationPreferencesTab.swift; sourceTree = "<group>"; };
+		CRS00100010001000100F001 /* CrashReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReportSheet.swift; sourceTree = "<group>"; };
 		CS6002A002A002A002A00002 /* CreateShareLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateShareLinkView.swift; sourceTree = "<group>"; };
 		CSHDR001A001A001A001A0001 /* ConversationSocketHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSocketHandler.swift; sourceTree = "<group>"; };
 		CT6002A002A002A002A00002 /* CreateTrackingLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateTrackingLinkView.swift; sourceTree = "<group>"; };
@@ -587,7 +588,6 @@
 		LABR01C1C1C1C1C1C1C10002 /* LiveActivityBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiveActivityBridge.swift; sourceTree = "<group>"; };
 		LANG001A001A001A001A0001 /* LanguagePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguagePickerSheet.swift; sourceTree = "<group>"; };
 		LGCT0100000001F001 /* Logger+Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Logger+Categories.swift"; sourceTree = "<group>"; };
-		CDM00100010001000100F001 /* CrashDiagnosticsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CrashDiagnosticsManager.swift"; sourceTree = "<group>"; };
 		LH6002A002A002A002A00002 /* LinksHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinksHubView.swift; sourceTree = "<group>"; };
 		LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocallyHiddenMessagesStore.swift; sourceTree = "<group>"; };
 		LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocallyHiddenMessagesStoreTests.swift; sourceTree = "<group>"; };
@@ -1322,7 +1322,7 @@
 				A0CA3D341BC3E6EC520974FB /* Sources */,
 				EE11FF22AA33BB44CC55DD03 /* Frameworks */,
 				23E401F0C251E533DEC02613 /* Resources */,
-				9F6FBAEA8A651A098A8D3B4B /* Embed App Extensions */,
+				9F6FBAEA8A651A098A8D3B4B /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
@@ -1363,7 +1363,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					TSTS000E000E000E000E001 = {
 						ProvisioningStyle = Automatic;
@@ -1795,7 +1795,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MeeshyWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Widgets Dev";
@@ -1824,6 +1823,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -1855,8 +1855,10 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -1877,6 +1879,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = Meeshy;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -1897,7 +1900,6 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 161;
-				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev";
@@ -1926,6 +1928,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -1957,8 +1960,10 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -1972,6 +1977,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = Meeshy;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -1990,7 +1996,6 @@
 				CODE_SIGN_ENTITLEMENTS = Meeshy/Meeshy.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 161;
-				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Meeshy;
@@ -2026,7 +2031,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MeeshyNotificationExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev Notifications";
@@ -2063,7 +2067,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MeeshyNotificationExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Notifications";
@@ -2101,7 +2104,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MeeshyWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Widgets";
@@ -2133,7 +2135,6 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = me.meeshy.app.tests;
@@ -2152,7 +2153,6 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = me.meeshy.app.tests;
