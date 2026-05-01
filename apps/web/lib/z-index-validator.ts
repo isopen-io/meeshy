@@ -61,24 +61,24 @@ export function logZIndexReport() {
   console.group('🎯 RAPPORT Z-INDEX MEESHY');
   
   console.group('📊 Hiérarchie configurée');
-  Object.entries(Z_INDEX).forEach(([key, value]) => {
+  Object.entries(Z_INDEX).forEach(() => {
   });
   console.groupEnd();
-  
+
   console.group('🔍 Éléments actifs dans le DOM');
-  const popovers = document.querySelectorAll('[data-radix-popover-content]');
-  const dropdowns = document.querySelectorAll('[data-radix-dropdown-menu-content]');
-  const tooltips = document.querySelectorAll('[data-radix-tooltip-content]');
-  const portals = document.querySelectorAll('[data-radix-portal]');
-  
+  document.querySelectorAll('[data-radix-popover-content]');
+  document.querySelectorAll('[data-radix-dropdown-menu-content]');
+  document.querySelectorAll('[data-radix-tooltip-content]');
+  document.querySelectorAll('[data-radix-portal]');
+
   console.groupEnd();
-  
+
   console.group('⚠️ Problèmes détectés');
   const issues = validateRadixZIndexes();
-  
+
   if (issues.length === 0) {
   } else {
-    issues.forEach((issue, index) => {
+    issues.forEach(() => {
     });
   }
   console.groupEnd();
@@ -140,7 +140,7 @@ export function disableZIndexDebugMode() {
  * Ajoute les utilitaires de debug au window global (dev only)
  */
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  (window as any).meeshyZIndex = {
+  (window as unknown as Record<string, unknown>).meeshyZIndex = {
     validate: validateRadixZIndexes,
     report: logZIndexReport,
     debug: enableZIndexDebugMode,

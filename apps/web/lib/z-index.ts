@@ -100,7 +100,7 @@ export const Z_STYLES = {
 export const useZIndexDebug = () => {
   const logZIndexHierarchy = () => {
     console.group('🎯 Hiérarchie Z-Index Meeshy');
-    Object.entries(Z_INDEX).forEach(([key, value]) => {
+    Object.entries(Z_INDEX).forEach(() => {
     });
     console.groupEnd();
   };

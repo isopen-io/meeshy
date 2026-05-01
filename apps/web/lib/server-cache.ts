@@ -22,14 +22,6 @@
 import { cache } from 'react';
 import { buildApiUrl } from '@/lib/config';
 
-/**
- * Type générique pour les réponses API
- */
-interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  error?: string;
-}
 
 /**
  * Fetch dashboard data avec déduplication
