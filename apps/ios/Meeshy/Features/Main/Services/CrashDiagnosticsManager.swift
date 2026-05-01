@@ -31,8 +31,15 @@ final class CrashDiagnosticsManager: NSObject {
 
     private nonisolated static let directoryName = "crash_diagnostics"
     private nonisolated static let maxStoredReports = 50
+    private nonisolated static let fileExtension = "json"
 
     private var installed = false
+    /// File URLs we've already pulled into `pending`. Tracked so
+    /// `consumePending()` only deletes files we own — not anything else that
+    /// happens to live in the directory — and so reports written by a live
+    /// MetricKit callback during this session aren't wiped before being
+    /// surfaced (they're picked up by the rescan inside `consumePending()`).
+    private var loadedFileURLs: Set<URL> = []
 
     private override init() {
         super.init()
@@ -51,13 +58,18 @@ final class CrashDiagnosticsManager: NSObject {
         Logger.crash.info("CrashDiagnostics installed (\(self.pending.count, privacy: .public) pending report(s))")
     }
 
-    /// Returns and clears the queue of previously-captured reports. Reports
-    /// are also deleted from disk so the same crash isn't surfaced twice.
+    /// Returns and clears the queue of previously-captured reports. Also
+    /// rescans the on-disk store for any reports written by a live MetricKit
+    /// callback since `install()` ran — without this rescan, a hang/crash
+    /// diagnostic delivered mid-session would land on disk but `clearPersisted`
+    /// would wipe it before the user ever saw it. Files we wrote are deleted
+    /// at the end so the same incident isn't surfaced twice.
     func consumePending() -> [Diagnostic] {
-        let snapshot = pending
+        let live = loadFreshFromDisk()
+        let combined = pending + live
         pending.removeAll()
-        clearPersisted()
-        return snapshot
+        clearLoadedFiles()
+        return combined
     }
 
     // MARK: - Diagnostic model
@@ -82,6 +94,12 @@ final class CrashDiagnosticsManager: NSObject {
 
     // MARK: - NSException
 
+    /// Captured at install time so we can chain to whatever handler was
+    /// installed before us (Crashlytics, Sentry, the OS default, etc.). Marked
+    /// `nonisolated(unsafe)` because it's set exactly once, on the main thread,
+    /// before the handler can ever fire — at which point we only read it.
+    private nonisolated(unsafe) static var previousExceptionHandler: (@convention(c) (NSException) -> Void)?
+
     /// `@convention(c)` is required by `NSSetUncaughtExceptionHandler`'s C
     /// signature and also makes the closure provably non-isolated under
     /// Swift 6 strict concurrency (SE-0466 default-MainActor isolation would
@@ -92,6 +110,9 @@ final class CrashDiagnosticsManager: NSObject {
         let summary = "\(exception.name.rawValue): \(exception.reason ?? "no reason")"
         let details = exception.callStackSymbols.joined(separator: "\n")
         CrashDiagnosticsManager.writeSync(kind: .nsException, summary: summary, details: details)
+        // Hand off to whatever was registered before us so we don't clobber
+        // a sibling reporter (e.g. a future Crashlytics integration).
+        CrashDiagnosticsManager.previousExceptionHandler?(exception)
     }
 
     private func installNSExceptionHandler() {
@@ -99,43 +120,80 @@ final class CrashDiagnosticsManager: NSObject {
         // about to be terminated, so we intentionally avoid spawning Tasks or
         // hopping actors — just fsync a JSON blob and return so the OS can
         // continue its termination sequence.
+        Self.previousExceptionHandler = NSGetUncaughtExceptionHandler()
         NSSetUncaughtExceptionHandler(Self.uncaughtExceptionHandler)
     }
 
     // MARK: - Persistence
 
     private func loadPersisted() {
-        guard let dir = Self.directoryURL() else { return }
-        guard let files = try? FileManager.default.contentsOfDirectory(
-            at: dir,
-            includingPropertiesForKeys: [.contentModificationDateKey]
-        ) else { return }
-
-        let sorted = files.sorted { lhs, rhs in
-            let l = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            let r = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            return l > r
-        }
-
-        let decoder = Self.makeDecoder()
         let isoFormatter = ISO8601DateFormatter()
         var loaded: [Diagnostic] = []
-        for url in sorted.prefix(Self.maxStoredReports) {
-            guard let data = try? Data(contentsOf: url),
-                  let diag = try? decoder.decode(Diagnostic.self, from: data) else { continue }
+        for (url, diag) in decodeAllReports() {
             loaded.append(diag)
+            loadedFileURLs.insert(url)
             let when = isoFormatter.string(from: diag.timestamp)
             Logger.crash.error("Restored \(diag.kind.rawValue, privacy: .public) @ \(when, privacy: .public): \(diag.summary, privacy: .public)")
         }
         pending = loaded
     }
 
-    private func clearPersisted() {
-        guard let dir = Self.directoryURL() else { return }
-        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
-        for url in files {
+    /// Picks up reports written to disk *since* `loadPersisted()` ran — i.e.
+    /// reports MetricKit delivered during the live session. Without this,
+    /// `clearLoadedFiles()` could wipe a fresh diagnostic before the user
+    /// ever sees it.
+    private func loadFreshFromDisk() -> [Diagnostic] {
+        var fresh: [Diagnostic] = []
+        for (url, diag) in decodeAllReports() where !loadedFileURLs.contains(url) {
+            fresh.append(diag)
+            loadedFileURLs.insert(url)
+        }
+        return fresh
+    }
+
+    /// Returns every persisted report ordered most-recent first, paired with
+    /// its on-disk URL. Caps the result at `maxStoredReports` and proactively
+    /// garbage-collects any older overflow so a runaway crash loop can't bloat
+    /// `Documents/` indefinitely (the surfacing pipeline only ever deletes
+    /// files it loaded, so the tail beyond the cap would otherwise leak).
+    private func decodeAllReports() -> [(URL, Diagnostic)] {
+        guard let dir = Self.directoryURL() else { return [] }
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return [] }
+
+        let jsonFiles = files.filter { $0.pathExtension == Self.fileExtension }
+        let sorted = jsonFiles.sorted { lhs, rhs in
+            let l = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let r = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return l > r
+        }
+
+        if sorted.count > Self.maxStoredReports {
+            for url in sorted.dropFirst(Self.maxStoredReports) {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+
+        let decoder = Self.makeDecoder()
+        var result: [(URL, Diagnostic)] = []
+        for url in sorted.prefix(Self.maxStoredReports) {
+            guard let data = try? Data(contentsOf: url),
+                  let diag = try? decoder.decode(Diagnostic.self, from: data) else { continue }
+            result.append((url, diag))
+        }
+        return result
+    }
+
+    /// Deletes only the files we've actually loaded into memory, leaving any
+    /// unrelated content in the directory untouched and any reports that
+    /// arrive *after* this call intact for the next launch.
+    private func clearLoadedFiles() {
+        for url in loadedFileURLs {
             try? FileManager.default.removeItem(at: url)
         }
+        loadedFileURLs.removeAll()
     }
 
     private nonisolated static func directoryURL() -> URL? {
@@ -192,10 +250,11 @@ extension CrashDiagnosticsManager: MXMetricManagerSubscriber {
                 // Hang duration is the headline number for ranking severity:
                 // `0x8BADF00D` watchdog kills and `0xDEAD10CC` background-task
                 // overruns both surface here, and the wall-clock duration is
-                // the single most useful signal to triage them.
-                let value = diag.hangDuration.value
-                let unit = diag.hangDuration.unit.symbol
-                let summary = "Hang \(value)\(unit)"
+                // the single most useful signal to triage them. Normalise to
+                // seconds with one decimal so the toast reads "Hang 5.3s"
+                // instead of "Hang 5.341277ms" or similar raw-unit ugliness.
+                let seconds = diag.hangDuration.converted(to: .seconds).value
+                let summary = String(format: "Hang %.1fs", seconds)
                 let details = String(data: diag.jsonRepresentation(), encoding: .utf8) ?? "<binary>"
                 Self.writeSync(kind: .hang, summary: summary, details: details)
             }
