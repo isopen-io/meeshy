@@ -26,7 +26,7 @@ nonisolated enum NSEDataSync {
         conversationId: String,
         messageId: String,
         apiBaseURL: String,
-        completion: @escaping (Bool) -> Void
+        completion: @escaping @Sendable (Bool) -> Void
     ) {
         guard let token = readAuthToken() else {
             completion(false)
