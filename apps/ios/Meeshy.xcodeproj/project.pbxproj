@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		NSEDS002 /* NSEDataSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEDS001 /* NSEDataSync.swift */; };
-		NSEPC002 /* NSEPendingMessageConsumer.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEPC001 /* NSEPendingMessageConsumer.swift */; };
 		009B4248B90F6AC8EE19E3B7 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22D7D8C0B82CB88F1D3D5CA2 /* AppDelegate.swift */; };
 		00CDA82D2AC8F3D9847F02C4 /* StatsTimelineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA306483025A83773D87DED /* StatsTimelineChart.swift */; };
 		031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7789A854759F389975CB9906 /* FeedViewModelTests.swift */; };
@@ -159,16 +157,7 @@
 		D4E5F6A7B8C9D0E1F2A3B4D8 /* iPadRootView+Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4D7 /* iPadRootView+Navigation.swift */; };
 		D4E5F6A7B8C9D0E1F2A3B4D9 /* iPadRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* iPadRootView.swift */; };
 		D5A1B2C3E4F506A7B8C9D0E2 /* DraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1B2C3E4F506A7B8C9D0E1 /* DraftStore.swift */; };
-		EHS0020020020020020001 /* EditHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EHS0010010010010010001 /* EditHistoryStore.swift */; };
-		LHM0020020020020020001 /* LocallyHiddenMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */; };
-		SMS0020020020020020001 /* StarredMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMS0010010010010010001 /* StarredMessagesStore.swift */; };
-		LPS0020020020020020001 /* LinkPreviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPS0010010010010010001 /* LinkPreviewStore.swift */; };
-		LPC0020020020020020001 /* LinkPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPC0010010010010010001 /* LinkPreviewCard.swift */; };
-		SMV0020020020020020001 /* StarredMessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMV0010010010010010001 /* StarredMessagesView.swift */; };
 		D5A1B2C3E4F506A7B8C9D0E4 /* DraftStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */; };
-		EHST02002002002002001 /* EditHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EHST01001001001001001 /* EditHistoryStoreTests.swift */; };
-		LHMT02002002002002001 /* LocallyHiddenMessagesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */; };
-		SMST02002002002002001 /* StarredMessagesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMST01001001001001001 /* StarredMessagesStoreTests.swift */; };
 		D90603ED4F5C335BE9FA78D9 /* BlockedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F573D0F41F068B1CDCAB79C6 /* BlockedViewModel.swift */; };
 		D974F1384869B32923B076E7 /* StoryViewerContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8B729437578B76EC6727BF0 /* StoryViewerContainer.swift */; };
 		DD0100000000004F01 /* ConversationDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0100000000003F01 /* ConversationDashboardView.swift */; };
@@ -201,6 +190,8 @@
 		EE55FF66AA77BB88CC990043 /* ConversationBackgroundComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA77BB88CC990042 /* ConversationBackgroundComponents.swift */; };
 		EE88FF99AA00BB11CC220001 /* EmojiPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */; };
 		EF01020304050607080900AC /* EffectsPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF01020304050607080900AB /* EffectsPickerView.swift */; };
+		EHS0020020020020020001 /* EditHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EHS0010010010010010001 /* EditHistoryStore.swift */; };
+		EHST02002002002002001 /* EditHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EHST01001001001001001 /* EditHistoryStoreTests.swift */; };
 		EMVF0001000100010001001 /* EmailVerificationViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EMVF0001000100010001000 /* EmailVerificationViewModelTests.swift */; };
 		EVVM001B001B001B001B0002 /* EmailVerificationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVVM001A001A001A001A0001 /* EmailVerificationViewModel.swift */; };
 		F2632D3F2F8049F90061F392 /* README 2.md in Resources */ = {isa = PBXBuildFile; fileRef = F2632D3E2F8049F90061F392 /* README 2.md */; };
@@ -233,8 +224,13 @@
 		LABR01C1C1C1C1C1C1C10001 /* LiveActivityBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LABR01C1C1C1C1C1C1C10002 /* LiveActivityBridge.swift */; };
 		LANG001A001A001A001A0002 /* LanguagePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = LANG001A001A001A001A0001 /* LanguagePickerSheet.swift */; };
 		LGCT0100000002F001 /* Logger+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = LGCT0100000001F001 /* Logger+Categories.swift */; };
+		CDM00100010001000100B001 /* CrashDiagnosticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDM00100010001000100F001 /* CrashDiagnosticsManager.swift */; };
 		LH6001A001A001A001A00001 /* LinksHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LH6002A002A002A002A00002 /* LinksHubView.swift */; };
+		LHM0020020020020020001 /* LocallyHiddenMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */; };
+		LHMT02002002002002001 /* LocallyHiddenMessagesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */; };
 		LICV002A002A002A002A0002 /* LicensesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LICV001A001A001A001A0001 /* LicensesView.swift */; };
+		LPC0020020020020020001 /* LinkPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPC0010010010010010001 /* LinkPreviewCard.swift */; };
+		LPS0020020020020020001 /* LinkPreviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = LPS0010010010010010001 /* LinkPreviewStore.swift */; };
 		MAPM000100010001000100B0 /* MeeshyAudioProcessingModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAPM000100010001000100F0 /* MeeshyAudioProcessingModule.swift */; };
 		MAPT000100010001000100B0 /* MeeshyAudioProcessingModuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAPT000100010001000100F0 /* MeeshyAudioProcessingModuleTests.swift */; };
 		MASK0001000100010001001 /* MockAuthServiceSDK.swift in Sources */ = {isa = PBXBuildFile; fileRef = MASK0001000100010001000 /* MockAuthServiceSDK.swift */; };
@@ -262,6 +258,8 @@
 		MVPS0001000100010001001 /* MockVoiceProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MVPS0001000100010001000 /* MockVoiceProfileService.swift */; };
 		NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NEWCONV001A3B4C5D6E7F8901 /* NewConversationView.swift */; };
 		NRST0001000100010001001 /* NavigationStateRestorationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NRST0001000100010001000 /* NavigationStateRestorationTests.swift */; };
+		NSEDS002 /* NSEDataSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEDS001 /* NSEDataSync.swift */; };
+		NSEPC002 /* NSEPendingMessageConsumer.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEPC001 /* NSEPendingMessageConsumer.swift */; };
 		NTFY0001000100010001001 /* NotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NTFY0001000100010001000 /* NotificationTests.swift */; };
 		NTIF002A002A002A002A0002 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */; };
 		OB2900000000002F29 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OB2900000000001F29 /* OnboardingView.swift */; };
@@ -285,6 +283,9 @@
 		SECV002A002A002A002A0002 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SECV001A001A001A001A0001 /* SecurityView.swift */; };
 		SETT002A002A002A002A0002 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SETT001A001A001A001A0001 /* SettingsView.swift */; };
 		SL6001A001A001A001A00001 /* ShareLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SL6002A002A002A002A00002 /* ShareLinksView.swift */; };
+		SMS0020020020020020001 /* StarredMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMS0010010010010010001 /* StarredMessagesStore.swift */; };
+		SMST02002002002002001 /* StarredMessagesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMST01001001001001001 /* StarredMessagesStoreTests.swift */; };
+		SMV0020020020020020001 /* StarredMessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMV0010010010010010001 /* StarredMessagesView.swift */; };
 		SP3400000000002F34 /* SharePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SP3400000000001F34 /* SharePickerView.swift */; };
 		SUPV002A002A002A002A0002 /* SupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SUPV001A001A001A001A0001 /* SupportView.swift */; };
 		TD6001A001A001A001A00001 /* TrackingLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TD6002A002A002A002A00002 /* TrackingLinkDetailView.swift */; };
@@ -358,8 +359,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		NSEDS001 /* NSEDataSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDataSync.swift; sourceTree = "<group>"; };
-		NSEPC001 /* NSEPendingMessageConsumer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEPendingMessageConsumer.swift; sourceTree = "<group>"; };
 		00075CCB07F2C17B7B703EDB /* MeeshyWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = MeeshyWidgets.entitlements; sourceTree = "<group>"; };
 		00B3D9B4A2850060E2C9470D /* FloatingCallPillView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FloatingCallPillView.swift; sourceTree = "<group>"; };
 		0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliateCreateView.swift; sourceTree = "<group>"; };
@@ -368,7 +367,7 @@
 		0A8803B4442F5F663F4D5B63 /* ConversationListHelpers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationListHelpers.swift; sourceTree = "<group>"; };
 		12EC32EE90955ED041C92F06 /* ConversationViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationViewModelTests.swift; sourceTree = "<group>"; };
 		13A020468B6C8367F8121928 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		147B06F4C6BA47BCD48D03C6 /* PresenceManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift; sourceTree = SOURCE_ROOT; };
+		147B06F4C6BA47BCD48D03C6 /* apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift; sourceTree = SOURCE_ROOT; };
 		161B698A5C7ABD5B61A9F071 /* ThemedMessageBubble+Media.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ThemedMessageBubble+Media.swift"; sourceTree = "<group>"; };
 		17FD2C4BEA6C9C218634F16B /* CallTranscriptionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CallTranscriptionService.swift; sourceTree = "<group>"; };
 		18D41D2818B5E73E616A792D /* MeeshyWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyWidgets.swift; sourceTree = "<group>"; };
@@ -523,16 +522,7 @@
 		D4E5F6A7B8C9D0E1F2A3B4D5 /* iPadRootView+Overlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Overlays.swift"; sourceTree = "<group>"; };
 		D4E5F6A7B8C9D0E1F2A3B4D7 /* iPadRootView+Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Navigation.swift"; sourceTree = "<group>"; };
 		D5A1B2C3E4F506A7B8C9D0E1 /* DraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStore.swift; sourceTree = "<group>"; };
-		EHS0010010010010010001 /* EditHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditHistoryStore.swift; sourceTree = "<group>"; };
-		LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocallyHiddenMessagesStore.swift; sourceTree = "<group>"; };
-		SMS0010010010010010001 /* StarredMessagesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStore.swift; sourceTree = "<group>"; };
-		LPS0010010010010010001 /* LinkPreviewStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewStore.swift; sourceTree = "<group>"; };
-		LPC0010010010010010001 /* LinkPreviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewCard.swift; sourceTree = "<group>"; };
-		SMV0010010010010010001 /* StarredMessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesView.swift; sourceTree = "<group>"; };
 		D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStoreTests.swift; sourceTree = "<group>"; };
-		EHST01001001001001001 /* EditHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditHistoryStoreTests.swift; sourceTree = "<group>"; };
-		LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocallyHiddenMessagesStoreTests.swift; sourceTree = "<group>"; };
-		SMST01001001001001001 /* StarredMessagesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStoreTests.swift; sourceTree = "<group>"; };
 		D6E7F8091A2B3C4D5E6F7081 /* ReplyThreadOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyThreadOverlay.swift; sourceTree = "<group>"; };
 		DA190704EDDA2E1CA660F898 /* OnboardingStepViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingStepViews.swift; sourceTree = "<group>"; };
 		DD0100000000003F01 /* ConversationDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDashboardView.swift; sourceTree = "<group>"; };
@@ -556,6 +546,8 @@
 		EE55FF66AA77BB88CC990042 /* ConversationBackgroundComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationBackgroundComponents.swift; sourceTree = "<group>"; };
 		EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiPickerSheet.swift; sourceTree = "<group>"; };
 		EF01020304050607080900AB /* EffectsPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsPickerView.swift; sourceTree = "<group>"; };
+		EHS0010010010010010001 /* EditHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditHistoryStore.swift; sourceTree = "<group>"; };
+		EHST01001001001001001 /* EditHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditHistoryStoreTests.swift; sourceTree = "<group>"; };
 		EMVF0001000100010001000 /* EmailVerificationViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationViewModelTests.swift; sourceTree = "<group>"; };
 		EVVM001A001A001A001A0001 /* EmailVerificationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationViewModel.swift; sourceTree = "<group>"; };
 		F2632D3E2F8049F90061F392 /* README 2.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "README 2.md"; sourceTree = "<group>"; };
@@ -593,8 +585,13 @@
 		LABR01C1C1C1C1C1C1C10002 /* LiveActivityBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiveActivityBridge.swift; sourceTree = "<group>"; };
 		LANG001A001A001A001A0001 /* LanguagePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguagePickerSheet.swift; sourceTree = "<group>"; };
 		LGCT0100000001F001 /* Logger+Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Logger+Categories.swift"; sourceTree = "<group>"; };
+		CDM00100010001000100F001 /* CrashDiagnosticsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CrashDiagnosticsManager.swift"; sourceTree = "<group>"; };
 		LH6002A002A002A002A00002 /* LinksHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinksHubView.swift; sourceTree = "<group>"; };
+		LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocallyHiddenMessagesStore.swift; sourceTree = "<group>"; };
+		LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocallyHiddenMessagesStoreTests.swift; sourceTree = "<group>"; };
 		LICV001A001A001A001A0001 /* LicensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensesView.swift; sourceTree = "<group>"; };
+		LPC0010010010010010001 /* LinkPreviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewCard.swift; sourceTree = "<group>"; };
+		LPS0010010010010010001 /* LinkPreviewStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewStore.swift; sourceTree = "<group>"; };
 		MAPM000100010001000100F0 /* MeeshyAudioProcessingModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAudioProcessingModule.swift; sourceTree = "<group>"; };
 		MAPT000100010001000100F0 /* MeeshyAudioProcessingModuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAudioProcessingModuleTests.swift; sourceTree = "<group>"; };
 		MASK0001000100010001000 /* MockAuthServiceSDK.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAuthServiceSDK.swift; sourceTree = "<group>"; };
@@ -622,6 +619,8 @@
 		MVPS0001000100010001000 /* MockVoiceProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockVoiceProfileService.swift; sourceTree = "<group>"; };
 		NEWCONV001A3B4C5D6E7F8901 /* NewConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationView.swift; sourceTree = "<group>"; };
 		NRST0001000100010001000 /* NavigationStateRestorationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateRestorationTests.swift; sourceTree = "<group>"; };
+		NSEDS001 /* NSEDataSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDataSync.swift; sourceTree = "<group>"; };
+		NSEPC001 /* NSEPendingMessageConsumer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEPendingMessageConsumer.swift; sourceTree = "<group>"; };
 		NTFY0001000100010001000 /* NotificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationTests.swift; sourceTree = "<group>"; };
 		NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		OB2900000000001F29 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
@@ -645,6 +644,9 @@
 		SECV001A001A001A001A0001 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
 		SETT001A001A001A001A0001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		SL6002A002A002A002A00002 /* ShareLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinksView.swift; sourceTree = "<group>"; };
+		SMS0010010010010010001 /* StarredMessagesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStore.swift; sourceTree = "<group>"; };
+		SMST01001001001001001 /* StarredMessagesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStoreTests.swift; sourceTree = "<group>"; };
+		SMV0010010010010010001 /* StarredMessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesView.swift; sourceTree = "<group>"; };
 		SP3400000000001F34 /* SharePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePickerView.swift; sourceTree = "<group>"; };
 		SUPV001A001A001A001A0001 /* SupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportView.swift; sourceTree = "<group>"; };
 		TD6002A002A002A002A00002 /* TrackingLinkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinkDetailView.swift; sourceTree = "<group>"; };
@@ -748,7 +750,7 @@
 				LANG001A001A001A001A0001 /* LanguagePickerSheet.swift */,
 				CC4000000000001F40 /* ContactCardView.swift */,
 				MEFF00000000001F01 /* MessageEffectModifiers.swift */,
-					LPC0010010010010010001 /* LinkPreviewCard.swift */,
+				LPC0010010010010010001 /* LinkPreviewCard.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -932,7 +934,7 @@
 				25AD7697AD569462191E395F /* DataExportView.swift */,
 				00B3D9B4A2850060E2C9470D /* FloatingCallPillView.swift */,
 				823B2865CE9642B487B0FC22 /* VideoFilterControlView.swift */,
-					SMV0010010010010010001 /* StarredMessagesView.swift */,
+				SMV0010010010010010001 /* StarredMessagesView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -967,12 +969,13 @@
 				409C08F1FC8A1E6C810690CF /* E2EAPI.swift */,
 				A35C370F515C4807CB86FA5E /* E2EEService.swift */,
 				LGCT0100000001F001 /* Logger+Categories.swift */,
+				CDM00100010001000100F001 /* CrashDiagnosticsManager.swift */,
 				PS3900000000001F39 /* ParticipantService.swift */,
 				D5A1B2C3E4F506A7B8C9D0E1 /* DraftStore.swift */,
-					EHS0010010010010010001 /* EditHistoryStore.swift */,
-					LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */,
-					SMS0010010010010010001 /* StarredMessagesStore.swift */,
-					LPS0010010010010010001 /* LinkPreviewStore.swift */,
+				EHS0010010010010010001 /* EditHistoryStore.swift */,
+				LHM0010010010010010001 /* LocallyHiddenMessagesStore.swift */,
+				SMS0010010010010010001 /* StarredMessagesStore.swift */,
+				LPS0010010010010010001 /* LinkPreviewStore.swift */,
 				17FD2C4BEA6C9C218634F16B /* CallTranscriptionService.swift */,
 				AA5D13830922E297A0AF6C50 /* VideoFilterPipeline.swift */,
 				CFCF53B6AD169522F7F20047 /* ThermalStateMonitor.swift */,
@@ -1228,7 +1231,7 @@
 			isa = PBXGroup;
 			children = (
 				AA7E08B0D1609D24446F93BE /* AnonymousSessionStoreTests.swift */,
-				147B06F4C6BA47BCD48D03C6 /* PresenceManagerTests.swift */,
+				147B06F4C6BA47BCD48D03C6 /* apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift */,
 				A1B893097A2EDC16D20579F8 /* ConversationLockManagerTests.swift */,
 				5F682CF63D510A2E111E7BD1 /* PresenceManagerTests.swift */,
 				F96C9A03A8540DCCEB3528A8 /* AuthServiceTests.swift */,
@@ -1238,9 +1241,9 @@
 				5FEFAB456AD3F85FCBCDC078 /* PresenceManagerTests.swift */,
 				1DBCE13E5C724D3BCB34B45B /* APIServiceTests.swift */,
 				D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */,
-					EHST01001001001001001 /* EditHistoryStoreTests.swift */,
-					LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */,
-					SMST01001001001001001 /* StarredMessagesStoreTests.swift */,
+				EHST01001001001001001 /* EditHistoryStoreTests.swift */,
+				LHMT01001001001001001 /* LocallyHiddenMessagesStoreTests.swift */,
+				SMST01001001001001001 /* StarredMessagesStoreTests.swift */,
 				AUPL0001000100010001002 /* AudioPlayerManagerTests.swift */,
 				AURC0001000100010001002 /* AudioRecorderManagerTests.swift */,
 				CAET000100010001000100F0 /* CallAudioEffectsServiceTests.swift */,
@@ -1380,7 +1383,7 @@
 			mainGroup = 4B839730A63FC9359E52BECF;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AABB001100220055 /* XCLocalSwiftPackageReference "MeeshySDK" */,
+				AABB001100220055 /* XCLocalSwiftPackageReference "../../packages/MeeshySDK" */,
 			);
 			productRefGroup = F121C0AAA9428DB850C5DC59 /* Products */;
 			projectDirPath = "";
@@ -1590,6 +1593,7 @@
 				VP01000000000002F001 /* VoiceProfileWizardView.swift in Sources */,
 				VP02000000000002F002 /* VoiceProfileManageView.swift in Sources */,
 				LGCT0100000002F001 /* Logger+Categories.swift in Sources */,
+				CDM00100010001000100B001 /* CrashDiagnosticsManager.swift in Sources */,
 				CM3600000000002F36 /* CallManager.swift in Sources */,
 				BT3600000000002F36 /* BackgroundTaskManager.swift in Sources */,
 				VP3600000000002F36 /* VoIPPushManager.swift in Sources */,
@@ -1634,12 +1638,12 @@
 				EDD817AE0118AEBF9FE37640 /* E2EEService.swift in Sources */,
 				42662443FBC51E2F08ABE46F /* UserProfileViewModel.swift in Sources */,
 				D5A1B2C3E4F506A7B8C9D0E2 /* DraftStore.swift in Sources */,
-					EHS0020020020020020001 /* EditHistoryStore.swift in Sources */,
-					LHM0020020020020020001 /* LocallyHiddenMessagesStore.swift in Sources */,
-					SMS0020020020020020001 /* StarredMessagesStore.swift in Sources */,
-					LPS0020020020020020001 /* LinkPreviewStore.swift in Sources */,
-					LPC0020020020020020001 /* LinkPreviewCard.swift in Sources */,
-					SMV0020020020020020001 /* StarredMessagesView.swift in Sources */,
+				EHS0020020020020020001 /* EditHistoryStore.swift in Sources */,
+				LHM0020020020020020001 /* LocallyHiddenMessagesStore.swift in Sources */,
+				SMS0020020020020020001 /* StarredMessagesStore.swift in Sources */,
+				LPS0020020020020020001 /* LinkPreviewStore.swift in Sources */,
+				LPC0020020020020020001 /* LinkPreviewCard.swift in Sources */,
+				SMV0020020020020020001 /* StarredMessagesView.swift in Sources */,
 				447EB12B85279B3E448C2456 /* BlockedTab.swift in Sources */,
 				D90603ED4F5C335BE9FA78D9 /* BlockedViewModel.swift in Sources */,
 				44C6640DF69BEB3FF362DE4A /* ContactsHubView.swift in Sources */,
@@ -1706,9 +1710,9 @@
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,
 				D240F5AC635D4F38FD26A6A1 /* APIServiceTests.swift in Sources */,
 				D5A1B2C3E4F506A7B8C9D0E4 /* DraftStoreTests.swift in Sources */,
-					EHST02002002002002001 /* EditHistoryStoreTests.swift in Sources */,
-					LHMT02002002002002001 /* LocallyHiddenMessagesStoreTests.swift in Sources */,
-					SMST02002002002002001 /* StarredMessagesStoreTests.swift in Sources */,
+				EHST02002002002002001 /* EditHistoryStoreTests.swift in Sources */,
+				LHMT02002002002002001 /* LocallyHiddenMessagesStoreTests.swift in Sources */,
+				SMST02002002002002001 /* StarredMessagesStoreTests.swift in Sources */,
 				AUPL0001000100010001001 /* AudioPlayerManagerTests.swift in Sources */,
 				AURC0001000100010001001 /* AudioRecorderManagerTests.swift in Sources */,
 				MCAE000100010001000100B0 /* MockCallAudioEffectsService.swift in Sources */,
@@ -1888,7 +1892,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 161;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
@@ -1981,7 +1985,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Meeshy/Meeshy.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 161;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
@@ -2210,7 +2214,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		AABB001100220055 /* XCLocalSwiftPackageReference "MeeshySDK" */ = {
+		AABB001100220055 /* XCLocalSwiftPackageReference "../../packages/MeeshySDK" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../packages/MeeshySDK;
 		};

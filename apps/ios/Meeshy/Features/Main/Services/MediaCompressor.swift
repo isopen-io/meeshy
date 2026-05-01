@@ -168,6 +168,7 @@ actor MediaCompressor {
         let targetSize = fitSize(sourceSize, within: context.maxVideoResolution)
         let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
         let targetFPS = min(nominalFrameRate, 30)
+        let transform = try await videoTrack.load(.preferredTransform)
 
         let useHEVC = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
         let codecType: AVVideoCodecType = useHEVC ? .hevc : .h264

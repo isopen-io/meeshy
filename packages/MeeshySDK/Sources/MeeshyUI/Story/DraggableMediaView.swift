@@ -392,13 +392,13 @@ public struct DraggableMediaView: View {
         // video swaps (composer flipping between clips) could land last-completed
         // ratio AFTER the latest URL took effect, painting the wrong proportions.
         aspectRatioTask?.cancel()
-        aspectRatioTask = Task.detached(priority: .userInitiated) {
+        aspectRatioTask = Task {
             do {
                 guard let size = try await AVURLAsset.naturalDisplaySize(of: url),
                       size.width > 0, size.height > 0 else { return }
                 try Task.checkCancellation()
                 let ratio = size.width / size.height
-                await MainActor.run { resolveCallback(ratio) }
+                resolveCallback(ratio)
             } catch is CancellationError {
                 // Expected when a fresher URL arrived; drop quietly.
             } catch {

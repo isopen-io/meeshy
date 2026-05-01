@@ -23,16 +23,6 @@
         }
       }
     },
-    "%@ — %@" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ — %2$@"
-          }
-        }
-      }
-    },
     "%@ %@" : {
       "localizations" : {
         "fr" : {
@@ -117,6 +107,9 @@
     "%llds" : {
 
     },
+    "%llds max" : {
+
+    },
     "🏘️" : {
 
     },
@@ -147,11 +140,55 @@
     "Ajouter un tag..." : {
 
     },
-    "Arrêter l'enregistrement" : {
+    "Annuler" : {
 
     },
     "Aucun membre trouve" : {
 
+    },
+    "audio.recorder.micDenied" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Permission micro refusée"
+          }
+        }
+      }
+    },
+    "audio.recorder.record" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enregistrer"
+          }
+        }
+      }
+    },
+    "audio.recorder.recording" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enregistrement"
+          }
+        }
+      }
+    },
+    "audio.recorder.tapToRecord" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appuyez pour enregistrer"
+          }
+        }
+      }
     },
     "auth.country.AU" : {
       "extractionState" : "extracted_with_value",
@@ -2254,6 +2291,12 @@
       }
     },
     "Bannir" : {
+
+    },
+    "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes." : {
+
+    },
+    "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire." : {
 
     },
     "common.cancel" : {
@@ -6172,29 +6215,7 @@
         }
       }
     },
-    "conversation.settings.delete.confirm.message" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Cette action est irreversible. La conversation et tous ses messages seront supprimes pour tous les membres."
-          }
-        }
-      }
-    },
     "conversation.settings.delete.confirm.title" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Supprimer la conversation"
-          }
-        }
-      }
-    },
-    "conversation.settings.delete.label" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "fr" : {
@@ -7102,6 +7123,9 @@
 
     },
     "Expulser" : {
+
+    },
+    "Fermer" : {
 
     },
     "Filtre %@" : {
@@ -8586,6 +8610,9 @@
         }
       }
     },
+    "Langue du contenu" : {
+
+    },
     "Langues: %@" : {
 
     },
@@ -8771,9 +8798,6 @@
       }
     },
     "Lu" : {
-
-    },
-    "Maintenir pour enregistrer" : {
 
     },
     "media.audio.cancel" : {
@@ -11361,9 +11385,6 @@
     "OK" : {
 
     },
-    "Où placer ce %@ ?" : {
-
-    },
     "Pause" : {
 
     },
@@ -12747,7 +12768,13 @@
     "Promouvoir Moderateur" : {
 
     },
+    "Read" : {
+
+    },
     "Rechercher un membre..." : {
+
+    },
+    "Rechercher une langue" : {
 
     },
     "Retour" : {
@@ -13358,28 +13385,6 @@
         }
       }
     },
-    "story.canvas.moveToBack" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Mettre en fond"
-          }
-        }
-      }
-    },
-    "story.canvas.moveToFront" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Mettre au premier plan"
-          }
-        }
-      }
-    },
     "story.canvas.sendToBack" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -13503,6 +13508,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Áudio"
+          }
+        }
+      }
+    },
+    "story.composer.backgroundBadge" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fond"
           }
         }
       }
@@ -13879,6 +13895,17 @@
         }
       }
     },
+    "story.composer.emptyText" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Texte vide"
+          }
+        }
+      }
+    },
     "story.composer.filter" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14035,6 +14062,17 @@
         }
       }
     },
+    "story.composer.loadingImage" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Chargement de l'image..."
+          }
+        }
+      }
+    },
     "story.composer.loadingVideo" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14053,6 +14091,28 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Media"
+          }
+        }
+      }
+    },
+    "story.composer.moveToBackground" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mettre en fond"
+          }
+        }
+      }
+    },
+    "story.composer.moveToForeground" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mettre en premier plan"
           }
         }
       }
@@ -14959,6 +15019,17 @@
         }
       }
     },
+    "story.filters.intensity" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intensite"
+          }
+        }
+      }
+    },
     "story.music.searchPlaceholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -15030,7 +15101,7 @@
       }
     },
     "story.placement.background" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -15065,7 +15136,7 @@
       }
     },
     "story.placement.backgroundSubtitle" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -15100,7 +15171,7 @@
       }
     },
     "story.placement.foreground" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -15135,7 +15206,7 @@
       }
     },
     "story.placement.foregroundSubtitle" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16080,7 +16151,7 @@
       }
     },
     "story.timeline.bgImageElement" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16115,7 +16186,7 @@
       }
     },
     "story.timeline.bgVideo" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16395,7 +16466,7 @@
       }
     },
     "story.toolbar.background" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16425,6 +16496,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fundo"
+          }
+        }
+      }
+    },
+    "story.toolbar.contenu" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "CONTENU"
           }
         }
       }
@@ -16499,6 +16581,17 @@
         }
       }
     },
+    "story.toolbar.effets" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "EFFETS"
+          }
+        }
+      }
+    },
     "story.toolbar.filter" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16534,8 +16627,19 @@
         }
       }
     },
-    "story.toolbar.media" : {
+    "story.toolbar.filters" : {
       "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Filtres"
+          }
+        }
+      }
+    },
+    "story.toolbar.media" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16565,6 +16669,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Mídia"
+          }
+        }
+      }
+    },
+    "story.toolbar.photo" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo"
           }
         }
       }
@@ -16605,7 +16720,7 @@
       }
     },
     "story.toolbar.timeline" : {
-      "extractionState" : "stale",
+      "extractionState" : "extracted_with_value",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16709,7 +16824,49 @@
         }
       }
     },
+    "story.voiceRecorder.holdToRecord" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appuyez pour enregistrer"
+          }
+        }
+      }
+    },
+    "story.voiceRecorder.start" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enregistrer"
+          }
+        }
+      }
+    },
+    "story.voiceRecorder.stop" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arrêter l'enregistrement"
+          }
+        }
+      }
+    },
     "Supprimer" : {
+
+    },
+    "Supprimer pour moi" : {
+
+    },
+    "Supprimer pour moi ?" : {
+
+    },
+    "Supprimer pour tous" : {
 
     },
     "Tap to open full map" : {

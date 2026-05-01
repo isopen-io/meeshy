@@ -180,6 +180,11 @@ struct MeeshyApp: App {
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
+                    // Surface any crash/hang reports captured since the last
+                    // foreground. Done after the splash + session work so the
+                    // toast lands on a stable UI rather than racing the splash
+                    // animation.
+                    surfacePendingCrashReports()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
@@ -297,6 +302,43 @@ struct MeeshyApp: App {
             object: payload
         )
         pushManager.clearPendingNotification()
+    }
+
+    // MARK: - Crash Diagnostics Surfacing
+
+    /// Drains the queue of crash/hang reports captured since the last
+    /// foreground and shows a single toast describing the most recent one.
+    /// Each report is also logged via `Logger.crash` so the full call stack
+    /// is grep-able in Console.app under subsystem `me.meeshy.app` /
+    /// category `crash`.
+    private func surfacePendingCrashReports() {
+        let reports = CrashDiagnosticsManager.shared.consumePending()
+        guard let mostRecent = reports.first else { return }
+
+        let isoFormatter = ISO8601DateFormatter()
+        for report in reports {
+            let when = isoFormatter.string(from: report.timestamp)
+            Logger.crash.error("""
+                [\(report.kind.rawValue, privacy: .public)] \
+                \(when, privacy: .public) — \
+                \(report.summary, privacy: .public)
+                \(report.details, privacy: .public)
+                """)
+        }
+
+        let kindLabel: String
+        switch mostRecent.kind {
+        case .nsException: kindLabel = "Exception"
+        case .crash: kindLabel = "Crash"
+        case .hang: kindLabel = "Blocage"
+        case .cpuException: kindLabel = "Pic CPU"
+        case .diskWriteException: kindLabel = "Ecriture disque"
+        }
+        let extra = reports.count > 1 ? " (+\(reports.count - 1))" : ""
+        toastManager.show(
+            "\(kindLabel) precedent\(extra) : \(mostRecent.summary)",
+            type: .info
+        )
     }
 
     // MARK: - App Lifecycle Transitions
