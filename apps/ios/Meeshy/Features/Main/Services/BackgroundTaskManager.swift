@@ -46,12 +46,14 @@ final class BackgroundTaskManager {
             forTaskWithIdentifier: Self.conversationSyncTaskId,
             using: nil
         ) { task in
+            // BGTaskScheduler delivers on an arbitrary background queue.
+            // We must NOT access @MainActor state directly here.
             guard let refreshTask = task as? BGAppRefreshTask else {
                 task.setTaskCompleted(success: false)
                 return
             }
-            Task { @MainActor [weak self] in
-                await self?.handleConversationSync(task: refreshTask)
+            Task {
+                await BackgroundTaskManager.shared.handleConversationSync(task: refreshTask)
             }
         }
 
@@ -63,8 +65,8 @@ final class BackgroundTaskManager {
                 task.setTaskCompleted(success: false)
                 return
             }
-            Task { @MainActor [weak self] in
-                await self?.handleMessagePrefetch(task: processingTask)
+            Task {
+                await BackgroundTaskManager.shared.handleMessagePrefetch(task: processingTask)
             }
         }
 

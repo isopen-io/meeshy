@@ -320,9 +320,9 @@ public struct UserIdentityBar: View {
         case .delivered:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 10, weight: .regular))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 10, weight: .regular))
                     .offset(x: 4)
             }
             .foregroundColor(secondaryColor)

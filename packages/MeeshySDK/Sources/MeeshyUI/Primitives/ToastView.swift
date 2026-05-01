@@ -31,12 +31,14 @@ public struct Toast: Equatable {
     public let message: String
     public let type: ToastType
     public let icon: String
+    public let isTappable: Bool
 
-    public init(message: String, type: ToastType, icon: String? = nil) {
+    public init(message: String, type: ToastType, icon: String? = nil, isTappable: Bool = false) {
         self.id = UUID()
         self.message = message
         self.type = type
         self.icon = icon ?? type.defaultIcon
+        self.isTappable = isTappable
     }
 
     public static func == (lhs: Toast, rhs: Toast) -> Bool {
@@ -63,6 +65,13 @@ public struct ToastView: View {
                 .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(.white)
                 .lineLimit(2)
+
+            if toast.isTappable {
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.7))
+            }
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.md)

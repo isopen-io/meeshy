@@ -469,9 +469,9 @@ struct AudioMediaView: View {
         case .delivered:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 9, weight: .regular))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 9, weight: .regular))
                     .offset(x: 3)
             }
             .foregroundColor(metaColor)

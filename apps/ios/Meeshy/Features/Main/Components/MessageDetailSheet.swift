@@ -3,6 +3,7 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 import NaturalLanguage
+import os
 
 // MARK: - DetailTab
 
@@ -1025,7 +1026,7 @@ struct MessageDetailSheet: View {
                     }
                 }
             } else {
-                emptyStateView(icon: "wifi.slash", text: "Impossible de charger les donnees", accent: accent)
+                retryableErrorView(accent: accent)
             }
         }
     }
@@ -1061,7 +1062,7 @@ struct MessageDetailSheet: View {
                     }
                 }
             } else {
-                emptyStateView(icon: "wifi.slash", text: "Impossible de charger les donnees", accent: accent)
+                retryableErrorView(accent: accent)
             }
         }
     }
@@ -1098,7 +1099,7 @@ struct MessageDetailSheet: View {
                     }
                 }
             } else {
-                emptyStateView(icon: "wifi.slash", text: "Impossible de charger les donnees", accent: accent)
+                retryableErrorView(accent: accent)
             }
         }
     }
@@ -1367,6 +1368,30 @@ struct MessageDetailSheet: View {
             Text(text)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(theme.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+    }
+
+    private func retryableErrorView(accent: Color) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 28, weight: .light))
+                .foregroundColor(theme.textMuted.opacity(0.4))
+            Text(readStatusError ?? "Impossible de charger les donnees")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.textMuted)
+            Button {
+                readStatusData = nil
+                Task { await loadReadStatus() }
+            } label: {
+                Text("Reessayer")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(accent))
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
@@ -2231,9 +2256,11 @@ struct MessageDetailSheet: View {
                 readStatusData = response.data
             } else {
                 readStatusError = "Erreur serveur"
+                Logger.network.error("read-status error: success=false")
             }
         } catch {
             readStatusError = "Erreur de connexion"
+            Logger.network.error("read-status decode/network error: \(error)")
         }
     }
 
