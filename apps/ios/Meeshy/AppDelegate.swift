@@ -14,6 +14,16 @@ class AppDelegate: NSObject, @preconcurrency UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Install the crash & hang observer first so any crash that happens
+        // during the rest of `didFinishLaunching` (or at any later point in
+        // this session) is captured. MetricKit also delivers diagnostics
+        // recorded during *previous* sessions here, which is the whole point:
+        // background crashes were previously invisible because no reporter
+        // was wired up.
+        Task { @MainActor in
+            CrashDiagnosticsManager.shared.install()
+        }
+
         UNUserNotificationCenter.current().delegate = self
         registerNotificationCategories()
         BackgroundTaskManager.shared.registerTasks()
