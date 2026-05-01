@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -104,8 +105,8 @@ export class PostService {
   constructor(private readonly prisma: PrismaClient) {}
 
   async createPost(data: {
-    type: string;
-    visibility: string;
+    type: PostType;
+    visibility: PostVisibility;
     visibilityUserIds?: string[];
     content?: string;
     originalLanguage?: string;
@@ -120,9 +121,9 @@ export class PostService {
     const now = new Date();
     let expiresAt: Date | undefined;
 
-    if (data.type === 'STORY') {
+    if (data.type === PostType.STORY) {
       expiresAt = new Date(now.getTime() + STORY_EXPIRY_HOURS * 3600_000);
-    } else if (data.type === 'STATUS') {
+    } else if (data.type === PostType.STATUS) {
       expiresAt = new Date(now.getTime() + STATUS_EXPIRY_HOURS * 3600_000);
     }
 
@@ -131,8 +132,8 @@ export class PostService {
     const post = await this.prisma.post.create({
       data: {
         authorId: userId,
-        type: data.type as any,
-        visibility: data.visibility as any,
+        type: data.type,
+        visibility: data.visibility,
         visibilityUserIds: data.visibilityUserIds ?? [],
         content: data.content,
         originalLanguage,
@@ -188,7 +189,7 @@ export class PostService {
     }
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
-    if (data.type === 'STORY' && data.content) {
+    if (data.type === PostType.STORY && data.content) {
       this.triggerStoryTextTranslation(post.id, data.content, userId).catch(() => {});
     }
 
@@ -411,16 +412,16 @@ export class PostService {
   /// queries apply the same rules.
   private async buildVisibilityFilter(viewerUserId?: string) {
     if (!viewerUserId) {
-      return { visibility: 'PUBLIC' as const };
+      return { visibility: PostVisibility.PUBLIC };
     }
     const friendIds = await this.getFriendIdsForViewer(viewerUserId);
     return {
       OR: [
         { authorId: viewerUserId },
-        { visibility: 'PUBLIC' },
-        { visibility: 'FRIENDS', authorId: { in: friendIds } },
-        { visibility: 'EXCEPT', authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerUserId } } },
-        { visibility: 'ONLY', visibilityUserIds: { has: viewerUserId } },
+        { visibility: PostVisibility.PUBLIC },
+        { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
+        { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerUserId } } },
+        { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerUserId } },
       ],
     };
   }
@@ -443,7 +444,7 @@ export class PostService {
 
   async updatePost(postId: string, userId: string, data: {
     content?: string;
-    visibility?: string;
+    visibility?: PostVisibility;
     visibilityUserIds?: string[];
     storyEffects?: Record<string, unknown>;
     moodEmoji?: string;
@@ -459,7 +460,7 @@ export class PostService {
 
     const updateData: any = {
       ...data,
-      visibility: data.visibility as any,
+      visibility: data.visibility,
       storyEffects: (data.storyEffects as any) ?? undefined,
       isEdited: true,
     };
@@ -747,7 +748,7 @@ export class PostService {
     const repost = await this.prisma.post.create({
       data: {
         authorId: userId,
-        type: 'POST',
+        type: PostType.POST,
         visibility: original.visibility,
         content: content ?? undefined,
         originalLanguage,

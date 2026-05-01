@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 
 const authorSelect = {
@@ -97,7 +98,7 @@ export class PostFeedService {
     // Phase 1 — Fetch candidates
     const where: any = {
       isDeleted: false,
-      type: 'POST',
+      type: PostType.POST,
       visibility: { in: ['PUBLIC', 'FRIENDS'] },
       // Exclude expired (isSet: false matches MongoDB docs where field is absent)
       OR: [
@@ -182,7 +183,7 @@ export class PostFeedService {
 
     const where: any = {
       isDeleted: false,
-      type: 'STORY',
+      type: PostType.STORY,
       AND: [
         visibilityFilter,
         { OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }] },
@@ -223,7 +224,7 @@ export class PostFeedService {
 
     const whereClause: any = {
       isDeleted: false,
-      type: 'STATUS',
+      type: PostType.STATUS,
       AND: [
         visibilityFilter,
         { OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }] },
@@ -263,8 +264,8 @@ export class PostFeedService {
 
     const where: any = {
       isDeleted: false,
-      type: 'STATUS',
-      visibility: 'PUBLIC',
+      type: PostType.STATUS,
+      visibility: PostVisibility.PUBLIC,
       AND: [
         { OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }] },
       ],
@@ -303,7 +304,7 @@ export class PostFeedService {
     const where: any = {
       authorId: targetUserId,
       isDeleted: false,
-      type: 'POST',
+      type: PostType.POST,
     };
 
     // Visibility filter
@@ -340,7 +341,7 @@ export class PostFeedService {
     const where: any = {
       communityId,
       isDeleted: false,
-      type: 'POST',
+      type: PostType.POST,
       visibility: { in: ['PUBLIC', 'COMMUNITY'] },
     };
 
@@ -411,10 +412,10 @@ export class PostFeedService {
     return {
       OR: [
         { authorId: viewerId },
-        { visibility: 'PUBLIC' },
-        { visibility: 'FRIENDS', authorId: { in: friendIds } },
-        { visibility: 'EXCEPT', authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerId } } },
-        { visibility: 'ONLY', visibilityUserIds: { has: viewerId } },
+        { visibility: PostVisibility.PUBLIC },
+        { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
+        { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerId } } },
+        { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },
       ],
     };
   }
