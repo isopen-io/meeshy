@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PostService } from '../../services/PostService';
 import { PostCommentService } from '../../services/PostCommentService';
+import { PostType, PostVisibility } from '@meeshy/shared/prisma/client';
 
 // PostAudioService uses a singleton that requires initialization — mock it entirely
 // so PostService tests don't depend on ZMQ / SocialEventsHandler setup.
@@ -117,8 +118,8 @@ describe('PostService', () => {
 
   describe('createPost', () => {
     const basePostData = {
-      type: 'POST',
-      visibility: 'PUBLIC',
+      type: PostType.POST,
+      visibility: PostVisibility.PUBLIC,
     };
 
     it('creates a post and links mediaIds without mobileTranscription', async () => {
