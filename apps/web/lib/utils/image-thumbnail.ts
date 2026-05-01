@@ -152,7 +152,7 @@ export async function createThumbnailsBatch(
  */
 export function isLowEndDevice(): boolean {
   // Vérifier la mémoire disponible
-  const memory = (navigator as any).deviceMemory;
+  const memory = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
   if (memory && memory < 4) return true;
   
   // Vérifier le nombre de CPU

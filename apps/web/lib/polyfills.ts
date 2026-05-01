@@ -19,14 +19,14 @@ if (typeof Promise.allSettled === 'undefined') {
 
 // Polyfill pour structuredClone (manquant sur certains navigateurs)
 if (typeof structuredClone === 'undefined') {
-  (globalThis as any).structuredClone = function <T>(obj: T): T {
+  (globalThis as unknown as Record<string, unknown>).structuredClone = function <T>(obj: T): T {
     return JSON.parse(JSON.stringify(obj));
   };
 }
 
 // Polyfill pour queueMicrotask (manquant sur certains navigateurs)
 if (typeof queueMicrotask === 'undefined') {
-  (globalThis as any).queueMicrotask = function (callback: () => void) {
+  (globalThis as unknown as Record<string, unknown>).queueMicrotask = function (callback: () => void) {
     Promise.resolve().then(callback);
   };
 }
@@ -36,13 +36,13 @@ if (typeof window !== 'undefined') {
   try {
     window.localStorage.setItem('__test__', '1');
     window.localStorage.removeItem('__test__');
-  } catch (e) {
+  } catch {
     console.warn('[Polyfill] localStorage not available, using in-memory storage');
 
     // Créer un fallback en mémoire
     const memoryStorage: Record<string, string> = {};
 
-    (window as any).localStorage = {
+    Object.defineProperty(window, 'localStorage', { value: {
       getItem: (key: string) => memoryStorage[key] || null,
       setItem: (key: string, value: string) => {
         memoryStorage[key] = value;
@@ -60,33 +60,41 @@ if (typeof window !== 'undefined') {
         const keys = Object.keys(memoryStorage);
         return keys[index] || null;
       },
-    };
+    }, writable: true });
   }
 }
 
 // Fix pour IntersectionObserver (ancien Android)
 if (typeof IntersectionObserver === 'undefined' && typeof window !== 'undefined') {
   console.warn('[Polyfill] IntersectionObserver not available');
-  // Créer un stub basique
-  (window as any).IntersectionObserver = class IntersectionObserver {
-    constructor(callback: any) {
-      this.callback = callback;
+  const StubObserver = class {
+    private _callback: IntersectionObserverCallback;
+    constructor(callback: IntersectionObserverCallback) {
+      this._callback = callback;
+      void this._callback;
     }
     observe() {}
     unobserve() {}
     disconnect() {}
-    private callback: any;
+    takeRecords(): IntersectionObserverEntry[] { return []; }
+    get root() { return null; }
+    get rootMargin() { return '0px'; }
+    get thresholds() { return [0]; }
   };
+  Object.defineProperty(window, 'IntersectionObserver', { value: StubObserver, writable: true });
 }
 
 // Fix pour navigator.connection (manquant sur certains navigateurs)
-if (typeof navigator !== 'undefined' && !(navigator as any).connection) {
-  (navigator as any).connection = {
-    effectiveType: '4g',
-    downlink: 10,
-    rtt: 50,
-    saveData: false,
-  };
+if (typeof navigator !== 'undefined' && !('connection' in navigator)) {
+  Object.defineProperty(navigator, 'connection', {
+    value: {
+      effectiveType: '4g',
+      downlink: 10,
+      rtt: 50,
+      saveData: false,
+    },
+    writable: true,
+  });
 }
 
 console.info('[Polyfills] Polyfills loaded successfully');

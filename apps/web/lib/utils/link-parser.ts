@@ -2,7 +2,7 @@
  * Utilitaires pour parser et gérer les liens dans les messages
  */
 
-import { buildApiUrl, API_ENDPOINTS } from '../config';
+import { buildApiUrl } from '../config';
 
 import { authManager } from '@/services/auth-manager.service';
 
@@ -162,7 +162,7 @@ export async function createTrackingLink(
     conversationId?: string;
     messageId?: string;
   } = {}
-): Promise<{ success: boolean; trackingLink?: any; error?: string }> {
+): Promise<{ success: boolean; trackingLink?: unknown; error?: string }> {
   // Vérifier que nous sommes côté client
   if (typeof window === 'undefined') {
     return { success: false, error: 'Function only available on client side' };

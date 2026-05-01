@@ -268,18 +268,19 @@ const componentCache = new Map();
 /**
  * Fonction utilitaire pour obtenir un composant avec cache
  */
-export function getUIComponent(componentName: string) {
+export async function getUIComponent(componentName: string) {
   if (componentCache.has(componentName)) {
     return componentCache.get(componentName);
   }
-  
+
   // Import dynamique pour les composants non critiques
-  const component = require('@/components/ui/' + componentName.toLowerCase())[componentName];
+  const mod = await import(`@/components/ui/${componentName.toLowerCase()}`);
+  const component = mod[componentName];
   if (component) {
     componentCache.set(componentName, component);
     return component;
   }
-  
+
   return null;
 }
 
