@@ -6,10 +6,8 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useCallStore } from '@/stores/call-store';
-import { useAuth } from '@/hooks/use-auth';
 import { CallNotification } from './CallNotification';
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
 import { logger } from '@/utils/logger';
@@ -27,8 +25,6 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 const CALL_TIMEOUT_MS = 30000; // 30 seconds
 
 export function CallManager() {
-  const router = useRouter();
-  const { user, isChecking } = useAuth();
   const {
     currentCall,
     isInCall,
@@ -82,7 +78,7 @@ export function CallManager() {
         // Emit leave event to server
         const socket = meeshySocketIOService.getSocket();
         if (socket) {
-          (socket as any).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
+          (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
         }
 
         // Reset local state
@@ -212,13 +208,12 @@ export function CallManager() {
     (event: CallParticipantLeftEvent) => {
       logger.info('[CallManager]', 'Participant left - callId: ' + event.callId + ', participantId: ' + event.participantId, {
         userId: event.userId,
-        anonymousId: (event as any).anonymousId,
+        anonymousId: (event as unknown).anonymousId,
         mode: event.mode
       });
 
       // Use userId for WebRTC cleanup (peer connections and streams are tracked by userId)
-      const userIdForCleanup = event.userId || (event as any).anonymousId;
-
+      const userIdForCleanup = event.userId || (event as unknown).anonymousId;
 
       if (userIdForCleanup) {
         // Remove their stream and peer connection (tracked by userId)
@@ -320,7 +315,7 @@ export function CallManager() {
         throw new Error('No socket connection');
       }
 
-      (socket as any).emit(CLIENT_EVENTS.CALL_JOIN, {
+      (socket as unknown).emit(CLIENT_EVENTS.CALL_JOIN, {
         callId: incomingCall.callId,
         settings: {
           audioEnabled: true,
@@ -346,7 +341,7 @@ export function CallManager() {
       setIncomingCall(null);
 
       logger.info('[CallManager]', 'Call accepted - callId: ' + incomingCall.callId);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('[CallManager]', 'Failed to accept call: ' + (error?.message || 'Unknown error'));
       toast.error('Failed to join call');
       setIncomingCall(null);
@@ -372,7 +367,7 @@ export function CallManager() {
     // Emit leave event
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as any).emit(CLIENT_EVENTS.CALL_LEAVE, {
+      (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, {
         callId: incomingCall.callId,
       });
     }
@@ -409,9 +404,9 @@ export function CallManager() {
     if (isChecking || !user?.id) return;
 
     let isSubscribed = true;
-    let debugListenerRef: ((eventName: string, ...args: any[]) => void) | null = null;
+    let debugListenerRef: ((eventName: string, ...args: unknown[]) => void) | null = null;
 
-    const attachListeners = (socket: any) => {
+    const attachListeners = (socket: unknown) => {
       if (!isSubscribed || !socket?.connected) return;
 
       // Cleanup existing listeners to avoid duplicates
@@ -424,7 +419,7 @@ export function CallManager() {
       if (debugListenerRef) socket.offAny(debugListenerRef);
 
       // Debug listener for call events
-      debugListenerRef = (eventName: string, ...args: any[]) => {
+      debugListenerRef = (eventName: string, ...args: unknown[]) => {
         if (eventName.startsWith('call:')) {
           console.log('📡 [CallManager] Socket event:', eventName, args);
         }
@@ -434,11 +429,11 @@ export function CallManager() {
       // Attach via refs (stable references that don't cause re-fires)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Socket.IO listener args are typed by the handler ref
       socket.on(SERVER_EVENTS.CALL_INITIATED, (data: any) => handleIncomingCallRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, (data: any) => handleParticipantJoinedRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, (data: any) => handleParticipantLeftRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_ENDED, (data: any) => handleCallEndedRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, (data: any) => handleMediaToggleRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_ERROR, (data: any) => handleCallErrorRef.current(data));
+      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, (data: unknown) => handleParticipantJoinedRef.current(data));
+      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, (data: unknown) => handleParticipantLeftRef.current(data));
+      socket.on(SERVER_EVENTS.CALL_ENDED, (data: unknown) => handleCallEndedRef.current(data));
+      socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, (data: unknown) => handleMediaToggleRef.current(data));
+      socket.on(SERVER_EVENTS.CALL_ERROR, (data: unknown) => handleCallErrorRef.current(data));
 
       console.log('✅ [CallManager] All call listeners registered', {
         socketId: socket.id,

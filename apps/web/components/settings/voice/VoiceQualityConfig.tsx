@@ -1,12 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Loader2, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useI18n } from '@/hooks/useI18n';
 import type { VoiceQualityAnalysis } from '@meeshy/shared/types/voice-api';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -102,7 +100,6 @@ function QualityMetric({ label, value, unit = '', description, goodRange }: Qual
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQualityConfigProps) {
-  const { t } = useI18n('settings');
 
   if (isLoading) {
     return (
@@ -272,7 +269,7 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
       {/* Energy Analysis */}
       <Card>
         <CardHeader>
-          <CardTitle>Analyse d'énergie</CardTitle>
+          <CardTitle>Analyse d&apos;énergie</CardTitle>
           <CardDescription>Niveau sonore et dynamique</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -313,7 +310,7 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
               <Badge variant="secondary">{analysis.classification.gender}</Badge>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground mb-1">Tranche d'âge</div>
+              <div className="text-sm text-muted-foreground mb-1">Tranche d&apos;âge</div>
               <Badge variant="secondary">{analysis.classification.ageRange}</Badge>
             </div>
           </div>

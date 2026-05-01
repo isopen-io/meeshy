@@ -49,7 +49,7 @@ import { useAutoRetryFailedMessages } from '@/hooks/use-auto-retry-failed-messag
 import { useFCMNotifications } from '@/hooks/use-fcm-notifications';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 
-import type { Conversation, Message, UserRoleEnum } from '@meeshy/shared/types';
+import type { Conversation } from '@meeshy/shared/types';
 import type { FailedMessage } from '@/stores/failed-messages-store';
 
 import { createOptimisticMessage } from '@/utils/optimistic-message';
@@ -80,7 +80,7 @@ const AuthCheckingLoader = (
   <div className="flex items-center justify-center min-h-screen bg-background">
     <div className="text-center">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
-      <p className="text-muted-foreground">Vérification de l'authentification...</p>
+      <p className="text-muted-foreground">Vérification de l&apos;authentification...</p>
     </div>
   </div>
 );
@@ -186,7 +186,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   } = useTranslationState();
 
   // Participants
-  const { participants, participantsRef, loadParticipants } = useParticipants({
+  const { participants, _participantsRef, loadParticipants } = useParticipants({
     conversationId: effectiveSelectedId,
   });
 
@@ -263,8 +263,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     hasMore,
     loadMore,
     refresh: refreshMessages,
-    clearMessages,
-    addMessage,
+    _clearMessages,
+    _addMessage,
     updateMessage,
     removeMessage,
     addOptimisticMessage,
@@ -530,7 +530,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     [effectiveSelectedId, handleSelectConversation]
   );
 
-  const handleReplyMessage = useCallback((message: any) => {
+  const handleReplyMessage = useCallback((message: unknown) => {
     useReplyStore.getState().setReplyingTo({
       id: message.id,
       content: message.content,
@@ -683,8 +683,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       (m): m is OptimisticMessage => '_tempId' in m && (m as OptimisticMessage)._tempId === tempId
     );
     const sendPayload = failedMessage?._sendPayload ?? {};
-    const forwardedFromId = (failedMessage as any)?.forwardedFromId;
-    const forwardedFromConversationId = (failedMessage as any)?.forwardedFromConversationId;
+    const forwardedFromId = (failedMessage as unknown)?.forwardedFromId;
+    const forwardedFromConversationId = (failedMessage as unknown)?.forwardedFromConversationId;
 
     removeOptimisticMessage(tempId);
 
@@ -694,10 +694,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       conversationId: selectedConversation.id,
       language,
       replyToId,
-      replyTo: (failedMessage as any)?.replyTo,
+      replyTo: (failedMessage as unknown)?.replyTo,
       forwardedFromId,
       forwardedFromConversationId,
-      messageType: (failedMessage as any)?.messageType,
+      messageType: (failedMessage as unknown)?.messageType,
       sender: { id: user.id, userId: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
       sendPayload,
     });
@@ -760,7 +760,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       setNewMessage(failedMsg.content);
       setSelectedLanguage(failedMsg.originalLanguage);
       if (failedMsg.attachmentIds.length > 0) setAttachmentIds(failedMsg.attachmentIds);
-      if (failedMsg.replyTo) useReplyStore.getState().setReplyingTo(failedMsg.replyTo as any);
+      if (failedMsg.replyTo) useReplyStore.getState().setReplyingTo(failedMsg.replyTo as unknown);
       setTimeout(() => messageComposerRef.current?.focus(), 100);
       toast.info(t('messageRestored') || 'Message restauré.');
     },
@@ -798,7 +798,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     [selectedConversation?.id, user, sendMessageViaSocket]
   );
 
-  const handleConversationUpdated = useCallback(
+  const _handleConversationUpdated = useCallback(
     (updatedData: Partial<Conversation>) => {
       if (!selectedConversation) return;
       setConversations(prev =>

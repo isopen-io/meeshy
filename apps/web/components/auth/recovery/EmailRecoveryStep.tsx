@@ -12,7 +12,7 @@ interface EmailRecoveryStepProps {
   onBack: () => void;
   isLoading: boolean;
   error: string | null;
-  honeypotProps: any;
+  honeypotProps: unknown;
   t: (key: string) => string | undefined;
 }
 

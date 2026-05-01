@@ -28,7 +28,7 @@ export default function BroadcastDetailPage() {
   const params = useParams();
   const id = params.id as string;
 
-  const [broadcast, setBroadcast] = useState<any>(null);
+  const [broadcast, setBroadcast] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [selectedLang, setSelectedLang] = useState<string>('');

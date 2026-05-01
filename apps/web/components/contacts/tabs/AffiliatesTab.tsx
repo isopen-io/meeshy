@@ -23,7 +23,7 @@ interface AffiliateRelation {
 interface AffiliatesTabProps {
   affiliateRelations: AffiliateRelation[];
   getUserDisplayName: (user: User) => string;
-  t: (key: string, params?: any) => string;
+  t: (key: string, params?: unknown) => string;
 }
 
 const AffiliatesTab = React.memo<AffiliatesTabProps>(({

@@ -8,7 +8,7 @@
 'use client';
 
 import { forwardRef, useImperativeHandle, useEffect, KeyboardEvent, useMemo, useCallback, useState, useRef } from 'react';
-import { Send, MapPin, X, MessageCircle, Languages, Paperclip, Loader2, Mic } from 'lucide-react';
+import { MapPin, X, MessageCircle, Languages, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,10 +22,8 @@ import { MentionAutocomplete } from '../MentionAutocomplete';
 
 // Hooks intégrés (Phase 1-3)
 import { usePerformanceProfile } from '@/hooks/usePerformanceProfile';
-import { getAnimationConfig } from '@/constants/animations';
 import { useComposerState } from '@/hooks/composer/useComposerState';
 import { useClipboardPaste } from '@/hooks/composer/useClipboardPaste';
-import { useUploadRetry } from '@/hooks/composer/useUploadRetry';
 import { useI18n } from '@/hooks/useI18n';
 
 // Components animés (Phase 6)
@@ -133,8 +131,6 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
 
     // Performance profile (Phase 1)
     const performanceProfile = usePerformanceProfile();
-    const animConfig = getAnimationConfig(performanceProfile);
-
     // Typing detection pour DynamicGlow (Phase 6)
     const [isTyping, setIsTyping] = useState(false);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -171,7 +167,6 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
     }, []);
 
     // Upload retry logic (Phase 1)
-    const { uploadWithRetry, retryStatus } = useUploadRetry({ maxRetries: 3 });
 
     // Clipboard paste handler (Phase 3)
     const { handlePaste } = useClipboardPaste({
@@ -184,8 +179,8 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
       const textarea = composerState.textareaRef.current;
       if (!textarea) return;
 
-      textarea.addEventListener('paste', handlePaste as any);
-      return () => textarea.removeEventListener('paste', handlePaste as any);
+      textarea.addEventListener('paste', handlePaste as unknown);
+      return () => textarea.removeEventListener('paste', handlePaste as unknown);
     }, [handlePaste, composerState.textareaRef]);
 
     // Expose methods via ref

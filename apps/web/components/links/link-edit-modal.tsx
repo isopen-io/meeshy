@@ -49,10 +49,10 @@ export function LinkEditModal({ link, isOpen, onClose, onUpdate }: LinkEditModal
     allowAnonymousImages: link.allowAnonymousImages,
     allowAnonymousFiles: link.allowAnonymousFiles,
     allowViewHistory: link.allowViewHistory,
-    requireAccount: (link as any).requireAccount || false,
+    requireAccount: (link as unknown).requireAccount || false,
     requireNickname: link.requireNickname,
     requireEmail: link.requireEmail,
-    requireBirthday: (link as any).requireBirthday || false
+    requireBirthday: (link as unknown).requireBirthday || false
   });
 
   // Quand requireAccount est activé, activer automatiquement toutes les permissions

@@ -38,7 +38,7 @@ interface CreateConversationModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser: User;
-  onConversationCreated: (conversationId: string, conversationData?: any) => void;
+  onConversationCreated: (conversationId: string, conversationData?: unknown) => void;
 }
 
 /**

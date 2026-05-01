@@ -22,7 +22,6 @@ export function PageHeader({
   actionButtons,
   hideNotificationButton,
   hideProfileButton,
-  onBack,
   children,
 }: PageHeaderProps) {
   const { goBackToList, isMobile, showRightPanel } = useSplitView();

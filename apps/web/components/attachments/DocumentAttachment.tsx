@@ -71,7 +71,7 @@ export const DocumentAttachment = React.memo(function DocumentAttachment({
   if (documentType === 'pdf') {
     return (
       <PDFViewerWrapper
-        attachment={documentAttachment as any}
+        attachment={documentAttachment as unknown}
         onOpenLightbox={handleOpenLightbox}
         onDelete={canDelete ? handleDelete : undefined}
         canDelete={canDelete}
@@ -82,7 +82,7 @@ export const DocumentAttachment = React.memo(function DocumentAttachment({
   if (documentType === 'pptx') {
     return (
       <PPTXViewer
-        attachment={documentAttachment as any}
+        attachment={documentAttachment as unknown}
         onOpenLightbox={handleOpenLightbox}
         onDelete={canDelete ? handleDelete : undefined}
         canDelete={canDelete}
@@ -93,7 +93,7 @@ export const DocumentAttachment = React.memo(function DocumentAttachment({
   if (documentType === 'markdown') {
     return (
       <MarkdownViewer
-        attachment={documentAttachment as any}
+        attachment={documentAttachment as unknown}
         onOpenLightbox={handleOpenLightbox}
         onDelete={canDelete ? handleDelete : undefined}
         canDelete={canDelete}
@@ -105,7 +105,7 @@ export const DocumentAttachment = React.memo(function DocumentAttachment({
     return (
       <div className="relative">
         <TextViewer
-          attachment={documentAttachment as any}
+          attachment={documentAttachment as unknown}
           onOpenLightbox={handleOpenLightbox}
         />
         {canDelete && (

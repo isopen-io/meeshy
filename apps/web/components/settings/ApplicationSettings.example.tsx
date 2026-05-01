@@ -269,7 +269,7 @@ function SettingsLoadingFallback() {
   );
 }
 
-function SettingsErrorFallback({ error, resetErrorBoundary }: any) {
+function SettingsErrorFallback({ error, resetErrorBoundary }: unknown) {
   return (
     <Alert variant="destructive" className="m-8">
       <AlertCircle className="h-4 w-4" />

@@ -107,7 +107,7 @@ export function FontPreview({ fontFamily, className, showInfo = false }: FontPre
           </div>
           <div className={`text-sm font-medium ${fontConfig.cssClass}`} 
                style={{ fontFamily: `var(${fontConfig.variable})` }}>
-            Texte moyen - Nom d'utilisateur
+            Texte moyen - Nom d&apos;utilisateur
           </div>
           <div className={`text-sm font-semibold ${fontConfig.cssClass}`} 
                style={{ fontFamily: `var(${fontConfig.variable})` }}>

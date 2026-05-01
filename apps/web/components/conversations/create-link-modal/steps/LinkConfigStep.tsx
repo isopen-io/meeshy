@@ -1,16 +1,5 @@
 'use client';
 
-import {
-  MessageSquare,
-  Link2,
-  Shield,
-  Globe,
-  ChevronRight,
-  ChevronDown
-} from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { useI18n } from '@/hooks/useI18n';
 import type { Conversation, User } from '@meeshy/shared/types';
 import type { NewConversationData } from '../types';
 import { ConversationSection } from './config-sections/ConversationSection';
@@ -59,7 +48,6 @@ interface LinkConfigStepProps {
 }
 
 export function LinkConfigStep(props: LinkConfigStepProps) {
-  const { t } = useI18n('modals');
 
   return (
     <div className="space-y-8">

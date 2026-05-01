@@ -1,15 +1,15 @@
 'use client';
 
-import React, { memo, useState } from 'react';
-import { Play, Pause, AlertTriangle, Gauge, Download, Globe, FileText, Loader2, Languages, Check, Sparkles, Volume2, Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React, { memo } from 'react';
+
+import { Gauge, Globe, FileText, Loader2, Check, Sparkles, Plus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { formatTime, snapPlaybackRate } from '@/utils/audio-formatters';
+import { formatTime } from '@/utils/audio-formatters';
 import { LANGUAGE_NAMES } from '@/utils/audio-effects-config';
 import type { TranslatedAudioData } from '@meeshy/shared/types/socketio-events';
 
@@ -73,8 +73,7 @@ interface AudioControlsProps {
  * Optimisé avec React.memo pour éviter les re-renders inutiles
  */
 export const AudioControls = memo<AudioControlsProps>(({
-  isPlaying,
-  isLoading,
+  _isPlaying,
   hasError,
   errorMessage,
   duration,
@@ -94,14 +93,7 @@ export const AudioControls = memo<AudioControlsProps>(({
   isTranscriptionExpanded,
   setIsTranscriptionExpanded,
   requestTranscription,
-  isTranslating,
-  translationError,
   requestTranslation,
-  isTranslationDropdownOpen,
-  setIsTranslationDropdownOpen,
-  objectUrl,
-  downloadFileName,
-  onTogglePlay,
 }) => {
   return (
     <div className="flex items-center justify-center gap-2">
@@ -240,7 +232,7 @@ export const AudioControls = memo<AudioControlsProps>(({
                     >
                       <div className="relative flex-shrink-0 w-6 h-6 rounded bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center mt-0.5">
                         <span className="text-sm">{langInfo?.flag || '🌐'}</span>
-                        {(audio as any).cloned && (
+                        {(audio as unknown).cloned && (
                           <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-purple-600 rounded-full flex items-center justify-center" title="Voix clonée">
                             <Sparkles className="w-2 h-2 text-white" />
                           </div>
@@ -255,9 +247,9 @@ export const AudioControls = memo<AudioControlsProps>(({
                             <Check className="w-3 h-3 text-blue-600" />
                           )}
                         </div>
-                        {(audio as any).translatedText && (
+                        {(audio as unknown).translatedText && (
                           <p className="text-[10px] text-gray-600 dark:text-gray-400 line-clamp-2">
-                            {(audio as any).translatedText.substring(0, 80)}...
+                            {(audio as unknown).translatedText.substring(0, 80)}...
                           </p>
                         )}
                       </div>

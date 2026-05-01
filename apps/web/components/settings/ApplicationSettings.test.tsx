@@ -265,7 +265,7 @@ describe('ApplicationSettings', () => {
     });
 
     it('should show success message after save', async () => {
-      const { toast } = require('sonner');
+      import { toast } from 'sonner';
 
       // Make a change
       const switches = screen.getAllByRole('switch');
@@ -281,7 +281,7 @@ describe('ApplicationSettings', () => {
     });
 
     it('should show error message if save fails', async () => {
-      const { toast } = require('sonner');
+      import { toast } from 'sonner';
 
       // Mock failed save (first call returns prefs, second call fails)
       (global.fetch as jest.Mock)
@@ -353,7 +353,7 @@ describe('ApplicationSettings', () => {
     });
 
     it('should reset tutorials when reset button is clicked', async () => {
-      const { toast } = require('sonner');
+      import { toast } from 'sonner';
       const user = userEvent.setup();
 
       const resetButton = screen.getByText(/Reset/i);

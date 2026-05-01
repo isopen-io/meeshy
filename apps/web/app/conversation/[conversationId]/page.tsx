@@ -74,7 +74,7 @@ export async function generateMetadata({ params }: ConversationPageProps): Promi
   notFound();
 }
 
-export default async function ConversationPage({ params }: ConversationPageProps) {
+export default async function ConversationPage({ _params }: ConversationPageProps) {
   // Rediriger vers la page de conversation dans l'application
   return (
     <div className="flex items-center justify-center min-h-screen">

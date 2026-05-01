@@ -16,7 +16,7 @@ export interface CommentComposerProps {
 }
 
 function CommentComposer({
-  postId,
+  _postId,
   parentId,
   parentAuthor,
   currentUser,

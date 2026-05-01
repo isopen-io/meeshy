@@ -31,7 +31,6 @@ import {
 } from 'lucide-react';
 import { PermissionsService } from '@/services/permissions.service';
 import { toast } from 'sonner';
-import { useAppStore } from '@/stores/app-store';
 import { preloadRouteModules } from '@/lib/lazy-components';
 import {
   DropdownMenu,
@@ -51,8 +50,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const theme = useAppStore((state) => state.theme);
-  const setTheme = useAppStore((state) => state.setTheme);
 
   // Vérifier l'accès admin avec useEffect pour éviter setState pendant render
   useEffect(() => {

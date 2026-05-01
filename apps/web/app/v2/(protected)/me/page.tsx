@@ -186,7 +186,7 @@ export default function V2ProfilePage() {
       await logout();
       addToast('Deconnexion reussie', 'success');
       router.push('/v2/login');
-    } catch (err) {
+    } catch (_err) {
       addToast('Erreur lors de la deconnexion', 'error');
       setIsLoggingOut(false);
     }
@@ -197,7 +197,7 @@ export default function V2ProfilePage() {
       await updateProfile(data);
       addToast('Profil mis a jour avec succes', 'success');
       setIsEditModalOpen(false);
-    } catch (err) {
+    } catch (_err) {
       addToast('Erreur lors de la mise a jour du profil', 'error');
     }
   };

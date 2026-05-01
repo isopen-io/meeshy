@@ -118,11 +118,11 @@ function detectDevice(ua: string): string {
 // Collecte complète des données navigateur
 // =============================================================================
 
-function collectBrowserData(): Record<string, any> {
+function collectBrowserData(): Record<string, unknown> {
   const ua = navigator.userAgent;
   const ref = document.referrer;
 
-  const data: Record<string, any> = {
+  const data: Record<string, unknown> = {
     // Données de base enrichies
     userAgent: ua,
     browser: detectBrowser(ua),
@@ -159,11 +159,11 @@ function collectBrowserData(): Record<string, any> {
 
   // Device memory (Chrome only)
   if ('deviceMemory' in navigator) {
-    data.deviceMemory = (navigator as any).deviceMemory;
+    data.deviceMemory = (navigator as unknown).deviceMemory;
   }
 
   // Connection info (Chrome only)
-  const conn = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+  const conn = (navigator as unknown).connection || (navigator as unknown).mozConnection || (navigator as unknown).webkitConnection;
   if (conn) {
     data.connectionType = conn.effectiveType || conn.type || undefined;
     data.connectionSpeed = conn.downlink || undefined;
@@ -312,14 +312,14 @@ export default function TrackingLinkPage() {
               Lien introuvable
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Ce lien de tracking n'existe pas ou a expiré.
+              Ce lien de tracking n&apos;existe pas ou a expiré.
             </p>
           </div>
           <a
             href="/"
             className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Retour à l'accueil
+            Retour à l&apos;accueil
           </a>
         </div>
       </div>

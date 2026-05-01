@@ -56,7 +56,7 @@ import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitia
 interface ConversationParticipantsDrawerProps {
   conversationId: string;
   participants: Participant[];
-  currentUser: any;
+  currentUser: unknown;
   isGroup: boolean;
   conversationType?: string;
   userConversationRole?: UserRoleEnum | string;
@@ -72,13 +72,9 @@ export function ConversationParticipantsDrawer({
   conversationId,
   participants,
   currentUser,
-  isGroup,
-  conversationType,
-  userConversationRole,
   memberCount,
   onParticipantRemoved,
   onParticipantAdded,
-  onLinkCreated,
   onOpenSettings
 }: ConversationParticipantsDrawerProps) {
   const { t } = useI18n('conversations');
@@ -149,7 +145,7 @@ export function ConversationParticipantsDrawer({
     try {
       await manualRefresh();
       toast.success('Statuts rafraîchis');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du rafraîchissement');
     }
   };
@@ -252,8 +248,6 @@ export function ConversationParticipantsDrawer({
       });
 
   // Separer en ligne / hors ligne via getUserStatus (temps reel)
-  const _tick = useUserStore(state => state._lastStatusUpdate);
-  const getUserByIdFn = useUserStore(state => state.getUserById);
   const onlineParticipants = filteredParticipants.filter(p => {
     const storeUser = p.userId ? getUserByIdFn(p.userId) : undefined;
     return getUserStatus(storeUser || p.user as ParticipantUser) === 'online';
@@ -307,7 +301,7 @@ export function ConversationParticipantsDrawer({
       };
 
       toast.success(`Rôle mis à jour avec succès: ${roleNames[newRole]}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la mise à jour du rôle:', error);
       toast.error(error.message || 'Erreur lors de la mise à jour du rôle');
     } finally {
@@ -329,7 +323,7 @@ export function ConversationParticipantsDrawer({
     return null;
   };
 
-  const handleUserInvited = (user: any) => {
+  const handleUserInvited = (user: unknown) => {
     onParticipantAdded?.(user);
     toast.success(`${user.displayName || user.username} a été invité à la conversation`);
   };
@@ -369,7 +363,7 @@ export function ConversationParticipantsDrawer({
       toast.success(`${user.displayName || user.username} ajouté comme ${roleLabels[role]}`);
       setSearchQuery('');
       setPlatformResults([]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de l\'ajout du participant:', error);
       toast.error(error.message || 'Erreur lors de l\'ajout du participant');
     } finally {

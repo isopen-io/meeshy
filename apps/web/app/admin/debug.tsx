@@ -11,10 +11,10 @@ import { authManager } from '@/services/auth-manager.service';
 
 interface DebugInfo {
   token: string | null;
-  userFromLocalStorage: any;
-  userFromAPI: any;
-  permissionsFromAPI: any;
-  permissionsFromDefault: any;
+  userFromLocalStorage: unknown;
+  userFromAPI: unknown;
+  permissionsFromAPI: unknown;
+  permissionsFromDefault: unknown;
   canAccessAdmin: boolean;
   role: string;
 }
@@ -94,7 +94,7 @@ const AdminDebug: React.FC = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Debug - Accès Administration</h1>
         <Button onClick={() => router.push('/admin')}>
-          Retour à l'admin
+          Retour à l&apos;admin
         </Button>
       </div>
 
@@ -113,7 +113,7 @@ const AdminDebug: React.FC = () => {
                 <strong>Rôle:</strong> {debugInfo.role}
               </div>
               <div>
-                <strong>Peut accéder à l'admin:</strong> 
+                <strong>Peut accéder à l&apos;admin:</strong> 
                 <span className={debugInfo.canAccessAdmin ? 'text-green-600 ml-2' : 'text-red-600 ml-2'}>
                   {debugInfo.canAccessAdmin ? 'Oui' : 'Non'}
                 </span>

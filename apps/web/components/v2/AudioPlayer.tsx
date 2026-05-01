@@ -73,7 +73,7 @@ function PauseIcon({ className }: { className?: string }) {
 }
 
 const BAR_COUNT = 32;
-const BAR_GAP = 2;
+const _BAR_GAP = 2;
 const BAR_WIDTH = 3;
 
 export function AudioPlayer({

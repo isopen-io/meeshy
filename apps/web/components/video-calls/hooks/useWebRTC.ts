@@ -8,7 +8,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { WebRTCService } from '@/services/webrtc-service';
 import { logger } from '@/utils/logger';
-import { toast } from 'sonner';
 
 export interface UseWebRTCOptions {
   onError?: (error: Error) => void;
@@ -94,7 +93,7 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
       }
 
       const constraints = videoTrack.getConstraints();
-      const currentFacingMode = (constraints as any).facingMode || 'user';
+      const currentFacingMode = (constraints as unknown).facingMode || 'user';
       const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
 
       const newStream = await navigator.mediaDevices.getUserMedia({

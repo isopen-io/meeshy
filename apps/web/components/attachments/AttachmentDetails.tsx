@@ -82,7 +82,7 @@ export function AttachmentDetails({
         };
         let effectDisplay = '';
         // audioEffectsTimeline est stocké dans metadata
-        const audioEffectsTimeline = (attachment as any).metadata?.audioEffectsTimeline;
+        const audioEffectsTimeline = (attachment as unknown).metadata?.audioEffectsTimeline;
 
         if (audioEffectsTimeline?.events) {
           const effects = new Set<string>();

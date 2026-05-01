@@ -282,7 +282,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
       handlersRef.current.onMediaToggle?.(event);
     };
 
-    const handleError = (error: any) => {
+    const handleError = (error: unknown) => {
       logger.error('[useCallSignaling]', 'Call error', { error });
       handlersRef.current.onError?.(new Error(error.message || 'Call error'));
     };

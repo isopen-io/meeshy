@@ -66,7 +66,7 @@ export default function NewBroadcastPage() {
   };
 
   const buildPayload = () => {
-    const targeting: any = {
+    const targeting: unknown = {
       activityStatus,
     };
     if (activityStatus === 'inactive') {

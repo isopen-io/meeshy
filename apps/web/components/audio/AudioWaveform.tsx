@@ -26,8 +26,6 @@ export const AudioWaveform: React.FC<AudioWaveformProps> = ({
     <div className={`flex items-center justify-center gap-0.5 h-10 ${className}`}>
       {Array.from({ length: bars }).map((_, index) => {
         // Créer un pattern de vague avec offset pour chaque barre
-        const phaseOffset = (index / bars) * Math.PI * 2;
-        const delay = index * 0.05; // Délai progressif pour effet de vague
 
         return (
           <motion.div

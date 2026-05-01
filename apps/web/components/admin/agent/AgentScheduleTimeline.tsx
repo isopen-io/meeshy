@@ -130,7 +130,7 @@ export default memo(function AgentScheduleTimeline({ conversationId, compact = f
     );
   }
 
-  const { horizon, totalMs, scans, nextScanTs, timeUntilNext, hourMarkers } = timelineData;
+  const { totalMs, scans, timeUntilNext, hourMarkers } = timelineData;
   const budgetRatio = schedule.budget.messagesMax > 0
     ? schedule.budget.remaining / schedule.budget.messagesMax
     : 0;

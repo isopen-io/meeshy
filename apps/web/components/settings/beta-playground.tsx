@@ -2,13 +2,11 @@
 
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
 import { Rocket, Sparkles, Zap, Beaker, Flag, AlertTriangle } from 'lucide-react';
-import { useI18n } from '@/hooks/use-i18n';
 import { toast } from 'sonner';
 
 interface BetaPlaygroundProps {
@@ -16,8 +14,7 @@ interface BetaPlaygroundProps {
   onUserUpdate?: (updatedUser: Partial<User>) => void;
 }
 
-export default function BetaPlayground({ user, onUserUpdate }: BetaPlaygroundProps) {
-  const { t } = useI18n('settings');
+export default function BetaPlayground({ _user }: BetaPlaygroundProps) {
   const [betaFeatures, setBetaFeatures] = useState({
     aiAssistant: false,
     voiceCloning: false,
@@ -162,7 +159,7 @@ export default function BetaPlayground({ user, onUserUpdate }: BetaPlaygroundPro
             <CardTitle className="text-2xl">Beta Playground</CardTitle>
           </div>
           <CardDescription className="text-base">
-            Welcome to the Beta Playground! Try out experimental features before they're released to everyone.
+            Welcome to the Beta Playground! Try out experimental features before they&apos;re released to everyone.
           </CardDescription>
         </CardHeader>
         <CardContent>

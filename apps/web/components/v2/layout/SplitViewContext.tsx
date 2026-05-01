@@ -109,7 +109,7 @@ export function SplitViewProvider({
     }
   }, [sidebarWidth]);
 
-  const navigateToPanel = useCallback((route: string) => {
+  const navigateToPanel = useCallback((_route: string) => {
     setShowRightPanel(true);
     // Navigation is handled by Next.js router, we just manage the panel visibility
   }, []);

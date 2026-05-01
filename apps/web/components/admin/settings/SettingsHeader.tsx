@@ -36,7 +36,7 @@ export function SettingsHeader({
           <div>
             <h1 className="text-2xl font-bold">Configuration du système</h1>
             <p className="text-slate-100 mt-1">
-              Paramètres globaux et variables d'environnement
+              Paramètres globaux et variables d&apos;environnement
             </p>
           </div>
         </div>

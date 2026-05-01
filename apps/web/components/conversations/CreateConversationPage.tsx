@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/stores';
 import { CreateConversationModal } from './create-conversation-modal';
-import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 
 export function CreateConversationPage() {

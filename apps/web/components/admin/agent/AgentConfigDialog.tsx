@@ -13,7 +13,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
@@ -92,7 +91,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
   useEffect(() => {
     if (config) {
       setConversationId(config.conversationId);
-      const { id, conversationId: _cid, conversation, configuredBy, controlledUserIds: _cu, analytics: _an, createdAt, updatedAt, ...upsertFields } = config;
+      const { _id, conversationId: _cid, _conversation, _configuredBy, controlledUserIds: _cu, analytics: _an, _createdAt, _updatedAt, ...upsertFields } = config;
       setForm(upsertFields);
     } else {
       setConversationId('');

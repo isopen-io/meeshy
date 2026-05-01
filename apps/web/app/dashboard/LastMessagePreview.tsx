@@ -16,7 +16,7 @@ import type { Message } from '@/types';
 interface LastMessagePreviewProps {
   message: Message | null | undefined;
   currentLanguage: string;
-  t: (key: string, params?: any) => string;
+  t: (key: string, params?: unknown) => string;
 }
 
 /**
@@ -40,7 +40,6 @@ function formatDuration(milliseconds: number, includeHours = true): string {
  */
 export const LastMessagePreview = React.memo<LastMessagePreviewProps>(({
   message,
-  currentLanguage,
   t
 }) => {
   if (!message) {
@@ -54,9 +53,9 @@ export const LastMessagePreview = React.memo<LastMessagePreviewProps>(({
   const senderPrefix = sender ? (
     <span className="font-medium">
       {sender.displayName ||
-       (sender as any).username ||
-       ((sender as any).firstName && (sender as any).lastName
-         ? `${(sender as any).firstName} ${(sender as any).lastName}`.trim()
+       (sender as unknown).username ||
+       ((sender as unknown).firstName && (sender as unknown).lastName
+         ? `${(sender as unknown).firstName} ${(sender as unknown).lastName}`.trim()
          : isAnonymous ? t('anonymous') || 'Anonyme' : 'Utilisateur')}
       {isAnonymous && ' (anonyme)'}
       :{' '}
@@ -110,7 +109,7 @@ export const LastMessagePreview = React.memo<LastMessagePreviewProps>(({
               };
 
               const appliedEffects: string[] = [];
-              const audioEffectsTimeline = (attachment as any).metadata?.audioEffectsTimeline;
+              const audioEffectsTimeline = (attachment as unknown).metadata?.audioEffectsTimeline;
 
               if (audioEffectsTimeline?.events) {
                 const effects = new Set<string>();

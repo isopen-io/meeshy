@@ -7,7 +7,7 @@ import { formatRelativeDate } from '@/utils/date-format';
  */
 export function getConversationNameOnly(
   conversation: Conversation,
-  getOtherParticipantUser: () => any
+  getOtherParticipantUser: () => unknown
 ): string {
   if (conversation.type !== 'direct') {
     return conversation.title || 'Groupe sans nom';
@@ -53,7 +53,7 @@ export function getConversationAvatar(name: string, date: string | null): string
  */
 export function getConversationAvatarUrl(
   conversation: Conversation,
-  getOtherParticipantUser: () => any
+  getOtherParticipantUser: () => unknown
 ): string | undefined {
   if (conversation.type === 'direct') {
     const participantUser = getOtherParticipantUser();

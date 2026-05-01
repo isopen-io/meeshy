@@ -18,7 +18,7 @@ interface CallStatusIndicatorProps {
 
 export function CallStatusIndicator({
   connectionState,
-  callDuration = 0,
+  _callDuration = 0,
   participantName,
   connectionQuality,
 }: CallStatusIndicatorProps) {
@@ -26,7 +26,7 @@ export function CallStatusIndicator({
   const quality = connectionQuality || getQualityFromState(connectionState);
 
   // Format duration
-  const formatDuration = (seconds: number): string => {
+  const _formatDuration = (seconds: number): string => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;

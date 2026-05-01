@@ -2,7 +2,6 @@
 
 import { FormField } from './FormField';
 import { useFieldValidation } from '@/hooks/use-field-validation';
-import { useAuthFormStore } from '@/stores/auth-form-store';
 import type { TFunction } from '@/hooks/useI18n';
 
 interface UsernameFieldProps {
@@ -20,7 +19,7 @@ export function UsernameField({
   formPrefix,
   t,
 }: UsernameFieldProps) {
-  const { status, errorMessage } = useFieldValidation({
+  const { status } = useFieldValidation({
     value,
     disabled,
     t,

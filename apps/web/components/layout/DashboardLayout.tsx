@@ -34,7 +34,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { User } from '@/types';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { useUser, useIsAuthChecking } from '@/stores';
 import { useAuth } from '@/hooks/use-auth';
@@ -267,7 +266,7 @@ export function DashboardLayout({
                   </DropdownMenuItem>
 
                   {/* Lien Admin - Affiché seulement si l'utilisateur a les permissions */}
-                  {(user as any).permissions?.canAccessAdmin && (
+                  {(user as unknown).permissions?.canAccessAdmin && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem asChild>

@@ -4,7 +4,6 @@ import { type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { SplitViewProvider, useSplitView } from './SplitViewContext';
 import { ConversationSidebar } from './ConversationSidebar';
-import { Button } from '@/components/v2';
 
 interface SplitViewLayoutProps {
   children: ReactNode;

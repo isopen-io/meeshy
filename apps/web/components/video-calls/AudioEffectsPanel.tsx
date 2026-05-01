@@ -72,7 +72,6 @@ export function AudioEffectsPanel({
   onLoadPreset,
   currentPreset,
   availablePresets,
-  availableBackSounds,
   onClose,
   className,
 }: AudioEffectsPanelProps) {
@@ -201,7 +200,7 @@ export function AudioEffectsPanel({
                     <div className="pt-1 space-y-0.5 text-[10px]">
                       <p><strong>Rapidité:</strong> Vitesse de correction</p>
                       <p><strong>Gamme:</strong> Notes autorisées</p>
-                      <p><strong>Force:</strong> Intensité de l'effet</p>
+                      <p><strong>Force:</strong> Intensité de l&apos;effet</p>
                       <p><strong>Expression:</strong> Garde le naturel</p>
                     </div>
                   </div>

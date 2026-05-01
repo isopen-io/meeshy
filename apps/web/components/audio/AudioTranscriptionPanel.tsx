@@ -67,7 +67,7 @@ export const AudioTranscriptionPanel = memo<AudioTranscriptionPanelProps>(({
               {/* Texte de transcription avec text-wrap balance */}
               <p
                 className="text-sm text-gray-700 dark:text-gray-300 break-words leading-relaxed"
-                style={{ textWrap: 'balance' } as any}
+                style={{ textWrap: 'balance' } as unknown}
               >
                 {isExpanded ? transcriptionPreview.fullText : transcriptionPreview.preview}
                 {!isExpanded && transcriptionPreview.shouldTruncate && (

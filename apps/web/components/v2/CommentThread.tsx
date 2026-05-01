@@ -25,7 +25,7 @@ export interface CommentThreadProps {
 }
 
 function CommentThread({
-  postId,
+  _postId,
   parentComment,
   replies,
   currentUserId,

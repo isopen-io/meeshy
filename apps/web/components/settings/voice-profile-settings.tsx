@@ -10,7 +10,6 @@ import { useI18n } from '@/hooks/useI18n';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { apiService, TIMEOUT_VOICE_PROFILE } from '@/services/api.service';
 import { useVoiceProfileManagement } from '@/hooks/use-voice-profile-management';
-import { MIN_RECORDING_SECONDS } from '@/hooks/use-voice-recording';
 import { useVoiceAnalysis } from '@/hooks/use-voice-analysis';
 import {
   saveRecordingToStorage,
@@ -112,7 +111,7 @@ export function VoiceProfileSettings() {
   );
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
+  const [, setRecordedUrl] = useState<string | null>(null);
   const [browserTranscription, setBrowserTranscription] = useState<BrowserTranscription | null>(null);
   const [hasRestoredRecording, setHasRestoredRecording] = useState(false);
 
@@ -258,7 +257,7 @@ export function VoiceProfileSettings() {
         // Reload profile
         await loadProfile();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[VoiceProfile] Error creating profile:', err);
       toast.error(t('voiceProfile.create.error', 'Erreur lors de la création du profil'));
     } finally {

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { theme } from './theme';
 import { Tooltip } from './Tooltip';
 
 export interface Attachment {

@@ -8,24 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  ArrowLeft,
-  Shield,
-  Activity,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  User,
-  Settings,
-  Database,
-  Key,
-  FileText,
-  Search,
-  Calendar,
-  Filter,
-  Download,
-  Clock
-} from 'lucide-react';
+import { ArrowLeft, Shield, Activity, AlertCircle, CheckCircle, XCircle, User, Settings, Key, FileText, Search, Filter, Download, Clock } from 'lucide-react';
+
 import { StatsGrid, type StatItem } from '@/components/admin/Charts';
 
 // Types pour les logs d'audit
@@ -48,10 +32,10 @@ interface AuditLog {
   userAgent: string;
   changes?: {
     field: string;
-    oldValue: any;
-    newValue: any;
+    oldValue: unknown;
+    newValue: unknown;
   }[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   severity: 'low' | 'medium' | 'high' | 'critical';
 }
 
@@ -330,7 +314,7 @@ export default function AuditLogsPage() {
                 Retour
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">Journaux d'audit</h1>
+                <h1 className="text-2xl font-bold">Journaux d&apos;audit</h1>
                 <p className="text-indigo-100 mt-1">Traçabilité complète des actions système</p>
               </div>
             </div>
@@ -424,7 +408,7 @@ export default function AuditLogsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Journaux d'événements ({filteredLogs.length})</span>
+              <span>Journaux d&apos;événements ({filteredLogs.length})</span>
               <Badge variant="outline">{dateRange}</Badge>
             </CardTitle>
           </CardHeader>

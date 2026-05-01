@@ -33,7 +33,7 @@ export const ImageAttachment = React.memo(function ImageAttachment({
   onImageClick,
   onDeleteClick,
 }: ImageAttachmentProps) {
-  const handleImageClick = useCallback((event: React.MouseEvent) => {
+  const handleImageClick = useCallback((_event: React.MouseEvent) => {
     onImageClick(attachment);
   }, [attachment, onImageClick]);
 
@@ -84,7 +84,7 @@ export const ImageAttachment = React.memo(function ImageAttachment({
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                handleImageClick(e as any);
+                handleImageClick(e as unknown);
               }
             }}
             role="button"

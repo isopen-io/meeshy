@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import { useI18n } from '@/hooks/use-i18n';
-import type { ReactionAggregation } from '@meeshy/shared/types/reaction';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface MessageReactionsProps {
@@ -37,7 +36,6 @@ interface MessageReactionsProps {
  */
 export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
   messageId,
-  conversationId,
   currentUserId,
   currentAnonymousUserId,
   isAnonymous = false,

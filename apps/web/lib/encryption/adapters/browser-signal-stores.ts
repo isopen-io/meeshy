@@ -132,7 +132,7 @@ export class BrowserIdentityKeyStore extends IdentityKeyStore {
     const tx = db.transaction([STORES.IDENTITY], 'readonly');
     const store = tx.objectStore(STORES.IDENTITY);
 
-    const data = await new Promise<any>((resolve, reject) => {
+    const data = await new Promise<unknown>((resolve, reject) => {
       const request = store.get(this.userId);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -200,7 +200,7 @@ export class BrowserIdentityKeyStore extends IdentityKeyStore {
   async isTrustedIdentity(
     address: ProtocolAddress,
     identityKey: PublicKey,
-    direction: Direction
+    _direction: Direction
   ): Promise<boolean> {
     const key = this.getAddressKey(address);
     const db = await openDB();
@@ -357,7 +357,7 @@ export class BrowserKyberPreKeyStore extends KyberPreKeyStore {
     const tx = db.transaction([STORES.KYBER_PRE_KEYS], 'readonly');
     const store = tx.objectStore(STORES.KYBER_PRE_KEYS);
 
-    const record = await new Promise<any>((resolve, reject) => {
+    const record = await new Promise<unknown>((resolve, reject) => {
       const request = store.get(kyberPreKeyId);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -397,7 +397,7 @@ export class BrowserKyberPreKeyStore extends KyberPreKeyStore {
     const tx = db.transaction([STORES.KYBER_PRE_KEYS], 'readwrite');
     const store = tx.objectStore(STORES.KYBER_PRE_KEYS);
 
-    const record = await new Promise<any>((resolve, reject) => {
+    const record = await new Promise<unknown>((resolve, reject) => {
       const request = store.get(kyberPreKeyId);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -546,7 +546,7 @@ export async function createBrowserSignalStores(
   // Try to load existing identity, or generate new one
   try {
     await identityStore.loadFromStorage();
-  } catch (error) {
+  } catch (_error) {
     // Generate new identity key pair
     const identityKeyPair = IdentityKeyPair.generate();
     await identityStore.initialize(identityKeyPair);

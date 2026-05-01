@@ -4,12 +4,12 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Mail, Phone, Globe, Clock, MapPin, Edit2, Save, X } from 'lucide-react';
+import { Mail, Phone, Clock, MapPin, Edit2, Save, X } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
 
 interface UserContactInfoProps {
-  user: any;
+  user: unknown;
   userId: string;
   onUpdate: () => void;
 }
@@ -69,8 +69,8 @@ export function UserContactInfoSection({
   const [formData, setFormData] = useState({
     email: user.email || '',
     phoneNumber: user.phoneNumber || '',
-    phoneCountryCode: (user as any).phoneCountryCode || 'FR',
-    timezone: (user as any).timezone || 'Europe/Paris'
+    phoneCountryCode: (user as unknown).phoneCountryCode || 'FR',
+    timezone: (user as unknown).timezone || 'Europe/Paris'
   });
 
   const handleChange = (field: string, value: string) => {
@@ -81,8 +81,8 @@ export function UserContactInfoSection({
     setFormData({
       email: user.email || '',
       phoneNumber: user.phoneNumber || '',
-      phoneCountryCode: (user as any).phoneCountryCode || 'FR',
-      timezone: (user as any).timezone || 'Europe/Paris'
+      phoneCountryCode: (user as unknown).phoneCountryCode || 'FR',
+      timezone: (user as unknown).timezone || 'Europe/Paris'
     });
     setEditing(false);
   };
@@ -90,7 +90,7 @@ export function UserContactInfoSection({
   const handleSave = async () => {
     try {
       setSaving(true);
-      const response = await apiService.patch<AdminApiResponse<any>>(`/admin/users/${userId}`, {
+      const response = await apiService.patch<AdminApiResponse<unknown>>(`/admin/users/${userId}`, {
         email: formData.email,
         phoneNumber: formData.phoneNumber || null,
         phoneCountryCode: formData.phoneCountryCode,
@@ -102,7 +102,7 @@ export function UserContactInfoSection({
         setEditing(false);
         onUpdate();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors de la mise à jour');
     } finally {
       setSaving(false);
@@ -230,7 +230,7 @@ export function UserContactInfoSection({
                   Téléphone:
                 </span>
                 <span className="font-medium dark:text-gray-200">
-                  {getPhoneCode((user as any).phoneCountryCode || 'FR')} {user.phoneNumber}
+                  {getPhoneCode((user as unknown).phoneCountryCode || 'FR')} {user.phoneNumber}
                 </span>
               </div>
             )}
@@ -240,16 +240,16 @@ export function UserContactInfoSection({
                 Pays:
               </span>
               <span className="font-medium dark:text-gray-200">
-                {getCountryName((user as any).phoneCountryCode || 'FR')}
+                {getCountryName((user as unknown).phoneCountryCode || 'FR')}
               </span>
             </div>
-            {(user as any).timezone && (
+            {(user as unknown).timezone && (
               <div className="flex items-center text-sm">
                 <span className="w-40 text-gray-600 dark:text-gray-400 flex items-center">
                   <Clock className="h-4 w-4 mr-2" />
                   Fuseau horaire:
                 </span>
-                <span className="font-medium dark:text-gray-200">{(user as any).timezone}</span>
+                <span className="font-medium dark:text-gray-200">{(user as unknown).timezone}</span>
               </div>
             )}
           </div>

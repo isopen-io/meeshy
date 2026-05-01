@@ -60,7 +60,7 @@ export function AttachmentContextMenu({
       await navigator.clipboard.writeText(attachment.fileUrl);
       toast.success('Lien copié dans le presse-papiers');
       onClose();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Impossible de copier le lien');
     }
   };
@@ -140,12 +140,12 @@ export function AttachmentContextMenu({
     // Petit délai pour éviter que le clic qui ouvre le menu le ferme immédiatement
     setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('touchstart', handleClickOutside as any);
+      document.addEventListener('touchstart', handleClickOutside as unknown);
     }, 100);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside as any);
+      document.removeEventListener('touchstart', handleClickOutside as unknown);
     };
   }, [isOpen, showDeleteConfirm, onClose]);
 

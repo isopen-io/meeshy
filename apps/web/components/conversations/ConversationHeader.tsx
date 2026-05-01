@@ -70,7 +70,7 @@ export function ConversationHeader({
     currentUser
   );
 
-  const displayName = preferences.customName
+  const _displayName = preferences.customName
     ? `${preferences.customName} (${participantInfo.name})`
     : participantInfo.name;
 

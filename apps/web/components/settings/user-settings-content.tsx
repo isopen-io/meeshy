@@ -16,7 +16,7 @@ interface UserSettingsContentProps {
 }
 
 export function UserSettingsContent({ user, localSettings, onSettingUpdate, children }: UserSettingsContentProps) {
-  const getLanguageDisplay = (code: string) => {
+  const _getLanguageDisplay = (code: string) => {
     const lang = INTERFACE_LANGUAGES.find(l => l.code === code);
     return lang ? `${lang.flag} ${lang.name}` : code;
   };

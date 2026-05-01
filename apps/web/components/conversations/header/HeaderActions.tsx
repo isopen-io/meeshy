@@ -21,7 +21,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import type { HeaderPreferences } from './types';
 
 interface HeaderActionsProps {
   isPinned: boolean;

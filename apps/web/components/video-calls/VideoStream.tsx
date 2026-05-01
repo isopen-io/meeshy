@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Mic, MicOff, VideoOff } from 'lucide-react';
+import { MicOff, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VideoStreamProps {
@@ -24,7 +24,7 @@ interface VideoStreamProps {
 export function VideoStream({
   stream,
   muted = false,
-  isLocal = false,
+  _isLocal = false,
   className,
   participantName,
   isAudioEnabled = true,

@@ -35,7 +35,7 @@ export function TrackingLinkDetailsModal({
   onClose 
 }: TrackingLinkDetailsModalProps) {
   const { t } = useI18n('links');
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<unknown>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -202,8 +202,8 @@ export function TrackingLinkDetailsModal({
                   {stats?.clicksByCountry && Object.keys(stats.clicksByCountry).length > 0 ? (
                     <div className="space-y-2">
                       {Object.entries(stats.clicksByCountry)
-                        .sort(([, a]: any, [, b]: any) => b - a)
-                        .map(([country, clicks]: any) => (
+                        .sort(([, a]: unknown, [, b]: unknown) => b - a)
+                        .map(([country, clicks]: unknown) => (
                           <div key={country} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                             <span className="font-medium">{country || 'Unknown'}</span>
                             <Badge variant="outline">{clicks} clicks</Badge>
@@ -231,8 +231,8 @@ export function TrackingLinkDetailsModal({
                   {stats?.clicksByDevice && Object.keys(stats.clicksByDevice).length > 0 ? (
                     <div className="space-y-2">
                       {Object.entries(stats.clicksByDevice)
-                        .sort(([, a]: any, [, b]: any) => b - a)
-                        .map(([device, clicks]: any) => (
+                        .sort(([, a]: unknown, [, b]: unknown) => b - a)
+                        .map(([device, clicks]: unknown) => (
                           <div key={device} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                             <span className="font-medium capitalize">{device || 'Unknown'}</span>
                             <Badge variant="outline">{clicks} clicks</Badge>
@@ -260,8 +260,8 @@ export function TrackingLinkDetailsModal({
                   {stats?.clicksByBrowser && Object.keys(stats.clicksByBrowser).length > 0 ? (
                     <div className="space-y-2">
                       {Object.entries(stats.clicksByBrowser)
-                        .sort(([, a]: any, [, b]: any) => b - a)
-                        .map(([browser, clicks]: any) => (
+                        .sort(([, a]: unknown, [, b]: unknown) => b - a)
+                        .map(([browser, clicks]: unknown) => (
                           <div key={browser} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                             <span className="font-medium">{browser || 'Unknown'}</span>
                             <Badge variant="outline">{clicks} clicks</Badge>
@@ -290,7 +290,7 @@ export function TrackingLinkDetailsModal({
                     <div className="space-y-2">
                       {Object.entries(stats.clicksByDate)
                         .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
-                        .map(([date, clicks]: any) => (
+                        .map(([date, clicks]: unknown) => (
                           <div key={date} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                             <span className="font-medium">{new Date(date).toLocaleDateString()}</span>
                             <Badge variant="outline">{clicks} clicks</Badge>
@@ -317,7 +317,7 @@ export function TrackingLinkDetailsModal({
                 <CardContent>
                   {stats?.topReferrers && stats.topReferrers.length > 0 ? (
                     <div className="space-y-2">
-                      {stats.topReferrers.map((item: any, index: number) => (
+                      {stats.topReferrers.map((item: unknown, index: number) => (
                         <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                           <span className="font-medium truncate">{item.referrer || 'Direct'}</span>
                           <Badge variant="outline">{item.count} clicks</Badge>

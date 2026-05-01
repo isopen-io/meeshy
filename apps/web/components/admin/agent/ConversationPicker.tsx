@@ -128,8 +128,8 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
               </div>
               {selectedConversation.lastMessage && (
                 <div className="mt-2 px-2 py-1.5 rounded bg-indigo-100/50 dark:bg-indigo-900/30 text-xs text-indigo-700 dark:text-indigo-300 truncate">
-                  <span className="font-semibold">{(selectedConversation.lastMessage as any).sender?.displayName || 'Utilisateur'}:</span>{' '}
-                  {(selectedConversation.lastMessage as any).content}
+                  <span className="font-semibold">{(selectedConversation.lastMessage as unknown).sender?.displayName || 'Utilisateur'}:</span>{' '}
+                  {(selectedConversation.lastMessage as unknown).content}
                 </div>
               )}
             </div>
@@ -207,9 +207,9 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                                 </>
                               )}
                             </div>
-                            {(conv as any).lastMessage?.content && (
+                            {(conv as unknown).lastMessage?.content && (
                               <p className="text-[11px] text-gray-400 truncate mt-0.5">
-                                {(conv as any).lastMessage.content}
+                                {(conv as unknown).lastMessage.content}
                               </p>
                             )}
                           </div>

@@ -103,7 +103,7 @@ export function FontSelector({ className }: FontSelectorProps) {
                style={{ fontFamily: `var(${font.variable})` }}>
             {/* Exemple de titre */}
             <h5 className="text-lg font-semibold mb-2 text-foreground">
-              Titre d'exemple
+              Titre d&apos;exemple
             </h5>
             
             {/* Exemple de contenu */}
@@ -141,7 +141,7 @@ export function FontSelector({ className }: FontSelectorProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Palette className="h-5 w-5" />
-            <CardTitle>Police d'affichage</CardTitle>
+            <CardTitle>Police d&apos;affichage</CardTitle>
           </div>
           <Button
             variant="outline"
@@ -154,7 +154,7 @@ export function FontSelector({ className }: FontSelectorProps) {
           </Button>
         </div>
         <CardDescription>
-          Choisissez la police qui s'affiche dans toute l'application. 
+          Choisissez la police qui s&apos;affiche dans toute l&apos;application. 
           Police actuelle : <span className="font-medium">{fontConfig?.name}</span>
         </CardDescription>
       </CardHeader>

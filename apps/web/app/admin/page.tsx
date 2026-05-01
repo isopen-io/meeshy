@@ -17,14 +17,14 @@ import {
   Clock,
   Server
 } from 'lucide-react';
-import { User, UserRoleEnum } from '@/types';
+import { User } from '@/types';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { toast } from 'sonner';
 import { adminService, AdminDashboardData } from '@/services/admin.service';
 import { getDefaultPermissions } from '@/utils/user-adapter';
 import { authManager } from '@/services/auth-manager.service';
 
-interface UserCapabilities {
+interface _UserCapabilities {
   role: string;
   level: number;
   permissions: string[];
@@ -42,8 +42,8 @@ const AdminDashboard: React.FC = () => {
       const response = await adminService.getDashboardStats();
       // Le backend retourne { data: { success: true, data: DashboardData } }
       // Donc response.data contient { success: true, data: DashboardData }
-      if (response.data && (response.data as any).success && (response.data as any).data) {
-        const dashData = (response.data as any).data;
+      if (response.data && (response.data as unknown).success && (response.data as unknown).data) {
+        const dashData = (response.data as unknown).data;
         setDashboardData(dashData);
         toast.success('Données actualisées avec succès');
       } else if (response.data) {
@@ -120,8 +120,8 @@ const AdminDashboard: React.FC = () => {
         // Traiter les stats si elles ont été chargées avec succès
         if (statsResult) {
           // Le backend retourne { data: { success: true, data: DashboardData } }
-          if (statsResult.data && (statsResult.data as any).success && (statsResult.data as any).data) {
-            const dashData = (statsResult.data as any).data;
+          if (statsResult.data && (statsResult.data as unknown).success && (statsResult.data as unknown).data) {
+            const dashData = (statsResult.data as unknown).data;
             setDashboardData(dashData);
           } else if (statsResult.data) {
             // Cas où les données sont directement dans statsResult.data (pas de wrapping)

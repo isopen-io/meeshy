@@ -3,44 +3,29 @@
 import { useState, useEffect, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Footer } from '@/components/layout/Footer';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Link2,
   Search,
-  Calendar,
-  Users,
-  Activity,
-  MoreVertical,
-  Eye,
-  Edit,
-  Trash2,
   Clock,
-  Copy,
   BarChart,
   CheckCircle,
   XCircle,
   RefreshCw,
   MessageSquare,
   Plus,
-  TrendingUp,
-  AlertCircle,
+  _TrendingUp,
+  _AlertCircle,
   Zap,
-  ExternalLink,
-  MousePointerClick,
-  ChevronDown
+  _ExternalLink,
+  _MousePointerClick,
+  ChevronDown,
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
+import { buildApiUrl } from '@/lib/config';
 import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
 import { useI18n } from '@/hooks/useI18n';
 import { ExpandableLinkCard } from '@/components/links/expandable-link-card';
@@ -81,7 +66,6 @@ interface ConversationLink {
   };
 }
 import { LinkEditModal } from '@/components/links/link-edit-modal';
-import { CreateLinkButton } from '@/components/links/create-link-button';
 import { CreateLinkModalV2 } from '@/components/conversations/create-link-modal';
 import { CreateTrackingLinkModal } from '@/components/links/create-tracking-link-modal';
 import { EditTrackingLinkModal } from '@/components/links/edit-tracking-link-modal';
@@ -89,7 +73,7 @@ import { CreateConversationModal } from '@/components/conversations/create-conve
 import { copyToClipboard } from '@/lib/clipboard';
 import { useUser } from '@/stores';
 import { useRouter } from 'next/navigation';
-import { getUserTrackingLinks, deleteTrackingLink, deactivateTrackingLink } from '@/services/tracking-links';
+import { deleteTrackingLink, deactivateTrackingLink } from '@/services/tracking-links';
 import { authManager } from '@/services/auth-manager.service';
 
 export default function LinksPage() {
@@ -140,7 +124,7 @@ export default function LinksPage() {
    * Tronque le nom du lien à 32 caractères pour l'affichage dans la liste
    * Le nom complet est visible dans la modale de détails/édition
    */
-  const truncateLinkName = (name: string, maxLength: number = 32): string => {
+  const _truncateLinkName = (name: string, maxLength: number = 32): string => {
     if (name.length <= maxLength) {
       return name;
     }
@@ -338,7 +322,7 @@ export default function LinksPage() {
     router.push(`/conversations/${conversationId}`);
   };
 
-  const handleLinkCreated = () => {
+  const _handleLinkCreated = () => {
     toast.success(t('success.linkCreated'));
     loadLinks(); // Recharger la liste des liens
   };
@@ -466,7 +450,7 @@ export default function LinksPage() {
   };
 
   // Formater la date
-  const formatDate = (date: string | Date) => {
+  const _formatDate = (date: string | Date) => {
     return new Date(date).toLocaleDateString('fr-FR', {
       day: 'numeric',
       month: 'short',
@@ -477,7 +461,7 @@ export default function LinksPage() {
   };
 
   // Calculer le temps restant
-  const getTimeRemaining = (expiresAt: string | Date) => {
+  const _getTimeRemaining = (expiresAt: string | Date) => {
     const now = new Date();
     const expiry = new Date(expiresAt);
     const diff = expiry.getTime() - now.getTime();
@@ -690,7 +674,7 @@ export default function LinksPage() {
                         setShowEditModal(true);
                       }}
                       onToggle={() => handleToggleActive(link)}
-                      onExtend={(l: any, days: number) => handleExtendDuration(l, days)}
+                      onExtend={(l: unknown, days: number) => handleExtendDuration(l, days)}
                       onDelete={() => handleDeleteLink(link)}
                     />
                   ))}
@@ -802,7 +786,7 @@ export default function LinksPage() {
         {/* Modales */}
         {selectedLink && (
           <LinkEditModal
-            link={selectedLink as any}
+            link={selectedLink as unknown}
             isOpen={showEditModal}
             onClose={() => {
               setShowEditModal(false);

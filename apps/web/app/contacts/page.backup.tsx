@@ -4,11 +4,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Footer } from '@/components/layout/Footer';
 import { toast } from 'sonner';
@@ -37,7 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { User } from '@/types';
-import { usersService, conversationsService, type ParticipantsFilters } from '@/services';
+import { usersService, type ParticipantsFilters } from '@/services';
 import { ShareAffiliateModal } from '@/components/affiliate/share-affiliate-modal';
 import { useUser } from '@/stores';
 import { useI18n } from '@/hooks/useI18n';
@@ -87,7 +87,7 @@ export default function ContactsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<User[]>([]);
-  const [filters, setFilters] = useState<ParticipantsFilters>({});
+  const [filters, _setFilters] = useState<ParticipantsFilters>({});
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [affiliateRelations, setAffiliateRelations] = useState<AffiliateRelation[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'connected' | 'pending' | 'refused' | 'affiliates'>('all');
@@ -285,7 +285,7 @@ export default function ContactsPage() {
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
+  const _handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     searchUsers(searchQuery);
   };

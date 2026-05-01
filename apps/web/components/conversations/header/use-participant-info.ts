@@ -9,7 +9,7 @@ import type { ParticipantInfo } from './types';
 /** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
 type ParticipantUser = User & { sessionToken?: string; shareLinkId?: string };
 
-function isAnonymousUser(user: any): boolean {
+function isAnonymousUser(user: unknown): boolean {
   return user && ('sessionToken' in user || 'shareLinkId' in user);
 }
 
@@ -34,9 +34,9 @@ export function useParticipantInfo(
       if (name) return name;
     }
 
-    const convParticipants = (conversation as any).participants;
+    const convParticipants = (conversation as unknown).participants;
     if (Array.isArray(convParticipants) && convParticipants.length > 0) {
-      const otherConvParticipant = convParticipants.find((p: any) => p.userId !== currentUser?.id);
+      const otherConvParticipant = convParticipants.find((p: unknown) => p.userId !== currentUser?.id);
       if (otherConvParticipant?.user) {
         const user = otherConvParticipant.user;
         const name = user.displayName || user.username ||
@@ -45,9 +45,9 @@ export function useParticipantInfo(
       }
     }
 
-    const members = (conversation as any).participants;
+    const members = (conversation as unknown).participants;
     if (Array.isArray(members) && members.length > 0) {
-      const otherMember = members.find((m: any) => m.userId !== currentUser?.id);
+      const otherMember = members.find((m: unknown) => m.userId !== currentUser?.id);
       if (otherMember?.user) {
         const user = otherMember.user;
         const name = user.displayName || user.username ||
@@ -81,13 +81,13 @@ export function useParticipantInfo(
         return (otherParticipant.user as ParticipantUser).avatar;
       }
 
-      const otherConvParticipant = (conversation as any).participants?.find((p: any) => p.userId !== currentUser?.id);
+      const otherConvParticipant = (conversation as unknown).participants?.find((p: unknown) => p.userId !== currentUser?.id);
       if (otherConvParticipant?.user?.avatar) {
         return otherConvParticipant.user.avatar;
       }
 
-      if ((conversation as any).participants) {
-        const otherMember = (conversation as any).participants.find((m: any) => m.userId !== currentUser?.id);
+      if ((conversation as unknown).participants) {
+        const otherMember = (conversation as unknown).participants.find((m: unknown) => m.userId !== currentUser?.id);
         return otherMember?.user?.avatar;
       }
     }
@@ -101,13 +101,13 @@ export function useParticipantInfo(
         return isAnonymousUser(otherParticipant.user);
       }
 
-      const otherConvParticipant = (conversation as any).participants?.find((p: any) => p.userId !== currentUser?.id);
+      const otherConvParticipant = (conversation as unknown).participants?.find((p: unknown) => p.userId !== currentUser?.id);
       if (otherConvParticipant?.user) {
         return isAnonymousUser(otherConvParticipant.user);
       }
 
-      if ((conversation as any).participants) {
-        const otherMember = (conversation as any).participants.find((m: any) => m.userId !== currentUser?.id);
+      if ((conversation as unknown).participants) {
+        const otherMember = (conversation as unknown).participants.find((m: unknown) => m.userId !== currentUser?.id);
         return otherMember?.user ? isAnonymousUser(otherMember.user) : false;
       }
     }
@@ -121,7 +121,7 @@ export function useParticipantInfo(
       if (otherParticipant) {
         otherUserId = otherParticipant.userId;
       } else {
-        const otherConvParticipant = (conversation as any).participants?.find((p: any) => p.userId !== currentUser?.id);
+        const otherConvParticipant = (conversation as unknown).participants?.find((p: unknown) => p.userId !== currentUser?.id);
         otherUserId = otherConvParticipant?.userId;
       }
 

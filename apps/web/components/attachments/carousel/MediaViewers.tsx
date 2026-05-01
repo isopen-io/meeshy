@@ -6,7 +6,6 @@
 
 import React from 'react';
 import { Image, Loader2, CheckCircle, Maximize } from 'lucide-react';
-import { getAttachmentType } from '@meeshy/shared/types/attachment';
 import { CompactVideoPlayer } from '../../video/VideoPlayer';
 
 interface ImageViewerProps {
@@ -24,7 +23,6 @@ interface ImageViewerProps {
 
 export const ImageViewer = React.memo(function ImageViewer({
   file,
-  fileKey,
   thumbnailUrl,
   fileUrl,
   isLoadingThumbnail,
@@ -50,7 +48,7 @@ export const ImageViewer = React.memo(function ImageViewer({
           className="w-full h-full object-contain"
           loading="lazy"
           decoding="async"
-          onError={(e) => {
+          onError={(_e) => {
             console.error('Failed to load image:', file.name);
           }}
         />
@@ -126,7 +124,7 @@ export const VideoViewer = React.memo(function VideoViewer({
             fileSize: file.size,
             duration: undefined,
             createdAt: new Date().toISOString(),
-          } as any}
+          } as unknown}
           className="w-full"
         />
 
@@ -177,7 +175,7 @@ interface DocumentViewerProps {
 }
 
 export const DocumentViewer = React.memo(function DocumentViewer({
-  file,
+  _file,
   isUploading,
   isUploaded,
   progress,

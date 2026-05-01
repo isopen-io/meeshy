@@ -15,7 +15,7 @@ export interface ConversationHeaderProps {
   onBackToList: () => void;
   onParticipantRemoved: (userId: string) => void;
   onParticipantAdded: (userId: string) => void;
-  onLinkCreated: (link: any) => void;
+  onLinkCreated: (link: unknown) => void;
   onStartCall?: () => void;
   onOpenGallery?: () => void;
   t: (key: string) => string;
@@ -50,7 +50,7 @@ export interface ParticipantInfo {
 }
 
 export interface EncryptionInfo {
-  icon: any;
+  icon: unknown;
   color: string;
   bgColor: string;
   label: string;

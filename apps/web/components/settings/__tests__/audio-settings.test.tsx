@@ -4,14 +4,14 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AudioSettings } from '../audio-settings';
 
 // Mock the usePreferences hook
 const mockUpdatePreferences = jest.fn();
 
-let mockUsePreferencesReturn: any;
+let mockUsePreferencesReturn: unknown;
 
 jest.mock('@/hooks/use-preferences', () => ({
   usePreferences: () => mockUsePreferencesReturn,
@@ -20,9 +20,9 @@ jest.mock('@/hooks/use-preferences', () => ({
 // Mock next/dynamic
 jest.mock('next/dynamic', () => ({
   __esModule: true,
-  default: (loader: () => Promise<any>) => {
-    const Component = (props: any) => {
-      const [Comp, setComp] = React.useState<any>(null);
+  default: (loader: () => Promise<unknown>) => {
+    const Component = (props: unknown) => {
+      const [Comp, setComp] = React.useState<unknown>(null);
       React.useEffect(() => {
         loader().then((mod) => setComp(() => mod.default));
       }, []);

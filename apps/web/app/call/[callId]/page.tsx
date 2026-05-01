@@ -80,7 +80,7 @@ export default function CallPage({ params }: CallPageProps) {
         }, 10000);
 
         // Listen for successful join
-        const handleParticipantJoined = (event: any) => {
+        const handleParticipantJoined = (event: unknown) => {
           if (event.callId === callId) {
             clearTimeout(timeout);
             setIsJoining(false);
@@ -89,7 +89,7 @@ export default function CallPage({ params }: CallPageProps) {
           }
         };
 
-        const handleCallInitiated = (event: any) => {
+        const handleCallInitiated = (event: unknown) => {
           if (event.callId === callId) {
             clearTimeout(timeout);
             setIsJoining(false);

@@ -29,11 +29,11 @@ interface ContactsListProps {
   searchQuery: string;
   getUserDisplayName: (user: User) => string;
   formatLastSeen: (user: User) => string;
-  getPendingRequestWithUser: (userId: string) => any | undefined;
+  getPendingRequestWithUser: (userId: string) => unknown | undefined;
   onSendRequest: (userId: string) => void;
   onCancelRequest: (requestId: string) => void;
   onStartConversation: (userId: string) => void;
-  t: (key: string, params?: any) => string;
+  t: (key: string, params?: unknown) => string;
 }
 
 const ContactsList = React.memo<ContactsListProps>(({

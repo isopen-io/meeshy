@@ -1,9 +1,6 @@
 'use client';
 
 import { memo } from 'react';
-import { Ghost } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { ConversationParticipants } from '../conversation-participants';
 import { TypingIndicator } from './TypingIndicator';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';

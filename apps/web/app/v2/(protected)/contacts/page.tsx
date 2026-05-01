@@ -2,22 +2,8 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Button,
-  Card,
-  Input,
-  Badge,
-  Skeleton,
-  PageHeader,
-  EmptyState,
-  Dialog,
-  DialogHeader,
-  DialogBody,
-  DialogFooter,
-  ContactCard,
-  FriendRequestCard,
-  BlockedUserCard,
-} from '@/components/v2';
+import { Button, Card, Input, Skeleton, PageHeader, EmptyState, ContactCard, FriendRequestCard, BlockedUserCard } from '@/components/v2';
+
 import { useContactsV2, useFriendRequestsV2, useBlockedUsersV2 } from '@/hooks/v2';
 import { useUser } from '@/stores';
 import { useI18n } from '@/hooks/useI18n';
@@ -106,7 +92,7 @@ export default function V2ContactsPage() {
     isLoading: isLoadingBlocked,
     blockUser,
     unblockUser,
-    isBlocked,
+    _isBlocked,
     refresh: refreshBlocked,
   } = useBlockedUsersV2();
 

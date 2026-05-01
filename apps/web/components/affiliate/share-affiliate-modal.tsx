@@ -5,24 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { 
-  Share2, 
-  Copy, 
-  Plus, 
-  Link, 
-  Users, 
-  Calendar,
-  Clock,
-  CheckCircle,
-  XCircle,
-  ExternalLink,
-  MessageSquare
-} from 'lucide-react';
+import { Share2, Copy, Plus } from 'lucide-react';
+
 import { buildApiUrl } from '@/lib/config';
 import { useI18n } from '@/hooks/useI18n';
 import { authManager } from '@/services/auth-manager.service';
@@ -52,8 +40,8 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
 
   const [tokens, setTokens] = useState<AffiliateToken[]>([]);
   const [selectedToken, setSelectedToken] = useState<AffiliateToken | null>(null);
-  const [isCreatingNew, setIsCreatingNew] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsCreatingNew] = useState(false);
+  const [, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newTokenName, setNewTokenName] = useState('');
   const [shareMessage, setShareMessage] = useState('');
@@ -338,7 +326,6 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
                 className="mt-1 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
               />
             </div>
-
 
           </div>
         );

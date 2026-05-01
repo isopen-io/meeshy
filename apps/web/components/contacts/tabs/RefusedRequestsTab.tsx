@@ -24,7 +24,7 @@ interface RefusedRequestsTabProps {
   currentUserId?: string;
   getUserDisplayName: (user: User) => string;
   onSendRequest: (userId: string) => void;
-  t: (key: string, params?: any) => string;
+  t: (key: string, params?: unknown) => string;
 }
 
 const RefusedRequestsTab = React.memo<RefusedRequestsTabProps>(({

@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ArrowLeft, Lock, Copy, CheckCircle2, UserPlus, Settings, Globe, Users, MessageSquare } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import type { Group, Conversation } from '@meeshy/shared/types';
 import { CommunityMembersPanel } from './CommunityMembersPanel';
 import { CommunityPreferencesMenu } from './CommunityPreferencesMenu';
@@ -44,7 +43,7 @@ export const GroupDetails = memo(function GroupDetails({
 }: GroupDetailsProps) {
   const router = useRouter();
   const displayIdentifier = group.identifier?.replace(/^mshy_/, '') || '';
-  const [showMembers, setShowMembers] = useState(false);
+  const [, ] = useState(false);
 
   return (
     <>

@@ -44,7 +44,7 @@ interface StreamComposerProps {
 /**
  * Composant StreamComposer avec optimisation React.memo
  */
-export const StreamComposer = memo(forwardRef<any, StreamComposerProps>(
+export const StreamComposer = memo(forwardRef<unknown, StreamComposerProps>(
   function StreamComposer(props, ref) {
     const {
       value,

@@ -16,7 +16,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-function isAnonymousUser(user: any): user is Participant {
+function isAnonymousUser(user: unknown): user is Participant {
   return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
 }
 

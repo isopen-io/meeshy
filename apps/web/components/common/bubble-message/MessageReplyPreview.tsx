@@ -16,7 +16,7 @@ interface MessageReplyPreviewProps {
     content: string;
     createdAt: Date | string;
     sender?: MessageSender;
-    attachments?: any[];
+    attachments?: unknown[];
   };
   replyToContent: string | null;
   isOwnMessage: boolean;

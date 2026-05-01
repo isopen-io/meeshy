@@ -9,12 +9,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
-  MessageSquare,
   Users,
   Activity,
   UserPlus,
   X,
 } from 'lucide-react';
+
 import { usersService, conversationsService, type UserStats } from '@/services';
 import { type User } from '@/types';
 import { useI18n } from '@/hooks/useI18n';

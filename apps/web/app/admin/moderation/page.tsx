@@ -17,15 +17,14 @@ import {
   XCircle,
   Clock,
   User,
-  MessageSquare,
   Search,
   ChevronLeft,
   ChevronRight,
   Eye,
   Ban,
-  UserX
+  UserX,
 } from 'lucide-react';
-import { adminService } from '@/services/admin.service';
+
 import { toast } from 'sonner';
 import { StatsGrid, TimeSeriesChart, DonutChart, type StatItem } from '@/components/admin/Charts';
 import { StatCardSkeleton, TableSkeleton } from '@/components/admin/TableSkeleton';

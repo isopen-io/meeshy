@@ -8,21 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Activity,
-  Users,
-  Brain,
-  MessageSquare,
-  Clock,
-  Loader2,
-  Search,
-  Lock,
-  RefreshCw,
-  ChevronRight,
-  Zap,
-  Eye,
-  ListOrdered,
-} from 'lucide-react';
+import { Activity, Users, Brain, MessageSquare, Clock, Loader2, Search, Lock, RefreshCw, Zap, Eye, ListOrdered } from 'lucide-react';
 import {
   agentAdminService,
   type LiveStateData,
@@ -185,8 +171,6 @@ function RecentConversationsList({
 // ── Live State Detail Cards ───────────────────────────────────────────────
 
 function ActivityCard({ data }: { data: LiveStateData }) {
-  const score = data.analytics?.avgConfidence ?? 0;
-  const hasCooldown = (data.controlledUsers ?? []).some(u => u.locked);
 
   return (
     <Card>

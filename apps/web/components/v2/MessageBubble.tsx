@@ -3,9 +3,9 @@
 import { HTMLAttributes, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { getLanguageColor, theme } from './theme';
+import { getLanguageColor } from './theme';
 import { GhostIcon } from './GhostBadge';
-import { FLAG_MAP, getFlag } from './flags';
+import { getFlag } from './flags';
 
 export interface Translation {
   languageCode: string;
@@ -37,7 +37,6 @@ export interface MessageBubbleProps extends HTMLAttributes<HTMLDivElement> {
   /** Callback when a translation is selected */
   onTranslationSelect?: (languageCode: string) => void;
 }
-
 
 // Icône chevron
 function ChevronIcon({ className = 'w-3 h-3', direction = 'down' }: { className?: string; direction?: 'down' | 'up' }) {

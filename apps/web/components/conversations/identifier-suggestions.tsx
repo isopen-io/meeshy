@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { Badge } from '@/components/ui/badge';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { User } from '@/types';
 import { Hash, Sparkles } from 'lucide-react';
@@ -19,9 +18,9 @@ export function IdentifierSuggestions({
   onSelect, 
   currentIdentifier 
 }: IdentifierSuggestionsProps) {
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, _setSuggestions] = useState<string[]>([]);
 
-  const generateSuggestions = useMemo(() => {
+  const _generateSuggestions = useMemo(() => {
     const suggestions: string[] = [];
     
     // Suggestion basée sur le titre
@@ -79,7 +78,7 @@ export function IdentifierSuggestions({
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Sparkles className="h-3 w-3" />
-        Suggestions d'identifiants
+        Suggestions d&apos;identifiants
       </div>
       <div className="flex flex-wrap gap-2">
         {suggestions.map((suggestion, index) => (

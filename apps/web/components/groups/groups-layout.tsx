@@ -55,7 +55,7 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
 
   // États UI
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [, setIsSettingsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('public');
   const [searchFilter, setSearchFilter] = useState('');
   const [copiedIdentifier, setCopiedIdentifier] = useState<string | null>(null);

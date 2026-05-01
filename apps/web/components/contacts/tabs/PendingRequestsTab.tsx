@@ -24,7 +24,7 @@ interface PendingRequestsTabProps {
   currentUserId?: string;
   getUserDisplayName: (user: User) => string;
   onHandleRequest: (requestId: string, action: 'accept' | 'reject') => void;
-  t: (key: string, params?: any) => string;
+  t: (key: string, params?: unknown) => string;
 }
 
 const PendingRequestsTab = React.memo<PendingRequestsTabProps>(({

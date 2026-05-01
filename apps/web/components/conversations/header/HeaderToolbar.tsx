@@ -33,7 +33,7 @@ interface HeaderToolbarProps {
   onOpenSettings: () => void;
   onParticipantRemoved: (userId: string) => void;
   onParticipantAdded: (userId: string) => void;
-  onLinkCreated: (link: any) => void;
+  onLinkCreated: (link: unknown) => void;
   onTogglePin: () => void;
   onToggleMute: () => void;
   onToggleArchive: () => void;

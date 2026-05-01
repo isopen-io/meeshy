@@ -4,16 +4,16 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import styles from './config-modal.module.css';
-import { 
-  User, 
-  Globe, 
-  Brain, 
-  Database, 
-  Palette, 
+import {
+  User,
+  Globe,
+  Palette,
   Shield,
   Bell,
-  BarChart3
+  BarChart3,
 } from 'lucide-react';
+
+
 import { User as UserType } from '@/types';
 import { UserSettings } from './user-settings';
 import { LanguageSettings } from '@/components/translation/language-settings';

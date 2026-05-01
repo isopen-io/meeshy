@@ -66,10 +66,10 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
   const [recordingTime, setRecordingTime] = useState(0);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [audioFormat, setAudioFormat] = useState<string>('WEBM');
+  const [, setAudioFormat] = useState<string>('WEBM');
   const [showEffectsPanel, setShowEffectsPanel] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const [panelPosition, setPanelPosition] = useState({ top: 0, left: 0 });
+  const [, setPanelPosition] = useState({ top: 0, left: 0 });
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const buttonEffectsRef = useRef<HTMLButtonElement>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -84,11 +84,11 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
   const recordedDurationRef = useRef<number>(0); // Stocker la durée enregistrée pour éviter problème de closure
 
   // Refs pour stocker les fonctions du hook timeline (éviter problème de closure)
-  const startTrackingRef = useRef<any>(null);
-  const stopTrackingRef = useRef<any>(null);
-  const recordActivationRef = useRef<any>(null);
-  const recordDeactivationRef = useRef<any>(null);
-  const recordUpdateRef = useRef<any>(null);
+  const startTrackingRef = useRef<unknown>(null);
+  const stopTrackingRef = useRef<unknown>(null);
+  const recordActivationRef = useRef<unknown>(null);
+  const recordDeactivationRef = useRef<unknown>(null);
+  const recordUpdateRef = useRef<unknown>(null);
 
   const effectiveDuration = Math.min(maxDuration, MAX_ALLOWED_DURATION);
 
@@ -152,7 +152,6 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
 
     animationFrameRef.current = requestAnimationFrame(updateTimer);
   }, [effectiveDuration]);
-
 
   // Arrêter l'enregistrement
   const stopRecording = useCallback(() => {
@@ -476,7 +475,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
       startTimeRef.current = performance.now();
       animationFrameRef.current = requestAnimationFrame(updateTimer);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       setIsInitializing(false);
 
       if (error instanceof DOMException) {

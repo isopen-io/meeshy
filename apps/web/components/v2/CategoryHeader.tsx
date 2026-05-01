@@ -16,7 +16,7 @@ export interface CategoryHeaderProps {
 }
 
 export function CategoryHeader({
-  id,
+  _id,
   name,
   icon,
   count,

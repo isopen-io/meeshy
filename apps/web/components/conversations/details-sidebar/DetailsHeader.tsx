@@ -29,7 +29,6 @@ interface DetailsHeaderProps {
  */
 export function DetailsHeader({
   conversation,
-  currentUser,
   canModifyImage,
   displayName,
   avatarUrl,

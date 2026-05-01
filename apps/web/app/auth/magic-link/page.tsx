@@ -48,7 +48,7 @@ function MagicLinkPageContent() {
   const [countdown, setCountdown] = useState(MAGIC_LINK_EXPIRY_SECONDS);
   const [retryCount, setRetryCount] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
-  const [blockedUntil, setBlockedUntil] = useState<Date | null>(null);
+  const [, setBlockedUntil] = useState<Date | null>(null);
   const [isResending, setIsResending] = useState(false);
 
   // Pre-fill email from store or sessionStorage on mount

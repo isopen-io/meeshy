@@ -21,20 +21,8 @@ import {
   Type,
 } from 'lucide-react';
 import { agentAdminService, type AgentStatsData } from '@/services/agent-admin.service';
-import { UserDisplay } from './UserDisplay';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip as RechartsTooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Legend,
-} from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
+
 import { toast } from 'sonner';
 
 function formatTimeAgo(dateStr: string | null): string {

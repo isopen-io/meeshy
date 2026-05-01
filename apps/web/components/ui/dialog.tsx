@@ -3,7 +3,7 @@
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 // VisuallyHidden replacement (package not installed)
-const VisuallyHidden = { Root: ({ children, asChild, ...props }: any) => asChild ? children : React.createElement('span', { className: 'sr-only', ...props }, children) }
+const VisuallyHidden = { Root: ({ children, asChild, ...props }: unknown) => asChild ? children : React.createElement('span', { className: 'sr-only', ...props }, children) }
 import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"

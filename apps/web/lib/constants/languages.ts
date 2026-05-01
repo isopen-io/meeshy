@@ -58,6 +58,6 @@ export const MAX_MESSAGE_LENGTH_MODERATOR = 4000;
  * Limite uniforme de 4000 caractères pour tous les rôles
  * Au-delà, un fichier .txt est automatiquement créé
  */
-export function getMaxMessageLength(userRole?: string): number {
+export function getMaxMessageLength(_userRole?: string): number {
   return MAX_MESSAGE_LENGTH_MODERATOR; // Limite uniforme de 4000 caractères
 }

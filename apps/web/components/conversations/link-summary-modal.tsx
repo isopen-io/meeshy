@@ -14,7 +14,6 @@ import {
   Link2,
   Copy,
   Calendar,
-  Clock,
   MessageSquare,
   FileText,
   Image,
@@ -29,7 +28,7 @@ import {
   Link,
   MapPin,
   Phone,
-  Shield
+  Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -89,7 +88,7 @@ export function LinkSummaryModal({
     });
   };
 
-  const getLanguageName = (code: string) => {
+  const _getLanguageName = (code: string) => {
     const languages: Record<string, string> = {
       'fr': 'Français',
       'en': 'English',

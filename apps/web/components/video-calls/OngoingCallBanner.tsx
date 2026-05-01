@@ -7,7 +7,7 @@
 'use client';
 
 import React from 'react';
-import { Phone, PhoneOff, X } from 'lucide-react';
+import { Phone, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -21,7 +21,7 @@ interface OngoingCallBannerProps {
 }
 
 export function OngoingCallBanner({
-  callId,
+  _callId,
   participantCount,
   duration,
   onJoin,

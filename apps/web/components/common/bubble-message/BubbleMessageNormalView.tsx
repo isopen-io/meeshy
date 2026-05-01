@@ -29,7 +29,7 @@ interface BubbleMessageNormalViewProps {
     translations: BubbleTranslation[];
     originalContent: string;
     readStatus?: Array<{ userId: string; readAt: Date }>;
-    attachments?: any[];
+    attachments?: unknown[];
     reactionSummary?: Record<string, number>;
     currentUserReactions?: string[];
   };
@@ -68,9 +68,9 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
   message,
   currentUser,
   userLanguage,
-  usedLanguages = [],
+  _usedLanguages = [],
   currentDisplayLanguage,
-  isTranslating = false,
+  _isTranslating = false,
   translationError,
   conversationType = 'direct',
   userRole = 'USER',
@@ -82,7 +82,6 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
   onEnterEditMode,
   onEnterDeleteMode,
   onEnterReportMode,
-  onForceTranslation,
   onEditMessage,
   onDeleteMessage,
   onLanguageSwitch,
@@ -122,7 +121,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
     handleReportMessage,
     handleReactionClick,
   } = useMessageInteractions({
-    message: message as any,
+    message: message as unknown,
     currentUserId: currentUser?.id,
     currentAnonymousUserId,
     isAnonymous,
@@ -145,7 +144,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
     replyToContent,
     availableVersions,
   } = useMessageDisplay({
-    message: message as any,
+    message: message as unknown,
     currentDisplayLanguage,
   });
 
@@ -188,7 +187,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
           {!isOwnMessage && (
             isFirstInGroup ? (
               <MessageHeader
-                message={message as any}
+                message={message as unknown}
                 isOwnMessage={isOwnMessage}
                 t={tBubble}
               />
@@ -205,7 +204,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
             {/* Name and Date - only for first message in group */}
             {isFirstInGroup && (
               <MessageNameDate
-                message={message as any}
+                message={message as unknown}
                 isOwnMessage={isOwnMessage}
                 t={tBubble}
               />
@@ -213,7 +212,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
 
             {/* Attachments (before text bubble) */}
             <MessageAttachmentsSection
-              message={message as any}
+              message={message as unknown}
               isOwnMessage={isOwnMessage}
               isAnonymous={isAnonymous}
               currentUserId={currentUser?.id}
@@ -226,7 +225,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
 
             {/* Message Content (text bubble with reactions) */}
             <MessageContent
-              message={message as any}
+              message={message as unknown}
               displayContentWithMentions={displayContentWithMentions}
               replyToContent={replyToContent}
               isOwnMessage={isOwnMessage}

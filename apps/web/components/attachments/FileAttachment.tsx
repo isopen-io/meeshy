@@ -27,7 +27,7 @@ export const FileAttachment = React.memo(function FileAttachment({
   isMobile,
   onDeleteClick,
 }: FileAttachmentProps) {
-  const handleFileClick = useCallback((event: React.MouseEvent) => {
+  const handleFileClick = useCallback((_event: React.MouseEvent) => {
     window.open(attachment.fileUrl, '_blank');
   }, [attachment.fileUrl]);
 
@@ -72,7 +72,7 @@ export const FileAttachment = React.memo(function FileAttachment({
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                handleFileClick(e as any);
+                handleFileClick(e as unknown);
               }
             }}
             role="button"

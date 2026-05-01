@@ -116,7 +116,7 @@ export function ConversationDetailsSidebar({
     }
 
     const otherParticipant = conv.participants?.find(p => p.userId !== currentUser.id);
-    const otherUser = (otherParticipant as any)?.user;
+    const otherUser = (otherParticipant as unknown)?.user;
     if (otherParticipant && otherUser) {
       return (
         otherUser.displayName ||
@@ -131,7 +131,7 @@ export function ConversationDetailsSidebar({
   const getConversationAvatarUrl = (conv: Conversation) => {
     if (conv.type === 'direct') {
       const otherParticipant = conv.participants?.find(p => p.userId !== currentUser.id);
-      const participantUser = (otherParticipant as any)?.user;
+      const participantUser = (otherParticipant as unknown)?.user;
       return participantUser?.avatar;
     }
     return conv.image || conv.avatar;

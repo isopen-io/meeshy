@@ -5,7 +5,7 @@ import type { Conversation } from '@meeshy/shared/types';
 export function usePermissions(
   conversation: Conversation,
   currentUserRole: UserRoleEnum,
-  currentUser: any
+  currentUser: unknown
 ) {
   const canUseVideoCalls = useCallback((): boolean => {
     const role = currentUser?.role as UserRoleEnum;

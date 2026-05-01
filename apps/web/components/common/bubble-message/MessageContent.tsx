@@ -80,8 +80,8 @@ interface MessageContentProps {
       id: string;
       content: string;
       createdAt: Date | string;
-      sender?: any;
-      attachments?: any[];
+      sender?: unknown;
+      attachments?: unknown[];
     };
   };
   displayContentWithMentions: string;

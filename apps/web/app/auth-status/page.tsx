@@ -10,7 +10,7 @@ export default function AuthStatusPage() {
   const user = useUser(); const isAuthChecking = useIsAuthChecking();
   const { isAuthenticated: useAuthAuthenticated, isChecking: useAuthChecking } = useAuth();
   const { isAuthenticated: guardAuthenticated, isChecking: guardChecking } = useAuthGuard();
-  const [localStorageData, setLocalStorageData] = useState<any>({});
+  const [localStorageData, setLocalStorageData] = useState<unknown>({});
 
   useEffect(() => {
     // Récupérer les données localStorage
@@ -103,7 +103,6 @@ export default function AuthStatusPage() {
               </pre>
             </div>
             
-
           </div>
 
           {/* Actions de débogage */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Footer } from '@/components/layout/Footer';
@@ -231,7 +231,7 @@ export default function TrackingLinkDetailsPage() {
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <XCircle className="h-16 w-16 text-red-600 mb-4" />
                 <h3 className="text-2xl font-bold text-foreground mb-3">{t('tracking.details.linkNotFound') || 'Erreur'}</h3>
-                <p className="text-muted-foreground mb-6">Une erreur inattendue s'est produite</p>
+                <p className="text-muted-foreground mb-6">Une erreur inattendue s&apos;est produite</p>
                 <Button onClick={() => router.push('/links#tracked')} variant="default">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   {t('tracking.details.backToLinks') || 'Retour aux liens'}

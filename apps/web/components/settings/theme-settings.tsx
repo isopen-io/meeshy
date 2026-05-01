@@ -6,11 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Palette, Monitor, Sun, Moon, Languages } from 'lucide-react';
+import { Palette, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme, useAppActions, useCurrentInterfaceLanguage, useLanguageActions } from '@/stores';
 import { useI18n } from '@/hooks/useI18n';
-import { useLanguage } from '@/hooks/compatibility-hooks';
 import { INTERFACE_LANGUAGES } from '@/types/frontend';
 
 interface ThemeConfig {
@@ -139,7 +138,6 @@ export function ThemeSettings() {
               ))}
             </div>
           </div>
-
 
         </CardContent>
       </Card>

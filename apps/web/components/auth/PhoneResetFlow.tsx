@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useI18n } from '@/hooks/useI18n';
-import { usePasswordResetStore, type MaskedUserInfo, type PhoneResetStep } from '@/stores/password-reset-store';
+import { usePasswordResetStore, type MaskedUserInfo, type _PhoneResetStep } from '@/stores/password-reset-store';
 import { phonePasswordResetService } from '@/services/phone-password-reset.service';
 import {
   Phone,
@@ -184,7 +184,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
   const {
     phoneResetStep,
     phoneNumber,
-    phoneCountryCode,
+    _phoneCountryCode,
     phoneResetTokenId,
     maskedUserInfo,
     isPhoneLookupLoading,
@@ -203,7 +203,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
     setIdentityAttemptsRemaining,
     setError,
     setToken,
-    resetPhoneFlow,
+    _resetPhoneFlow,
   } = usePasswordResetStore();
 
   // Local state
@@ -320,7 +320,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
         // Translate error code from service
         setError(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.lookupFailed') || 'Recherche échouée');
       }
-    } catch (err) {
+    } catch (_err) {
       setError(t('phoneReset.errors.networkError') || 'Erreur de connexion');
     } finally {
       setIsPhoneLookupLoading(false);
@@ -371,7 +371,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
           setIdentityAttemptsRemaining(result.attemptsRemaining);
         }
       }
-    } catch (err) {
+    } catch (_err) {
       setError(t('phoneReset.errors.networkError') || 'Erreur de connexion');
     } finally {
       setIsIdentityVerifying(false);
@@ -410,7 +410,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
         setError(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.codeFailed') || 'Code invalide');
         setCode('');
       }
-    } catch (err) {
+    } catch (_err) {
       setError(t('phoneReset.errors.networkError') || 'Erreur de connexion');
     } finally {
       setIsCodeVerifying(false);
@@ -440,7 +440,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
         // Translate error code from service
         toast.error(result.error ? translateErrorCode(result.error) : t('phoneReset.errors.resendFailed') || 'Impossible de renvoyer');
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error(t('phoneReset.errors.networkError') || 'Erreur de connexion');
     }
   };

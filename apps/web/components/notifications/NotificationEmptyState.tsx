@@ -11,7 +11,7 @@ type NotificationEmptyStateProps = {
 };
 
 export const NotificationEmptyState = memo(function NotificationEmptyState({
-  isSearching,
+  _isSearching,
   title,
   description,
 }: NotificationEmptyStateProps) {

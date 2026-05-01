@@ -5,7 +5,6 @@ import { Check, CheckCheck, Eye, EyeOff, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
 import { useMessageStatusDetails, type MessageStatusEntry } from '@/hooks/queries/use-message-status-details';
 
 interface MessageReadStatusDetailsProps {

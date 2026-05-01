@@ -27,7 +27,6 @@ export function TypingIndicator({
   className = "" 
 }: TypingIndicatorProps) {
   const [dots, setDots] = useState('');
-  const { t } = useI18n('conversations');
 
   // Animation des points
   useEffect(() => {

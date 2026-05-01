@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MapPin, Globe, Clock, Monitor, Wifi } from 'lucide-react';
+import { MapPin, Globe, Clock, Wifi } from 'lucide-react';
 
 interface UserGeolocationSectionProps {
-  user: any;
+  user: unknown;
 }
 
 function countryCodeToFlag(code: string | null): string {
@@ -82,7 +82,7 @@ export function UserGeolocationSection({ user }: UserGeolocationSectionProps) {
           <div className="p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800">
             <div className="flex items-center gap-2 mb-3">
               <Globe className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              <h4 className="font-semibold text-sm dark:text-gray-100">Contexte d'inscription</h4>
+              <h4 className="font-semibold text-sm dark:text-gray-100">Contexte d&apos;inscription</h4>
             </div>
             <div className="space-y-2">
               <InfoRow label="Localisation" value={user.registrationLocation} />

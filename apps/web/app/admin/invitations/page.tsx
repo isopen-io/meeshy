@@ -8,25 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  UserPlus,
-  ArrowLeft,
-  Search,
-  Filter,
-  Calendar,
-  User,
-  Users,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Mail,
-  Send,
-  RefreshCw,
-  ChevronLeft,
-  ChevronRight,
-  MessageSquare
-} from 'lucide-react';
-import { adminService } from '@/services/admin.service';
+import { UserPlus, ArrowLeft, Search, Filter, Calendar, User, Users, CheckCircle, XCircle, Clock, Send, RefreshCw, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
@@ -554,7 +536,7 @@ export default function AdminInvitationsPage() {
                           </div>
 
                           {invitation.message && (
-                            <p className="text-gray-700 dark:text-gray-300 mb-3 italic">"{invitation.message}"</p>
+                            <p className="text-gray-700 dark:text-gray-300 mb-3 italic">{'"'}{invitation.message}{'"'}</p>
                           )}
 
                           <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 flex-wrap">

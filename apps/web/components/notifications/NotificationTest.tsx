@@ -65,7 +65,7 @@ export function NotificationTest() {
     console.log('[NotificationTest] Simulating notification:', testNotification);
 
     // Émettre directement via le callback des listeners
-    const callbacks = (notificationSocketIO as any).notificationCallbacks;
+    const callbacks = (notificationSocketIO as unknown).notificationCallbacks;
     if (callbacks) {
       callbacks.forEach((cb: (n: Notification) => void) => cb(testNotification));
     }
@@ -158,7 +158,7 @@ export function NotificationTest() {
             Cliquez sur un bouton pour simuler une notification Socket.IO
           </p>
           <p className="text-xs text-muted-foreground text-center mt-1">
-            Les toasts s'affichent automatiquement via useNotificationsManagerRQ
+            Les toasts s&apos;affichent automatiquement via useNotificationsManagerRQ
           </p>
         </div>
       </CardContent>

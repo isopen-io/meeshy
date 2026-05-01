@@ -1,15 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Link2, Plus } from 'lucide-react';
+import { Link2 } from 'lucide-react';
 import { CreateLinkModalV2 } from './create-link-modal';
 import { LinkSummaryModal } from './link-summary-modal';
 import { QuickLinkConfigModal, QuickLinkConfig, CreatedLinkData } from './quick-link-config-modal';
 import { toast } from 'sonner';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
-import { copyToClipboard } from '@/lib/clipboard';
 import { useUser } from '@/stores';
 import { useLanguage } from '@/hooks/use-language';
 import { generateLinkName } from '@/utils/link-name-generator';
@@ -18,7 +16,7 @@ import { authManager } from '@/services/auth-manager.service';
 
 interface CreateLinkButtonProps {
   conversationId?: string; // ID de la conversation (optionnel, détecté depuis l'URL sinon)
-  currentUser?: any; // Utilisateur courant (optionnel, utilise le store si non fourni)
+  currentUser?: unknown; // Utilisateur courant (optionnel, utilise le store si non fourni)
   onLinkCreated?: () => void;
   variant?: 'default' | 'outline' | 'ghost' | 'secondary' | 'destructive';
   size?: 'default' | 'sm' | 'lg' | 'icon';
@@ -38,7 +36,7 @@ export function CreateLinkButton({
   className,
   children,
   forceModal = false,
-  disableSummaryModal = false
+  _disableSummaryModal = false
 }: CreateLinkButtonProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQuickConfigModalOpen, setIsQuickConfigModalOpen] = useState(false);
@@ -46,14 +44,12 @@ export function CreateLinkButton({
   const [isCreating, setIsCreating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
-  const [linkSummaryData, setLinkSummaryData] = useState<any>(null);
+  const [linkSummaryData, setLinkSummaryData] = useState<unknown>(null);
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [quickLinkDefaultTitle, setQuickLinkDefaultTitle] = useState<string>('');
   const [createdLinkData, setCreatedLinkData] = useState<CreatedLinkData | null>(null);
   const storeUser = useUser();
   const currentUser = propCurrentUser || storeUser; // Utiliser la prop en priorité, sinon le store
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const { detectedInterfaceLanguage } = useLanguage();
 
   // Messages traduits selon la langue de l'interface

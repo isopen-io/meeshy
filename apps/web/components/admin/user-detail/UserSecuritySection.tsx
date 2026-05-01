@@ -9,7 +9,7 @@ import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
 
 interface UserSecuritySectionProps {
-  user: any;
+  user: unknown;
   userId: string;
   onUpdate: () => void;
   onResetPassword: () => void;
@@ -41,7 +41,7 @@ export function UserSecuritySection({
       await apiService.post(`/admin/users/${userId}/unlock`);
       toast.success('Compte déverrouillé avec succès');
       onUpdate();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors du déverrouillage');
     }
   };
@@ -52,7 +52,7 @@ export function UserSecuritySection({
       await apiService.post(`/admin/users/${userId}/${has2FA ? 'disable' : 'enable'}-2fa`);
       toast.success(`2FA ${has2FA ? 'désactivé' : 'activé'} avec succès`);
       onUpdate();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors de la modification 2FA');
     }
   };
@@ -97,7 +97,7 @@ export function UserSecuritySection({
             {isAccountLocked && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Verrouillé jusqu'à:</span>
+                  <span className="text-gray-600 dark:text-gray-400">Verrouillé jusqu&apos;à:</span>
                   <span className="font-medium text-red-600 dark:text-red-400">
                     {formatDate(user.lockedUntil)}
                   </span>

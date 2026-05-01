@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { AttachmentService } from '@/services/attachmentService';
 import { conversationsService } from '@/services/conversations.service';
-import type { HeaderActions } from './types';
 
 export function useHeaderActions(conversationId: string, t: (key: string) => string) {
   const [isImageUploadDialogOpen, setIsImageUploadDialogOpen] = useState(false);
@@ -15,7 +14,7 @@ export function useHeaderActions(conversationId: string, t: (key: string) => str
       const uploadResult = await AttachmentService.uploadFiles([file]);
 
       if (uploadResult.success && uploadResult.attachments.length > 0) {
-        const imageUrl = (uploadResult.attachments[0] as any).url;
+        const imageUrl = (uploadResult.attachments[0] as unknown).url;
 
         await conversationsService.updateConversation(conversationId, {
           image: imageUrl,
@@ -51,7 +50,7 @@ export function useHeaderActions(conversationId: string, t: (key: string) => str
         await navigator.clipboard.writeText(fullMessage);
         toast.success(t('conversationHeader.linkCopied') || 'Lien copié !');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error.name === 'AbortError') {
         return;
       }

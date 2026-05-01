@@ -11,7 +11,6 @@ import { X, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } fro
 import { motion, AnimatePresence } from 'framer-motion';
 import { Attachment, formatFileSize } from '@meeshy/shared/types/attachment';
 import { Button } from '../ui/button';
-import { cn } from '@/lib/utils';
 
 interface ImageLightboxProps {
   images: Attachment[];
@@ -205,7 +204,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
           {imageError ? (
             <div className="flex flex-col items-center gap-4 text-white">
               <div className="text-red-400 text-6xl">⚠️</div>
-              <p className="text-lg">Impossible de charger l'image</p>
+              <p className="text-lg">Impossible de charger l&apos;image</p>
               <p className="text-sm text-gray-400">{currentImage.originalName}</p>
               <Button
                 variant="outline"
@@ -237,7 +236,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
                 e.stopPropagation();
                 onClose();
               }}
-              onError={(e) => {
+              onError={(_e) => {
                 console.error('[ImageLightbox] Erreur chargement image:', currentImage.fileUrl);
                 setImageError(true);
               }}

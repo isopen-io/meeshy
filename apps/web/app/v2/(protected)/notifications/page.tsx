@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Button, Card, Badge, LanguageOrb, PageHeader, Avatar, Skeleton } from '@/components/v2';
+import { Button, Badge, LanguageOrb, PageHeader, Avatar, Skeleton } from '@/components/v2';
 import { useNotificationsV2 } from '@/hooks/v2';
 import { safeInternalPath } from '@/utils/safe-redirect';
 
@@ -21,7 +21,7 @@ function NotificationSkeleton() {
   );
 }
 
-function NotificationTypeIcon({ type }: { type: string }) {
+function _NotificationTypeIcon({ type }: { type: string }) {
   switch (type) {
     case 'new_message':
     case 'message_reply':
@@ -164,7 +164,7 @@ export default function V2NotificationsPage() {
               Aucune notification
             </h2>
             <p className="text-[var(--gp-text-secondary)]">
-              Vous n'avez pas encore de notifications
+              Vous n&apos;avez pas encore de notifications
             </p>
           </div>
         )}

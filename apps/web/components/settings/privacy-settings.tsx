@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Shield, Eye, Database, Download, Trash2, Loader2, Phone, Search, Camera } from 'lucide-react';
+import { Eye, Database, Download, Trash2, Loader2, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { SoundFeedback } from '@/hooks/use-accessibility';
@@ -116,7 +116,7 @@ export function PrivacySettings() {
 
       SoundFeedback.playSuccess();
       toast.success(t('privacy.dataDeleted', 'Données supprimées'));
-    } catch (err) {
+    } catch (_err) {
       toast.error('Erreur lors de la suppression');
     }
   };
@@ -184,7 +184,7 @@ export function PrivacySettings() {
             <div className="space-y-1 flex-1">
               <Label className="text-sm sm:text-base">Masquer le profil de la recherche</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Empêche votre profil d'apparaître dans les résultats de recherche
+                Empêche votre profil d&apos;apparaître dans les résultats de recherche
               </p>
             </div>
             <Switch

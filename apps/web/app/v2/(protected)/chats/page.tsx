@@ -31,8 +31,6 @@ import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-
 interface FailedMessage {
   tempId: string;
   content: string;
@@ -114,7 +112,7 @@ const mockDemoMessages: DemoMessage[] = [
 // Components
 // ============================================================================
 
-function MessageStatusIndicator({ status }: { status: MessageStatus }) {
+function _MessageStatusIndicator({ status }: { status: MessageStatus }) {
   const getStatusIcon = () => {
     switch (status) {
       case 'sending':
@@ -166,7 +164,7 @@ function MessagesSkeleton() {
   );
 }
 
-function MessageAttachments({ attachments, isSent }: { attachments: any[]; isSent: boolean }) {
+function MessageAttachments({ attachments, isSent }: { attachments: unknown[]; isSent: boolean }) {
   if (!attachments || attachments.length === 0) return null;
 
   const images = attachments.filter((a) => a.type === 'image' || a.mimeType?.startsWith('image/'));
@@ -265,7 +263,7 @@ export default function V2ChatsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   const [failedMessages, setFailedMessages] = useState<FailedMessage[]>([]);
-  const [messageReactions, setMessageReactions] = useState<Record<string, Record<string, string[]>>>({});
+  const [, setMessageReactions] = useState<Record<string, Record<string, string[]>>>({});
 
   // Drawer state
   const [drawerNotifications, setDrawerNotifications] = useState<'all' | 'mentions' | 'none'>('all');
@@ -299,7 +297,7 @@ export default function V2ChatsPage() {
   // Conversations hook for getting current conversation details
   const {
     currentConversation,
-    isConnected: conversationsConnected,
+    isConnected: _conversationsConnected,
     selectConversation,
   } = useConversationsV2(selectedConversationId, {
     enabled: isAuthenticated,
@@ -315,8 +313,8 @@ export default function V2ChatsPage() {
     hasMore: hasMoreMessages,
     loadMore: loadMoreMessages,
     sendMessage,
-    editMessage,
-    deleteMessage,
+    _editMessage,
+    _deleteMessage,
     typingUsers: messageTypingUsers,
     startTyping,
     stopTyping,
@@ -365,7 +363,7 @@ export default function V2ChatsPage() {
     else stopTyping();
   }, [startTyping, stopTyping]);
 
-  const handleSend = useCallback(async (content: string, _attachments: any[], languageCode: string) => {
+  const handleSend = useCallback(async (content: string, _attachments: unknown[], languageCode: string) => {
     if (!content.trim()) return;
     stopTyping();
 
@@ -400,13 +398,6 @@ export default function V2ChatsPage() {
     });
   }, [currentUser?.id]);
 
-  const getMessageStatus = useCallback((msg: Message): MessageStatus => {
-    if (msg.id.startsWith('temp-')) return 'sending';
-    if (msg.readCount && msg.readCount > 0) return 'read';
-    if (msg.deliveredCount && msg.deliveredCount > 0) return 'delivered';
-    return 'sent';
-  }, []);
-
   // If no conversation selected, show empty state
   if (!selectedConversationId) {
     return <EmptyConversation />;
@@ -438,17 +429,17 @@ export default function V2ChatsPage() {
               </svg>
             </div>
           ) : (
-            <LanguageOrb code={(currentConversation?.participants?.[0]?.user as any)?.systemLanguage || 'fr'} size="md" pulse={false} />
+            <LanguageOrb code={(currentConversation?.participants?.[0]?.user as unknown)?.systemLanguage || 'fr'} size="md" pulse={false} />
           )}
 
           <div>
             <h2 className="font-semibold text-[var(--gp-text-primary)]">{(() => {
               if (currentConversation?.type === 'direct') {
                 const other = currentConversation.participants?.find(p => {
-                  const uid = p.userId ?? (p as any).user?.id;
+                  const uid = p.userId ?? (p as unknown).user?.id;
                   return uid && uid !== currentUser?.id;
                 }) ?? currentConversation.participants?.[1] ?? currentConversation.participants?.[0];
-                const otherUser = (other as any)?.user;
+                const otherUser = (other as unknown)?.user;
                 return otherUser?.displayName || otherUser?.username || other?.displayName || currentConversation.title || 'Conversation';
               }
               return currentConversation?.title || 'Conversation';
@@ -504,11 +495,8 @@ export default function V2ChatsPage() {
           </div>
         ) : (
           displayMessages.map((msg, index) => {
-            const isSent = (getSenderUserId(msg.sender as Record<string, unknown>) ?? (msg.sender as any)?.id) === currentUser?.id;
+            const isSent = (getSenderUserId(msg.sender as Record<string, unknown>) ?? (msg.sender as unknown)?.id) === currentUser?.id;
             const showTimestamp = index === 0 || new Date(msg.createdAt).toDateString() !== new Date(displayMessages[index - 1].createdAt).toDateString();
-            const status = isSent ? getMessageStatus(msg) : undefined;
-            const reactions = messageReactions[msg.id] || {};
-            const repliedMessage = msg.replyToId ? displayMessages.find((m) => m.id === msg.replyToId) : null;
 
             return (
               <div key={msg.id}>
@@ -519,7 +507,7 @@ export default function V2ChatsPage() {
                     <div className={`mb-1 ${isSent ? 'flex justify-end' : ''}`}>
                       <div className="max-w-[60%] opacity-80">
                         <ReplyPreview
-                          authorName={(repliedMessage.sender as any)?.displayName || 'Unknown'}
+                          authorName={(repliedMessage.sender as unknown)?.displayName || 'Unknown'}
                           content={repliedMessage.content}
                           contentType="text"
                           languageCode={repliedMessage.originalLanguage || 'fr'}
@@ -542,13 +530,13 @@ export default function V2ChatsPage() {
                     languageCode={msg.originalLanguage || 'fr'}
                     languageName={msg.originalLanguage || 'Francais'}
                     content={msg.content}
-                    translations={(msg.translations as any[])?.filter((t: any) => t.language && t.content).map((t: any) => ({
+                    translations={(msg.translations as unknown[])?.filter((t: unknown) => t.language && t.content).map((t: unknown) => ({
                       languageCode: t.language,
                       languageName: t.language,
                       content: t.content,
                     })) || []}
-                    sender={!isSent ? (msg.sender as any)?.displayName || (msg.sender as any)?.username : undefined}
-                    senderUsername={!isSent ? (msg.sender as any)?.username : undefined}
+                    sender={!isSent ? (msg.sender as unknown)?.displayName || (msg.sender as unknown)?.username : undefined}
+                    senderUsername={!isSent ? (msg.sender as unknown)?.username : undefined}
                     timestamp={
                       new Date(msg.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
                     }
@@ -587,7 +575,7 @@ export default function V2ChatsPage() {
               <div className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
               <div className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
-            <span>Quelqu'un ecrit...</span>
+            <span>Quelqu&apos;un ecrit...</span>
           </div>
         )}
 
@@ -599,7 +587,7 @@ export default function V2ChatsPage() {
         <div className="flex items-center gap-3 px-4 py-2 border-b border-[var(--gp-border)] bg-[var(--gp-surface)]">
           <div className="flex-1 min-w-0">
             <ReplyPreview
-              authorName={(replyToMessage.sender as any)?.displayName || 'Unknown'}
+              authorName={(replyToMessage.sender as unknown)?.displayName || 'Unknown'}
               content={replyToMessage.content}
               contentType="text"
               languageCode={replyToMessage.originalLanguage || 'fr'}
@@ -615,7 +603,7 @@ export default function V2ChatsPage() {
 
       {/* Message Composer */}
       <MessageComposer
-        ref={composerRef as any}
+        ref={composerRef as unknown}
         value={message}
         onChange={handleMessageChange}
         onSend={handleSend}
@@ -634,10 +622,10 @@ export default function V2ChatsPage() {
         conversationName={(() => {
           if (currentConversation?.type === 'direct') {
             const other = currentConversation.participants?.find(p => {
-              const uid = p.userId ?? (p as any).user?.id;
+              const uid = p.userId ?? (p as unknown).user?.id;
               return uid && uid !== currentUser?.id;
             }) ?? currentConversation.participants?.[1] ?? currentConversation.participants?.[0];
-            const otherUser = (other as any)?.user;
+            const otherUser = (other as unknown)?.user;
             return otherUser?.displayName || otherUser?.username || other?.displayName || currentConversation.title || '';
           }
           return currentConversation?.title || '';

@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CardHeader,
-  CardContent,
   CardTitle,
   CardDescription,
   Badge,
@@ -13,6 +12,7 @@ import {
   MessageBubble,
   theme,
 } from '@/components/v2';
+
 
 export default function V2LandingPage() {
   return (
@@ -215,7 +215,7 @@ export default function V2LandingPage() {
                 </div>
                 <CardTitle>100+ Langues</CardTitle>
                 <CardDescription>
-                  Communiquez avec n'importe qui dans le monde. Notre IA traduit instantanément vos messages.
+                  Communiquez avec n&apos;importe qui dans le monde. Notre IA traduit instantanément vos messages.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -230,7 +230,7 @@ export default function V2LandingPage() {
                 </div>
                 <CardTitle>Temps Réel</CardTitle>
                 <CardDescription>
-                  Pas d'attente. La traduction apparaît pendant que vous tapez pour des conversations fluides.
+                  Pas d&apos;attente. La traduction apparaît pendant que vous tapez pour des conversations fluides.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -266,7 +266,7 @@ export default function V2LandingPage() {
             Prêt à briser les barrières ?
           </h2>
           <p className="text-xl opacity-80 mb-8">
-            Rejoignez des milliers d'utilisateurs qui communiquent sans frontières linguistiques.
+            Rejoignez des milliers d&apos;utilisateurs qui communiquent sans frontières linguistiques.
           </p>
           <Link href="/v2/signup">
             <Button variant="primary" size="lg">

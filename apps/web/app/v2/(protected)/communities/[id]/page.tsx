@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { Button, Card, Badge, Avatar, useToast, PageHeader } from '@/components/v2';
+import { Button, Card, Badge, useToast, PageHeader } from '@/components/v2';
 import {
   useCommunityQuery,
   useCommunityConversationsQuery,
@@ -10,7 +10,7 @@ import {
   useLeaveCommunityMutation,
 } from '@/hooks/queries';
 import { CommunityPreferencesMenu } from '@/components/groups/CommunityPreferencesMenu';
-import type { Community, CommunityMember } from '@meeshy/shared/types';
+import type { CommunityMember } from '@meeshy/shared/types';
 
 export default function CommunityDetailPage() {
   const params = useParams();

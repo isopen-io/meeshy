@@ -346,7 +346,7 @@ export function MentionAutocomplete({
                   {getUserInitials({
                     firstName: suggestion.displayName || suggestion.username,
                     lastName: '',
-                  } as any)}
+                  } as unknown)}
                 </AvatarFallback>
               </Avatar>
 
@@ -390,7 +390,7 @@ export function MentionAutocomplete({
           transition={{ duration: 0.3, type: 'spring' }}
           className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 font-medium"
         >
-          Aucun utilisateur trouvé pour "{query}"
+          Aucun utilisateur trouvé pour &quot;{query}&quot;
         </motion.div>
       )}
 

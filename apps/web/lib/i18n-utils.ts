@@ -30,7 +30,7 @@ export function getNestedValue(
   if (!obj) return undefined;
 
   const keys = path.split('.');
-  let current: any = obj;
+  let current: unknown = obj;
 
   for (const key of keys) {
     if (current === null || current === undefined) {
