@@ -412,12 +412,12 @@ struct SimpleTimelineView: View {
         }
 
         for media in effects.mediaObjects ?? [] {
-            let trackType: TrackType = media.mediaType == "video" ? .video : .image
+            let trackType: TrackType = media.kind == .video ? .video : .image
 
             let img = viewModel.loadedImages[media.id]
             result.append(SimpleSegment(
                 id: media.id,
-                name: media.mediaType == "video" ? "Video" : "Image",
+                name: media.kind == .video ? "Video" : "Image",
                 type: trackType,
                 startTime: media.startTime ?? 0,
                 duration: media.duration ?? slideDur,

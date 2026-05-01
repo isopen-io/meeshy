@@ -185,14 +185,15 @@ public struct StoryComposerView: View {
         _ loadedImages: [String: UIImage],
         _ loadedVideoURLs: [String: URL],
         _ loadedAudioURLs: [String: URL],
-        _ originalLanguage: String?
+        _ originalLanguage: String?,
+        _ visibility: String
     ) -> Void
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
     public init(
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -919,7 +920,7 @@ public struct StoryComposerView: View {
         let isBackground = viewModel.isBackground(id: obj.id)
         return HStack(spacing: 8) {
             mediaElementThumbnail(obj: obj)
-            Text(obj.mediaType == "video" ? String(localized: "story.composer.videoLabel", defaultValue: "Video", bundle: .module) : String(localized: "story.composer.imageLabel", defaultValue: "Image", bundle: .module))
+            Text(obj.kind == .video ? String(localized: "story.composer.videoLabel", defaultValue: "Video", bundle: .module) : String(localized: "story.composer.imageLabel", defaultValue: "Image", bundle: .module))
                 .font(.system(size: 12, weight: isSelected ? .bold : .medium))
                 .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
             if isBackground {
@@ -1045,7 +1046,7 @@ public struct StoryComposerView: View {
                 .frame(width: 32, height: 32)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         } else {
-            Image(systemName: obj.mediaType == "video" ? "video.fill" : "photo")
+            Image(systemName: obj.kind == .video ? "video.fill" : "photo")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(MeeshyColors.indigo400)
                 .frame(width: 32, height: 32)
@@ -1259,9 +1260,17 @@ public struct StoryComposerView: View {
             offsetY: bt.offsetY != 0 ? bt.offsetY : nil,
             rotation: bt.rotation != 0 ? bt.rotation : nil
         )
+        // Voice fields are NOT a function of the composer's @State — they live
+        // entirely on `viewModel.currentEffects` (set by the voice recorder /
+        // TTS pipeline). Re-emitting them here ensures `buildEffects()` is the
+        // FULL slide snapshot and not a partial overwrite. Same for
+        // `backgroundAudioVariants` (TTS variants per language). Without this,
+        // every slide-switch + sync wiped the voice payload.
+        let current = viewModel.currentEffects
         return StoryEffects(
             background: bgHex,
             filter: selectedFilter?.rawValue,
+            filterIntensity: selectedFilter != nil ? viewModel.filterIntensity : nil,
             stickers: stickerObjects.isEmpty ? nil : stickerObjects.map(\.emoji),
             stickerObjects: stickerObjects.isEmpty ? nil : stickerObjects,
             drawingData: viewModel.drawingData,
@@ -1269,11 +1278,14 @@ public struct StoryComposerView: View {
             backgroundAudioVolume: selectedAudioId != nil ? audioVolume : nil,
             backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil,
             backgroundAudioEnd: selectedAudioId != nil && audioTrimEnd > 0 ? audioTrimEnd : nil,
+            voiceAttachmentId: current.voiceAttachmentId,
+            voiceTranscriptions: current.voiceTranscriptions,
             opening: openingEffect,
             closing: closingEffect,
-            textObjects: viewModel.currentEffects.textObjects,
-            mediaObjects: viewModel.currentEffects.mediaObjects,
-            audioPlayerObjects: viewModel.currentEffects.audioPlayerObjects,
+            textObjects: current.textObjects,
+            mediaObjects: current.mediaObjects,
+            audioPlayerObjects: current.audioPlayerObjects,
+            backgroundAudioVariants: current.backgroundAudioVariants,
             backgroundTransform: bgTransform.isIdentity ? nil : bgTransform,
             slideDuration: Float(viewModel.currentSlideDuration)
         )
@@ -1323,7 +1335,7 @@ public struct StoryComposerView: View {
                 if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
 
                 // Add as background media object in effects
-                if let obj = viewModel.addMediaObject(type: "video") {
+                if let obj = viewModel.addMediaObject(kind: .video) {
                     viewModel.loadedVideoURLs[obj.id] = tempURL
                     if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
                     if obj.id != objectId {
@@ -1355,14 +1367,20 @@ public struct StoryComposerView: View {
     private func handleForegroundMediaSelection(from item: PhotosPickerItem?) {
         guard let item else { return }
         let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
-        addForegroundMedia(from: item, type: isVideo ? "video" : "image")
+        addForegroundMedia(from: item, kind: isVideo ? .video : .image)
     }
 
-    private func addForegroundMedia(from item: PhotosPickerItem?, type: String) {
+    private func addForegroundMedia(from item: PhotosPickerItem?, kind: StoryMediaKind) {
         guard let item else { return }
+        // Capture the slide ID at the START of the picker flow. PhotosPicker's
+        // `loadTransferable` is async (1-3s for a video) and the user can switch
+        // slides mid-load — without this pin, the media gets appended to whichever
+        // slide happens to be active when the awaits resolve, which is a silent
+        // data-loss race (audit F2).
+        let targetSlideId = viewModel.currentSlide.id
         isLoadingMedia = true
         mediaLoadProgress = 0
-        mediaLoadLabel = type == "video"
+        mediaLoadLabel = kind == .video
             ? String(localized: "story.composer.loadingVideo", defaultValue: "Chargement de la video...", bundle: .module)
             : String(localized: "story.composer.loadingImage", defaultValue: "Chargement de l'image...", bundle: .module)
         Task {
@@ -1372,7 +1390,7 @@ public struct StoryComposerView: View {
                 mediaLoadLabel = ""
             }
             let objectId = UUID().uuidString
-            if type == "video" {
+            if kind == .video {
                 guard let data = try? await item.loadTransferable(type: Data.self) else { return }
                 mediaLoadProgress = 0.3
                 let ext = item.supportedContentTypes
@@ -1395,7 +1413,7 @@ public struct StoryComposerView: View {
                     await MainActor.run {
                         viewModel.loadedVideoURLs[objectId] = tempURL
                         if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
-                        if let obj = viewModel.addMediaObject(type: "video") {
+                        if let obj = viewModel.addMediaObject(kind: .video, toSlideId: targetSlideId) {
                             viewModel.loadedVideoURLs[obj.id] = tempURL
                             if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
                             if obj.id != objectId {
@@ -1403,7 +1421,7 @@ public struct StoryComposerView: View {
                                 viewModel.loadedImages.removeValue(forKey: objectId)
                             }
                             if let dur = mediaDuration {
-                                viewModel.autoExtendDuration(forElementEnd: dur)
+                                viewModel.autoExtendDuration(forElementEnd: dur, slideId: targetSlideId)
                             }
                         }
                     }
@@ -1417,7 +1435,7 @@ public struct StoryComposerView: View {
                       let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else { return }
                 mediaLoadProgress = 1.0
                 await MainActor.run {
-                    if let obj = viewModel.addMediaObject(type: "image") {
+                    if let obj = viewModel.addMediaObject(kind: .image, toSlideId: targetSlideId) {
                         viewModel.loadedImages[obj.id] = image
                     }
                 }
@@ -1460,7 +1478,7 @@ public struct StoryComposerView: View {
         let mediaObj = viewModel.currentEffects.mediaObjects?.first(where: { $0.id == elementId })
         guard let mediaObj else { return }
 
-        if mediaObj.mediaType == "video", let url = viewModel.loadedVideoURLs[elementId] {
+        if mediaObj.kind == .video, let url = viewModel.loadedVideoURLs[elementId] {
             editingElementVideo = EditingMediaVideo(elementId: elementId, url: url)
         } else if let image = viewModel.loadedImages[elementId] {
             editingElementImage = EditingMediaImage(elementId: elementId, image: image)
@@ -1490,7 +1508,7 @@ public struct StoryComposerView: View {
         let snapshot = snapshotAllSlides()
         clearAllDrafts()
         HapticFeedback.success()
-        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage)
+        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility)
     }
 
     private func snapshotAllSlides() -> (slides: [StorySlide], bgImages: [String: UIImage]) {
@@ -1498,6 +1516,12 @@ public struct StoryComposerView: View {
         let idx = viewModel.currentSlideIndex
         if idx < slides.count {
             slides[idx].effects = buildEffects()
+        }
+        // Propage la duree authoritative de chaque slide vers effects.slideDuration —
+        // sinon les slides jamais activees (donc jamais passees par buildEffects)
+        // gardent un slideDuration nil et le viewer retombe sur le minimum 5s.
+        for i in slides.indices {
+            slides[i].effects.slideDuration = Float(slides[i].duration)
         }
         // Compute composite thumbHash for each slide (bg + text + media + stickers)
         for i in slides.indices {

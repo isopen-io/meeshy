@@ -148,6 +148,12 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var rotation: CGFloat       // degrés
     public var translations: [String: String]?  // { "en": "Hello", "es": "Hola", ... }
     public var sourceLanguage: String?
+    /// Z-order persistent — controle l'ordre de superposition entre composer et reader.
+    /// Auparavant l'ordre etait conserve dans une map memoire-only `zIndexMap` du
+    /// ViewModel, ecrasee a chaque selectSlide. Resultat : l'ordre de superposition
+    /// disparaissait au switch de slide ET le reader rendait dans l'ordre du tableau,
+    /// sans tenir compte des promotions `bringToFront`.
+    public var zIndex: Int?
 
     // Style per-objet (tous optionnels pour backward compat JSON existant)
     public var textStyle: String?      // "bold"|"neon"|"typewriter"|"handwriting"|"classic"
@@ -163,7 +169,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var fadeOut: Float?              // animation de sortie (secondes)
 
     enum CodingKeys: String, CodingKey {
-        case id, content, x, y, scale, rotation, translations, sourceLanguage
+        case id, content, x, y, scale, rotation, translations, sourceLanguage, zIndex
         case textStyle, textColor, textSize, textAlign, textBg
         case startTime, displayDuration, fadeIn, fadeOut
     }
@@ -204,12 +210,22 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     }
 }
 
+// MARK: - Story Media Kind
+
+/// Type-safe wrapper around `StoryMediaObject.mediaType`. The underlying field stays
+/// `String` for forward compatibility with API extensions and existing drafts on disk;
+/// callers should compare via `.kind == .video` rather than the raw string.
+public enum StoryMediaKind: String, Codable, Sendable {
+    case image
+    case video
+}
+
 // MARK: - Story Media Object (image/vidéo sur canvas)
 
 public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var id: String
     public var postMediaId: String      // référence PostMedia en DB
-    public var mediaType: String        // "image" | "video"
+    public var mediaType: String        // raw string, see `kind` for type-safe access
     public var placement: String        // kept for backward compat; no longer drives rendering
     public var x: CGFloat              // normalisé 0–1
     public var y: CGFloat
@@ -220,6 +236,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     /// Un seul media peut être en background par slide. Si `nil` à la lecture, on applique
     /// la règle legacy : le 1er media du tableau est traité comme background.
     public var isBackground: Bool?
+    /// Z-order persistent (cf. `StoryTextObject.zIndex`).
+    public var zIndex: Int?
 
     // Timeline timing
     public var startTime: Float?            // offset en secondes (défaut 0)
@@ -231,7 +249,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaType, placement, x, y, scale, rotation, volume
-        case isBackground
+        case isBackground, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
     }
 
@@ -253,6 +271,29 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
     }
+
+    /// Convenience init that takes a typed `StoryMediaKind` instead of a raw string.
+    public init(id: String = UUID().uuidString, postMediaId: String = "",
+                kind: StoryMediaKind, placement: String = "media",
+                x: CGFloat = 0.5, y: CGFloat = 0.5,
+                scale: CGFloat = 1.0, rotation: CGFloat = 0,
+                volume: Float = 1.0,
+                isBackground: Bool? = nil,
+                startTime: Float? = nil, duration: Float? = nil,
+                loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
+                sourceLanguage: String? = nil) {
+        self.init(id: id, postMediaId: postMediaId,
+                  mediaType: kind.rawValue, placement: placement,
+                  x: x, y: y, scale: scale, rotation: rotation,
+                  volume: volume, isBackground: isBackground,
+                  startTime: startTime, duration: duration,
+                  loop: loop, fadeIn: fadeIn, fadeOut: fadeOut,
+                  sourceLanguage: sourceLanguage)
+    }
+
+    /// Type-safe view on `mediaType`. Returns `nil` if the persisted value is unrecognized
+    /// (forward compat with future API kinds).
+    public var kind: StoryMediaKind? { StoryMediaKind(rawValue: mediaType) }
 }
 
 // MARK: - Story Audio Player Object (player waveform sur canvas)
@@ -272,6 +313,8 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var isBackground: Bool?
     /// Variantes TTS par langue (rattachées à l'audio background historiquement).
     public var backgroundAudioVariants: [StoryAudioVariant]?
+    /// Z-order persistent (cf. `StoryTextObject.zIndex`).
+    public var zIndex: Int?
 
     // Timeline timing
     public var startTime: Float?            // offset en secondes (défaut 0)
@@ -283,7 +326,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, placement, x, y, volume, waveformSamples
-        case isBackground, backgroundAudioVariants
+        case isBackground, backgroundAudioVariants, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
     }
 
@@ -333,11 +376,13 @@ public struct StorySticker: Codable, Identifiable, Sendable {
     public var y: CGFloat
     public var scale: CGFloat
     public var rotation: CGFloat
+    /// Z-order persistent (cf. `StoryTextObject.zIndex`).
+    public var zIndex: Int?
 
     public init(id: String = UUID().uuidString, emoji: String, x: CGFloat = 0.5, y: CGFloat = 0.5,
-                scale: CGFloat = 1.0, rotation: CGFloat = 0) {
+                scale: CGFloat = 1.0, rotation: CGFloat = 0, zIndex: Int? = nil) {
         self.id = id; self.emoji = emoji; self.x = x; self.y = y
-        self.scale = scale; self.rotation = rotation
+        self.scale = scale; self.rotation = rotation; self.zIndex = zIndex
     }
 }
 
@@ -755,12 +800,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
 
     /// Résout le contenu dans la langue préférée via le Prisme Linguistique.
     /// Retourne la traduction si disponible, sinon le contenu original.
+    /// Pas de fallback implicite vers l'anglais — l'absence de traduction signifie
+    /// que le contenu est deja dans la langue de l'utilisateur OU qu'aucune
+    /// traduction n'a ete generee. Voir CLAUDE.md "Prisme Linguistique".
     public func resolvedContent(preferredLanguage: String?) -> String? {
         guard let lang = preferredLanguage,
               let translations = translations, !translations.isEmpty else { return content }
-        return translations.first { $0.language == lang }?.content
-            ?? translations.first { $0.language == "en" }?.content
-            ?? content
+        return translations.first { $0.language == lang }?.content ?? content
     }
 
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,

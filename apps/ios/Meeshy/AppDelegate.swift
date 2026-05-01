@@ -128,11 +128,24 @@ class AppDelegate: NSObject, @preconcurrency UIApplicationDelegate {
         restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
     ) -> Bool {
         guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
-              let url = userActivity.webpageURL else { return false }
-        Task { @MainActor in
-            let _ = DeepLinkRouter.shared.handle(url: url)
+              let url = userActivity.webpageURL,
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else { return false }
+
+        // The Universal Link router is @MainActor, so the actual
+        // pendingDeepLink mutation has to hop. We can still answer iOS
+        // synchronously by parsing the URL ourselves first: if it isn't
+        // a route we know, return `false` so iOS falls back to opening
+        // the URL in Safari instead of silently swallowing it. Returning
+        // `true` for an unrecognised URL would tell iOS we handled it
+        // and the user would just see the app land on the home screen.
+        let recognised = DeepLinkParser.isMeeshyDeepLink(url)
+        if recognised {
+            Task { @MainActor in
+                _ = DeepLinkRouter.shared.handle(url: url)
+            }
         }
-        return true
+        return recognised
     }
 
     // MARK: - Notification Categories

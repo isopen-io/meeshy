@@ -12,7 +12,23 @@ import MeeshySDK
 @MainActor
 public final class StoryMediaLoader {
     public static let shared = StoryMediaLoader()
-    private init() {}
+
+    private init() {
+        // React to system memory pressure — drop the thumbnail cache and tear
+        // down all prerolled players. Without this, a sustained tour through
+        // many stories accumulated up to 6 prerolled `AVQueuePlayer` instances
+        // plus 100 thumbnails (~30 MB) until the next manual `clear*` call.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.clearThumbnailCache()
+                self?.clearPlayerCache()
+            }
+        }
+    }
 
     private let thumbnailCache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()

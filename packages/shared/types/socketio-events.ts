@@ -50,6 +50,8 @@ import type {
   PostRepostedEventData,
   PostBookmarkedEventData,
   StoryCreatedEventData,
+  StoryUpdatedEventData,
+  StoryDeletedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
   StatusCreatedEventData,
@@ -88,6 +90,11 @@ export const SERVER_EVENTS = {
   USER_STATUS: 'user:status',
   CONVERSATION_JOINED: 'conversation:joined',
   CONVERSATION_LEFT: 'conversation:left',
+  /** Server emits when a `conversation:join` is rejected (banned, not a
+   * member, conversation deleted, etc.). Carries the conversationId so
+   * clients can route the error to the right ViewModel and purge stale
+   * cache entries. */
+  CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
   NOTIFICATION: 'notification',
@@ -168,6 +175,8 @@ export const SERVER_EVENTS = {
 
   // --- Stories ---
   STORY_CREATED: 'story:created',
+  STORY_UPDATED: 'story:updated',
+  STORY_DELETED: 'story:deleted',
   STORY_VIEWED: 'story:viewed',
   STORY_REACTED: 'story:reacted',
   STORY_TRANSLATION_UPDATED: 'post:story-translation-updated',
@@ -736,6 +745,8 @@ export interface ServerToClientEvents {
 
   // Stories
   [SERVER_EVENTS.STORY_CREATED]: (data: StoryCreatedEventData) => void;
+  [SERVER_EVENTS.STORY_UPDATED]: (data: StoryUpdatedEventData) => void;
+  [SERVER_EVENTS.STORY_DELETED]: (data: StoryDeletedEventData) => void;
   [SERVER_EVENTS.STORY_VIEWED]: (data: StoryViewedEventData) => void;
   [SERVER_EVENTS.STORY_REACTED]: (data: StoryReactedEventData) => void;
   [SERVER_EVENTS.STORY_TRANSLATION_UPDATED]: (data: StoryTranslationUpdatedEventData) => void;

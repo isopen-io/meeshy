@@ -136,14 +136,43 @@ public actor CacheCoordinator {
         subscribeToLifecycle()
     }
 
-    /// Tear the coordinator down after logout so a subsequent login can
-    /// re-run `start()`. Without this, `isStarted` stays `true` across
-    /// sessions: the second call becomes a silent no-op and any future
-    /// resubscribe logic would never attach. `.task { }` in `MeeshyApp`
-    /// only runs once per view lifecycle, so the `onChange(isAuth:)`
-    /// observer is the only entry point that re-initialises the
-    /// coordinator.
-    public func reset() {
+    /// Tear the coordinator down after logout/account-switch so a subsequent
+    /// login can re-run `start()` from a clean slate. This MUST also purge
+    /// every disk-backed store (GRDB tables + on-disk media files) because
+    /// the stores are NOT namespaced by userId — leaving them populated
+    /// would expose user A's cached conversations/messages/profiles to a
+    /// user B who logs in next on the same device. Memory caches and
+    /// lifecycle subscriptions are also reset so `MeeshyApp.task` only
+    /// runs once per view lifecycle while `onChange(isAuth:)` is the
+    /// re-init entry point.
+    public func reset() async {
+        // 1. Purge everything on disk first so a concurrent reader on the
+        //    other side of the actor hop sees an empty cache (no stale
+        //    entries from the previous user).
+        await conversations.invalidateAll()
+        await messages.invalidateAll()
+        await participants.invalidateAll()
+        await profiles.invalidateAll()
+        await feed.invalidateAll()
+        await comments.invalidateAll()
+        await stories.invalidateAll()
+        await stats.invalidateAll()
+        await notifications.invalidateAll()
+        await affiliateTokens.invalidateAll()
+        await shareLinks.invalidateAll()
+        await trackingLinks.invalidateAll()
+        await communityLinks.invalidateAll()
+        await statuses.invalidateAll()
+        await friends.invalidateAll()
+        await timeline.invalidateAll()
+        await images.invalidateAll()
+        await audio.invalidateAll()
+        await video.invalidateAll()
+        await thumbnails.invalidateAll()
+        await UserColorCache.shared.invalidateAll()
+        clearTranslationCacheDB()
+
+        // 2. Tear down the coordinator state so the next `start()` re-arms.
         isStarted = false
         cancellables.removeAll()
         for observer in lifecycleObservers {

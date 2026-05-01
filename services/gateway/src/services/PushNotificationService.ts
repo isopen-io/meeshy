@@ -348,6 +348,12 @@ export class PushNotificationService {
 
       // Platform-specific options
       if (tokenRecord.platform === 'ios') {
+        // `content-available: 1` wakes the app in the background even when it
+        // has been swiped away, which is the only path that runs the
+        // `application(_:didReceiveRemoteNotification:fetchCompletionHandler:)`
+        // delegate. That delegate calls `PushDeliveryReceiptService.ack`, which
+        // posts `mark-as-received` and lets the sender's checkmark flip from
+        // ✓ to ✓✓ even when the recipient never foregrounds the app.
         message.apns = {
           payload: {
             aps: {
@@ -356,6 +362,7 @@ export class PushNotificationService {
               category: payload.category,
               'thread-id': payload.threadId,
               'mutable-content': 1,
+              'content-available': 1,
             },
           },
         };
@@ -444,6 +451,14 @@ export class PushNotificationService {
       }
 
       notification.mutableContent = true;
+      // `content-available: 1` wakes the app in the background so the silent
+      // push handler in `AppDelegate` can post the delivery receipt
+      // (`PushDeliveryReceiptService.ack`). Without this, an offline recipient
+      // never triggers `mark-as-received` and the sender's checkmark stays at
+      // ✓ until the recipient manually foregrounds the app.
+      if (!isVoIP) {
+        notification.contentAvailable = true;
+      }
 
       if (payload.data) {
         notification.payload = payload.data;

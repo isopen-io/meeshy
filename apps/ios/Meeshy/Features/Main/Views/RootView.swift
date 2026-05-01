@@ -32,8 +32,6 @@ struct RootView: View {
     @State private var showMenu = false
     @State private var pendingReplyContext: ReplyContext?
     @State private var storyViewerRequest: StoryViewerRequest?
-    @State private var joinFlowIdentifier: String?
-    @State private var showJoinFlow = false
 
     // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
     @AppStorage("feedButtonPosition") private var feedButtonPosition: String = "0.0,0.0"  // Top-left default
@@ -113,6 +111,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
                     case .communityDetail(let communityId):
                         CommunityDetailView(
                             communityId: communityId,
@@ -133,6 +132,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
                     case .communityCreate:
                         CommunityCreateView(
                             onCreated: { community in
@@ -166,6 +166,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
                         .onDisappear {
                             Task { await notificationManager.refreshUnreadCount() }
                         }
@@ -424,7 +425,15 @@ struct RootView: View {
             }
         }
         .onOpenURL { url in
-            router.handleDeepLink(url)
+            // Only the share intent flows through Router here — every other
+            // destination (joinLink/chatLink/conversation/magicLink) is
+            // already routed via MeeshyApp's `.onOpenURL` → DeepLinkRouter →
+            // pendingDeepLink → handleDeepLink. Letting Router.handleDeepLink
+            // process those a second time double-fires the API call and
+            // races the navigation with the pendingDeepLink path.
+            if case .share = DeepLinkParser.parse(url) {
+                router.handleDeepLink(url)
+            }
         }
         .sheet(item: $router.deepLinkProfileUser) { user in
             UserProfileSheet(
@@ -453,13 +462,6 @@ struct RootView: View {
                 showSharePicker = true
             }
         }
-        .sheet(isPresented: $showJoinFlow) {
-            if let identifier = joinFlowIdentifier {
-                JoinFlowSheet(identifier: identifier) { joinResponse in
-                    handleJoinSuccess(joinResponse)
-                }
-            }
-        }
         .sheet(isPresented: $showNewConversation) {
             NewConversationView()
                 .environmentObject(statusViewModel)
@@ -479,7 +481,15 @@ struct RootView: View {
                 }
             }
         }
-        .onChange(of: deepLinkRouter.pendingDeepLink) { _, newValue in
+        // `initial: true` covers the cold-launch race where a Universal
+        // Link sets `pendingDeepLink` from AppDelegate.continue:userActivity:
+        // BEFORE this view mounts. Without it, a plain `.onChange` only fires
+        // on subsequent transitions and the user lands on the home screen
+        // with the deep link silently discarded. `consumePendingDeepLink`
+        // returns nil for the typical cold-launch (no pending link), so
+        // firing on the initial value is a free no-op when there's nothing
+        // to process.
+        .onChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
             handleDeepLink(newValue)
         }
     }
@@ -490,36 +500,56 @@ struct RootView: View {
         guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
 
         switch deepLink {
-        case .joinLink(let identifier):
-            joinFlowIdentifier = identifier
-            showJoinFlow = true
-
-        case .chatLink:
-            break
+        case .joinLink(let identifier), .chatLink(let identifier):
+            // RootView only mounts when authenticated, so we never want
+            // the anonymous join sheet here — that flow is owned by
+            // MeeshyApp.handleGuestDeepLink for the unauthenticated
+            // branch. For authenticated users we resolve the share link
+            // server-side: the gateway is idempotent, so an existing
+            // member gets the same payload as a fresh join and we can
+            // navigate to the canonical conversationId either way.
+            joinViaShareLink(identifier: identifier)
 
         case .conversation(let id):
-            let conv = Conversation(
-                id: id, identifier: id, type: .group,
-                title: nil, lastMessageAt: Date(), createdAt: Date(), updatedAt: Date()
-            )
-            router.navigateToConversation(conv)
+            // Validate the conversation exists BEFORE navigating. Pushing a
+            // placeholder Conversation for an id that the server doesn't
+            // know lands the user on an empty screen with no recovery —
+            // worse, returning to that screen via an external link re-fires
+            // the deep link and recreates the empty view, looking like an
+            // infinite loop to the user.
+            navigateToConversationById(id)
 
         case .magicLink:
             break
         }
     }
 
-    private func handleJoinSuccess(_ response: AnonymousJoinResponse) {
-        let conv = Conversation(
-            id: response.conversation.id,
-            identifier: response.conversation.id,
-            type: response.conversation.type.lowercased() == "group" ? .group : .direct,
-            title: response.conversation.title,
-            lastMessageAt: Date(),
-            createdAt: Date(),
-            updatedAt: Date()
-        )
-        router.navigateToConversation(conv)
+    private func joinViaShareLink(identifier: String) {
+        Task {
+            do {
+                let response = try await ShareLinkService.shared.joinAuthenticated(linkId: identifier)
+                navigateToConversationById(response.conversationId)
+            } catch let error as MeeshyError {
+                let message: String
+                switch error {
+                case .server(404, _):
+                    message = String(localized: "Lien introuvable", defaultValue: "Lien introuvable")
+                case .server(410, let msg):
+                    message = msg.isEmpty
+                        ? String(localized: "Ce lien n'est plus actif", defaultValue: "Ce lien n'est plus actif")
+                        : msg
+                case .forbidden(let reason):
+                    message = reason ?? String(localized: "Acces refuse a cette conversation", defaultValue: "Acces refuse a cette conversation")
+                default:
+                    message = error.errorDescription ?? String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
+                }
+                ToastManager.shared.showError(message)
+            } catch {
+                ToastManager.shared.showError(
+                    String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
+                )
+            }
+        }
     }
 
     // MARK: - Handle Story Reply

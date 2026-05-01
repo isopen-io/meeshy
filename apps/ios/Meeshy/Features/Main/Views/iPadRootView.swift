@@ -40,8 +40,6 @@ struct iPadRootView: View {
     @State var pendingReplyContext: ReplyContext?
     @State var showStoryViewerFromConv = false
     @State var selectedStoryUserIdFromConv: String?
-    @State var joinFlowIdentifier: String?
-    @State var showJoinFlow = false
     @State var showSharePicker = false
     @State var showNewConversation = false
     @State private var isScrollingDown = false
@@ -140,9 +138,26 @@ struct iPadRootView: View {
                 handlePushNavigateToRoute(notification)
             }
             .onOpenURL { url in
-                router.handleDeepLink(url)
+                // Only the share intent flows through Router here — every
+                // other destination (joinLink/chatLink/conversation/magicLink)
+                // is already routed via MeeshyApp's `.onOpenURL` →
+                // DeepLinkRouter → pendingDeepLink → handleDeepLink. Letting
+                // Router.handleDeepLink process those a second time
+                // double-fires the API call and races the navigation with
+                // the pendingDeepLink path.
+                if case .share = DeepLinkParser.parse(url) {
+                    router.handleDeepLink(url)
+                }
             }
-            .onChange(of: deepLinkRouter.pendingDeepLink) { _, newValue in
+            // `initial: true` covers the cold-launch race where a Universal
+            // Link sets `pendingDeepLink` from AppDelegate.continue:userActivity:
+            // BEFORE this view mounts. Without it, a plain `.onChange` only
+            // fires on subsequent transitions and the user lands on the home
+            // screen with the deep link silently discarded. consumePendingDeepLink
+            // returns nil for the typical cold-launch (no pending link), so
+            // firing on the initial value is a free no-op when nothing
+            // is queued.
+            .onChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
                 handleDeepLink(newValue)
             }
         )

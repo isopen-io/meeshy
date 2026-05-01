@@ -477,15 +477,18 @@ struct AudioMediaView: View {
             .foregroundColor(metaColor)
             .frame(width: 14)
         case .read:
+            // Bold double-check + brand indigo400 to clearly distinguish from
+            // `.delivered` (which uses `metaColor` — gray).
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .black))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .black))
                     .offset(x: 3)
             }
             .foregroundColor(MeeshyColors.readReceipt)
-            .frame(width: 14)
+            .frame(width: 15)
+            .accessibilityLabel("Read")
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 10, weight: .bold))

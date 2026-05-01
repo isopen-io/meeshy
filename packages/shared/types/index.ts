@@ -675,4 +675,4 @@ export type {
 
 // ===== AGENT TYPES =====
 export type { AgentType } from './agent.js';
-export { AGENT_TYPES } from './agent.js';
+export { AGENT_TYPES, SCAN_STALE_MS, isScanActive } from './agent.js';

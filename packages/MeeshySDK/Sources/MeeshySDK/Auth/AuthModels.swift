@@ -176,9 +176,11 @@ public struct AvailabilityResponse: Decodable {
 
 public struct RefreshTokenRequest: Encodable {
     public let token: String
+    public let sessionToken: String?
 
-    public init(token: String) {
+    public init(token: String, sessionToken: String? = nil) {
         self.token = token
+        self.sessionToken = sessionToken
     }
 }
 

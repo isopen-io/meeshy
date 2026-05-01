@@ -120,8 +120,8 @@ public final class JoinFlowViewModel: ObservableObject {
             switch error {
             case .server(409, let msg):
                 errorMessage = msg
-            case .server(403, let msg):
-                errorMessage = msg
+            case .forbidden(let reason):
+                errorMessage = reason ?? error.errorDescription
             case .server(410, let msg):
                 errorMessage = msg
             case .server(429, _):

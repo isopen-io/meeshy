@@ -1011,15 +1011,19 @@ struct ThemedMessageBubble: View {
             .foregroundColor(.white.opacity(0.8))
             .frame(width: 14)
         case .read:
+            // Match the bubble identity bar: full-opacity bold double-check on
+            // the dark capsule overlay, sized one point larger than `.delivered`
+            // so the read state is unambiguously distinct.
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .black))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .black))
                     .offset(x: 3)
             }
-            .foregroundColor(MeeshyColors.readReceipt)
-            .frame(width: 14)
+            .foregroundColor(.white)
+            .frame(width: 15)
+            .accessibilityLabel("Read")
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 10, weight: .bold))

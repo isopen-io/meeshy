@@ -8,28 +8,42 @@ public struct DraggableTextObjectView: View {
     public let onDoubleTap: () -> Void
     public let onDragEnd: () -> Void
 
-    // Local state snapshots — read from binding once, update on gesture end.
+    /// Live drag tracking — same shape as DraggableMediaView so the parent can wire all
+    /// draggable elements through a single `viewModel.beginDrag/updateDrag/endDrag` API.
+    public var onDragStarted: ((_ position: CGPoint, _ size: CGSize) -> Void)?
+    public var onDragChanged: ((CGPoint) -> Void)?
+    public var onDragCommitted: (() -> Void)?
+
     @State private var baseX: CGFloat?
     @State private var baseY: CGFloat?
     @State private var baseScale: CGFloat?
     @State private var baseRotation: CGFloat?
+    @State private var dragInitialized: Bool = false
 
-    // Gesture-transient visual offsets — never written to binding, reset on gesture end.
+    /// Rendered text size in points, captured via a GeometryReader background — used to
+    /// compute a normalized bbox for the safe-zone warning. Defaults to zero until the
+    /// first layout pass; the warning will fail closed (no warning) until then.
+    @State private var measuredTextSize: CGSize = .zero
+
     @GestureState private var dragOffset: CGSize = .zero
     @GestureState private var gestureScale: CGFloat = 1.0
     @GestureState private var gestureRotation: Angle = .zero
-
-    @State private var canvasSize: CGSize = .zero
 
     public init(textObject: Binding<StoryTextObject>,
                 isEditing: Bool = false,
                 onTapToFront: @escaping () -> Void = {},
                 onDoubleTap: @escaping () -> Void = {},
+                onDragStarted: ((CGPoint, CGSize) -> Void)? = nil,
+                onDragChanged: ((CGPoint) -> Void)? = nil,
+                onDragCommitted: (() -> Void)? = nil,
                 onDragEnd: @escaping () -> Void = {}) {
         self._textObject = textObject
         self.isEditing = isEditing
         self.onTapToFront = onTapToFront
         self.onDoubleTap = onDoubleTap
+        self.onDragStarted = onDragStarted
+        self.onDragChanged = onDragChanged
+        self.onDragCommitted = onDragCommitted
         self.onDragEnd = onDragEnd
     }
 
@@ -41,16 +55,12 @@ public struct DraggableTextObjectView: View {
     public var body: some View {
         GeometryReader { geo in
             textContentWithGestures(canvasWidth: geo.size.width, canvasHeight: geo.size.height)
-                .onAppear {
-                    canvasSize = geo.size
-                    syncBaseFromBinding()
-                }
-                .onChange(of: geo.size) { newSize in canvasSize = newSize }
-                .onChange(of: textObject.id) { _ in syncBaseFromBinding() }
-                .onChange(of: textObject.x) { _ in syncBaseFromBinding() }
-                .onChange(of: textObject.y) { _ in syncBaseFromBinding() }
-                .onChange(of: textObject.scale) { _ in syncBaseFromBinding() }
-                .onChange(of: textObject.rotation) { _ in syncBaseFromBinding() }
+                .onAppear { syncBaseFromBinding() }
+                .onChange(of: textObject.id) { _, _ in syncBaseFromBinding() }
+                .onChange(of: textObject.x) { _, _ in syncBaseFromBinding() }
+                .onChange(of: textObject.y) { _, _ in syncBaseFromBinding() }
+                .onChange(of: textObject.scale) { _, _ in syncBaseFromBinding() }
+                .onChange(of: textObject.rotation) { _, _ in syncBaseFromBinding() }
         }
     }
 
@@ -72,6 +82,7 @@ public struct DraggableTextObjectView: View {
 
         if isEditing {
             styledTextContent
+                .background(textSizeReader)
                 .scaleEffect(effectiveScale)
                 .rotationEffect(.degrees(effectiveRotation))
                 .contentShape(Rectangle())
@@ -84,7 +95,9 @@ public struct DraggableTextObjectView: View {
                 // Combined primary gesture — claims touch exclusively, preventing
                 // parent canvas gestures from firing when touching this element.
                 .gesture(
-                    dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight)
+                    dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight,
+                                normSize: normalizedSize(canvasWidth: canvasWidth, canvasHeight: canvasHeight,
+                                                          scale: effectiveScale))
                         .simultaneously(with: pinchGesture)
                         .simultaneously(with: rotateGesture)
                 )
@@ -98,6 +111,23 @@ public struct DraggableTextObjectView: View {
                     y: currentY * canvasHeight
                 )
         }
+    }
+
+    /// Captures the rendered text size into `measuredTextSize` so we can broadcast a
+    /// normalized bbox during drag.
+    private var textSizeReader: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .preference(key: TextSizePreferenceKey.self, value: proxy.size)
+        }
+        .onPreferenceChange(TextSizePreferenceKey.self) { measuredTextSize = $0 }
+    }
+
+    private func normalizedSize(canvasWidth: CGFloat, canvasHeight: CGFloat, scale: CGFloat) -> CGSize {
+        guard canvasWidth > 0, canvasHeight > 0 else { return .zero }
+        let w = measuredTextSize.width * scale / canvasWidth
+        let h = measuredTextSize.height * scale / canvasHeight
+        return CGSize(width: w, height: h)
     }
 
     // MARK: - Styled text rendering
@@ -137,18 +167,32 @@ public struct DraggableTextObjectView: View {
 
     // MARK: - Gestures
 
-    private func dragGesture(canvasWidth: CGFloat, canvasHeight: CGFloat) -> some Gesture {
+    private func dragGesture(canvasWidth: CGFloat, canvasHeight: CGFloat,
+                             normSize: CGSize) -> some Gesture {
         DragGesture()
             .updating($dragOffset) { value, state, _ in
                 state = value.translation
             }
+            .onChanged { value in
+                let nx = min(1, max(0, currentX + value.translation.width / canvasWidth))
+                let ny = min(1, max(0, currentY + value.translation.height / canvasHeight))
+                let pos = CGPoint(x: nx, y: ny)
+                if !dragInitialized {
+                    dragInitialized = true
+                    onDragStarted?(pos, normSize)
+                }
+                onDragChanged?(pos)
+            }
             .onEnded { value in
-                let newX = min(1, max(0, currentX + value.translation.width / canvasWidth))
-                let newY = min(1, max(0, currentY + value.translation.height / canvasHeight))
-                baseX = newX
-                baseY = newY
-                textObject.x = newX
-                textObject.y = newY
+                let rawX = min(1, max(0, currentX + value.translation.width / canvasWidth))
+                let rawY = min(1, max(0, currentY + value.translation.height / canvasHeight))
+                let snapped = StoryAlignmentSnap.apply(to: CGPoint(x: rawX, y: rawY))
+                baseX = snapped.x
+                baseY = snapped.y
+                textObject.x = snapped.x
+                textObject.y = snapped.y
+                dragInitialized = false
+                onDragCommitted?()
                 onDragEnd()
             }
     }
@@ -177,5 +221,14 @@ public struct DraggableTextObjectView: View {
                 textObject.rotation = newRotation
                 onDragEnd()
             }
+    }
+}
+
+// MARK: - Size measurement
+
+private struct TextSizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
     }
 }

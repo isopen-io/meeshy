@@ -190,8 +190,13 @@ struct StoryViewerView: View {
         .onDisappear {
             timerCancellable?.cancel()
             StoryMediaCoordinator.shared.deactivate()
-            StoryMediaLoader.shared.clearThumbnailCache()
-            StoryMediaLoader.shared.clearPlayerCache()
+            // Don't aggressively `clearThumbnailCache()` / `clearPlayerCache()` here.
+            // Both caches use LRU + size budgets, plus `StoryMediaLoader.init()`
+            // listens to memory-warning notifications to drop them under pressure.
+            // Eagerly evicting on every viewer dismiss defeated the prefetch
+            // benefit when the user immediately re-opened the tray (audit C1/C3 +
+            // the perf-audit observation that 6 prerolled players were torn down
+            // right after the user finished tapping through them).
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
@@ -259,6 +264,7 @@ struct StoryViewerView: View {
             // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
                 StoryCanvasReaderView(story: outgoing, preferredLanguage: resolvedViewerLanguage,
+                                      preferredContentLanguages: resolvedViewerLanguageChain,
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs)
@@ -272,6 +278,7 @@ struct StoryViewerView: View {
             // === Layers 2–4: Canvas pixel-perfect (media + filter + text + stickers) ===
             if let story = currentStory {
                 StoryCanvasReaderView(story: story, preferredLanguage: resolvedViewerLanguage,
+                                      preferredContentLanguages: resolvedViewerLanguageChain,
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs)
@@ -928,8 +935,18 @@ struct StoryViewerView: View {
         return group.stories[currentStoryIndex]
     }
 
+    /// Premier element de la chaine Prisme — utilise pour les API single-string
+    /// (audio variants legacy, contenu de message, etc.). Pour la resolution complete
+    /// on passe `resolvedViewerLanguageChain` au reader.
     private var resolvedViewerLanguage: String? {
-        AuthManager.shared.currentUser?.systemLanguage
+        resolvedViewerLanguageChain.first
+    }
+
+    /// Chaine complete : systemLanguage → regionalLanguage → customDestinationLanguage → "fr"
+    /// (cf. `MeeshyUser.preferredContentLanguages`). Utilisee par le reader pour resoudre
+    /// les traductions selon le Prisme Linguistique.
+    private var resolvedViewerLanguageChain: [String] {
+        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
     }
 
     var storyHasAudioOrVideo: Bool {
@@ -939,7 +956,7 @@ struct StoryViewerView: View {
         if effects.backgroundAudioId != nil { return true }
         if let audioObjs = effects.audioPlayerObjects, !audioObjs.isEmpty { return true }
         if let mediaObjs = effects.mediaObjects {
-            if mediaObjs.contains(where: { $0.mediaType == "video" }) { return true }
+            if mediaObjs.contains(where: { $0.kind == .video }) { return true }
         }
         return false
     }

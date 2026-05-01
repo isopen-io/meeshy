@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -104,8 +105,8 @@ export class PostService {
   constructor(private readonly prisma: PrismaClient) {}
 
   async createPost(data: {
-    type: string;
-    visibility: string;
+    type: PostType;
+    visibility: PostVisibility;
     visibilityUserIds?: string[];
     content?: string;
     originalLanguage?: string;
@@ -120,9 +121,9 @@ export class PostService {
     const now = new Date();
     let expiresAt: Date | undefined;
 
-    if (data.type === 'STORY') {
+    if (data.type === PostType.STORY) {
       expiresAt = new Date(now.getTime() + STORY_EXPIRY_HOURS * 3600_000);
-    } else if (data.type === 'STATUS') {
+    } else if (data.type === PostType.STATUS) {
       expiresAt = new Date(now.getTime() + STATUS_EXPIRY_HOURS * 3600_000);
     }
 
@@ -131,8 +132,8 @@ export class PostService {
     const post = await this.prisma.post.create({
       data: {
         authorId: userId,
-        type: data.type as any,
-        visibility: data.visibility as any,
+        type: data.type,
+        visibility: data.visibility,
         visibilityUserIds: data.visibilityUserIds ?? [],
         content: data.content,
         originalLanguage,
@@ -188,7 +189,7 @@ export class PostService {
     }
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
-    if (data.type === 'STORY' && data.content) {
+    if (data.type === PostType.STORY && data.content) {
       this.triggerStoryTextTranslation(post.id, data.content, userId).catch(() => {});
     }
 
@@ -261,8 +262,16 @@ export class PostService {
       const expectedCount = targetLanguages.length;
       let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
+      // Subscribe to the per-messageId scoped event instead of the global
+      // `translationCompleted`. Avoids O(active_stories × global_events) filter
+      // overhead — previously every translation across the entire gateway
+      // (messages, comments, etc.) fanned out to every active story listener
+      // which then filtered by messageId. With 100 active stories and 1000
+      // messages/min that was ~100k listener invocations/min.
+      const scopedEvent = `translationCompleted:${storyMessageId}`;
+
       const removeListener = () => {
-        zmqClient.off('translationCompleted', handleResult);
+        zmqClient.off(scopedEvent, handleResult);
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
           timeoutHandle = null;
@@ -270,7 +279,17 @@ export class PostService {
       };
 
       const handleResult = async (event: { taskId: string; result: { messageId: string; translatedText: string; confidenceScore?: number; translatorModel?: string }; targetLanguage: string; metadata: Record<string, unknown> }) => {
+        // The scoped event guarantees messageId match, but keep the guard for
+        // defense in depth (the event payload is reused).
         if (event.result.messageId !== storyMessageId) return;
+
+        // Reject malformed `targetLanguage` before interpolating into the
+        // raw Mongo `$set` field path. A value like `"a.b.$inject"` would
+        // otherwise let a compromised translator write arbitrary fields.
+        if (!/^[a-z]{2,5}$/.test(event.targetLanguage)) {
+          log.warn('StoryTranslation: rejected malformed targetLanguage', { postId, targetLanguage: event.targetLanguage });
+          return;
+        }
 
         try {
           await (this.prisma as any).$runCommandRaw({
@@ -298,7 +317,7 @@ export class PostService {
         }
       };
 
-      zmqClient.on('translationCompleted', handleResult);
+      zmqClient.on(scopedEvent, handleResult);
 
       // 4. Envoyer la requête ZMQ
       try {
@@ -371,25 +390,61 @@ export class PostService {
     return ['en', 'fr', 'es', 'de', 'pt', 'ar', 'zh', 'ja', 'ko', 'ru'];
   }
 
+  /// Returns the post if and only if `viewerUserId` is allowed to see it,
+  /// according to the post's `visibility` and `visibilityUserIds`. Unauthenticated
+  /// callers (`viewerUserId === undefined`) can only see PUBLIC posts. The 404 is
+  /// indistinguishable from "doesn't exist" by design (no enumeration leak).
+  ///
+  /// View recording is NOT triggered here — callers that want to record a view
+  /// must call `recordView()` explicitly (e.g., the dedicated POST /:id/view
+  /// route). Previously, every fetch silently inflated viewCount.
   async getPostById(postId: string, viewerUserId?: string) {
+    const visibilityFilter = await this.buildVisibilityFilter(viewerUserId);
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, isDeleted: false },
+      where: { id: postId, isDeleted: false, ...visibilityFilter },
       include: postInclude,
     });
+    return post ?? null;
+  }
 
-    if (!post) return null;
-
-    // Record view asynchronously (fire & forget)
-    if (viewerUserId) {
-      this.recordView(postId, viewerUserId).catch(() => {});
+  /// Builds the Prisma `where` fragment that enforces post visibility for a viewer.
+  /// Mirrors `PostFeedService.buildVisibilityFilter` so single-post fetches and feed
+  /// queries apply the same rules.
+  private async buildVisibilityFilter(viewerUserId?: string) {
+    if (!viewerUserId) {
+      return { visibility: PostVisibility.PUBLIC };
     }
+    const friendIds = await this.getFriendIdsForViewer(viewerUserId);
+    return {
+      OR: [
+        { authorId: viewerUserId },
+        { visibility: PostVisibility.PUBLIC },
+        { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
+        { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerUserId } } },
+        { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerUserId } },
+      ],
+    };
+  }
 
-    return post;
+  private async getFriendIdsForViewer(userId: string): Promise<string[]> {
+    try {
+      const friendRequests = await this.prisma.friendRequest.findMany({
+        where: {
+          status: 'accepted',
+          OR: [{ senderId: userId }, { receiverId: userId }],
+        },
+        select: { senderId: true, receiverId: true },
+      });
+      return Array.from(new Set(friendRequests.flatMap((fr) => [fr.senderId, fr.receiverId])
+        .filter((id) => id !== userId)));
+    } catch {
+      return [];
+    }
   }
 
   async updatePost(postId: string, userId: string, data: {
     content?: string;
-    visibility?: string;
+    visibility?: PostVisibility;
     visibilityUserIds?: string[];
     storyEffects?: Record<string, unknown>;
     moodEmoji?: string;
@@ -405,7 +460,7 @@ export class PostService {
 
     const updateData: any = {
       ...data,
-      visibility: data.visibility as any,
+      visibility: data.visibility,
       storyEffects: (data.storyEffects as any) ?? undefined,
       isEdited: true,
     };
@@ -535,23 +590,42 @@ export class PostService {
 
   async recordView(postId: string, userId: string, duration?: number) {
     try {
+      // Enforce visibility before recording — without this, any authenticated
+      // user could increment viewCount on any private story by ID, and have
+      // their userId surface in the author's `/posts/:id/views` response
+      // (information disclosure + view inflation).
+      const visibilityFilter = await this.buildVisibilityFilter(userId);
+      const post = await this.prisma.post.findFirst({
+        where: { id: postId, isDeleted: false, ...visibilityFilter },
+        select: { id: true, authorId: true },
+      });
+      if (!post) return;
+
+      // Author re-opening their own story shouldn't inflate viewCount.
+      if (post.authorId === userId) return;
+
+      // Sanitize duration: client-supplied → cap at 5 minutes (way past any
+      // reasonable story).
+      const safeDuration = duration !== undefined
+        ? Math.max(0, Math.min(300_000, Math.round(duration)))
+        : undefined;
+
       const existing = await this.prisma.postView.findUnique({
         where: { postId_userId: { postId, userId } },
       });
 
       if (existing) {
-        // Update duration if provided
-        if (duration) {
+        if (safeDuration !== undefined) {
           await this.prisma.postView.update({
             where: { id: existing.id },
-            data: { duration },
+            data: { duration: safeDuration },
           });
         }
         return;
       }
 
       await this.prisma.postView.create({
-        data: { postId, userId, duration },
+        data: { postId, userId, duration: safeDuration },
       });
 
       await this.prisma.post.update({
@@ -674,7 +748,7 @@ export class PostService {
     const repost = await this.prisma.post.create({
       data: {
         authorId: userId,
-        type: 'POST',
+        type: PostType.POST,
         visibility: original.visibility,
         content: content ?? undefined,
         originalLanguage,

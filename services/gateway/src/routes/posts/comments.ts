@@ -6,6 +6,7 @@ import { PostTranslationService } from '../../services/posts/PostTranslationServ
 import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
 import { sendSuccess } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
+import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 
 export function registerCommentRoutes(
   fastify: FastifyInstance,
@@ -73,6 +74,7 @@ export function registerCommentRoutes(
   // POST /posts/:postId/comments — Add a comment
   fastify.post('/posts/:postId/comments', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('comment') },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;

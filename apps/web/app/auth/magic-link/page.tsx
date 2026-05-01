@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Sparkles, Mail, CheckCircle, ArrowLeft, Clock, RefreshCw, AlertTriangle, Shield } from 'lucide-react';
 import { usePasswordResetStore } from '@/stores/password-reset-store';
+import { safeInternalPath } from '@/utils/safe-redirect';
 
 // Constants
 const MAGIC_LINK_EXPIRY_SECONDS = 600; // 10 minutes
@@ -76,16 +77,23 @@ function MagicLinkPageContent() {
       if (result.success && result.data) {
         setTokenValidated(true);
 
+        // returnUrl arrives from the URL search params and is therefore
+        // attacker-controlled. We MUST clamp it to an internal pathname
+        // so a phisher cannot craft `?returnUrl=https://attacker.com`
+        // and ride this redirect after the victim authenticates.
+        const safeReturnUrl = safeInternalPath(returnUrl, '/');
+
         // Check if 2FA is required
         if (result.data.requires2FA && result.data.twoFactorToken) {
           toast.success(t('magicLink.validate.success.title') || 'Lien validé !');
-          router.push(`/auth/verify-2fa?token=${result.data.twoFactorToken}${returnUrl ? `&returnUrl=${encodeURIComponent(returnUrl)}` : ''}`);
+          router.push(`/auth/verify-2fa?token=${result.data.twoFactorToken}&returnUrl=${encodeURIComponent(safeReturnUrl)}`);
         } else {
           // Successfully authenticated
           toast.success(t('magicLink.validate.success.title') || 'Connexion réussie !');
-          // Use window.location.href to force a full page reload
-          // This ensures the auth state is properly loaded before rendering
-          window.location.href = returnUrl || '/';
+          // Use window.location.href to force a full page reload so the
+          // auth state is properly loaded before rendering. The path is
+          // already validated as same-origin above.
+          window.location.href = safeReturnUrl;
         }
       } else {
         setTokenError(result.error || t('magicLink.validate.error.description') || 'Lien invalide ou expiré');

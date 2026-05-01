@@ -53,21 +53,30 @@ struct ConnectionBanner: View {
                 }
             }
         }
-        .onChange(of: isDisconnected) { _, disconnected in
-            if disconnected {
-                showAfterDelay = false
-                Task {
-                    try? await Task.sleep(for: .seconds(10))
-                    if isDisconnected {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showAfterDelay = true
-                        }
+        .task(id: isDisconnected) {
+            // Runs on view appearance AND whenever isDisconnected flips.
+            // Auto-cancels when the view disappears or the id changes,
+            // which prevents stale timers from firing across reconnect cycles.
+            guard isDisconnected else {
+                if showAfterDelay {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showAfterDelay = false
                     }
                 }
-            } else {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showAfterDelay = false
-                }
+                return
+            }
+
+            if showAfterDelay { return }
+
+            do {
+                try await Task.sleep(for: .seconds(10))
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled, isDisconnected else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showAfterDelay = true
             }
         }
     }

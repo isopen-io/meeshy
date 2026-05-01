@@ -52,9 +52,12 @@ struct SlideMiniPreview: View {
 
     @ViewBuilder
     private func bgMediaImage(in size: CGSize) -> some View {
-        // First media object fills canvas as background
-        if let bgMedia = effects.mediaObjects?.first,
-           bgMedia.mediaType == "image",
+        // Background media resolu via le helper SDK (respecte isBackground=true,
+        // sinon retombe sur le 1er media legacy). Avant on utilisait
+        // `mediaObjects.first` directement, qui montrait le mauvais element comme
+        // background apres un toggleBackground manuel.
+        if let bgMedia = effects.resolvedBackgroundMedia,
+           bgMedia.kind == .image,
            let img = loadedImages[bgMedia.id] {
             Image(uiImage: img)
                 .resizable()
@@ -83,9 +86,10 @@ struct SlideMiniPreview: View {
 
     @ViewBuilder
     private func foregroundMediaLayer(in size: CGSize) -> some View {
-        // Skip first media (rendered as background), show rest as positioned
-        let positionedMedia = Array((effects.mediaObjects ?? []).dropFirst())
-        ForEach(positionedMedia) { media in
+        // Tous les media non-background — alignement sur le helper SDK plutot que
+        // sur `dropFirst()` qui ratait le cas ou l'utilisateur a toggle un autre
+        // media en background via le menu contextuel.
+        ForEach(effects.resolvedForegroundMediaObjects) { media in
             foregroundMediaItem(media, in: size)
         }
     }
@@ -167,7 +171,7 @@ struct SlideMiniPreview: View {
     @ViewBuilder
     private func bgColorDot(in size: CGSize) -> some View {
         let hasBgImage = bgImage != nil
-            || effects.mediaObjects?.first.flatMap { loadedImages[$0.id] } != nil
+            || effects.resolvedBackgroundMedia.flatMap { loadedImages[$0.id] } != nil
         if hasBgImage, let bg = effects.background {
             VStack {
                 Spacer()

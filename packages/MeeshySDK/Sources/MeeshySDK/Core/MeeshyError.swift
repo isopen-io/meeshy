@@ -77,6 +77,13 @@ public enum MeeshyError: LocalizedError {
     case auth(AuthError)
     case message(MessageError)
     case media(MediaError)
+    /// Resource-level access denied (HTTP 403). Distinct from `.auth` —
+    /// the credentials are still valid; the user simply does not (or no
+    /// longer) has access to THIS resource (kicked from a conversation,
+    /// blocked by another user, etc.). Callers must NEVER treat this as
+    /// a session failure. The auth refresh / re-authentication paths
+    /// only react to `.auth(...)` cases.
+    case forbidden(reason: String?)
     case server(statusCode: Int, message: String)
     case unknown(Error)
 
@@ -86,6 +93,7 @@ public enum MeeshyError: LocalizedError {
         case .auth(let error): return error.errorDescription
         case .message(let error): return error.errorDescription
         case .media(let error): return error.errorDescription
+        case .forbidden(let reason): return reason ?? "Acces refuse a cette ressource"
         case .server(_, let message): return message
         case .unknown(let error): return error.localizedDescription
         }
@@ -97,6 +105,7 @@ public enum MeeshyError: LocalizedError {
         case .auth: return "lock.fill"
         case .message: return "bubble.left.and.exclamationmark.bubble.right"
         case .media: return "photo.badge.exclamationmark"
+        case .forbidden: return "lock.slash.fill"
         case .server: return "server.rack"
         case .unknown: return "exclamationmark.triangle.fill"
         }
@@ -160,7 +169,11 @@ public enum MeeshyError: LocalizedError {
         case 401:
             return .auth(.sessionExpired)
         case 403:
-            return .auth(.accountLocked)
+            // Resource-level forbidden — NOT an account-locked signal. The
+            // session is still valid; only this specific resource is off
+            // limits. Callers (ViewModels) decide what to do (purge stale
+            // cache, dismiss a conversation, etc.).
+            return .forbidden(reason: message)
         case 429:
             return .server(statusCode: 429, message: "Trop de requetes")
         default:

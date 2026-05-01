@@ -66,6 +66,16 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     func persistMessagesUsingServerIds() async {
         // no-op in tests
     }
+
+    var accessRevokedReasons: [String?] = []
+    func handleSocketAccessRevoked(reason: String?) {
+        accessRevokedReasons.append(reason)
+    }
+
+    var markAsReadCallCount: Int = 0
+    func markAsRead() {
+        markAsReadCallCount += 1
+    }
 }
 
 // MARK: - Tests
@@ -178,6 +188,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(delegate.messages[0].content, "Hey!")
         XCTAssertEqual(delegate.newMessageAppended, 1)
         XCTAssertNotNil(delegate.lastUnreadMessage)
+        XCTAssertEqual(
+            delegate.markAsReadCallCount, 1,
+            "Inbound message in an active conversation must auto-trigger markAsRead so the sender's checkmark turns purple"
+        )
     }
 
     // MARK: - messageReceived: From Self (no new append)
@@ -192,6 +206,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(delegate.messages.count, 0, "Should not append own message from socket")
+        XCTAssertEqual(
+            delegate.markAsReadCallCount, 0,
+            "Echo of own message must not trigger markAsRead — there is nothing new to read"
+        )
     }
 
     // MARK: - messageReceived: Duplicate (already exists)

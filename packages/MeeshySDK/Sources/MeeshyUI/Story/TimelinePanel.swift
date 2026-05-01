@@ -101,7 +101,7 @@ struct TimelinePanel: View {
         for media in effects.mediaObjects ?? [] {
             let url: URL?
             let mediaType: TimelinePlaybackEngine.MediaElement.MediaType
-            if media.mediaType == "video" {
+            if media.kind == .video {
                 url = viewModel.loadedVideoURLs[media.id]
                 mediaType = .video
             } else {
@@ -140,7 +140,7 @@ struct TimelinePanel: View {
         let effects = viewModel.currentEffects
 
         if let media = effects.mediaObjects?.first(where: { $0.id == elementId }) {
-            if media.mediaType == "image", let img = viewModel.loadedImages[elementId] {
+            if media.kind == .image, let img = viewModel.loadedImages[elementId] {
                 MeeshyImageEditorView(
                     image: img,
                     initialCropRatio: nil,
@@ -151,7 +151,7 @@ struct TimelinePanel: View {
                     },
                     onCancel: { showMediaEditor = nil }
                 )
-            } else if media.mediaType == "video", let url = viewModel.loadedVideoURLs[elementId] {
+            } else if media.kind == .video, let url = viewModel.loadedVideoURLs[elementId] {
                 MeeshyVideoPreviewView(
                     url: url,
                     context: .story,
@@ -656,7 +656,7 @@ struct TimelinePanel: View {
         }
 
         for media in effects.mediaObjects ?? [] {
-            if media.mediaType == "video" {
+            if media.kind == .video {
                 let vidURL = viewModel.loadedVideoURLs[media.id]
                 result.append(TimelineTrack(
                     id: media.id, name: String(localized: "story.timeline.video", defaultValue: "Video", bundle: .module), type: .video,

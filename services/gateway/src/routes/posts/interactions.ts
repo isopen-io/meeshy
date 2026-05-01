@@ -6,6 +6,7 @@ import { PostService } from '../../services/PostService';
 import { LikeSchema, RepostSchema, PostParams } from './types';
 import { sendSuccess } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
+import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -17,6 +18,7 @@ export function registerInteractionRoutes(
   // POST /posts/:postId/like
   fastify.post('/posts/:postId/like', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('like') },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -33,16 +35,27 @@ export function registerInteractionRoutes(
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
 
-      // Broadcast like via Socket.IO
+      // Broadcast like via Socket.IO. Stories use a private `story:reacted`
+      // event aimed only at the author — previously they fanned out as
+      // `post:liked` to ALL friends (privacy leak: a reaction to a private
+      // story was advertised to the author's entire feed).
       const socialEvents = fastify.socialEvents;
       if (socialEvents && post.authorId) {
-        socialEvents.broadcastPostLiked({
-          postId,
-          userId: authContext.registeredUser.id,
-          emoji,
-          likeCount: post.likeCount,
-          reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-        }, post.authorId).catch(() => {});
+        if (post.type === 'STORY') {
+          socialEvents.broadcastStoryReacted({
+            storyId: postId,
+            userId: authContext.registeredUser.id,
+            emoji,
+          }, post.authorId);
+        } else {
+          socialEvents.broadcastPostLiked({
+            postId,
+            userId: authContext.registeredUser.id,
+            emoji,
+            likeCount: post.likeCount,
+            reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
+          }, post.authorId).catch(() => {});
+        }
       }
 
       // Create notification for post author
@@ -140,6 +153,7 @@ export function registerInteractionRoutes(
   // POST /posts/:postId/view
   fastify.post('/posts/:postId/view', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('view') },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -224,6 +238,7 @@ export function registerInteractionRoutes(
       }
     },
     preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('impression') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;

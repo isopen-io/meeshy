@@ -351,6 +351,9 @@ struct FeedView: View {
                     composerPlaceholder
                         .padding(.bottom, 8)
 
+                    // Connection status banner (banner manages its own socket observation)
+                    ConnectionBanner()
+
                     // Error state
                     if let error = viewModel.error {
                         VStack(spacing: 12) {

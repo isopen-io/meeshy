@@ -248,6 +248,14 @@ class TranslationHandler:
                 await self._handle_transcription_only_request(request_data)
                 return
 
+            # === STORY TEXT OBJECT TRANSLATION ===
+            # Le gateway envoie ce type quand un textObject d'une story doit etre
+            # traduit en plusieurs langues. On gathered toutes les traductions et
+            # publie un seul event combine `story_text_object_translation_completed`.
+            elif message_type == 'story_text_object_translation':
+                await self._handle_story_text_object_translation(request_data)
+                return
+
             # === VOICE API ===
             elif VOICE_API_AVAILABLE and self.voice_api_handler and self.voice_api_handler.is_voice_api_request(message_type):
                 await self._handle_voice_api_request(request_data)
@@ -540,6 +548,103 @@ class TranslationHandler:
                 return reason
 
         return "Erreur de validation inconnue"
+
+    async def _handle_story_text_object_translation(self, request_data: dict):
+        """
+        Traduit un textObject de story en N langues et publie un event combine.
+
+        Avant ce handler, le gateway envoyait des requetes `story_text_object_translation`
+        sans handler cote translator → tombait dans le `else` final et le pipeline
+        textObjects-translation etait silencieusement mort en production. Toutes les
+        stories montraient le texte original quel que soit la langue de l'utilisateur.
+
+        Format requete:
+            {type, postId, textObjectIndex, text, sourceLanguage, targetLanguages, timestamp}
+        Format reponse (publie sur PUB):
+            {type: 'story_text_object_translation_completed',
+             postId, textObjectIndex,
+             translations: {targetLang: translatedText, ...},
+             timestamp}
+        """
+        post_id = request_data.get('postId')
+        text_object_index = request_data.get('textObjectIndex')
+        text = request_data.get('text', '')
+        source_language = request_data.get('sourceLanguage', 'fr')
+        target_languages = request_data.get('targetLanguages', [])
+
+        # Validation minimale — ignore les requetes malformees plutot que de crash
+        if not post_id or text_object_index is None or not text or not target_languages:
+            logger.warning(
+                f"⚠️ [TRANSLATOR] story_text_object_translation requete invalide: "
+                f"postId={post_id}, index={text_object_index}, has_text={bool(text)}, "
+                f"targets={target_languages}"
+            )
+            return
+
+        # Verifier la longueur (memes limites que les messages)
+        if not can_translate_message(text):
+            logger.warning(
+                f"⚠️ [TRANSLATOR] story textObject trop long: postId={post_id}, "
+                f"index={text_object_index}, length={len(text)}"
+            )
+            return
+
+        translation_service = getattr(self.pool_manager, 'translation_service', None)
+        if translation_service is None:
+            logger.error(
+                "❌ [TRANSLATOR] story_text_object_translation: translation_service non disponible"
+            )
+            return
+
+        translations: Dict[str, str] = {}
+        start_time = time.time()
+
+        for target_lang in target_languages:
+            if target_lang == source_language:
+                # Pas besoin de traduire vers la langue source
+                continue
+            try:
+                result = await translation_service.translate_with_structure(
+                    text=text,
+                    source_language=source_language,
+                    target_language=target_lang,
+                    model_type=request_data.get('modelType', 'basic'),
+                    source_channel='zmq_story_text_object'
+                )
+                translated = result.get('translated_text') if isinstance(result, dict) else None
+                if translated and translated.strip() and translated != text:
+                    translations[target_lang] = translated
+            except Exception as e:
+                logger.warning(
+                    f"⚠️ [TRANSLATOR] story textObject translation failed: "
+                    f"postId={post_id}, index={text_object_index}, target={target_lang}, err={e}"
+                )
+
+        if not translations:
+            logger.warning(
+                f"⚠️ [TRANSLATOR] story_text_object: no translations produced for "
+                f"postId={post_id}, index={text_object_index}"
+            )
+            # On publie quand meme l'event vide pour que le gateway sache que la
+            # requete a ete traitee (evite les listener leaks cote gateway).
+
+        completed_event = {
+            'type': 'story_text_object_translation_completed',
+            'postId': post_id,
+            'textObjectIndex': text_object_index,
+            'translations': translations,
+            'timestamp': int(time.time() * 1000),
+        }
+
+        if self.pub_socket:
+            await self.pub_socket.send(json.dumps(completed_event).encode('utf-8'))
+            logger.info(
+                f"✅ [TRANSLATOR] story_text_object_translation_completed: "
+                f"postId={post_id}, index={text_object_index}, "
+                f"translations={len(translations)}, elapsed={time.time() - start_time:.2f}s"
+            )
+        else:
+            logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour story_text_object event")
 
     async def _handle_audio_process_request(self, request_data: dict):
         """
