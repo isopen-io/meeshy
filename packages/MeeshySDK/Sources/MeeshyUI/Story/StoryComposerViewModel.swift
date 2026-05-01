@@ -117,14 +117,24 @@ final class StoryComposerViewModel {
         var rotation: Double = 0
     }
     var backgroundTransform: BackgroundTransform = BackgroundTransform()
-    private var backgroundTransformCache: [Int: BackgroundTransform] = [:]
+    /// Per-slide background transform cache, keyed by `slide.id` rather than its index.
+    /// Index keying broke after slide reordering or removal: deleting slide 0 promoted
+    /// slide 1's content to position 0 but `restoreBackgroundTransform()` would still
+    /// load the old slide 0's transform (now stranded at key `0`). Using the stable
+    /// slide ID survives any reorder/insert/remove operation.
+    private var backgroundTransformCache: [String: BackgroundTransform] = [:]
 
     func saveBackgroundTransform() {
-        backgroundTransformCache[currentSlideIndex] = backgroundTransform
+        guard let id = slides[safe: currentSlideIndex]?.id else { return }
+        backgroundTransformCache[id] = backgroundTransform
     }
 
     func restoreBackgroundTransform() {
-        backgroundTransform = backgroundTransformCache[currentSlideIndex] ?? BackgroundTransform()
+        guard let id = slides[safe: currentSlideIndex]?.id else {
+            backgroundTransform = BackgroundTransform()
+            return
+        }
+        backgroundTransform = backgroundTransformCache[id] ?? BackgroundTransform()
     }
 
     // MARK: - Media Storage (pre-publication)
@@ -132,6 +142,45 @@ final class StoryComposerViewModel {
     var loadedImages: [String: UIImage] = [:]
     var loadedVideoURLs: [String: URL] = [:]
     var loadedAudioURLs: [String: URL] = [:]
+
+    // MARK: - Media Aspect Ratios (render-time only, not persisted)
+
+    /// Natural aspect ratio (width/height) for each loaded media object, keyed by mediaObject.id.
+    /// Computed from UIImage.size or AVAsset track size. Used to render media in its natural
+    /// proportions instead of forcing a square frame. When unknown, `1.0` is used as fallback.
+    var mediaAspectRatios: [String: CGFloat] = [:]
+
+    func setAspectRatio(_ ratio: CGFloat, for mediaId: String) {
+        guard ratio.isFinite, ratio > 0 else { return }
+        mediaAspectRatios[mediaId] = ratio
+    }
+
+    // MARK: - Active Drag State (for alignment guides + warnings)
+
+    /// Snapshot of the foreground element being dragged. Held as a single optional struct
+    /// to keep id / position / size in sync — three independent properties would invite
+    /// inconsistent intermediate states. `nil` when no drag is active.
+    struct ActiveDrag: Equatable {
+        let elementId: String
+        var position: CGPoint
+        var size: CGSize
+    }
+
+    var activeDrag: ActiveDrag?
+
+    func beginDrag(elementId: String, position: CGPoint, size: CGSize) {
+        activeDrag = ActiveDrag(elementId: elementId, position: position, size: size)
+    }
+
+    func updateDrag(position: CGPoint) {
+        guard var current = activeDrag, current.position != position else { return }
+        current.position = position
+        activeDrag = current
+    }
+
+    func endDrag() {
+        activeDrag = nil
+    }
 
     // MARK: - Timeline
 
@@ -176,9 +225,20 @@ final class StoryComposerViewModel {
         }
     }
 
-    func autoExtendDuration(forElementEnd end: Float) {
-        if end > currentSlideDuration {
-            currentSlideDuration = min(600, end + 0.5)
+    func autoExtendDuration(forElementEnd end: Float, slideId: String? = nil) {
+        // Target the slide that owns the element, NOT the currently-visible one.
+        // Without this, a video added to slide 0 while the user is on slide 1
+        // (PhotosPicker async race) would extend slide 1's duration.
+        let targetIndex: Int = {
+            if let id = slideId, let idx = slides.firstIndex(where: { $0.id == id }) {
+                return idx
+            }
+            return currentSlideIndex
+        }()
+        guard slides.indices.contains(targetIndex) else { return }
+        let current = Float(slides[targetIndex].duration)
+        if end > current {
+            slides[targetIndex].duration = TimeInterval(min(600, end + 0.5))
         }
     }
 
@@ -229,11 +289,11 @@ final class StoryComposerViewModel {
     var canAddMedia: Bool { mediaCount < 10 }
     var canAddImage: Bool {
         canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.mediaType == "image" }.count ?? 0) < 5
+        (currentEffects.mediaObjects?.filter { $0.kind == .image }.count ?? 0) < 5
     }
     var canAddVideo: Bool {
         canAddMedia &&
-        (currentEffects.mediaObjects?.filter { $0.mediaType == "video" }.count ?? 0) < 4
+        (currentEffects.mediaObjects?.filter { $0.kind == .video }.count ?? 0) < 4
     }
     var canAddAudio: Bool {
         canAddMedia &&
@@ -251,9 +311,23 @@ final class StoryComposerViewModel {
 
     func removeSlide(at index: Int) {
         guard slides.count > 1, slides.indices.contains(index) else { return }
-        let slideId = slides[index].id
+        let slide = slides[index]
+        let slideId = slide.id
+        let mediaIds = (slide.effects.mediaObjects ?? []).map(\.id)
+        let audioIds = (slide.effects.audioPlayerObjects ?? []).map(\.id)
         slides.remove(at: index)
         slideImages.removeValue(forKey: slideId)
+        backgroundTransformCache.removeValue(forKey: slideId)
+        for id in mediaIds {
+            loadedImages.removeValue(forKey: id)
+            loadedVideoURLs.removeValue(forKey: id)
+            mediaAspectRatios.removeValue(forKey: id)
+            zIndexMap.removeValue(forKey: id)
+        }
+        for id in audioIds {
+            loadedAudioURLs.removeValue(forKey: id)
+            zIndexMap.removeValue(forKey: id)
+        }
         if currentSlideIndex >= slides.count {
             currentSlideIndex = slides.count - 1
         }
@@ -276,9 +350,33 @@ final class StoryComposerViewModel {
         selectedElementId = nil
         activeTool = nil
         currentSlideIndex = index
-        zIndexMap = [:]
-        nextZIndex = 1
+        rehydrateZIndexMapFromSlide()
         restoreBackgroundTransform()
+    }
+
+    /// Rebuild `zIndexMap` from the current slide's persisted `zIndex` fields. The map
+    /// is the in-memory cache for `bringToFront` ordering during composer edits;
+    /// hydrating from the model means an element promoted on slide 0 retains its
+    /// front-position when the user comes back from slide 1. `nextZIndex` advances
+    /// past the highest persisted value so newly-promoted elements still rise above.
+    private func rehydrateZIndexMapFromSlide() {
+        var map: [String: Int] = [:]
+        var maxZ = 0
+        let effects = currentEffects
+        for obj in (effects.textObjects ?? []) {
+            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+        }
+        for obj in (effects.mediaObjects ?? []) {
+            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+        }
+        for obj in (effects.audioPlayerObjects ?? []) {
+            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+        }
+        for obj in (effects.stickerObjects ?? []) {
+            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+        }
+        zIndexMap = map
+        nextZIndex = maxZ + 1
     }
 
     func moveSlide(from source: Int, to destination: Int) {
@@ -327,15 +425,28 @@ final class StoryComposerViewModel {
     }
 
     @discardableResult
-    func addMediaObject(type: String) -> StoryMediaObject? {
+    func addMediaObject(kind: StoryMediaKind, toSlideId: String? = nil) -> StoryMediaObject? {
         guard canAddMedia else { return nil }
+        // Resolve the target slide. If the caller pinned a specific id (e.g., the
+        // PhotosPicker started on slide 0 and the user switched to slide 1 mid-load),
+        // honour it — without this guard, the new media object would be appended to
+        // whichever slide happened to be active when the async task resolved.
+        let targetSlideIndex: Int = {
+            if let id = toSlideId, let idx = slides.firstIndex(where: { $0.id == id }) {
+                return idx
+            }
+            return currentSlideIndex
+        }()
+        guard slides.indices.contains(targetSlideIndex) else { return nil }
+
         let center = CGPoint(x: 0.5, y: 0.5)
+        var targetEffects = slides[targetSlideIndex].effects
         // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
         // inclus : resolvedBackgroundMedia retombe sur le 1er existant).
-        let shouldBeBackground = currentEffects.resolvedBackgroundMedia == nil
+        let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil
         let obj = StoryMediaObject(
             postMediaId: "",
-            mediaType: type,
+            kind: kind,
             placement: "media",
             x: center.x,
             y: center.y,
@@ -345,13 +456,16 @@ final class StoryComposerViewModel {
             isBackground: shouldBeBackground ? true : nil,
             sourceLanguage: detectedKeyboardLanguage
         )
-        var effects = currentEffects
-        var medias = effects.mediaObjects ?? []
+        var medias = targetEffects.mediaObjects ?? []
         medias.append(obj)
-        effects.mediaObjects = medias
-        currentEffects = effects
-        selectedElementId = obj.id
-        bringToFront(id: obj.id)
+        targetEffects.mediaObjects = medias
+        slides[targetSlideIndex].effects = targetEffects
+        // Selection / z-index state is composer-global; only mutate it when we're
+        // actually adding to the currently-visible slide so the UI doesn't jump.
+        if targetSlideIndex == currentSlideIndex {
+            selectedElementId = obj.id
+            bringToFront(id: obj.id)
+        }
         return obj
     }
 
@@ -393,6 +507,7 @@ final class StoryComposerViewModel {
         loadedImages.removeValue(forKey: id)
         loadedVideoURLs.removeValue(forKey: id)
         loadedAudioURLs.removeValue(forKey: id)
+        mediaAspectRatios.removeValue(forKey: id)
         zIndexMap.removeValue(forKey: id)
     }
 
@@ -516,13 +631,37 @@ final class StoryComposerViewModel {
         zIndexMap[id] ?? 0
     }
 
+    /// Promote an element to the front. Persists the value into the slide's effects so
+    /// the order survives slide-switches AND publish (the reader applies the same
+    /// `zIndex` modifier for WYSIWYG playback). Previously the map was in-memory only,
+    /// so re-entering slide N showed elements in array-order with no memory of past
+    /// `bringToFront` actions.
     func bringToFront(id: String) {
-        zIndexMap[id] = nextZIndex
+        let z = nextZIndex
+        zIndexMap[id] = z
         nextZIndex += 1
+        persistZIndex(z, for: id)
     }
 
     func sendToBack(id: String) {
         zIndexMap[id] = 0
+        persistZIndex(0, for: id)
+    }
+
+    private func persistZIndex(_ z: Int, for id: String) {
+        var effects = currentEffects
+        if var texts = effects.textObjects, let i = texts.firstIndex(where: { $0.id == id }) {
+            texts[i].zIndex = z; effects.textObjects = texts
+        } else if var medias = effects.mediaObjects, let i = medias.firstIndex(where: { $0.id == id }) {
+            medias[i].zIndex = z; effects.mediaObjects = medias
+        } else if var audios = effects.audioPlayerObjects, let i = audios.firstIndex(where: { $0.id == id }) {
+            audios[i].zIndex = z; effects.audioPlayerObjects = audios
+        } else if var stickers = effects.stickerObjects, let i = stickers.firstIndex(where: { $0.id == id }) {
+            stickers[i].zIndex = z; effects.stickerObjects = stickers
+        } else {
+            return  // Sticker handled by view-level state — caller patches via onUpdate
+        }
+        currentEffects = effects
     }
 
     // MARK: - Tool Actions
@@ -563,11 +702,32 @@ final class StoryComposerViewModel {
         }
     }
 
-    /// Evict background images for slides not currently visible to reduce memory.
-    /// Images will be reloaded from draft store when the slide is selected.
+    /// Evict cached media for slides not currently visible. Triggered by
+    /// `UIApplication.didReceiveMemoryWarningNotification` via `startMemoryObserver`.
+    /// Previously only `slideImages` (background thumbnails) and the global thumbnail
+    /// cache were purged — `loadedImages` / `loadedVideoURLs` / `loadedAudioURLs` /
+    /// `mediaAspectRatios` of foreground media on non-visible slides leaked, which
+    /// could keep ~50 MB of UIImages around with 10 slides × 5 photos.
+    /// Active-slide caches are preserved; the user is currently editing them and
+    /// their re-decoding cost would be visible.
     func evictNonVisibleSlideMedia() {
+        let currentSlideId = slides[safe: currentSlideIndex]?.id
+        var keepIds = Set<String>()
+        if let id = currentSlideId {
+            for obj in (currentEffects.mediaObjects ?? []) { keepIds.insert(obj.id) }
+            for obj in (currentEffects.audioPlayerObjects ?? []) { keepIds.insert(obj.id) }
+        }
+
         for (index, slide) in slides.enumerated() where index != currentSlideIndex {
             slideImages.removeValue(forKey: slide.id)
+            for obj in (slide.effects.mediaObjects ?? []) where !keepIds.contains(obj.id) {
+                loadedImages.removeValue(forKey: obj.id)
+                loadedVideoURLs.removeValue(forKey: obj.id)
+                mediaAspectRatios.removeValue(forKey: obj.id)
+            }
+            for obj in (slide.effects.audioPlayerObjects ?? []) where !keepIds.contains(obj.id) {
+                loadedAudioURLs.removeValue(forKey: obj.id)
+            }
         }
         StoryMediaLoader.shared.clearThumbnailCache()
     }

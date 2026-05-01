@@ -103,6 +103,13 @@ public struct CreateCommentRequest: Encodable {
     }
 }
 
+public struct LikeRequest: Encodable {
+    public let emoji: String
+    public init(emoji: String) {
+        self.emoji = emoji
+    }
+}
+
 public struct UpdatePostRequest: Encodable, Sendable {
     public let content: String?
     public let visibility: String?

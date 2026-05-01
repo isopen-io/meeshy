@@ -94,6 +94,7 @@ import { BackgroundJobsManager } from './jobs';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
 import { TusCleanupService } from './services/TusCleanupService';
+import { ExpiredStoriesCleanupService } from './services/ExpiredStoriesCleanupService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
 import { AuthenticationError, ValidationError, TranslationError } from './errors/custom-errors';
 
@@ -268,6 +269,7 @@ class MeeshyServer {
   private backgroundJobs: BackgroundJobsManager;
   private jobMappingCache: MultiLevelJobMappingCache;
   private tusCleanup: TusCleanupService;
+  private expiredStoriesCleanup: ExpiredStoriesCleanupService;
   private deliveryQueue: RedisDeliveryQueue;
   private agentClient: ZmqAgentClient | null = null;
 
@@ -375,6 +377,10 @@ class MeeshyServer {
 
     // Initialiser le service de nettoyage des uploads tus incomplets
     this.tusCleanup = new TusCleanupService();
+
+    // Cron de purge des stories expirees (soft-delete passe le `expiresAt`,
+    // hard-delete au-dela de la fenetre de retention).
+    this.expiredStoriesCleanup = new ExpiredStoriesCleanupService(this.prisma);
 
     // Expose emailService for use in routes (friend requests, etc.)
     this.server.decorate('emailService', emailService);
@@ -1232,6 +1238,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       this.tusCleanup.start();
       logger.info('✓ TUS cleanup service started');
 
+      // Start expired-stories cron (hourly): soft-delete past expiresAt,
+      // hard-delete past the retention grace window.
+      this.expiredStoriesCleanup.start();
+      logger.info('✓ Expired stories cleanup service started');
+
     } catch (error) {
       logger.error('❌ Failed to start server: ', error);
       process.exit(1);
@@ -1258,6 +1269,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (this.tusCleanup) {
         this.tusCleanup.stop();
         logger.info('✓ TUS cleanup service stopped');
+      }
+
+      // Stop expired-stories cleanup cron
+      if (this.expiredStoriesCleanup) {
+        this.expiredStoriesCleanup.stop();
+        logger.info('✓ Expired stories cleanup service stopped');
       }
 
       // SECURITY: Clear all cryptographic material from memory

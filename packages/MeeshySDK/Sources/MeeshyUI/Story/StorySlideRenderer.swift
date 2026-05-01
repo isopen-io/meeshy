@@ -43,7 +43,7 @@ public enum StorySlideRenderer {
 
             // 4. Foreground media images
             if let mediaObjects = slide.effects.mediaObjects {
-                for obj in mediaObjects where obj.mediaType == "image" {
+                for obj in mediaObjects where obj.kind == .image {
                     if let img = loadedImages[obj.id] {
                         drawMediaObject(obj, image: img, in: size, ctx: cgCtx)
                     }

@@ -1,8 +1,57 @@
 import SwiftUI
 import Combine
 import AVFoundation
+import QuartzCore
 import MeeshySDK
 import MeeshyUI
+
+// MARK: - Story progress display-link proxy
+
+/// Wraps a `CADisplayLink` that fires once per display refresh (typically 60Hz,
+/// up to 120Hz on ProMotion). The closure is invoked on the main run loop in
+/// `.common` mode so it keeps ticking during scroll. Lifetime is bridged via
+/// the parent's `AnyCancellable` — when that's cancelled the proxy is dropped
+/// and `invalidate()` is called explicitly from the cancellation closure.
+final class StoryProgressDisplayLinkProxy {
+    /// Tiny boxed Double so the tick closure can mutate the last-committed
+    /// progress between fires without requiring `inout` plumbing through a
+    /// closure that crosses concurrency boundaries.
+    final class MutableDouble {
+        var value: Double
+        init(_ value: Double) { self.value = value }
+    }
+
+    private var displayLink: CADisplayLink?
+    private let onTick: @MainActor () -> Void
+
+    init(onTick: @escaping @MainActor () -> Void) {
+        self.onTick = onTick
+    }
+
+    @MainActor
+    func start() {
+        invalidate()
+        let link = CADisplayLink(target: self, selector: #selector(handleTick))
+        if #available(iOS 15.0, *) {
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 60)
+        }
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    /// Safe to call from any context — `CADisplayLink.invalidate()` is documented
+    /// thread-safe and the run loop drops its strong reference to the proxy.
+    func invalidate() {
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    @objc private func handleTick() {
+        // CADisplayLink fires on its scheduled run loop (main, here). Hop the
+        // closure onto the MainActor explicitly for Swift 6 isolation correctness.
+        MainActor.assumeIsolated { onTick() }
+    }
+}
 
 // MARK: - Reveal Circle Shape
 
@@ -526,25 +575,45 @@ extension StoryViewerView {
         storyReactionCount = currentStory?.reactionCount ?? 0
         updateStoryDuration()
         let duration = computedStoryDuration
-        let interval: Double = 0.03
-        let increment = CGFloat(interval / duration)
         let fadeOutThreshold = max(0, 1.0 - (2.0 / duration))
 
-        timerCancellable = Timer.publish(every: interval, on: .main, in: .common)
-            .autoconnect()
-            .sink { _ in
-                guard !shouldPauseTimer else { return }
-                if progress >= 1.0 {
-                    goToNext()
-                } else {
-                    progress += increment
-                    // Déclencher le fade-out audio 2s avant la fin
-                    if progress >= fadeOutThreshold && !hasFiredFadeOut {
-                        hasFiredFadeOut = true
-                        NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
-                    }
-                }
+        // Drive the progress bar from a CADisplayLink instead of `Timer.publish(every: 0.03)`.
+        // Two wins:
+        // (a) CADisplayLink syncs to the display refresh, auto-pauses when the
+        //     app backgrounds, and stops cleanly when invalidated. The Combine
+        //     timer kept ticking on background and accumulated wake-ups.
+        // (b) A diff-guarded write only commits `progress` when the bar would
+        //     visually advance by at least 1/300 (≈1 pixel on a 300pt-wide
+        //     viewer). On a 5s story that's ~60 commits total instead of ~165
+        //     timer fires — a 2.5x reduction in body re-evaluations of the
+        //     storyCard ZStack (audit E1: ~10% CPU continuous). Authority on
+        //     elapsed time stays wall-clock so a missed display frame doesn't
+        //     drift the story duration.
+        let started = CACurrentMediaTime()
+        let lastCommitted = StoryProgressDisplayLinkProxy.MutableDouble(0)
+        let proxy = StoryProgressDisplayLinkProxy { [self] in
+            guard !shouldPauseTimer else { return }
+            let elapsed = CACurrentMediaTime() - started
+            let raw = min(1.0, CGFloat(elapsed / duration))
+            if abs(raw - CGFloat(lastCommitted.value)) >= 1.0 / 300.0 || raw >= 1.0 {
+                lastCommitted.value = Double(raw)
+                progress = raw
             }
+            if raw >= fadeOutThreshold && !hasFiredFadeOut {
+                hasFiredFadeOut = true
+                NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
+            }
+            if raw >= 1.0 {
+                goToNext()
+            }
+        }
+        proxy.start()
+
+        // Bridge the proxy lifetime to `timerCancellable` so existing `cancel()`
+        // sites at the top of this method, in `restartTimer()`, and in
+        // `onDisappear` keep working unchanged. The closure captures `proxy`
+        // strongly; cancelling the AnyCancellable invalidates the link.
+        timerCancellable = AnyCancellable { proxy.invalidate() }
     }
 
     /// Restart timer AND clear manual pause (e.g., after drag->transition).
@@ -568,29 +637,27 @@ extension StoryViewerView {
             return
         }
 
-        // Durées des médias foreground (vidéo + audio) — startTime + duration = end time
-        if let mediaObjects = effects?.mediaObjects {
-            for obj in mediaObjects where obj.placement == "foreground" {
-                let startOffset = Double(obj.startTime ?? 0)
-                if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
-                   let dur = feedMedia.duration, dur > 0 {
-                    maxDuration = max(maxDuration, startOffset + Double(dur))
-                } else if let objDur = obj.duration {
-                    maxDuration = max(maxDuration, startOffset + Double(objDur))
-                }
+        // Durées des médias foreground (composer écrit `placement: "media"`, jamais
+        // `"foreground"` — le filtre legacy laissait passer aucun élément, écrasant la
+        // durée à 5s pour toute vidéo > 5s). On s'aligne sur les accesseurs partagés.
+        for obj in effects?.resolvedForegroundMediaObjects ?? [] {
+            let startOffset = Double(obj.startTime ?? 0)
+            if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
+               let dur = feedMedia.duration, dur > 0 {
+                maxDuration = max(maxDuration, startOffset + Double(dur))
+            } else if let objDur = obj.duration {
+                maxDuration = max(maxDuration, startOffset + Double(objDur))
             }
         }
 
-        // Durées des audio players foreground — startTime + duration = end time
-        if let audioObjects = effects?.audioPlayerObjects {
-            for obj in audioObjects where obj.placement == "foreground" {
-                let startOffset = Double(obj.startTime ?? 0)
-                if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
-                   let dur = feedMedia.duration, dur > 0 {
-                    maxDuration = max(maxDuration, startOffset + Double(dur))
-                } else if let objDur = obj.duration {
-                    maxDuration = max(maxDuration, startOffset + Double(objDur))
-                }
+        // Durées des audio players foreground — même correctif.
+        for obj in effects?.resolvedForegroundAudioPlayers ?? [] {
+            let startOffset = Double(obj.startTime ?? 0)
+            if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
+               let dur = feedMedia.duration, dur > 0 {
+                maxDuration = max(maxDuration, startOffset + Double(dur))
+            } else if let objDur = obj.duration {
+                maxDuration = max(maxDuration, startOffset + Double(objDur))
             }
         }
 

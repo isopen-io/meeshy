@@ -23,6 +23,10 @@ struct StoryCanvasView: View {
     @GestureState private var pinchDelta: CGFloat = 1.0
     @GestureState private var rotationDelta: Angle = .zero
     @State private var filteredImage: UIImage?
+    /// In-flight filter render task. Cancelled on filter change / image change /
+    /// view disappear so a slow filter operation can't paint a stale result over
+    /// a faster one (last-writer-wins race).
+    @State private var filterTask: Task<Void, Never>?
 
     private var imageScale: CGFloat {
         get { viewModel.backgroundTransform.scale }
@@ -125,6 +129,14 @@ struct StoryCanvasView: View {
                 // Layer 2: ALL media objects — first fills canvas as background, rest positioned
                 mediaLayer(interactive: !isDrawingActive)
 
+                // Layer 2.5 : Filter overlay au-dessus des media de fond, sous les
+                // elements de premier plan — match du reader pour assurer le WYSIWYG.
+                // Auparavant le filtre n'etait applique que sur le `selectedImage`
+                // legacy, donc une story avec un media de fond et un filtre montrait
+                // un canvas non-filtre dans le composer mais filtre dans le viewer.
+                composerFilterOverlay
+                    .allowsHitTesting(false)
+
                 // Layer 3: Drawing overlay (PKCanvasView — UIKit via UIViewRepresentable)
                 drawingLayer
 
@@ -133,15 +145,18 @@ struct StoryCanvasView: View {
                 // UIKit-backed drawing layer AND foreground media (whose zIndex increments via bringToFront).
                 frontElementsGroup(canvasSize: canvasSize)
                     .zIndex(1000)
+
+                // Layer N+1 : Safe zone, alignment guides, and out-of-bounds warning.
+                // Visible only during edit. Subtle by default, intensifies during drag.
+                editingGuidesOverlay(canvasSize: canvasSize)
+                    .zIndex(2000)
             }
             .frame(width: canvasSize.width, height: canvasSize.height)
             .clipped()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(
-                RoundedRectangle(cornerRadius: 2)
-                    .strokeBorder(
-                        style: StrokeStyle(lineWidth: 1, dash: [6, 4])
-                    )
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(style: .storyDashed)
                     .foregroundStyle(MeeshyColors.indigo400.opacity(viewModel.isCanvasZoomed ? 0.6 : 0))
                     .allowsHitTesting(false)
                     .animation(.easeInOut(duration: 0.3), value: viewModel.isCanvasZoomed)
@@ -173,13 +188,23 @@ struct StoryCanvasView: View {
                 object: nil
             )
         }
+        .onDisappear {
+            filterTask?.cancel()
+            filterTask = nil
+        }
     }
 
     private func updateFilteredImage() {
         let filter = selectedFilter
         let source = selectedImage
-        Task.detached(priority: .userInitiated) {
+        // Cancel any in-flight filter render before kicking off a new one.
+        // Without cancellation, rapid filter switches could complete out-of-order
+        // and paint a stale result (e.g., user picks vintage → bw → vintage in
+        // 200ms; the slower bw landing last would briefly overwrite vintage).
+        filterTask?.cancel()
+        filterTask = Task.detached(priority: .userInitiated) {
             let result = source.map { StoryFilterProcessor.apply(filter, to: $0) }
+            if Task.isCancelled { return }
             await MainActor.run { filteredImage = result }
         }
     }
@@ -189,6 +214,32 @@ struct StoryCanvasView: View {
     private func handleEmptyCanvasTap() {
         guard !isDrawingActive else { return }
         viewModel.deselectAll()
+    }
+
+    // MARK: - Editing guides overlay (safe zone + alignment + warnings)
+
+    @ViewBuilder
+    private func editingGuidesOverlay(canvasSize: CGSize) -> some View {
+        if !isDrawingActive, !viewModel.isTimelinePlaying {
+            let drag = viewModel.activeDrag
+            ZStack {
+                SafeZoneOverlay(canvasSize: canvasSize, isDragging: drag != nil)
+                if let drag {
+                    AlignmentGuidesOverlay(canvasSize: canvasSize, dragPosition: drag.position)
+                    let bbox = CGRect(
+                        x: drag.position.x - drag.size.width / 2,
+                        y: drag.position.y - drag.size.height / 2,
+                        width: drag.size.width,
+                        height: drag.size.height
+                    )
+                    OutOfBoundsWarningOverlay(
+                        canvasSize: canvasSize,
+                        isOutOfBounds: StorySafeZone.isOutOfBounds(bbox)
+                    )
+                }
+            }
+            .frame(width: canvasSize.width, height: canvasSize.height)
+        }
     }
 
     // MARK: - Background Layer
@@ -213,6 +264,17 @@ struct StoryCanvasView: View {
     }
 
     // MARK: - Background Media Layer (classic selectedImage only — shown when no media objects)
+
+    /// Overlay de filtre du composer — miroir de `StoryCanvasReaderView.filterOverlay`.
+    /// Applique le meme blend (vintage / bw / warm / cool / dramatic / vivid / etc.) avec
+    /// la meme `filterIntensity` pour un rendu pixel-identique entre composer et viewer.
+    @ViewBuilder
+    private var composerFilterOverlay: some View {
+        if let filter = selectedFilter {
+            StoryFilterOverlayView(filter: filter, intensity: viewModel.filterIntensity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
 
     @ViewBuilder
     private var backgroundMediaLayer: some View {
@@ -313,6 +375,15 @@ struct StoryCanvasView: View {
                         viewModel.selectedElementId = obj.id
                         onEditText?(obj.id)
                     },
+                    onDragStarted: { pos, size in
+                        viewModel.beginDrag(elementId: obj.id, position: pos, size: size)
+                    },
+                    onDragChanged: { pos in
+                        viewModel.updateDrag(position: pos)
+                    },
+                    onDragCommitted: {
+                        viewModel.endDrag()
+                    },
                     onDragEnd: {}
                 )
                 .opacity(elementOpacity(startTime: obj.startTime, duration: obj.displayDuration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
@@ -341,6 +412,15 @@ struct StoryCanvasView: View {
                 },
                 onRemove: {
                     stickerObjects.removeAll { $0.id == sticker.id }
+                },
+                onDragStarted: { pos, size in
+                    viewModel.beginDrag(elementId: sticker.id, position: pos, size: size)
+                },
+                onDragChanged: { pos in
+                    viewModel.updateDrag(position: pos)
+                },
+                onDragCommitted: {
+                    viewModel.endDrag()
                 }
             )
             .allowsHitTesting(interactive)
@@ -370,7 +450,7 @@ struct StoryCanvasView: View {
     @ViewBuilder
     private func firstMediaElement(obj: StoryMediaObject) -> some View {
         Group {
-            if obj.mediaType == "image", let image = viewModel.loadedImages[obj.id] {
+            if obj.kind == .image, let image = viewModel.loadedImages[obj.id] {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -382,13 +462,16 @@ struct StoryCanvasView: View {
                     )
                     .allowsHitTesting(!isDrawingActive)
                     .gesture(isDrawingActive ? nil : backgroundImageGesture)
-            } else if obj.mediaType == "video" {
+            } else if obj.kind == .video {
                 DraggableMediaView(
                     mediaObject: mediaObjectBinding(for: obj.id),
                     image: nil,
                     videoURL: viewModel.loadedVideoURLs[obj.id],
                     isEditing: true,
-                    canvasWidth: viewModel.canvasSize.width,
+                    naturalAspectRatio: viewModel.mediaAspectRatios[obj.id],
+                    onAspectRatioResolved: { ratio in
+                        viewModel.setAspectRatio(ratio, for: obj.id)
+                    },
                     onDragEnd: {},
                     onTapToFront: {}
                 )
@@ -398,7 +481,7 @@ struct StoryCanvasView: View {
         .clipped()
         .canvasContextMenu(
             elementId: obj.id,
-            elementType: obj.mediaType == "video" ? .video : .image,
+            elementType: obj.kind == .video ? .video : .image,
             viewModel: viewModel
         )
         .zIndex(-1)
@@ -411,7 +494,19 @@ struct StoryCanvasView: View {
             image: viewModel.loadedImages[obj.id],
             videoURL: viewModel.loadedVideoURLs[obj.id],
             isEditing: interactive,
-            canvasWidth: viewModel.canvasSize.width,
+            naturalAspectRatio: viewModel.mediaAspectRatios[obj.id],
+            onAspectRatioResolved: { ratio in
+                viewModel.setAspectRatio(ratio, for: obj.id)
+            },
+            onDragStarted: { pos, size in
+                viewModel.beginDrag(elementId: obj.id, position: pos, size: size)
+            },
+            onDragChanged: { pos in
+                viewModel.updateDrag(position: pos)
+            },
+            onDragCommitted: {
+                viewModel.endDrag()
+            },
             onDragEnd: {},
             onTapToFront: {
                 viewModel.selectedElementId = obj.id
@@ -442,7 +537,7 @@ struct StoryCanvasView: View {
         }
         .canvasContextMenu(
             elementId: obj.id,
-            elementType: obj.mediaType == "video" ? .video : .image,
+            elementType: obj.kind == .video ? .video : .image,
             viewModel: viewModel
         )
         .gesture(
@@ -546,16 +641,26 @@ public struct DraggableSticker: View {
     public let canvasSize: CGSize
     public var onUpdate: (StorySticker) -> Void
     public var onRemove: () -> Void
+    public var onDragStarted: ((_ position: CGPoint, _ size: CGSize) -> Void)?
+    public var onDragChanged: ((CGPoint) -> Void)?
+    public var onDragCommitted: (() -> Void)?
 
     @State private var currentScale: CGFloat = 1
     @State private var currentRotation: Angle = .zero
     @State private var showDeleteButton = false
+    @State private var dragInitialized: Bool = false
 
     public init(sticker: StorySticker, canvasSize: CGSize,
                 onUpdate: @escaping (StorySticker) -> Void,
-                onRemove: @escaping () -> Void) {
+                onRemove: @escaping () -> Void,
+                onDragStarted: ((CGPoint, CGSize) -> Void)? = nil,
+                onDragChanged: ((CGPoint) -> Void)? = nil,
+                onDragCommitted: (() -> Void)? = nil) {
         self.sticker = sticker; self.canvasSize = canvasSize
         self.onUpdate = onUpdate; self.onRemove = onRemove
+        self.onDragStarted = onDragStarted
+        self.onDragChanged = onDragChanged
+        self.onDragCommitted = onDragCommitted
     }
 
     public var body: some View {
@@ -588,6 +693,14 @@ public struct DraggableSticker: View {
         }
     }
 
+    /// Emoji bbox is roughly font-size × font-size (em-square). Normalize against the
+    /// canvas dimensions so the parent can run safe-zone checks in 0–1 space.
+    private var normalizedSize: CGSize {
+        guard canvasSize.width > 0, canvasSize.height > 0 else { return .zero }
+        let side = 50 * sticker.scale * currentScale
+        return CGSize(width: side / canvasSize.width, height: side / canvasSize.height)
+    }
+
     private var dragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
@@ -596,6 +709,17 @@ public struct DraggableSticker: View {
                 var updated = sticker
                 updated.x = newX; updated.y = newY
                 onUpdate(updated)
+
+                let pos = CGPoint(x: newX, y: newY)
+                if !dragInitialized {
+                    dragInitialized = true
+                    onDragStarted?(pos, normalizedSize)
+                }
+                onDragChanged?(pos)
+            }
+            .onEnded { _ in
+                dragInitialized = false
+                onDragCommitted?()
             }
     }
 

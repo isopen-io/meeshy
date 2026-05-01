@@ -7,6 +7,7 @@ import { PostTranslationService } from '../../services/posts/PostTranslationServ
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
+import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,
@@ -18,6 +19,7 @@ export function registerCoreRoutes(
   // POST /posts — Create a new post
   fastify.post('/posts', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('create') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -143,6 +145,15 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, updateContentStrings)
         : [];
 
+      // Broadcast story edits to viewers so they don't render stale content.
+      // Regular posts already have `broadcastPostUpdated`; stories need their
+      // own event so iOS / web can listen narrowly to story changes (per audit
+      // X7 — without this, deletes and edits silently desync the cached tray).
+      const socialEvents = fastify.socialEvents;
+      if (socialEvents && (post as any).type === 'STORY') {
+        socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+      }
+
       return sendSuccess(reply, post, { meta: { mentionedUsers: updateMentionedUsers } });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
@@ -174,6 +185,8 @@ export function registerCoreRoutes(
       if (socialEvents) {
         if (result.type === 'STATUS') {
           socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? []).catch(() => {});
+        } else if (result.type === 'STORY') {
+          socialEvents.broadcastStoryDeleted(postId, authContext.registeredUser.id).catch(() => {});
         } else {
           socialEvents.broadcastPostDeleted(postId, authContext.registeredUser.id).catch(() => {});
         }

@@ -16,7 +16,7 @@ final class StoryComposerZIndexTests: XCTestCase {
     @MainActor
     func test_addMediaObject_assignsHighestZIndex() {
         let vm = StoryComposerViewModel()
-        let obj = vm.addMediaObject(type: "image")
+        let obj = vm.addMediaObject(kind: .image)
 
         XCTAssertNotNil(obj)
         XCTAssertEqual(vm.zIndex(for: obj!.id), 1)
@@ -35,7 +35,7 @@ final class StoryComposerZIndexTests: XCTestCase {
     func test_multipleAdds_incrementZIndex() {
         let vm = StoryComposerViewModel()
         let text = vm.addText()
-        let media = vm.addMediaObject(type: "image")
+        let media = vm.addMediaObject(kind: .image)
         let audio = vm.addAudioObject()
 
         XCTAssertEqual(vm.zIndex(for: text!.id), 1)
@@ -46,8 +46,8 @@ final class StoryComposerZIndexTests: XCTestCase {
     @MainActor
     func test_newElement_alwaysAbovePrevious() {
         let vm = StoryComposerViewModel()
-        let first = vm.addMediaObject(type: "image")
-        let second = vm.addMediaObject(type: "image")
+        let first = vm.addMediaObject(kind: .image)
+        let second = vm.addMediaObject(kind: .image)
 
         let firstZ = vm.zIndex(for: first!.id)
         let secondZ = vm.zIndex(for: second!.id)
@@ -59,7 +59,7 @@ final class StoryComposerZIndexTests: XCTestCase {
     func test_bringToFront_raisesAboveAll() {
         let vm = StoryComposerViewModel()
         let first = vm.addText()
-        let second = vm.addMediaObject(type: "image")
+        let second = vm.addMediaObject(kind: .image)
 
         vm.bringToFront(id: first!.id)
 

@@ -21,6 +21,10 @@ public extension Notification.Name {
 public struct StoryCanvasReaderView: View {
     public let story: StoryItem
     public let preferredLanguage: String?
+    /// Chaine de langues preferees pour la resolution Prisme (systemLanguage →
+    /// regionalLanguage → customDestinationLanguage). Si nil, on retombe sur
+    /// `preferredLanguage` (1 element). Voir CLAUDE.md "Prisme Linguistique".
+    public let preferredContentLanguages: [String]?
     /// Assets préchargés localement (mode preview — avant publication).
     /// En mode viewer normal, ces dicts sont vides et les URLs sont résolues depuis story.media.
     public let preloadedImages: [String: UIImage]
@@ -31,15 +35,26 @@ public struct StoryCanvasReaderView: View {
     @StateObject private var state: ReaderState
 
     public init(story: StoryItem, preferredLanguage: String? = nil,
+                preferredContentLanguages: [String]? = nil,
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:]) {
         self.story = story
         self.preferredLanguage = preferredLanguage
+        self.preferredContentLanguages = preferredContentLanguages
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
         self._state = StateObject(wrappedValue: ReaderState(story: story))
+    }
+
+    /// Chaine de resolution finale : array si fourni, sinon preferredLanguage en
+    /// element unique, sinon vide. Le caller normal (StoryViewerView) injecte la
+    /// chaine complete depuis `MeeshyUser.preferredContentLanguages`.
+    private var resolvedLanguageChain: [String] {
+        if let chain = preferredContentLanguages, !chain.isEmpty { return chain }
+        if let lang = preferredLanguage { return [lang] }
+        return []
     }
 
     /// Computes the largest 9:16 canvas that fits within the available space.
@@ -63,7 +78,7 @@ public struct StoryCanvasReaderView: View {
                 stickerLayer(size: canvas)
                 textLayer(size: canvas)
                 textObjectsLayer(size: canvas)
-                foregroundMediaLayer(canvasWidth: canvas.width)
+                foregroundMediaLayer()
                 foregroundAudioLayer
             }
             .frame(width: canvas.width, height: canvas.height)
@@ -83,7 +98,7 @@ public struct StoryCanvasReaderView: View {
             state.startBackgroundAudio(
                 effects: story.storyEffects,
                 story: story,
-                userLang: preferredLanguage ?? "fr"
+                preferredLanguages: resolvedLanguageChain
             )
             state.startForegroundVideos(story: story, preloadedVideoURLs: preloadedVideoURLs)
             state.startForegroundAudios(story: story, preloadedAudioURLs: preloadedAudioURLs)
@@ -139,12 +154,12 @@ public struct StoryCanvasReaderView: View {
     @ViewBuilder
     private var backgroundMediaLayer: some View {
         if let bgMedia = story.storyEffects?.resolvedBackgroundMedia {
-            if bgMedia.mediaType == "image" {
+            if bgMedia.kind == .image {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId) {
                     let thumbHash = story.media.first(where: { $0.id == bgMedia.postMediaId })?.thumbHash ?? resolvedThumbHash
                     backgroundImageView(urlStr: urlStr, thumbHash: thumbHash)
                 }
-            } else if bgMedia.mediaType == "video" {
+            } else if bgMedia.kind == .video {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId),
                    let url = MeeshyConfig.resolveMediaURL(urlStr) {
                     let player = state.ensureBackgroundVideoPlayer(url: url, muted: true)
@@ -202,32 +217,9 @@ public struct StoryCanvasReaderView: View {
     private var filterOverlay: some View {
         if let filter = story.storyEffects?.parsedFilter {
             let intensity = story.storyEffects?.filterIntensity ?? 1.0
-            filterView(filter, intensity: intensity)
+            StoryFilterOverlayView(filter: filter, intensity: intensity)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
-        }
-    }
-
-    @ViewBuilder
-    private func filterView(_ filter: StoryFilter, intensity: Double) -> some View {
-        switch filter {
-        case .vintage:
-            Color.orange.opacity(0.15 * intensity).blendMode(.multiply)
-        case .bw:
-            Color.gray.opacity(0.001)
-                .saturation(1.0 - intensity)
-        case .warm:
-            Color.orange.opacity(0.08 * intensity).blendMode(.softLight)
-        case .cool:
-            Color.blue.opacity(0.08 * intensity).blendMode(.softLight)
-        case .dramatic:
-            Color.black.opacity(0.2 * intensity).blendMode(.multiply)
-        case .vivid:
-            Color.clear.saturation(1.0 + 0.5 * intensity)
-        case .fade:
-            Color.white.opacity(0.15 * intensity).blendMode(.lighten)
-        case .chrome:
-            Color.clear.contrast(1.0 + 0.3 * intensity)
         }
     }
 
@@ -297,12 +289,11 @@ public struct StoryCanvasReaderView: View {
 
     @ViewBuilder
     private func textObjectsLayer(size: CGSize) -> some View {
-        let lang = preferredLanguage ?? "fr"
         let time = state.currentTime
         ForEach(state.textObjects) { obj in
             let opacity = state.textObjectOpacity(for: obj, at: time)
             if opacity > 0 {
-                let content = resolvedText(for: obj, userLang: lang)
+                let content = resolvedText(for: obj)
                 let style = obj.parsedTextStyle
                 let colorHex = obj.textColor ?? "FFFFFF"
                 let fontSize = obj.resolvedSize
@@ -333,6 +324,7 @@ public struct StoryCanvasReaderView: View {
                     .opacity(opacity)
                     .rotationEffect(.degrees(obj.rotation))
                     .position(x: obj.x * size.width, y: obj.y * size.height)
+                    .zIndex(Double(obj.zIndex ?? 0))
                     .allowsHitTesting(false)
                     .animation(.easeInOut(duration: 0.15), value: opacity)
             }
@@ -352,6 +344,7 @@ public struct StoryCanvasReaderView: View {
                         x: sticker.x * size.width,
                         y: sticker.y * size.height
                     )
+                    .zIndex(Double(sticker.zIndex ?? 0))
                     .allowsHitTesting(false)
             }
         } else if let emojiStrings = story.storyEffects?.stickers, !emojiStrings.isEmpty {
@@ -369,7 +362,7 @@ public struct StoryCanvasReaderView: View {
     // MARK: - Positioned Media Layer (timing-aware visibility + volume fade, skips first = bg)
 
     @ViewBuilder
-    private func foregroundMediaLayer(canvasWidth: CGFloat) -> some View {
+    private func foregroundMediaLayer() -> some View {
         let time = state.currentTime
         let foregroundMedia = story.storyEffects?.resolvedForegroundMediaObjects ?? []
         ForEach(foregroundMedia) { media in
@@ -378,14 +371,18 @@ public struct StoryCanvasReaderView: View {
                 DraggableMediaView(
                     mediaObject: .constant(media),
                     image: state.loadedImages[media.id],
-                    videoURL: media.mediaType == "video"
+                    videoURL: media.kind == .video
                         ? mediaURL(for: media.postMediaId).flatMap { MeeshyConfig.resolveMediaURL($0) }
                         : nil,
-                    externalPlayer: media.mediaType == "video" ? state.foregroundVideoPlayers[media.id] : nil,
+                    externalPlayer: media.kind == .video ? state.foregroundVideoPlayers[media.id] : nil,
                     isEditing: false,
-                    canvasWidth: canvasWidth
+                    naturalAspectRatio: state.mediaAspectRatios[media.id],
+                    onAspectRatioResolved: { resolved in
+                        state.mediaAspectRatios[media.id] = resolved
+                    }
                 )
                 .opacity(state.mediaObjectOpacity(for: media, at: time))
+                .zIndex(Double(media.zIndex ?? 0))
                 .animation(.easeInOut(duration: 0.15), value: state.mediaObjectOpacity(for: media, at: time))
             }
         }
@@ -406,6 +403,7 @@ public struct StoryCanvasReaderView: View {
                     externalPlayer: state.foregroundAudioPlayers[audio.id]
                 )
                 .opacity(state.audioObjectOpacity(for: audio, at: time))
+                .zIndex(Double(audio.zIndex ?? 0))
                 .animation(.easeInOut(duration: 0.15), value: state.audioObjectOpacity(for: audio, at: time))
             }
         }
@@ -413,10 +411,17 @@ public struct StoryCanvasReaderView: View {
 
     // MARK: - Helpers
 
-    private func resolvedText(for obj: StoryTextObject, userLang: String) -> String {
-        obj.translations?[userLang]
-            ?? obj.translations?["en"]
-            ?? obj.content
+    /// Resout le texte selon le Prisme : on essaie chaque langue de la chaine
+    /// preferee dans l'ordre, sinon on retombe sur l'original. Pas de fallback
+    /// implicite vers l'anglais — l'absence de traduction signifie que le contenu
+    /// est deja dans la langue de l'utilisateur OU qu'aucune traduction n'a ete
+    /// generee. Voir CLAUDE.md "Prisme Linguistique".
+    private func resolvedText(for obj: StoryTextObject) -> String {
+        guard let translations = obj.translations else { return obj.content }
+        for lang in resolvedLanguageChain {
+            if let translated = translations[lang] { return translated }
+        }
+        return obj.content
     }
 
     /// Résout l'URL d'un media par son postMediaId depuis les médias legacy du StoryItem.
@@ -451,6 +456,9 @@ private extension View {
 private final class ReaderState: ObservableObject {
     @Published var textObjects: [StoryTextObject]
     @Published var loadedImages: [String: UIImage] = [:]
+    /// Aspect ratios (width/height) detected for foreground media — populated
+    /// asynchronously for videos and synchronously from `UIImage.size` for images.
+    @Published var mediaAspectRatios: [String: CGFloat] = [:]
     /// Players vidéo foreground — un par média, démarrés selon leur startTime.
     @Published var foregroundVideoPlayers: [String: AVPlayer] = [:]
     /// Elapsed time since playback started (seconds). Drives timing-based visibility.
@@ -673,7 +681,7 @@ private final class ReaderState: ObservableObject {
     func loadForegroundImages(story: StoryItem, preloadedImages: [String: UIImage] = [:]) async {
         // Charge les images foreground (exclut le media background résolu).
         let foregroundImages = (story.storyEffects?.resolvedForegroundMediaObjects ?? [])
-            .filter { $0.mediaType == "image" }
+            .filter { $0.kind == .image }
 
         // Phase 1: Synchronous — populate from preloaded + disk cache (instant)
         var needsNetworkLoad: [(id: String, resolved: String)] = []
@@ -708,13 +716,16 @@ private final class ReaderState: ObservableObject {
 
     // MARK: Background audio
 
-    func startBackgroundAudio(effects: StoryEffects?, story: StoryItem, userLang: String) {
+    func startBackgroundAudio(effects: StoryEffects?, story: StoryItem, preferredLanguages: [String]) {
         guard let effects, let bgAudio = effects.resolvedBackgroundAudio else { return }
 
-        // Résolution langue : si variantes disponibles, prendre celle qui match userLang.
-        let resolvedMediaId = bgAudio.backgroundAudioVariants?
-            .first { $0.language == userLang }?.postMediaId
-            ?? bgAudio.postMediaId
+        // Resolution Prisme : on essaie chaque langue de la chaine preferee dans
+        // l'ordre, sinon on retombe sur la variante originale (postMediaId direct).
+        let variants = bgAudio.backgroundAudioVariants ?? []
+        let resolvedMediaId: String = preferredLanguages
+            .lazy
+            .compactMap { lang in variants.first { $0.language == lang }?.postMediaId }
+            .first ?? bgAudio.postMediaId
 
         guard let urlString = story.media.first(where: { $0.id == resolvedMediaId })?.url,
               let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
@@ -933,7 +944,7 @@ private final class ReaderState: ObservableObject {
         currentStoryRef = story
         // Démarre les videos foreground (exclut le media background résolu).
         let videoObjects = (story.storyEffects?.resolvedForegroundMediaObjects ?? [])
-            .filter { $0.mediaType == "video" }
+            .filter { $0.kind == .video }
         for media in videoObjects {
             if let preloaded = preloadedVideoURLs[media.id] {
                 registerPendingVideoStart(media: media, url: preloaded)
