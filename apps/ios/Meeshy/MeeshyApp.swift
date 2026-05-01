@@ -17,6 +17,9 @@ struct MeeshyApp: App {
     @State private var showSplash = AuthManager.shared.authToken == nil
     @State private var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
+    @State private var crashReportsToShow: [CrashDiagnostic] = []
+    @State private var showCrashSheet = false
+    @State private var hasSurfacedCrashReports = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -77,12 +80,18 @@ struct MeeshyApp: App {
                             .transition(.move(edge: .top).combined(with: .opacity))
                             .padding(.top, MeeshySpacing.xxl)
                             .onTapGesture {
+                                if let action = toastManager.onTapAction {
+                                    action()
+                                }
                                 toastManager.dismiss()
                             }
                             .zIndex(999)
                     }
                 }
                 .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
+                .sheet(isPresented: $showCrashSheet) {
+                    CrashReportSheet(reports: crashReportsToShow)
+                }
                 .environmentObject(authManager)
                 .environmentObject(deepLinkRouter)
                 .preferredColorScheme(theme.preferredColorScheme)
@@ -312,6 +321,9 @@ struct MeeshyApp: App {
     /// is grep-able in Console.app under subsystem `me.meeshy.app` /
     /// category `crash`.
     private func surfacePendingCrashReports() {
+        guard !hasSurfacedCrashReports else { return }
+        hasSurfacedCrashReports = true
+
         let reports = CrashDiagnosticsManager.shared.consumePending()
         guard let mostRecent = reports.first else { return }
 
@@ -326,6 +338,8 @@ struct MeeshyApp: App {
                 """)
         }
 
+        crashReportsToShow = reports
+
         let kindLabel: String
         switch mostRecent.kind {
         case .nsException: kindLabel = "Exception"
@@ -338,7 +352,9 @@ struct MeeshyApp: App {
         toastManager.show(
             "\(kindLabel) precedent\(extra) : \(mostRecent.summary)",
             type: .info
-        )
+        ) { [self] in
+            showCrashSheet = true
+        }
     }
 
     // MARK: - App Lifecycle Transitions

@@ -118,6 +118,7 @@
 		CAES000100010001000100B0 /* CallAudioEffectsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAES000100010001000100F0 /* CallAudioEffectsService.swift */; };
 		CAET000100010001000100B0 /* CallAudioEffectsServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAET000100010001000100F0 /* CallAudioEffectsServiceTests.swift */; };
 		CB3100000000002F31 /* ConnectionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3100000000001F31 /* ConnectionBanner.swift */; };
+		CRS00100010001000100B001 /* CrashReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CRS00100010001000100F001 /* CrashReportSheet.swift */; };
 		CC1000000000002F10 /* MediaPlayerContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1000000000001F10 /* MediaPlayerContext.swift */; };
 		CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1700000000001F17 /* MessageOverlayMenu.swift */; };
 		CC1800000000002F18 /* MessageInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1800000000001F18 /* MessageInfoSheet.swift */; };
@@ -486,6 +487,7 @@
 		CAES000100010001000100F0 /* CallAudioEffectsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioEffectsService.swift; sourceTree = "<group>"; };
 		CAET000100010001000100F0 /* CallAudioEffectsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioEffectsServiceTests.swift; sourceTree = "<group>"; };
 		CB3100000000001F31 /* ConnectionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionBanner.swift; sourceTree = "<group>"; };
+		CRS00100010001000100F001 /* CrashReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CrashReportSheet.swift"; sourceTree = "<group>"; };
 		CC1000000000001F10 /* MediaPlayerContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlayerContext.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleOverlay.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversalComposerBar.swift; sourceTree = "<group>"; };
@@ -746,6 +748,7 @@
 				PP2600000000001F26 /* AddParticipantSheet.swift */,
 				OF3000000000001F30 /* OfflineBanner.swift */,
 				CB3100000000001F31 /* ConnectionBanner.swift */,
+				CRS00100010001000100F001 /* CrashReportSheet.swift */,
 				A356FD5DE5874BCEFB9139C4 /* SecurityVerificationView.swift */,
 				LANG001A001A001A001A0001 /* LanguagePickerSheet.swift */,
 				CC4000000000001F40 /* ContactCardView.swift */,
@@ -1586,6 +1589,7 @@
 				OB2900000000002F29 /* OnboardingView.swift in Sources */,
 				OF3000000000002F30 /* OfflineBanner.swift in Sources */,
 				CB3100000000002F31 /* ConnectionBanner.swift in Sources */,
+				CRS00100010001000100B001 /* CrashReportSheet.swift in Sources */,
 				GS3200000000002F32 /* GlobalSearchView.swift in Sources */,
 				GS3300000000002F33 /* GlobalSearchViewModel.swift in Sources */,
 				SP3400000000002F34 /* SharePickerView.swift in Sources */,

@@ -256,20 +256,7 @@ struct RootView: View {
                 .zIndex(190)
             }
 
-            // 8. Toast overlay (system toasts)
-            VStack {
-                if let toast = toastManager.currentToast {
-                    ToastView(toast: toast)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .padding(.top, MeeshySpacing.xxl)
-                        .onTapGesture {
-                            toastManager.dismiss()
-                        }
-                }
-                Spacer()
-            }
-            .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
-            .zIndex(200)
+            // 8. Toast overlay — handled at MeeshyApp level to avoid duplicates
 
             // 9. Notification toast overlay (socket real-time)
             VStack {

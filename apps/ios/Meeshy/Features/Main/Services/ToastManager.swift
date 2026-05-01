@@ -8,6 +8,7 @@ final class ToastManager: ObservableObject {
     static let showToastNotification = Notification.Name("meeshy.showToast")
 
     @Published var currentToast: Toast?
+    var onTapAction: (() -> Void)?
 
     private var dismissTask: Task<Void, Never>?
 
@@ -17,9 +18,18 @@ final class ToastManager: ObservableObject {
 
     func show(_ message: String, type: ToastType = .success) {
         dismissTask?.cancel()
+        onTapAction = nil
         currentToast = Toast(message: message, type: type)
         HapticFeedback.light()
         scheduleDismiss()
+    }
+
+    func show(_ message: String, type: ToastType = .success, tapAction: @escaping () -> Void) {
+        dismissTask?.cancel()
+        onTapAction = tapAction
+        currentToast = Toast(message: message, type: type, isTappable: true)
+        HapticFeedback.light()
+        scheduleDismiss(duration: 6_000_000_000)
     }
 
     func showError(_ message: String) {
@@ -41,11 +51,12 @@ final class ToastManager: ObservableObject {
         currentToast = nil
     }
 
-    private func scheduleDismiss() {
+    private func scheduleDismiss(duration: UInt64 = 3_000_000_000) {
         dismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            try? await Task.sleep(nanoseconds: duration)
             guard !Task.isCancelled else { return }
             currentToast = nil
+            onTapAction = nil
         }
     }
 

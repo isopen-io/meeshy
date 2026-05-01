@@ -63,9 +63,11 @@ extension VoIPPushManager: PKPushRegistryDelegate {
 
         logger.info("VoIP push received: callId=\(callId), caller=\(callerName)")
 
-        // PushKit REQUIRES reportNewIncomingCall to be called synchronously
-        // before this callback returns. DispatchQueue.main.sync guarantees this.
-        DispatchQueue.main.sync {
+        // PushKit delivers this on .main (configured in register()). We are
+        // guaranteed to be on the main thread but the function is nonisolated,
+        // so we use MainActor.assumeIsolated to bridge into @MainActor context
+        // synchronously — no dispatch_sync, no deadlock.
+        MainActor.assumeIsolated {
             CallManager.shared.reportIncomingVoIPCall(
                 callId: callId,
                 callerUserId: callerUserId,
