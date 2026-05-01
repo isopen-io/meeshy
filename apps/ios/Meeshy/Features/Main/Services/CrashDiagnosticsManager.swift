@@ -17,6 +17,24 @@ import os
 /// - `NSSetUncaughtExceptionHandler` covers Obj-C exceptions and Swift
 ///   force-unwraps that bridge through `NSException` in real time.
 ///
+// MARK: - Diagnostic model (top-level so Codable is nonisolated)
+
+nonisolated struct CrashDiagnostic: Codable, Identifiable, Sendable {
+    let id: UUID
+    let timestamp: Date
+    let kind: Kind
+    let summary: String
+    let details: String
+
+    enum Kind: String, Codable, Sendable {
+        case nsException
+        case crash
+        case hang
+        case cpuException
+        case diskWriteException
+    }
+}
+
 /// Reports are written as JSON to `Documents/crash_diagnostics/`. On the next
 /// foreground, `consumePending()` returns and clears them so the UI can show
 /// a single toast and log them via `Logger.crash` (visible in Console.app).
@@ -27,7 +45,7 @@ final class CrashDiagnosticsManager: NSObject {
     /// Reports captured in previous sessions, ordered most-recent first.
     /// Drained exactly once by `consumePending()` so the toast doesn't fire
     /// on every relaunch.
-    private(set) var pending: [Diagnostic] = []
+    private(set) var pending: [CrashDiagnostic] = []
 
     private nonisolated static let directoryName = "crash_diagnostics"
     private nonisolated static let maxStoredReports = 50
@@ -64,7 +82,7 @@ final class CrashDiagnosticsManager: NSObject {
     /// diagnostic delivered mid-session would land on disk but `clearPersisted`
     /// would wipe it before the user ever saw it. Files we wrote are deleted
     /// at the end so the same incident isn't surfaced twice.
-    func consumePending() -> [Diagnostic] {
+    func consumePending() -> [CrashDiagnostic] {
         let live = loadFreshFromDisk()
         let combined = pending + live
         pending.removeAll()
@@ -72,25 +90,6 @@ final class CrashDiagnosticsManager: NSObject {
         return combined
     }
 
-    // MARK: - Diagnostic model
-
-    struct Diagnostic: Codable, Identifiable, Sendable {
-        let id: UUID
-        let timestamp: Date
-        let kind: Kind
-        /// One-line headline suitable for a toast / log subject.
-        let summary: String
-        /// Multi-line technical detail (call stack, raw JSON payload).
-        let details: String
-
-        enum Kind: String, Codable, Sendable {
-            case nsException
-            case crash
-            case hang
-            case cpuException
-            case diskWriteException
-        }
-    }
 
     // MARK: - NSException
 
@@ -128,7 +127,7 @@ final class CrashDiagnosticsManager: NSObject {
 
     private func loadPersisted() {
         let isoFormatter = ISO8601DateFormatter()
-        var loaded: [Diagnostic] = []
+        var loaded: [CrashDiagnostic] = []
         for (url, diag) in decodeAllReports() {
             loaded.append(diag)
             loadedFileURLs.insert(url)
@@ -142,8 +141,8 @@ final class CrashDiagnosticsManager: NSObject {
     /// reports MetricKit delivered during the live session. Without this,
     /// `clearLoadedFiles()` could wipe a fresh diagnostic before the user
     /// ever sees it.
-    private func loadFreshFromDisk() -> [Diagnostic] {
-        var fresh: [Diagnostic] = []
+    private func loadFreshFromDisk() -> [CrashDiagnostic] {
+        var fresh: [CrashDiagnostic] = []
         for (url, diag) in decodeAllReports() where !loadedFileURLs.contains(url) {
             fresh.append(diag)
             loadedFileURLs.insert(url)
@@ -156,7 +155,7 @@ final class CrashDiagnosticsManager: NSObject {
     /// garbage-collects any older overflow so a runaway crash loop can't bloat
     /// `Documents/` indefinitely (the surfacing pipeline only ever deletes
     /// files it loaded, so the tail beyond the cap would otherwise leak).
-    private func decodeAllReports() -> [(URL, Diagnostic)] {
+    private func decodeAllReports() -> [(URL, CrashDiagnostic)] {
         guard let dir = Self.directoryURL() else { return [] }
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: dir,
@@ -177,10 +176,10 @@ final class CrashDiagnosticsManager: NSObject {
         }
 
         let decoder = Self.makeDecoder()
-        var result: [(URL, Diagnostic)] = []
+        var result: [(URL, CrashDiagnostic)] = []
         for url in sorted.prefix(Self.maxStoredReports) {
             guard let data = try? Data(contentsOf: url),
-                  let diag = try? decoder.decode(Diagnostic.self, from: data) else { continue }
+                  let diag = try? decoder.decode(CrashDiagnostic.self, from: data) else { continue }
             result.append((url, diag))
         }
         return result
@@ -219,11 +218,14 @@ final class CrashDiagnosticsManager: NSObject {
 
     /// Writes a single diagnostic to disk synchronously. Thread-safe and
     /// callable from the NSException handler and from MetricKit callbacks.
-    nonisolated static func writeSync(kind: Diagnostic.Kind, summary: String, details: String) {
+    nonisolated static func writeSync(kind: CrashDiagnostic.Kind, summary: String, details: String) {
         guard let dir = directoryURL() else { return }
         let id = UUID()
-        let diag = Diagnostic(id: id, timestamp: Date(), kind: kind, summary: summary, details: details)
-        guard let data = try? makeEncoder().encode(diag) else { return }
+        let diag = CrashDiagnostic(id: id, timestamp: Date(), kind: kind, summary: summary, details: details)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = .prettyPrinted
+        guard let data = try? encoder.encode(diag) else { return }
         let url = dir.appendingPathComponent("\(id.uuidString).json")
         try? data.write(to: url, options: .atomic)
     }
