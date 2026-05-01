@@ -10,6 +10,49 @@ import { TranslationToggle } from './TranslationToggle';
 // Types
 // ============================================================================
 
+/// Per-text overlay produced by the iOS composer (and eventually the web
+/// composer). Positions are normalized 0-1 against the 9:16 canvas. Each text
+/// carries its own translation map per Prisme — render time picks the best
+/// available language match.
+export interface StoryTextObjectData {
+  id: string;
+  content: string;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+  translations?: Record<string, string>;
+  sourceLanguage?: string;
+  textStyle?: 'bold' | 'neon' | 'typewriter' | 'handwriting';
+  textColor?: string;
+  textSize?: number;
+  textAlign?: string;
+  textBg?: string;
+  zIndex?: number;
+}
+
+export interface StoryMediaObjectData {
+  id: string;
+  postMediaId: string;
+  mediaType: 'image' | 'video';
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+  isBackground?: boolean;
+  zIndex?: number;
+}
+
+export interface StoryAudioObjectData {
+  id: string;
+  postMediaId: string;
+  x: number;
+  y: number;
+  volume: number;
+  isBackground?: boolean;
+  zIndex?: number;
+}
+
 interface StoryData {
   id: string;
   authorId?: string;
@@ -24,7 +67,21 @@ interface StoryData {
     textPosition?: { x: number; y: number };
     filter?: 'vintage' | 'bw' | 'warm' | 'cool' | 'dramatic' | null;
     stickers?: Array<{ emoji: string; x: number; y: number; scale: number; rotation: number }>;
+    /// Per-element overlays produced by the iOS composer. Web previously rendered
+    /// `content` as a single flat block (audit T9), losing all positioning,
+    /// styling, and per-element translations. These arrays mirror the iOS
+    /// `StoryEffects.{textObjects, mediaObjects, audioPlayerObjects}` shape.
+    textObjects?: StoryTextObjectData[];
+    mediaObjects?: StoryMediaObjectData[];
+    audioObjects?: StoryAudioObjectData[];
+    /// Slide duration in milliseconds (5000 default if absent). Without this,
+    /// every story fell to the hardcoded 5s STORY_DURATION even when the author
+    /// set a longer duration to fit a 30s video.
+    slideDurationMs?: number;
   };
+  /// Lookup of `postMediaId -> { url, mimeType }` for resolving foreground
+  /// `mediaObjects` / `audioObjects` URLs at render time.
+  mediaById?: Map<string, { url: string; mimeType: string }>;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
   createdAt: string;
@@ -47,7 +104,7 @@ interface StoryViewerProps {
 // Constants
 // ============================================================================
 
-const STORY_DURATION = 5000;
+const DEFAULT_STORY_DURATION_MS = 5000;
 
 const FILTER_MAP: Record<string, string> = {
   vintage: 'sepia(0.5) saturate(1.3)',
@@ -67,6 +124,47 @@ function timeAgo(dateStr: string): string {
   if (mins < 60) return `${mins}min`;
   const hrs = Math.floor(mins / 60);
   return `${hrs}h`;
+}
+
+/// Resolve a Prisme-chain pick for a per-text translation map. The web side
+/// receives a single `userLanguage` for now (audit B11B will plumb the full
+/// chain). Returns the original `content` when no translation matches — never
+/// falls back implicitly to "en", per CLAUDE.md "Prisme Linguistique".
+function resolvePrismeText(obj: StoryTextObjectData, preferredLanguage?: string): string {
+  if (preferredLanguage && obj.translations) {
+    const exact = obj.translations[preferredLanguage];
+    if (exact) return exact;
+    // Fallback to a 2-letter prefix match (en-US → en) so users with locales
+    // like "en-GB" still see English translations.
+    const prefix = preferredLanguage.split('-')[0]?.toLowerCase();
+    if (prefix && prefix !== preferredLanguage) {
+      for (const [lang, text] of Object.entries(obj.translations)) {
+        if (lang.toLowerCase() === prefix) return text;
+      }
+    }
+  }
+  return obj.content;
+}
+
+function textObjectClass(style?: StoryTextObjectData['textStyle']): string {
+  switch (style) {
+    case 'bold':
+      return 'font-bold';
+    case 'typewriter':
+      return 'font-mono';
+    case 'handwriting':
+      return 'italic';
+    case 'neon':
+      return 'font-semibold';
+    default:
+      return '';
+  }
+}
+
+function textObjectShadow(style?: StoryTextObjectData['textStyle']): string {
+  return style === 'neon'
+    ? '0 0 10px currentColor, 0 0 20px currentColor'
+    : '0 1px 4px rgba(0,0,0,0.5)';
 }
 
 function parseBackground(bg?: string): React.CSSProperties {
@@ -99,14 +197,56 @@ function parseBackground(bg?: string): React.CSSProperties {
 // Sub-components
 // ============================================================================
 
+/// Small wrapper around `<audio>` that respects the per-object volume from the
+/// composer. React's native `<audio>` doesn't take `volume` as a prop — must be
+/// set imperatively via a ref. Background-tagged audio renders display:none so
+/// it plays silently in the background; foreground renders the `controls` UI.
+function StoryAudioElement({
+  audio,
+  src,
+}: {
+  audio: StoryAudioObjectData;
+  src: string;
+}) {
+  const ref = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.volume = Math.max(0, Math.min(1, audio.volume));
+    }
+  }, [audio.volume]);
+
+  if (audio.isBackground) {
+    return <audio ref={ref} src={src} autoPlay loop style={{ display: 'none' }} />;
+  }
+  return (
+    <audio
+      ref={ref}
+      src={src}
+      autoPlay
+      loop
+      controls
+      className="absolute pointer-events-auto"
+      style={{
+        left: `${audio.x * 100}%`,
+        top: `${audio.y * 100}%`,
+        transform: 'translate(-50%, -50%)',
+        width: '60%',
+        zIndex: audio.zIndex ?? 3,
+      }}
+    />
+  );
+}
+
 function ProgressBar({
   total,
   current,
   isPaused,
+  durationMs,
 }: {
   total: number;
   current: number;
   isPaused: boolean;
+  durationMs: number;
 }) {
   return (
     <div className="flex gap-1 px-3 pt-3 pb-1">
@@ -126,7 +266,7 @@ function ProgressBar({
             style={
               i === current
                 ? {
-                    animationDuration: `${STORY_DURATION}ms`,
+                    animationDuration: `${durationMs}ms`,
                     animationTimingFunction: 'linear',
                     animationFillMode: 'forwards',
                   }
@@ -244,12 +384,15 @@ function StoryViewer({
   }, [story, onView]);
 
   // ---- Auto-advance timer ----
+  // Honor the per-story `slideDurationMs` (set by the composer to fit longer
+  // videos / TTS narrations) instead of a global 5s constant.
+  const storyDurationMs = story.storyEffects?.slideDurationMs ?? DEFAULT_STORY_DURATION_MS;
   useEffect(() => {
     if (isPaused) return;
 
     timerRef.current = setTimeout(() => {
       goNext();
-    }, STORY_DURATION);
+    }, storyDurationMs);
 
     return () => {
       if (timerRef.current) {
@@ -257,7 +400,7 @@ function StoryViewer({
         timerRef.current = null;
       }
     };
-  }, [currentIndex, isPaused, goNext]);
+  }, [currentIndex, isPaused, goNext, storyDurationMs]);
 
   // ---- Escape key ----
   useEffect(() => {
@@ -367,14 +510,134 @@ function StoryViewer({
         {/* Gradient overlay for readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
 
+        {/* Foreground media objects (iOS composer outputs normalized x/y in
+            0-1 — multiply by 100 for CSS %). Resolved via the postMediaId
+            lookup built in story-transforms. Background-tagged objects render
+            full-bleed; foreground positioned. */}
+        {effects?.mediaObjects?.map((m) => {
+          const resolved = story.mediaById?.get(m.postMediaId);
+          if (!resolved?.url) return null;
+          if (m.isBackground) {
+            return m.mediaType === 'video' ? (
+              <video
+                key={m.id}
+                src={resolved.url}
+                autoPlay
+                muted
+                playsInline
+                loop
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ zIndex: m.zIndex ?? 0 }}
+              />
+            ) : (
+              <img
+                key={m.id}
+                src={resolved.url}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ zIndex: m.zIndex ?? 0 }}
+              />
+            );
+          }
+          // Foreground: 65% of canvas short-dimension at scale=1, matches iOS
+          // `baseMediaSize = shortDim * 0.65` heuristic so cross-platform render
+          // stays roughly consistent.
+          const sizePct = 65 * m.scale;
+          return m.mediaType === 'video' ? (
+            <video
+              key={m.id}
+              src={resolved.url}
+              autoPlay
+              muted
+              playsInline
+              loop
+              className="absolute pointer-events-none rounded-lg"
+              style={{
+                left: `${m.x * 100}%`,
+                top: `${m.y * 100}%`,
+                width: `${sizePct}%`,
+                transform: `translate(-50%, -50%) rotate(${m.rotation}deg)`,
+                zIndex: m.zIndex ?? 1,
+              }}
+            />
+          ) : (
+            <img
+              key={m.id}
+              src={resolved.url}
+              alt=""
+              className="absolute pointer-events-none rounded-lg"
+              style={{
+                left: `${m.x * 100}%`,
+                top: `${m.y * 100}%`,
+                width: `${sizePct}%`,
+                transform: `translate(-50%, -50%) rotate(${m.rotation}deg)`,
+                zIndex: m.zIndex ?? 1,
+              }}
+            />
+          );
+        })}
+
+        {/* Per-text overlays produced by the iOS composer. Position is
+            normalized 0-1; iOS sends actual normalized values so we multiply
+            by 100 for CSS percentages. Each text picks its own translation
+            via the Prisme chain (passed via `userLanguage` for now; full
+            chain support ships in B11B). */}
+        {effects?.textObjects?.map((t) => {
+          const resolvedText = resolvePrismeText(t, userLanguage);
+          if (!resolvedText) return null;
+          const fontSize = t.textSize ?? 24;
+          return (
+            <div
+              key={t.id}
+              className={cn(
+                'absolute pointer-events-none select-none whitespace-pre-wrap text-center',
+                textObjectClass(t.textStyle),
+              )}
+              style={{
+                left: `${t.x * 100}%`,
+                top: `${t.y * 100}%`,
+                transform: `translate(-50%, -50%) scale(${t.scale}) rotate(${t.rotation}deg)`,
+                fontSize: `${fontSize}px`,
+                color: t.textColor ? (t.textColor.startsWith('#') ? t.textColor : `#${t.textColor}`) : '#ffffff',
+                textShadow: textObjectShadow(t.textStyle),
+                textAlign: (t.textAlign as 'left' | 'right' | 'center' | undefined) ?? 'center',
+                background: t.textBg
+                  ? (t.textBg.startsWith('#') ? t.textBg : `#${t.textBg}`)
+                  : undefined,
+                padding: t.textBg ? '4px 10px' : undefined,
+                borderRadius: t.textBg ? '6px' : undefined,
+                maxWidth: '85%',
+                zIndex: t.zIndex ?? 2,
+              }}
+            >
+              {resolvedText}
+            </div>
+          );
+        })}
+
+        {/* Foreground / background audio players. Volume is set on mount via
+            a ref because React's native `<audio>` doesn't accept `volume` as
+            a prop. Background audio plays silently (display:none). */}
+        {effects?.audioObjects?.map((a) => {
+          const resolved = story.mediaById?.get(a.postMediaId);
+          if (!resolved?.url) return null;
+          return (
+            <StoryAudioElement
+              key={a.id}
+              audio={a}
+              src={resolved.url}
+            />
+          );
+        })}
+
         {/* Stickers */}
         {effects?.stickers?.map((sticker, i) => (
           <div
             key={i}
             className="absolute pointer-events-none select-none"
             style={{
-              left: `${sticker.x}%`,
-              top: `${sticker.y}%`,
+              left: `${sticker.x * 100}%`,
+              top: `${sticker.y * 100}%`,
               transform: `translate(-50%, -50%) scale(${sticker.scale}) rotate(${sticker.rotation}deg)`,
               fontSize: '2rem',
             }}
@@ -391,6 +654,7 @@ function StoryViewer({
               total={stories.length}
               current={currentIndex}
               isPaused={isPaused}
+              durationMs={storyDurationMs}
             />
           </div>
 
