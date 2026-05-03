@@ -302,10 +302,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 conversationId: conversationId, offset: 0, limit: 30, includeReplies: true
             )
             let userId = await currentUserId()
+            let username = await currentUsername()
             if let mentionedUsers = response.meta?.mentionedUsers {
                 UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
             }
-            let freshMessages = response.data.map { $0.toMessage(currentUserId: userId) }
+            let freshMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username) }
             // Atomic merge: keep any messages that arrived via socket between the
             // REST request and this write, so they are never silently overwritten.
             await cache.messages.mergeUpdate(for: conversationId) { existing in
@@ -325,7 +326,8 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 conversationId: conversationId, before: messageId, limit: 30, includeReplies: true
             )
             let userId = await currentUserId()
-            let olderMessages = response.data.map { $0.toMessage(currentUserId: userId) }
+            let username = await currentUsername()
+            let olderMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username) }
 
             // Atomic merge: prepend older messages without overwriting any
             // messages that arrived via socket between the REST fetch and now.
@@ -532,8 +534,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
         }
         let userId = await currentUserId()
+        let username = await currentUsername()
         let isMe = apiMessage.senderId == userId
-        let msg = apiMessage.toMessage(currentUserId: userId)
+        let msg = apiMessage.toMessage(currentUserId: userId, currentUsername: username)
         await cache.messages.upsert(item: msg, for: msg.conversationId) { existing, new in
             existing.contains(where: { $0.id == new.id }) ? existing : existing + [new]
         }
@@ -573,7 +576,8 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     private func handleEditedMessage(_ apiMessage: APIMessage) async {
         let userId = await currentUserId()
-        let msg = apiMessage.toMessage(currentUserId: userId)
+        let username = await currentUsername()
+        let msg = apiMessage.toMessage(currentUserId: userId, currentUsername: username)
         await cache.messages.upsertPatch(for: msg.conversationId, itemId: msg.id) { existing in
             existing = msg
         }
@@ -731,5 +735,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     private func currentUserId() async -> String {
         await MainActor.run { AuthManager.shared.currentUser?.id ?? "" }
+    }
+
+    private func currentUsername() async -> String? {
+        await MainActor.run { AuthManager.shared.currentUser?.username }
     }
 }

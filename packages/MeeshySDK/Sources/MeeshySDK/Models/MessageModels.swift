@@ -416,7 +416,7 @@ extension APIMessage {
             senderAvatarURL: sender?.resolvedAvatar, senderUserId: sender?.resolvedUserId,
             deliveryStatus: computedDeliveryStatus,
             isMe: (sender?.resolvedUserId ?? senderId) == currentUserId
-                || (currentUsername != nil && resolvedUsername == currentUsername),
+                || (currentUsername != nil && resolvedUsername?.lowercased() == currentUsername?.lowercased()),
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
             deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0
         )
