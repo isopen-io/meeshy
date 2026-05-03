@@ -2,21 +2,56 @@ import Foundation
 import MetricKit
 import os
 
-/// Captures, persists and surfaces crash & hang reports without depending on
-/// any third-party SDK. The app shipped with `FirebaseCrashlytics` listed in
-/// `Package.swift` but it was never imported nor configured (no
-/// `FirebaseApp.configure()`, no `GoogleService-Info.plist`), so background
-/// crashes were silently lost. This manager fills that gap with the native
-/// stack:
+/// Captures, persists and surfaces crash & hang reports through two layers:
 ///
-/// - `MetricKit` (`MXCrashDiagnostic`, `MXHangDiagnostic`) catches OS-recorded
-///   incidents — including `0x8BADF00D` watchdog terminations and
-///   `0xDEAD10CC` background-task overruns, which are the most likely culprits
-///   for "the app crashes when backgrounded". Diagnostics are delivered by
-///   the OS at the next launch.
-/// - `NSSetUncaughtExceptionHandler` covers Obj-C exceptions and Swift
-///   force-unwraps that bridge through `NSException` in real time.
+/// 1. **On-device** — `MetricKit` (`MXCrashDiagnostic`, `MXHangDiagnostic`)
+///    catches OS-recorded incidents including `0x8BADF00D` watchdog
+///    terminations and `0xDEAD10CC` background-task overruns, delivered by
+///    the OS at the next launch. `NSSetUncaughtExceptionHandler` covers
+///    Obj-C exceptions and Swift force-unwraps that bridge through
+///    `NSException` in real time. Reports are persisted to
+///    `Documents/crash_diagnostics/` and surfaced via a one-shot toast.
 ///
+/// 2. **Remote (optional)** — A pluggable `CrashReporting` reporter is
+///    invoked for every MetricKit diagnostic so server-side aggregators
+///    (Crashlytics in production) get the same data with full
+///    symbolication. The default `NoOpCrashReporter` keeps everything on
+///    device when no reporter is wired up (debug builds without a
+///    `GoogleService-Info.plist`). NSExceptions are NOT forwarded
+///    explicitly: Crashlytics installs its own `NSUncaughtExceptionHandler`
+///    during `FirebaseApp.configure()`, and our handler chains to it via
+///    `previousExceptionHandler`, so forwarding manually would
+///    double-count.
+
+// MARK: - Crash reporter protocol
+
+/// Surface where MetricKit diagnostics are forwarded after they've been
+/// persisted locally. Implementations MUST be thread-safe — `record(_:)`
+/// is invoked on the MetricKit background queue.
+protocol CrashReporting: Sendable {
+    /// Forward a captured diagnostic. Invoked on a background queue.
+    func record(_ diagnostic: CrashDiagnostic)
+
+    /// Associate subsequent diagnostics with a user. Pass `nil` on logout.
+    func setUserID(_ userID: String?)
+
+    /// Free-form breadcrumb attached to the next crash report.
+    func log(_ message: String)
+}
+
+/// Default reporter when no remote backend is configured. Every call is a
+/// no-op; on-device persistence still happens via the manager itself.
+///
+/// Marked `nonisolated` so MetricKit's background queue can invoke
+/// `record(_:)` without hopping through the default-MainActor isolation
+/// SE-0466 imposes on this package.
+nonisolated struct NoOpCrashReporter: CrashReporting {
+    init() {}
+    func record(_ diagnostic: CrashDiagnostic) {}
+    func setUserID(_ userID: String?) {}
+    func log(_ message: String) {}
+}
+
 // MARK: - Diagnostic model (top-level so Codable is nonisolated)
 
 nonisolated struct CrashDiagnostic: Codable, Identifiable, Sendable {
@@ -67,9 +102,14 @@ final class CrashDiagnosticsManager: NSObject {
 
     /// Wires up the OS-level crash & hang observers and reloads any reports
     /// persisted from previous sessions. Idempotent.
-    func install() {
+    ///
+    /// - Parameter crashReporter: Remote forwarder for MetricKit
+    ///   diagnostics. Defaults to `NoOpCrashReporter`; production wires a
+    ///   `CrashlyticsReporter` once `FirebaseApp.configure()` has run.
+    func install(crashReporter: CrashReporting = NoOpCrashReporter()) {
         guard !installed else { return }
         installed = true
+        Self.reporter = crashReporter
         loadPersisted()
         installNSExceptionHandler()
         MXMetricManager.shared.add(self)
@@ -90,6 +130,20 @@ final class CrashDiagnosticsManager: NSObject {
         return combined
     }
 
+    /// Tag every subsequent diagnostic with a user identifier on the
+    /// remote reporter (cleared on logout via `nil`). No-op when the
+    /// reporter is `NoOpCrashReporter`.
+    func setUserID(_ userID: String?) {
+        Self.reporter.setUserID(userID)
+    }
+
+    /// Free-form breadcrumb attached to the next crash report. Use sparingly
+    /// — Crashlytics caps the per-session log so noisy callers crowd out
+    /// useful signal.
+    nonisolated func log(_ message: String) {
+        Self.reporter.log(message)
+    }
+
 
     // MARK: - NSException
 
@@ -98,6 +152,21 @@ final class CrashDiagnosticsManager: NSObject {
     /// `nonisolated(unsafe)` because it's set exactly once, on the main thread,
     /// before the handler can ever fire — at which point we only read it.
     private nonisolated(unsafe) static var previousExceptionHandler: (@convention(c) (NSException) -> Void)?
+
+    /// Remote forwarder used by `capture(...)` for MetricKit diagnostics.
+    /// Set once during `install(crashReporter:)` from MainActor; subsequent
+    /// reads happen on the MetricKit background queue, which is why the
+    /// reporter itself must conform to `Sendable`.
+    private nonisolated(unsafe) static var reporter: CrashReporting = NoOpCrashReporter()
+
+    #if DEBUG
+    /// Test-only override that bypasses `install()`'s idempotency guard so
+    /// each test can swap in a fresh mock. Production code MUST go through
+    /// `install(crashReporter:)` once at launch.
+    nonisolated static func setReporterForTesting(_ reporter: CrashReporting) {
+        Self.reporter = reporter
+    }
+    #endif
 
     /// `@convention(c)` is required by `NSSetUncaughtExceptionHandler`'s C
     /// signature and also makes the closure provably non-isolated under
@@ -218,15 +287,32 @@ final class CrashDiagnosticsManager: NSObject {
 
     /// Writes a single diagnostic to disk synchronously. Thread-safe and
     /// callable from the NSException handler and from MetricKit callbacks.
+    /// Use `capture(...)` instead when remote forwarding is also desired —
+    /// `writeSync` exists for the crashing-thread NSException path, where
+    /// the chained `previousExceptionHandler` already forwards to
+    /// Crashlytics so an additional `reporter.record(...)` would
+    /// double-count.
     nonisolated static func writeSync(kind: CrashDiagnostic.Kind, summary: String, details: String) {
+        let diag = CrashDiagnostic(id: UUID(), timestamp: Date(), kind: kind, summary: summary, details: details)
+        persist(diag)
+    }
+
+    /// Persists a diagnostic to disk AND forwards it to the configured
+    /// remote reporter. Used from MetricKit callbacks where there's no
+    /// upstream handler chain to rely on for server-side delivery.
+    nonisolated static func capture(kind: CrashDiagnostic.Kind, summary: String, details: String) {
+        let diag = CrashDiagnostic(id: UUID(), timestamp: Date(), kind: kind, summary: summary, details: details)
+        persist(diag)
+        reporter.record(diag)
+    }
+
+    private nonisolated static func persist(_ diag: CrashDiagnostic) {
         guard let dir = directoryURL() else { return }
-        let id = UUID()
-        let diag = CrashDiagnostic(id: id, timestamp: Date(), kind: kind, summary: summary, details: details)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = .prettyPrinted
         guard let data = try? encoder.encode(diag) else { return }
-        let url = dir.appendingPathComponent("\(id.uuidString).json")
+        let url = dir.appendingPathComponent("\(diag.id.uuidString).json")
         try? data.write(to: url, options: .atomic)
     }
 }
@@ -245,7 +331,7 @@ extension CrashDiagnosticsManager: MXMetricManagerSubscriber {
                 let termination = diag.terminationReason ?? "unknown"
                 let summary = "Crash exc=\(typeCode) sig=\(signalCode) reason=\(termination)"
                 let details = String(data: diag.jsonRepresentation(), encoding: .utf8) ?? "<binary>"
-                Self.writeSync(kind: .crash, summary: summary, details: details)
+                Self.capture(kind: .crash, summary: summary, details: details)
             }
 
             for diag in payload.hangDiagnostics ?? [] {
@@ -258,19 +344,19 @@ extension CrashDiagnosticsManager: MXMetricManagerSubscriber {
                 let seconds = diag.hangDuration.converted(to: .seconds).value
                 let summary = String(format: "Hang %.1fs", seconds)
                 let details = String(data: diag.jsonRepresentation(), encoding: .utf8) ?? "<binary>"
-                Self.writeSync(kind: .hang, summary: summary, details: details)
+                Self.capture(kind: .hang, summary: summary, details: details)
             }
 
             for diag in payload.cpuExceptionDiagnostics ?? [] {
                 let summary = "CPU exception"
                 let details = String(data: diag.jsonRepresentation(), encoding: .utf8) ?? "<binary>"
-                Self.writeSync(kind: .cpuException, summary: summary, details: details)
+                Self.capture(kind: .cpuException, summary: summary, details: details)
             }
 
             for diag in payload.diskWriteExceptionDiagnostics ?? [] {
                 let summary = "Disk-write exception"
                 let details = String(data: diag.jsonRepresentation(), encoding: .utf8) ?? "<binary>"
-                Self.writeSync(kind: .diskWriteException, summary: summary, details: details)
+                Self.capture(kind: .diskWriteException, summary: summary, details: details)
             }
         }
     }
