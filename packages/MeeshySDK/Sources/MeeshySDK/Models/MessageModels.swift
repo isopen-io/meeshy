@@ -288,7 +288,7 @@ extension APIMessage {
         return f
     }()
 
-    public func toMessage(currentUserId: String) -> MeeshyMessage {
+    public func toMessage(currentUserId: String, currentUsername: String? = nil) -> MeeshyMessage {
         let msgType: MeeshyMessage.MessageType = {
             switch messageType?.lowercased() {
             case "image": return .image
@@ -415,7 +415,8 @@ extension APIMessage {
             senderName: senderDisplayName, senderUsername: resolvedUsername, senderColor: senderColor,
             senderAvatarURL: sender?.resolvedAvatar, senderUserId: sender?.resolvedUserId,
             deliveryStatus: computedDeliveryStatus,
-            isMe: (sender?.resolvedUserId ?? senderId) == currentUserId,
+            isMe: (sender?.resolvedUserId ?? senderId) == currentUserId
+                || (currentUsername != nil && resolvedUsername == currentUsername),
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
             deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0
         )
