@@ -774,9 +774,11 @@ class ConversationViewModel: ObservableObject {
         switch cached {
         case .fresh(let data, _):
             messages = data
+            await hydrateTranslationsFromCache()
 
         case .stale(let data, _):
             messages = data
+            await hydrateTranslationsFromCache()
             isRevalidating = true
             Task { [weak self] in
                 guard let self else { return }
@@ -2073,6 +2075,32 @@ class ConversationViewModel: ObservableObject {
                 }
             }
             messageTranslations[msg.id] = existing
+        }
+    }
+
+    private func hydrateTranslationsFromCache() async {
+        let msgIds = messages.map(\.id)
+        let cached = await CacheCoordinator.shared.cachedTranslations(for: msgIds)
+        guard !cached.isEmpty else { return }
+        for (msgId, translations) in cached {
+            var existing = messageTranslations[msgId] ?? []
+            for t in translations {
+                let mt = MessageTranslation(
+                    id: t.id,
+                    messageId: t.messageId,
+                    sourceLanguage: t.sourceLanguage,
+                    targetLanguage: t.targetLanguage,
+                    translatedContent: t.translatedContent,
+                    translationModel: t.translationModel,
+                    confidenceScore: t.confidenceScore
+                )
+                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
+                    existing[idx] = mt
+                } else {
+                    existing.append(mt)
+                }
+            }
+            messageTranslations[msgId] = existing
         }
     }
 
