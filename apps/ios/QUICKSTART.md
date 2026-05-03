@@ -1,200 +1,113 @@
-# Quick Start Guide - Setting Up MeeshySDK and MeeshyUI
-
-This guide will help you set up the MeeshySDK and MeeshyUI modules in your Xcode project.
+# Quick Start - Meeshy iOS
 
 ## Prerequisites
 
-- Xcode 15.0 or later
-- iOS 17.0+ / macOS 14.0+ deployment target
-- Swift 5.9+
+- macOS 14+
+- Xcode 16+ with iOS 17+ SDK
+- iPhone 16 Pro simulator (or physical device)
+- Backend services running (gateway on port 3000, translator on port 8000)
 
-## Setup Options
+## First-Time Setup
 
-### Option 1: In an Existing Xcode Project
-
-#### Step 1: Add the Package
-
-1. In Xcode, go to **File → Add Package Dependencies...**
-2. Enter the repository URL (or use local path if developing locally)
-3. Select version or branch
-4. Click **Add Package**
-
-#### Step 2: Add Modules to Your Target
-
-1. Select your app target
-2. Go to **General → Frameworks, Libraries, and Embedded Content**
-3. Click **+** and add:
-   - `MeeshySDK`
-   - `MeeshyUI` (if you need UI components)
-
-#### Step 3: Build Your Project
-
-Press **⌘B** to build. The import errors should now be resolved!
-
-### Option 2: Using Swift Package Manager (Command Line)
-
-If you're building from the command line or in a different environment:
+### 1. Clone and install dependencies
 
 ```bash
-# Build the package
-swift build
-
-# Run tests
-swift test
-
-# Build for release
-swift build -c release
+git clone git@github.com:isopen-io/meeshy.git
+cd meeshy
+pnpm install          # Installs gateway + web dependencies
 ```
 
-### Option 3: Local Development
+### 2. Build and run the iOS app
 
-If you're developing the SDK and app together:
-
-1. Add the Package.swift file to your project root
-2. Create the `Sources/` directory structure as shown in README.md
-3. In your Xcode project settings, add a local package dependency pointing to the project root
-4. The modules will appear as separate targets
-
-## Verifying the Setup
-
-### Test Import
-
-Create a new Swift file and try importing:
-
-```swift
-import MeeshySDK
-import MeeshyUI
-
-// This should compile without errors
-let conversation = MeeshyConversation(
-    identifier: "test",
-    type: .direct,
-    title: "Test"
-)
-```
-
-### Check Build Log
-
-Look for these messages in the build log:
-- ✅ Building MeeshySDK
-- ✅ Building MeeshyUI
-- ✅ Building [YourAppTarget]
-
-## Common Issues and Solutions
-
-### Issue: "Unable to find module dependency"
-
-**Solutions:**
-1. Clean build folder: **Product → Clean Build Folder** (⇧⌘K)
-2. Reset package caches: **File → Packages → Reset Package Caches**
-3. Quit and restart Xcode
-4. Delete `~/Library/Developer/Xcode/DerivedData/[YourProject]`
-
-### Issue: "No such module 'MeeshySDK'"
-
-**Solutions:**
-1. Verify the package is added to your project dependencies
-2. Check that your target includes the module in **Build Phases → Dependencies**
-3. Ensure the module is imported in **General → Frameworks, Libraries, and Embedded Content**
-
-### Issue: Type ambiguity errors
-
-If you have both local types and SDK types with similar names:
-
-**Solution:** Use the type aliases provided in `Conversation.swift` and `Message.swift`:
-
-```swift
-// Instead of defining local types, use:
-typealias Conversation = MeeshyConversation
-typealias Message = MeeshyMessage
-```
-
-### Issue: Swift version compatibility
-
-**Solution:** Update Package.swift to match your Swift version:
-
-```swift
-// swift-tools-version: 5.9  // or 6.0 for Swift 6
-```
-
-## Next Steps
-
-Once setup is complete:
-
-1. **Explore the Models**: Check out `CoreModels.swift` to see all available types
-2. **Use UI Components**: Import `MeeshyUI` and add components to your views
-3. **Run Tests**: Verify everything works with `swift test` or ⌘U in Xcode
-4. **Read the README**: See `README.md` for detailed usage examples
-
-## Project Structure After Setup
-
-```
-YourProject/
-├── Package.swift                 # Package definition
-├── Sources/
-│   ├── MeeshySDK/               # SDK module
-│   │   ├── MeeshySDK.swift
-│   │   └── CoreModels.swift
-│   └── MeeshyUI/                # UI module
-│       └── MeeshyUI.swift
-├── Tests/
-│   └── MeeshySDKTests/
-│       └── CoreModelsTests.swift
-└── YourApp/                     # Your app target
-    ├── Views/
-    ├── ViewModels/
-    ├── Conversation.swift       # Type aliases
-    ├── Message.swift            # Type aliases
-    └── ...
-```
-
-## Integration Checklist
-
-- [ ] Package.swift created with both modules
-- [ ] Sources/MeeshySDK/ directory with model files
-- [ ] Sources/MeeshyUI/ directory with UI components
-- [ ] Package added to Xcode project
-- [ ] Modules added to app target dependencies
-- [ ] Project builds without import errors
-- [ ] Tests run successfully
-- [ ] Type aliases configured in app layer
-
-## Need Help?
-
-If you're still experiencing issues:
-
-1. Check that all files are in the correct directory structure
-2. Verify your Swift and Xcode versions meet requirements
-3. Try creating a fresh Xcode project and adding the package
-4. Review the error messages carefully - they often indicate missing dependencies
-
-## Building for Distribution
-
-When you're ready to distribute your SDK:
-
-### As a Swift Package
-
-```swift
-// In Package.swift, set appropriate version and products
-.library(
-    name: "MeeshySDK",
-    type: .dynamic, // or .static
-    targets: ["MeeshySDK"]
-)
-```
-
-### As an XCFramework
+From the repo root:
 
 ```bash
-# Build for multiple platforms
-xcodebuild archive -scheme MeeshySDK -destination "generic/platform=iOS" -archivePath "build/ios"
-xcodebuild archive -scheme MeeshySDK -destination "generic/platform=iOS Simulator" -archivePath "build/ios-sim"
-
-# Create XCFramework
-xcodebuild -create-xcframework \
-  -framework build/ios.xcarchive/Products/Library/Frameworks/MeeshySDK.framework \
-  -framework build/ios-sim.xcarchive/Products/Library/Frameworks/MeeshySDK.framework \
-  -output MeeshySDK.xcframework
+./apps/ios/meeshy.sh build    # Build only
+./apps/ios/meeshy.sh run      # Build + install + launch + stream logs
 ```
 
-Happy coding! 🚀
+`meeshy.sh` handles simulator boot, SPM resolution, code signing, and log streaming. Never use `xcodebuild` directly.
+
+### 3. Test credentials
+
+| User       | Password                 |
+|------------|--------------------------|
+| `atabeth`  | `pD5p1ir9uxLUf2X2FpNE`   |
+
+API base: `http://localhost:3000/api/v1/` (dev) or `https://gate.meeshy.me/api/v1/` (prod)
+
+## Project Structure
+
+```
+apps/ios/
+├── Meeshy.xcodeproj           → Xcode project (SPM dependencies)
+├── Package.swift              → SPM package definition (Firebase, WebRTC, SocketIO, etc.)
+├── GoogleService-Info.plist   → Firebase config (Analytics, Crashlytics, Messaging)
+├── meeshy.sh                  → Build/run/test script (single entry point)
+├── Meeshy/
+│   ├── MeeshyApp.swift        → App entry point
+│   ├── AppDelegate.swift      → Firebase init, push notifications, crash reporting
+│   ├── DesignSystem/          → Theme, colors, modifiers
+│   └── Features/Main/
+│       ├── Views/             → SwiftUI screens
+│       ├── ViewModels/        → MVVM state management
+│       ├── Models/            → App-level models
+│       ├── Navigation/        → Router, Route enum
+│       ├── Services/          → Networking, calls, audio, analytics
+│       └── Components/        → Reusable UI
+├── MeeshyNotificationExtension/ → Rich push (avatar, threading, prefetch)
+├── MeeshyShareExtension/     → Share-to-Meeshy
+├── MeeshyWidgets/             → Home screen widgets
+└── MeeshyTests/               → Unit tests (XCTest)
+```
+
+## Key Dependencies
+
+| Package            | Purpose                          |
+|--------------------|----------------------------------|
+| `MeeshySDK`       | Core SDK (auth, networking, sockets, cache) — `packages/MeeshySDK/` |
+| `MeeshyUI`        | Reusable SwiftUI components — `packages/MeeshySDK/` |
+| `FirebaseCore`     | Firebase initialization           |
+| `FirebaseAnalytics`| Screen tracking, usage analytics  |
+| `FirebaseCrashlytics` | Crash reporting               |
+| `FirebaseMessaging`| Push notifications (APNs)        |
+| `SocketIO`         | Real-time messaging               |
+| `WebRTC`           | Voice/video calls (P2P)          |
+| `Kingfisher`       | Image caching                     |
+| `WhisperKit`       | On-device speech recognition      |
+
+## Common Commands
+
+```bash
+./apps/ios/meeshy.sh build     # Build (non-blocking)
+./apps/ios/meeshy.sh run       # Build + install + launch + logs (blocks)
+./apps/ios/meeshy.sh test      # Run unit tests
+./apps/ios/meeshy.sh clean     # Clean build artifacts
+./apps/ios/meeshy.sh status    # Show simulator/app/build status
+./apps/ios/meeshy.sh restart   # Stop + build + install + launch
+```
+
+## Architecture
+
+- **MVVM** with `@MainActor` ViewModels and `@Published` state
+- **Singletons** for shared services: `AuthManager`, `APIClient`, `MessageSocketManager`, `CacheCoordinator`
+- **NavigationStack** + `Router` for navigation (supports iPad two-column)
+- **Cache-first**: Every screen loads from GRDB/disk cache before network
+- **Prisme Linguistique**: Content displayed in user's preferred language automatically
+
+## Troubleshooting
+
+### "No such module 'MeeshySDK'"
+SPM hasn't resolved yet. Run `./apps/ios/meeshy.sh clean --deep` then rebuild.
+
+### Build killed or hangs
+A previous build may be running. Run `./apps/ios/meeshy.sh clean` first.
+
+### Simulator not found
+Check available simulators: `xcrun simctl list devices available | grep iPhone`
+
+### Firebase not configured
+Ensure `GoogleService-Info.plist` is in `apps/ios/` with correct `BUNDLE_ID` (`me.meeshy.app`).
+
+### WebSocket connection failed
+Ensure the gateway is running on port 3000: `tmux attach -t meeshy` (window 1).
