@@ -1552,6 +1552,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.message.isEdited == rhs.message.isEdited &&
         lhs.message.deletedAt == rhs.message.deletedAt &&
         lhs.message.pinnedAt == rhs.message.pinnedAt &&
+        lhs.message.updatedAt == rhs.message.updatedAt &&
         lhs.message.expiresAt == rhs.message.expiresAt &&
         lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
         lhs.message.effects.flags.rawValue == rhs.message.effects.flags.rawValue &&
