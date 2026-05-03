@@ -1,6 +1,6 @@
 import Foundation
 import AVFoundation
-import CallKit
+@preconcurrency import CallKit
 import Combine
 import Network
 import UIKit
@@ -134,16 +134,17 @@ final class CallManager: ObservableObject {
         startAction.isVideo = isVideo
         startAction.contactIdentifier = username
         let transaction = CXTransaction(action: startAction)
+        let provider = callProvider
         callController.request(transaction) { [weak self] error in
             if let error {
                 Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
                 Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
             } else {
                 let update = CXCallUpdate()
-                update.remoteHandle = handle
+                update.remoteHandle = CXHandle(type: .generic, value: username)
                 update.localizedCallerName = username
                 update.hasVideo = isVideo
-                self?.callProvider.reportCall(with: uuid, updated: update)
+                provider.reportCall(with: uuid, updated: update)
             }
         }
 
@@ -768,7 +769,7 @@ final class CallManager: ObservableObject {
         audioSessionQueue.async {
             let session = AVAudioSession.sharedInstance()
             do {
-                try session.setCategory(.playAndRecord, mode: isVideo ? .videoChat : .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
+                try session.setCategory(.playAndRecord, mode: isVideo ? .videoChat : .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
                 try session.setActive(true)
                 if speaker {
                     try session.overrideOutputAudioPort(.speaker)
