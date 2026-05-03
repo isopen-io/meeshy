@@ -65,6 +65,7 @@ final class CallManager: ObservableObject {
     private var signalOfferCancellable: AnyCancellable?
     private var pendingRemoteOffer: SessionDescription?
     private var cancellables = Set<AnyCancellable>()
+    private let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
 
     // Screen capture monitoring
     private var screenCaptureObserver: NSObjectProtocol?
@@ -128,7 +129,7 @@ final class CallManager: ObservableObject {
 
         let uuid = UUID()
         activeCallUUID = uuid
-        let handle = CXHandle(type: .generic, value: userId)
+        let handle = CXHandle(type: .generic, value: username)
         let startAction = CXStartCallAction(call: uuid, handle: handle)
         startAction.isVideo = isVideo
         startAction.contactIdentifier = username
@@ -137,6 +138,12 @@ final class CallManager: ObservableObject {
             if let error {
                 Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
                 Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
+            } else {
+                let update = CXCallUpdate()
+                update.remoteHandle = handle
+                update.localizedCallerName = username
+                update.hasVideo = isVideo
+                self?.callProvider.reportCall(with: uuid, updated: update)
             }
         }
 
@@ -159,7 +166,7 @@ final class CallManager: ObservableObject {
     func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool) {
         let uuid = UUID()
         let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .generic, value: callerUserId)
+        update.remoteHandle = CXHandle(type: .generic, value: callerName)
         update.localizedCallerName = callerName
         update.hasVideo = isVideo
         update.supportsGrouping = false
@@ -208,11 +215,22 @@ final class CallManager: ObservableObject {
         HapticFeedback.medium()
     }
 
+    // MARK: - Update Incoming Call Name
+
+    func updateIncomingCallName(_ name: String) {
+        guard let uuid = activeCallUUID else { return }
+        remoteUsername = name
+        let update = CXCallUpdate()
+        update.localizedCallerName = name
+        callProvider.reportCall(with: uuid, updated: update)
+        Logger.calls.info("Updated incoming call name to: \(name)")
+    }
+
     // MARK: - Incoming Call (Socket)
 
     @Published var showCallWaitingBanner = false
 
-    func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool) {
+    func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil) {
         guard callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
             pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
@@ -232,7 +250,7 @@ final class CallManager: ObservableObject {
         let uuid = UUID()
         activeCallUUID = uuid
         let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .generic, value: fromUserId)
+        update.remoteHandle = CXHandle(type: .generic, value: fromUsername)
         update.localizedCallerName = fromUsername
         update.hasVideo = isVideo
         update.supportsGrouping = false
@@ -246,7 +264,7 @@ final class CallManager: ObservableObject {
         }
 
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
-        webRTCService.configure(isVideo: isVideo)
+        webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
         Task { [weak self] in
             guard let self else { return }
             await self.webRTCService.startLocalMedia(isVideo: isVideo)
@@ -302,6 +320,7 @@ final class CallManager: ObservableObject {
         guard let callId = currentCallId, let userId = remoteUserId else { return }
 
         callState = .connecting
+        configureAudioSession()
 
         if let uuid = activeCallUUID {
             let answerAction = CXAnswerCallAction(call: uuid)
@@ -396,6 +415,7 @@ final class CallManager: ObservableObject {
 
     func toggleSpeaker() {
         isSpeaker.toggle()
+        applySpeakerRoute()
         HapticFeedback.light()
     }
 
@@ -518,6 +538,7 @@ final class CallManager: ObservableObject {
 
     private func transitionToConnected() {
         callState = .connected
+        configureAudioSession()
         playHaptic(.heavy)
         startScreenCaptureMonitoring()
         callStartDate = Date()
@@ -718,6 +739,7 @@ final class CallManager: ObservableObject {
         callStartDate = nil
         reconnectAttempt = 0
         webRTCService.close()
+        deactivateAudioSession()
         callState = .ended(reason: reason)
         connectionQuality = .new
         activeCallUUID = nil
@@ -738,6 +760,48 @@ final class CallManager: ObservableObject {
         }
     }
 
+    // MARK: - Audio Session
+
+    private func configureAudioSession() {
+        let isVideo = isVideoEnabled
+        let speaker = isSpeaker
+        audioSessionQueue.async {
+            let session = AVAudioSession.sharedInstance()
+            do {
+                try session.setCategory(.playAndRecord, mode: isVideo ? .videoChat : .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
+                try session.setActive(true)
+                if speaker {
+                    try session.overrideOutputAudioPort(.speaker)
+                }
+                Logger.calls.info("Audio session configured — video: \(isVideo), speaker: \(speaker)")
+            } catch {
+                Logger.calls.error("Audio session configuration failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func applySpeakerRoute() {
+        guard callState.isActive else { return }
+        let speaker = isSpeaker
+        audioSessionQueue.async {
+            do {
+                try AVAudioSession.sharedInstance().overrideOutputAudioPort(speaker ? .speaker : .none)
+            } catch {
+                Logger.calls.error("Audio route change failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func deactivateAudioSession() {
+        audioSessionQueue.async {
+            do {
+                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            } catch {
+                Logger.calls.error("Audio session deactivation failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Socket.IO Signaling
 
     private func setupSocketListeners() {
@@ -746,12 +810,21 @@ final class CallManager: ObservableObject {
         socket.callOfferReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
+                guard let self else { return }
+                let myUserId = AuthManager.shared.currentUser?.id
+                guard event.initiator.userId != myUserId else { return }
+                guard self.currentCallId != event.callId else { return }
                 let isVideo = event.mode == "video" || event.mode == nil
-                self?.handleIncomingCallNotification(
+                let callerName = event.initiator.displayName ?? event.initiator.username
+                let dynamicIceServers = event.iceServers?.map { server in
+                    IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
+                }
+                self.handleIncomingCallNotification(
                     callId: event.callId,
                     fromUserId: event.initiator.userId,
-                    fromUsername: event.initiator.username,
-                    isVideo: isVideo
+                    fromUsername: callerName,
+                    isVideo: isVideo,
+                    iceServers: dynamicIceServers
                 )
             }
             .store(in: &cancellables)
@@ -803,9 +876,18 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .filter { $0.callId == callId }
             .first()
-            .sink { [weak self] _ in
+            .sink { [weak self] event in
                 guard let self else { return }
                 Logger.calls.info("Participant joined call \(callId), creating offer")
+
+                // Update ICE servers with TURN credentials without recreating the peer connection
+                if let servers = event.iceServers, !servers.isEmpty {
+                    let dynamicServers = servers.map { server in
+                        IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
+                    }
+                    self.webRTCService.updateIceServers(dynamicServers)
+                }
+
                 self.callState = .connecting
                 Task { [weak self] in
                     guard let self else { return }

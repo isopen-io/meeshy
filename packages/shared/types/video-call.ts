@@ -381,6 +381,7 @@ export interface CallInitiatedEvent {
   readonly initiator: {
     readonly userId: string;
     readonly username: string;
+    readonly displayName?: string;
     readonly avatar?: string;
   };
   readonly participants: CallParticipant[];

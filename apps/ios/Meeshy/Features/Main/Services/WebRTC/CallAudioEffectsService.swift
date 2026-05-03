@@ -5,6 +5,16 @@ import os
 
 final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
 
+    // MARK: - Dependencies
+
+    private let backSoundFileProvider: BackSoundFileProviding
+
+    // MARK: - Init
+
+    init(backSoundFileProvider: BackSoundFileProviding = BundleBackSoundFileProvider()) {
+        self.backSoundFileProvider = backSoundFileProvider
+    }
+
     // MARK: - State (atomic reads via os_unfair_lock for real-time safety)
 
     private(set) var activeVoiceEffect: AudioEffectType?
@@ -296,20 +306,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     // MARK: - Private — BackSound Setup (config queue)
 
     private func setBackSound(_ params: BackSoundParams) throws {
-        guard !params.soundFile.isEmpty else {
-            throw AudioEffectsError.soundFileNotFound(params.soundFile)
-        }
-
-        guard let url = Bundle.main.url(forResource: params.soundFile, withExtension: nil) else {
-            throw AudioEffectsError.soundFileNotFound(params.soundFile)
-        }
-
-        let audioFile: AVAudioFile
-        do {
-            audioFile = try AVAudioFile(forReading: url)
-        } catch {
-            throw AudioEffectsError.soundFileNotFound(params.soundFile)
-        }
+        let audioFile = try backSoundFileProvider.audioFile(for: params.soundFile)
 
         configQueue.sync { [self] in
             stopEngineOnConfigQueue()

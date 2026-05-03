@@ -268,6 +268,7 @@ export class NotificationService {
     type: NotificationType;
     priority: NotificationPriority;
     content: string;
+    title?: string;
     actor?: NotificationActor;
     context: NotificationContext;
     metadata: NotificationMetadata;
@@ -356,15 +357,30 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}`) :
             undefined;
 
+          const isGroupMessage = params.type === 'new_message'
+            && params.context.conversationType
+            && params.context.conversationType !== 'direct';
+          const pushTitle = params.title
+            || (isGroupMessage && params.context.conversationTitle
+              ? params.context.conversationTitle
+              : null)
+            || params.actor?.displayName
+            || 'Meeshy';
+          const pushBody = isGroupMessage && params.actor?.displayName
+            ? `${params.actor.displayName}: ${params.content.substring(0, 200)}`
+            : params.content.substring(0, 200);
+
           this.pushService.sendToUser({
             userId: params.userId,
             payload: {
-              title: params.actor?.displayName || 'Meeshy',
-              body: params.content.substring(0, 200),
+              title: pushTitle,
+              body: pushBody,
               link,
               data: {
                 type: params.type,
                 conversationId: params.context.conversationId || '',
+                conversationTitle: params.context.conversationTitle || '',
+                conversationType: params.context.conversationType || '',
                 messageId: params.context.messageId || '',
                 postId: params.context.postId || '',
                 postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
@@ -372,6 +388,7 @@ export class NotificationService {
                 senderUsername: params.actor?.username || '',
                 senderDisplayName: params.actor?.displayName || '',
                 senderAvatar: params.actor?.avatar || '',
+                imageURL: params.actor?.avatar || '',
               },
             },
           }).catch(err => {
@@ -1666,11 +1683,29 @@ export class NotificationService {
       revokeAllUrl,
     };
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: params.recipientUserId },
+      select: { systemLanguage: true }
+    });
+    const locale = user?.systemLanguage === 'en' ? 'en-US' : 'fr-FR';
+
+    const bodyParts: string[] = [];
+    if (location) bodyParts.push(location);
+    if (params.ipAddress) bodyParts.push(`IP : ${params.ipAddress}`);
+    if (deviceName) bodyParts.push(deviceName);
+    else if (deviceOS) bodyParts.push(deviceOS);
+    const now = new Date();
+    bodyParts.push(now.toLocaleString(locale, { timeZone: geo?.timezone || 'UTC', dateStyle: 'short', timeStyle: 'short' }));
+    const content = bodyParts.join(' — ');
+
+    const title = locale.startsWith('en') ? 'New login detected' : 'Nouvelle connexion détectée';
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'login_new_device',
       priority: 'high',
-      content: '',
+      content,
+      title,
       context: {},
       metadata: {
         action: 'view_details' as const,

@@ -26,6 +26,7 @@ class FeedViewModel: ObservableObject {
     private let socialSocket: SocialSocketProviding
     private let postService: PostServiceProviding
     private var cacheSaveTask: Task<Void, Never>?
+    private var isFeedLoadInProgress = false
 
     init(
         api: APIClientProviding = APIClient.shared,
@@ -48,7 +49,9 @@ class FeedViewModel: ObservableObject {
     // MARK: - Initial Load
 
     func loadFeed() async {
-        guard !isLoading else { return }
+        guard !isFeedLoadInProgress else { return }
+        isFeedLoadInProgress = true
+        defer { isFeedLoadInProgress = false }
         error = nil
 
         let cacheResult = await CacheCoordinator.shared.feed.load(for: "main-feed")

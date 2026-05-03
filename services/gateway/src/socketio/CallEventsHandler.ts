@@ -221,6 +221,7 @@ export class CallEventsHandler {
           initiator: {
             userId: callSession.initiator.id,
             username: callSession.initiator.username,
+            displayName: callSession.initiator.displayName || undefined,
             avatar: callSession.initiator.avatar
           },
           participants: callSession.participants.map((p: any) => ({
@@ -242,10 +243,7 @@ export class CallEventsHandler {
         // ACK to initiator with callId and mode
         ack?.({ success: true, data: { callId: callSession.id, mode: callSession.mode } });
 
-        // Also emit call:initiated to initiator socket
-        socket.emit(CALL_EVENTS.INITIATED, initiatedEvent);
-
-        // Get all conversation participants and send to their sockets directly
+        // Get all conversation participants to notify (excluding initiator)
         const conversationParticipants = await this.prisma.participant.findMany({
           where: {
             conversationId: data.conversationId,
@@ -263,14 +261,16 @@ export class CallEventsHandler {
           memberUserIds
         });
 
-        // Send call:initiated to ALL member sockets (not just those in the room)
+        // Send call:initiated to each member socket ONCE (excluding initiator
+        // to avoid the initiator treating their own call as an incoming call)
         const allSockets = await io.fetchSockets();
         let notifiedSocketsCount = 0;
 
         for (const memberSocket of allSockets) {
           const socketUserId = getUserId(memberSocket.id);
-          if (socketUserId && memberUserIds.includes(socketUserId)) {
-            memberSocket.emit(CALL_EVENTS.INITIATED, initiatedEvent);
+          if (socketUserId && socketUserId !== userId && memberUserIds.includes(socketUserId)) {
+            const memberIceServers = this.callService.generateIceServers(socketUserId);
+            memberSocket.emit(CALL_EVENTS.INITIATED, { ...initiatedEvent, iceServers: memberIceServers });
             notifiedSocketsCount++;
             logger.debug('📤 Sent call:initiated to member socket', {
               socketId: memberSocket.id,
@@ -279,25 +279,21 @@ export class CallEventsHandler {
           }
         }
 
-        // ALSO broadcast to conversation room for backwards compatibility
-        const roomName = ROOMS.conversation(data.conversationId);
-        io.to(roomName).emit(CALL_EVENTS.INITIATED, initiatedEvent);
-
-        logger.info('✅ Socket: Call initiated and broadcasted to all members', {
+        logger.info('✅ Socket: Call initiated and sent to members', {
           callId: callSession.id,
           conversationId: data.conversationId,
           totalMembers: memberUserIds.length,
-          notifiedSockets: notifiedSocketsCount,
-          roomName
+          notifiedSockets: notifiedSocketsCount
         });
 
         // Send VoIP push to offline members for incoming call wake-up
         if (this.pushService) {
           const initiatorUser = await this.prisma.user.findUnique({
             where: { id: userId },
-            select: { displayName: true, username: true }
+            select: { displayName: true, username: true, avatar: true }
           });
           const callerName = initiatorUser?.displayName || initiatorUser?.username || 'Unknown';
+          const callerAvatar = initiatorUser?.avatar || undefined;
           const notifiedSocketUserIds = new Set<string>();
           for (const memberSocket of allSockets) {
             const sid = getUserId(memberSocket.id);
@@ -313,13 +309,17 @@ export class CallEventsHandler {
               userId: offlineUserId,
               payload: {
                 title: `${callerName} vous appelle`,
-                body: data.type === 'video' ? 'Appel video' : 'Appel audio',
+                body: data.type === 'video' ? 'Appel vidéo' : 'Appel audio',
+                callId: callSession.id,
+                callerName,
+                callerAvatar,
                 data: {
                   type: 'call',
                   callId: callSession.id,
                   conversationId: data.conversationId,
                   callerName,
                   callerUserId: userId,
+                  callerAvatar: callerAvatar || '',
                   isVideo: String(data.type === 'video'),
                 },
               },

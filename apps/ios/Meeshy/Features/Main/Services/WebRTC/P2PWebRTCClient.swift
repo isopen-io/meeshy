@@ -81,6 +81,20 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.info("Peer connection created with \(iceServers.count) ICE servers")
     }
 
+    func updateIceServers(_ iceServers: [IceServer]) {
+        guard let pc = peerConnection else { return }
+        let config = pc.configuration
+        config.iceServers = iceServers.map { server in
+            RTCIceServer(
+                urlStrings: server.urls,
+                username: server.username,
+                credential: server.credential
+            )
+        }
+        pc.setConfiguration(config)
+        Logger.webrtc.info("ICE servers updated to \(iceServers.count) servers (no reconnect)")
+    }
+
     // MARK: - Local Media
 
     func startLocalMedia(type: CallMediaType) async throws {
@@ -667,6 +681,8 @@ final class P2PWebRTCClient: WebRTCClientProviding {
         Logger.webrtc.warning("WebRTC framework not available - calls are disabled")
         throw WebRTCError.notSupported
     }
+
+    func updateIceServers(_ iceServers: [IceServer]) {}
 
     func createOffer() async throws -> SessionDescription { throw WebRTCError.notSupported }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { throw WebRTCError.notSupported }

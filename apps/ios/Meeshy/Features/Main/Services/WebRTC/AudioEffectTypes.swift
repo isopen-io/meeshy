@@ -99,6 +99,28 @@ enum AudioEffectConfig: Equatable, Sendable {
     var isVoiceEffect: Bool { effectType.isVoiceEffect }
 }
 
+// MARK: - Back Sound File Provider Protocol
+
+protocol BackSoundFileProviding: Sendable {
+    func audioFile(for soundFile: String) throws -> AVAudioFile
+}
+
+struct BundleBackSoundFileProvider: BackSoundFileProviding {
+    func audioFile(for soundFile: String) throws -> AVAudioFile {
+        guard !soundFile.isEmpty else {
+            throw AudioEffectsError.soundFileNotFound(soundFile)
+        }
+        guard let url = Bundle.main.url(forResource: soundFile, withExtension: nil) else {
+            throw AudioEffectsError.soundFileNotFound(soundFile)
+        }
+        do {
+            return try AVAudioFile(forReading: url)
+        } catch {
+            throw AudioEffectsError.soundFileNotFound(soundFile)
+        }
+    }
+}
+
 // MARK: - Audio Effects Service Protocol
 
 protocol CallAudioEffectsServiceProviding: AnyObject {
