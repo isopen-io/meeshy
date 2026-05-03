@@ -1,5 +1,7 @@
 import UIKit
 @preconcurrency import UserNotifications
+import FirebaseCore
+import FirebaseCrashlytics
 import MeeshySDK
 import MeeshyUI
 import os
@@ -14,14 +16,23 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Configure Firebase synchronously before anything else so Crashlytics
+        // installs its NSExceptionHandler and signal handlers BEFORE we wire
+        // up our own. CrashDiagnosticsManager captures whatever handler is
+        // currently installed as `previousExceptionHandler` and chains to it
+        // — meaning any NSException that reaches us will also be forwarded
+        // to Crashlytics. Returns a `CrashReporting` we hand to the manager
+        // so MetricKit diagnostics also reach the Crashlytics dashboard
+        // (those don't trigger the live signal handlers since they're
+        // delivered at next launch from the OS).
+        let crashReporter = Self.bootCrashReporting()
+
         // Install the crash & hang observer first so any crash that happens
         // during the rest of `didFinishLaunching` (or at any later point in
         // this session) is captured. MetricKit also delivers diagnostics
-        // recorded during *previous* sessions here, which is the whole point:
-        // background crashes were previously invisible because no reporter
-        // was wired up.
+        // recorded during *previous* sessions here.
         Task { @MainActor in
-            CrashDiagnosticsManager.shared.install()
+            CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
         }
 
         UNUserNotificationCenter.current().delegate = self
@@ -259,6 +270,33 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             socialCategory,
             callCategory
         ])
+    }
+
+    // MARK: - Crash Reporting Bootstrap
+
+    /// Configures Firebase + Crashlytics if a `GoogleService-Info.plist` is
+    /// bundled with this build (production / staging schemes). Debug builds
+    /// without the plist fall through to `NoOpCrashReporter` so the rest of
+    /// the launch flow stays unchanged. Idempotent: safe to call multiple
+    /// times — only the first call configures, subsequent calls return the
+    /// already-active reporter.
+    private static func bootCrashReporting() -> CrashReporting {
+        guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else {
+            Logger.crash.info("Firebase not configured (GoogleService-Info.plist missing); using NoOp reporter")
+            return NoOpCrashReporter()
+        }
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
+        let crashlytics = Crashlytics.crashlytics()
+        if let bundleVersion = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
+            crashlytics.setCustomValue(bundleVersion, forKey: "build")
+        }
+        if let shortVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+            crashlytics.setCustomValue(shortVersion, forKey: "version")
+        }
+        Logger.crash.info("Crashlytics configured")
+        return CrashlyticsReporter()
     }
 }
 

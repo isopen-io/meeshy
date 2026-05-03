@@ -218,6 +218,13 @@ struct MeeshyApp: App {
                     }
                 }
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
+                    // Tag every subsequent crash report with the active user
+                    // so we can filter the Crashlytics dashboard per account.
+                    // Cleared on logout to prevent the next user inheriting
+                    // the previous identity.
+                    CrashDiagnosticsManager.shared.setUserID(
+                        isAuth ? authManager.currentUser?.id : nil
+                    )
                     if isAuth {
                         activeGuestSession = nil
                         // Re-arm every coordinator after a logout/login cycle.
