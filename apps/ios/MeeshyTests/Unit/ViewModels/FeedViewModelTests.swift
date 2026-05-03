@@ -6,6 +6,11 @@ import MeeshySDK
 @MainActor
 final class FeedViewModelTests: XCTestCase {
 
+    override func setUp() async throws {
+        try await super.setUp()
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+    }
+
     // MARK: - Factory
 
     private func makeSUT(
@@ -290,8 +295,8 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts[0].likes, 10)
         XCTAssertFalse(sut.posts[0].isLiked)
 
-        let likeResponse: APIResponse<[String: AnyCodable]> = JSONStub.decode("""
-        {"success":true,"data":{},"error":null}
+        let likeResponse: SimpleAPIResponse = JSONStub.decode("""
+        {"success":true,"message":null,"error":null}
         """)
         api.stub("/posts/like-test/like", result: likeResponse)
 
@@ -322,8 +327,8 @@ final class FeedViewModelTests: XCTestCase {
         await sut.loadFeed()
 
         // First like
-        let likeResponse: APIResponse<[String: AnyCodable]> = JSONStub.decode("""
-        {"success":true,"data":{},"error":null}
+        let likeResponse: SimpleAPIResponse = JSONStub.decode("""
+        {"success":true,"message":null,"error":null}
         """)
         api.stub("/posts/unlike-test/like", result: likeResponse)
         await sut.likePost("unlike-test")
@@ -475,13 +480,21 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse())
 
-        sut.newPostsCount = 5
+        // Initial load to prime state
+        await sut.loadFeed()
+        XCTAssertTrue(sut.hasLoaded)
 
+        // Simulate new posts arriving
+        sut.newPostsCount = 5
+        let countBefore = api.requestCount
+
+        // Invalidate cache so refresh's loadFeed goes to network
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
         await sut.refresh()
 
         XCTAssertEqual(sut.newPostsCount, 0)
-        XCTAssertTrue(sut.hasMore)
         XCTAssertTrue(sut.hasLoaded)
+        XCTAssertGreaterThan(api.requestCount, countBefore)
     }
 
     // MARK: - acknowledgeNewPosts()

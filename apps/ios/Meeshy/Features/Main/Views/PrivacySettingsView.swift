@@ -21,6 +21,9 @@ struct PrivacySettingsView: View {
                 scrollContent
             }
         }
+        .onChange(of: prefs.privacy.allowAnalytics) { _, _ in
+            AnalyticsManager.shared.syncCollectionState()
+        }
     }
 
     // MARK: - Header

@@ -48,13 +48,14 @@ extension ConversationView {
     @ViewBuilder
     var headerCallButtons: some View {
         if isDirect, let userId = conversation?.participantUserId {
+            let calleeName = resolvedCalleeName
             HStack(spacing: 4) {
                 // Audio call
                 Button {
                     CallManager.shared.startCall(
                         conversationId: conversation?.id ?? "",
                         userId: userId,
-                        username: conversation?.name ?? "Inconnu",
+                        username: calleeName,
                         isVideo: false
                     )
                 } label: {
@@ -76,7 +77,7 @@ extension ConversationView {
                     CallManager.shared.startCall(
                         conversationId: conversation?.id ?? "",
                         userId: userId,
-                        username: conversation?.name ?? "Inconnu",
+                        username: calleeName,
                         isVideo: true
                     )
                 } label: {
@@ -94,6 +95,29 @@ extension ConversationView {
                 .accessibilityLabel("Appel video")
             }
         }
+    }
+
+    /// Resolves the callee display name for DM calls.
+    /// Prefers: conversation title (display name) > participantUsername > "Inconnu"
+    /// Guards against ObjectId/UUID strings leaking as the displayed name.
+    private var resolvedCalleeName: String {
+        let candidates: [String?] = [
+            conversation?.title,
+            conversation?.participantUsername
+        ]
+        for candidate in candidates {
+            if let name = candidate, !name.isEmpty, !looksLikeObjectId(name) {
+                return name
+            }
+        }
+        return "Inconnu"
+    }
+
+    /// Returns true if the string looks like a MongoDB ObjectId (24-char hex) or UUID.
+    private func looksLikeObjectId(_ value: String) -> Bool {
+        if value.count == 24, value.allSatisfy(\.isHexDigit) { return true }
+        if UUID(uuidString: value) != nil { return true }
+        return false
     }
 
     // MARK: - Header Tags Row (category first, then colored tags, horizontally scrollable)

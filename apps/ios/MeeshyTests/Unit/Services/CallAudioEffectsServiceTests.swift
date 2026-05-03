@@ -2,12 +2,34 @@ import XCTest
 import AVFoundation
 @testable import Meeshy
 
+// MARK: - Mock Back Sound File Provider
+
+private final class MockBackSoundFileProvider: BackSoundFileProviding, @unchecked Sendable {
+    var result: Result<AVAudioFile, Error> = .success(MockBackSoundFileProvider.makeSilentFile())
+
+    func audioFile(for soundFile: String) throws -> AVAudioFile {
+        try result.get()
+    }
+
+    static func makeSilentFile() -> AVAudioFile {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test_backsound_\(UUID().uuidString).wav")
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1)!
+        let file = try! AVAudioFile(forWriting: tempURL, settings: format.settings)
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4800)!
+        buffer.frameLength = 4800
+        try! file.write(from: buffer)
+        return try! AVAudioFile(forReading: tempURL)
+    }
+}
+
 final class CallAudioEffectsServiceTests: XCTestCase {
 
     // MARK: - Factory
 
     private func makeSUT() -> CallAudioEffectsService {
-        CallAudioEffectsService()
+        let mockProvider = MockBackSoundFileProvider()
+        return CallAudioEffectsService(backSoundFileProvider: mockProvider)
     }
 
     private func makeBuffer(

@@ -33,6 +33,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // recorded during *previous* sessions here.
         Task { @MainActor in
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
+            AnalyticsManager.shared.syncCollectionState()
         }
 
         UNUserNotificationCenter.current().delegate = self
@@ -289,6 +290,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             FirebaseApp.configure()
         }
         let crashlytics = Crashlytics.crashlytics()
+        #if DEBUG
+        // Debug builds must not pollute the production Crashlytics dashboard.
+        // Firebase is still configured (Analytics, Messaging work), but crash
+        // collection is disabled so developer crashes stay local-only.
+        crashlytics.setCrashlyticsCollectionEnabled(false)
+        Logger.crash.info("Crashlytics collection disabled (DEBUG)")
+        return NoOpCrashReporter()
+        #else
         if let bundleVersion = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
             crashlytics.setCustomValue(bundleVersion, forKey: "build")
         }
@@ -297,6 +306,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
         Logger.crash.info("Crashlytics configured")
         return CrashlyticsReporter()
+        #endif
     }
 }
 

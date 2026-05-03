@@ -314,15 +314,44 @@ public struct MessageConsumedEvent: Decodable, Sendable {
 
 // MARK: - Call Signaling Event Data
 
+public struct SocketIceServer: Decodable, Sendable {
+    public let urls: IceServerURLs
+    public let username: String?
+    public let credential: String?
+
+    public enum IceServerURLs: Decodable, Sendable {
+        case single(String)
+        case multiple([String])
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let str = try? container.decode(String.self) {
+                self = .single(str)
+            } else {
+                self = .multiple(try container.decode([String].self))
+            }
+        }
+
+        public var asArray: [String] {
+            switch self {
+            case .single(let url): return [url]
+            case .multiple(let urls): return urls
+            }
+        }
+    }
+}
+
 public struct CallOfferData: Decodable, Sendable {
     public let callId: String
     public let conversationId: String
     public let mode: String?
     public let initiator: CallInitiatorInfo
+    public let iceServers: [SocketIceServer]?
 
     public struct CallInitiatorInfo: Decodable, Sendable {
         public let userId: String
         public let username: String
+        public let displayName: String?
         public let avatar: String?
     }
 }
@@ -358,6 +387,7 @@ public struct CallParticipantData: Decodable, Sendable {
     public let participantId: String?
     public let userId: String?
     public let mode: String?
+    public let iceServers: [SocketIceServer]?
 }
 
 public struct CallMediaToggleData: Decodable, Sendable {

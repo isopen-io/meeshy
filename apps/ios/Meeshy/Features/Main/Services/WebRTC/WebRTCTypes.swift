@@ -71,6 +71,7 @@ protocol WebRTCClientProviding: AnyObject {
     var remoteVideoTrack: Any? { get }
 
     func configure(iceServers: [IceServer]) throws
+    func updateIceServers(_ iceServers: [IceServer])
     func createOffer() async throws -> SessionDescription
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription
     func setRemoteAnswer(_ answer: SessionDescription) async throws

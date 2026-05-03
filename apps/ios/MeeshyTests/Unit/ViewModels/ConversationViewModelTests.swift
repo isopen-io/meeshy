@@ -17,8 +17,9 @@ final class ConversationViewModelTests: XCTestCase {
 
     // MARK: - Lifecycle
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
+        await CacheCoordinator.shared.messages.invalidate(for: "000000000000000000000001")
         mockAuthManager = MockAuthManager()
         mockMessageService = MockMessageService()
         mockConversationService = MockConversationService()
@@ -181,13 +182,14 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertTrue(sut.hasOlderMessages)
     }
 
-    func test_loadMessages_failure_setsError() async {
+    func test_loadMessages_failure_keepsEmptyMessagesAndFinishesLoading() async {
         mockMessageService.listResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Server error"]))
         let sut = makeSUT()
 
         await sut.loadMessages()
 
-        XCTAssertNotNil(sut.error)
+        // Generic errors (non-403/404/410) are treated as transient and don't set error
+        XCTAssertTrue(sut.messages.isEmpty)
         XCTAssertFalse(sut.isLoadingInitial)
     }
 
@@ -269,7 +271,7 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageService.sendCallCount, 1)
     }
 
-    func test_sendMessage_failure_marksOptimisticAsFailed() async {
+    func test_sendMessage_failure_keepsOptimisticAsSendingForRetry() async {
         mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Send failed"]))
         let sut = makeSUT()
 
@@ -277,7 +279,8 @@ final class ConversationViewModelTests: XCTestCase {
 
         XCTAssertFalse(result)
         XCTAssertEqual(sut.messages.count, 1)
-        XCTAssertEqual(sut.messages.first?.deliveryStatus, .failed)
+        // On failure, message stays in .sending status as it's enqueued for retry
+        XCTAssertEqual(sut.messages.first?.deliveryStatus, .sending)
     }
 
     func test_sendMessage_incrementsNewMessageAppended() async {
@@ -519,9 +522,11 @@ final class ConversationViewModelTests: XCTestCase {
     }
 
     func test_preferredTranslation_respectsCustomDestinationLanguage() {
+        // When systemLanguage has no translation available but customDestinationLanguage does,
+        // resolution falls through to customDestinationLanguage
         let currentUser = MeeshyUser(
             id: testUserId, username: "testuser",
-            systemLanguage: "en",
+            systemLanguage: "ja",
             customDestinationLanguage: "de"
         )
         mockAuthManager.simulateLoggedIn(user: currentUser)
@@ -551,6 +556,7 @@ final class ConversationViewModelTests: XCTestCase {
 
         let result = sut.preferredTranslation(for: "msg-t")
 
+        // systemLanguage "ja" has no match, customDestinationLanguage "de" does
         XCTAssertEqual(result?.targetLanguage, "de")
         XCTAssertEqual(result?.translatedContent, "Hallo")
     }

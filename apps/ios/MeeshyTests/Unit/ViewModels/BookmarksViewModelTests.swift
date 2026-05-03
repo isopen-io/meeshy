@@ -5,6 +5,13 @@ import MeeshySDK
 @MainActor
 final class BookmarksViewModelTests: XCTestCase {
 
+    // MARK: - Lifecycle
+
+    override func setUp() async throws {
+        try await super.setUp()
+        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
+    }
+
     // MARK: - Factory
 
     private func makeSUT(

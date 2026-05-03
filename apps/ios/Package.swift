@@ -30,9 +30,10 @@ let package = Package(
     ],
     dependencies: [
         // Firebase for Analytics, Crashlytics, Authentication, and Push Notifications
+        // 12.x required for CrashlyticsPlugin SPM build tool (automatic dSYM upload)
         .package(
             url: "https://github.com/firebase/firebase-ios-sdk.git",
-            from: "10.29.0"
+            from: "12.12.1"
         ),
 
         // Socket.IO Client for real-time messaging and presence
@@ -85,7 +86,10 @@ let package = Package(
                 // On-device Speech Recognition
                 .product(name: "WhisperKit", package: "WhisperKit")
             ],
-            swiftSettings: appSwiftSettings
+            swiftSettings: appSwiftSettings,
+            plugins: [
+                .plugin(name: "CrashlyticsPlugin", package: "firebase-ios-sdk")
+            ]
         ),
         .testTarget(
             name: "MeeshyTests",

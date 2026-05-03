@@ -1,4 +1,5 @@
 @preconcurrency import UserNotifications
+import Intents
 
 /// Rich-push service extension.
 ///
@@ -31,18 +32,45 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         updateSharedUnreadCount(from: bestAttemptContent.userInfo)
         prefetchMessageData(from: bestAttemptContent.userInfo)
 
-        if let imageURLString = bestAttemptContent.userInfo["imageURL"] as? String,
+        let userInfo = bestAttemptContent.userInfo
+        let isCommunicationType = Self.communicationTypes.contains(
+            userInfo["type"] as? String ?? ""
+        )
+
+        if let imageURLString = userInfo["imageURL"] as? String,
            let imageURL = URL(string: imageURLString) {
-            downloadAttachment(from: imageURL) { attachment in
-                if let attachment {
-                    bestAttemptContent.attachments = [attachment]
+            downloadAvatarData(from: imageURL) { [weak self] avatarData in
+                guard let self else {
+                    contentHandler(bestAttemptContent)
+                    return
                 }
-                contentHandler(bestAttemptContent)
+
+                if let avatarData {
+                    let attachment = self.createAttachment(from: avatarData, fileExtension: imageURL.pathExtension)
+                    if let attachment {
+                        bestAttemptContent.attachments = [attachment]
+                    }
+                }
+
+                if isCommunicationType {
+                    let finalContent = self.applyCommunicationIntent(
+                        to: bestAttemptContent,
+                        avatarData: avatarData
+                    )
+                    contentHandler(finalContent)
+                } else {
+                    contentHandler(bestAttemptContent)
+                }
             }
             return
         }
 
-        contentHandler(bestAttemptContent)
+        if isCommunicationType {
+            let finalContent = applyCommunicationIntent(to: bestAttemptContent, avatarData: nil)
+            contentHandler(finalContent)
+        } else {
+            contentHandler(bestAttemptContent)
+        }
     }
 
     override func serviceExtensionTimeWillExpire() {
@@ -157,35 +185,116 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         ) { _ in }
     }
 
+    // MARK: - Communication Notifications
+
+    /// Notification types that should use iOS Communication Notification style.
+    private static let communicationTypes: Set<String> = [
+        "new_message", "message_reply", "reply",
+        "message_reaction", "mention", "user_mentioned"
+    ]
+
+    /// Creates an `INSendMessageIntent` and returns updated notification content
+    /// that iOS renders with circular avatar + sender name + group name.
+    private func applyCommunicationIntent(
+        to content: UNMutableNotificationContent,
+        avatarData: Data?
+    ) -> UNNotificationContent {
+        let userInfo = content.userInfo
+
+        let senderName = (userInfo["senderDisplayName"] as? String)
+            .flatMap { $0.isEmpty ? nil : $0 }
+            ?? (userInfo["senderUsername"] as? String)
+            .flatMap { $0.isEmpty ? nil : $0 }
+            ?? "Meeshy"
+
+        let senderId = (userInfo["senderId"] as? String) ?? UUID().uuidString
+        let conversationId = (userInfo["conversationId"] as? String) ?? ""
+
+        let senderImage: INImage? = avatarData.flatMap { INImage(imageData: $0) }
+
+        let senderHandle = INPersonHandle(value: senderId, type: .unknown)
+        let sender = INPerson(
+            personHandle: senderHandle,
+            nameComponents: nil,
+            displayName: senderName,
+            image: senderImage,
+            contactIdentifier: nil,
+            customIdentifier: senderId
+        )
+
+        let conversationType = userInfo["conversationType"] as? String ?? ""
+        let isGroup = !conversationType.isEmpty && conversationType != "direct"
+
+        let speakableGroupName: INSpeakableString?
+        if isGroup {
+            let groupTitle = (userInfo["conversationTitle"] as? String)
+                .flatMap { $0.isEmpty ? nil : $0 }
+                ?? content.title
+            speakableGroupName = INSpeakableString(spokenPhrase: groupTitle)
+        } else {
+            speakableGroupName = nil
+        }
+
+        let intent = INSendMessageIntent(
+            recipients: nil,
+            outgoingMessageType: .unknown,
+            content: content.body,
+            speakableGroupName: speakableGroupName,
+            conversationIdentifier: conversationId,
+            serviceName: nil,
+            sender: sender,
+            attachments: nil
+        )
+
+        if isGroup, let senderImage {
+            intent.setImage(senderImage, forParameterNamed: \INSendMessageIntent.speakableGroupName)
+        }
+
+        let interaction = INInteraction(intent: intent, response: nil)
+        interaction.direction = INInteractionDirection.incoming
+        interaction.donate { _ in }
+
+        do {
+            let updatedContent = try content.updating(from: intent)
+            return updatedContent
+        } catch {
+            return content
+        }
+    }
+
     // MARK: - Attachments
 
-    private func downloadAttachment(
+    /// Downloads image data (raw bytes) for use as both attachment and INImage.
+    private func downloadAvatarData(
         from url: URL,
-        completion: @escaping (UNNotificationAttachment?) -> Void
+        completion: @escaping (Data?) -> Void
     ) {
         nonisolated(unsafe) let completion = completion
-        let task = URLSession.shared.downloadTask(with: url) { localURL, _, error in
-            guard let localURL, error == nil else {
+        let task = URLSession.shared.dataTask(with: url) { data, _, error in
+            guard let data, error == nil else {
                 completion(nil)
                 return
             }
-
-            let tempDir = FileManager.default.temporaryDirectory
-            let fileExtension = url.pathExtension.isEmpty ? "jpg" : url.pathExtension
-            let tempFile = tempDir.appendingPathComponent(UUID().uuidString + "." + fileExtension)
-
-            do {
-                try FileManager.default.moveItem(at: localURL, to: tempFile)
-                let attachment = try UNNotificationAttachment(
-                    identifier: UUID().uuidString,
-                    url: tempFile,
-                    options: nil
-                )
-                completion(attachment)
-            } catch {
-                completion(nil)
-            }
+            completion(data)
         }
         task.resume()
+    }
+
+    /// Creates a `UNNotificationAttachment` from raw image data.
+    private func createAttachment(from data: Data, fileExtension: String) -> UNNotificationAttachment? {
+        let tempDir = FileManager.default.temporaryDirectory
+        let ext = fileExtension.isEmpty ? "jpg" : fileExtension
+        let tempFile = tempDir.appendingPathComponent(UUID().uuidString + "." + ext)
+
+        do {
+            try data.write(to: tempFile)
+            return try UNNotificationAttachment(
+                identifier: UUID().uuidString,
+                url: tempFile,
+                options: nil
+            )
+        } catch {
+            return nil
+        }
     }
 }

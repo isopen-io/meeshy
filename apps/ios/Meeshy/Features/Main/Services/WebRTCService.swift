@@ -50,13 +50,18 @@ final class WebRTCService: @unchecked Sendable {
 
     // MARK: - Peer Connection Lifecycle
 
-    func configure(isVideo: Bool) {
+    func configure(isVideo: Bool, iceServers: [IceServer]? = nil) {
         do {
-            try client.configure(iceServers: IceServer.defaultServers)
-            Logger.webrtc.info("WebRTC configured - video: \(isVideo)")
+            let servers = iceServers ?? IceServer.defaultServers
+            try client.configure(iceServers: servers)
+            Logger.webrtc.info("WebRTC configured - video: \(isVideo), ICE servers: \(servers.count)")
         } catch {
             Logger.webrtc.error("WebRTC configuration failed: \(error.localizedDescription)")
         }
+    }
+
+    func updateIceServers(_ iceServers: [IceServer]) {
+        client.updateIceServers(iceServers)
     }
 
     func createOffer() async -> SessionDescription? {

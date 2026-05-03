@@ -6,6 +6,12 @@ import MeeshySDK
 @MainActor
 final class PostDetailViewModelTests: XCTestCase {
 
+    override func setUp() async throws {
+        try await super.setUp()
+        await CacheCoordinator.shared.feed.invalidate(for: "p1")
+        await CacheCoordinator.shared.comments.invalidate(for: "post-p1")
+    }
+
     // MARK: - Factory
 
     private func makeSUT(
@@ -39,8 +45,9 @@ final class PostDetailViewModelTests: XCTestCase {
             cursorJSON = "null"
         }
         let commentsJSON = comments.map { c in
-            """
-            {"id":"\(c.id)","content":"\(c.content)","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"\(c.author.id)","username":"\(c.author.username ?? "user")"}}
+            let parentField = c.parentId.map { ",\"parentId\":\"\($0)\"" } ?? ""
+            return """
+            {"id":"\(c.id)","content":"\(c.content)","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"\(c.author.id)","username":"\(c.author.username ?? "user")"}\(parentField)}
             """
         }
         return JSONStub.decode("""

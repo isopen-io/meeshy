@@ -19,28 +19,24 @@ nonisolated struct CrashlyticsReporter: CrashReporting {
     func record(_ diagnostic: CrashDiagnostic) {
         let crashlytics = Crashlytics.crashlytics()
 
-        // The full MetricKit JSON payload is too large for the dashboard
-        // summary, but we attach it as a custom key so it shows up under
-        // "Keys" on the issue detail page. Truncated to 1024 chars to
-        // stay under Crashlytics' per-key limit.
-        let truncatedDetails = String(diagnostic.details.prefix(1024))
-        crashlytics.setCustomValue(truncatedDetails, forKey: "metrickit_details")
-        crashlytics.setCustomValue(diagnostic.kind.rawValue, forKey: "diagnostic_kind")
-        crashlytics.setCustomValue(
-            ISO8601DateFormatter().string(from: diagnostic.timestamp),
-            forKey: "diagnostic_timestamp"
-        )
-
         // Breadcrumb so the diagnostic shows up in the issue's session log
         // even if Crashlytics merges it under an existing fingerprint.
         crashlytics.log("[\(diagnostic.kind.rawValue)] \(diagnostic.summary)")
 
+        // All per-diagnostic metadata travels inside NSError.userInfo so
+        // that batch delivery (MetricKit often sends N diagnostics in one
+        // payload) doesn't overwrite global custom keys — each
+        // `record(error:)` carries its own self-contained context.
+        let truncatedDetails = String(diagnostic.details.prefix(900))
         let error = NSError(
             domain: Self.errorDomain,
             code: diagnostic.kind.errorCode,
             userInfo: [
                 NSLocalizedDescriptionKey: diagnostic.summary,
-                "id": diagnostic.id.uuidString
+                "diagnostic_id": diagnostic.id.uuidString,
+                "diagnostic_kind": diagnostic.kind.rawValue,
+                "diagnostic_timestamp": ISO8601DateFormatter().string(from: diagnostic.timestamp),
+                "metrickit_details": truncatedDetails
             ]
         )
         crashlytics.record(error: error)
@@ -55,10 +51,10 @@ nonisolated struct CrashlyticsReporter: CrashReporting {
     }
 }
 
-private extension CrashDiagnostic.Kind {
+extension CrashDiagnostic.Kind {
     /// Stable numeric identity per kind so dashboard grouping survives
     /// rawValue rename. Append-only — never reuse a code.
-    var errorCode: Int {
+    nonisolated var errorCode: Int {
         switch self {
         case .nsException:          return 1001
         case .crash:                return 1002

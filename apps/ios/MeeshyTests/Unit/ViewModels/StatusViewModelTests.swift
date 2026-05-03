@@ -12,8 +12,11 @@ final class StatusViewModelTests: XCTestCase {
     private var mockAuthManager: MockAuthManager!
     private var cancellables: Set<AnyCancellable>!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
+        // Clear any cached statuses from previous tests to ensure fresh state
+        await CacheCoordinator.shared.statuses.invalidate(for: "statuses_friends")
+        await CacheCoordinator.shared.statuses.invalidate(for: "statuses_discover")
         mockStatusService = MockStatusService()
         mockSocket = MockSocialSocket()
         mockAuthManager = MockAuthManager()
@@ -148,16 +151,17 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertNil(discoverVM.myStatus, "Discover mode should not set myStatus")
     }
 
-    func test_loadStatuses_failure_friendsMode_fallsBackToSampleData() async {
+    func test_loadStatuses_failure_friendsMode_setsError() async {
         mockStatusService.listResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
 
         await sut.loadStatuses()
 
-        XCTAssertFalse(sut.statuses.isEmpty, "Friends mode should fall back to sample data")
+        XCTAssertTrue(sut.statuses.isEmpty, "Should not populate statuses on failure")
+        XCTAssertNotNil(sut.error, "Should set error on failure")
         XCTAssertFalse(sut.isLoading)
     }
 
-    func test_loadStatuses_failure_discoverMode_doesNotFallBack() async {
+    func test_loadStatuses_failure_discoverMode_setsError() async {
         let discoverVM = StatusViewModel(
             mode: .discover,
             statusService: mockStatusService,
@@ -168,10 +172,11 @@ final class StatusViewModelTests: XCTestCase {
 
         await discoverVM.loadStatuses()
 
-        XCTAssertTrue(discoverVM.statuses.isEmpty, "Discover mode should not fall back to sample data")
+        XCTAssertTrue(discoverVM.statuses.isEmpty, "Discover mode should not populate statuses on failure")
+        XCTAssertNotNil(discoverVM.error, "Should set error on failure")
     }
 
-    func test_loadStatuses_responseNotSuccess_friendsMode_fallsBack() async {
+    func test_loadStatuses_responseNotSuccess_setsError() async {
         let failResponse: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
         {"success":false,"data":[],"pagination":null,"error":"Unavailable"}
         """)
@@ -179,7 +184,8 @@ final class StatusViewModelTests: XCTestCase {
 
         await sut.loadStatuses()
 
-        XCTAssertFalse(sut.statuses.isEmpty, "Should fall back to sample data on non-success response in friends mode")
+        XCTAssertTrue(sut.statuses.isEmpty, "Should not populate statuses on non-success response")
+        XCTAssertNotNil(sut.error, "Should set error on non-success response")
     }
 
     func test_loadStatuses_guardsAgainstDoubleLoad() async {
@@ -220,14 +226,13 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(mockStatusService.createCallCount, 1)
     }
 
-    func test_setStatus_failure_stillCreatesLocalEntry() async {
+    func test_setStatus_failure_doesNotCreateLocalEntry() async {
         mockStatusService.createResult = .failure(APIError.networkError(URLError(.timedOut)))
 
         await sut.setStatus(emoji: "\u{2615}", content: "Coffee time")
 
-        XCTAssertNotNil(sut.myStatus, "Should create local entry even on failure")
-        XCTAssertEqual(sut.myStatus?.moodEmoji, "\u{2615}")
-        XCTAssertEqual(sut.statuses.count, 1, "Local entry should be inserted even on failure")
+        XCTAssertNil(sut.myStatus, "Should not create local entry on failure")
+        XCTAssertTrue(sut.statuses.isEmpty, "No entry should be inserted on failure")
     }
 
     func test_setStatus_passesCorrectParameters() async {
@@ -265,7 +270,7 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(mockStatusService.deleteCallCount, 0, "Should not call delete when no myStatus exists")
     }
 
-    func test_clearStatus_serviceFailure_stillClearsLocally() async {
+    func test_clearStatus_serviceFailure_rollsBack() async {
         let entry = makeStatusEntry(id: "fail-clear", userId: "me")
         sut.myStatus = entry
         sut.statuses = [entry]
@@ -273,8 +278,9 @@ final class StatusViewModelTests: XCTestCase {
 
         await sut.clearStatus()
 
-        XCTAssertNil(sut.myStatus, "Should clear locally even on service failure")
-        XCTAssertTrue(sut.statuses.isEmpty, "Should remove from list even on service failure")
+        XCTAssertNotNil(sut.myStatus, "Should rollback on service failure")
+        XCTAssertEqual(sut.statuses.count, 1, "Should restore status in list on service failure")
+        XCTAssertEqual(sut.statuses[0].id, "fail-clear")
     }
 
     // MARK: - Socket.IO Tests

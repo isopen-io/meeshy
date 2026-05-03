@@ -461,7 +461,16 @@ export class PushNotificationService {
       }
 
       if (payload.data) {
-        notification.payload = payload.data;
+        notification.payload = { ...payload.data };
+      } else {
+        notification.payload = {};
+      }
+
+      // Include VoIP call fields in payload for PushKit handling
+      if (isVoIP) {
+        if (payload.callId) notification.payload.callId = payload.callId;
+        if (payload.callerName) notification.payload.callerName = payload.callerName;
+        if (payload.callerAvatar) notification.payload.callerAvatar = payload.callerAvatar;
       }
 
       const result = await this.apnsClient.send(notification, tokenRecord.token);

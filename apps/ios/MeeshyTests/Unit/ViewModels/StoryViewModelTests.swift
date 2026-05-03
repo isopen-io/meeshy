@@ -125,7 +125,7 @@ final class StoryViewModelTests: XCTestCase {
         let response = Self.makeStoriesResponse(posts: [storyPost1, storyPost2])
         mockStoryService.listResult = .success(response)
 
-        await sut.loadStories()
+        await sut.loadStories(forceNetwork: true)
 
         XCTAssertEqual(sut.storyGroups.count, 2)
         XCTAssertFalse(sut.isLoading)
@@ -137,7 +137,7 @@ final class StoryViewModelTests: XCTestCase {
         let response = Self.makeStoriesResponse(posts: [storyPost1, storyPost2])
         mockStoryService.listResult = .success(response)
 
-        await sut.loadStories()
+        await sut.loadStories(forceNetwork: true)
 
         XCTAssertEqual(sut.storyGroups.count, 1, "Same author stories should be grouped")
         XCTAssertEqual(sut.storyGroups[0].stories.count, 2)
@@ -146,7 +146,7 @@ final class StoryViewModelTests: XCTestCase {
     func test_loadStories_failure_showsEmptyState() async {
         mockStoryService.listResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
 
-        await sut.loadStories()
+        await sut.loadStories(forceNetwork: true)
 
         XCTAssertTrue(sut.storyGroups.isEmpty, "Should show empty state on failure")
         XCTAssertFalse(sut.isLoading)
@@ -158,7 +158,7 @@ final class StoryViewModelTests: XCTestCase {
         """)
         mockStoryService.listResult = .success(failResponse)
 
-        await sut.loadStories()
+        await sut.loadStories(forceNetwork: true)
 
         XCTAssertTrue(sut.storyGroups.isEmpty, "Should show empty state on non-success response")
     }
@@ -169,8 +169,8 @@ final class StoryViewModelTests: XCTestCase {
         """)
         mockStoryService.listResult = .success(response)
 
-        await sut.loadStories()
-        await sut.loadStories()
+        await sut.loadStories(forceNetwork: true)
+        await sut.loadStories(forceNetwork: true)
 
         XCTAssertLessThanOrEqual(mockStoryService.listCallCount, 2)
     }

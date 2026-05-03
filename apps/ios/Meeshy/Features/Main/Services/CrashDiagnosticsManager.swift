@@ -30,13 +30,13 @@ import os
 /// is invoked on the MetricKit background queue.
 protocol CrashReporting: Sendable {
     /// Forward a captured diagnostic. Invoked on a background queue.
-    func record(_ diagnostic: CrashDiagnostic)
+    nonisolated func record(_ diagnostic: CrashDiagnostic)
 
     /// Associate subsequent diagnostics with a user. Pass `nil` on logout.
-    func setUserID(_ userID: String?)
+    nonisolated func setUserID(_ userID: String?)
 
     /// Free-form breadcrumb attached to the next crash report.
-    func log(_ message: String)
+    nonisolated func log(_ message: String)
 }
 
 /// Default reporter when no remote backend is configured. Every call is a
@@ -109,7 +109,7 @@ final class CrashDiagnosticsManager: NSObject {
     func install(crashReporter: CrashReporting = NoOpCrashReporter()) {
         guard !installed else { return }
         installed = true
-        Self.reporter = crashReporter
+        Self.setReporter(crashReporter)
         loadPersisted()
         installNSExceptionHandler()
         MXMetricManager.shared.add(self)
@@ -154,17 +154,25 @@ final class CrashDiagnosticsManager: NSObject {
     private nonisolated(unsafe) static var previousExceptionHandler: (@convention(c) (NSException) -> Void)?
 
     /// Remote forwarder used by `capture(...)` for MetricKit diagnostics.
-    /// Set once during `install(crashReporter:)` from MainActor; subsequent
-    /// reads happen on the MetricKit background queue, which is why the
-    /// reporter itself must conform to `Sendable`.
-    private nonisolated(unsafe) static var reporter: CrashReporting = NoOpCrashReporter()
+    /// Protected by `OSAllocatedUnfairLock` so reads from the MetricKit
+    /// background queue and the single write from `install(crashReporter:)`
+    /// are data-race free. Available iOS 16+.
+    private nonisolated static let _reporter = OSAllocatedUnfairLock<any CrashReporting>(initialState: NoOpCrashReporter())
+
+    private nonisolated static var reporter: any CrashReporting {
+        _reporter.withLock { $0 }
+    }
+
+    private nonisolated static func setReporter(_ newValue: any CrashReporting) {
+        _reporter.withLock { $0 = newValue }
+    }
 
     #if DEBUG
     /// Test-only override that bypasses `install()`'s idempotency guard so
     /// each test can swap in a fresh mock. Production code MUST go through
     /// `install(crashReporter:)` once at launch.
-    nonisolated static func setReporterForTesting(_ reporter: CrashReporting) {
-        Self.reporter = reporter
+    nonisolated static func setReporterForTesting(_ reporter: any CrashReporting) {
+        setReporter(reporter)
     }
     #endif
 
