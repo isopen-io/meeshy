@@ -831,7 +831,7 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId, offset: 0, limit: 30, includeReplies: true
             )
             let freshMessages = await processAPIMessages(response.data)
-            let freshById = Dictionary(uniqueKeysWithValues: freshMessages.map { ($0.id, $0) })
+            let freshById = Dictionary(freshMessages.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
             let existingIds = Set(messages.map(\.id))
             let newOnly = freshMessages.filter { !existingIds.contains($0.id) }
 
@@ -1005,7 +1005,7 @@ class ConversationViewModel: ObservableObject {
                     case .fresh(let data, _), .stale(let data, _):
                         let currentIds = Set(self.messages.map(\.id))
                         let newFromCache = data.filter { !currentIds.contains($0.id) }
-                        let cachedById = Dictionary(uniqueKeysWithValues: data.map { ($0.id, $0) })
+                        let cachedById = Dictionary(data.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
 
                         // Merge delivery-status updates from cache into existing own
                         // messages. This covers read-status:updated events that
