@@ -62,6 +62,7 @@ public actor CacheCoordinator {
     private var transcriptionInsertionOrder: [String] = []
     private var audioTranslationCache: [String: [AudioTranslationEvent]] = [:]
     private var audioTranslationInsertionOrder: [String] = []
+    private var translationPersistTask: Task<Void, Never>?
 
     public func cachedTranslations(for messageId: String) -> [TranslationData]? {
         // TTL enforcement on read: if the entry is older than 24h, drop it so
@@ -180,6 +181,8 @@ public actor CacheCoordinator {
         await video.invalidateAll()
         await thumbnails.invalidateAll()
         await UserColorCache.shared.invalidateAll()
+        translationPersistTask?.cancel()
+        translationPersistTask = nil
         clearTranslationCacheDB()
 
         // 2. Tear down the coordinator state so the next `start()` re-arms.
@@ -231,6 +234,12 @@ public actor CacheCoordinator {
         if isNew {
             translationInsertionOrder.append(msgId)
             evictTranslationCacheIfNeeded()
+        }
+        translationPersistTask?.cancel()
+        translationPersistTask = Task {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard !Task.isCancelled else { return }
+            persistTranslationCaches()
         }
     }
 
