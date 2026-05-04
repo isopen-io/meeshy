@@ -125,7 +125,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // If the first page already returned everything, we're done.
         let knownTotal: Int? = totalCount ?? (firstPage.count < pageSize ? firstPage.count : nil)
         if let total = knownTotal, total <= firstPage.count {
-            lastSyncTimestamp = Date().addingTimeInterval(-30)
+            lastSyncTimestamp = Date()
             return true
         }
 
@@ -229,7 +229,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
 
         if succeeded {
-            lastSyncTimestamp = Date().addingTimeInterval(-30)
+            lastSyncTimestamp = Date()
         }
         return succeeded
     }
@@ -278,7 +278,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await cache.conversations.save(merged, for: "list")
             _conversationsDidChange.send()
 
-            lastSyncTimestamp = Date().addingTimeInterval(-30)
+            lastSyncTimestamp = Date()
             return true
         } catch {
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")
