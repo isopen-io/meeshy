@@ -425,9 +425,11 @@ final class ConversationSocketHandler {
                     let current = delegate.messages[i].deliveryStatus
                     guard current != .read else { break }
                     if newStatus.isBetterThan(current) {
-                        delegate.messages[i].deliveryStatus = newStatus
-                        delegate.messages[i].deliveredCount = summary.deliveredCount
-                        delegate.messages[i].readCount = summary.readCount
+                        var msg = delegate.messages[i]
+                        msg.deliveryStatus = newStatus
+                        msg.deliveredCount = summary.deliveredCount
+                        msg.readCount = summary.readCount
+                        delegate.messages[i] = msg
                     }
                 }
             }
