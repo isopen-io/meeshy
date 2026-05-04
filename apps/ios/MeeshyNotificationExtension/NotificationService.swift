@@ -184,7 +184,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// Mirror the unread count into the App Group so widgets can refresh from the
     /// extension context (no main app launch required).
     private func updateSharedUnreadCount(from userInfo: [AnyHashable: Any]) {
-        guard let defaults = UserDefaults(suiteName: "group.me.meeshy.app") else { return }
+        guard let defaults = UserDefaults(suiteName: "group.me.meeshy.apps") else { return }
         if let count = userInfo["unreadCount"] as? Int {
             defaults.set(max(count, 0), forKey: "unread_count")
         } else if let strCount = userInfo["unreadCount"] as? String, let parsed = Int(strCount) {

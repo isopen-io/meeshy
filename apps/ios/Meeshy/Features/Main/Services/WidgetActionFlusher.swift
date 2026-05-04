@@ -16,7 +16,7 @@ nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "w
 final class WidgetActionFlusher {
     static let shared = WidgetActionFlusher()
 
-    private let suiteName = "group.me.meeshy.app"
+    private let suiteName = "group.me.meeshy.apps"
     private let pendingMarkReadKey = "pending_mark_read"
 
     private lazy var sharedDefaults: UserDefaults? = {

@@ -100,7 +100,7 @@ Dans Apple Developer Portal (developer.apple.com) :
      - `applinks:app.meeshy.me`
 
 4. **App Groups** (si utilisé)
-   - Group : `group.me.meeshy.app`
+   - Group : `group.me.meeshy.apps`
 
 5. **Keychain Sharing**
    - Keychain Groups : `$(AppIdentifierPrefix)me.meeshy.app`

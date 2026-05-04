@@ -17,7 +17,7 @@
     <!-- App Groups (si vous partagez des données entre extensions) -->
     <key>com.apple.security.application-groups</key>
     <array>
-        <string>group.me.meeshy.app</string>
+        <string>group.me.meeshy.apps</string>
     </array>
     
     <!-- Keychain Sharing -->

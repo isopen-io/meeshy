@@ -14,7 +14,7 @@ import Foundation
 /// - Auth token read from shared Keychain (same access group)
 nonisolated enum NSEDataSync {
 
-    private static let appGroupId = "group.me.meeshy.app"
+    private static let appGroupId = "group.me.meeshy.apps"
     private static let pendingDirName = "nse_pending_messages"
 
     // MARK: - Sync entry point
