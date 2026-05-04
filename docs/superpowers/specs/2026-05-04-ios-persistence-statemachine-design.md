@@ -257,11 +257,14 @@ struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
     // Mentions
     var mentionedUsersJson: Data?    // JSON [MentionedUser]
 
-    // Pre-computed layout
+    // Pre-computed layout (CTFramesetter)
     var cachedBubbleWidth: Double?
     var cachedBubbleHeight: Double?
+    var cachedLastLineWidth: Double?  // Largeur derniere ligne (pour timestamp inline)
+    var cachedLineCount: Int?         // Nombre exact de lignes
+    var cachedTimestampInline: Bool?  // true = timestamp a droite de la derniere ligne
     var layoutVersion: Int
-    var layoutMaxWidth: Double?      // (I4) maxWidth utilise pour ce calcul
+    var layoutMaxWidth: Double?       // (I4) maxWidth utilise pour ce calcul
 
     // (O1) Version counter — incremente a chaque write GRDB
     var changeVersion: Int64
@@ -650,6 +653,9 @@ public actor MessagePersistenceActor {
                 t.column("cachedBubbleHeight", .double)
                 t.column("layoutVersion", .integer).notNull().defaults(to: 0)
                 t.column("layoutMaxWidth", .double)
+                t.column("cachedLastLineWidth", .double)
+                t.column("cachedLineCount", .integer)
+                t.column("cachedTimestampInline", .boolean)
                 t.column("changeVersion", .integer).notNull().defaults(to: 0) // (O1)
             }
             try db.create(index: "idx_msg_conv_date", on: "messages", columns: ["conversationId", "createdAt"])
@@ -1062,29 +1068,47 @@ Le `BubbleLayoutEngine` verifie `record.layoutVersion == globalLayoutEpoch && re
 
 **Pourquoi CTFramesetter au lieu de `boundingRect`** :
 
+`boundingRect` appelle `CTFramesetter` en interne (c'est un wrapper UIKit sur Core Text).
+Le delta perf est ~15-20% (pas 2x). Le vrai avantage est l'acces aux **metriques par ligne**.
+
 | | `boundingRect` | `CTFramesetter` |
 |---|---|---|
-| Precision | Sur-estime souvent (~2-5pt) | Exact au pixel (ligne par ligne) |
-| Mixed fonts | Approximatif | Correct (emoji + bold + mentions) |
-| Line count | Pas accessible | `CTFrameGetLines()` donne chaque ligne |
-| Baseline metrics | Non | `CTLineGetTypographicBounds()` pour alignement vertical |
+| Performance | ~0.18ms/message | ~0.15ms/message (~15-20% plus rapide) |
+| Precision hauteur | Sur-estime ~2-5pt (dilemme usesFontLeading) | Exact au pixel |
+| **Timestamp inline** | **Impossible** (pas d'acces a la derniere ligne) | **`CTLineGetTypographicBounds`** sur la derniere ligne |
+| **Line count** | Approximatif (height / lineHeight) | **Exact** via `CTFrameGetLines().count` |
+| Mixed fonts (emoji + bold + @mention) | Correct globalement | Pixel-perfect par segment |
+| Baseline metrics | Non | `CTLineGetTypographicBounds(ascent, descent, leading)` |
 | Thread safety | Oui (iOS 15+) | Oui (Core Text natif) |
-| Performance | ~0.15ms/message | ~0.08ms/message (pas de bridge UIKit) |
+
+**L'argument decisif** : les apps messaging modernes (WhatsApp, Telegram, iMessage) placent
+le timestamp a droite de la derniere ligne quand il y a assez d'espace, sinon il descend.
+Ca necessite de connaitre la largeur exacte de la derniere ligne — seul CTFramesetter donne ca.
 
 ```swift
 /// Layout engine pur — Core Text, zero UIKit, thread-safe, off-main
 enum BubbleLayoutEngine {
 
+    struct LayoutResult: Sendable {
+        let size: CGSize
+        let lastLineWidth: CGFloat    // Pour savoir si le timestamp tient inline
+        let lineCount: Int
+        let timestampInline: Bool     // true = timestamp a droite de la derniere ligne
+    }
+
+    static let timestampWidth: CGFloat = 52  // "12:34" + delivery indicator
+    static let timestampInlineGap: CGFloat = 8
+
     /// Calcule la taille exacte d'une bulle de message
     /// Appele depuis un Task.detached — JAMAIS sur MainActor
-    static func computeSize(
+    static func computeLayout(
         content: String?,
         contentType: String,
         attachmentDimensions: CGSize?,
         replyPreview: Bool,
         reactionCount: Int,
         maxWidth: CGFloat
-    ) -> CGSize {
+    ) -> LayoutResult {
         let bubblePadding: CGFloat = 12
         let timestampRowHeight: CGFloat = 18
         let replyPreviewHeight: CGFloat = replyPreview ? 44 : 0
@@ -1094,58 +1118,107 @@ enum BubbleLayoutEngine {
         switch contentType {
         case "text":
             guard let text = content, !text.isEmpty else {
-                return CGSize(width: 80, height: timestampRowHeight + bubblePadding * 2)
+                return LayoutResult(
+                    size: CGSize(width: 80, height: timestampRowHeight + bubblePadding * 2),
+                    lastLineWidth: 0, lineCount: 0, timestampInline: false
+                )
             }
 
-            // CTFramesetter pour mesure exacte
+            // CTFramesetter pour mesure exacte + metriques par ligne
             let font = CTFontCreateWithName("SFProText-Regular" as CFString, 16, nil)
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .paragraphStyle: {
-                    let style = NSMutableParagraphStyle()
-                    style.lineBreakMode = .byWordWrapping
-                    return style
-                }()
-            ]
-            let attrString = NSAttributedString(string: text, attributes: attributes)
+            let attrString = CFAttributedStringCreate(
+                nil,
+                text as CFString,
+                [kCTFontAttributeName: font] as CFDictionary
+            )!
             let framesetter = CTFramesetterCreateWithAttributedString(attrString)
 
-            // Suggest frame size avec contrainte de largeur
+            // Suggest frame size
             var fitRange = CFRange()
             let textSize = CTFramesetterSuggestFrameSizeWithConstraints(
                 framesetter,
-                CFRange(location: 0, length: attrString.length),
+                CFRange(location: 0, length: CFAttributedStringGetLength(attrString)),
                 nil,
                 CGSize(width: contentMaxWidth, height: .greatestFiniteMagnitude),
                 &fitRange
             )
 
-            let totalWidth = ceil(textSize.width) + bubblePadding * 2
-            let totalHeight = ceil(textSize.height)
-                + timestampRowHeight
+            // Creer le frame pour acceder aux lignes
+            let path = CGPath(
+                rect: CGRect(origin: .zero, size: CGSize(width: contentMaxWidth, height: textSize.height + 100)),
+                transform: nil
+            )
+            let frame = CTFramesetterCreateFrame(
+                framesetter,
+                CFRange(location: 0, length: CFAttributedStringGetLength(attrString)),
+                path, nil
+            )
+            let lines = CTFrameGetLines(frame) as! [CTLine]
+            let lineCount = lines.count
+
+            // Largeur de la derniere ligne — pour decidir si le timestamp tient inline
+            var lastLineWidth: CGFloat = 0
+            if let lastLine = lines.last {
+                var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
+                lastLineWidth = CGFloat(CTLineGetTypographicBounds(lastLine, &ascent, &descent, &leading))
+            }
+
+            // Timestamp inline si assez de place sur la derniere ligne
+            let spaceForTimestamp = contentMaxWidth - lastLineWidth
+            let timestampInline = spaceForTimestamp >= (timestampWidth + timestampInlineGap)
+
+            let textHeight = ceil(textSize.height)
+            let totalHeight = textHeight
+                + (timestampInline ? 0 : timestampRowHeight)  // Pas de ligne extra si inline
                 + replyPreviewHeight
                 + reactionBarHeight
                 + bubblePadding * 2
 
-            return CGSize(width: min(totalWidth, maxWidth * 0.75), height: totalHeight)
+            let totalWidth = ceil(max(
+                textSize.width,
+                timestampInline ? lastLineWidth + timestampWidth + timestampInlineGap : timestampWidth
+            )) + bubblePadding * 2
+
+            return LayoutResult(
+                size: CGSize(width: min(totalWidth, maxWidth * 0.75), height: totalHeight),
+                lastLineWidth: lastLineWidth,
+                lineCount: lineCount,
+                timestampInline: timestampInline
+            )
 
         case "image", "video":
             guard let dims = attachmentDimensions else {
-                return CGSize(width: 200, height: 200 + timestampRowHeight + reactionBarHeight)
+                return LayoutResult(
+                    size: CGSize(width: 200, height: 200 + timestampRowHeight + reactionBarHeight),
+                    lastLineWidth: 200, lineCount: 0, timestampInline: true
+                )
             }
             let maxMediaWidth = maxWidth * 0.65
             let maxMediaHeight: CGFloat = 300
             let ratio = min(maxMediaWidth / dims.width, maxMediaHeight / dims.height, 1.0)
-            return CGSize(
-                width: dims.width * ratio,
-                height: dims.height * ratio + timestampRowHeight + reactionBarHeight
+            return LayoutResult(
+                size: CGSize(width: dims.width * ratio,
+                             height: dims.height * ratio + timestampRowHeight + reactionBarHeight),
+                lastLineWidth: dims.width * ratio,
+                lineCount: 0,
+                timestampInline: true  // Toujours overlay sur media
             )
 
         case "audio":
-            return CGSize(width: maxWidth * 0.65, height: 56 + timestampRowHeight + reactionBarHeight)
+            return LayoutResult(
+                size: CGSize(width: maxWidth * 0.65, height: 56 + timestampRowHeight + reactionBarHeight),
+                lastLineWidth: maxWidth * 0.65,
+                lineCount: 0,
+                timestampInline: true
+            )
 
         default:
-            return CGSize(width: maxWidth * 0.6, height: 60 + reactionBarHeight)
+            return LayoutResult(
+                size: CGSize(width: maxWidth * 0.6, height: 60 + reactionBarHeight),
+                lastLineWidth: maxWidth * 0.6,
+                lineCount: 0,
+                timestampInline: false
+            )
         }
     }
 }
@@ -1159,11 +1232,11 @@ enum BubbleLayoutEngine {
 let currentEpoch = BubbleLayoutEngine.globalLayoutEpoch
 let currentMaxWidth = await MainActor.run { UIScreen.main.bounds.width }
 
-var layoutUpdates: [(String, Double, Double)] = []
+var layoutUpdates: [(String, BubbleLayoutEngine.LayoutResult)] = []
 for i in records.indices {
     if records[i].layoutVersion != currentEpoch
         || records[i].layoutMaxWidth != currentMaxWidth {
-        let size = BubbleLayoutEngine.computeSize(
+        let result = BubbleLayoutEngine.computeLayout(
             content: records[i].content,
             contentType: records[i].messageType,
             attachmentDimensions: records[i].attachmentDimensions,
@@ -1171,23 +1244,37 @@ for i in records.indices {
             reactionCount: records[i].reactionCount,
             maxWidth: currentMaxWidth
         )
-        records[i].cachedBubbleWidth = size.width
-        records[i].cachedBubbleHeight = size.height
+        records[i].cachedBubbleWidth = result.size.width
+        records[i].cachedBubbleHeight = result.size.height
+        records[i].cachedLastLineWidth = result.lastLineWidth
+        records[i].cachedLineCount = result.lineCount
+        records[i].cachedTimestampInline = result.timestampInline
         records[i].layoutVersion = currentEpoch
         records[i].layoutMaxWidth = currentMaxWidth
-        layoutUpdates.append((records[i].localId, size.width, size.height))
+        layoutUpdates.append((records[i].localId, result))
     }
 }
 
-// Persist les nouveaux layouts en background (fire & forget)
+// Persist les layouts en background (fire & forget)
 if !layoutUpdates.isEmpty {
     Task { [persistence] in
-        for (id, w, h) in layoutUpdates {
-            try? await persistence.updateLayout(localId: id, width: w, height: h,
-                                                  epoch: currentEpoch, maxWidth: currentMaxWidth)
+        for (id, result) in layoutUpdates {
+            try? await persistence.updateLayout(
+                localId: id, width: result.size.width, height: result.size.height,
+                lastLineWidth: result.lastLineWidth, lineCount: result.lineCount,
+                timestampInline: result.timestampInline,
+                epoch: currentEpoch, maxWidth: currentMaxWidth
+            )
         }
     }
 }
+
+// La vue utilise timestampInline pour placer le timestamp :
+// if record.cachedTimestampInline == true {
+//     HStack { Text(content); Spacer(); DeliveryIndicator() }  // inline
+// } else {
+//     VStack { Text(content); HStack { Spacer(); DeliveryIndicator() } }  // ligne separee
+// }
 ```
 
 ---
@@ -1722,7 +1809,7 @@ private func refreshConversationPreviews() async {
 |-----------|-----------|--------|
 | GRDB read 200 records | < 15ms | Task.detached |
 | E2EE decrypt 50 messages | < 100ms | Task.detached |
-| CTFramesetter layout 200 messages | < 40ms | Task.detached (Core Text 2x plus rapide que boundingRect) |
+| CTFramesetter layout 200 messages | < 35ms | Task.detached (~15-20% plus rapide que boundingRect + metriques ligne) |
 | JPEG decode 1 thumbnail | < 5ms | Task.detached |
 | GRDB write 1 message | < 10ms | MessagePersistenceActor |
 | GRDB write batch 100 messages | < 200ms | MessagePersistenceActor |
