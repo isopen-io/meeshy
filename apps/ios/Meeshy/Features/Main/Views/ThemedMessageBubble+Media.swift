@@ -303,7 +303,6 @@ struct BubbleCarouselView: View {
     let contactColor: String
 
     @State private var currentPageID: String?
-    @ObservedObject private var videoManager = SharedAVPlayerManager.shared
 
     private let carouselHeight: CGFloat = 300
 
@@ -350,8 +349,8 @@ struct BubbleCarouselView: View {
 
             if oldIndex != newIndex {
                 let oldAttachment = items[oldIndex]
-                if oldAttachment.type == .video && videoManager.activeURL == oldAttachment.fileUrl {
-                    videoManager.pause()
+                if oldAttachment.type == .video && SharedAVPlayerManager.shared.activeURL == oldAttachment.fileUrl {
+                    SharedAVPlayerManager.shared.pause()
                 }
                 HapticFeedback.light()
             }
