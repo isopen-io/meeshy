@@ -312,7 +312,18 @@ public actor DiskCacheStore: ReadableCacheStore {
             return image
         }
 
-        guard let url = URL(string: urlString), url.scheme == "https" || url.scheme == "http" else { return nil }
+        guard let url = URL(string: urlString) else { return nil }
+
+        // Local file:// URLs — load directly from filesystem
+        if url.scheme == "file" {
+            if let data = try? Data(contentsOf: url), let image = Self.downsampledImage(data: data) {
+                Self.cacheIfWithinBudget(image, key: fileKey)
+                return image
+            }
+            return nil
+        }
+
+        guard url.scheme == "https" || url.scheme == "http" else { return nil }
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
             guard let httpResponse = response as? HTTPURLResponse,
@@ -336,6 +347,17 @@ public actor DiskCacheStore: ReadableCacheStore {
         guard cost > 0, cost <= maxCacheableDecodedBytes else { return }
         Task { @MainActor in
             Self._imageCache.setObject(image, forKey: key as NSString, cost: cost)
+        }
+    }
+
+    /// Pre-cache an image in the static UIImage NSCache for immediate display
+    /// in ProgressiveCachedImage. Used for optimistic media messages where the
+    /// local file URL is set as the attachment URL before upload.
+    public nonisolated static func cacheImageForPreview(_ image: UIImage, key: String) {
+        let cacheKey = Self.fileKey(for: key)
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+        Task { @MainActor in
+            Self._imageCache.setObject(image, forKey: cacheKey as NSString, cost: cost)
         }
     }
 

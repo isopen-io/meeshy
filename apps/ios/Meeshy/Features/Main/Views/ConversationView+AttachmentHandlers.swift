@@ -78,6 +78,63 @@ extension ConversationView {
         composerState.isUploading = true
         HapticFeedback.light()
 
+        // --- Optimistic media insert: show bubble immediately with local files ---
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+        let senderName = AuthManager.shared.currentUser?.displayName
+        let senderColor = DynamicColorGenerator.colorForName(senderName ?? "?")
+
+        var previewAttachments: [MeeshyMessageAttachment] = []
+        for att in attachments where att.type != .audio {
+            if let fileURL = mediaFiles[att.id] {
+                if att.mimeType.hasPrefix("image/"),
+                   let data = try? Data(contentsOf: fileURL),
+                   let image = UIImage(data: data) {
+                    DiskCacheStore.cacheImageForPreview(image, key: fileURL.absoluteString)
+                }
+                previewAttachments.append(MeeshyMessageAttachment(
+                    id: att.id,
+                    mimeType: att.mimeType,
+                    fileUrl: fileURL.absoluteString,
+                    width: att.width,
+                    height: att.height,
+                    thumbnailUrl: fileURL.absoluteString,
+                    uploadedBy: currentUserId,
+                    thumbnailColor: senderColor
+                ))
+            }
+        }
+
+        let tempId = "temp_\(UUID().uuidString)"
+        if !previewAttachments.isEmpty || audioURL != nil {
+            let msgType: Message.MessageType = audioURL != nil ? .audio
+                : (previewAttachments.first?.mimeType.hasPrefix("video/") == true ? .video : .image)
+
+            let optimistic = Message(
+                id: tempId,
+                conversationId: viewModel.conversationId,
+                senderId: currentUserId,
+                content: content,
+                messageType: msgType,
+                replyToId: replyId,
+                storyReplyToId: storyReplyId,
+                createdAt: Date(),
+                updatedAt: Date(),
+                attachments: previewAttachments,
+                replyTo: storyRef,
+                senderName: senderName,
+                senderColor: senderColor,
+                senderAvatarURL: AuthManager.shared.currentUser?.avatar,
+                deliveryStatus: .sending,
+                isMe: true
+            )
+            viewModel.messages.append(optimistic)
+            viewModel.newMessageAppended += 1
+        }
+
+        composerState.pendingAttachments.removeAll()
+        composerState.pendingThumbnails.removeAll()
+        // --- End optimistic media insert ---
+
         Task {
             do {
                 // Reconnect socket if disconnected
@@ -118,7 +175,6 @@ extension ConversationView {
                     }
                     let userId = AuthManager.shared.currentUser?.id ?? ""
                     localAttachments.append(result.toMessageAttachment(uploadedBy: userId))
-                    try? FileManager.default.removeItem(at: audioURL)
                 }
 
                 let currentUserId = AuthManager.shared.currentUser?.id ?? ""
@@ -139,7 +195,6 @@ extension ConversationView {
                             }
                         }
                         localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))
-                        try? FileManager.default.removeItem(at: fileURL)
                     }
                 }
 
@@ -159,13 +214,17 @@ extension ConversationView {
                         originalLanguage: lang
                     )
                     if let messageId {
-                        viewModel.insertOptimisticAudioMessage(
-                            messageId: messageId,
-                            content: content,
-                            attachments: localAttachments,
-                            replyToId: replyId,
-                            replyReference: storyRef
-                        )
+                        if previewAttachments.isEmpty {
+                            viewModel.insertOptimisticAudioMessage(
+                                messageId: messageId,
+                                content: content,
+                                attachments: localAttachments,
+                                replyToId: replyId,
+                                replyReference: storyRef
+                            )
+                        } else {
+                            viewModel.pendingServerIds[tempId] = messageId
+                        }
                         sendSuccess = true
                     } else {
                         viewModel.error = "Echec de l'envoi du message vocal"
@@ -179,16 +238,17 @@ extension ConversationView {
                         storyReplyReference: storyRef,
                         attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds,
                         localAttachments: localAttachments.isEmpty ? nil : localAttachments,
-                        originalLanguage: lang
+                        originalLanguage: lang,
+                        existingTempId: tempId
                     )
                 }
 
-                // Clear UI after upload+send
+                // Clear UI after upload+send and clean up local files
                 await MainActor.run {
-                    composerState.pendingAttachments.removeAll()
-                    composerState.pendingAudioURL = nil
+                    for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
+                    if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
                     composerState.pendingMediaFiles.removeAll()
-                    composerState.pendingThumbnails.removeAll()
+                    composerState.pendingAudioURL = nil
                     composerState.uploadProgress = nil
                     composerState.isUploading = false
                     if sendSuccess {
