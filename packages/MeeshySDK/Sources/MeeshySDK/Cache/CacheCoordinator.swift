@@ -62,7 +62,7 @@ public actor CacheCoordinator {
     private var transcriptionInsertionOrder: [String] = []
     private var audioTranslationCache: [String: [AudioTranslationEvent]] = [:]
     private var audioTranslationInsertionOrder: [String] = []
-    private var translationPersistTask: Task<Void, Never>?
+
 
     public func cachedTranslations(for messageId: String) -> [TranslationData]? {
         // TTL enforcement on read: if the entry is older than 24h, drop it so
@@ -181,8 +181,7 @@ public actor CacheCoordinator {
         await video.invalidateAll()
         await thumbnails.invalidateAll()
         await UserColorCache.shared.invalidateAll()
-        translationPersistTask?.cancel()
-        translationPersistTask = nil
+        // No translation persist task to cancel — persistence is now incremental
         clearTranslationCacheDB()
 
         // 2. Tear down the coordinator state so the next `start()` re-arms.
@@ -235,12 +234,8 @@ public actor CacheCoordinator {
             translationInsertionOrder.append(msgId)
             evictTranslationCacheIfNeeded()
         }
-        translationPersistTask?.cancel()
-        translationPersistTask = Task {
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard !Task.isCancelled else { return }
-            persistTranslationCaches()
-        }
+        // Persist this specific translation immediately (incremental, not full rewrite)
+        persistTranslationIncremental(messageId: msgId, translations: existing, cachedAt: translationTimestamps[msgId] ?? Date())
     }
 
     public func cacheTranscription(_ event: TranscriptionReadyEvent) {
@@ -386,6 +381,31 @@ public actor CacheCoordinator {
     }
 
     // MARK: - Translation Cache Persistence
+
+    private func persistTranslationIncremental(messageId: String, translations: [TranslationData], cachedAt: Date) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        do {
+            try db.write { db in
+                // Delete existing records for this message, then insert fresh
+                try TranslationCacheRecord
+                    .filter(Column("messageId") == messageId)
+                    .deleteAll(db)
+                for translation in translations {
+                    let data = try encoder.encode(translation)
+                    let record = TranslationCacheRecord(
+                        messageId: messageId,
+                        targetLanguage: translation.targetLanguage,
+                        encodedData: data,
+                        cachedAt: cachedAt
+                    )
+                    try record.save(db)
+                }
+            }
+        } catch {
+            logger.error("Failed to persist translation for \(messageId): \(error)")
+        }
+    }
 
     private func persistTranslationCaches() {
         let encoder = JSONEncoder()
