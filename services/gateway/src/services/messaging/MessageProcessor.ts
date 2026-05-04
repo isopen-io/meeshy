@@ -716,19 +716,26 @@ export class MessageProcessor {
     if (!this.notificationService) return;
 
     try {
-      // Sanitize notification preview for protected messages
+      // Sanitize notification preview for protected messages.
+      // Use loc-key identifiers so the iOS NSE can resolve them to the
+      // user's preferred language via Localizable.xcstrings. The gateway
+      // does not know the recipient's locale — localisation is client-side.
       let notificationPreview = processedContent;
+      let notificationLocKey: string | undefined;
 
       if (message.isEncrypted || message.encryptionMode === 'e2ee') {
-        notificationPreview = 'Message chiffré';
+        notificationPreview = 'Encrypted message';
+        notificationLocKey = 'notification.encrypted_message';
       }
 
       if (message.isViewOnce) {
-        notificationPreview = 'Message éphémère';
+        notificationPreview = 'View-once message';
+        notificationLocKey = 'notification.view_once_message';
       }
 
       if (message.isBlurred || (message.effectFlags && (message.effectFlags & 0x02) !== 0)) {
-        notificationPreview = 'Message masqué';
+        notificationPreview = 'Hidden message';
+        notificationLocKey = 'notification.hidden_message';
       }
       // 1. Résoudre le senderId en userId
       let senderUserId = data.senderId;
@@ -862,6 +869,7 @@ export class MessageProcessor {
             conversationId: data.conversationId,
             messagePreview: notificationPreview,
             encryptedContent: message.encryptedContent || undefined,
+            notificationLocKey: notificationLocKey,
             ...attachmentInfo as any
           })
         ));

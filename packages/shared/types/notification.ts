@@ -191,6 +191,7 @@ export interface NotificationContext {
   readonly postId?: string;
   readonly commentId?: string;
   readonly encryptedContent?: string;
+  readonly notificationLocKey?: string;
 }
 
 /**
