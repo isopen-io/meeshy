@@ -33,6 +33,22 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         prefetchMessageData(from: bestAttemptContent.userInfo)
 
         let userInfo = bestAttemptContent.userInfo
+
+        // E2EE decryption: if the push payload contains encrypted content,
+        // attempt to decrypt it locally using the shared Keychain session key.
+        // On success, replace the notification body with the decrypted plaintext.
+        // On failure, the body stays as "Message chiffré" (set by the gateway).
+        if let encryptedContent = userInfo["encryptedContent"] as? String,
+           let senderId = userInfo["senderId"] as? String,
+           !encryptedContent.isEmpty {
+            if let decrypted = NSEDecryptor.decrypt(
+                encryptedBase64: encryptedContent,
+                senderUserId: senderId
+            ) {
+                bestAttemptContent.body = decrypted
+            }
+        }
+
         let isCommunicationType = Self.communicationTypes.contains(
             userInfo["type"] as? String ?? ""
         )

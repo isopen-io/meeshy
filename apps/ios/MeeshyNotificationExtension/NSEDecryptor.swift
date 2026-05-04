@@ -9,7 +9,7 @@ enum NSEDecryptor {
     /// Attempt to decrypt an E2EE message from the push payload.
     /// Returns the decrypted plaintext, or nil if decryption fails
     /// (missing session key, corrupted ciphertext, etc.).
-    static func decrypt(
+    nonisolated static func decrypt(
         encryptedBase64: String,
         senderUserId: String
     ) -> String? {
@@ -31,7 +31,7 @@ enum NSEDecryptor {
     /// Read the E2EE session key from the shared Keychain.
     /// Key format matches SessionManager: base64-encoded SymmetricKey raw bytes
     /// stored at account "me.meeshy.e2ee.session.{userId}" with service "me.meeshy.app".
-    private static func loadSessionKey(for userId: String) -> SymmetricKey? {
+    private nonisolated static func loadSessionKey(for userId: String) -> SymmetricKey? {
         let account = "me.meeshy.e2ee.session.\(userId)"
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
