@@ -10,6 +10,7 @@ final class DependencyContainer {
 
     let dbPool: DatabasePool
     let messagePersistence: MessagePersistenceActor
+    let feedPersistence: FeedPersistenceActor
 
     private init() {
         let dbPath = Self.databasePath()
@@ -18,10 +19,12 @@ final class DependencyContainer {
         do {
             let pool = try DatabasePool(path: dbPath, configuration: config)
             try MessageDatabaseMigrations.runAll(on: pool)
+            try FeedDatabaseMigrations.runAll(on: pool)
             self.dbPool = pool
             self.messagePersistence = MessagePersistenceActor(dbWriter: pool)
+            self.feedPersistence = FeedPersistenceActor(dbWriter: pool)
         } catch {
-            fatalError("Failed to initialize message database: \(error)")
+            fatalError("Failed to initialize database: \(error)")
         }
     }
 

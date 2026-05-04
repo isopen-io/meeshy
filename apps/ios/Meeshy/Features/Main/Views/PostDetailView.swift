@@ -204,6 +204,14 @@ struct PostDetailView: View {
         .background(theme.backgroundGradient.ignoresSafeArea())
         .navigationBarHidden(true)
         .task {
+            // Wire persistence layer on first appearance
+            if viewModel.commentStore == nil {
+                let deps = DependencyContainer.shared
+                let commentStore = CommentStore(postId: postId, persistence: deps.feedPersistence)
+                viewModel.setupPersistence(commentStore: commentStore, persistence: deps.feedPersistence)
+                await commentStore.loadInitial()
+            }
+
             if viewModel.post == nil {
                 await viewModel.loadPost(postId)
             }

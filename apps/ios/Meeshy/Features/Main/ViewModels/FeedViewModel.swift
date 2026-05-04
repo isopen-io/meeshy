@@ -28,6 +28,12 @@ class FeedViewModel: ObservableObject {
     private var cacheSaveTask: Task<Void, Never>?
     private var isFeedLoadInProgress = false
 
+    // MARK: - Persistence Layer
+
+    private(set) var feedStore: FeedStore?
+    private(set) var feedSocketHandler: FeedSocketHandler?
+    private var feedPersistence: FeedPersistenceActor?
+
     init(
         api: APIClientProviding = APIClient.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
@@ -36,6 +42,15 @@ class FeedViewModel: ObservableObject {
         self.api = api
         self.socialSocket = socialSocket
         self.postService = postService
+    }
+
+    /// Wire persistence store and socket handler for GRDB-backed feed.
+    /// Call once after init when the dependency container is available.
+    func setupPersistence(store: FeedStore, socketHandler: FeedSocketHandler, persistence: FeedPersistenceActor) {
+        self.feedStore = store
+        self.feedSocketHandler = socketHandler
+        self.feedPersistence = persistence
+        socketHandler.arm()
     }
 
     private var preferredLanguages: [String] {
@@ -101,6 +116,15 @@ class FeedViewModel: ObservableObject {
                 Task.detached(priority: .utility) { [fetched] in
                     await CacheCoordinator.shared.feed.save(fetched, for: "main-feed")
                 }
+
+                // Persist to GRDB alongside cache
+                if let persistence = feedPersistence {
+                    let apiPosts = response.data
+                    Task.detached(priority: .utility) {
+                        let records = apiPosts.compactMap { PostRecord(from: $0) }
+                        try? await persistence.insertPosts(records)
+                    }
+                }
             } else {
                 if posts.isEmpty {
                     error = response.error ?? String(localized: "Impossible de charger le fil", defaultValue: "Impossible de charger le fil")
@@ -152,6 +176,15 @@ class FeedViewModel: ObservableObject {
                 hasMore = response.pagination?.hasMore ?? false
 
                 prefetchMedia(around: posts.count - uniqueNew.count)
+
+                // Persist to GRDB
+                if let persistence = feedPersistence {
+                    let apiPosts = response.data
+                    Task.detached(priority: .utility) {
+                        let records = apiPosts.compactMap { PostRecord(from: $0) }
+                        try? await persistence.insertPosts(records)
+                    }
+                }
             }
         } catch {
             // Silently fail on load more -- user can scroll again
@@ -199,6 +232,15 @@ class FeedViewModel: ObservableObject {
                 let _ = try await api.delete(endpoint: "/posts/\(postId)/like")
             }
             debouncedCacheSave()
+
+            // Sync like state to GRDB
+            if let persistence = feedPersistence {
+                let liked = posts[index].isLiked
+                let count = posts[index].likes
+                Task.detached(priority: .utility) {
+                    try? await persistence.updateLikeCount(postId: postId, count: count, isLikedByMe: liked)
+                }
+            }
         } catch {
             // Revert on failure — batch mutations
             var revert = posts[index]
@@ -238,6 +280,13 @@ class FeedViewModel: ObservableObject {
             posts.insert(feedPost, at: 0)
             debouncedCacheSave()
             publishSuccess = true
+
+            // Persist to GRDB
+            if let persistence = feedPersistence, let record = PostRecord(from: apiPost) {
+                Task.detached(priority: .utility) {
+                    try? await persistence.insertPost(record)
+                }
+            }
         } catch {
             publishError = error.localizedDescription
         }
@@ -257,6 +306,16 @@ class FeedViewModel: ObservableObject {
                 )
                 posts[index].comments.insert(feedComment, at: 0)
                 posts[index].commentCount += 1
+
+                // Persist comment + updated count to GRDB
+                if let persistence = feedPersistence,
+                   let record = CommentRecord(from: apiComment, postId: postId) {
+                    let newCount = posts[index].commentCount
+                    Task.detached(priority: .utility) {
+                        try? await persistence.insertComment(record)
+                        try? await persistence.updateCommentCount(postId: postId, count: newCount)
+                    }
+                }
             }
         } catch {
             ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
@@ -308,6 +367,14 @@ class FeedViewModel: ObservableObject {
         do {
             try await postService.delete(postId: postId)
             debouncedCacheSave()
+
+            // Remove from GRDB
+            if let persistence = feedPersistence {
+                Task.detached(priority: .utility) {
+                    try? await persistence.deletePost(id: postId)
+                }
+            }
+
             ToastManager.shared.showSuccess("Post supprime")
         } catch {
             posts = snapshot
@@ -520,6 +587,7 @@ class FeedViewModel: ObservableObject {
     func unsubscribeFromSocketEvents() {
         cancellables.removeAll()
         socialSocket.unsubscribeFeed()
+        feedSocketHandler?.disarm()
     }
 
     // MARK: - Media Prefetch
