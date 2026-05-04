@@ -41,14 +41,14 @@ public final class KeychainManager: @unchecked Sendable {
         if existingStatus == errSecSuccess {
             let attributes: [String: Any] = [
                 kSecValueData as String: data,
-                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             ]
             let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
             guard status == errSecSuccess else { throw KeychainError.saveFailed(status) }
         } else {
             var addQuery = query
             addQuery[kSecValueData as String] = data
-            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             let status = SecItemAdd(addQuery as CFDictionary, nil)
             guard status == errSecSuccess else { throw KeychainError.saveFailed(status) }
         }
@@ -101,6 +101,45 @@ public final class KeychainManager: @unchecked Sendable {
     }
 
     // MARK: - Migration
+
+    /// Migrate existing Keychain items from WhenUnlocked to AfterFirstUnlock accessibility.
+    /// Items stored with WhenUnlocked are not readable by the NSE when the device is locked.
+    /// This must be called once at app startup.
+    public func migrateToAfterFirstUnlock() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true,
+            kSecReturnData as String: true,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else { return }
+
+        let targetAccessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String
+
+        for item in items {
+            guard let account = item[kSecAttrAccount as String] as? String,
+                  let data = item[kSecValueData as String] as? Data else { continue }
+
+            if let accessible = item[kSecAttrAccessible as String] as? String,
+               accessible == targetAccessibility { continue }
+
+            let deleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+            ]
+            SecItemDelete(deleteQuery as CFDictionary)
+
+            var addQuery = deleteQuery
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            SecItemAdd(addQuery as CFDictionary, nil)
+        }
+    }
 
     public func migrateFromUserDefaults(keys: [String]) {
         let defaults = UserDefaults.standard
