@@ -109,8 +109,8 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "autoprefixer": "^10.5.0",
     "dotenv": "^17.2.1",
-    "eslint": "^9.39.4",
-    "eslint-config-next": "15.3.5",
+    "eslint": "^10.3.0",
+    "eslint-config-next": "16.2.4",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "postcss": "^8.5.13",
@@ -118,6 +118,6 @@
     "tailwindcss": "^3.4.19",
     "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }

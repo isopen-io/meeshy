@@ -56,7 +56,7 @@
     "dotenv": "^17.4.2",
     "tsx": "^4.21.0",
     "turbo": "^2.9.8",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   },
   "pnpm": {
     "peerDependencyRules": {
