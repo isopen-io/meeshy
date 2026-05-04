@@ -605,6 +605,25 @@ describe('PostService', () => {
         }),
       );
     });
+
+    it('sets originalRepostOfId to original.id when original is a root post', async () => {
+      const original = makePost({ id: 'original-1', repostOfId: null, originalRepostOfId: null });
+      prisma.post.findFirst.mockResolvedValue(original);
+      const repost = makePost({ id: 'repost-1', repostOfId: 'original-1', originalRepostOfId: 'original-1' });
+      prisma.post.create.mockResolvedValue(repost);
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('original-1', 'user-reposter');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            repostOfId: 'original-1',
+            originalRepostOfId: 'original-1',
+          }),
+        })
+      );
+    });
   });
 
   // -----------------------------------------------------------------------
