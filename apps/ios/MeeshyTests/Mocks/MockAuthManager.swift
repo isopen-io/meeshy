@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import MeeshySDK
 import XCTest
@@ -7,7 +8,14 @@ final class MockAuthManager: AuthManaging {
     // MARK: - State
 
     var isAuthenticated: Bool = false
-    var currentUser: MeeshyUser?
+    var currentUser: MeeshyUser? {
+        didSet { currentUserSubject.send(currentUser) }
+    }
+
+    private let currentUserSubject = CurrentValueSubject<MeeshyUser?, Never>(nil)
+    var currentUserPublisher: AnyPublisher<MeeshyUser?, Never> {
+        currentUserSubject.eraseToAnyPublisher()
+    }
     var isLoading: Bool = false
     var errorMessage: String?
     var savedAccounts: [SavedAccount] = []

@@ -11,6 +11,7 @@ public protocol AuthManaging: AnyObject {
     var errorMessage: String? { get }
     var savedAccounts: [SavedAccount] { get }
     var authToken: String? { get }
+    var currentUserPublisher: AnyPublisher<MeeshyUser?, Never> { get }
     func login(username: String, password: String) async
     func register(request: RegisterRequest) async
     func requestMagicLink(email: String) async -> Bool
@@ -36,6 +37,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
     @Published public var errorMessage: String?
     /// All accounts that have saved credentials on this device, sorted by most recently active.
     @Published public var savedAccounts: [SavedAccount] = []
+
+    // MARK: - Protocol Publisher
+
+    public var currentUserPublisher: AnyPublisher<MeeshyUser?, Never> {
+        $currentUser.eraseToAnyPublisher()
+    }
 
     // MARK: - Private
 
