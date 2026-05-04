@@ -113,6 +113,7 @@ struct MeeshyApp: App {
                     let _ = deepLinkRouter.handle(url: url)
                 }
                 .task {
+                    KeychainManager.shared.migrateToAfterFirstUnlock()
                     MeeshyConfig.shared.restoreEnvironment()
                     // Bridge iOS Focus filter selection into the SDK so in-app
                     // toasts respect the currently-active Focus filter.
