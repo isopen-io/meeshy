@@ -32,6 +32,8 @@ export interface PushNotificationPayload {
   callId?: string;
   callerName?: string;
   callerAvatar?: string;
+  // APNs collapse-id: allows replacing an existing notification in Notification Center
+  collapseId?: string;
 }
 
 export interface PushResult {
@@ -391,6 +393,19 @@ export class PushNotificationService {
         };
       }
 
+      if (payload.collapseId) {
+        message.android = {
+          ...message.android,
+          collapseKey: payload.collapseId,
+        };
+        if (message.apns) {
+          message.apns.headers = {
+            ...message.apns.headers,
+            'apns-collapse-id': payload.collapseId,
+          };
+        }
+      }
+
       await this.firebaseAdmin.messaging().send(message);
       return { success: true, tokenId: tokenRecord.id };
     } catch (error: any) {
@@ -451,6 +466,11 @@ export class PushNotificationService {
       }
 
       notification.mutableContent = true;
+
+      if (payload.collapseId) {
+        notification.collapseId = payload.collapseId;
+      }
+
       // `content-available: 1` wakes the app in the background so the silent
       // push handler in `AppDelegate` can post the delivery receipt
       // (`PushDeliveryReceiptService.ack`). Without this, an offline recipient

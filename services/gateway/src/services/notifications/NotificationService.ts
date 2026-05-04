@@ -273,6 +273,7 @@ export class NotificationService {
     context: NotificationContext;
     metadata: NotificationMetadata;
     expiresAt?: Date;
+    collapseId?: string;
   }): Promise<Notification | null> {
     try {
       // SECURITY: Validate notification type
@@ -376,6 +377,7 @@ export class NotificationService {
               title: pushTitle,
               body: pushBody,
               link,
+              collapseId: params.collapseId,
               data: {
                 type: params.type,
                 conversationId: params.context.conversationId || '',
@@ -596,6 +598,7 @@ export class NotificationService {
       type: 'new_message',
       priority: 'normal',
       content,
+      collapseId: `msg-${params.messageId}`,
 
       actor: {
         id: params.senderId,
@@ -663,6 +666,7 @@ export class NotificationService {
       type: 'user_mentioned',
       priority: 'high',
       content: params.messagePreview,
+      collapseId: `msg-${params.messageId}`,
 
       actor: {
         id: params.mentionerUserId,
@@ -1034,6 +1038,7 @@ export class NotificationService {
       type: 'message_reply',
       priority: 'normal',
       content: params.messagePreview,
+      collapseId: `msg-${params.messageId}`,
 
       actor: {
         id: params.replierUserId,
