@@ -1962,7 +1962,605 @@ private func refreshConversationPreviews() async {
 
 ---
 
-## Section 10 : Tests
+## Section 10 : Feed UICollectionView — Posts + Infinite Scroll
+
+### Principe
+
+Le feed est le 2eme hot path apres les messages : scroll infini, media-heavy (images, videos, audio),
+reactions en temps reel. Meme architecture que la message list : UICollectionView + DiffableDataSource,
+mais avec des cells plus complexes (media carousels, quoted reposts, reaction bars).
+
+### Architecture
+
+```
+FeedView (SwiftUI)
+  └─ FeedListView (UIViewControllerRepresentable)
+       └─ FeedListViewController (UIKit)
+            ├─ UICollectionView + CompositionalLayout
+            ├─ UICollectionViewDiffableDataSource<FeedSection, String>
+            ├─ Cell types: TextPostCell, MediaPostCell, RepostCell, AudioPostCell
+            ├─ Supplementary: SectionHeader (date/category)
+            └─ Prefetching: UICollectionViewDataSourcePrefetching
+  └─ CreatePostButton (SwiftUI) — FAB overlay
+  └─ NewPostsBanner (SwiftUI) — "N new posts" sticky banner
+```
+
+### FeedPersistenceActor
+
+Meme pattern que `MessagePersistenceActor` — write-through, SQLCipher WAL, meme DatabasePool.
+
+```swift
+public actor FeedPersistenceActor {
+    private let dbPool: DatabasePool  // MEME dbPool que MessagePersistenceActor (shared)
+
+    // Tables: feed_posts, feed_comments, feed_translations
+
+    // Write-through
+    func insertPost(_ record: PostRecord) throws {
+        try dbPool.write { db in
+            try record.save(db) // upsert
+        }
+    }
+
+    func insertPosts(_ records: [PostRecord]) throws {
+        try dbPool.write { db in
+            for record in records { try record.save(db) }
+        }
+    }
+
+    func updateLikeCount(postId: String, count: Int, isLikedByMe: Bool) throws {
+        try dbPool.write { db in
+            try db.execute(
+                sql: "UPDATE feed_posts SET likeCount = ?, isLikedByMe = ?, changeVersion = changeVersion + 1 WHERE id = ?",
+                arguments: [count, isLikedByMe, postId]
+            )
+        }
+    }
+
+    func updateCommentCount(postId: String, count: Int) throws {
+        try dbPool.write { db in
+            try db.execute(
+                sql: "UPDATE feed_posts SET commentCount = ?, changeVersion = changeVersion + 1 WHERE id = ?",
+                arguments: [count, postId]
+            )
+        }
+    }
+
+    func deletePost(id: String) throws {
+        try dbPool.write { db in
+            try db.execute(sql: "DELETE FROM feed_posts WHERE id = ?", arguments: [id])
+        }
+    }
+
+    func saveTranslation(_ translation: PostTranslationRecord) throws {
+        try dbPool.write { db in try translation.save(db) }
+    }
+
+    // Comments
+    func insertComment(_ record: CommentRecord) throws {
+        try dbPool.write { db in try record.save(db) }
+    }
+
+    func deleteComment(id: String) throws {
+        try dbPool.write { db in
+            try db.execute(sql: "DELETE FROM feed_comments WHERE id = ?", arguments: [id])
+        }
+    }
+
+    // Reads (nonisolated, zero contention)
+    nonisolated func posts(cursor: Date? = nil, limit: Int = 20) throws -> [PostRecord] {
+        try dbPool.read { db in
+            var query = PostRecord.order(Column("createdAt").desc).limit(limit)
+            if let cursor { query = query.filter(Column("createdAt") < cursor) }
+            return try query.fetchAll(db)
+        }
+    }
+
+    nonisolated func comments(forPostId postId: String, parentId: String? = nil,
+                               cursor: Date? = nil, limit: Int = 20) throws -> [CommentRecord] {
+        try dbPool.read { db in
+            var query = CommentRecord
+                .filter(Column("postId") == postId)
+                .order(Column("createdAt").desc)
+                .limit(limit)
+            if let parentId {
+                query = query.filter(Column("parentId") == parentId)
+            } else {
+                query = query.filter(Column("parentId") == nil) // Top-level only
+            }
+            if let cursor { query = query.filter(Column("createdAt") < cursor) }
+            return try query.fetchAll(db)
+        }
+    }
+}
+```
+
+### PostRecord (GRDB)
+
+```swift
+struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "feed_posts"
+
+    var id: String                  // PK
+    var authorId: String
+    var authorUsername: String?
+    var authorDisplayName: String?
+    var authorAvatarURL: String?
+    var type: String?               // post, story, status
+    var content: String?
+    var originalLanguage: String?
+    var visibility: String?
+    var likeCount: Int
+    var commentCount: Int
+    var repostCount: Int
+    var viewCount: Int
+    var bookmarkCount: Int
+    var shareCount: Int
+    var isLikedByMe: Bool
+    var isPinned: Bool
+    var isEdited: Bool
+    var isQuote: Bool
+    var moodEmoji: String?
+    var audioUrl: String?
+    var audioDuration: Int?
+    var mediaJson: Data?            // JSON [FeedMedia]
+    var reactionSummaryJson: Data?  // JSON [String: Int]
+    var repostOfJson: Data?         // JSON RepostContent
+    var mentionedUsersJson: Data?   // JSON [MentionedUser]
+    var translationsJson: Data?     // JSON [String: PostTranslation]
+    var createdAt: Date
+    var updatedAt: Date?
+    var changeVersion: Int64        // (O1) Pour Equatable rapide
+}
+
+extension PostRecord: Equatable {
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id && lhs.changeVersion == rhs.changeVersion
+    }
+}
+```
+
+### CommentRecord (GRDB)
+
+```swift
+struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "feed_comments"
+
+    var id: String                  // PK
+    var postId: String              // FK
+    var parentId: String?           // Nested replies
+    var authorId: String
+    var authorUsername: String?
+    var authorDisplayName: String?
+    var authorAvatarURL: String?
+    var content: String
+    var originalLanguage: String?
+    var translatedContent: String?
+    var likeCount: Int
+    var replyCount: Int
+    var effectFlags: Int
+    var createdAt: Date
+    var changeVersion: Int64
+}
+
+extension CommentRecord: Equatable {
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id && lhs.changeVersion == rhs.changeVersion
+    }
+}
+```
+
+### FeedStore (@Observable)
+
+Meme pattern que MessageStore — observe GRDB via DatabaseRegionObservation, off-main reads.
+
+```swift
+@Observable
+@MainActor
+final class FeedStore {
+    private(set) var posts: [PostRecord] = []
+    private var _idIndex: [String: Int]?
+    private var regionObservation: DatabaseCancellable?
+    private var isUserScrolling = false
+
+    func startObserving(dbPool: DatabasePool) {
+        let region = PostRecord.databaseRegion
+        var refreshTask: Task<Void, Never>?
+
+        regionObservation = DatabaseRegionObservation(tracking: region)
+            .start(in: dbPool) { [weak self] _ in
+                refreshTask?.cancel()
+                refreshTask = Task { [weak self] in
+                    guard let self else { return }
+                    let delay: Duration = self.isUserScrolling ? .milliseconds(200) : .milliseconds(16)
+                    try? await Task.sleep(for: delay)
+                    guard !Task.isCancelled else { return }
+                    await self.refreshFromDB()
+                }
+            }
+    }
+
+    private func refreshFromDB() async {
+        let newPosts = await Task.detached(priority: .userInitiated) { [persistence] in
+            try? persistence.posts(limit: 50)
+        }.value
+        guard let newPosts, newPosts != posts else { return }
+        posts = newPosts
+        _idIndex = nil
+    }
+
+    func loadMore(before cursor: Date) async -> Bool {
+        let older = await Task.detached(priority: .userInitiated) { [persistence] in
+            try? persistence.posts(cursor: cursor, limit: 20)
+        }.value
+        guard let older, !older.isEmpty else { return false }
+        posts.append(contentsOf: older)
+        _idIndex = nil
+        return true
+    }
+}
+```
+
+### FeedListViewController (UICollectionView)
+
+```swift
+final class FeedListViewController: UIViewController {
+    private var collectionView: UICollectionView!
+    private var dataSource: UICollectionViewDiffableDataSource<Int, String>!
+    private let store: FeedStore
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        configureLayout()
+        configureDataSource()
+        observeStore()
+    }
+
+    private func configureLayout() {
+        let layout = UICollectionViewCompositionalLayout { _, env in
+            let itemSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1.0),
+                heightDimension: .estimated(400) // Posts are taller than messages
+            )
+            let item = NSCollectionLayoutItem(layoutSize: itemSize)
+            let group = NSCollectionLayoutGroup.vertical(layoutSize: itemSize, subitems: [item])
+            let section = NSCollectionLayoutSection(group: group)
+            section.interGroupSpacing = 8
+            return section
+        }
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.prefetchDataSource = self
+        // NOT flipped (feed is top-to-bottom, unlike messages)
+        view.addSubview(collectionView)
+    }
+
+    private func configureDataSource() {
+        let textPostReg = UICollectionView.CellRegistration<TextPostCell, String> {
+            [weak self] cell, indexPath, postId in
+            guard let record = self?.store.post(for: postId) else { return }
+            cell.configure(with: record)
+        }
+
+        let mediaPostReg = UICollectionView.CellRegistration<MediaPostCell, String> {
+            [weak self] cell, indexPath, postId in
+            guard let record = self?.store.post(for: postId) else { return }
+            cell.configure(with: record, imageCache: ThumbnailPrefetcher.shared.decodedImageCache)
+        }
+
+        dataSource = UICollectionViewDiffableDataSource(collectionView: collectionView) {
+            [weak self] cv, indexPath, postId in
+            guard let record = self?.store.post(for: postId) else { return nil }
+            let hasMedia = record.mediaJson != nil
+            if hasMedia {
+                return cv.dequeueConfiguredReusableCell(using: mediaPostReg, for: indexPath, item: postId)
+            }
+            return cv.dequeueConfiguredReusableCell(using: textPostReg, for: indexPath, item: postId)
+        }
+    }
+
+    private func applySnapshot() {
+        var snapshot = NSDiffableDataSourceSnapshot<Int, String>()
+        snapshot.appendSections([0])
+        snapshot.appendItems(store.posts.map(\.id), toSection: 0)
+        dataSource.apply(snapshot, animatingDifferences: true)
+    }
+}
+
+extension FeedListViewController: UICollectionViewDataSourcePrefetching {
+    func collectionView(_ cv: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
+        let postIds = indexPaths.compactMap { dataSource.itemIdentifier(for: $0) }
+        Task { await ThumbnailPrefetcher.shared.prefetchBatch(postIds) }
+
+        // Infinite scroll trigger
+        if let last = indexPaths.last, last.item > store.posts.count - 5 {
+            Task {
+                guard let cursor = store.posts.last?.createdAt else { return }
+                _ = await store.loadMore(before: cursor)
+            }
+        }
+    }
+}
+```
+
+### Socket events — FeedSocketHandler
+
+```swift
+/// Gere les events socket pour le feed — ecrit dans FeedPersistenceActor
+final class FeedSocketHandler {
+    private let persistence: FeedPersistenceActor
+    private let socialSocket: SocialSocketManager
+    private var cancellables: Set<AnyCancellable> = []
+
+    func arm() {
+        socialSocket.postCreated.sink { [persistence] apiPost in
+            Task { try? await persistence.insertPost(PostRecord(from: apiPost)) }
+        }.store(in: &cancellables)
+
+        socialSocket.postUpdated.sink { [persistence] apiPost in
+            Task { try? await persistence.insertPost(PostRecord(from: apiPost)) } // upsert
+        }.store(in: &cancellables)
+
+        socialSocket.postDeleted.sink { [persistence] postId in
+            Task { try? await persistence.deletePost(id: postId) }
+        }.store(in: &cancellables)
+
+        socialSocket.postLiked.sink { [persistence] event in
+            Task { try? await persistence.updateLikeCount(
+                postId: event.postId, count: event.likeCount, isLikedByMe: event.isMe) }
+        }.store(in: &cancellables)
+
+        socialSocket.postUnliked.sink { [persistence] event in
+            Task { try? await persistence.updateLikeCount(
+                postId: event.postId, count: event.likeCount, isLikedByMe: false) }
+        }.store(in: &cancellables)
+
+        socialSocket.commentAdded.sink { [persistence] event in
+            Task {
+                try? await persistence.insertComment(CommentRecord(from: event))
+                try? await persistence.updateCommentCount(
+                    postId: event.postId, count: event.commentCount)
+            }
+        }.store(in: &cancellables)
+
+        socialSocket.commentDeleted.sink { [persistence] event in
+            Task {
+                try? await persistence.deleteComment(id: event.commentId)
+                try? await persistence.updateCommentCount(
+                    postId: event.postId, count: event.commentCount)
+            }
+        }.store(in: &cancellables)
+
+        socialSocket.postTranslationUpdated.sink { [persistence] event in
+            Task { try? await persistence.saveTranslation(
+                PostTranslationRecord(from: event)) }
+        }.store(in: &cancellables)
+    }
+}
+```
+
+### Performance profile Feed vs Messages
+
+| Aspect | Message list | Feed list |
+|--------|-------------|-----------|
+| Cell height | ~44-300px (variable) | ~200-600px (tres variable) |
+| Media per cell | 0-1 | 0-10 (carousel) |
+| Cell complexity | Moyenne | Elevee (reaction bar, author header, media grid) |
+| Scroll pattern | Rapide (flick up to read history) | Modere (scroll down to discover) |
+| Cells visibles | 5-8 | 2-4 |
+| Prefetch window | 20-30 items | 5-10 items (cells plus grandes) |
+| Infinite scroll | Anchor-based window | Cursor-based pagination |
+
+---
+
+## Section 11 : Comments UICollectionView — Nested threads
+
+### Architecture
+
+```
+PostDetailView (SwiftUI)
+  └─ PostHeader (SwiftUI) — post content, media, reactions
+  └─ CommentListView (UIViewControllerRepresentable)
+       └─ CommentListViewController (UIKit)
+            ├─ UICollectionView + CompositionalLayout
+            ├─ UICollectionViewDiffableDataSource<CommentSection, CommentItem>
+            ├─ Cell types: TopLevelCommentCell, ReplyCell, LoadMoreRepliesCell
+            └─ Section per top-level comment (with expandable replies)
+  └─ CommentInputBar (SwiftUI) — input + replyTo preview
+```
+
+### Section model pour nested threads
+
+```swift
+/// Chaque section = un top-level comment + ses replies
+enum CommentSection: Hashable {
+    case topLevel(commentId: String)
+}
+
+/// Items dans une section
+enum CommentItem: Hashable {
+    case comment(id: String)               // Top-level ou reply
+    case loadMoreReplies(parentId: String, remaining: Int)  // "Load N more replies"
+}
+```
+
+### CommentListViewController
+
+```swift
+final class CommentListViewController: UIViewController {
+    private let store: CommentStore
+    private var collectionView: UICollectionView!
+    private var dataSource: UICollectionViewDiffableDataSource<CommentSection, CommentItem>!
+
+    private func configureLayout() {
+        let layout = UICollectionViewCompositionalLayout { sectionIndex, env in
+            let itemSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1.0),
+                heightDimension: .estimated(80)
+            )
+            let item = NSCollectionLayoutItem(layoutSize: itemSize)
+            let group = NSCollectionLayoutGroup.vertical(layoutSize: itemSize, subitems: [item])
+            let section = NSCollectionLayoutSection(group: group)
+            section.interGroupSpacing = 0
+            section.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 12, trailing: 0)
+            return section
+        }
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        view.addSubview(collectionView)
+    }
+
+    private func applySnapshot() {
+        var snapshot = NSDiffableDataSourceSnapshot<CommentSection, CommentItem>()
+
+        for comment in store.topLevelComments {
+            let section = CommentSection.topLevel(commentId: comment.id)
+            snapshot.appendSections([section])
+            snapshot.appendItems([.comment(id: comment.id)], toSection: section)
+
+            // Replies (si thread expande)
+            if store.expandedThreads.contains(comment.id) {
+                let replies = store.replies(for: comment.id)
+                for reply in replies {
+                    snapshot.appendItems([.comment(id: reply.id)], toSection: section)
+                }
+                // "Load more" si il reste des replies non-chargees
+                let remaining = comment.replyCount - replies.count
+                if remaining > 0 {
+                    snapshot.appendItems(
+                        [.loadMoreReplies(parentId: comment.id, remaining: remaining)],
+                        toSection: section
+                    )
+                }
+            } else if comment.replyCount > 0 {
+                // Thread collapse — affiche "View N replies"
+                snapshot.appendItems(
+                    [.loadMoreReplies(parentId: comment.id, remaining: comment.replyCount)],
+                    toSection: section
+                )
+            }
+        }
+
+        dataSource.apply(snapshot, animatingDifferences: true)
+    }
+}
+```
+
+### ReplyCell — indentation pour nested threads
+
+```swift
+final class ReplyCell: UICollectionViewCell {
+    private let avatarView = UIImageView()
+    private let authorLabel = UILabel()
+    private let contentLabel = UILabel()
+    private let timestampLabel = UILabel()
+    private let likeButton = UIButton()
+
+    func configure(with record: CommentRecord, depth: Int) {
+        // Indentation : 40pt par niveau de profondeur
+        contentView.layoutMargins.left = CGFloat(depth) * 40 + 16
+
+        authorLabel.text = record.authorDisplayName ?? record.authorUsername
+        contentLabel.text = record.translatedContent ?? record.content // Prisme Linguistique
+        timestampLabel.text = DateFormatter.relative.string(from: record.createdAt)
+        likeButton.setTitle("\(record.likeCount)", for: .normal)
+
+        // Author color (denormalized)
+        let color = UIColor(hex: DynamicColorGenerator.colorForId(record.authorId))
+        avatarView.backgroundColor = color
+    }
+}
+```
+
+### CommentStore (@Observable)
+
+```swift
+@Observable
+@MainActor
+final class CommentStore {
+    let postId: String
+    private let persistence: FeedPersistenceActor
+    private(set) var topLevelComments: [CommentRecord] = []
+    private(set) var repliesMap: [String: [CommentRecord]] = [:]
+    var expandedThreads: Set<String> = []
+
+    func replies(for parentId: String) -> [CommentRecord] {
+        repliesMap[parentId] ?? []
+    }
+
+    func loadInitial() async {
+        let comments = await Task.detached(priority: .userInitiated) { [persistence, postId] in
+            try? persistence.comments(forPostId: postId, parentId: nil, limit: 20)
+        }.value
+        guard let comments else { return }
+        topLevelComments = comments
+    }
+
+    func loadReplies(for commentId: String) async {
+        let replies = await Task.detached(priority: .userInitiated) { [persistence, postId] in
+            try? persistence.comments(forPostId: postId, parentId: commentId, limit: 20)
+        }.value
+        guard let replies else { return }
+        repliesMap[commentId] = replies
+        expandedThreads.insert(commentId)
+    }
+
+    func toggleThread(_ commentId: String) async {
+        if expandedThreads.contains(commentId) {
+            expandedThreads.remove(commentId)
+        } else {
+            if repliesMap[commentId] == nil {
+                await loadReplies(for: commentId)
+            } else {
+                expandedThreads.insert(commentId)
+            }
+        }
+    }
+}
+```
+
+---
+
+## Section 12 : Hybrid Strategy — UIKit vs SwiftUI par screen
+
+| Screen | Implementation | Raison |
+|--------|---------------|--------|
+| **Message list** | UICollectionView | Cell recycling, media-heavy, scroll rapide |
+| **Feed/Posts** | UICollectionView | Infinite scroll, media carousels, cell recycling |
+| **Comments** | UICollectionView | Nested threads, expand/collapse, pagination |
+| Conversation list | SwiftUI List | Scroll modere, 50-200 items, pas media-heavy |
+| Conversation header | SwiftUI | Statique |
+| Input bar | SwiftUI | Interactions clavier, pas de scroll |
+| Typing indicator | SwiftUI | Simple overlay |
+| Settings | SwiftUI | Navigation stack standard |
+| Profile | SwiftUI | Peu d'items |
+| Story viewer | SwiftUI (custom) | Full-screen, gestes custom |
+| Notifications | SwiftUI List | Scroll modere |
+| Communities list | SwiftUI List | Peu d'items |
+| Create post | SwiftUI | Formulaire |
+
+### GRDB tables — schema complet final
+
+```
+Messages layer (MessagePersistenceActor):
+  messages                    — 35+ champs, PK localId
+  pending_ids                 — tempId → serverId mapping
+  message_translations        — traductions texte
+  message_transcriptions      — transcriptions audio Whisper
+  message_audio_translations  — traductions audio TTS
+  local_attachments           — snapshots media avant upload
+
+Feed layer (FeedPersistenceActor):
+  feed_posts                  — posts/stories/statuses, PK id
+  feed_comments               — comments + nested replies, PK id
+  feed_translations           — traductions posts/comments
+
+Shared:
+  Toutes les tables dans le MEME DatabasePool (App Group)
+  SQLCipher WAL, reader pool adaptatif
+```
+
+---
+
+## Section 13 : Tests
 
 *Test pyramid et patterns inchanges depuis v1. Ajouts :*
 
@@ -2016,6 +2614,10 @@ private func refreshConversationPreviews() async {
 | `MeeshySDK/Persistence/ThumbnailPrefetcher.swift` | mmap + CGImageSource |
 | `MeeshySDK/Persistence/LegacyMigration.swift` | One-time migration from old cache |
 | `MeeshySDK/Cache/DecodedImageCache.swift` | NSCache 50MB pour CGImage decoded (O3) |
+| `MeeshySDK/Persistence/FeedPersistenceActor.swift` | Actor write-through pour posts + comments |
+| `MeeshySDK/Persistence/PostRecord.swift` | GRDB record posts |
+| `MeeshySDK/Persistence/CommentRecord.swift` | GRDB record comments + nested replies |
+| `MeeshySDK/Persistence/PostTranslationRecord.swift` | GRDB record traductions posts |
 
 ### New files (App layer)
 
@@ -2030,6 +2632,18 @@ private func refreshConversationPreviews() async {
 | `Meeshy/Features/Main/Views/Cells/AudioBubbleCell.swift` | Audio waveform bubble |
 | `Meeshy/Features/Main/Views/Cells/SystemMessageCell.swift` | System message (joined, left, etc.) |
 | `Meeshy/Features/Main/Coordinators/MediaAttachmentCoordinator.swift` | Upload orchestration |
+| `Meeshy/Features/Main/Stores/FeedStore.swift` | @Observable + DatabaseRegionObservation feed |
+| `Meeshy/Features/Main/Stores/CommentStore.swift` | @Observable + nested threads |
+| `Meeshy/Features/Main/Views/FeedListViewController.swift` | UICollectionView feed infinite scroll |
+| `Meeshy/Features/Main/Views/FeedListView.swift` | UIViewControllerRepresentable bridge feed |
+| `Meeshy/Features/Main/Views/CommentListViewController.swift` | UICollectionView nested comments |
+| `Meeshy/Features/Main/Views/CommentListView.swift` | UIViewControllerRepresentable bridge comments |
+| `Meeshy/Features/Main/Views/Cells/TextPostCell.swift` | Text-only post cell |
+| `Meeshy/Features/Main/Views/Cells/MediaPostCell.swift` | Post avec media carousel |
+| `Meeshy/Features/Main/Views/Cells/TopLevelCommentCell.swift` | Comment cell |
+| `Meeshy/Features/Main/Views/Cells/ReplyCell.swift` | Nested reply cell (indented) |
+| `Meeshy/Features/Main/Views/Cells/LoadMoreRepliesCell.swift` | "View N replies" cell |
+| `Meeshy/Features/Main/ViewModels/FeedSocketHandler.swift` | Socket events → FeedPersistenceActor |
 
 ### Modified files
 
@@ -2039,7 +2653,11 @@ private func refreshConversationPreviews() async {
 | `ConversationSocketHandler.swift` | Write to Actor (all 25 events), callback for non-persisted state |
 | `ConversationListViewModel.swift` | Add `observeMessageChanges()` for preview updates |
 | `MeeshyApp.swift` | Init DependencyContainer, run legacy migration once |
-| `ConversationView.swift` | Use store.messages, iOS 17/18 conditional scroll APIs |
+| `ConversationView.swift` | Use MessageListView (UIKit bridge) |
+| `FeedView.swift` | Use FeedListView (UIKit bridge) |
+| `PostDetailView.swift` | Use CommentListView (UIKit bridge) |
+| `FeedViewModel.swift` | Strip to orchestrator, delegate to FeedStore/Actor |
+| `PostDetailViewModel.swift` | Strip to orchestrator, delegate to CommentStore/Actor |
 | `CacheCoordinator.swift` | Deprecate message methods, redirect to new actor |
 | `MeeshyNotificationExtension/NotificationService.swift` | Pre-persist message en App Group DB (O6) |
 
@@ -2066,10 +2684,15 @@ private func refreshConversationPreviews() async {
 | `MeeshyTests/Integration/MessagePipelineIntegrationTests.swift` | ~15 tests |
 | `MeeshyTests/Integration/ConversationListReactivityTests.swift` | ~5 tests |
 | `MeeshyTests/Integration/NotificationExtensionPrePersistTests.swift` | ~3 tests (O6) |
+| `MeeshySDKTests/FeedPersistenceActorTests.swift` | ~10 tests (CRUD posts + comments) |
+| `MeeshySDKTests/PostRecordTests.swift` | ~5 tests (roundtrip, Equatable) |
+| `MeeshySDKTests/CommentRecordTests.swift` | ~5 tests (nested threads, parentId) |
+| `MeeshyTests/Integration/FeedPipelineIntegrationTests.swift` | ~8 tests (actor → store → UICollectionView) |
+| `MeeshyTests/Integration/CommentThreadIntegrationTests.swift` | ~5 tests (expand/collapse, pagination) |
 
 ---
 
-## Section 11 : Performance Budget (zero-freeze guarantee)
+## Section 14 : Performance Budget (zero-freeze guarantee)
 
 ### Regle absolue
 
