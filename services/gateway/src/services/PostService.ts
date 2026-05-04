@@ -745,6 +745,10 @@ export class PostService {
 
     const originalLanguage = content ? detectLanguage(content) : undefined;
 
+    const originalRepostOfId = original.originalRepostOfId
+      ?? original.repostOfId
+      ?? original.id;
+
     const repost = await this.prisma.post.create({
       data: {
         authorId: userId,
@@ -753,6 +757,7 @@ export class PostService {
         content: content ?? undefined,
         originalLanguage,
         repostOfId: postId,
+        originalRepostOfId,
         isQuote,
       },
       include: postInclude,
