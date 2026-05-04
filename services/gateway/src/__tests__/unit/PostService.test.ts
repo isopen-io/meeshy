@@ -624,6 +624,29 @@ describe('PostService', () => {
         })
       );
     });
+
+    it('flattens originalRepostOfId when original is itself a repost', async () => {
+      const original = makePost({
+        id: 'intermediate-1',
+        repostOfId: 'root-1',
+        originalRepostOfId: 'root-1',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      const repost = makePost({ id: 'repost-2', repostOfId: 'intermediate-1' });
+      prisma.post.create.mockResolvedValue(repost);
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('intermediate-1', 'user-reposter');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            repostOfId: 'intermediate-1',
+            originalRepostOfId: 'root-1',
+          }),
+        })
+      );
+    });
   });
 
   // -----------------------------------------------------------------------
