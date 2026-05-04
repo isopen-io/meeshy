@@ -94,6 +94,7 @@
 		AA6000000000002FA6 /* AttachmentSendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6000000000001FA6 /* AttachmentSendService.swift */; };
 		AABB001100220033 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220066 /* MeeshySDK */; };
 		AABB001100220044 /* MeeshyUI in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220077 /* MeeshyUI */; };
+		NSE0SDK0000000001 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = NSE0SDK0000000002 /* MeeshySDK */; };
 		AABB00110022FF01 /* PresenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB00110022EE01 /* PresenceManager.swift */; };
 		AACC00220033FF01 /* AudioRecorderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00220033EE01 /* AudioRecorderManager.swift */; };
 		ABEF9530C003C1159F8B9049 /* ConversationSocketHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBFCC5061B469FCAB2CE547 /* ConversationSocketHandlerTests.swift */; };
@@ -700,6 +701,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D470C3569767DC3CE63400CC /* Foundation.framework in Frameworks */,
+				NSE0SDK0000000001 /* MeeshySDK in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1330,6 +1332,9 @@
 			dependencies = (
 			);
 			name = MeeshyNotificationExtension;
+			packageProductDependencies = (
+				NSE0SDK0000000002 /* MeeshySDK */,
+			);
 			productName = MeeshyNotificationExtension;
 			productReference = D476AE3A97B7291A27F716AD /* MeeshyNotificationExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -2277,6 +2282,11 @@
 		AABB001100220077 /* MeeshyUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MeeshyUI;
+		};
+		NSE0SDK0000000002 /* MeeshySDK */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AABB001100220055 /* XCLocalSwiftPackageReference "../../packages/MeeshySDK" */;
+			productName = MeeshySDK;
 		};
 		FB000200020002000200020001 /* FirebaseCore */ = {
 			isa = XCSwiftPackageProductDependency;
