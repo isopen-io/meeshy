@@ -37,7 +37,6 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         // E2EE decryption: if the push payload contains encrypted content,
         // attempt to decrypt it locally using the shared Keychain session key.
         // On success, replace the notification body with the decrypted plaintext.
-        // On failure, the body stays as "Message chiffré" (set by the gateway).
         if let encryptedContent = userInfo["encryptedContent"] as? String,
            let senderId = userInfo["senderId"] as? String,
            !encryptedContent.isEmpty {
@@ -46,6 +45,18 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 senderUserId: senderId
             ) {
                 bestAttemptContent.body = decrypted
+            }
+        }
+
+        // Localize protected message placeholders. The gateway sends a
+        // notificationLocKey (e.g. "notification.encrypted_message") and a
+        // plain-English fallback body. If the loc-key is present and the body
+        // was NOT already overridden by the E2EE decryptor above, resolve the
+        // localized string from the NSE bundle's Localizable.xcstrings.
+        if let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
+            let localized = NSLocalizedString(locKey, comment: "")
+            if localized != locKey {
+                bestAttemptContent.body = localized
             }
         }
 

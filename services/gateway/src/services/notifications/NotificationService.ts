@@ -392,6 +392,7 @@ export class NotificationService {
                 senderAvatar: params.actor?.avatar || '',
                 imageURL: params.actor?.avatar || '',
                 encryptedContent: params.context.encryptedContent || '',
+                notificationLocKey: params.context.notificationLocKey || '',
               },
             },
           }).catch(err => {
@@ -569,6 +570,7 @@ export class NotificationService {
     firstAttachmentWidth?: number | null;
     firstAttachmentHeight?: number | null;
     encryptedContent?: string;
+    notificationLocKey?: string;
   }): Promise<Notification | null> {
     // Récupérer les infos de l'expéditeur
     const sender = await this.prisma.user.findUnique({
@@ -613,6 +615,7 @@ export class NotificationService {
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         encryptedContent: params.encryptedContent,
+        notificationLocKey: params.notificationLocKey,
       },
 
       metadata: {
