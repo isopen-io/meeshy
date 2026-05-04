@@ -73,8 +73,7 @@ extension ThemedMessageBubble {
         let attachmentIsProtected = attachment.isViewOnce || attachment.isBlurred
         let isRevealed = revealedAttachmentIds.contains(attachment.id)
 
-        AnyView(
-            ZStack {
+        ZStack {
                 Color.black
 
                 switch attachment.type {
@@ -161,7 +160,6 @@ extension ThemedMessageBubble {
                     downloadBadge(attachment)
                 }
             }
-        )
     }
 
     // MARK: - Grid Image
