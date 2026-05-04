@@ -109,7 +109,7 @@ class ConversationViewModel: ObservableObject {
 
     /// True during programmatic scrolls (initial load, send, scroll-to-bottom tap)
     /// When true, onAppear prefetch triggers are suppressed.
-    @Published var isProgrammaticScroll = false
+    var isProgrammaticScroll = false
 
     /// True when the conversation has been closed (no more messages can be sent)
     @Published var isConversationClosed = false
@@ -778,6 +778,11 @@ class ConversationViewModel: ObservableObject {
 
         case .stale(let data, _):
             messages = data
+            // Hydrate from persisted translation cache so the user sees
+            // preferred-language content immediately.  The background
+            // refreshMessagesFromAPI() below will call extractTextTranslations()
+            // which may upsert fresher translations from the REST payload —
+            // that's correct: REST > cache > nothing.
             await hydrateTranslationsFromCache()
             isRevalidating = true
             Task { [weak self] in
