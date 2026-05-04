@@ -49,6 +49,7 @@ struct ThemedMessageBubble: View {
     var hasEditHistory: Bool = false
     var activeVideoURL: String? = nil
     var currentUserId: String = ""
+    var userLanguages: (regional: String?, custom: String?) = (nil, nil)
 
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
@@ -887,7 +888,6 @@ struct ThemedMessageBubble: View {
     private func buildAvailableFlags() -> [String] {
         let activeLang = currentDisplayLangCode.lowercased()
         let origLower = message.originalLanguage.lowercased()
-        let user = AuthManager.shared.currentUser
 
         let hasTranslation: (String) -> Bool = { code in
             textTranslations.contains(where: { $0.targetLanguage.lowercased() == code })
@@ -901,11 +901,11 @@ struct ThemedMessageBubble: View {
             all.append(pc); seen.insert(pc)
         }
 
-        if let reg = user?.regionalLanguage?.lowercased(), !seen.contains(reg), hasTranslation(reg) {
+        if let reg = userLanguages.regional?.lowercased(), !seen.contains(reg), hasTranslation(reg) {
             all.append(reg); seen.insert(reg)
         }
 
-        if let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom), hasTranslation(custom) {
+        if let custom = userLanguages.custom?.lowercased(), !seen.contains(custom), hasTranslation(custom) {
             all.append(custom); seen.insert(custom)
         }
 
@@ -1574,6 +1574,8 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.activeAudioLanguage == rhs.activeAudioLanguage &&
         lhs.isEditSaving == rhs.isEditSaving &&
         lhs.hasEditHistory == rhs.hasEditHistory &&
-        lhs.highlightSearchTerm == rhs.highlightSearchTerm
+        lhs.highlightSearchTerm == rhs.highlightSearchTerm &&
+        lhs.userLanguages.regional == rhs.userLanguages.regional &&
+        lhs.userLanguages.custom == rhs.userLanguages.custom
     }
 }
