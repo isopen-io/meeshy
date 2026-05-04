@@ -27,17 +27,21 @@ class ConversationViewModel: ObservableObject {
 
     @Published var messages: [Message] = [] {
         didSet {
+            let countChanged = messages.count != oldValue.count
             _messageIdIndex = nil
-            _messagesByDate = nil
-            _topActiveMembers = nil
-            _mediaSenderInfoMap = nil
-            _allVisualAttachments = nil
-            _mediaCaptionMap = nil
-            _allAudioItems = nil
-            _replyCountMap = nil
-            _mentionDisplayNames = nil
-            _mentionCandidates = nil
             _cachedLastReceivedIndex = nil
+
+            if countChanged {
+                _messagesByDate = nil
+                _topActiveMembers = nil
+                _mediaSenderInfoMap = nil
+                _allVisualAttachments = nil
+                _mediaCaptionMap = nil
+                _allAudioItems = nil
+                _replyCountMap = nil
+                _mentionDisplayNames = nil
+                _mentionCandidates = nil
+            }
         }
     }
 
