@@ -79,6 +79,16 @@ public actor CacheCoordinator {
         return translationCache[messageId]
     }
 
+    public func cachedTranslations(for messageIds: [String]) -> [String: [TranslationData]] {
+        var result: [String: [TranslationData]] = [:]
+        for msgId in messageIds {
+            if let translations = cachedTranslations(for: msgId) {
+                result[msgId] = translations
+            }
+        }
+        return result
+    }
+
     public func cachedTranscription(for messageId: String) -> TranscriptionReadyEvent? {
         transcriptionCache[messageId]
     }

@@ -734,7 +734,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     private var manager: SocketManager?
     private var socket: SocketIOClient?
-    private let decoder = JSONDecoder()
     private var joinedConversations: Set<String> = []
     private var reconnectAttempt: Int = 0
     private var hadPreviousConnection = false
@@ -758,15 +757,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         heartbeatTimer = nil
     }
 
-    private init() {
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            if let date = MessageSocketManager.isoFormatterWithFractional.date(from: dateStr) { return date }
-            if let date = MessageSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
-    }
+    private init() {}
 
     // MARK: - JWT Helpers
 
@@ -1547,6 +1538,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 return
             }
 
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let dateStr = try container.decode(String.self)
+                if let date = MessageSocketManager.isoFormatterWithFractional.date(from: dateStr) { return date }
+                if let date = MessageSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
+            }
             let decoded = try decoder.decode(type, from: jsonData)
             DispatchQueue.main.async {
                 handler(decoded)

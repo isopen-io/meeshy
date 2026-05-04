@@ -27,17 +27,24 @@ class ConversationViewModel: ObservableObject {
 
     @Published var messages: [Message] = [] {
         didSet {
+            let structureChanged = messages.count != oldValue.count
+                || messages.first?.id != oldValue.first?.id
+                || messages.last?.id != oldValue.last?.id
+
             _messageIdIndex = nil
-            _messagesByDate = nil
-            _topActiveMembers = nil
-            _mediaSenderInfoMap = nil
-            _allVisualAttachments = nil
-            _mediaCaptionMap = nil
-            _allAudioItems = nil
-            _replyCountMap = nil
-            _mentionDisplayNames = nil
-            _mentionCandidates = nil
             _cachedLastReceivedIndex = nil
+
+            if structureChanged {
+                _messagesByDate = nil
+                _topActiveMembers = nil
+                _mediaSenderInfoMap = nil
+                _allVisualAttachments = nil
+                _mediaCaptionMap = nil
+                _allAudioItems = nil
+                _replyCountMap = nil
+                _mentionDisplayNames = nil
+                _mentionCandidates = nil
+            }
         }
     }
 
@@ -109,7 +116,7 @@ class ConversationViewModel: ObservableObject {
 
     /// True during programmatic scrolls (initial load, send, scroll-to-bottom tap)
     /// When true, onAppear prefetch triggers are suppressed.
-    @Published var isProgrammaticScroll = false
+    var isProgrammaticScroll = false
 
     /// True when the conversation has been closed (no more messages can be sent)
     @Published var isConversationClosed = false
@@ -774,9 +781,16 @@ class ConversationViewModel: ObservableObject {
         switch cached {
         case .fresh(let data, _):
             messages = data
+            await hydrateTranslationsFromCache()
 
         case .stale(let data, _):
             messages = data
+            // Hydrate from persisted translation cache so the user sees
+            // preferred-language content immediately.  The background
+            // refreshMessagesFromAPI() below will call extractTextTranslations()
+            // which may upsert fresher translations from the REST payload —
+            // that's correct: REST > cache > nothing.
+            await hydrateTranslationsFromCache()
             isRevalidating = true
             Task { [weak self] in
                 guard let self else { return }
@@ -2073,6 +2087,32 @@ class ConversationViewModel: ObservableObject {
                 }
             }
             messageTranslations[msg.id] = existing
+        }
+    }
+
+    private func hydrateTranslationsFromCache() async {
+        let msgIds = messages.map(\.id)
+        let cached = await CacheCoordinator.shared.cachedTranslations(for: msgIds)
+        guard !cached.isEmpty else { return }
+        for (msgId, translations) in cached {
+            var existing = messageTranslations[msgId] ?? []
+            for t in translations {
+                let mt = MessageTranslation(
+                    id: t.id,
+                    messageId: t.messageId,
+                    sourceLanguage: t.sourceLanguage,
+                    targetLanguage: t.targetLanguage,
+                    translatedContent: t.translatedContent,
+                    translationModel: t.translationModel,
+                    confidenceScore: t.confidenceScore
+                )
+                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
+                    existing[idx] = mt
+                } else {
+                    existing.append(mt)
+                }
+            }
+            messageTranslations[msgId] = existing
         }
     }
 

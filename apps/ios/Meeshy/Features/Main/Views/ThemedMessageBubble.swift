@@ -48,6 +48,8 @@ struct ThemedMessageBubble: View {
     /// the "View edits" affordance in the detail sheet.
     var hasEditHistory: Bool = false
     var activeVideoURL: String? = nil
+    var currentUserId: String = ""
+    var userLanguages: (regional: String?, custom: String?) = (nil, nil)
 
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
@@ -167,7 +169,6 @@ struct ThemedMessageBubble: View {
 
     // Computed reaction summaries for display — order is stable (first-seen per emoji)
     private var reactionSummaries: [ReactionSummary] {
-        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         var emojiCounts: [String: (count: Int, includesMe: Bool)] = [:]
         var emojiOrder: [String] = []
         for reaction in message.reactions {
@@ -887,7 +888,6 @@ struct ThemedMessageBubble: View {
     private func buildAvailableFlags() -> [String] {
         let activeLang = currentDisplayLangCode.lowercased()
         let origLower = message.originalLanguage.lowercased()
-        let user = AuthManager.shared.currentUser
 
         let hasTranslation: (String) -> Bool = { code in
             textTranslations.contains(where: { $0.targetLanguage.lowercased() == code })
@@ -901,11 +901,11 @@ struct ThemedMessageBubble: View {
             all.append(pc); seen.insert(pc)
         }
 
-        if let reg = user?.regionalLanguage?.lowercased(), !seen.contains(reg), hasTranslation(reg) {
+        if let reg = userLanguages.regional?.lowercased(), !seen.contains(reg), hasTranslation(reg) {
             all.append(reg); seen.insert(reg)
         }
 
-        if let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom), hasTranslation(custom) {
+        if let custom = userLanguages.custom?.lowercased(), !seen.contains(custom), hasTranslation(custom) {
             all.append(custom); seen.insert(custom)
         }
 
@@ -1552,6 +1552,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.message.isEdited == rhs.message.isEdited &&
         lhs.message.deletedAt == rhs.message.deletedAt &&
         lhs.message.pinnedAt == rhs.message.pinnedAt &&
+        lhs.message.updatedAt == rhs.message.updatedAt &&
         lhs.message.expiresAt == rhs.message.expiresAt &&
         lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
         lhs.message.effects.flags.rawValue == rhs.message.effects.flags.rawValue &&
@@ -1573,6 +1574,8 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.activeAudioLanguage == rhs.activeAudioLanguage &&
         lhs.isEditSaving == rhs.isEditSaving &&
         lhs.hasEditHistory == rhs.hasEditHistory &&
-        lhs.highlightSearchTerm == rhs.highlightSearchTerm
+        lhs.highlightSearchTerm == rhs.highlightSearchTerm &&
+        lhs.userLanguages.regional == rhs.userLanguages.regional &&
+        lhs.userLanguages.custom == rhs.userLanguages.custom
     }
 }

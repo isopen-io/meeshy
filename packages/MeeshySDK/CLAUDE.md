@@ -4,7 +4,7 @@
 SDK Swift modulaire fournissant les services core (auth, networking, sockets, cache, notifications) et les composants UI rutilisables pour l'app iOS Meeshy. Spar en deux targets pour permettre l'utilisation du SDK sans la couche UI.
 
 ## Tech Stack
-- Swift 5.9, iOS 16.0+
+- Swift 6 (swift-tools-version 6.2), iOS 16.0+
 - Swift Package Manager (SPM)
 - Socket.IO Client 16.1 (seule dpendance externe)
 - URLSession natif (HTTP)

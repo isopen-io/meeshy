@@ -351,6 +351,7 @@ final class ConversationSocketHandler {
 
         // Reactions added (with deduplication)
         socketManager.reactionAdded
+            .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
@@ -368,6 +369,7 @@ final class ConversationSocketHandler {
 
         // Reactions removed
         socketManager.reactionRemoved
+            .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
@@ -418,21 +420,17 @@ final class ConversationSocketHandler {
                 let newStatus: Message.DeliveryStatus = summary.readCount > 0 ? .read
                     : summary.deliveredCount > 0 ? .delivered : .sent
 
-                var snapshot = delegate.messages
-                var didChange = false
-                for i in snapshot.indices.reversed() {
-                    guard snapshot[i].isMe else { continue }
-                    let current = snapshot[i].deliveryStatus
+                for i in delegate.messages.indices.reversed() {
+                    guard delegate.messages[i].isMe else { continue }
+                    let current = delegate.messages[i].deliveryStatus
                     guard current != .read else { break }
                     if newStatus.isBetterThan(current) {
-                        snapshot[i].deliveryStatus = newStatus
-                        snapshot[i].deliveredCount = summary.deliveredCount
-                        snapshot[i].readCount = summary.readCount
-                        didChange = true
+                        var msg = delegate.messages[i]
+                        msg.deliveryStatus = newStatus
+                        msg.deliveredCount = summary.deliveredCount
+                        msg.readCount = summary.readCount
+                        delegate.messages[i] = msg
                     }
-                }
-                if didChange {
-                    delegate.messages = snapshot
                 }
             }
             .store(in: &cancellables)

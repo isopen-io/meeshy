@@ -286,6 +286,19 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// once, but we won't hold onto it.
     private static let maxCacheableDecodedBytes: Int = 50 * 1024 * 1024 // 50 MB
 
+    private static func downsampledImage(data: Data, maxPixelSize: CGFloat = 1200) -> UIImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        else { return UIImage(data: data) }
+        return UIImage(cgImage: cgImage)
+    }
+
     public func image(for urlString: String) async -> UIImage? {
         let fileKey = Self.fileKey(for: urlString)
 
@@ -294,7 +307,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
 
         let result = await load(for: urlString)
-        if let data = result.value?.first, let image = UIImage(data: data) {
+        if let data = result.value?.first, let image = Self.downsampledImage(data: data) {
             Self.cacheIfWithinBudget(image, key: fileKey)
             return image
         }
@@ -304,7 +317,7 @@ public actor DiskCacheStore: ReadableCacheStore {
             let (data, response) = try await URLSession.shared.data(from: url)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode),
-                  let image = UIImage(data: data) else { return nil }
+                  let image = Self.downsampledImage(data: data) else { return nil }
             await save(data, for: urlString)
             Self.cacheIfWithinBudget(image, key: fileKey)
             return image

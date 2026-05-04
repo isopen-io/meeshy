@@ -1,7 +1,7 @@
 # apps/ios - SwiftUI iOS App
 
 ## Tech Stack
-- SwiftUI (NOT UIKit), iOS 17.0+, Swift 5.9
+- SwiftUI (NOT UIKit), iOS 17.0+, Swift 6 (swift-tools-version 6.2)
 - MVVM architecture
 - Swift Package Manager (SPM)
 - Firebase 10.29 (Analytics, Crashlytics, Messaging, Performance)
