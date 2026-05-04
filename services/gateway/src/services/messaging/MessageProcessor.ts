@@ -861,6 +861,7 @@ export class MessageProcessor {
             messageId: message.id,
             conversationId: data.conversationId,
             messagePreview: notificationPreview,
+            encryptedContent: message.encryptedContent || undefined,
             ...attachmentInfo as any
           })
         ));

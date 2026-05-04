@@ -190,6 +190,7 @@ export interface NotificationContext {
   readonly reactionId?: string;
   readonly postId?: string;
   readonly commentId?: string;
+  readonly encryptedContent?: string;
 }
 
 /**
