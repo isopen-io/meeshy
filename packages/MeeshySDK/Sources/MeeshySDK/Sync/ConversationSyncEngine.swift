@@ -556,9 +556,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     updated[idx].lastMessageSenderName = resolvedSenderName
                 }
                 updated[idx].lastMessageAt = msg.createdAt
-                if !isMe {
-                    updated[idx].unreadCount += 1
-                }
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)
             }
