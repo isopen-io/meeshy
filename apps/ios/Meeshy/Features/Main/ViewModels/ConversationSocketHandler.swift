@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import GRDB
 import MeeshySDK
 import os
 
@@ -51,6 +52,10 @@ final class ConversationSocketHandler {
     private let currentUserId: String
     private let messageSocket: MessageSocketProviding
     weak var delegate: ConversationSocketDelegate?
+
+    /// Optional persistence actor — when set, message-related socket events
+    /// write through the actor in addition to updating the delegate/ViewModel.
+    var persistence: MessagePersistenceActor?
 
     // Message deduplication: sliding window of recently seen message IDs
     // to prevent duplicates when REST refresh and socket broadcast deliver
@@ -247,6 +252,14 @@ final class ConversationSocketHandler {
                             // Keep pendingServerIds[tempId] = serverId so future
                             // backend ops keep resolving correctly until reload.
                         }
+                        // Persist server ACK via actor
+                        if let persistence = self.persistence {
+                            _ = try? await persistence.applyEvent(
+                                localId: tempId,
+                                event: .serverAck(serverId: apiMsg.id, at: serverMsg.updatedAt ?? Date())
+                            )
+                        }
+
                         // Persist using server id so a future cold-start REST
                         // fetch reconciles cleanly without duplicates.
                         await delegate.persistMessagesUsingServerIds()
@@ -302,6 +315,19 @@ final class ConversationSocketHandler {
                         delegate.markAsRead()
                     }
 
+                    // Persist incoming message via actor if available
+                    if let persistence = self.persistence {
+                        let incoming = MessagePersistenceActor.IncomingMessageData(
+                            id: msg.id,
+                            conversationId: msg.conversationId,
+                            senderId: msg.senderId,
+                            content: msg.content,
+                            createdAt: msg.createdAt,
+                            computedState: .delivered
+                        )
+                        await persistence.bufferIncoming([incoming])
+                    }
+
                     // mark-as-received is handled globally by ConversationListViewModel
                 }
             }
@@ -324,12 +350,19 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiMsg in
-                guard let delegate = self?.delegate else { return }
+                guard let self, let delegate = self.delegate else { return }
                 if let idx = delegate.messageIndex(for: apiMsg.id) {
                     var updated = delegate.messages[idx]
                     updated.content = apiMsg.content ?? ""
                     updated.isEdited = true
                     delegate.messages[idx] = updated
+                }
+                if let persistence = self.persistence {
+                    Task { try? await persistence.markEdited(
+                        localId: apiMsg.id,
+                        newContent: apiMsg.content ?? "",
+                        editedAt: Date()
+                    ) }
                 }
             }
             .store(in: &cancellables)
@@ -339,12 +372,16 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let delegate = self?.delegate else { return }
+                guard let self, let delegate = self.delegate else { return }
+                let now = Date()
                 if let idx = delegate.messageIndex(for: event.messageId) {
                     var updated = delegate.messages[idx]
-                    updated.deletedAt = Date()
+                    updated.deletedAt = now
                     updated.content = ""
                     delegate.messages[idx] = updated
+                }
+                if let persistence = self.persistence {
+                    Task { try? await persistence.markDeleted(localId: event.messageId, deletedAt: now) }
                 }
             }
             .store(in: &cancellables)
@@ -354,7 +391,7 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let delegate = self?.delegate else { return }
+                guard let self, let delegate = self.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
                     let exists = delegate.messages[idx].reactions.contains {
                         $0.emoji == event.emoji && $0.participantId == event.participantId
@@ -363,6 +400,7 @@ final class ConversationSocketHandler {
                         let reaction = Reaction(messageId: event.messageId, participantId: event.participantId, emoji: event.emoji)
                         delegate.messages[idx].reactions.append(reaction)
                     }
+                    self.persistReactions(for: event.messageId, reactions: delegate.messages[idx].reactions)
                 }
             }
             .store(in: &cancellables)
@@ -372,11 +410,12 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let delegate = self?.delegate else { return }
+                guard let self, let delegate = self.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
                     delegate.messages[idx].reactions.removeAll {
                         $0.emoji == event.emoji && $0.participantId == event.participantId
                     }
+                    self.persistReactions(for: event.messageId, reactions: delegate.messages[idx].reactions)
                 }
             }
             .store(in: &cancellables)
@@ -414,7 +453,7 @@ final class ConversationSocketHandler {
             .filter { ($0.userId ?? $0.participantId) != userId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let delegate = self?.delegate else { return }
+                guard let self, let delegate = self.delegate else { return }
                 let summary = event.summary
 
                 let newStatus: Message.DeliveryStatus = summary.readCount > 0 ? .read
@@ -431,6 +470,14 @@ final class ConversationSocketHandler {
                         msg.readCount = summary.readCount
                         delegate.messages[i] = msg
                     }
+                }
+
+                // Batch-update delivery state in persistence
+                if let persistence = self.persistence {
+                    let event: MessageEvent = summary.readCount > 0
+                        ? .readBy(userId: userId, at: Date())
+                        : .delivered(count: summary.deliveredCount, at: Date())
+                    Task { await persistence.bufferBatchDelivery(conversationId: convId, event: event) }
                 }
             }
             .store(in: &cancellables)
@@ -464,13 +511,19 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let delegate = self?.delegate else { return }
+                guard let self, let delegate = self.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
                     delegate.messages[idx].viewOnceCount = event.viewOnceCount
                     if event.isFullyConsumed {
                         delegate.evictViewOnceMedia(message: delegate.messages[idx])
                         delegate.markMessageAsConsumed(messageId: event.messageId)
                     }
+                }
+                if let persistence = self.persistence {
+                    Task { try? await persistence.updateViewOnceCount(
+                        localId: event.messageId,
+                        count: event.viewOnceCount
+                    ) }
                 }
             }
             .store(in: &cancellables)
@@ -513,6 +566,29 @@ final class ConversationSocketHandler {
                 // regardless of how many messages/languages came in.
                 for (msgId, merged) in buckets {
                     delegate.messageTranslations[msgId] = merged
+                }
+
+                // Persist translations via actor
+                if let persistence = self?.persistence {
+                    let capturedEvents = events
+                    Task {
+                        for event in capturedEvents {
+                            for t in event.translations {
+                                let record = TranslationRecord(
+                                    id: t.id,
+                                    messageLocalId: t.messageId,
+                                    messageServerId: t.messageId,
+                                    targetLanguage: t.targetLanguage,
+                                    translatedContent: t.translatedContent,
+                                    translationModel: t.translationModel,
+                                    confidenceScore: t.confidenceScore,
+                                    sourceLanguage: t.sourceLanguage,
+                                    receivedAt: Date()
+                                )
+                                try? await persistence.saveTranslation(record)
+                            }
+                        }
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -648,6 +724,22 @@ final class ConversationSocketHandler {
                 delegate.isConversationClosed = true
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Persistence Helpers
+
+    private func persistReactions(for messageId: String, reactions: [Reaction]) {
+        guard let persistence else { return }
+        let encoder = JSONEncoder()
+        guard let json = try? encoder.encode(reactions) else { return }
+        let count = reactions.count
+        let noUserReactions: Data? = nil
+        Task { try? await persistence.updateReactions(
+            localId: messageId,
+            reactionsJson: json,
+            reactionCount: count,
+            currentUserReactionsJson: noUserReactions
+        ) }
     }
 
     // MARK: - Reconnection Sync
