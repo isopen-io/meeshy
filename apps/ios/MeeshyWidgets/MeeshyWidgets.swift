@@ -6,7 +6,7 @@ import AppIntents
 // MARK: - App Group Constants
 
 private enum WidgetSharedKeys: Sendable {
-    nonisolated static let suiteName = "group.me.meeshy.app"
+    nonisolated static let suiteName = "group.me.meeshy.apps"
     nonisolated static let conversations = "recent_conversations"
     nonisolated static let unreadCount = "unread_count"
     nonisolated static let pendingMarkRead = "pending_mark_read"

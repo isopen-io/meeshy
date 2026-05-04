@@ -128,7 +128,7 @@ public struct MeeshyFocusSnapshot: Codable, Sendable, Equatable {
 public final class MeeshyFocusStore {
     public static let shared = MeeshyFocusStore()
 
-    private let suiteName = "group.me.meeshy.app"
+    private let suiteName = "group.me.meeshy.apps"
     private let key = "meeshy_focus_filter"
 
     private lazy var defaults: UserDefaults? = {

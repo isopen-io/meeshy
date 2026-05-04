@@ -6,7 +6,7 @@ import os
 final class NSEPendingMessageConsumer {
     static let shared = NSEPendingMessageConsumer()
 
-    private static let appGroupId = "group.me.meeshy.app"
+    private static let appGroupId = "group.me.meeshy.apps"
     private static let pendingDirName = "nse_pending_messages"
     private let logger = Logger(subsystem: "me.meeshy.app", category: "nse-consumer")
 

@@ -34,7 +34,7 @@ struct WidgetFavoriteContact: Codable, Identifiable {
 final class WidgetDataManager: NotificationWidgetSink {
     static let shared = WidgetDataManager()
 
-    private let suiteName = "group.me.meeshy.app"
+    private let suiteName = "group.me.meeshy.apps"
     private let conversationsKey = "recent_conversations"
     private let unreadCountKey = "unread_count"
     private let favoritesKey = "favorite_contacts"
