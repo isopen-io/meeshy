@@ -27,11 +27,14 @@ class ConversationViewModel: ObservableObject {
 
     @Published var messages: [Message] = [] {
         didSet {
-            let countChanged = messages.count != oldValue.count
+            let structureChanged = messages.count != oldValue.count
+                || messages.first?.id != oldValue.first?.id
+                || messages.last?.id != oldValue.last?.id
+
             _messageIdIndex = nil
             _cachedLastReceivedIndex = nil
 
-            if countChanged {
+            if structureChanged {
                 _messagesByDate = nil
                 _topActiveMembers = nil
                 _mediaSenderInfoMap = nil
