@@ -143,6 +143,7 @@ struct ConversationAnimatedBackground: View {
                 wavesOverlay(in: geo.size)
                     .opacity(0.12)
             }
+            .drawingGroup()
         }
         .ignoresSafeArea()
         .onAppear { startAnimations() }
