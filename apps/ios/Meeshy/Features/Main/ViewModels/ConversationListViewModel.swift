@@ -7,10 +7,7 @@ import MeeshySDK
 @MainActor
 class ConversationListViewModel: ObservableObject {
     @Published var conversations: [Conversation] = [] {
-        didSet {
-            _convIdIndex = nil
-            recomputeFilteredAndGrouped()
-        }
+        didSet { _convIdIndex = nil }
     }
     @Published var userCategories: [ConversationSection] = []
     @Published var isLoading = false
@@ -26,7 +23,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Reactive Filters & Prepared Data
     @Published var searchText: String = ""
     @Published var selectedFilter: ConversationFilter = .all
-    @Published var filteredConversations: [Conversation] = []
+    private(set) var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
     /// Typing usernames indexed by conversationId. NOT @Published to avoid triggering
     /// a full list re-render on every typing event from any conversation.
@@ -108,36 +105,15 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Background Processing
     private func setupBackgroundProcessing() {
-        // Pipeline: Search/filter changes → recompute filtered + grouped in one pass.
-        // Conversations changes are handled inline by reloadFromCache() and socket
-        // handlers, so $conversations is NOT included here to avoid a redundant
-        // second recompute on every cache reload.
-        Publishers.CombineLatest($searchText, $selectedFilter)
+        // Single unified pipeline: conversations, search, filter, or categories change
+        // → filter + group in one pass → single @Published update (groupedConversations).
+        // Eliminates the old 3-broadcast chain ($conversations → $filteredConversations → $groupedConversations).
+        Publishers.CombineLatest4($conversations, $searchText, $selectedFilter, $userCategories)
             .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
-            .sink { [weak self] (text, filter) in
+            .sink { [weak self] (convs, text, filter, categories) in
                 guard let self else { return }
-                let filtered = Self.filterConversations(self.conversations, searchText: text, filter: filter)
+                let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
                 self.filteredConversations = filtered
-                let categories = self.userCategories
-                self.groupingTask?.cancel()
-                self.groupingTask = Task.detached(priority: .userInitiated) { [weak self] in
-                    guard !Task.isCancelled else { return }
-                    let grouped = Self.groupConversations(filtered, categories: categories)
-                    guard !Task.isCancelled else { return }
-                    await MainActor.run { [weak self] in
-                        self?.groupedConversations = grouped
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Category changes → regroup with current filtered set
-        $userCategories
-            .dropFirst()
-            .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
-            .sink { [weak self] categories in
-                guard let self else { return }
-                let filtered = self.filteredConversations
                 self.groupingTask?.cancel()
                 self.groupingTask = Task.detached(priority: .userInitiated) { [weak self] in
                     guard !Task.isCancelled else { return }
@@ -255,23 +231,6 @@ class ConversationListViewModel: ObservableObject {
             conversations = data
         case .expired, .empty:
             break
-        }
-    }
-
-    /// Recomputes filteredConversations and groupedConversations in one pass,
-    /// producing a single objectWillChange broadcast (only groupedConversations is @Published).
-    private func recomputeFilteredAndGrouped() {
-        let filtered = Self.filterConversations(conversations, searchText: searchText, filter: selectedFilter)
-        filteredConversations = filtered
-        let categories = userCategories
-        groupingTask?.cancel()
-        groupingTask = Task.detached(priority: .userInitiated) { [weak self] in
-            guard !Task.isCancelled else { return }
-            let grouped = Self.groupConversations(filtered, categories: categories)
-            guard !Task.isCancelled else { return }
-            await MainActor.run { [weak self] in
-                self?.groupedConversations = grouped
-            }
         }
     }
 

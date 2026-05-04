@@ -549,7 +549,7 @@ struct ConversationListView: View {
             .onChange(of: conversationViewModel.userCategories) { _, categories in
                 for cat in categories where cat.isExpanded { expandedSections.insert(cat.id) }
             }
-            .onChange(of: conversationViewModel.filteredConversations.isEmpty) { _, isEmpty in
+            .onChange(of: conversationViewModel.groupedConversations.isEmpty) { _, isEmpty in
                 if isEmpty && isScrollingDown {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
                 }
@@ -644,7 +644,7 @@ struct ConversationListView: View {
                     })
 
                     // Sectioned conversation list (skeleton -> content -> empty/error)
-                    if conversationViewModel.isLoading && conversationViewModel.filteredConversations.isEmpty {
+                    if conversationViewModel.isLoading && conversationViewModel.groupedConversations.isEmpty {
                         LazyVStack(spacing: 8) {
                             ForEach(0..<8, id: \.self) { index in
                                 SkeletonConversationRow()
@@ -653,7 +653,7 @@ struct ConversationListView: View {
                         }
                         .padding(.horizontal, 16)
                         .transition(.opacity)
-                    } else if conversationViewModel.filteredConversations.isEmpty && conversationViewModel.loadFailed {
+                    } else if conversationViewModel.groupedConversations.isEmpty && conversationViewModel.loadFailed {
                         // Cold-start sync failed AND cache is empty: offer a
                         // retry instead of the misleading "no conversations"
                         // placeholder. This is the path users hit after a
@@ -671,7 +671,7 @@ struct ConversationListView: View {
                         )
                         .padding(.top, 60)
                         .transition(.opacity)
-                    } else if conversationViewModel.filteredConversations.isEmpty {
+                    } else if conversationViewModel.groupedConversations.isEmpty {
                         EmptyStateView(
                             icon: "bubble.left.and.bubble.right",
                             title: String(localized: "conversations.empty.title", defaultValue: "Aucune conversation"),
