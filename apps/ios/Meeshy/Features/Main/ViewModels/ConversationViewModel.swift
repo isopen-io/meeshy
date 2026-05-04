@@ -1134,7 +1134,7 @@ class ConversationViewModel: ObservableObject {
     }
 
     @discardableResult
-    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil) async -> Bool {
+    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
 
@@ -1248,7 +1248,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         // Optimistic insert
-        let tempId = "temp_\(UUID().uuidString)"
+        let tempId = existingTempId ?? "temp_\(UUID().uuidString)"
         let resolvedAttachments = localAttachments ?? []
         let optimisticMessageType: Message.MessageType = {
             guard let first = resolvedAttachments.first else { return .text }
@@ -1260,46 +1260,48 @@ class ConversationViewModel: ObservableObject {
             case .location: return .location
             }
         }()
-        let optimisticMessage = Message(
-            id: tempId,
-            conversationId: conversationId,
-            senderId: currentUserId,
-            content: text,
-            messageType: optimisticMessageType,
-            replyToId: replyToId,
-            storyReplyToId: storyReplyToId,
-            forwardedFromId: forwardedFromId,
-            forwardedFromConversationId: forwardedFromConversationId,
-            expiresAt: resolvedExpiresAt,
-            effects: {
-                var e = pendingEffects
-                if resolvedIsViewOnce { e.flags.insert(.viewOnce) }
-                if resolvedBlur == true { e.flags.insert(.blurred) }
-                if resolvedExpiresAt != nil { e.flags.insert(.ephemeral) }
-                return e
-            }(),
-            maxViewOnceCount: resolvedMaxViewOnceCount,
-            viewOnceCount: 0,
-            createdAt: Date(),
-            updatedAt: Date(),
-            attachments: resolvedAttachments,
-            replyTo: replyRef,
-            deliveryStatus: .sending,
-            isMe: true
-        )
-        messages.append(optimisticMessage)
-        newMessageAppended += 1
+        if existingTempId == nil {
+            let optimisticMessage = Message(
+                id: tempId,
+                conversationId: conversationId,
+                senderId: currentUserId,
+                content: text,
+                messageType: optimisticMessageType,
+                replyToId: replyToId,
+                storyReplyToId: storyReplyToId,
+                forwardedFromId: forwardedFromId,
+                forwardedFromConversationId: forwardedFromConversationId,
+                expiresAt: resolvedExpiresAt,
+                effects: {
+                    var e = pendingEffects
+                    if resolvedIsViewOnce { e.flags.insert(.viewOnce) }
+                    if resolvedBlur == true { e.flags.insert(.blurred) }
+                    if resolvedExpiresAt != nil { e.flags.insert(.ephemeral) }
+                    return e
+                }(),
+                maxViewOnceCount: resolvedMaxViewOnceCount,
+                viewOnceCount: 0,
+                createdAt: Date(),
+                updatedAt: Date(),
+                attachments: resolvedAttachments,
+                replyTo: replyRef,
+                deliveryStatus: .sending,
+                isMe: true
+            )
+            messages.append(optimisticMessage)
+            newMessageAppended += 1
 
-        // Persister le message optimiste en cache pour qu'il survive
-        // si l'utilisateur quitte la conversation avant la confirmation serveur.
-        let convId = conversationId
-        let snapshot = messages
-        Task.detached(priority: .utility) {
-            await CacheCoordinator.shared.messages.mergeUpdate(for: convId) { cached in
-                let cachedIds = Set(cached.map(\.id))
-                let newOnly = snapshot.filter { !cachedIds.contains($0.id) }
-                guard !newOnly.isEmpty else { return cached }
-                return (cached + newOnly).sorted { $0.createdAt < $1.createdAt }
+            // Persister le message optimiste en cache pour qu'il survive
+            // si l'utilisateur quitte la conversation avant la confirmation serveur.
+            let convId = conversationId
+            let snapshot = messages
+            Task.detached(priority: .utility) {
+                await CacheCoordinator.shared.messages.mergeUpdate(for: convId) { cached in
+                    let cachedIds = Set(cached.map(\.id))
+                    let newOnly = snapshot.filter { !cachedIds.contains($0.id) }
+                    guard !newOnly.isEmpty else { return cached }
+                    return (cached + newOnly).sorted { $0.createdAt < $1.createdAt }
+                }
             }
         }
 
