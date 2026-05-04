@@ -1,0 +1,148 @@
+import Foundation
+import GRDB
+
+public enum MessageDatabaseMigrations {
+
+    /// Run all message-layer migrations on the given database
+    public static func runAll(on db: any DatabaseWriter) throws {
+        var migrator = DatabaseMigrator()
+        registerAll(in: &migrator)
+        try migrator.migrate(db)
+    }
+
+    /// Register migrations without running — for use with shared migrator
+    public static func registerAll(in migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("msg_v1_messages") { db in
+            try db.create(table: "messages") { t in
+                t.column("localId", .text).primaryKey()
+                t.column("serverId", .text).indexed()
+                t.column("conversationId", .text).notNull()
+                t.column("senderId", .text).notNull()
+                t.column("content", .text)
+                t.column("originalLanguage", .text).notNull().defaults(to: "fr")
+                t.column("messageType", .text).notNull().defaults(to: "text")
+                t.column("messageSource", .text).notNull().defaults(to: "user")
+                t.column("contentType", .text).notNull().defaults(to: "text")
+                t.column("state", .text).notNull()
+                t.column("retryCount", .integer).notNull().defaults(to: 0)
+                t.column("lastError", .text)
+                t.column("isEncrypted", .boolean).notNull().defaults(to: false)
+                t.column("encryptionMode", .text)
+                t.column("encryptedPayload", .blob)
+                t.column("replyToId", .text)
+                t.column("storyReplyToId", .text)
+                t.column("forwardedFromId", .text)
+                t.column("forwardedFromConversationId", .text)
+                t.column("replyToJson", .blob)
+                t.column("forwardedFromJson", .blob)
+                t.column("expiresAt", .datetime)
+                t.column("effectFlags", .integer).notNull().defaults(to: 0)
+                t.column("maxViewOnceCount", .integer)
+                t.column("viewOnceCount", .integer).notNull().defaults(to: 0)
+                t.column("isEdited", .boolean).notNull().defaults(to: false)
+                t.column("editedAt", .datetime)
+                t.column("deletedAt", .datetime)
+                t.column("pinnedAt", .datetime)
+                t.column("pinnedBy", .text)
+                t.column("senderName", .text)
+                t.column("senderUsername", .text)
+                t.column("senderColor", .text)
+                t.column("senderAvatarURL", .text)
+                t.column("deliveredCount", .integer).notNull().defaults(to: 0)
+                t.column("readCount", .integer).notNull().defaults(to: 0)
+                t.column("deliveredToAllAt", .datetime)
+                t.column("readByAllAt", .datetime)
+                t.column("createdAt", .datetime).notNull()
+                t.column("sentAt", .datetime)
+                t.column("deliveredAt", .datetime)
+                t.column("readAt", .datetime)
+                t.column("updatedAt", .datetime).notNull()
+                t.column("attachmentsJson", .blob)
+                t.column("reactionsJson", .blob)
+                t.column("reactionCount", .integer).notNull().defaults(to: 0)
+                t.column("currentUserReactionsJson", .blob)
+                t.column("mentionedUsersJson", .blob)
+                t.column("cachedBubbleWidth", .double)
+                t.column("cachedBubbleHeight", .double)
+                t.column("cachedLastLineWidth", .double)
+                t.column("cachedLineCount", .integer)
+                t.column("cachedTimestampInline", .boolean)
+                t.column("layoutVersion", .integer).notNull().defaults(to: 0)
+                t.column("layoutMaxWidth", .double)
+                t.column("changeVersion", .integer).notNull().defaults(to: 0)
+            }
+            try db.create(index: "idx_msg_conv_date", on: "messages",
+                          columns: ["conversationId", "createdAt"])
+            try db.create(index: "idx_msg_state", on: "messages", columns: ["state"])
+        }
+
+        migrator.registerMigration("msg_v1_pending_ids") { db in
+            try db.create(table: "pending_ids") { t in
+                t.column("localId", .text).primaryKey()
+                t.column("serverId", .text).notNull().indexed()
+                t.column("conversationId", .text).notNull()
+                t.column("reconciledAt", .datetime)
+            }
+        }
+
+        migrator.registerMigration("msg_v1_translations") { db in
+            try db.create(table: "message_translations") { t in
+                t.column("id", .text).primaryKey()
+                t.column("messageLocalId", .text).notNull().indexed()
+                t.column("messageServerId", .text)
+                t.column("targetLanguage", .text).notNull()
+                t.column("translatedContent", .text).notNull()
+                t.column("translationModel", .text).notNull()
+                t.column("confidenceScore", .double)
+                t.column("sourceLanguage", .text)
+                t.column("receivedAt", .datetime).notNull()
+            }
+            try db.create(index: "idx_trans_msg_lang", on: "message_translations",
+                          columns: ["messageLocalId", "targetLanguage"], unique: true)
+        }
+
+        migrator.registerMigration("msg_v1_transcriptions") { db in
+            try db.create(table: "message_transcriptions") { t in
+                t.column("messageLocalId", .text).primaryKey()
+                t.column("messageServerId", .text)
+                t.column("language", .text).notNull()
+                t.column("text", .text).notNull()
+                t.column("segmentsJson", .blob)
+                t.column("speakerCount", .integer)
+                t.column("receivedAt", .datetime).notNull()
+            }
+        }
+
+        migrator.registerMigration("msg_v1_audio_translations") { db in
+            try db.create(table: "message_audio_translations") { t in
+                t.column("id", .text).primaryKey()
+                t.column("messageLocalId", .text).notNull().indexed()
+                t.column("messageServerId", .text)
+                t.column("targetLanguage", .text).notNull()
+                t.column("audioUrl", .text)
+                t.column("status", .text).notNull()
+                t.column("receivedAt", .datetime).notNull()
+            }
+        }
+
+        migrator.registerMigration("msg_v1_local_attachments") { db in
+            try db.create(table: "local_attachments") { t in
+                t.column("localId", .text).primaryKey()
+                t.column("messageLocalId", .text).notNull().indexed()
+                t.column("type", .text).notNull()
+                t.column("mimeType", .text).notNull()
+                t.column("fileName", .text).notNull()
+                t.column("fileSize", .integer).notNull()
+                t.column("localPath", .text).notNull()
+                t.column("thumbnailPath", .text)
+                t.column("width", .double)
+                t.column("height", .double)
+                t.column("duration", .double)
+                t.column("createdAt", .datetime).notNull()
+                t.column("remoteUrl", .text)
+                t.column("uploadProgress", .double)
+                t.column("uploadState", .text).notNull().defaults(to: "pending")
+            }
+        }
+    }
+}
