@@ -1067,37 +1067,103 @@ final class MessageListViewController: UIViewController {
     // MARK: - Observe MessageStore changes
 
     private func observeStore() {
-        // Le MessageStore est @Observable — on observe `messages` via withObservationTracking
-        // ou via un Combine publisher bridge
         storeObservation = store.$messagesDidChange
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.applySnapshot() }
+            .sink { [weak self] in
+                self?.applySnapshot()
+                self?.onNewMessageWhileScrolledUp()
+            }
     }
 
+    // MARK: - Infinite Scroll UP (load older messages)
+
+    /// Flipped UICollectionView : "scroll up" = scroll vers index 0 visuellement en HAUT
+    /// mais vers les items les plus anciens (prepend).
+    /// DiffableDataSource gere automatiquement l'insertion.
+    /// Le contentOffset est preserve par UICollectionView quand on insere AVANT le viewport.
+
+    /// Detecte l'approche du haut (messages anciens) via delegate
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        let offsetY = scrollView.contentOffset.y
+        let contentHeight = scrollView.contentSize.height
+        let frameHeight = scrollView.frame.height
+
+        // FLIPPED : offset proche de contentHeight = visuellement en HAUT
+        let distanceFromTop = contentHeight - offsetY - frameHeight
+        if distanceFromTop < 500 && !isLoadingOlder { // 500pt threshold
+            loadOlderMessages()
+        }
+    }
+
+    private var isLoadingOlder = false
+
+    private func loadOlderMessages() {
+        guard let oldestDate = store.messages.first?.createdAt else { return }
+        isLoadingOlder = true
+
+        Task {
+            let hasMore = await store.loadOlder(before: oldestDate)
+            await MainActor.run {
+                isLoadingOlder = false
+                if hasMore {
+                    // applySnapshot() sera appele via store observation
+                    // DiffableDataSource insere les items en haut
+                    // UICollectionView preserve contentOffset automatiquement
+                    // car les nouveaux items sont AVANT le viewport visible
+                }
+            }
+        }
+    }
+
+    /// applySnapshot() gere le diff — les nouveaux messages anciens
+    /// sont prepend dans le snapshot, DiffableDataSource anime l'insertion
     private func applySnapshot() {
         var snapshot = NSDiffableDataSourceSnapshot<DateSection, String>()
         let calendar = Calendar.current
 
+        // Les sections sont ordonnees chronologiquement
+        // FLIPPED : la section la plus recente est visuellement en BAS (index 0 flipped)
         for section in store.sections {
-            let dateSection = DateSection(year: section.date.year!, month: section.date.month!, day: section.date.day!)
+            let dateSection = DateSection(
+                year: section.date.year!, month: section.date.month!, day: section.date.day!
+            )
             snapshot.appendSections([dateSection])
             snapshot.appendItems(section.messageIds, toSection: dateSection)
         }
 
-        // animatingDifferences: true pour animations fluides insert/delete
-        // La diffable data source calcule le diff automatiquement
+        // animatingDifferences: true pour animations fluides
+        // NSDiffableDataSourceSnapshot calcule le diff automatiquement
+        // Les items prepend (anciens) s'inserent sans jump de scroll
         dataSource.apply(snapshot, animatingDifferences: true)
     }
 
     // MARK: - Scroll to bottom (Fix Scenario 2)
 
     func scrollToBottom(animated: Bool = true) {
-        guard let lastSection = dataSource.snapshot().sectionIdentifiers.last,
-              let lastItem = dataSource.snapshot().itemIdentifiers(inSection: lastSection).last,
-              let indexPath = dataSource.indexPath(for: lastItem)
-        else { return }
-        collectionView.scrollToItem(at: indexPath, at: .top, animated: animated) // .top because flipped
+        // FLIPPED : le "bottom" visuel = index 0 dans le data source
+        collectionView.scrollToItem(
+            at: IndexPath(item: 0, section: 0),
+            at: .top,  // .top because flipped
+            animated: animated
+        )
     }
+
+    // MARK: - New messages indicator
+
+    /// Quand un message arrive et l'utilisateur est scrolle vers le haut
+    /// on ne force PAS le scroll — on affiche un badge "N new messages"
+    func onNewMessageWhileScrolledUp() {
+        let isAtBottom = collectionView.contentOffset.y < 100 // FLIPPED: small offset = at bottom
+        if !isAtBottom {
+            // Callback vers le ViewModel pour afficher le badge
+            onNewMessagesBadge?(store.unreadBelowCount)
+        } else {
+            // Auto-scroll vers le nouveau message
+            scrollToBottom(animated: true)
+        }
+    }
+
+    var onNewMessagesBadge: ((Int) -> Void)?
 }
 
 // MARK: - Prefetching (remplace le prefetch directionnel SwiftUI)
