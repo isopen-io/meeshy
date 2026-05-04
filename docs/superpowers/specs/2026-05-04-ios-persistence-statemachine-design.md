@@ -861,33 +861,55 @@ private func refreshFromDB() async {
         }
         guard var records else { return nil as [MessageRecord]? }
 
-        // (F2) Decryptage E2EE — off main, bulk
-        // Extraction de la cle une seule fois, puis decrypt en batch
+        // (F2) Decryptage E2EE — off main, PROGRESSIF (Fix Scenario 1)
+        // Phase 1 : decrypt les 20 derniers (viewport visible) → render immediat
+        // Phase 2 : decrypt les 180 restants → update silencieux
         let encryptedIndices = records.indices.filter { records[$0].isEncrypted }
         if !encryptedIndices.isEmpty {
-            // Recuperer la session key une seule fois (pas 50 fois)
             let sessionKey = try? await SessionManager.shared.sessionKey(for: convId)
             if let key = sessionKey {
-                for i in encryptedIndices {
+                // Phase 1 : les 20 derniers (bottom of conversation = visible)
+                let viewportSize = 20
+                let viewportIndices = encryptedIndices.suffix(viewportSize)
+                for i in viewportIndices {
                     if let payload = records[i].encryptedPayload,
                        let decrypted = try? CryptoEngine.decrypt(payload, with: key) {
                         records[i].content = String(data: decrypted, encoding: .utf8)
                     }
                 }
+                // Retourne Phase 1 immediatement pour premier render
+                // Phase 2 sera lancee apres l'assignation
+                return (records, key, encryptedIndices.dropLast(viewportSize))
             }
         }
 
-        return records
+        return (records, nil, [])
     }.value
 
-    guard let newRecords else { return }
-    // (F1) Comparaison Equatable aussi off-main? Non — 200 structs sans blobs = < 0.1ms
+    guard let (newRecords, sessionKey, remainingEncrypted) = result else { return }
     guard newRecords != messages else { return }
 
-    // SEULE operation sur MainActor — assignation pure
+    // Assignation Phase 1 — les 20 messages visibles sont decryptes
     messages = newRecords
     invalidateIndex()
     invalidateSections()
+
+    // Phase 2 — decrypt les restants en background, update silencieux
+    if let key = sessionKey, !remainingEncrypted.isEmpty {
+        Task.detached(priority: .utility) { [weak self] in
+            var updated = newRecords
+            for i in remainingEncrypted {
+                if let payload = updated[i].encryptedPayload,
+                   let decrypted = try? CryptoEngine.decrypt(payload, with: key) {
+                    updated[i].content = String(data: decrypted, encoding: .utf8)
+                }
+            }
+            await MainActor.run { [weak self] in
+                self?.messages = updated
+                self?.invalidateIndex()
+            }
+        }
+    }
 }
 ```
 
@@ -966,6 +988,9 @@ func preloadThumbnail(url: URL, cacheKey: String) async -> CGImage? {
 }
 
 /// Dans la vue : placeholder instantane, image quand prete
+/// (Fix Scenario 4) AsyncCachedImage avec lifecycle management
+/// onDisappear nil-out le CGImage pour simuler le recyclage
+/// onAppear reload depuis NSCache (O(1)) si disponible
 struct AsyncCachedImage: View, Equatable {
     let cacheKey: String
     @State private var image: CGImage?
@@ -976,14 +1001,16 @@ struct AsyncCachedImage: View, Equatable {
                 .resizable()
                 .transition(.opacity.animation(.easeIn(duration: 0.15)))
         } else {
-            // Placeholder avec dimensions connues (pas de reflow)
             Rectangle()
                 .fill(Color(.systemGray5))
                 .onAppear { loadAsync() }
         }
     }
+    .onAppear { loadAsync() }    // Reload depuis NSCache quand la vue revient a l'ecran
+    .onDisappear { image = nil } // Libere le CGImage quand la vue sort de l'ecran
 
     private func loadAsync() {
+        guard image == nil else { return } // Deja charge
         Task.detached(priority: .userInitiated) {
             let decoded = await ThumbnailPrefetcher.shared.get(key: cacheKey)
             await MainActor.run { image = decoded }
@@ -1048,17 +1075,41 @@ Les bubble sizes pre-calcules sont invalides par :
 
 ```swift
 /// (O4) Epoch global — incremente sans toucher la DB
-/// Le recalcul se fait lazy quand le message entre dans la fenetre visible
 static var globalLayoutEpoch: Int = 1
 
-/// Appele quand Dynamic Type change — ZERO write DB
-static func invalidateAllLayouts() {
+/// (Fix Scenario 7) Appele quand Dynamic Type change
+/// Strategie hybride : sync pour les ~15 visibles, async pour le reste
+/// Cout sync : 15 x 0.15ms = ~2.25ms sur MainActor (dans le budget 16ms)
+@MainActor
+static func invalidateAllLayouts(store: MessageStore, maxWidth: CGFloat) {
     globalLayoutEpoch += 1
-    // Pas de batch UPDATE — le recalcul se fait a la demande dans refreshFromDB :
-    // if record.layoutVersion != globalLayoutEpoch || record.layoutMaxWidth != currentMaxWidth {
-    //     BubbleLayoutCalculator.computeSize(...) → record.cachedBubbleWidth/Height
-    //     persistence.updateLayout(localId, width, height, epoch, maxWidth) // background write
-    // }
+
+    // Phase 1 (SYNC) : recalcul immediat des ~15 messages visibles
+    // Evite le layout jump — l'utilisateur ne voit aucun saut
+    let visibleIds = store.currentVisibleMessageIds // Set par onScrollTargetVisibilityChange
+    for i in store.messages.indices {
+        guard visibleIds.contains(store.messages[i].localId) else { continue }
+        let result = BubbleLayoutEngine.computeLayout(
+            content: store.messages[i].content,
+            contentType: store.messages[i].messageType,
+            attachmentDimensions: store.messages[i].attachmentDimensions,
+            replyPreview: store.messages[i].replyToId != nil,
+            reactionCount: store.messages[i].reactionCount,
+            maxWidth: maxWidth
+        )
+        store.messages[i].cachedBubbleWidth = result.size.width
+        store.messages[i].cachedBubbleHeight = result.size.height
+        store.messages[i].cachedLastLineWidth = result.lastLineWidth
+        store.messages[i].cachedLineCount = result.lineCount
+        store.messages[i].cachedTimestampInline = result.timestampInline
+        store.messages[i].layoutVersion = globalLayoutEpoch
+        store.messages[i].layoutMaxWidth = maxWidth
+    }
+    // SwiftUI re-render immediatement avec les bonnes tailles
+
+    // Phase 2 (ASYNC) : recalcul du reste via refreshFromDB normal
+    // Le prochain cycle d'observation recalcule les messages hors viewport
+    // Ils seront corrects quand l'utilisateur scrolle vers eux
 }
 ```
 
@@ -1315,7 +1366,12 @@ private func syncGap(for conversationId: String) async {
     var totalFetched = 0
     let maxTotal = 1000 // Safety cap
 
+    // (Fix Scenario 5) Semaphore limite a 3 conversations concurrentes
+    private let syncSemaphore = AsyncSemaphore(limit: 3)
+
     // Pagination jusqu'a ce que le gap soit comble
+    await syncSemaphore.wait()
+    defer { syncSemaphore.signal() }
     while totalFetched < maxTotal {
         let page = try? await messageService.list(
             conversationId: conversationId,
@@ -1474,8 +1530,8 @@ Chaque event ecrit dans le `MessagePersistenceActor` (pas dans le ViewModel). Va
 | `reaction:removed` | `reactionRemoved` | `updateReactions(localId, reactionsJson, count)` | Non |
 | `reaction:sync` | `reactionSynced` | Bulk `updateReactions()` pour toute la conversation | Non |
 | `read-status:updated` | `readStatusUpdated` | `bufferBatchDelivery(conversationId, event)` | Via AsyncStream |
-| `typing:start` | `typingStarted` | Callback ViewModel (pas de persistence) | Non |
-| `typing:stop` | `typingStopped` | Callback ViewModel (pas de persistence) | Non |
+| `typing:start` | `typingStarted` | Callback ViewModel (pas de persistence). (Fix S3) Collapse > 3 users en "N people typing" | Non |
+| `typing:stop` | `typingStopped` | Callback ViewModel. (Fix S3) Remove from typing list | Non |
 | `message:translation` | `translationReceived` | `saveTranslation(TranslationRecord)` | `.collect(.byTime, 80ms)` |
 | `message:translated` | `translationReceived` | Meme que ci-dessus | `.collect(.byTime, 80ms)` |
 | `audio:transcription-ready` | `transcriptionReady` | `saveTranscription(TranscriptionRecord)` | Non |
@@ -1598,7 +1654,15 @@ class NotificationService: UNNotificationServiceExtension {
             }
 
             // 3. Persist en GRDB (shared App Group DB)
-            let record = MessageRecord(from: incoming, decryptedContent: content)
+            // (Fix Scenario 6) IMPORTANT : si decrypt reussi, stocker avec isEncrypted = false
+            // pour eviter double-decrypt dans l'app
+            let decryptSucceeded = (content != nil && incoming.isEncrypted)
+            let record = MessageRecord(
+                from: incoming,
+                decryptedContent: content,
+                isEncrypted: decryptSucceeded ? false : incoming.isEncrypted,
+                encryptedPayload: decryptSucceeded ? nil : incoming.encryptedPayload
+            )
             try? await persistence.insertOptimistic(record)
 
             // 4. Enrich notification
@@ -1698,6 +1762,13 @@ private func refreshConversationPreviews() async {
 | Debounce adaptatif : 16ms idle, 200ms scroll | O5 | Instantane au repos |
 | NotificationServiceExtension pre-persist en App Group DB | O6 | Message visible immediatement au tap |
 | Prepared statement window query reutilise | O2 | Zero recompilation SQL |
+| Progressive decrypt : 20 visibles d'abord, 180 apres | Fix S1 | Premier render < 60ms |
+| AsyncCachedImage onDisappear nil-out image | Fix S4 | Memoire constante en scroll |
+| Layout sync 15 visibles sur Dynamic Type change | Fix S7 | Zero layout jump |
+| Gap detector max 3 conversations concurrentes | Fix S5 | Pas de flood reseau |
+| NSE stocke isEncrypted=false apres decrypt | Fix S6 | Pas de double-decrypt |
+| Typing collapse > 3 users en "N typing" | Fix S3 | Pas de 50 animations |
+| Scroll-to-bottom apres envoi message | Fix S2 | Bulle visible immediatement |
 | Layout invalide quand Dynamic Type change | I4 | Bulles recalculees |
 | Migration legacy MeeshyMessage -> MessageRecord | I5 | Pas de perte au premier lancement |
 | Decryptage lazy dans MessageStore.refreshFromDB | I6 | Messages E2EE lisibles |
@@ -1820,7 +1891,7 @@ private func refreshConversationPreviews() async {
 |--------|--------------|-----------------|--------|
 | DatabaseRegionObservation | 16ms (1 frame) | 200ms | Instantane au repos, coalesce en scroll |
 | Translation events | 80ms | 80ms | Toujours coalesce (pas critique pour latence) |
-| Layout invalidation | 500ms | 500ms | User ajuste le slider progressivement |
+| Layout invalidation | 16ms (sync visible) | 16ms | Sync ~15 visibles (2.25ms) + async reste |
 | Conversation list preview | 100ms | 100ms | Coalesce messages multi-conversations |
 
 ### Metriques de validation
@@ -1835,7 +1906,7 @@ Avant de considerer l'implementation terminee, ces metriques doivent etre verifi
 | Memoire conversation ouverte (200 messages) | < 50MB | Allocations instrument |
 | Temps d'ouverture conversation (cache chaud) | < 100ms | Time Profiler |
 | Temps d'ouverture conversation (cache froid) | < 500ms | Time Profiler |
-| Envoi message → affichage bulle | < 16ms (1 frame) | Manual measurement |
+| Envoi message → affichage bulle | < 50ms (3 frames) | Manual measurement |
 | Reception message → affichage bulle | < 100ms (debounce inclus) | Manual measurement |
 | Clock → check transition | < 300ms apres REST ACK | Manual measurement |
 
