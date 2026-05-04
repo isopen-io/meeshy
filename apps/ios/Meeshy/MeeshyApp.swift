@@ -8,6 +8,7 @@ import os
 @main
 struct MeeshyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    private let dependencies = DependencyContainer.shared
     @StateObject private var authManager = AuthManager.shared
     @StateObject private var toastManager = ToastManager.shared
     @StateObject private var pushManager = PushNotificationManager.shared
