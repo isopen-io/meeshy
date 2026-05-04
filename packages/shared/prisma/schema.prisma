@@ -2619,6 +2619,10 @@ model Post {
   // ============================================
   /// Post original si repost/quote
   repostOfId String?  @db.ObjectId
+  /// Racine de la chaîne de reposts. Pointe vers l'auteur original quand
+  /// le post intermédiaire (repostOf) est lui-même un repost.
+  /// null si ce post n'est pas un repost.
+  originalRepostOfId String?  @db.ObjectId
   /// true = quote (avec contenu ajouté), false = repost simple
   isQuote    Boolean  @default(false)
 
@@ -2712,6 +2716,7 @@ model Post {
   @@index([type, visibility, createdAt])
   @@index([expiresAt])
   @@index([type, createdAt])
+  @@index([originalRepostOfId])
 }
 
 /// Bibliothèque de sons d'arrière-plan pour les stories
