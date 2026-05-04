@@ -48,6 +48,7 @@ struct ThemedMessageBubble: View {
     /// the "View edits" affordance in the detail sheet.
     var hasEditHistory: Bool = false
     var activeVideoURL: String? = nil
+    var currentUserId: String = ""
 
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
@@ -167,7 +168,6 @@ struct ThemedMessageBubble: View {
 
     // Computed reaction summaries for display — order is stable (first-seen per emoji)
     private var reactionSummaries: [ReactionSummary] {
-        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         var emojiCounts: [String: (count: Int, includesMe: Bool)] = [:]
         var emojiOrder: [String] = []
         for reaction in message.reactions {

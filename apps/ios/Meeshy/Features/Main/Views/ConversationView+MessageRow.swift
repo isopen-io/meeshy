@@ -137,7 +137,8 @@ extension ConversationView {
                     highlightSearchTerm: viewModel.currentSearchQuery,
                     isEditSaving: viewModel.isEditSaving(messageId: msg.id),
                     hasEditHistory: !viewModel.editRevisions(for: msg.id).isEmpty,
-                    activeVideoURL: SharedAVPlayerManager.shared.isPlaying ? SharedAVPlayerManager.shared.activeURL : nil
+                    activeVideoURL: SharedAVPlayerManager.shared.isPlaying ? SharedAVPlayerManager.shared.activeURL : nil,
+                    currentUserId: AuthManager.shared.currentUser?.id ?? ""
                 )
                 .equatable()
                 .onLongPressGesture(minimumDuration: 0.5) {
