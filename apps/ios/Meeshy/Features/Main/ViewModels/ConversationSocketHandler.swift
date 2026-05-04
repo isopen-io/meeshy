@@ -351,6 +351,7 @@ final class ConversationSocketHandler {
 
         // Reactions added (with deduplication)
         socketManager.reactionAdded
+            .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
@@ -368,6 +369,7 @@ final class ConversationSocketHandler {
 
         // Reactions removed
         socketManager.reactionRemoved
+            .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
