@@ -654,6 +654,7 @@ class ConversationViewModel: ObservableObject {
                 Task { [weak self] in await self?.persistMessagesUsingServerIds() }
             }
         subscribeToQueueReconciliation()
+        subscribeToLanguagePreferenceChanges()
         if let session = anonymousSession {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
@@ -716,6 +717,21 @@ class ConversationViewModel: ObservableObject {
                         )
                     }
                 }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func subscribeToLanguagePreferenceChanges() {
+        authManager.currentUserPublisher
+            .removeDuplicates { old, new in
+                old?.systemLanguage == new?.systemLanguage
+                && old?.regionalLanguage == new?.regionalLanguage
+                && old?.customDestinationLanguage == new?.customDestinationLanguage
+            }
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?._cachedPreferredLanguages = nil
+                self?._cachedPreferredLanguagesUserId = nil
             }
             .store(in: &cancellables)
     }
@@ -1850,7 +1866,6 @@ class ConversationViewModel: ObservableObject {
 
     func syncMissedMessages() async {
         guard !messages.isEmpty else { return }
-        guard let lastMessage = messages.last else { return }
 
         do {
             let response = try await messageService.list(
@@ -1864,11 +1879,23 @@ class ConversationViewModel: ObservableObject {
             extractTextTranslations(from: response.data)
 
             let newMessages = fetchedMessages.filter { !self.containsMessage(id: $0.id) }
-                .filter { $0.createdAt > lastMessage.createdAt }
 
             if !newMessages.isEmpty {
                 messages.append(contentsOf: newMessages)
+                messages.sort { $0.createdAt < $1.createdAt }
                 newMessageAppended += 1
+
+                let convId = conversationId
+                let snapshot = messages
+                Task.detached(priority: .utility) {
+                    await CacheCoordinator.shared.messages.mergeUpdate(for: convId) { cached in
+                        let cachedIds = Set(cached.map(\.id))
+                        let newOnly = snapshot.filter { !cachedIds.contains($0.id) }
+                        guard !newOnly.isEmpty else { return cached }
+                        return (cached + newOnly).sorted { $0.createdAt < $1.createdAt }
+                    }
+                }
+
                 Logger.socket.info("Synced \(newMessages.count) missed message(s) for conversation \(self.conversationId)")
             }
         } catch {
