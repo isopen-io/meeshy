@@ -716,6 +716,20 @@ export class MessageProcessor {
     if (!this.notificationService) return;
 
     try {
+      // Sanitize notification preview for protected messages
+      let notificationPreview = processedContent;
+
+      if (message.isEncrypted || message.encryptionMode === 'e2ee') {
+        notificationPreview = 'Message chiffré';
+      }
+
+      if (message.isViewOnce) {
+        notificationPreview = 'Message éphémère';
+      }
+
+      if (message.isBlurred || (message.effectFlags && (message.effectFlags & 0x02) !== 0)) {
+        notificationPreview = 'Message masqué';
+      }
       // 1. Résoudre le senderId en userId
       let senderUserId = data.senderId;
       const senderParticipant = await this.prisma.participant.findUnique({
@@ -797,7 +811,7 @@ export class MessageProcessor {
           replierUserId: senderUserId,
           messageId: message.id,
           conversationId: data.conversationId,
-          messagePreview: processedContent,
+          messagePreview: notificationPreview,
           originalMessageId: message.replyToId!,
         });
       }
@@ -810,7 +824,7 @@ export class MessageProcessor {
             senderId: senderUserId,
             senderUsername: sender.displayName || sender.username,
             senderAvatar: sender.avatar || undefined,
-            messageContent: processedContent,
+            messageContent: notificationPreview,
             conversationId: data.conversationId,
             messageId: message.id,
           },
@@ -846,7 +860,7 @@ export class MessageProcessor {
             senderId: senderUserId,
             messageId: message.id,
             conversationId: data.conversationId,
-            messagePreview: processedContent,
+            messagePreview: notificationPreview,
             ...attachmentInfo as any
           })
         ));
