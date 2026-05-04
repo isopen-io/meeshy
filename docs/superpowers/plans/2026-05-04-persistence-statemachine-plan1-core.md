@@ -4,11 +4,79 @@
 
 **Goal:** Build the foundational persistence layer — formal state machine, GRDB write-through actor with SQLCipher WAL, observable message store, and dependency container — that Plans 2 and 3 build upon.
 
-**Architecture:** Actor-isolated write-through persistence using Swift 6.2 actors + GRDB DatabasePool in WAL mode with SQLCipher encryption. MessageStore uses DatabaseRegionObservation to push changes to UI. All DB reads happen off-main via Task.detached. State machine is a pure Sendable struct with compile-safe transitions.
+**Architecture:** Actor-isolated write-through persistence using Swift 6.2 actors + GRDB `any DatabaseWriter` (DatabasePool in prod, DatabaseQueue in tests) with SQLCipher WAL. MessageStore uses `DatabaseRegionObservation(tracking: request)` to push changes to UI. All DB reads happen off-main via Task.detached. State machine is a pure Sendable struct with compile-safe transitions.
+
+**GRDB API notes (from review):**
+- `DatabasePool` requires a real file path — NEVER use `":memory:"`. Tests use `DatabaseQueue()` (in-memory).
+- Actors accept `any DatabaseWriter` (protocol both `DatabasePool` and `DatabaseQueue` conform to).
+- `DatabaseRegionObservation(tracking:)` accepts `any DatabaseRegionConvertible` — pass the `QueryInterfaceRequest` directly, NOT `.databaseRegion`.
+- `ValueObservation.start(in:onError:onChange:)` — ALWAYS pass `onError:` to avoid `fatalError` on DB errors.
+- MeeshySDK uses `nonisolated` default isolation (SE-0461). Static mutable vars accessed from `@MainActor` must be `@MainActor` too.
 
 **Tech Stack:** Swift 6.2, GRDB 6.29.3, SQLCipher, XCTest
 
 **Spec reference:** `docs/superpowers/specs/2026-05-04-ios-persistence-statemachine-design.md` (Sections 1, 2, 3, 6 partial)
+
+---
+
+## ERRATA (post-review corrections — apply BEFORE executing tasks)
+
+### E1: `any DatabaseWriter` au lieu de `DatabasePool` dans l'actor (P1-1, P1-2)
+Partout dans ce plan :
+- `MessagePersistenceActor.init(dbPool: DatabasePool)` → `init(dbWriter: any DatabaseWriter)`
+- `private let dbPool: DatabasePool` → `private let dbWriter: any DatabaseWriter`
+- `dbPool.write { }` → `dbWriter.write { }` et `dbPool.read { }` → `dbWriter.read { }`
+- `nonisolated var reader: DatabasePool` → `nonisolated var reader: any DatabaseReader { dbWriter as! any DatabaseReader }`
+- Dans les tests : `try DatabasePool(path: ":memory:")` → `try DatabaseQueue()` (in-memory, pas de path)
+- `DependencyContainer` passe un vrai `DatabasePool` en prod, `DatabaseQueue` en tests
+
+### E2: `DatabaseRegionObservation(tracking:)` — passer la request directement (P1-3)
+Dans Task 8 (`MessageStore.startObserving`), remplacer :
+```swift
+// INCORRECT:
+let region = MessageRecord.filter(Column("conversationId") == convId).databaseRegion
+regionObservation = DatabaseRegionObservation(tracking: region)
+
+// CORRECT:
+let request = MessageRecord.filter(Column("conversationId") == convId)
+regionCancellable = DatabaseRegionObservation(tracking: request)
+    .start(in: dbPool) { ... }
+```
+
+### E3: `@MainActor` sur `globalLayoutEpoch` (P1-4)
+Dans Task 6 (`BubbleLayoutEngine`), remplacer :
+```swift
+// INCORRECT:
+public static var globalLayoutEpoch: Int = 1
+
+// CORRECT:
+@MainActor public static var globalLayoutEpoch: Int = 1
+```
+
+### E4: Safe cast CTLine (P1-8)
+Dans Task 6 (`BubbleLayoutEngine.computeLayout`), remplacer :
+```swift
+// INCORRECT:
+let lines = CTFrameGetLines(frame) as! [CTLine]
+
+// CORRECT:
+let lines = (CTFrameGetLines(frame) as? [CTLine]) ?? []
+```
+
+### E5: Reorder Task 3 et Task 4 (P1-5)
+Executer **Task 4 (migrations) AVANT Task 3 (records)** car les tests record utilisent `MessageDatabaseMigrations.runAll()`. L'ordre correct est : 1 → 2 → **4 → 3** → 5 → 6 → 7 → 8 → 9 → 10.
+
+### E6: `ValueObservation.start` doit toujours avoir `onError:` (P2-8)
+Partout ou `ValueObservation.start(in:)` est utilise, ajouter `onError: { _ in }` :
+```swift
+observation.start(in: dbPool, onError: { _ in }, onChange: { ... })
+```
+
+### E7: Test runner SDK
+Si `./apps/ios/meeshy.sh test` ne run pas les `MeeshySDKTests`, utiliser en complement :
+```bash
+cd packages/MeeshySDK && swift test
+```
 
 ---
 

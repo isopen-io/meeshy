@@ -14,6 +14,58 @@
 
 ---
 
+## ERRATA (post-review corrections — apply BEFORE executing tasks)
+
+### E1: `any DatabaseWriter` (meme que Plan 1 E1)
+`FeedPersistenceActor.init(dbPool:)` → `init(dbWriter: any DatabaseWriter)`. Tests utilisent `DatabaseQueue()`.
+
+### E2: `DatabaseRegionObservation` correct API (meme que Plan 1 E2)
+Dans `FeedStore.startObserving`, utiliser :
+```swift
+// CORRECT:
+let request = PostRecord.all()  // ou PostRecord.order(Column("createdAt").desc)
+DatabaseRegionObservation(tracking: request).start(in: dbPool) { ... }
+
+// INCORRECT:
+PostRecord.databaseRegion  // cette propriete n'existe pas comme prevu
+```
+
+### E3: `FeedStore(persistence:)` constructeur doit etre aligne (P3-3)
+Le constructeur dans les tests d'integration doit matcher l'implementation reelle :
+```swift
+// FeedStore init:
+init(persistence: FeedPersistenceActor) {
+    self.persistence = persistence
+}
+
+// Ajouter aussi:
+func stopObserving() {
+    regionCancellable = nil
+}
+```
+
+### E4: Tasks 3-8 code manquant (P3-2)
+L'agent executeur doit implementer ces tasks en suivant la spec :
+- **Task 3** : `FeedStore` → spec Section 10 (pattern identique a `MessageStore` de Plan 1 Task 8). `CommentStore` → spec Section 11 avec `toggleThread`, `loadReplies`, `expandedThreads`.
+- **Task 4** : `TextPostCell` et `MediaPostCell` → cells UIKit avec `configure(with: PostRecord)`, `prepareForReuse()`, `preferredLayoutAttributesFitting()`.
+- **Task 5** : `TopLevelCommentCell`, `ReplyCell` (indentation `depth * 40 + 16`), `LoadMoreRepliesCell` ("View N replies").
+- **Task 6** : `FeedListViewController` (NON flippe, scroll down infini), `CommentListViewController` (sections par top-level comment). Obligatoire : definir les enums :
+```swift
+enum CommentSection: Hashable {
+    case topLevel(commentId: String)
+}
+enum CommentItem: Hashable {
+    case comment(id: String)
+    case loadMoreReplies(parentId: String, remaining: Int)
+}
+```
+- **Task 7** : `FeedSocketHandler` — 8 events post + 3 events comment + 1 translation. Chaque event ecrit dans `FeedPersistenceActor`.
+- **Task 8** : Refactorer `FeedViewModel` → orchestrateur avec `FeedStore`. Refactorer `PostDetailViewModel` → orchestrateur avec `CommentStore`.
+
+### E5: `ValueObservation.start` avec `onError:` (meme que Plan 1 E6)
+
+---
+
 ## File Structure
 
 ### New Files (MeeshySDK)

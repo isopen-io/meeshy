@@ -14,6 +14,75 @@
 
 ---
 
+## ERRATA (post-review corrections — apply BEFORE executing tasks)
+
+### E1: `any DatabaseWriter` (meme que Plan 1 E1)
+Tous les actors et tests utilisent `any DatabaseWriter` au lieu de `DatabasePool`. Tests utilisent `DatabaseQueue()`.
+
+### E2: `DiskCacheStore.shared` et `filePath(forKey:)` n'existent pas (P2-2, P2-3)
+Dans Task 2 (`ThumbnailPrefetcher`) :
+- Supprimer `diskCache: DiskCacheStore` du init
+- Le ThumbnailPrefetcher gere son propre stockage disque via `FileManager`
+- Remplacer `diskCache.filePath(forKey:)` par un chemin calcule directement :
+```swift
+private func thumbnailPath(forKey key: String) -> URL {
+    let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("meeshy_thumbnails")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir.appendingPathComponent(key.sha256 + ".jpg")
+}
+```
+
+### E3: `MessageServiceProviding.list(after: Date)` n'existe pas (P2-1)
+Dans Task 4 (`ReconnectionGapDetector`), remplacer :
+```swift
+// INCORRECT:
+messageService.list(conversationId: conversationId, after: cursor, limit: 100)
+
+// CORRECT — utiliser l'API existante avec before/offset:
+messageService.list(conversationId: conversationId, offset: totalFetched, limit: 100, includeReplies: false)
+// Ou ajouter une nouvelle methode au protocol si pagination par date est necessaire
+```
+
+### E4: `collectionView.delegate = self` manquant (P2-5)
+Dans Task 7, `configureCollectionView()` DOIT inclure :
+```swift
+collectionView.delegate = self
+// Et declarer la conformance:
+extension MessageListViewController: UICollectionViewDelegate {}
+// scrollViewDidScroll est herite de UIScrollViewDelegate via UICollectionViewDelegate
+```
+
+### E5: `[weak self]` dans actor → capture forte (P2-6)
+Dans Task 2 (`ThumbnailPrefetcher.prefetchBatch`), remplacer `[weak self]` par capture forte :
+```swift
+group.addTask {
+    defer { await self.inFlight.remove(key) }  // self fort, pas weak
+    // ...
+}
+```
+
+### E6: MediaSnapshotStore manquant (P2-7)
+`MediaSnapshotStore` est reference dans DependencyContainer mais aucun task ne l'implemente. Options :
+- **Option A** : Ajouter un Task 4.5 qui implemente `MediaSnapshotStore` (spec Section 5A)
+- **Option B** : Retirer de DependencyContainer, ajouter dans un sprint suivant
+L'agent executeur doit choisir Option A.
+
+### E7: `ValueObservation.start` avec `onError:` (meme que Plan 1 E6)
+
+### E8: Tests manquants pour Tasks 7-9 (P2-9)
+L'agent executeur DOIT creer des tests pour :
+- Task 8 : `ConversationSocketHandlerTests` — au moins 5 tests couvrant message:new, reaction:added, read-status:updated → actor writes
+- Task 9 : `ConversationViewModelTests` — au moins 3 tests couvrant send → insertOptimistic → applyEvent
+
+### E9: Tasks 7/8/9 code manquant (P2-4)
+Ces tasks sont des descriptions sans code. L'agent executeur doit :
+- Task 7 : Implementer `MessageListViewController` en suivant la spec Section "Message List : UICollectionView hybrid" (spec lignes ~960-1170). Points obligatoires : `configureCollectionView()` avec flipped transform, `configureDataSource()` avec 4 CellRegistrations, `applySnapshot()`, `scrollViewDidScroll` pour infinite scroll up, `collectionView.delegate = self`.
+- Task 8 : Refactorer `ConversationSocketHandler` en suivant la spec Section 7 "Socket Event Coverage". Les 25 events doivent ecrire dans `MessagePersistenceActor` au lieu du ViewModel. Garder typing/location/presence comme callbacks ViewModel.
+- Task 9 : Refactorer `ConversationViewModel` en suivant la spec Section 6 "Orchestration". Remplacer `@Published var messages` par `let store: MessageStore`. `send(text:)` appelle `persistence.insertOptimistic()` puis REST puis `persistence.applyEvent(.serverAck)`.
+
+---
+
 ## File Structure
 
 ### New Files (MeeshySDK)
