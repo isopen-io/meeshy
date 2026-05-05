@@ -462,7 +462,7 @@ final class FeedViewModelTests: XCTestCase {
 
         XCTAssertEqual(postService.repostCallCount, 1)
         XCTAssertEqual(postService.lastRepostPostId, "post1")
-        XCTAssertEqual(postService.lastRepostQuote, "My quote")
+        XCTAssertEqual(postService.lastRepostContent, "My quote")
     }
 
     func test_repostPost_simpleRepost_passesNilQuote() async {
@@ -471,7 +471,7 @@ final class FeedViewModelTests: XCTestCase {
         await sut.repostPost("post1")
 
         XCTAssertEqual(postService.repostCallCount, 1)
-        XCTAssertNil(postService.lastRepostQuote)
+        XCTAssertNil(postService.lastRepostContent)
     }
 
     // MARK: - refresh()
