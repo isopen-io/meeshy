@@ -236,6 +236,28 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
+    // MARK: - create / createStory with repostOfId (B.5c)
+
+    func test_create_includes_repostOfId_when_provided() async throws {
+        let post = makePost(id: "newPost1")
+        let response = APIResponse(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.create(content: "x", type: "POST", repostOfId: "root-1")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["repostOfId"] as? String, "root-1")
+    }
+
+    func test_createStory_includes_repostOfId_when_provided() async throws {
+        let post = makePost(id: "story1")
+        let response = APIResponse(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.createStory(content: "x", storyEffects: nil, repostOfId: "root-1")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["repostOfId"] as? String, "root-1")
+    }
+
     // MARK: - createWithType
 
     func testCreateWithTypePostDelegatesToCreate() async throws {
