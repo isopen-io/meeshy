@@ -274,7 +274,8 @@ class FeedViewModel: ObservableObject {
                 audioUrl: audioUrl,
                 audioDuration: audioDuration,
                 originalLanguage: originalLanguage,
-                mobileTranscription: mobileTranscription
+                mobileTranscription: mobileTranscription,
+                repostOfId: nil
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             posts.insert(feedPost, at: 0)

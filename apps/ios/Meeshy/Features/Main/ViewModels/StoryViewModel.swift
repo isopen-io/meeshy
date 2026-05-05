@@ -301,7 +301,8 @@ class StoryViewModel: ObservableObject {
                 storyEffects: effects,
                 visibility: visibility,
                 originalLanguage: originalLanguage,
-                mediaIds: uploadResult.map { [$0.id] }
+                mediaIds: uploadResult.map { [$0.id] },
+                repostOfId: nil
             )
 
             let media = buildFeedMedia(from: post, fallback: uploadResult)
@@ -392,7 +393,8 @@ class StoryViewModel: ObservableObject {
             storyEffects: updatedEffects,
             visibility: visibility,
             originalLanguage: originalLanguage,
-            mediaIds: allMediaIds.isEmpty ? nil : allMediaIds
+            mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
+            repostOfId: nil
         )
 
         let media = buildFeedMedia(from: post, fallback: uploadResult)
@@ -546,7 +548,8 @@ class StoryViewModel: ObservableObject {
                         storyEffects: updatedEffects,
                         visibility: upload.visibility,
                         originalLanguage: upload.originalLanguage,
-                        mediaIds: allMediaIds.isEmpty ? nil : allMediaIds
+                        mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
+                        repostOfId: nil
                     )
 
                     // Track committed slide IDs so a later cancel/failure can delete
