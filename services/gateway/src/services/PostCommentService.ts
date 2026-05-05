@@ -11,7 +11,14 @@ const authorSelect = {
 export class PostCommentService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addComment(postId: string, authorId: string, content: string, parentId?: string, effectFlags?: number) {
+  async addComment(
+    postId: string,
+    authorId: string,
+    content: string,
+    parentId?: string,
+    effectFlags?: number,
+    originalLanguage?: string,
+  ) {
     // Verify post exists
     const post = await this.prisma.post.findFirst({
       where: { id: postId, isDeleted: false },
@@ -33,6 +40,7 @@ export class PostCommentService {
         content,
         parentId: parentId ?? null,
         effectFlags: effectFlags ?? 0,
+        originalLanguage: originalLanguage ?? null,
       },
       select: {
         id: true,

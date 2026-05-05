@@ -755,14 +755,18 @@ extension StoryViewerView {
             authorAvatarURL: currentUser?.avatar,
             content: text,
             effectFlags: effectFlags ?? 0,
-            originalLanguage: currentUser?.systemLanguage
+            originalLanguage: composerLanguage
         )
         storyComments.append(optimisticComment)
         storyCommentCount += 1
 
         // Send to API
+        let language = composerLanguage
         Task {
-            var body: [String: AnyCodable] = ["content": AnyCodable(text)]
+            var body: [String: AnyCodable] = [
+                "content": AnyCodable(text),
+                "originalLanguage": AnyCodable(language),
+            ]
             if let effectFlags {
                 body["effectFlags"] = AnyCodable(effectFlags)
             }

@@ -53,7 +53,7 @@ struct StoryViewerView: View {
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var emojiToInject = ""
     @State private var composerFocusTrigger = false
-    @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
+    @State var composerLanguage: String = DefaultComposerLanguage.resolve() // internal for cross-file extension access
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State var showLanguageOptions = false // internal for cross-file extension access

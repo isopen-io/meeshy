@@ -89,6 +89,10 @@ export const CreateCommentSchema = z.object({
   content: z.string().min(1).max(2000),
   parentId: z.string().optional(),
   effectFlags: z.number().int().min(0).optional(),
+  /// ISO 639-1 (or BCP-47) code of the language the comment is written in.
+  /// Optional — when omitted the translation pipeline detects the language
+  /// from the content as a fallback.
+  originalLanguage: z.string().min(2).max(16).optional(),
 });
 
 export const RepostSchema = z.object({

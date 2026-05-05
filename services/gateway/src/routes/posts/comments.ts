@@ -93,7 +93,8 @@ export function registerCommentRoutes(
         authContext.registeredUser.id,
         parsed.data.content,
         parsed.data.parentId,
-        parsed.data.effectFlags
+        parsed.data.effectFlags,
+        parsed.data.originalLanguage,
       );
 
       if (!comment) {
