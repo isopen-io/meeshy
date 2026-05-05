@@ -131,6 +131,7 @@ export class PostService {
     audioDuration?: number;
     mediaIds?: string[];
     mobileTranscription?: MobileTranscription;
+    repostOfId?: string;
   }, userId: string) {
     const now = new Date();
     let expiresAt: Date | undefined;
@@ -142,6 +143,25 @@ export class PostService {
     }
 
     const originalLanguage = data.originalLanguage ?? (data.content ? detectLanguage(data.content) : undefined);
+
+    let repostOfId: string | undefined;
+    let originalRepostOfId: string | undefined;
+
+    if (data.repostOfId) {
+      const sourcePost = await this.prisma.post.findFirst({
+        where: { id: data.repostOfId, isDeleted: false },
+        select: { id: true, repostOfId: true, originalRepostOfId: true },
+      });
+      if (!sourcePost) {
+        const err: any = new Error('Repost source not found');
+        err.statusCode = 404;
+        throw err;
+      }
+      repostOfId = sourcePost.id;
+      originalRepostOfId = (sourcePost.originalRepostOfId as string | null)
+        ?? (sourcePost.repostOfId as string | null)
+        ?? sourcePost.id;
+    }
 
     const post = await this.prisma.post.create({
       data: {
@@ -157,6 +177,7 @@ export class PostService {
         audioUrl: data.audioUrl,
         audioDuration: data.audioDuration,
         expiresAt,
+        ...(repostOfId !== undefined ? { repostOfId, originalRepostOfId } : {}),
       },
       include: postInclude,
     });
