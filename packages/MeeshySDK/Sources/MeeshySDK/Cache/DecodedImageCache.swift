@@ -9,7 +9,7 @@ public final class CGImageRef: NSObject {
 
 /// (O3) NSCache cost-based for decoded CGImages
 /// Auto-evicts on memory warning without NotificationCenter
-public final class DecodedImageCache: Sendable {
+public final class DecodedImageCache: @unchecked Sendable {
     public static let shared = DecodedImageCache()
 
     private let cache: NSCache<NSString, CGImageRef>

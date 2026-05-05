@@ -21,8 +21,11 @@ final class DependencyContainer {
             try MessageDatabaseMigrations.runAll(on: pool)
             try FeedDatabaseMigrations.runAll(on: pool)
             self.dbPool = pool
-            self.messagePersistence = MessagePersistenceActor(dbWriter: pool)
+            let persistence = MessagePersistenceActor(dbWriter: pool)
+            self.messagePersistence = persistence
             self.feedPersistence = FeedPersistenceActor(dbWriter: pool)
+            // Start the actor's background write processor (must be done outside init).
+            Task { await persistence.start() }
         } catch {
             fatalError("Failed to initialize database: \(error)")
         }
