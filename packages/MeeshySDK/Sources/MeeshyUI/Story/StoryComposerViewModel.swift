@@ -75,8 +75,9 @@ public final class StoryComposerViewModel {
     var originalRepostOfId: String?
 
     // Cancellable preload Task started by `init(reposting:authorHandle:)`.
-    // Released on deinit so the Task does not retain `self` past view dismissal.
-    private var preloadTask: Task<Void, Never>?
+    // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it
+    // without requiring a MainActor hop (cancellation is Sendable / thread-safe).
+    nonisolated(unsafe) private var preloadTask: Task<Void, Never>?
 
     var currentSlide: StorySlide {
         get { slides[safe: currentSlideIndex] ?? slides[0] }
@@ -853,11 +854,11 @@ public final class StoryComposerViewModel {
         // Locked badge sticker — non-editable text rendered at bottom-center.
         // The composer (StoryTextObject `isLocked == true`, see Patch B.3) skips
         // drag/edit/delete for this object so reposters cannot strip the attribution.
-        let badgeText = String(
-            localized: "story.repost.badge.\(authorHandle)",
-            defaultValue: "Reposté de @\(authorHandle)",
-            bundle: .module
-        )
+        // Direct interpolation : the Localizable.xcstrings catalog does not yet have
+        // a `story.repost.badge` key with a `%@` placeholder, and `String(localized:)`
+        // requires a StaticString literal (not a runtime-interpolated key). When the
+        // catalog grows a proper entry, switch to `String(format: NSLocalizedString(...))`.
+        let badgeText = "Reposté de @\(authorHandle)"
         let badge = StoryTextObject(
             id: UUID().uuidString,
             content: badgeText,
@@ -902,7 +903,7 @@ public final class StoryComposerViewModel {
         }
     }
 
-    deinit {
+    nonisolated deinit {
         preloadTask?.cancel()
     }
 }
