@@ -48,12 +48,18 @@ public actor RetryEngine {
         observationCancellable = nil
     }
 
+    private var inFlightLocalIds: Set<String> = []
+
     private func processQueue(_ messages: [MessageRecord]) async {
         guard !isProcessing, !messages.isEmpty else { return }
         isProcessing = true
         defer { isProcessing = false }
 
         for message in messages {
+            guard !inFlightLocalIds.contains(message.localId) else { continue }
+            inFlightLocalIds.insert(message.localId)
+            defer { inFlightLocalIds.remove(message.localId) }
+
             let delay = Self.backoffBase * pow(Self.backoffMultiplier, Double(message.retryCount))
             try? await Task.sleep(for: .seconds(delay))
 

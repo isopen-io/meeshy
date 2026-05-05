@@ -223,18 +223,24 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     ///
     /// This is a best-effort, fire-and-forget operation. Any failure is silently
     /// swallowed; the main app will fetch the message from the REST API on resume.
+    private static let sharedPool: DatabasePool? = {
+        do {
+            let pool = try DatabasePool(path: appGroupDatabasePath())
+            try MessageDatabaseMigrations.runAll(on: pool)
+            return pool
+        } catch { return nil }
+    }()
+
     private func prePersistMessage(from userInfo: [AnyHashable: Any]) {
         guard let messageId = userInfo["messageId"] as? String,
               let conversationId = userInfo["conversationId"] as? String,
-              let senderId = userInfo["senderId"] as? String
+              let senderId = userInfo["senderId"] as? String,
+              let pool = Self.sharedPool
         else { return }
 
         let content = userInfo["content"] as? String ?? ""
 
         do {
-            let dbPath = Self.appGroupDatabasePath()
-            let pool = try DatabasePool(path: dbPath)
-            try MessageDatabaseMigrations.runAll(on: pool)
 
             let now = Date()
             let record = MessageRecord(

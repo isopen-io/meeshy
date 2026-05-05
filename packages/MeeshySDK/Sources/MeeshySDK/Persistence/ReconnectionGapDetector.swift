@@ -81,13 +81,15 @@ public actor ReconnectionGapDetector {
         persistTimestamps()
     }
 
+    nonisolated(unsafe) private static let appGroupDefaults = UserDefaults(suiteName: "group.me.meeshy.apps") ?? .standard
+
     private func persistTimestamps() {
         let data = try? JSONEncoder().encode(lastReceivedTimestamps)
-        UserDefaults.standard.set(data, forKey: Self.userDefaultsKey)
+        Self.appGroupDefaults.set(data, forKey: Self.userDefaultsKey)
     }
 
     private static func loadTimestamps() -> [String: Date] {
-        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+        guard let data = appGroupDefaults.data(forKey: userDefaultsKey),
               let decoded = try? JSONDecoder().decode([String: Date].self, from: data) else {
             return [:]
         }

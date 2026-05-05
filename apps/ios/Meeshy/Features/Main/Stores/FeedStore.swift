@@ -37,13 +37,16 @@ public final class FeedStore {
         regionCancellable = nil
     }
 
+    private var loadedCount = 50
+
     // MARK: - Off-main DB read
 
     private func refreshFromDB() async {
         let reader = persistence.reader
+        let limit = loadedCount
         let newPosts = await Task.detached(priority: .userInitiated) {
             try? reader.read { db in
-                try PostRecord.order(Column("createdAt").desc).limit(50).fetchAll(db)
+                try PostRecord.order(Column("createdAt").desc).limit(limit).fetchAll(db)
             }
         }.value
 
@@ -61,20 +64,10 @@ public final class FeedStore {
     // MARK: - Pagination
 
     func loadOlder() async -> Bool {
-        guard let lastDate = posts.last?.createdAt else { return false }
-        let reader = persistence.reader
-        let older = await Task.detached(priority: .userInitiated) {
-            try? reader.read { db in
-                try PostRecord
-                    .filter(Column("createdAt") < lastDate)
-                    .order(Column("createdAt").desc)
-                    .limit(20)
-                    .fetchAll(db)
-            }
-        }.value
-        guard let older, !older.isEmpty else { return false }
-        posts.append(contentsOf: older)
-        postsDidChange.send()
-        return true
+        guard posts.last != nil else { return false }
+        let previousCount = loadedCount
+        loadedCount += 20
+        await refreshFromDB()
+        return posts.count > previousCount
     }
 }
