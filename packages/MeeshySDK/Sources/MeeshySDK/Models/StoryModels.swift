@@ -999,7 +999,13 @@ public struct ReactionRequest: Encodable {
 public struct RepostRequest: Encodable {
     public let content: String?
     public let isQuote: Bool
-    public init(content: String? = nil, isQuote: Bool = false) { self.content = content; self.isQuote = isQuote }
+    public let targetType: String?
+
+    public init(content: String? = nil, isQuote: Bool = false, targetType: String? = nil) {
+        self.content = content
+        self.isQuote = isQuote
+        self.targetType = targetType
+    }
 }
 
 public struct StatusCreateRequest: Encodable {

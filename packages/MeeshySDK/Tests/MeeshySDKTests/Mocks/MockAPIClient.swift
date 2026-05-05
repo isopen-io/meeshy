@@ -8,9 +8,12 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
 
     // MARK: - Recording
 
-    struct RecordedRequest: Sendable {
+    struct RecordedRequest: @unchecked Sendable {
         let endpoint: String
         let method: String
+        let bodyJSON: [String: Any]?
+
+        var path: String { endpoint }
     }
 
     private(set) var requests: [RecordedRequest] = []
@@ -45,7 +48,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         body: Data?,
         queryItems: [URLQueryItem]?
     ) async throws -> T {
-        requests.append(RecordedRequest(endpoint: endpoint, method: method))
+        recordRequest(endpoint: endpoint, method: method, bodyData: body)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? T else {
             fatalError("MockAPIClient: no stub for '\(endpoint)' returning \(T.self). Available stubs: \(Array(stubs.keys))")
@@ -73,21 +76,36 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
-        return try await request(endpoint: endpoint, method: "POST", body: nil, queryItems: nil)
+        recordRequest(endpoint: endpoint, method: "POST", encodableBody: body)
+        if let error = errorToThrow { throw error }
+        guard let result = stubs[endpoint] as? APIResponse<T> else {
+            fatalError("MockAPIClient: no stub for '\(endpoint)' returning APIResponse<\(T.self)>. Available stubs: \(Array(stubs.keys))")
+        }
+        return result
     }
 
     func put<T: Decodable, U: Encodable>(
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
-        return try await request(endpoint: endpoint, method: "PUT", body: nil, queryItems: nil)
+        recordRequest(endpoint: endpoint, method: "PUT", encodableBody: body)
+        if let error = errorToThrow { throw error }
+        guard let result = stubs[endpoint] as? APIResponse<T> else {
+            fatalError("MockAPIClient: no stub for '\(endpoint)' returning APIResponse<\(T.self)>. Available stubs: \(Array(stubs.keys))")
+        }
+        return result
     }
 
     func patch<T: Decodable, U: Encodable>(
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
-        return try await request(endpoint: endpoint, method: "PATCH", body: nil, queryItems: nil)
+        recordRequest(endpoint: endpoint, method: "PATCH", encodableBody: body)
+        if let error = errorToThrow { throw error }
+        guard let result = stubs[endpoint] as? APIResponse<T> else {
+            fatalError("MockAPIClient: no stub for '\(endpoint)' returning APIResponse<\(T.self)>. Available stubs: \(Array(stubs.keys))")
+        }
+        return result
     }
 
     func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
@@ -98,6 +116,24 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
-        return try await request(endpoint: endpoint, method: "DELETE", body: nil, queryItems: nil)
+        recordRequest(endpoint: endpoint, method: "DELETE", encodableBody: body)
+        if let error = errorToThrow { throw error }
+        guard let result = stubs[endpoint] as? APIResponse<T> else {
+            fatalError("MockAPIClient: no stub for '\(endpoint)' returning APIResponse<\(T.self)>. Available stubs: \(Array(stubs.keys))")
+        }
+        return result
+    }
+
+    // MARK: - Internal recording helpers
+
+    private func recordRequest(endpoint: String, method: String, bodyData: Data?) {
+        let json = bodyData.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json))
+    }
+
+    private func recordRequest<U: Encodable>(endpoint: String, method: String, encodableBody: U) {
+        let data = try? JSONEncoder().encode(encodableBody)
+        let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json))
     }
 }

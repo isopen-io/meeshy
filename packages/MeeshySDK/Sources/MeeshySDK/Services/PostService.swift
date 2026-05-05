@@ -16,7 +16,7 @@ public protocol PostServiceProviding: Sendable {
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
-    func repost(postId: String, quote: String?) async throws
+    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost
     func share(postId: String) async throws
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, originalLanguage: String?, mediaIds: [String]?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
@@ -77,9 +77,19 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         )
     }
 
-    public func repost(postId: String, quote: String? = nil) async throws {
-        let body = RepostRequest(content: quote, isQuote: quote != nil)
-        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/posts/\(postId)/repost", body: body)
+    public func repost(
+        postId: String,
+        targetType: PostType? = nil,
+        content: String? = nil,
+        isQuote: Bool = false
+    ) async throws -> APIPost {
+        let body = RepostRequest(
+            content: content,
+            isQuote: isQuote,
+            targetType: targetType?.rawValue
+        )
+        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts/\(postId)/repost", body: body)
+        return response.data
     }
 
     public func share(postId: String) async throws {

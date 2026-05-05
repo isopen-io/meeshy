@@ -164,10 +164,11 @@ final class PostServiceTests: XCTestCase {
     // MARK: - repost
 
     func testRepostCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "reposted"], error: nil)
+        let post = makePost()
+        let response = APIResponse(success: true, data: post, error: nil)
         mock.stub("/posts/\(postId)/repost", result: response)
 
-        try await service.repost(postId: postId)
+        _ = try await service.repost(postId: postId)
 
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/repost")
@@ -175,14 +176,36 @@ final class PostServiceTests: XCTestCase {
     }
 
     func testRepostWithQuoteCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "reposted"], error: nil)
+        let post = makePost()
+        let response = APIResponse(success: true, data: post, error: nil)
         mock.stub("/posts/\(postId)/repost", result: response)
 
-        try await service.repost(postId: postId, quote: "Check this out!")
+        _ = try await service.repost(postId: postId, content: "Check this out!", isQuote: true)
 
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/repost")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
+
+    // MARK: - repost with targetType (B.5)
+
+    func test_RepostRequest_encodes_targetType() throws {
+        let req = RepostRequest(content: "hi", isQuote: false, targetType: "POST")
+        let data = try JSONEncoder().encode(req)
+        let json = String(data: data, encoding: .utf8) ?? ""
+        XCTAssertTrue(json.contains("\"targetType\":\"POST\""), "Expected JSON to contain targetType:POST, got: \(json)")
+    }
+
+    func test_PostService_repost_sends_targetType() async throws {
+        let post = makePost(id: "story-1")
+        let response = APIResponse(success: true, data: post, error: nil)
+        mock.stub("/posts/story-1/repost", result: response)
+
+        _ = try await service.repost(postId: "story-1", targetType: .post, content: "Mon commentaire", isQuote: false)
+
+        XCTAssertEqual(mock.lastRequest?.path, "/posts/story-1/repost")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["targetType"] as? String, "POST")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["content"] as? String, "Mon commentaire")
     }
 
     // MARK: - share
