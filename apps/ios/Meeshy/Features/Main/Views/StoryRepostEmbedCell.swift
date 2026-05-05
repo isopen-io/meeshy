@@ -8,9 +8,12 @@ import MeeshyUI
 /// Used by `FeedPostCard` when `post.type == "POST"` AND
 /// `post.repost?.type == "STORY"`.
 ///
-/// Phase C.3 — composer-based-story-repost. Double-attribution (Original par @x)
-/// is handled by C.4 in this same view; for the MVP only the intermediate
-/// re-poster is shown ("Reposté de @intermediate").
+/// Phase C.4 — composer-based-story-repost. The attribution header is
+/// intentionally single-level for the MVP: only the immediate re-poster is
+/// displayed ("Reposté de @intermediate"). The full repost chain is
+/// preserved server-side via `RepostContent.originalRepostOfId`; a future
+/// "trace lineage" feature can fetch the upstream authors on demand without
+/// changing this cell's layout.
 struct StoryRepostEmbedCell: View {
     let post: FeedPost
     let preferredContentLanguages: [String]?
@@ -42,6 +45,10 @@ struct StoryRepostEmbedCell: View {
         }
     }
 
+    /// Single-level attribution for the MVP: shows only the immediate
+    /// re-poster's handle. Falls back to the display name (`author`) when
+    /// the username is missing — defensive only; backend always provides
+    /// `authorUsername` for non-anonymous posts.
     @ViewBuilder
     private var attributionHeader: some View {
         if let repost = post.repost {
@@ -50,6 +57,7 @@ struct StoryRepostEmbedCell: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 4)
+                .accessibilityLabel("Reposté de \(handle)")
         }
     }
 }
