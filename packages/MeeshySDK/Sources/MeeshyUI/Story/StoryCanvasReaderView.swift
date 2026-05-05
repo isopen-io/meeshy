@@ -106,6 +106,45 @@ public struct StoryCanvasReaderView: View {
                   mute: mute)
     }
 
+    /// Alternate init for feed cells that have a `RepostContent` (the embedded
+    /// story snapshot exposed inside a `FeedPost.repost`). Synthesizes a
+    /// `StoryItem` from the snapshot fields. Used by `StoryRepostEmbedCell`
+    /// when a feed POST reposts a STORY (`type == "STORY"` on the snapshot).
+    public init(repost: RepostContent, preferredLanguage: String? = nil,
+                preferredContentLanguages: [String]? = nil,
+                preloadedImages: [String: UIImage] = [:],
+                preloadedVideoURLs: [String: URL] = [:],
+                preloadedAudioURLs: [String: URL] = [:],
+                mute: Bool = false) {
+        let translations: [StoryTranslation]? = repost.translations.map { dict in
+            dict.map { lang, entry in StoryTranslation(language: lang, content: entry.text) }
+        }
+        let story = StoryItem(
+            id: repost.id,
+            content: repost.content.isEmpty ? nil : repost.content,
+            media: repost.media,
+            storyEffects: repost.storyEffects,
+            createdAt: repost.timestamp,
+            expiresAt: repost.expiresAt,
+            repostOfId: nil,
+            originalRepostOfId: repost.originalRepostOfId,
+            repostAuthorName: repost.author,
+            visibility: repost.visibility,
+            audioUrl: repost.audioUrl,
+            isViewed: false,
+            translations: translations,
+            reactionCount: 0,
+            commentCount: 0
+        )
+        self.init(story: story,
+                  preferredLanguage: preferredLanguage,
+                  preferredContentLanguages: preferredContentLanguages,
+                  preloadedImages: preloadedImages,
+                  preloadedVideoURLs: preloadedVideoURLs,
+                  preloadedAudioURLs: preloadedAudioURLs,
+                  mute: mute)
+    }
+
     /// Chaine de resolution finale : array si fourni, sinon preferredLanguage en
     /// element unique, sinon vide. Le caller normal (StoryViewerView) injecte la
     /// chaine complete depuis `MeeshyUser.preferredContentLanguages`.
