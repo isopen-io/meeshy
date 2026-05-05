@@ -757,6 +757,49 @@ describe('PostService', () => {
         service.repostPost('private-1', 'user-reposter')
       ).rejects.toMatchObject({ statusCode: 403 });
     });
+
+    it('sets expiresAt to 21h from now when reposting as STORY', async () => {
+      const original = makePost({ id: 'src-1', type: PostType.STORY });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'r-1', ...args.data }));
+      prisma.post.update.mockResolvedValue(original);
+
+      const before = Date.now();
+      await service.repostPost('src-1', 'user-1', { targetType: PostType.STORY });
+      const after = Date.now();
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      const expiresAt = createCall.data.expiresAt as Date;
+      expect(expiresAt).toBeInstanceOf(Date);
+      const expectedMs = before + 21 * 3600_000;
+      const actualMs = expiresAt.getTime();
+      expect(actualMs).toBeGreaterThanOrEqual(expectedMs);
+      expect(actualMs).toBeLessThanOrEqual(after + 21 * 3600_000);
+    });
+
+    it('sets expiresAt to 1h from now when reposting as STATUS', async () => {
+      const original = makePost({ id: 'src-2', type: PostType.STATUS });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'r-2', ...args.data }));
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('src-2', 'user-1', { targetType: PostType.STATUS });
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.expiresAt).toBeInstanceOf(Date);
+    });
+
+    it('does NOT set expiresAt when reposting as POST', async () => {
+      const original = makePost({ id: 'src-3', type: PostType.POST });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'r-3', ...args.data }));
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('src-3', 'user-1', { targetType: PostType.POST });
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.expiresAt).toBeUndefined();
+    });
   });
 
   // -----------------------------------------------------------------------
