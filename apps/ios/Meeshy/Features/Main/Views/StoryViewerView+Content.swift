@@ -793,9 +793,6 @@ extension StoryViewerView {
         }
     }
 
-    // TODO C.2 : add repostAsPostDirect() using PostService.repost(postId:targetType:content:isQuote:)
-    // (replaces the deleted reshareStory() that bypassed the SDK by calling APIClient directly)
-
     func shareStory() {
         guard let story = currentStory else { return }
         let shareURL = "https://meeshy.me/story/\(story.id)"
