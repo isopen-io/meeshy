@@ -810,6 +810,30 @@ describe('PostService', () => {
       ).rejects.toMatchObject({ statusCode: 403 });
     });
 
+    it('rolls back media AND audio when prisma.post.create fails', async () => {
+      const original = makePost({
+        id: 'story-x',
+        type: PostType.STORY,
+        media: [{ id: 'm1', fileUrl: '/api/v1/attachments/file/m1.jpg', mimeType: 'image/jpeg' }],
+        audioUrl: '/api/v1/attachments/file/audio.mp3',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+
+      jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-m1.jpg', filePath: 'p', fileName: 'new-m1.jpg', fileSize: 100, mimeType: 'image/jpeg' })
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-audio.mp3', filePath: 'p', fileName: 'new-audio.mp3', fileSize: 200, mimeType: 'audio/mpeg' });
+      const deleteSpy = jest.spyOn(mediaService, 'deleteMedia').mockResolvedValue(undefined);
+
+      prisma.post.create.mockRejectedValue(new Error('DB constraint violation'));
+
+      await expect(
+        service.repostPost('story-x', 'user-1', { targetType: PostType.POST })
+      ).rejects.toThrow();
+
+      expect(deleteSpy).toHaveBeenCalledWith('/api/v1/attachments/file/new-m1.jpg');
+      expect(deleteSpy).toHaveBeenCalledWith('/api/v1/attachments/file/new-audio.mp3');
+    });
+
     it('sets expiresAt to 21h from now when reposting as STORY', async () => {
       const original = makePost({ id: 'src-1', type: PostType.STORY });
       prisma.post.findFirst.mockResolvedValue(original);
