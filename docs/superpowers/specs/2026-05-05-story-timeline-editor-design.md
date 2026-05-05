@@ -107,6 +107,94 @@ Décisions implicites héritées :
 
 ---
 
+## Stack technique iOS — garanties "no freeze, no lag"
+
+Contrainte non-négociable : **toute manipulation image/audio/vidéo doit utiliser exclusivement les API natives Apple GPU-accelerated**, sans manipulation pixel-par-pixel ni traitement bloquant le main thread. Tableau exhaustif des API utilisées et de leurs garanties :
+
+### Vidéo
+
+| API | Rôle | Garantie |
+|-----|------|----------|
+| `AVMutableComposition` | Timeline native (tracks audio + vidéo) | Composition non-destructive, jamais de re-encoding pendant l'édition |
+| `AVMutableVideoComposition` | Compositor GPU pour overlays + transitions | Render via Metal, hors main thread |
+| `AVMutableVideoCompositionInstruction` | Segments temporels du compositor | `setOpacityRamp` et `setTransform` natifs |
+| `AVAsynchronousCIImageFilteringRequest` | Application de filtres CI dans le compositor | GPU via Core Image, batch frames |
+| `AVPlayerItem(asset: composition)` | Source de lecture pour preview | Lazy decoding, hardware-accelerated |
+| `AVPlayer.addPeriodicTimeObserver` | Callback temps de lecture | Synchronisé au rendu vidéo, jamais en retard |
+| `AVURLAsset(loadingValuesAsynchronously:)` | Chargement asynchrone des métadonnées | Non bloquant, callback sur queue dédiée |
+| `AVAssetReaderTrackOutput` | Lecture des frames pour thumbnails / export | Async, queue background |
+| `AVAssetImageGenerator` | Extraction de frames pour timeline strips | Cancellable, batch, cache |
+| `CMSampleBufferDisplayLayer` | Rendu vidéo natif sans `AVPlayerLayer` | Plus léger, idéal pour scrubbing |
+| `AVAssetExportSession` *(futur)* | Export final MP4 | Hardware H.264/HEVC encoder, fully managed |
+
+### Audio
+
+| API | Rôle | Garantie |
+|-----|------|----------|
+| `AVAudioEngine` | Graph audio temps-réel multi-piste | Render hors main thread, jamais de glitch |
+| `AVAudioPlayerNode` | Une piste audio dans le graph | Volume / pitch / fade en temps-réel sans recompilation |
+| `AVAudioMixerNode` | Mixer multi-input automatique | Géré par AVAudioEngine, optimisé HW |
+| `AVAudioUnitVarispeed` *(futur)* | Variation de tempo sans pitch | Pour effets vitesse de lecture |
+| `AVAudioFile.read(into:frameCount:)` | Lecture chunked d'un fichier audio | 4096 samples par chunk, IO non-bloquant |
+| `AVAudioSession` | Configuration de la session iOS | Catégorie `.playAndRecord` avec `.mixWithOthers` |
+| `AVAssetTrack.preferredVolume` | Volume d'une piste de la composition | Géré par AVMutableComposition |
+
+### Image
+
+| API | Rôle | Garantie |
+|-----|------|----------|
+| `CIImage` + `CIContext(metal:)` | Pipeline image GPU | Metal-backed, jamais de CPU fallback |
+| `Image(uiImage:)` SwiftUI | Affichage statique | Cache automatique de SwiftUI |
+| `Kingfisher` (déjà présent) | Image network + cache disque | Async, throttled |
+| `UIImage.preparingThumbnail(of:)` | Downsampling pour les strips | iOS 15+, GPU |
+| `ImageIO` (`CGImageSourceCreateThumbnailAtIndex`) | Thumbnails depuis disque | Non bloquant, cache |
+
+### Interaction & Sync UI
+
+| API | Rôle | Garantie |
+|-----|------|----------|
+| `Task.detached(priority: .userInitiated)` | Décodage / extraction lourd | Hors `MainActor`, isolé du UI |
+| `actor` Swift | Encapsulation thread-safe pour caches | Pas de data race |
+| `@MainActor` | Toute mutation UI / `@Published` | Compile-time enforcement |
+| `withAnimation(.spring(...))` SwiftUI | Animations | Render thread (off-main) |
+| `CADisplayLink` | **Évité** au profit de `AVPlayer.addPeriodicTimeObserver` | Synchro native au rendu vidéo |
+
+### Garanties de performance promises
+
+| Opération | Cible | Mécanisme |
+|-----------|-------|-----------|
+| Drag clip → render | **< 16 ms** (1 frame à 60 fps) | Snap calculé sur main, render via SwiftUI structural diff (clip = struct, body minimal) |
+| Seek → preview audio+vidéo synchro | **< 50 ms** | `AVPlayer.seek(toleranceBefore: .zero)` + `AVAudioPlayerNode.scheduleSegment` |
+| Add keyframe → preview update | **< 33 ms** (2 frames) | Recompose `AVMutableVideoComposition` async + reload async, transition imperceptible |
+| Add transition (drag overlap) → render | **< 100 ms** | Recompose composition + reload `AVPlayerItem` |
+| Undo → state restored | **< 200 ms** | Apply revert command + reconfigure engine |
+| Configure engine (10 clips + 5 audios) | **< 200 ms** | `loadValuesAsynchronously` parallèle, batch |
+| Memory peak édition 5 min | **< 250 MB** sur iPhone SE 3 | Eviction non-visible slides + cap audio nodes |
+| Frame rate scrubbing | **≥ 55 fps** | `CMSampleBufferDisplayLayer` + lazy frame extraction |
+
+### Anti-patterns à proscrire (ne JAMAIS faire)
+
+- ❌ `UIImage.draw(in:)` ou `CIContext.createCGImage()` **synchrones sur main thread** → toujours `Task.detached`
+- ❌ Manipulation pixel-par-pixel via `CGContext` pour des effets temps-réel → utiliser `CIFilter` ou `MTLComputeKernel`
+- ❌ Polling avec `Timer.scheduledTimer` pour la lecture → utiliser `addPeriodicTimeObserver`
+- ❌ `try?` qui mange une erreur AVFoundation silencieusement → toujours logger via `Logger.media`
+- ❌ Création répétée d'`AVAudioFormat` ou `AVAudioBuffer` → cacher/réutiliser
+- ❌ `Thread.sleep()` ou `DispatchQueue.main.async` pour synchroniser → utiliser `await` Swift Concurrency
+- ❌ Charger un `AVURLAsset` puis lire `.tracks` synchrone → utiliser `try await asset.load(.tracks)`
+- ❌ Stockage de `UIImage` non-downscaled en mémoire → toujours `preparingThumbnail(of:)`
+
+### Profiling obligatoire
+
+Outils Instruments à passer avant chaque release timeline :
+- **SwiftUI** instrument : vérifier que les `body` re-evaluations sont localisées (pas de cascade sur changements de playhead)
+- **Allocations** : memory peak < 250 MB, pas de leak après edit session de 5 min
+- **Time Profiler** : aucun `MainActor` work > 16 ms
+- **Core Animation** : 60 fps stable pendant scrubbing avec 5 clips actifs
+- **Network** : requêtes media throttlées (pas de N+1)
+- **Energy** : impact "low" pendant lecture preview
+
+---
+
 ## 1. Architecture des Modules
 
 ### Arborescence cible
@@ -227,6 +315,14 @@ public enum StoryEasing: String, Codable, Sendable {
         }
     }
 }
+```
+
+**Note importante sur les easings au launch** :
+- Le **modèle persiste tous les easings** (`linear`, `easeIn`, `easeOut`, `easeInOut`) pour future-proofing
+- L'**UI ne propose que `.linear`** au launch (cohérent avec décision n°4 "interpolation linéaire")
+- Les autres easings sont prêts à l'emploi côté engine, il suffira d'ajouter le sélecteur UI dans un cycle ultérieur sans changer le wire
+
+```swift
 
 // MARK: - Story Keyframe (animation position/scale/opacity)
 
@@ -321,7 +417,31 @@ Chaque command concrète est un struct Codable Sendable d'environ 30-50 lignes c
 - Stories anciennes sans `clipTransitions` ni `keyframes` → rendus à l'identique (statique, pas de transition intra-slide)
 - Wire backend (gateway/translator) ignore les nouveaux champs s'ils sont présents → compatible immédiatement
 
-### 2.6 Tests modèle (`StoryModelsExtensionsTests`)
+### 2.6 Sémantique `isBackground` (héritée de l'existant — explicitée pour la timeline)
+
+Le modèle existant (`StoryMediaObject`, `StoryAudioPlayerObject`) porte un flag `isBackground: Bool?` qui distingue **background** (couvre toute la durée du slide, fullscreen, non-déplaçable sur le canvas) et **foreground** (clip draggable avec position/scale/transitions/keyframes). La timeline doit respecter cette sémantique :
+
+| Aspect | Background | Foreground |
+|--------|-----------|------------|
+| Position canvas | Plein écran (occupe le slide) | Position normalisée (x, y) |
+| Drag canvas | Désactivé | Actif |
+| Trim/Move sur timeline | Désactivé (toujours `startTime=0`, `duration=slideDuration`) | Actif |
+| Keyframes | ❌ ignorés | ✅ supportés |
+| Transitions inter-clips | ❌ jamais source/cible | ✅ peut participer |
+| Slot timeline | Première piste de son groupe (CONTENU ou AUDIO) | Pistes suivantes |
+| Limite | 1 background media + 1 background audio par slide | N foreground (jusqu'aux limites globales) |
+
+`StoryEffects` expose déjà :
+- `resolvedBackgroundMedia: StoryMediaObject?`
+- `resolvedForegroundMediaObjects: [StoryMediaObject]`
+- `resolvedBackgroundAudio: StoryAudioPlayerObject?`
+- `resolvedForegroundAudioPlayers: [StoryAudioPlayerObject]`
+
+Le `TimelineViewModel` passe systématiquement par ces propriétés résolues — jamais par les arrays bruts (`mediaObjects`, `audioPlayerObjects`) qui contiennent les deux types mélangés.
+
+UI : la piste contenant un background affiche un **badge 🔒 dim** (visuel "verrouillé"), les drag handles sont absents. Long-press sur la piste ouvre un menu "Convertir en foreground" (toggle l'`isBackground`, déplace dans une nouvelle piste).
+
+### 2.7 Tests modèle (`StoryModelsExtensionsTests`)
 
 | Cas | Vérifie |
 |-----|---------|
@@ -456,6 +576,34 @@ Conversion `StoryClipTransition.kind` :
 - L'engine est `@MainActor` → toutes ses méthodes publiques sur main thread
 - `deinit` → `stop()` synchrone (`pause` + `removeTimeObserver` + `engine.stop`)
 - `configure(...)` est `async` car les `AVURLAsset` chargent leurs métadonnées de façon asynchrone
+
+### 3.7 Mode preview vs édition (deux profils d'usage)
+
+L'engine sert deux profils d'usage avec des contraintes différentes. La distinction est interne à l'engine — l'API publique est la même.
+
+| Aspect | Mode édition (composer ouvert) | Mode preview pure (preview before publish, ou viewer) |
+|--------|--------------------------------|-------------------------------------------------------|
+| Audio | `AVAudioEngine` + nodes (volume/mute live) | `AVPlayer` audio tracks (depuis `AVMutableComposition`) |
+| Vidéo | `AVPlayer` + `AVMutableVideoComposition` | Idem |
+| Reconfigure freq | Hauf (chaque drag/edit) | Bas (1 fois au load) |
+| Mémoire | Plus haute (mixer actif) | Plus basse |
+| Latence interactivité | < 16 ms | N/A (lecture passive) |
+| Activation | `engine.setMode(.editing)` | `engine.setMode(.preview)` (défaut) |
+
+Le `TimelineViewModel` passe en mode édition à l'ouverture du composer, et bascule en mode preview quand on appuie sur le bouton "Aperçu" (qui montre la story telle qu'elle sera vue par les destinataires).
+
+### 3.8 Gestion d'erreurs
+
+| Cas | Stratégie |
+|-----|-----------|
+| `AVURLAsset.load` échoue (network ou fichier corrompu) | Retry 1 fois après 500 ms, sinon marqueur "❌" sur le clip dans la timeline + `errorMessage` propagé au ViewModel |
+| `AVAudioEngine.start()` échoue | Fallback silent : audio mute pour la session, banner non-bloquant "Audio indisponible — preview muette" |
+| `AVAssetReaderTrackOutput` retourne `nil` (frame extraction) | Skip le placeholder, retry asynchrone une fois, sinon use icône générique sur le clip |
+| Mémoire pleine pendant compositing | `evictNonVisibleSlideMedia()` automatique + reload async des assets actifs uniquement |
+| Disque plein (draft) | Erreur Codable propagée, alert SwiftUI "Espace insuffisant — libérez 50 Mo" |
+| `AVAssetExportSession.exportAsynchronously` échoue *(futur)* | `ExportError.sessionFailed(localizedDescription)` propagé |
+
+Toutes les erreurs sont loggées via `Logger.media` (subsystem `me.meeshy.app`, category `media`) selon la convention `apps/ios/CLAUDE.md`. Aucune ne crash l'app.
 
 ---
 
@@ -630,6 +778,15 @@ Référence visuelle : voir mockup `quick-mode-layout.html` dans `.superpowers/b
 - `DurationHandle` (overlay)
 - `ClipInspector` (présenté en `.sheet(presentationDetents: [.medium])` en Quick Mode — voir 6.4 pour la version Pro)
 
+#### Activation de l'inspector en Quick Mode
+
+- **Single tap sur un clip** : sélection sans ouvrir l'inspector (état "preview de sélection")
+- **Tap sur la chevron "ⓘ" qui apparaît à droite du clip sélectionné** : ouvre l'inspector en sheet bas (`presentationDetents: [.medium, .large]`, drag indicator visible)
+- **Double tap sur un clip** : split au playhead (n'ouvre pas l'inspector)
+- **Long press sur un clip** : context menu natif (Duplicate, Delete, Lock, etc.)
+
+Cette séparation single tap / inspector évite l'apparition surprise du sheet à chaque tap accidentel pendant l'édition rapide. Cohérent avec les patterns Stories Insta / TikTok où la sélection est légère et l'édition fine est explicitement opt-in.
+
 ---
 
 ## 6. Pro Mode UI (paysage, multi-track)
@@ -797,6 +954,74 @@ Référence visuelle : voir mockup `pro-mode-layout.html` dans `.superpowers/bra
 - **Pinch sur clip vs pinch global** : pinch démarrant sur un clip = zoom global avec anchor sur ce clip ; sinon zoom global au centre
 - **Long press sur clip vs drag** : `minimumDuration: 0.4`, `maximumDistance: 8` → drag annule le long press
 
+### 7.13 Accessibilité (Apple Accessibility — non négociable)
+
+Cohérent avec les règles `apps/ios/CLAUDE.md` "Accessibility Rules". Tout élément interactif doit être utilisable par VoiceOver, supporter Dynamic Type, et respecter les contrastes WCAG AA.
+
+#### VoiceOver
+
+| Élément | `accessibilityLabel` | `accessibilityHint` | `accessibilityValue` |
+|---------|---------------------|---------------------|----------------------|
+| Clip vidéo | "Clip vidéo intro.mp4" | "Double-tap pour sélectionner, swipe haut pour les options" | "Début 0:00.500, durée 5 secondes" |
+| Clip audio | "Clip audio music_bg" | Idem | "Volume 85 %, fade-out 0.6 s" |
+| Clip texte | "Texte 'Bienvenue'" | Idem | "Affiché de 1 à 4 secondes" |
+| Transition | "Transition crossfade entre intro et photo" | "Double-tap pour modifier" | "Durée 0.5 s" |
+| Keyframe | "Keyframe à 2.5 secondes" | "Position et échelle modifiées" | "x: 30 %, y: 50 %, échelle 1.2" |
+| Playhead | "Tête de lecture" | "Drag pour scrub" | "0:04.250 sur 0:10.000" |
+| Duration handle | "Poignée durée du slide" | "Drag pour modifier" | "Durée actuelle 10 secondes" |
+| Bouton play | "Lecture" / "Pause" | — | — |
+| Snap toggle | "Magnétisme" | — | "Activé" / "Désactivé" |
+
+#### Dynamic Type
+
+- **Tous les labels** utilisent les fonts sémantiques (`.caption`, `.footnote`, `.body`)
+- **Labels timeline** (noms de clips, tooltips) supportent jusqu'à `.accessibilityExtraExtraExtraLarge`
+- **Adaptation layout** : si la pourrait taille de texte fait dépasser le label hors de sa zone (ex: tooltip), bascule en sheet de détail
+- **Test manuel** : tester avec "Larger Text" max activé dans Settings > Accessibility
+
+#### Contraste & taille des cibles
+
+- Tous les contrastes texte/fond ≥ **4.5:1** (WCAG AA)
+- Toutes les cibles tactiles ≥ **44×44 pt** (Apple HIG)
+  - Clip avec drag handles : la zone de hit du handle est 20pt × full track height (= 44pt minimum)
+  - Transition badge : 14pt visuel avec hit zone 44pt élargie via `.contentShape`
+  - Keyframe : 6pt visuel avec hit zone 44pt élargie
+
+#### VoiceOver — actions custom (rotor)
+
+```swift
+.accessibilityActions {
+    Button("Modifier la durée") { ... }
+    Button("Supprimer") { ... }
+    Button("Dupliquer") { ... }
+    Button("Verrouiller la piste") { ... }
+}
+```
+
+#### Reduced Motion
+
+- Si `accessibilityReduceMotion` activé : transitions slide instantanées (pas de spring), pas de glow pulsant
+- Snap guide rose reste affiché statique (pas de pulse)
+- Animations transition crossfade conservées (essentielles à la story)
+
+### 7.14 Internationalisation
+
+Tous les strings dans le module Timeline doivent passer par :
+
+```swift
+String(localized: "story.timeline.transport.play",
+       defaultValue: "Lecture",
+       bundle: .module)
+```
+
+- **Bundle source** : `MeeshyUI/Resources/Localizable.xcstrings` (déjà existant pour les autres composants Story)
+- **Langues prioritaires** au launch : `fr`, `en` (parité avec le reste de l'app)
+- **Conventions de clé** : `story.timeline.{section}.{element}` — voir Annexe I pour la liste complète
+- **Aucun string en dur** — `String(localized:)` exclusivement
+- **Fallback** : si la clé manque, défaut français (langue native du produit)
+- **Pluriels** : utiliser `String(localized:, ...)` avec stringsdict ou `.xcstrings` pluralization native (ex: "%lld piste" / "%lld pistes")
+- **Tooltips de temps** : format adaptatif selon la locale (séparateur décimal, ordre h:m:s vs m:s)
+
 ---
 
 ## 8. Stratégie de Tests
@@ -836,7 +1061,7 @@ Conventions :
 
 ### 8.3 SDK Models — `StoryModelsExtensionsTests`
 
-Voir section 2.6.
+Voir section 2.7.
 
 ### 8.4 Snapshot UI — `swift-snapshot-testing`
 
@@ -969,6 +1194,86 @@ Si pendant le rollout (phases 4-5) on observe :
 - Test sur device réel pour ressenti tactile (snap, drag)
 - Accord sur seuil de rollout (10 % → 50 % → 100 %)
 
+### 9.9 Détail des PRs par phase
+
+Chaque phase est livrée comme une chaîne de PRs atomiques, mergeables indépendamment, jamais > 800 lignes ajoutées par PR.
+
+| Phase | PRs | Dépendances |
+|-------|-----|-------------|
+| 0 | `feat(sdk): add StoryClipTransition + StoryEasing types`, `feat(sdk): add StoryKeyframe + extensions`, `feat(sdk): add TimelineProject + AnyEditCommand enum`, `test(sdk): codable round-trip + retro-compat tests` | aucune |
+| 1 | `feat(timeline): SnapEngine + tests`, `feat(timeline): CommandStack + tests`, `feat(timeline): KeyframeInterpolator + tests`, `feat(timeline): 12 EditCommand structs + tests` | Phase 0 mergée |
+| 2 | `feat(timeline): TimelineMediaSource abstraction`, `feat(timeline): VideoCompositor + tests`, `feat(timeline): AudioMixer + AVAudioEngine wiring`, `feat(timeline): StoryTimelineEngine + integration tests`, `feat(reader): StoryCanvasReaderView interprets clipTransitions + keyframes` | Phase 1 mergée |
+| 3 | `feat(timeline): TimelineViewModel orchestration`, `feat(timeline): RulerView + PlayheadView + DurationHandle`, `feat(timeline): TrackBarView + ClipBars (video/audio/text)`, `feat(timeline): TransitionBadge + KeyframeView`, `feat(timeline): SnapGuideView + drag gestures`, `feat(timeline): ClipInspector + KeyframeInspector + TransitionInspector`, `feat(timeline): TransportBar + TimelineToolbar`, `feat(timeline): QuickTimelineView container`, `feat(timeline): ProTimelineView container + landscape rotation`, `feat(composer): integrate Timeline behind feature flag` | Phase 2 mergée |
+| 4 | `chore(beta): enable timeline_v2 for internal accounts`, `fix(timeline): bugs émergents` | Phase 3 mergée + dogfood OK |
+| 5 | `chore(rollout): enable timeline_v2 at 10%`, `... at 50%`, `... at 100%` | Phase 4 stable |
+| 6 | `chore(timeline): remove old TimelinePanel + SimpleTimelineView + TimelineTrackView + TrackDetailPopover + TimelinePlaybackEngine`, `chore: remove story_timeline_v2 feature flag`, `docs: archive design doc` | 100% rollout stable 7 jours |
+
+---
+
+## 10. Risques techniques & Mitigations
+
+| Risque | Probabilité | Impact | Mitigation |
+|--------|-------------|--------|------------|
+| **Performance `AVMutableComposition` avec beaucoup de pistes** (5+ vidéos overlay) | Moyenne | Élevé (lag visible) | Limite à 6 audio nodes simultanés actifs ; timeline strip preview throttlée à 8 frames/clip ; cap soft "max 4 vidéos foreground" affiché en alerte non-bloquante au-delà |
+| **Memory pressure sur iPhone SE 3** (3 GB RAM) | Élevée | Moyen (eviction → re-decode) | Eviction agressive non-visible slides (déjà existant) + cap mixer + downscale UIImage avant cache + monitoring `XCTMemoryMetric` à chaque PR |
+| **Régression UX pour utilisateurs existants** | Moyenne | Moyen (frustration) | Quick Mode mimétique (même actions principales placées au même endroit que TimelinePanel actuel) + onboarding "Quoi de neuf" 1 écran au premier lancement V2 + bouton "Préférer l'ancienne version" pendant 30 jours |
+| **Compat drafts V1 ↔ V2** | Faible | Élevé (perte de travail) | Tests round-trip exhaustifs phase 0 + tests d'intégration "open V1 in V2 then save then open V1 again" + Codable `decodeIfPresent` partout |
+| **Coût d'apprentissage Pro Mode** | Élevée | Faible (Pro Mode est opt-in) | Tooltip d'onboarding au 1er passage en Pro + accès reste optionnel (Quick reste défaut) |
+| **`AVAudioEngine` glitch sur seek rapide** | Moyenne | Moyen (audio coupé brièvement) | `AVAudioEngine.pause()` avant seek + reschedule avec `AVAudioPlayerNode.scheduleSegment(at:)` synchronisé sur prochain bus tick |
+| **Bug Swift 6 sur `nonisolated deinit` engine** | Moyenne | Élevé (crash) | Tests `XCTestExpectation` deinit + suivi pattern existant `StoryComposerViewModel.preloadTask` |
+| **Conflit gestures (long press vs drag vs scroll)** | Élevée | Moyen (UX confusion) | Toutes combinaisons testées en UITest sur device réel + matrice 7.12 documentée |
+| **Saturation CommandStack persistant** (drafts > 1 MB) | Faible | Faible (lecture lente) | Cap 50 commandes + commands compactes (delta only, pas snapshot full) + compression `.gzip` du `.commands.json` |
+| **`AVMutableVideoComposition` ne supporte pas certains codecs** (HEIC, ProRes pro) | Faible | Moyen (clip refusé) | Validation au moment du PhotosPicker import + transcoding fallback via `AVAssetExportSession` (existant pour les voice) |
+| **Rotation iPad bug état perdu** | Moyenne | Moyen (frustration) | `@SceneStorage` pour le `timelineMode` + tests de rotation forcée dans UITests |
+| **Latence rendu transition `.dissolve` (CIFilter masque)** | Moyenne | Moyen (saccade) | Précompute du masque sur load + cache `CIImage` Metal-backed |
+
+### Plan de réponse rapide
+
+- Surveillance Crashlytics dédiée filter `keyword:timeline_v2`
+- Alerting Slack si > 5 nouvelles crashs / heure sur le module
+- Hotfix process : kill switch RemoteConfig en < 5 min, puis fix code en < 24 h
+
+---
+
+## 11. Métriques de succès
+
+Comment on mesurera, après le rollout, si la refonte a réussi.
+
+### 11.1 Métriques produit (analytics — `MeeshyAnalytics`)
+
+| Métrique | Avant (baseline) | Cible | Mesure |
+|----------|------------------|-------|--------|
+| Adoption stories avec timeline | N/A (pas de timeline avant) | 30 % des nouvelles stories utilisent ≥ 1 transition ou keyframe | Event `story.published` avec attribut `timelineFeaturesUsed` |
+| Durée moyenne session composer | À mesurer | -20 % grâce au snap (montage plus rapide) | Event `composer.session.end` |
+| % stories avec multiple clips par slide | ~5 % | 25 % | Event `story.published.slide_clip_count` |
+| % users qui utilisent Pro Mode au moins 1 fois / 30j | N/A | 10 % des creators actifs | Event `composer.modeChanged` |
+| Taux d'abandon composer (open → close sans publier) | À mesurer | -15 % | Funnel composer |
+| Taux de re-édition d'une story (édition + republish) | À mesurer | +20 % (preuve d'usage actif des keyframes) | Event `story.edit` |
+
+### 11.2 Métriques techniques (Firebase Performance + Crashlytics)
+
+| Métrique | Cible | Alarme |
+|----------|-------|--------|
+| Crash rate composer | < 0.1 % des sessions | > 0.5 % |
+| OOM (Out of Memory) | < 0.5 % | > 2 % sur SE 3 |
+| Time-to-interactive composer | < 500 ms (P95) | > 800 ms |
+| Time-to-first-frame preview | < 300 ms (P95) | > 600 ms |
+| Frame rate scrubbing | ≥ 55 fps (P50) | < 45 fps |
+| Drafts perdus (non-restaurables) | 0 | > 0.01 % |
+| Latence undo | < 200 ms (P95) | > 500 ms |
+
+### 11.3 Métriques qualitatives
+
+- Score "satisfaction composer" via in-app survey trimestriel : cible 4.2/5
+- Feedback NPS écrit dans tickets support (compter mentions "timeline", "transition", "snap")
+- Demandes de fonctionnalités sur Discord interne (signal pour cycles ultérieurs)
+
+### 11.4 Période d'observation
+
+- **Semaines 1-2 post-100% rollout** : monitoring quotidien des métriques techniques
+- **Mois 1-3** : revue mensuelle des métriques produit, ajustements UI mineurs
+- **Mois 6** : revue stratégique → décider des prochaines fonctionnalités (export MP4 ? push transitions ?)
+
 ---
 
 ## Annexes
@@ -1062,12 +1367,156 @@ Conformes au [Swift API Design Guidelines](https://www.swift.org/documentation/a
 
 - [Swift API Design Guidelines](https://www.swift.org/documentation/api-design-guidelines/)
 - [WWDC23: Demystify SwiftUI Performance](https://developer.apple.com/videos/play/wwdc2023/10160/)
+- [WWDC22: Display HDR video in EDR](https://developer.apple.com/videos/play/wwdc2022/110565/) — pour AVMutableVideoComposition GPU paths
+- [WWDC22: What's new in AVQT, AVPlayer](https://developer.apple.com/videos/play/wwdc2022/) — pour `AVPlayer.addPeriodicTimeObserver`
 - [AVFoundation: Composition Programming Guide](https://developer.apple.com/documentation/avfoundation/media_assets_playback_and_editing/working_with_assets)
+- [AVAudioEngine — Apple Docs](https://developer.apple.com/documentation/avfaudio/avaudioengine)
+- [AVMutableVideoComposition — Apple Docs](https://developer.apple.com/documentation/avfoundation/avmutablevideocomposition)
+- [Apple Accessibility Documentation](https://developer.apple.com/documentation/swiftui/view-accessibility)
 - [Architecture Bible interne](./2026-03-17-architecture-bible-design.md) — pour Cache-First, Stale-While-Revalidate
 - [Background Story Publishing](./2026-03-23-background-story-publish-design.md) — précédent design relatif aux stories
+- `apps/ios/CLAUDE.md` — règles iOS (TDD, Swift 6, Accessibility, Logging, Sécurité)
+- `packages/MeeshySDK/CLAUDE.md` — conventions SDK
+- CLAUDE.md racine — règle "No redundant boolean + timestamp pairs"
+
+### G. Mapping ancien → nouveau (transition pour les développeurs)
+
+Pour les développeurs qui connaissent l'ancien sous-système, voici le mapping vers les nouveaux composants :
+
+| Ancien | Nouveau | Notes |
+|--------|---------|-------|
+| `TimelinePanel` (vue avancée) | `ProTimelineView` + `QuickTimelineView` (déployé) | Splittée en deux |
+| `SimpleTimelineView` | `QuickTimelineView` (compact) | Renommée + clarifiée + intégrée au composer (l'ancienne était orpheline) |
+| `TimelineTrackView` (TrackBar) | `TrackBarView` + `VideoClipBar`/`AudioClipBar`/`TextClipBar` | Splittée par type |
+| `TrackDetailPopover` | `ClipInspector` | Refactor + extension à transitions et keyframes |
+| `TimelinePlaybackEngine` (mono-track) | `StoryTimelineEngine` + `AudioMixer` + `VideoCompositor` | Architecture multi-track |
+| `TimelineTrack` (struct runtime) | `TimelineTrack` (conservé, étendu avec `keyframes` et `transitions`) | Compat |
+| `TimelineTrack.startTime/duration` | Idem | Inchangé |
+| `viewModel.isTimelineVisible` (sheet) | `viewModel.timelineMode == .quick/.pro` | Plus de double-mode sheet+inline |
+| `viewModel.timelineZoomScale` | Idem | Conservé |
+| Drag handles dans `TimelineTrackBar` | Idem dans `ClipBars` (pattern préservé) | Geste identique |
+| `CADisplayLink` dans engine | `AVPlayer.addPeriodicTimeObserver` | Plus précis, sync vidéo native |
+| `activeMediaId` (mono) | Multiple `AVAudioPlayerNode` actifs simultanément | Multi-track |
+| `effects.backgroundAudioId/Volume/Start/End` (legacy) | Conservés en lecture (rétro-compat), nouvelles écritures via `audioPlayerObjects[].isBackground = true` | Migration douce |
+
+### H. Internationalisation — clés strings à créer
+
+Liste exhaustive des clés `String(localized:)` à ajouter dans `Localizable.xcstrings` (bundle `MeeshyUI`). Toutes préfixées par `story.timeline.` :
+
+```
+story.timeline.transport.play
+story.timeline.transport.pause
+story.timeline.transport.mute
+story.timeline.transport.unmute
+story.timeline.transport.zoomIn
+story.timeline.transport.zoomOut
+story.timeline.transport.zoomReset
+story.timeline.transport.timeReadout       // "%@/%@" => "0:04.250 / 0:10.000"
+
+story.timeline.mode.quick                  // "Quick"
+story.timeline.mode.pro                    // "Pro"
+story.timeline.mode.switchToQuick          // "Mode rapide"
+story.timeline.mode.switchToPro            // "Mode Pro"
+
+story.timeline.toolbar.snap                // "Magnétisme"
+story.timeline.toolbar.undo                // "Annuler"
+story.timeline.toolbar.redo                // "Rétablir"
+story.timeline.toolbar.deployTracks        // "+ %lld piste(s)"
+story.timeline.toolbar.collapseTracks      // "Replier"
+
+story.timeline.section.contenu             // "CONTENU"
+story.timeline.section.audio               // "AUDIO"
+story.timeline.section.effets              // "EFFETS"
+
+story.timeline.track.video                 // "Vidéo %lld"
+story.timeline.track.image                 // "Image %lld"
+story.timeline.track.audio                 // "Audio %lld"
+story.timeline.track.text                  // "Texte %lld"
+story.timeline.track.bgVideo               // "Vidéo fond"
+story.timeline.track.bgAudio               // "Audio fond"
+story.timeline.track.lock                  // "Verrouiller"
+story.timeline.track.unlock                // "Déverrouiller"
+
+story.timeline.clip.duplicate              // "Dupliquer"
+story.timeline.clip.delete                 // "Supprimer"
+story.timeline.clip.split                  // "Couper au playhead"
+story.timeline.clip.bringToFront           // "Mettre devant"
+story.timeline.clip.toggleBackground       // "Basculer fond / premier plan"
+story.timeline.clip.tooltip.start          // "Début %@"
+story.timeline.clip.tooltip.duration       // "Durée %@"
+story.timeline.clip.tooltip.fadeIn         // "Fondu entrée %@"
+story.timeline.clip.tooltip.fadeOut        // "Fondu sortie %@"
+
+story.timeline.transition.crossfade        // "Fondu enchaîné"
+story.timeline.transition.dissolve         // "Dissolution"
+story.timeline.transition.duration         // "Durée %@"
+story.timeline.transition.delete           // "Supprimer la transition"
+
+story.timeline.keyframe.add                // "Ajouter keyframe"
+story.timeline.keyframe.delete             // "Supprimer keyframe"
+story.timeline.keyframe.position           // "Position"
+story.timeline.keyframe.scale              // "Échelle"
+story.timeline.keyframe.opacity            // "Opacité"
+
+story.timeline.inspector.start             // "Début"
+story.timeline.inspector.duration          // "Durée"
+story.timeline.inspector.volume            // "Volume"
+story.timeline.inspector.loop              // "Boucle"
+story.timeline.inspector.background        // "Fond"
+
+story.timeline.snapGuide.playhead          // "Playhead %@"
+story.timeline.snapGuide.clipStart         // "Début %@"
+story.timeline.snapGuide.clipEnd           // "Fin %@"
+story.timeline.snapGuide.keyframe          // "Keyframe %@"
+story.timeline.snapGuide.gridMajor         // "%@"
+
+story.timeline.error.mediaUnavailable      // "Média indisponible"
+story.timeline.error.audioFailed           // "Audio indisponible — preview muette"
+story.timeline.error.diskFull              // "Espace insuffisant"
+story.timeline.error.assetLoadFailed       // "Impossible de charger %@"
+
+story.timeline.empty.addContent            // "Ajoutez du contenu pour voir la timeline"
+story.timeline.empty.addMediaPrompt        // "+ Média"
+
+story.timeline.a11y.clip.video             // "Clip vidéo %@"
+story.timeline.a11y.clip.audio             // "Clip audio %@"
+story.timeline.a11y.clip.text              // "Texte %@"
+story.timeline.a11y.transition             // "Transition %@ entre %@ et %@"
+story.timeline.a11y.keyframe               // "Keyframe à %@"
+story.timeline.a11y.playhead               // "Tête de lecture"
+story.timeline.a11y.durationHandle         // "Poignée durée du slide"
+story.timeline.a11y.snap.on                // "Magnétisme activé"
+story.timeline.a11y.snap.off               // "Magnétisme désactivé"
+```
+
+Total : ~70 clés. Toutes traduites en `fr` (défaut) + `en` au launch.
+
+### I. Visual Identity — palette utilisée par la timeline
+
+Strict respect de la palette Indigo Meeshy (`apps/ios/CLAUDE.md` "Brand Color Scale"). La timeline n'introduit **aucune nouvelle couleur de marque** ; elle se sert exclusivement des tokens existants :
+
+| Token Meeshy | Hex | Usage timeline |
+|--------------|-----|----------------|
+| `MeeshyColors.indigo500` | `#6366F1` | Brand primary, gradient transport, sélection |
+| `MeeshyColors.indigo700` | `#4338CA` | Gradient deep, pressed states |
+| `MeeshyColors.indigo400` | `#818CF8` | Snap guide, accents secondaires |
+| `MeeshyColors.indigo300` | `#A5B4FC` | Accents tertiaires |
+| `MeeshyColors.brandGradient` | linear gradient | Play button, Pro button, CTAs |
+| `MeeshyColors.success` | `#34D399` | Track image clips |
+| `MeeshyColors.warning` | `#FBBF24` | Track audio clips, transition badges, keyframes |
+| `MeeshyColors.error` | `#F87171` | Track text clips, delete actions |
+| `MeeshyColors.info` | `#60A5FA` | Tooltips info |
+| (semantic snap) | `#EC4899` (magenta) | Snap guide line *(pink/magenta — exception : différencie du brand pour visibilité immédiate)* |
+| `theme.backgroundPrimary` | (theme-aware) | Background timeline panel |
+| `theme.textPrimary` / `Secondary` / `Muted` | (theme-aware) | Hierarchies de texte |
+
+**Note sur le rose magenta** : seule exception au brand. Justification : le snap guide doit être instantanément distinguable de toute couleur de la marque pour que l'utilisateur sache "ah, c'est l'accroche magnétique". Pattern emprunté à Final Cut Pro et Premiere Rush. Documenté en commentaire `// Color de snap = magenta — exception design, voir spec timeline`.
+
+Toutes les couleurs respectent les contrastes WCAG AA en light + dark theme (testé via Snapshot tests).
 
 ---
 
 ## Changelog
 
-- **2026-05-05** — Initial draft (jcharlesnm)
+- **2026-05-05 v1** — Initial draft (jcharlesnm)
+- **2026-05-05 v2** — Enrichissement post-review : ajout section Stack technique iOS, sémantique isBackground (2.6), modes preview/édition (3.7), gestion d'erreurs (3.8), inspector Quick Mode (5.5), accessibilité (7.13), internationalisation (7.14), risques techniques (10), métriques de succès (11), annexes G (mapping), H (i18n strings), I (palette)
