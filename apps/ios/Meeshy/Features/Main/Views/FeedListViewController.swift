@@ -1,11 +1,11 @@
-import UIKit
+@preconcurrency import UIKit
 import Combine
 import MeeshySDK
 
 final class FeedListViewController: UIViewController {
 
     private var collectionView: UICollectionView!
-    nonisolated(unsafe) private var dataSource: UICollectionViewDiffableDataSource<FeedListSection, FeedListItem>!
+    private var dataSource: FeedListDataSource!
     private let store: FeedStore
     private var cancellables = Set<AnyCancellable>()
     private var isLoadingOlder = false

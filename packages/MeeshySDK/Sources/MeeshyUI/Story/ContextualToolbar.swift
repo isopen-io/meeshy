@@ -68,17 +68,20 @@ struct ContextualToolbar: View {
     // MARK: - Tool Pills
 
     private var toolPills: some View {
-        HStack(spacing: 8) {
-            switch selectedTab {
-            case .contenu:
-                toolPill(.photo, icon: "photo.fill", label: String(localized: "story.toolbar.photo", defaultValue: "Photo", bundle: .module), badge: mediaCount)
-                toolPill(.drawing, icon: "pencil.tip", label: String(localized: "story.toolbar.drawing", defaultValue: "Dessin", bundle: .module), badge: hasDrawing ? 1 : 0)
-                toolPill(.text, icon: "textformat", label: String(localized: "story.toolbar.text", defaultValue: "Texte", bundle: .module), badge: textCount)
-                toolPill(.audio, icon: "waveform", label: String(localized: "story.toolbar.audio", defaultValue: "Audio", bundle: .module), badge: audioCount)
-            case .effets:
-                toolPill(.filters, icon: "camera.filters", label: String(localized: "story.toolbar.filters", defaultValue: "Filtres", bundle: .module), badge: viewModel.selectedFilter != nil ? 1 : 0)
-                toolPill(.timeline, icon: "timer", label: String(localized: "story.toolbar.timeline", defaultValue: "Timeline", bundle: .module), badge: 0)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                switch selectedTab {
+                case .contenu:
+                    toolPill(.media, icon: "play.rectangle.fill", label: String(localized: "story.toolbar.media", defaultValue: "Medias", bundle: .module), badge: mediaCount + audioCount)
+                    toolPill(.drawing, icon: "pencil.tip", label: String(localized: "story.toolbar.drawing", defaultValue: "Dessin", bundle: .module), badge: hasDrawing ? 1 : 0)
+                    toolPill(.text, icon: "textformat", label: String(localized: "story.toolbar.text", defaultValue: "Texte", bundle: .module), badge: textCount)
+                    toolPill(.texture, icon: "paintpalette.fill", label: String(localized: "story.toolbar.texture", defaultValue: "Texture", bundle: .module), badge: 0)
+                case .effets:
+                    toolPill(.filters, icon: "camera.filters", label: String(localized: "story.toolbar.filters", defaultValue: "Filtres", bundle: .module), badge: viewModel.selectedFilter != nil ? 1 : 0)
+                    toolPill(.timeline, icon: "timer", label: String(localized: "story.toolbar.timeline", defaultValue: "Timeline", bundle: .module), badge: 0)
+                }
             }
+            .padding(.horizontal, 12)
         }
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selectedTab)
     }
@@ -99,14 +102,16 @@ struct ContextualToolbar: View {
             guard !isDisabled else { return }
             viewModel.selectTool(tool)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 15, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
+                    .lineLimit(1)
+                    .fixedSize()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .background(pillBackground(isActive: isActive))
             .foregroundStyle(isActive ? .white : theme.textSecondary)
             .clipShape(Capsule())
@@ -157,8 +162,7 @@ struct ContextualToolbar: View {
     private func isToolDisabled(_ tool: StoryToolMode) -> Bool {
         switch tool {
         case .text: return !viewModel.canAddText
-        case .photo: return !viewModel.canAddMedia
-        case .audio: return !viewModel.canAddAudio
+        case .media: return !viewModel.canAddMedia && !viewModel.canAddAudio
         default: return false
         }
     }

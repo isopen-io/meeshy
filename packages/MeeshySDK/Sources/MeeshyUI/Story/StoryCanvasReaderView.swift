@@ -98,7 +98,8 @@ public struct StoryCanvasReaderView: View {
             state.startBackgroundAudio(
                 effects: story.storyEffects,
                 story: story,
-                preferredLanguages: resolvedLanguageChain
+                preferredLanguages: resolvedLanguageChain,
+                preloadedAudioURLs: preloadedAudioURLs
             )
             state.startForegroundVideos(story: story, preloadedVideoURLs: preloadedVideoURLs)
             state.startForegroundAudios(story: story, preloadedAudioURLs: preloadedAudioURLs)
@@ -155,14 +156,18 @@ public struct StoryCanvasReaderView: View {
     private var backgroundMediaLayer: some View {
         if let bgMedia = story.storyEffects?.resolvedBackgroundMedia {
             if bgMedia.kind == .image {
-                if let urlStr = mediaURL(for: bgMedia.postMediaId) {
+                if let preloaded = preloadedImages[bgMedia.id] {
+                    Image(uiImage: preloaded)
+                        .resizable()
+                        .scaledToFill()
+                        .bgTransform(scale: bgTransformScale, offsetX: bgTransformOffsetX, offsetY: bgTransformOffsetY, rotation: bgTransformRotation)
+                } else if let urlStr = mediaURL(for: bgMedia.postMediaId) {
                     let thumbHash = story.media.first(where: { $0.id == bgMedia.postMediaId })?.thumbHash ?? resolvedThumbHash
                     backgroundImageView(urlStr: urlStr, thumbHash: thumbHash)
                 }
             } else if bgMedia.kind == .video {
-                if let urlStr = mediaURL(for: bgMedia.postMediaId),
-                   let url = MeeshyConfig.resolveMediaURL(urlStr) {
-                    let player = state.ensureBackgroundVideoPlayer(url: url, muted: true)
+                if let url = resolvedVideoURL(for: bgMedia) {
+                    let player = state.ensureBackgroundVideoPlayer(url: url, muted: false)
                     BareVideoLayer(player: player)
                         .bgTransform(scale: bgTransformScale, offsetX: bgTransformOffsetX, offsetY: bgTransformOffsetY, rotation: bgTransformRotation)
                 }
@@ -370,10 +375,8 @@ public struct StoryCanvasReaderView: View {
             if visible {
                 DraggableMediaView(
                     mediaObject: .constant(media),
-                    image: state.loadedImages[media.id],
-                    videoURL: media.kind == .video
-                        ? mediaURL(for: media.postMediaId).flatMap { MeeshyConfig.resolveMediaURL($0) }
-                        : nil,
+                    image: state.loadedImages[media.id] ?? preloadedImages[media.id],
+                    videoURL: media.kind == .video ? resolvedVideoURL(for: media) : nil,
                     externalPlayer: media.kind == .video ? state.foregroundVideoPlayers[media.id] : nil,
                     isEditing: false,
                     naturalAspectRatio: state.mediaAspectRatios[media.id],
@@ -427,6 +430,13 @@ public struct StoryCanvasReaderView: View {
     /// Résout l'URL d'un media par son postMediaId depuis les médias legacy du StoryItem.
     private func mediaURL(for postMediaId: String) -> String? {
         story.media.first { $0.id == postMediaId }?.url
+    }
+
+    /// Résout l'URL vidéo : preloaded (preview) > story.media (viewer normal).
+    private func resolvedVideoURL(for media: StoryMediaObject) -> URL? {
+        if let url = preloadedVideoURLs[media.id] { return url }
+        guard let urlStr = story.media.first(where: { $0.id == media.postMediaId })?.url else { return nil }
+        return MeeshyConfig.resolveMediaURL(urlStr)
     }
 
     /// Résout l'URL audio foreground : preloaded (preview) > story.media (viewer normal).
@@ -716,7 +726,8 @@ private final class ReaderState: ObservableObject {
 
     // MARK: Background audio
 
-    func startBackgroundAudio(effects: StoryEffects?, story: StoryItem, preferredLanguages: [String]) {
+    func startBackgroundAudio(effects: StoryEffects?, story: StoryItem, preferredLanguages: [String],
+                              preloadedAudioURLs: [String: URL] = [:]) {
         guard let effects, let bgAudio = effects.resolvedBackgroundAudio else { return }
 
         // Resolution Prisme : on essaie chaque langue de la chaine preferee dans
@@ -727,8 +738,16 @@ private final class ReaderState: ObservableObject {
             .compactMap { lang in variants.first { $0.language == lang }?.postMediaId }
             .first ?? bgAudio.postMediaId
 
-        guard let urlString = story.media.first(where: { $0.id == resolvedMediaId })?.url,
-              let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
+        // Preview mode: check preloaded URLs first (keyed by object id or postMediaId)
+        let url: URL
+        if let preloaded = preloadedAudioURLs[bgAudio.id] ?? preloadedAudioURLs[resolvedMediaId] {
+            url = preloaded
+        } else if let urlString = story.media.first(where: { $0.id == resolvedMediaId })?.url,
+                  let resolved = MeeshyConfig.resolveMediaURL(urlString) {
+            url = resolved
+        } else {
+            return
+        }
 
         let userVolume = bgAudio.volume
         targetBackgroundVolume = userVolume
@@ -992,7 +1011,7 @@ private final class ReaderState: ObservableObject {
         player.volume = hasFadeIn ? 0.0 : targetVolume
         foregroundVideoPlayers[media.id] = player
 
-        let shouldLoop = (media.loop ?? true) || shouldLoopVideoForAudio(media: media)
+        let shouldLoop = (media.loop ?? false)
         // Use AVPlayerLooper for seamless looping (Apple recommended, no gap)
         if shouldLoop, let queuePlayer = player as? AVQueuePlayer, let item = queuePlayer.currentItem {
             foregroundLoopers[media.id] = AVPlayerLooper(player: queuePlayer, templateItem: item)
@@ -1082,7 +1101,7 @@ private final class ReaderState: ObservableObject {
         player.volume = hasFadeIn ? 0.0 : targetVolume
         foregroundVideoPlayers[media.id] = player
 
-        let shouldLoop = (media.loop ?? true) || shouldLoopVideoForAudio(media: media)
+        let shouldLoop = (media.loop ?? false)
         // Use AVPlayerLooper for seamless looping (Apple recommended, no gap)
         if shouldLoop, let queuePlayer = player as? AVQueuePlayer, let item = queuePlayer.currentItem {
             foregroundLoopers[media.id] = AVPlayerLooper(player: queuePlayer, templateItem: item)

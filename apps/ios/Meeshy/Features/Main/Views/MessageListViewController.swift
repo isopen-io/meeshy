@@ -1,11 +1,11 @@
-import UIKit
+@preconcurrency import UIKit
 import Combine
 import MeeshySDK
 
 final class MessageListViewController: UIViewController {
 
     private var collectionView: UICollectionView!
-    nonisolated(unsafe) private var dataSource: UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>!
+    private var dataSource: MessageListDataSource!
     private let store: MessageStore
     private let currentUserId: String
     private let imageCache = DecodedImageCache.shared

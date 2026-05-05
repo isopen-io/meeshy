@@ -1,25 +1,26 @@
-import Foundation
+import UIKit
 
 // DiffableDataSource section/item identifier types.
-// Defined outside UIViewController to minimize @MainActor inference.
-// Note: These still produce Swift 6 strict concurrency errors when used
-// with UICollectionViewDiffableDataSource due to a known Swift 6 limitation
-// (SR-XXXXX). The fix requires either downgrading to targeted concurrency
-// for the Meeshy target or waiting for a Swift compiler fix.
+// Must be nonisolated + Sendable for UICollectionViewDiffableDataSource in Swift 6.
 
-enum MessageListSection: Hashable, Sendable { case main }
-enum MessageListItem: Hashable, Sendable { case message(localId: String) }
+nonisolated enum MessageListSection: Hashable, Sendable { case main }
+nonisolated enum MessageListItem: Hashable, Sendable { case message(localId: String) }
 
-enum FeedListSection: Hashable, Sendable { case main }
-enum FeedListItem: Hashable, Sendable {
+nonisolated enum FeedListSection: Hashable, Sendable { case main }
+nonisolated enum FeedListItem: Hashable, Sendable {
     case textPost(id: String)
     case mediaPost(id: String)
 }
 
-enum CommentListSection: Hashable, Sendable {
+nonisolated enum CommentListSection: Hashable, Sendable {
     case topLevel(commentId: String)
 }
-enum CommentListItem: Hashable, Sendable {
+nonisolated enum CommentListItem: Hashable, Sendable {
     case comment(id: String)
     case loadMoreReplies(parentId: String, remaining: Int)
 }
+
+// Type aliases for DiffableDataSource to suppress @MainActor inference
+typealias MessageListDataSource = UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>
+typealias FeedListDataSource = UICollectionViewDiffableDataSource<FeedListSection, FeedListItem>
+typealias CommentListDataSource = UICollectionViewDiffableDataSource<CommentListSection, CommentListItem>

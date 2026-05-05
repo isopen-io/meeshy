@@ -1,5 +1,6 @@
 import SwiftUI
 import PencilKit
+import AVKit
 import MeeshySDK
 
 // MARK: - Story Canvas View
@@ -123,31 +124,33 @@ struct StoryCanvasView: View {
                 // Layer 0: Background color / gradient
                 backgroundLayer
 
-                // Layer 1: Classic background image (gesture-manipulable, when no media objects)
+                // Layer 1: Background media (fullscreen image or video — pan/zoom)
                 backgroundMediaLayer
 
-                // Layer 2: ALL media objects — first fills canvas as background, rest positioned
-                mediaLayer(interactive: !isDrawingActive)
+                // Layer 2: Filter on background only (default)
+                if !viewModel.filterAppliesToEntireSlide {
+                    composerFilterOverlay
+                        .allowsHitTesting(false)
+                }
 
-                // Layer 2.5 : Filter overlay au-dessus des media de fond, sous les
-                // elements de premier plan — match du reader pour assurer le WYSIWYG.
-                // Auparavant le filtre n'etait applique que sur le `selectedImage`
-                // legacy, donc une story avec un media de fond et un filtre montrait
-                // un canvas non-filtre dans le composer mais filtre dans le viewer.
-                composerFilterOverlay
-                    .allowsHitTesting(false)
-
-                // Layer 3: Drawing overlay (PKCanvasView — UIKit via UIViewRepresentable)
+                // Layer 3: Drawing overlay (PKCanvasView)
                 drawingLayer
 
-                // Layers 4-N: Front elements (text, stickers, audio)
-                // Explicit zIndex ensures SwiftUI front content renders above
-                // UIKit-backed drawing layer AND foreground media (whose zIndex increments via bringToFront).
+                // Layer 4: Foreground media (positioned draggable tiles)
+                foregroundMediaLayer(interactive: !isDrawingActive)
+
+                // Layer 5+: Front elements (text, stickers, audio pills)
                 frontElementsGroup(canvasSize: canvasSize)
                     .zIndex(1000)
 
-                // Layer N+1 : Safe zone, alignment guides, and out-of-bounds warning.
-                // Visible only during edit. Subtle by default, intensifies during drag.
+                // Layer 5.5: Filter on entire slide (when toggled)
+                if viewModel.filterAppliesToEntireSlide {
+                    composerFilterOverlay
+                        .allowsHitTesting(false)
+                        .zIndex(1500)
+                }
+
+                // Layer N: Safe zone & alignment guides (edit only)
                 editingGuidesOverlay(canvasSize: canvasSize)
                     .zIndex(2000)
             }
@@ -263,11 +266,8 @@ struct StoryCanvasView: View {
         }
     }
 
-    // MARK: - Background Media Layer (classic selectedImage only — shown when no media objects)
+    // MARK: - Filter Overlay
 
-    /// Overlay de filtre du composer — miroir de `StoryCanvasReaderView.filterOverlay`.
-    /// Applique le meme blend (vintage / bw / warm / cool / dramatic / vivid / etc.) avec
-    /// la meme `filterIntensity` pour un rendu pixel-identique entre composer et viewer.
     @ViewBuilder
     private var composerFilterOverlay: some View {
         if let filter = selectedFilter {
@@ -276,12 +276,42 @@ struct StoryCanvasView: View {
         }
     }
 
+    // MARK: - Background Media Layer (fullscreen, single media: image or video)
+
     @ViewBuilder
     private var backgroundMediaLayer: some View {
-        // Classic selectedImage (flat background — from bgMedia panel picker)
-        // Only shown when no StoryMediaObject exists (first media object takes over as bg)
-        if mediaObjects.isEmpty,
-           let image = filteredImage ?? selectedImage {
+        if let bgMedia = viewModel.currentEffects.resolvedBackgroundMedia {
+            // New system: background from mediaObjects
+            if bgMedia.kind == .image, let image = filteredImage ?? viewModel.loadedImages[bgMedia.id] {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .scaleEffect(imageScale * pinchDelta)
+                    .offset(
+                        x: imageOffset.width + dragDelta.width,
+                        y: imageOffset.height + dragDelta.height
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .allowsHitTesting(!isDrawingActive)
+                    .gesture(isDrawingActive ? nil : backgroundVideoPanZoomGesture)
+                    .canvasContextMenu(elementId: bgMedia.id, elementType: .image, viewModel: viewModel)
+            } else if bgMedia.kind == .video {
+                BackgroundVideoPlayerView(
+                    url: viewModel.loadedVideoURLs[bgMedia.id],
+                    thumbnail: viewModel.loadedImages[bgMedia.id],
+                    scale: imageScale * pinchDelta,
+                    offsetX: imageOffset.width + dragDelta.width,
+                    offsetY: imageOffset.height + dragDelta.height
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .allowsHitTesting(!isDrawingActive)
+                .gesture(isDrawingActive ? nil : backgroundVideoPanZoomGesture)
+                .canvasContextMenu(elementId: bgMedia.id, elementType: .video, viewModel: viewModel)
+            }
+        } else if let image = filteredImage ?? selectedImage {
+            // Legacy fallback: selectedImage when no mediaObjects
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
@@ -323,6 +353,27 @@ struct StoryCanvasView: View {
                 }
                 .onEnded { value in
                     imageRotation += value
+                }
+        )
+    }
+
+    /// Pan + zoom only (no rotation) for background video.
+    private var backgroundVideoPanZoomGesture: some Gesture {
+        SimultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .updating($dragDelta) { value, state, _ in
+                    state = value.translation
+                }
+                .onEnded { value in
+                    imageOffset.width += value.translation.width
+                    imageOffset.height += value.translation.height
+                },
+            MagnificationGesture()
+                .updating($pinchDelta) { value, state, _ in
+                    state = value
+                }
+                .onEnded { value in
+                    imageScale = max(0.5, imageScale * value)
                 }
         )
     }
@@ -428,63 +479,16 @@ struct StoryCanvasView: View {
         }
     }
 
-    // MARK: - Unified Media Layer (background = fill-canvas, rest = positioned)
+    // MARK: - Foreground Media Layer (positioned, draggable tiles)
 
     @ViewBuilder
-    private func mediaLayer(interactive: Bool) -> some View {
-        // Resolution base sur le flag isBackground (fallback legacy = premier media).
+    private func foregroundMediaLayer(interactive: Bool) -> some View {
         let backgroundId = viewModel.currentEffects.resolvedBackgroundMedia?.id
-        ForEach(mediaObjects, id: \.id) { obj in
+        ForEach(mediaObjects.filter { $0.id != backgroundId }, id: \.id) { obj in
             if isElementVisible(startTime: obj.startTime, duration: obj.duration) {
-                if obj.id == backgroundId {
-                    // Background media fills canvas
-                    firstMediaElement(obj: obj)
-                } else {
-                    // Foreground media: positioned, draggable
-                    positionedMediaElement(obj: obj, interactive: interactive)
-                }
+                positionedMediaElement(obj: obj, interactive: interactive)
             }
         }
-    }
-
-    @ViewBuilder
-    private func firstMediaElement(obj: StoryMediaObject) -> some View {
-        Group {
-            if obj.kind == .image, let image = viewModel.loadedImages[obj.id] {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .scaleEffect(imageScale * pinchDelta)
-                    .rotationEffect(imageRotation + rotationDelta)
-                    .offset(
-                        x: imageOffset.width + dragDelta.width,
-                        y: imageOffset.height + dragDelta.height
-                    )
-                    .allowsHitTesting(!isDrawingActive)
-                    .gesture(isDrawingActive ? nil : backgroundImageGesture)
-            } else if obj.kind == .video {
-                DraggableMediaView(
-                    mediaObject: mediaObjectBinding(for: obj.id),
-                    image: nil,
-                    videoURL: viewModel.loadedVideoURLs[obj.id],
-                    isEditing: true,
-                    naturalAspectRatio: viewModel.mediaAspectRatios[obj.id],
-                    onAspectRatioResolved: { ratio in
-                        viewModel.setAspectRatio(ratio, for: obj.id)
-                    },
-                    onDragEnd: {},
-                    onTapToFront: {}
-                )
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
-        .canvasContextMenu(
-            elementId: obj.id,
-            elementType: obj.kind == .video ? .video : .image,
-            viewModel: viewModel
-        )
-        .zIndex(-1)
     }
 
     @ViewBuilder
@@ -753,5 +757,200 @@ public struct DraggableSticker: View {
         dragGesture
             .simultaneously(with: magnificationGesture)
             .simultaneously(with: rotationGesture)
+    }
+}
+
+// MARK: - Background Video Player (fullscreen, looping, with play/pause)
+
+/// Renders a video filling the entire canvas as background (resizeAspectFill).
+/// Uses a UIView-backed AVPlayerLayer for guaranteed rendering.
+/// Accepts scale/offset transforms applied directly on the layer (GPU, no re-render).
+struct BackgroundVideoPlayerView: UIViewRepresentable {
+    let url: URL?
+    let thumbnail: UIImage?
+    var scale: CGFloat = 1.0
+    var offsetX: CGFloat = 0
+    var offsetY: CGFloat = 0
+
+    func makeUIView(context: Context) -> BackgroundVideoUIView {
+        let view = BackgroundVideoUIView()
+        view.backgroundColor = .clear
+        if let thumbnail {
+            view.setThumbnail(thumbnail)
+        }
+        if let url {
+            view.loadAndPlay(url: url)
+        }
+        view.applyTransform(scale: scale, offsetX: offsetX, offsetY: offsetY)
+        return view
+    }
+
+    func updateUIView(_ uiView: BackgroundVideoUIView, context: Context) {
+        if let url, uiView.currentURL != url {
+            uiView.loadAndPlay(url: url)
+        }
+        if let thumbnail, uiView.thumbnailView.image == nil {
+            uiView.setThumbnail(thumbnail)
+        }
+        // Apply transforms on the layer directly — GPU-composited, no SwiftUI re-render
+        uiView.applyTransform(scale: scale, offsetX: offsetX, offsetY: offsetY)
+    }
+
+    static func dismantleUIView(_ uiView: BackgroundVideoUIView, coordinator: ()) {
+        uiView.teardown()
+    }
+}
+
+/// UIKit view with AVPlayerLayer sublayer — handles layout, looping, and tap-to-pause.
+final class BackgroundVideoUIView: UIView {
+    private(set) var currentURL: URL?
+    let thumbnailView = UIImageView()
+    private let playerLayer = AVPlayerLayer()
+    private var player: AVQueuePlayer?
+    private var looper: AVPlayerLooper?
+    private var statusObserver: NSKeyValueObservation?
+    private var isPlaying = false
+
+    private let playIcon: UIImageView = {
+        let config = UIImage.SymbolConfiguration(pointSize: 48, weight: .medium)
+        let img = UIImage(systemName: "play.circle.fill", withConfiguration: config)
+        let iv = UIImageView(image: img)
+        iv.tintColor = UIColor.white.withAlphaComponent(0.85)
+        iv.layer.shadowColor = UIColor.black.cgColor
+        iv.layer.shadowOpacity = 0.5
+        iv.layer.shadowOffset = CGSize(width: 0, height: 2)
+        iv.layer.shadowRadius = 8
+        iv.isHidden = true
+        return iv
+    }()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = true
+
+        thumbnailView.contentMode = .scaleAspectFill
+        thumbnailView.clipsToBounds = true
+        addSubview(thumbnailView)
+
+        playerLayer.videoGravity = .resizeAspectFill
+        layer.addSublayer(playerLayer)
+
+        addSubview(playIcon)
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        addGestureRecognizer(tap)
+
+        NotificationCenter.default.addObserver(self, selector: #selector(muteCanvas), name: .storyComposerMuteCanvas, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(unmuteCanvas), name: .storyComposerUnmuteCanvas, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(timelinePlay), name: .timelineDidStartPlaying, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(timelineStop), name: .timelineDidStopPlaying, object: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        thumbnailView.frame = bounds
+        playerLayer.frame = bounds
+        playIcon.sizeToFit()
+        playIcon.center = CGPoint(x: bounds.midX, y: bounds.midY)
+    }
+
+    func setThumbnail(_ image: UIImage) {
+        thumbnailView.image = image
+    }
+
+    /// Apply scale + offset via CATransform3D — GPU-composited, no layout pass.
+    func applyTransform(scale: CGFloat, offsetX: CGFloat, offsetY: CGFloat) {
+        var t = CATransform3DIdentity
+        t = CATransform3DScale(t, scale, scale, 1)
+        t = CATransform3DTranslate(t, offsetX / scale, offsetY / scale, 0)
+        layer.sublayerTransform = t
+        thumbnailView.transform = CGAffineTransform(scaleX: scale, y: scale)
+            .translatedBy(x: offsetX / scale, y: offsetY / scale)
+    }
+
+    func loadAndPlay(url: URL) {
+        teardown()
+        currentURL = url
+
+        // Activate audio session for playback
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
+
+        let item = AVPlayerItem(url: url)
+        item.preferredForwardBufferDuration = 2.0
+        let queuePlayer = AVQueuePlayer(playerItem: item)
+        queuePlayer.isMuted = false
+        player = queuePlayer
+        playerLayer.player = queuePlayer
+
+        if let currentItem = queuePlayer.currentItem {
+            looper = AVPlayerLooper(player: queuePlayer, templateItem: currentItem)
+        }
+
+        statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            guard item.status == .readyToPlay else { return }
+            DispatchQueue.main.async {
+                self?.statusObserver = nil
+                self?.player?.play()
+                self?.isPlaying = true
+                self?.thumbnailView.isHidden = true
+                self?.playIcon.isHidden = true
+            }
+        }
+
+        if item.status == .readyToPlay {
+            statusObserver = nil
+            queuePlayer.play()
+            isPlaying = true
+            thumbnailView.isHidden = true
+        }
+    }
+
+    func teardown() {
+        statusObserver?.invalidate()
+        statusObserver = nil
+        player?.pause()
+        looper?.disableLooping()
+        looper = nil
+        playerLayer.player = nil
+        player = nil
+        currentURL = nil
+        isPlaying = false
+        thumbnailView.isHidden = false
+        playIcon.isHidden = true
+    }
+
+    @objc private func handleTap() {
+        guard player != nil else { return }
+        if isPlaying {
+            player?.pause()
+            isPlaying = false
+            playIcon.isHidden = false
+        } else {
+            player?.play()
+            isPlaying = true
+            playIcon.isHidden = true
+        }
+    }
+
+    @objc private func muteCanvas() { player?.isMuted = true }
+    @objc private func unmuteCanvas() { player?.isMuted = false }
+    @objc private func timelinePlay() {
+        player?.seek(to: .zero)
+        player?.play()
+        isPlaying = true
+        playIcon.isHidden = true
+    }
+    @objc private func timelineStop() {
+        player?.pause()
+        isPlaying = false
+        playIcon.isHidden = false
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        teardown()
     }
 }

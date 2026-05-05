@@ -11,9 +11,11 @@ extension StrokeStyle {
 // MARK: - Safe Zone
 
 enum StorySafeZone {
-    static let topInset: CGFloat = 0.12
-    static let bottomInset: CGFloat = 0.18
-    static let horizontalInset: CGFloat = 0.04
+    /// Top inset accounts for viewer progress bars + header + Dynamic Island (~18% of canvas height).
+    static let topInset: CGFloat = 0.18
+    /// Bottom inset accounts for viewer reply bar + gradient scrim + actions (~25% of canvas height).
+    static let bottomInset: CGFloat = 0.25
+    static let horizontalInset: CGFloat = 0.05
 
     static let normalizedRect: CGRect = CGRect(
         x: horizontalInset,
@@ -88,14 +90,13 @@ struct SafeZoneOverlay: View {
         let rect = StorySafeZone.denormalizedRect(in: canvasSize)
 
         ZStack {
-            RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(style: .storyDashed)
-                .foregroundStyle(MeeshyColors.indigo300.opacity(isDragging ? 0.7 : 0.25))
-                .frame(width: rect.width, height: rect.height)
-                .position(x: rect.midX, y: rect.midY)
-                .animation(.easeInOut(duration: 0.2), value: isDragging)
-
             if isDragging {
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(style: .storyDashed)
+                    .foregroundStyle(MeeshyColors.indigo300.opacity(0.7))
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+
                 Text("Safe area")
                     .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundStyle(.white)
@@ -103,9 +104,9 @@ struct SafeZoneOverlay: View {
                     .padding(.vertical, 2)
                     .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.85)))
                     .position(x: rect.midX, y: rect.minY - 10)
-                    .transition(.opacity.combined(with: .scale))
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: isDragging)
         .allowsHitTesting(false)
     }
 }

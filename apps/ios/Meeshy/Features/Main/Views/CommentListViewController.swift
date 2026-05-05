@@ -1,11 +1,11 @@
-import UIKit
+@preconcurrency import UIKit
 import Combine
 import MeeshySDK
 
 final class CommentListViewController: UIViewController {
 
     private var collectionView: UICollectionView!
-    nonisolated(unsafe) private var dataSource: UICollectionViewDiffableDataSource<CommentListSection, CommentListItem>!
+    private var dataSource: CommentListDataSource!
     private let store: CommentStore
     var onToggleThread: ((String) -> Void)?
 

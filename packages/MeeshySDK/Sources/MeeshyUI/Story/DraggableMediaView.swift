@@ -355,20 +355,15 @@ public struct DraggableMediaView: View {
             item.preferredForwardBufferDuration = 2.0
             queuePlayer = AVQueuePlayer(playerItem: item)
         }
-        queuePlayer.isMuted = false
+        queuePlayer.isMuted = isEditing
         internalPlayer = queuePlayer
 
         if let currentItem = queuePlayer.currentItem {
             playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: currentItem)
         }
 
-        if isEditing {
-            queuePlayer.pause()
-            isPlaying = false
-        } else {
-            queuePlayer.play()
-            isPlaying = true
-        }
+        queuePlayer.play()
+        isPlaying = true
     }
 
     private func teardownInternalPlayer() {

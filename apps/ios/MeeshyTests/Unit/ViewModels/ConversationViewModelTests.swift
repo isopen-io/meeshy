@@ -1007,4 +1007,51 @@ final class ConversationViewModelTests: XCTestCase {
         sut.showEffectsPicker = false
         XCTAssertFalse(sut.showEffectsPicker)
     }
+
+    // MARK: - Persistence Orchestrator Tests
+
+    func test_setupPersistence_assignsStoreAndPersistence() {
+        let sut = makeSUT()
+
+        // Before setup, both should be nil
+        XCTAssertNil(sut.messageStore)
+        XCTAssertNil(sut.messagePersistence)
+
+        // After setup, both should be assigned
+        let container = DependencyContainer.shared
+        let store = MessageStore(
+            conversationId: testConversationId,
+            persistence: container.messagePersistence
+        )
+        sut.setupPersistence(
+            store: store,
+            persistence: container.messagePersistence,
+            dbPool: container.dbPool
+        )
+
+        XCTAssertNotNil(sut.messageStore)
+        XCTAssertNotNil(sut.messagePersistence)
+    }
+
+    func test_setupPersistence_storeMatchesConversationId() {
+        let sut = makeSUT()
+        let container = DependencyContainer.shared
+        let store = MessageStore(
+            conversationId: testConversationId,
+            persistence: container.messagePersistence
+        )
+        sut.setupPersistence(
+            store: store,
+            persistence: container.messagePersistence,
+            dbPool: container.dbPool
+        )
+
+        XCTAssertEqual(sut.messageStore?.conversationId, testConversationId)
+    }
+
+    func test_currentUserIdForView_matchesAuthManagerUser() {
+        let sut = makeSUT()
+
+        XCTAssertEqual(sut.currentUserIdForView, testUserId)
+    }
 }

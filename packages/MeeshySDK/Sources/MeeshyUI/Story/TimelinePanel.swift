@@ -42,15 +42,7 @@ struct TimelinePanel: View {
         VStack(spacing: 0) {
             transportBar
             Divider().overlay(MeeshyColors.indigo900.opacity(0.3))
-
-            if viewModel.timelineAdvanced {
-                advancedTimelineContent
-            } else {
-                SimpleTimelineView(
-                    viewModel: viewModel,
-                    onEditTap: { id in showMediaEditor = id }
-                )
-            }
+            advancedTimelineContent
         }
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -253,18 +245,41 @@ struct TimelinePanel: View {
                     )
             }
 
-            Button {
-                withAnimation(.spring(response: 0.25)) {
-                    viewModel.timelineAdvanced.toggle()
+            // Zoom controls
+            HStack(spacing: 2) {
+                Button {
+                    withAnimation(.spring(response: 0.2)) {
+                        viewModel.timelineZoomScale = max(0.3, viewModel.timelineZoomScale / 1.5)
+                        zoomAnchor = viewModel.timelineZoomScale
+                    }
+                } label: {
+                    Image(systemName: "minus.magnifyingglass")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(theme.textSecondary)
+                        .frame(width: 32, height: 32)
                 }
-            } label: {
-                Image(systemName: viewModel.timelineAdvanced ? "slider.horizontal.3" : "slider.horizontal.2.square")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(viewModel.timelineAdvanced ? MeeshyColors.brandPrimary : theme.textSecondary)
-                    .frame(width: 32, height: 32)
-                    .background(
-                        Circle().fill(viewModel.timelineAdvanced ? MeeshyColors.brandPrimary.opacity(0.15) : Color.clear)
-                    )
+                Button {
+                    withAnimation(.spring(response: 0.2)) {
+                        viewModel.timelineZoomScale = 1.0
+                        zoomAnchor = 1.0
+                    }
+                } label: {
+                    Text("1x")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(zoomScale == 1.0 ? MeeshyColors.brandPrimary : theme.textMuted)
+                        .frame(width: 28, height: 32)
+                }
+                Button {
+                    withAnimation(.spring(response: 0.2)) {
+                        viewModel.timelineZoomScale = min(15.0, viewModel.timelineZoomScale * 1.5)
+                        zoomAnchor = viewModel.timelineZoomScale
+                    }
+                } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(theme.textSecondary)
+                        .frame(width: 32, height: 32)
+                }
             }
         }
         .padding(.horizontal, 14)
@@ -277,46 +292,49 @@ struct TimelinePanel: View {
     private var advancedTimelineContent: some View {
         let grouped = groupedTracks
 
-        return ScrollView(.vertical, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 0) {
+        return HStack(alignment: .top, spacing: 0) {
+            // Fixed label column (doesn't scroll horizontally)
+            ScrollView(.vertical, showsIndicators: false) {
                 labelColumn(grouped: grouped)
-                    .frame(width: labelWidth)
+            }
+            .frame(width: labelWidth)
 
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        ZStack(alignment: .topLeading) {
-                            VStack(spacing: 0) {
-                                rulerRow
-                                trackRows(grouped: grouped)
-                            }
-
-                            gridLines(grouped: grouped)
-                            playheadOverlay(grouped: grouped)
-                            durationHandleOverlay
-
-                            Color.clear
-                                .frame(width: 1, height: 1)
-                                .id("playhead")
-                                .offset(x: CGFloat(viewModel.timelinePlaybackTime) * pixelsPerSecond)
+            // Scrollable timeline area (horizontal + vertical)
+            ScrollViewReader { proxy in
+                ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                    ZStack(alignment: .topLeading) {
+                        VStack(spacing: 0) {
+                            rulerRow
+                            trackRows(grouped: grouped)
                         }
-                        .frame(width: totalTimelineWidth)
+
+                        gridLines(grouped: grouped)
+                        playheadOverlay(grouped: grouped)
+                        durationHandleOverlay
+
+                        Color.clear
+                            .frame(width: 1, height: 1)
+                            .id("playhead")
+                            .offset(x: CGFloat(viewModel.timelinePlaybackTime) * pixelsPerSecond)
                     }
-                    .onAppear { scrollProxy = proxy }
+                    .frame(width: totalTimelineWidth)
                 }
+                .onAppear { scrollProxy = proxy }
+                // Pinch to zoom on the scrollable timeline area
+                .gesture(
+                    MagnificationGesture()
+                        .onChanged { value in
+                            viewModel.timelineZoomScale = max(0.3, min(15.0, zoomAnchor * value))
+                        }
+                        .onEnded { _ in
+                            zoomAnchor = viewModel.timelineZoomScale
+                        }
+                )
             }
 
             if tracks.isEmpty { emptyState }
         }
-        .frame(maxHeight: 340)
-        .gesture(
-            MagnificationGesture()
-                .onChanged { value in
-                    viewModel.timelineZoomScale = max(0.5, min(10.0, zoomAnchor * value))
-                }
-                .onEnded { _ in
-                    zoomAnchor = viewModel.timelineZoomScale
-                }
-        )
+        .frame(maxHeight: 400)
     }
 
     // MARK: - Track Grouping

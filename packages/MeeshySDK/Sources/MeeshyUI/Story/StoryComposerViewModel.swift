@@ -7,17 +7,21 @@ import PencilKit
 
 enum StoryToolMode: String, CaseIterable {
     // Contenu
-    case photo
+    case media      // Images, videos, audio (foreground + background)
     case drawing
     case text
-    case audio
+    case texture    // Background color, patterns
     // Effets
     case filters
     case timeline
 
+    // Legacy alias for code that still references .photo or .audio
+    static let photo: StoryToolMode = .media
+    static let audio: StoryToolMode = .media
+
     var tab: StoryTab {
         switch self {
-        case .photo, .drawing, .text, .audio: return .contenu
+        case .media, .drawing, .text, .texture: return .contenu
         case .filters, .timeline: return .effets
         }
     }
@@ -197,6 +201,8 @@ final class StoryComposerViewModel {
 
     var selectedFilter: String?
     var filterIntensity: Double = 1.0
+    /// When true, filter applies to the entire slide (all layers). When false (default), only background.
+    var filterAppliesToEntireSlide: Bool = false
 
     func applyFilter(_ name: String?) {
         selectedFilter = name
