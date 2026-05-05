@@ -3,6 +3,7 @@ import type { Prisma } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
+import { MediaService } from './MediaService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 
@@ -102,7 +103,10 @@ const postInclude = {
 };
 
 export class PostService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly mediaService: MediaService = new MediaService(),
+  ) {}
 
   async createPost(data: {
     type: PostType;
@@ -748,6 +752,7 @@ export class PostService {
   ) {
     const original = await this.prisma.post.findFirst({
       where: { id: postId, isDeleted: false },
+      include: { media: { select: mediaSelect, orderBy: { order: 'asc' as const } } },
     });
     if (!original) return null;
 
@@ -761,6 +766,68 @@ export class PostService {
       ?? original.repostOfId
       ?? original.id;
 
+    const isStoryToPostRepost = original.type === PostType.STORY && targetType === PostType.POST;
+
+    type SnapshotMediaCreate = {
+      fileName: string;
+      originalName: string;
+      mimeType: string;
+      fileSize: number;
+      filePath: string;
+      fileUrl: string;
+      thumbnailUrl?: string;
+      order: number;
+    };
+
+    let snapshotMedia: SnapshotMediaCreate[] | undefined;
+    let snapshotAudioUrl: string | undefined;
+    let snapshotStoryEffects: Prisma.InputJsonValue | undefined;
+
+    if (isStoryToPostRepost) {
+      const duplicatedMedia: SnapshotMediaCreate[] = [];
+      try {
+        const originalMedia = (original.media ?? []) as Array<{
+          fileUrl: string;
+          mimeType: string;
+          thumbnailUrl?: string | null;
+          order?: number;
+        }>;
+
+        for (const [idx, m] of originalMedia.entries()) {
+          const dup = await this.mediaService.duplicateMedia(m.fileUrl);
+          let dupThumbUrl: string | undefined;
+          if (m.thumbnailUrl) {
+            const dupThumb = await this.mediaService.duplicateMedia(m.thumbnailUrl);
+            dupThumbUrl = dupThumb.fileUrl;
+          }
+          duplicatedMedia.push({
+            fileName: dup.fileName,
+            originalName: dup.fileName,
+            mimeType: dup.mimeType,
+            fileSize: dup.fileSize,
+            filePath: dup.filePath,
+            fileUrl: dup.fileUrl,
+            thumbnailUrl: dupThumbUrl,
+            order: idx,
+          });
+        }
+
+        const audioUrl = original.audioUrl as string | null | undefined;
+        if (audioUrl) {
+          const dupAudio = await this.mediaService.duplicateMedia(audioUrl);
+          snapshotAudioUrl = dupAudio.fileUrl;
+        }
+
+        snapshotMedia = duplicatedMedia;
+        snapshotStoryEffects = original.storyEffects as Prisma.InputJsonValue | undefined;
+      } catch (err) {
+        for (const dup of duplicatedMedia) {
+          await this.mediaService.deleteMedia(dup.fileUrl).catch(() => {});
+        }
+        throw new Error('Media snapshot failed during repost', { cause: err });
+      }
+    }
+
     const repost = await this.prisma.post.create({
       data: {
         authorId: userId,
@@ -771,6 +838,9 @@ export class PostService {
         repostOfId: postId,
         originalRepostOfId,
         isQuote,
+        ...(snapshotAudioUrl !== undefined ? { audioUrl: snapshotAudioUrl } : {}),
+        ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),
+        ...(snapshotMedia !== undefined ? { media: { create: snapshotMedia } } : {}),
       },
       include: postInclude,
     });
