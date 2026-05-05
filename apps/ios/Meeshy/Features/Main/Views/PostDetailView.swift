@@ -20,7 +20,7 @@ struct PostDetailView: View {
     @State private var activeDisplayLangCode: String? = nil
     @State private var fullscreenMediaId: String? = nil
     @State private var showFullscreenGallery = false
-    @State private var composerLanguage: String = "fr"
+    @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false

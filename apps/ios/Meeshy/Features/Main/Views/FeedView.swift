@@ -26,7 +26,7 @@ struct FeedView: View {
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
     @State private var showAudioComposer = false
-    @State var composerLanguage: String = AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+    @State var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State var showComposerLanguagePicker = false
     @State private var headerScrollOffset: CGFloat = 0
 

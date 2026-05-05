@@ -123,7 +123,7 @@ struct CommentsSheetView: View {
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var liveComments: [FeedComment]?
     @State private var liveCommentCount: Int?
-    @State private var composerLanguage: String = "fr"
+    @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false

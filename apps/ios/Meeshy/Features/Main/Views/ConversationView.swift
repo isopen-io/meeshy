@@ -100,19 +100,10 @@ struct ConversationComposerState {
     var uploadProgress: UploadQueueProgress? = nil
     var showLocationPicker = false
     
-    // Language (source language for outgoing messages)
-    // Priority: keyboard layout > system language > "fr" fallback
-    var selectedLanguage: String = {
-        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            let code = String(kbd.prefix(2))
-            if LanguageOption.defaults.contains(where: { $0.code == code }) { return code }
-        }
-        if let sysLang = Locale.current.language.languageCode?.identifier,
-           LanguageOption.defaults.contains(where: { $0.code == sysLang }) {
-            return sysLang
-        }
-        return "fr"
-    }()
+    // Language (source language for outgoing messages).
+    // Resolved via DefaultComposerLanguage: keyboard layout > "fr" fallback.
+    // TextAnalyzer overrides this once the user types enough characters.
+    var selectedLanguage: String = DefaultComposerLanguage.resolve()
 
     // Reply & Edit
     var pendingReplyReference: ReplyReference? = nil
