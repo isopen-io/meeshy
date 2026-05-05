@@ -66,7 +66,11 @@ const postInclude = {
   repostOf: {
     select: {
       id: true,
+      type: true,
       content: true,
+      storyEffects: true,
+      audioUrl: true,
+      originalRepostOfId: true,
       author: { select: authorSelect },
       media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
       createdAt: true,
