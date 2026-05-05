@@ -669,6 +669,33 @@ describe('PostService', () => {
       );
     });
 
+    it('rolls back media snapshot if a duplication fails partway', async () => {
+      const original = makePost({
+        id: 'story-1',
+        type: PostType.STORY,
+        media: [
+          { id: 'm1', fileUrl: '/api/v1/attachments/file/m1.jpg', mimeType: 'image/jpeg', filePath: '2026/05/user/m1.jpg', fileName: 'm1.jpg', originalName: 'm1.jpg', fileSize: 1000 },
+          { id: 'm2', fileUrl: '/api/v1/attachments/file/m2.mp4', mimeType: 'video/mp4', filePath: '2026/05/user/m2.mp4', fileName: 'm2.mp4', originalName: 'm2.mp4', fileSize: 5000 },
+        ],
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+
+      // First media duplication succeeds, second fails
+      const duplicateMediaSpy = jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-m1.jpg', filePath: 'snapshots/new-m1.jpg', fileName: 'new-m1.jpg', fileSize: 1000, mimeType: 'image/jpeg' })
+        .mockRejectedValueOnce(new Error('Upload failed'));
+      const deleteMediaSpy = jest.spyOn(mediaService, 'deleteMedia').mockResolvedValue(undefined);
+
+      await expect(
+        service.repostPost('story-1', 'user-reposter', { targetType: PostType.POST })
+      ).rejects.toThrow('Media snapshot failed');
+
+      // Verify the first duplicated media was rolled back
+      expect(deleteMediaSpy).toHaveBeenCalledWith('/api/v1/attachments/file/new-m1.jpg');
+      // Verify NO Post was created
+      expect(prisma.post.create).not.toHaveBeenCalled();
+    });
+
     it('duplicates media to new CDN URLs when reposting STORY as POST', async () => {
       const original = makePost({
         id: 'story-1',
