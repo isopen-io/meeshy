@@ -40,7 +40,13 @@ public struct APIPostMedia: Decodable, Sendable {
 
 public struct APIRepostOf: Decodable, Sendable {
     public let id: String
+    public let type: String?
     public let content: String?
+    public let originalLanguage: String?
+    public let translations: [String: APIPostTranslationEntry]?
+    public let storyEffects: StoryEffects?
+    public let audioUrl: String?
+    public let originalRepostOfId: String?
     public let author: APIAuthor
     public let media: [APIPostMedia]?
     public let createdAt: Date
@@ -91,6 +97,7 @@ public struct APIPost: Decodable, Sendable {
     public let media: [APIPostMedia]?
     public let comments: [APIPostComment]?
     public let repostOf: APIRepostOf?
+    public let originalRepostOfId: String?
     public let isQuote: Bool?
     public let moodEmoji: String?
     public let audioUrl: String?

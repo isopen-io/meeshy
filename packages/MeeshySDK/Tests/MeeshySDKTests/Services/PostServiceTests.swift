@@ -27,7 +27,8 @@ final class PostServiceTests: XCTestCase {
             author: APIAuthor(id: "author1", username: "alice", displayName: "Alice", avatar: nil),
             likeCount: 10, commentCount: 2, repostCount: 1, viewCount: 100,
             bookmarkCount: 3, shareCount: 0, reactionSummary: nil, isPinned: false,
-            isEdited: false, media: nil, comments: nil, repostOf: nil, isQuote: nil,
+            isEdited: false, media: nil, comments: nil, repostOf: nil,
+            originalRepostOfId: nil, isQuote: nil,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
             translations: nil, isLikedByMe: nil
         )
