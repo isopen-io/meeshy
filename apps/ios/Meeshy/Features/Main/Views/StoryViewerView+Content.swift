@@ -793,23 +793,8 @@ extension StoryViewerView {
         }
     }
 
-    func reshareStory() {
-        guard let story = currentStory else { return }
-        HapticFeedback.light()
-
-        Task {
-            do {
-                let body = RepostRequest(content: nil, isQuote: false)
-                let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
-                    endpoint: "/posts/\(story.id)/repost",
-                    body: body
-                )
-                HapticFeedback.success()
-            } catch {
-                HapticFeedback.error()
-            }
-        }
-    }
+    // TODO C.2 : add repostAsPostDirect() using PostService.repost(postId:targetType:content:isQuote:)
+    // (replaces the deleted reshareStory() that bypassed the SDK by calling APIClient directly)
 
     func shareStory() {
         guard let story = currentStory else { return }

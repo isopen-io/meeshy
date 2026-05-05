@@ -575,7 +575,8 @@ struct StoryViewerView: View {
                     icon: "arrow.2.squarepath",
                     label: "Partager"
                 ) {
-                    reshareStory()
+                    // TODO C.2 : wire repostAsPostDirect() using PostService.repost(postId:targetType:content:isQuote:)
+                    HapticFeedback.light()
                 }
             } else {
                 storyActionButton(
@@ -1255,11 +1256,7 @@ struct StoryViewerView: View {
                             Label("Voir le profil", systemImage: "person.fill")
                         }
 
-                        Button {
-                            reshareStory()
-                        } label: {
-                            Label("Republier", systemImage: "arrow.2.squarepath")
-                        }
+                        // TODO C.2 : add Republier en post + Éditer et republier en post
 
                         Divider()
 
