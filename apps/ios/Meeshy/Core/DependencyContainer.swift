@@ -56,7 +56,7 @@ final class DependencyContainer {
 
     // MARK: - Database config (O7, N7, N8)
 
-    static func dbConfig() -> Configuration {
+    nonisolated static func dbConfig() -> Configuration {
         var config = Configuration()
         config.maximumReaderCount = min(ProcessInfo.processInfo.activeProcessorCount * 2, 16)
         config.prepareDatabase { db in
