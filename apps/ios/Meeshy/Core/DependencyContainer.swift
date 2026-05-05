@@ -11,6 +11,9 @@ final class DependencyContainer {
     let dbPool: DatabasePool
     let messagePersistence: MessagePersistenceActor
     let feedPersistence: FeedPersistenceActor
+    let retryEngine: RetryEngine
+    let thumbnailPrefetcher: ThumbnailPrefetcher
+    let mediaSnapshotStore: MediaSnapshotStore
 
     private init() {
         let dbPath = Self.databasePath()
@@ -23,9 +26,18 @@ final class DependencyContainer {
             self.dbPool = pool
             self.messagePersistence = MessagePersistenceActor(dbWriter: pool)
             self.feedPersistence = FeedPersistenceActor(dbWriter: pool)
+            self.thumbnailPrefetcher = ThumbnailPrefetcher.shared
+            self.mediaSnapshotStore = MediaSnapshotStore.shared
+            self.retryEngine = RetryEngine(
+                persistence: messagePersistence,
+                dbWriter: pool,
+                sender: MessageRESTSender()
+            )
         } catch {
             fatalError("Failed to initialize database: \(error)")
         }
+
+        Task { await retryEngine.start() }
     }
 
     // MARK: - App Group shared path (O6)
@@ -50,5 +62,20 @@ final class DependencyContainer {
             try db.execute(sql: "PRAGMA wal_autocheckpoint = 1000")
         }
         return config
+    }
+}
+
+// MARK: - Stub REST sender (TODO: wire to actual REST API)
+
+private struct MessageRESTSender: MessageSending {
+    func send(
+        conversationId: String,
+        content: String?,
+        contentType: String,
+        encryptedPayload: Data?,
+        attachments: Data?
+    ) async throws -> SendMessageResponse {
+        throw NSError(domain: "NotImplemented", code: 0,
+                      userInfo: [NSLocalizedDescriptionKey: "MessageRESTSender not yet wired"])
     }
 }
