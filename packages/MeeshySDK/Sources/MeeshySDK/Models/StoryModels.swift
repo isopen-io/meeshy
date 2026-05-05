@@ -168,10 +168,15 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var fadeIn: Float?               // animation d'entrée (secondes)
     public var fadeOut: Float?              // animation de sortie (secondes)
 
+    /// Lock flag — Patch B.3 : true = composer skips drag/edit/delete (used for repost badge sticker).
+    /// nil/false = editable. Synthesized Codable handles `Bool?` via decodeIfPresent / encodeIfPresent.
+    public var isLocked: Bool?
+
     enum CodingKeys: String, CodingKey {
         case id, content, x, y, scale, rotation, translations, sourceLanguage, zIndex
         case textStyle, textColor, textSize, textAlign, textBg
         case startTime, displayDuration, fadeIn, fadeOut
+        case isLocked
     }
 
     public init(id: String = UUID().uuidString, content: String,
@@ -183,7 +188,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 textSize: CGFloat? = 28, textAlign: String? = "center",
                 textBg: String? = nil,
                 startTime: Float? = nil, displayDuration: Float? = nil,
-                fadeIn: Float? = nil, fadeOut: Float? = nil) {
+                fadeIn: Float? = nil, fadeOut: Float? = nil,
+                isLocked: Bool? = nil) {
         self.id = id; self.content = content
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
         self.translations = translations
@@ -192,6 +198,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.textSize = textSize; self.textAlign = textAlign; self.textBg = textBg
         self.startTime = startTime; self.displayDuration = displayDuration
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
+        self.isLocked = isLocked
     }
 
     // MARK: - Computed properties (non-SwiftUI)

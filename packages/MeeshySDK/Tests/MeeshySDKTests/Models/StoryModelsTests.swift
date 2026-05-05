@@ -290,6 +290,36 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(withoutSize.resolvedSize, 28)
     }
 
+    // MARK: - StoryTextObject isLocked (Patch B.3)
+
+    func test_StoryTextObject_decodes_isLocked() throws {
+        let json = """
+        {"id": "t1", "content": "Reposté de @alice", "x": 0.5, "y": 0.92,
+         "scale": 1, "rotation": 0, "textStyle": "bold", "textColor": "FFFFFF",
+         "textSize": 14, "textAlign": "center", "textBg": "6366F1",
+         "isLocked": true, "zIndex": 1000}
+        """.data(using: .utf8)!
+        let obj = try JSONDecoder().decode(StoryTextObject.self, from: json)
+        XCTAssertEqual(obj.isLocked, true)
+    }
+
+    func test_StoryTextObject_isLocked_optional_defaults_nil() throws {
+        let json = """
+        {"id": "t1", "content": "hello", "x": 0.5, "y": 0.5,
+         "scale": 1, "rotation": 0}
+        """.data(using: .utf8)!
+        let obj = try JSONDecoder().decode(StoryTextObject.self, from: json)
+        XCTAssertNil(obj.isLocked)
+    }
+
+    func test_StoryTextObject_encodes_isLocked() throws {
+        var obj = StoryTextObject(content: "x")
+        obj.isLocked = true
+        let data = try JSONEncoder().encode(obj)
+        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(dict["isLocked"] as? Bool, true)
+    }
+
     // MARK: - StorySticker
 
     func testStoryStickerInit() {
