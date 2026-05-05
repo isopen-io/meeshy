@@ -4,11 +4,8 @@ import MeeshySDK
 
 final class MessageListViewController: UIViewController {
 
-    enum Section: Hashable { case main }
-    enum Item: Hashable { case message(localId: String) }
-
     private var collectionView: UICollectionView!
-    private var dataSource: UICollectionViewDiffableDataSource<Section, Item>!
+    nonisolated(unsafe) private var dataSource: UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>!
     private let store: MessageStore
     private let currentUserId: String
     private let imageCache = DecodedImageCache.shared
@@ -63,28 +60,28 @@ final class MessageListViewController: UIViewController {
     // MARK: - DataSource
 
     private func configureDataSource() {
-        let textReg = UICollectionView.CellRegistration<TextBubbleCell, Item> { [weak self] cell, _, item in
+        let textReg = UICollectionView.CellRegistration<TextBubbleCell, MessageListItem> { [weak self] cell, _, item in
             guard let self, case .message(let localId) = item,
                   let record = self.store.message(for: localId) else { return }
             cell.contentView.transform = CGAffineTransform(scaleX: 1, y: -1)
             cell.configure(with: record, isMe: record.senderId == self.currentUserId)
         }
 
-        let mediaReg = UICollectionView.CellRegistration<MediaBubbleCell, Item> { [weak self] cell, _, item in
+        let mediaReg = UICollectionView.CellRegistration<MediaBubbleCell, MessageListItem> { [weak self] cell, _, item in
             guard let self, case .message(let localId) = item,
                   let record = self.store.message(for: localId) else { return }
             cell.contentView.transform = CGAffineTransform(scaleX: 1, y: -1)
             cell.configure(with: record, isMe: record.senderId == self.currentUserId, imageCache: self.imageCache)
         }
 
-        let audioReg = UICollectionView.CellRegistration<AudioBubbleCell, Item> { [weak self] cell, _, item in
+        let audioReg = UICollectionView.CellRegistration<AudioBubbleCell, MessageListItem> { [weak self] cell, _, item in
             guard let self, case .message(let localId) = item,
                   let record = self.store.message(for: localId) else { return }
             cell.contentView.transform = CGAffineTransform(scaleX: 1, y: -1)
             cell.configure(with: record, isMe: record.senderId == self.currentUserId)
         }
 
-        let systemReg = UICollectionView.CellRegistration<SystemMessageCell, Item> { [weak self] cell, _, item in
+        let systemReg = UICollectionView.CellRegistration<SystemMessageCell, MessageListItem> { [weak self] cell, _, item in
             guard let self, case .message(let localId) = item,
                   let record = self.store.message(for: localId) else { return }
             cell.contentView.transform = CGAffineTransform(scaleX: 1, y: -1)
@@ -112,9 +109,9 @@ final class MessageListViewController: UIViewController {
     // MARK: - Snapshot
 
     private func applySnapshot(animated: Bool = true) {
-        var snapshot = NSDiffableDataSourceSnapshot<Section, Item>()
+        var snapshot = NSDiffableDataSourceSnapshot<MessageListSection, MessageListItem>()
         snapshot.appendSections([.main])
-        let items = store.messages.reversed().map { Item.message(localId: $0.localId) }
+        let items = store.messages.reversed().map { MessageListItem.message(localId: $0.localId) }
         snapshot.appendItems(items, toSection: .main)
         dataSource.apply(snapshot, animatingDifferences: animated)
     }

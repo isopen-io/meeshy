@@ -62,6 +62,37 @@ public actor FeedPersistenceActor {
         }
     }
 
+    public func updateCommentLikeCount(commentId: String, count: Int) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE feed_comments SET likeCount = ?,
+                    changeVersion = changeVersion + 1 WHERE id = ?
+                    """,
+                arguments: [count, commentId]
+            )
+        }
+    }
+
+    public func upsertPostTranslation(postId: String, language: String, translatedText: String) throws {
+        try dbWriter.write { db in
+            let existingData = try Data.fetchOne(db, sql: "SELECT translationsJson FROM feed_posts WHERE id = ?", arguments: [postId])
+            var translations: [String: String] = [:]
+            if let existingData {
+                translations = (try? JSONDecoder().decode([String: String].self, from: existingData)) ?? [:]
+            }
+            translations[language] = translatedText
+            let updatedData = try? JSONEncoder().encode(translations)
+            try db.execute(
+                sql: """
+                    UPDATE feed_posts SET translationsJson = ?,
+                    changeVersion = changeVersion + 1 WHERE id = ?
+                    """,
+                arguments: [updatedData, postId]
+            )
+        }
+    }
+
     // MARK: - Reads (nonisolated)
 
     public nonisolated var reader: any DatabaseWriter { dbWriter }

@@ -34,6 +34,56 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
     public var createdAt: Date
     public var updatedAt: Date?
     public var changeVersion: Int64
+
+    public init(
+        id: String, authorId: String,
+        authorUsername: String?, authorDisplayName: String?,
+        authorAvatarURL: String?, type: String?,
+        content: String?, originalLanguage: String?,
+        visibility: String?,
+        likeCount: Int, commentCount: Int,
+        repostCount: Int, viewCount: Int,
+        bookmarkCount: Int, shareCount: Int,
+        isLikedByMe: Bool, isPinned: Bool,
+        isEdited: Bool, isQuote: Bool,
+        moodEmoji: String?, audioUrl: String?, audioDuration: Int?,
+        mediaJson: Data?, reactionSummaryJson: Data?,
+        repostOfJson: Data?, mentionedUsersJson: Data?,
+        translationsJson: Data?,
+        createdAt: Date, updatedAt: Date?,
+        changeVersion: Int64
+    ) {
+        self.id = id
+        self.authorId = authorId
+        self.authorUsername = authorUsername
+        self.authorDisplayName = authorDisplayName
+        self.authorAvatarURL = authorAvatarURL
+        self.type = type
+        self.content = content
+        self.originalLanguage = originalLanguage
+        self.visibility = visibility
+        self.likeCount = likeCount
+        self.commentCount = commentCount
+        self.repostCount = repostCount
+        self.viewCount = viewCount
+        self.bookmarkCount = bookmarkCount
+        self.shareCount = shareCount
+        self.isLikedByMe = isLikedByMe
+        self.isPinned = isPinned
+        self.isEdited = isEdited
+        self.isQuote = isQuote
+        self.moodEmoji = moodEmoji
+        self.audioUrl = audioUrl
+        self.audioDuration = audioDuration
+        self.mediaJson = mediaJson
+        self.reactionSummaryJson = reactionSummaryJson
+        self.repostOfJson = repostOfJson
+        self.mentionedUsersJson = mentionedUsersJson
+        self.translationsJson = translationsJson
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.changeVersion = changeVersion
+    }
 }
 
 extension PostRecord: Equatable {

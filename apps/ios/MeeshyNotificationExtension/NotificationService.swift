@@ -255,13 +255,15 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 senderUsername: nil, senderColor: nil, senderAvatarURL: nil,
                 deliveredCount: 0, readCount: 0,
                 deliveredToAllAt: nil, readByAllAt: nil,
-                createdAt: now, sentAt: nil, deliveredAt: nil, readAt: nil,
-                updatedAt: now,
-                attachmentsJson: nil, reactionsJson: nil, reactionCount: 0,
-                currentUserReactionsJson: nil, mentionedUsersJson: nil,
+                createdAt: now, sentAt: nil,
+                deliveredAt: nil, readAt: nil, updatedAt: now,
+                attachmentsJson: nil, reactionsJson: nil,
+                reactionCount: 0, currentUserReactionsJson: nil,
+                mentionedUsersJson: nil,
                 cachedBubbleWidth: nil, cachedBubbleHeight: nil,
                 cachedLastLineWidth: nil, cachedLineCount: nil,
-                cachedTimestampInline: nil, layoutVersion: 0, layoutMaxWidth: nil,
+                cachedTimestampInline: nil,
+                layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0
             )
 

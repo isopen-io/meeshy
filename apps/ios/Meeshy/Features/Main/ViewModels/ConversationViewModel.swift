@@ -1368,7 +1368,7 @@ class ConversationViewModel: ObservableObject {
                 pinnedAt: nil, pinnedBy: nil,
                 senderName: authManager.currentUser?.displayName,
                 senderUsername: authManager.currentUser?.username,
-                senderColor: nil, senderAvatarURL: authManager.currentUser?.avatarUrl,
+                senderColor: nil, senderAvatarURL: authManager.currentUser?.avatar,
                 deliveredCount: 0, readCount: 0,
                 deliveredToAllAt: nil, readByAllAt: nil,
                 createdAt: Date(), sentAt: nil,

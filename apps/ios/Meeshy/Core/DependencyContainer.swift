@@ -37,7 +37,10 @@ final class DependencyContainer {
             fatalError("Failed to initialize database: \(error)")
         }
 
-        Task { await retryEngine.start() }
+        Task {
+            await messagePersistence.start()
+            await retryEngine.start()
+        }
     }
 
     // MARK: - App Group shared path (O6)

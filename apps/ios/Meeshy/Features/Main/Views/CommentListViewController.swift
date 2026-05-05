@@ -4,16 +4,8 @@ import MeeshySDK
 
 final class CommentListViewController: UIViewController {
 
-    enum CommentSection: Hashable {
-        case topLevel(commentId: String)
-    }
-    enum CommentItem: Hashable {
-        case comment(id: String)
-        case loadMoreReplies(parentId: String, remaining: Int)
-    }
-
     private var collectionView: UICollectionView!
-    private var dataSource: UICollectionViewDiffableDataSource<CommentSection, CommentItem>!
+    nonisolated(unsafe) private var dataSource: UICollectionViewDiffableDataSource<CommentListSection, CommentListItem>!
     private let store: CommentStore
     var onToggleThread: ((String) -> Void)?
 
@@ -56,13 +48,13 @@ final class CommentListViewController: UIViewController {
     }
 
     private func configureDataSource() {
-        let commentReg = UICollectionView.CellRegistration<TopLevelCommentCell, CommentItem> { [weak self] cell, _, item in
+        let commentReg = UICollectionView.CellRegistration<TopLevelCommentCell, CommentListItem> { [weak self] cell, _, item in
             guard let self, case .comment(let id) = item,
                   let record = self.store.topLevelComments.first(where: { $0.id == id }) else { return }
             cell.configure(with: record)
         }
 
-        let replyReg = UICollectionView.CellRegistration<ReplyCell, CommentItem> { [weak self] cell, _, item in
+        let replyReg = UICollectionView.CellRegistration<ReplyCell, CommentListItem> { [weak self] cell, _, item in
             guard let self, case .comment(let id) = item else { return }
             for parentId in self.store.expandedThreads {
                 if let record = self.store.replies(for: parentId).first(where: { $0.id == id }) {
@@ -72,7 +64,7 @@ final class CommentListViewController: UIViewController {
             }
         }
 
-        let loadMoreReg = UICollectionView.CellRegistration<LoadMoreRepliesCell, CommentItem> { cell, _, item in
+        let loadMoreReg = UICollectionView.CellRegistration<LoadMoreRepliesCell, CommentListItem> { cell, _, item in
             guard case .loadMoreReplies(let parentId, let remaining) = item else { return }
             cell.configure(parentId: parentId, remaining: remaining)
         }
@@ -95,15 +87,15 @@ final class CommentListViewController: UIViewController {
     }
 
     func applySnapshot(animated: Bool = true) {
-        var snapshot = NSDiffableDataSourceSnapshot<CommentSection, CommentItem>()
+        var snapshot = NSDiffableDataSourceSnapshot<CommentListSection, CommentListItem>()
         for comment in store.topLevelComments {
-            let section = CommentSection.topLevel(commentId: comment.id)
+            let section = CommentListSection.topLevel(commentId: comment.id)
             snapshot.appendSections([section])
             snapshot.appendItems([.comment(id: comment.id)], toSection: section)
 
             let replies = store.replies(for: comment.id)
             if !replies.isEmpty {
-                let replyItems = replies.map { CommentItem.comment(id: $0.id) }
+                let replyItems = replies.map { CommentListItem.comment(id: $0.id) }
                 snapshot.appendItems(replyItems, toSection: section)
             }
 

@@ -25,24 +25,32 @@ public actor ThumbnailPrefetcher {
 
     /// Prefetch thumbnails for a batch of keys
     public func prefetchBatch(_ keys: [String]) async {
+        let keysToFetch = keys.filter { cache.get($0) == nil && !inFlight.contains($0) }
+            .prefix(maxConcurrent)
+
+        for key in keysToFetch { inFlight.insert(key) }
+
+        // Compute paths before entering the task group to avoid actor isolation issues
+        let keyPathPairs = keysToFetch.map { ($0, thumbnailPath(forKey: $0)) }
+
         await withTaskGroup(of: Void.self) { group in
-            var launched = 0
-            for key in keys {
-                guard cache.get(key) == nil else { continue }
-                guard !inFlight.contains(key) else { continue }
-                guard launched < maxConcurrent else { break }
-
-                inFlight.insert(key)
-                launched += 1
-
-                group.addTask {
-                    defer { Task { await self.inFlight.remove(key) } }
-                    let path = self.thumbnailPath(forKey: key)
+            for (key, path) in keyPathPairs {
+                group.addTask { [cache] in
                     guard FileManager.default.fileExists(atPath: path.path) else { return }
-                    _ = await self.decodeFromDisk(url: path, cacheKey: key)
+                    guard let data = try? Data(contentsOf: path, options: .mappedIfSafe) else { return }
+                    guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return }
+                    let options: [CFString: Any] = [
+                        kCGImageSourceThumbnailMaxPixelSize: 300,
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceShouldCacheImmediately: true
+                    ]
+                    guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return }
+                    cache.set(cgImage, forKey: key)
                 }
             }
         }
+
+        for key in keysToFetch { inFlight.remove(key) }
     }
 
     /// Save raw thumbnail data to disk

@@ -39,7 +39,7 @@ public actor RetryEngine {
                 .fetchAll(db)
         }
 
-        observationCancellable = observation.start(in: dbWriter, onError: { _ in }, onChange: { [weak self] queuedMessages in
+        observationCancellable = observation.start(in: dbWriter, onError: { _ in }, onChange: { @Sendable [weak self] queuedMessages in
             Task { await self?.processQueue(queuedMessages) }
         })
     }

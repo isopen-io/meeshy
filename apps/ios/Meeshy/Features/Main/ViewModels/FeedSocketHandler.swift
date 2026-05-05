@@ -157,7 +157,7 @@ final class FeedSocketHandler {
 // MARK: - PostRecord convenience init from APIPost
 
 extension PostRecord {
-    init?(from post: APIPost) {
+    nonisolated init?(from post: APIPost) {
         guard !post.id.isEmpty, !post.author.id.isEmpty else { return nil }
         self.init(
             id: post.id,
@@ -193,16 +193,16 @@ extension PostRecord {
         )
     }
 
-    private static func encode<T: Encodable>(_ value: T?) -> String? {
+    nonisolated private static func encode<T: Encodable>(_ value: T?) -> Data? {
         guard let value else { return nil }
-        return try? String(data: JSONEncoder().encode(value), encoding: .utf8)
+        return try? JSONEncoder().encode(value)
     }
 }
 
 // MARK: - CommentRecord convenience init from APIPostComment
 
 extension CommentRecord {
-    init?(from comment: APIPostComment, postId: String) {
+    nonisolated init?(from comment: APIPostComment, postId: String) {
         guard !comment.id.isEmpty, !comment.author.id.isEmpty else { return nil }
         self.init(
             id: comment.id,

@@ -37,10 +37,12 @@ public actor MessagePersistenceActor {
         let (stream, continuation) = AsyncStream.makeStream(of: WriteOperation.self)
         self.writeStream = stream
         self.writeContinuation = continuation
-        startProcessor()
+        self.processorTask = nil
     }
 
-    private func startProcessor() {
+    /// Call after init to start the background write processor.
+    public func start() {
+        guard processorTask == nil else { return }
         processorTask = Task { [weak self, writeStream] in
             for await op in writeStream {
                 guard let self else { break }

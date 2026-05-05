@@ -4,14 +4,8 @@ import MeeshySDK
 
 final class FeedListViewController: UIViewController {
 
-    enum Section: Hashable { case main }
-    enum Item: Hashable {
-        case textPost(id: String)
-        case mediaPost(id: String)
-    }
-
     private var collectionView: UICollectionView!
-    private var dataSource: UICollectionViewDiffableDataSource<Section, Item>!
+    nonisolated(unsafe) private var dataSource: UICollectionViewDiffableDataSource<FeedListSection, FeedListItem>!
     private let store: FeedStore
     private var cancellables = Set<AnyCancellable>()
     private var isLoadingOlder = false
@@ -55,13 +49,13 @@ final class FeedListViewController: UIViewController {
     }
 
     private func configureDataSource() {
-        let textReg = UICollectionView.CellRegistration<TextPostCell, Item> { [weak self] cell, _, item in
+        let textReg = UICollectionView.CellRegistration<TextPostCell, FeedListItem> { [weak self] cell, _, item in
             guard let self, case .textPost(let id) = item,
                   let idx = self.store.posts.firstIndex(where: { $0.id == id }) else { return }
             cell.configure(with: self.store.posts[idx])
         }
 
-        let mediaReg = UICollectionView.CellRegistration<MediaPostCell, Item> { [weak self] cell, _, item in
+        let mediaReg = UICollectionView.CellRegistration<MediaPostCell, FeedListItem> { [weak self] cell, _, item in
             guard let self, case .mediaPost(let id) = item,
                   let idx = self.store.posts.firstIndex(where: { $0.id == id }) else { return }
             cell.configure(with: self.store.posts[idx])
@@ -78,9 +72,9 @@ final class FeedListViewController: UIViewController {
     }
 
     private func applySnapshot(animated: Bool = true) {
-        var snapshot = NSDiffableDataSourceSnapshot<Section, Item>()
+        var snapshot = NSDiffableDataSourceSnapshot<FeedListSection, FeedListItem>()
         snapshot.appendSections([.main])
-        let items: [Item] = store.posts.map { post in
+        let items: [FeedListItem] = store.posts.map { post in
             post.mediaJson != nil ? .mediaPost(id: post.id) : .textPost(id: post.id)
         }
         snapshot.appendItems(items, toSection: .main)

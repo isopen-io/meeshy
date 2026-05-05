@@ -40,7 +40,7 @@ public struct APIMessageSender: Decodable, Sendable {
     }
 }
 
-public struct APIAttachmentTranscription: Decodable, Sendable {
+public struct APIAttachmentTranscription: Codable, Sendable {
     public let text: String?
     public let transcribedText: String?
     public let language: String?
@@ -52,7 +52,7 @@ public struct APIAttachmentTranscription: Decodable, Sendable {
     public var resolvedText: String { text ?? transcribedText ?? "" }
 }
 
-public struct APIAttachmentTranslation: Decodable, Sendable {
+public struct APIAttachmentTranslation: Codable, Sendable {
     public let type: String?
     public let transcription: String?
     public let url: String?

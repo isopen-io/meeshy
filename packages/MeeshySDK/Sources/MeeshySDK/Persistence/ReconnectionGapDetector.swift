@@ -1,28 +1,8 @@
 import Foundation
 
-public protocol MessageServiceProviding: Sendable {
-    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool) async throws -> [MessageServiceResult]
-}
-
-public struct MessageServiceResult: Sendable {
-    public let id: String
-    public let conversationId: String
-    public let senderId: String
-    public let content: String?
-    public let createdAt: Date
-
-    public init(id: String, conversationId: String, senderId: String, content: String?, createdAt: Date) {
-        self.id = id
-        self.conversationId = conversationId
-        self.senderId = senderId
-        self.content = content
-        self.createdAt = createdAt
-    }
-}
-
 public actor ReconnectionGapDetector {
     private let persistence: MessagePersistenceActor
-    private let messageService: MessageServiceProviding
+    private let messageService: any MessageServiceProviding
     private var lastReceivedTimestamps: [String: Date] = [:]
     private var activeConversations: Set<String> = []
     private let syncSemaphore = AsyncSemaphore(limit: 3)
@@ -31,7 +11,7 @@ public actor ReconnectionGapDetector {
     private static let maxTotalMessages = 1000
     private static let pageSize = 100
 
-    public init(persistence: MessagePersistenceActor, messageService: MessageServiceProviding) {
+    public init(persistence: MessagePersistenceActor, messageService: any MessageServiceProviding) {
         self.persistence = persistence
         self.messageService = messageService
         lastReceivedTimestamps = Self.loadTimestamps()
@@ -67,16 +47,17 @@ public actor ReconnectionGapDetector {
         var totalFetched = 0
 
         while totalFetched < Self.maxTotalMessages {
-            guard let page = try? await messageService.list(
+            guard let response = try? await messageService.list(
                 conversationId: conversationId,
                 offset: totalFetched,
                 limit: Self.pageSize,
                 includeReplies: false
             ) else { break }
 
-            guard !page.isEmpty else { break }
+            let messages = response.data
+            guard !messages.isEmpty else { break }
 
-            let incoming = page.map {
+            let incoming = messages.map {
                 MessagePersistenceActor.IncomingMessageData(
                     id: $0.id,
                     conversationId: $0.conversationId,
@@ -86,15 +67,15 @@ public actor ReconnectionGapDetector {
                     computedState: .sent
                 )
             }
-            persistence.bufferIncoming(incoming)
+            await persistence.bufferIncoming(incoming)
 
-            totalFetched += page.count
+            totalFetched += messages.count
 
-            if let last = page.last {
+            if let last = messages.last {
                 lastReceivedTimestamps[conversationId] = last.createdAt
             }
 
-            if page.count < Self.pageSize { break }
+            if messages.count < Self.pageSize { break }
         }
 
         persistTimestamps()

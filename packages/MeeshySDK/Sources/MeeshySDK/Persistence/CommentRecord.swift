@@ -19,6 +19,32 @@ public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     public var effectFlags: Int
     public var createdAt: Date
     public var changeVersion: Int64
+
+    public init(
+        id: String, postId: String, parentId: String?,
+        authorId: String, authorUsername: String?,
+        authorDisplayName: String?, authorAvatarURL: String?,
+        content: String, originalLanguage: String?,
+        translatedContent: String?,
+        likeCount: Int, replyCount: Int, effectFlags: Int,
+        createdAt: Date, changeVersion: Int64
+    ) {
+        self.id = id
+        self.postId = postId
+        self.parentId = parentId
+        self.authorId = authorId
+        self.authorUsername = authorUsername
+        self.authorDisplayName = authorDisplayName
+        self.authorAvatarURL = authorAvatarURL
+        self.content = content
+        self.originalLanguage = originalLanguage
+        self.translatedContent = translatedContent
+        self.likeCount = likeCount
+        self.replyCount = replyCount
+        self.effectFlags = effectFlags
+        self.createdAt = createdAt
+        self.changeVersion = changeVersion
+    }
 }
 
 extension CommentRecord: Equatable {
