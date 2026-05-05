@@ -80,7 +80,21 @@ public struct DraggableTextObjectView: View {
         let effectiveScale = isEditing ? currentScale * gestureScale : currentScale
         let effectiveRotation = isEditing ? currentRotation + gestureRotation.degrees : currentRotation
 
-        if isEditing {
+        // Locked elements (e.g. the repost-attribution badge added by
+        // `StoryComposerViewModel.init(reposting:authorHandle:)`) render statically
+        // and ignore ALL gestures — drag, pinch, rotate, single-tap-to-front, and
+        // double-tap-to-edit. This prevents reposters from stripping the attribution
+        // sticker. See `StoryTextObject.isLocked` (Patch B.3) and the badge author
+        // in `StoryComposerViewModel.swift:872`.
+        if textObject.isLocked == true {
+            styledTextContent
+                .scaleEffect(currentScale)
+                .rotationEffect(.degrees(currentRotation))
+                .position(
+                    x: currentX * canvasWidth,
+                    y: currentY * canvasHeight
+                )
+        } else if isEditing {
             styledTextContent
                 .background(textSizeReader)
                 .scaleEffect(effectiveScale)

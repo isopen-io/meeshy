@@ -507,6 +507,14 @@ public final class StoryComposerViewModel {
     }
 
     func deleteElement(id: String) {
+        // Defensive guard : a locked text object (e.g. the repost-attribution
+        // badge from `init(reposting:authorHandle:)`) cannot be deleted from
+        // any path — context menu, timeline panel, contextual toolbar, etc.
+        // The UI already hides these affordances on locked elements, but a
+        // central refusal here closes any future call site we might miss.
+        if currentEffects.textObjects?.first(where: { $0.id == id })?.isLocked == true {
+            return
+        }
         var effects = currentEffects
         effects.textObjects?.removeAll { $0.id == id }
         effects.mediaObjects?.removeAll { $0.id == id }
@@ -548,6 +556,9 @@ public final class StoryComposerViewModel {
     func duplicateElement(id: String) {
         var effects = currentEffects
         if var text = effects.textObjects?.first(where: { $0.id == id }) {
+            // Locked text objects (repost-attribution badge) are not duplicable —
+            // duplicating would create a second editable copy that strips intent.
+            if text.isLocked == true { return }
             guard canAddText else { return }
             text.id = UUID().uuidString
             text.x = min(1.0, text.x + 0.05)
