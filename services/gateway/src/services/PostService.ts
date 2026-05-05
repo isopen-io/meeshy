@@ -756,6 +756,16 @@ export class PostService {
     });
     if (!original) return null;
 
+    if (original.expiresAt && (original.expiresAt as Date).getTime() < Date.now()) {
+      return null;
+    }
+
+    if (original.visibility !== 'PUBLIC') {
+      const err: any = new Error('Cannot repost private content');
+      err.statusCode = 403;
+      throw err;
+    }
+
     const targetType = opts.targetType ?? original.type;
     const content = opts.content;
     const isQuote = opts.isQuote ?? false;

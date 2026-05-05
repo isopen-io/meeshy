@@ -591,7 +591,7 @@ describe('PostService', () => {
     });
 
     it('creates a quote repost with content', async () => {
-      const original = makePost({ id: 'original-1', visibility: 'FRIENDS' });
+      const original = makePost({ id: 'original-1', visibility: 'PUBLIC' });
       prisma.post.findFirst.mockResolvedValue(original);
       prisma.post.create.mockResolvedValue(makePost());
       prisma.post.update.mockResolvedValue(original);
@@ -603,7 +603,7 @@ describe('PostService', () => {
           data: expect.objectContaining({
             content: 'Great post!',
             isQuote: true,
-            visibility: 'FRIENDS',
+            visibility: 'PUBLIC',
           }),
         }),
       );
