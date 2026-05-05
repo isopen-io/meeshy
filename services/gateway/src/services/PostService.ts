@@ -737,11 +737,23 @@ export class PostService {
     return { viewers, total, hasMore: offset + limit < total };
   }
 
-  async repostPost(postId: string, userId: string, content?: string, isQuote: boolean = false) {
+  async repostPost(
+    postId: string,
+    userId: string,
+    opts: {
+      targetType?: PostType;
+      content?: string;
+      isQuote?: boolean;
+    } = {},
+  ) {
     const original = await this.prisma.post.findFirst({
       where: { id: postId, isDeleted: false },
     });
     if (!original) return null;
+
+    const targetType = opts.targetType ?? original.type;
+    const content = opts.content;
+    const isQuote = opts.isQuote ?? false;
 
     const originalLanguage = content ? detectLanguage(content) : undefined;
 
@@ -752,7 +764,7 @@ export class PostService {
     const repost = await this.prisma.post.create({
       data: {
         authorId: userId,
-        type: PostType.POST,
+        type: targetType,
         visibility: original.visibility,
         content: content ?? undefined,
         originalLanguage,

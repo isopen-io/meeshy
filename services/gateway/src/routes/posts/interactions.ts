@@ -431,8 +431,7 @@ export function registerInteractionRoutes(
       const repost = await postService.repostPost(
         postId,
         authContext.registeredUser.id,
-        data.content,
-        data.isQuote
+        { content: data.content, isQuote: data.isQuote },
       );
 
       if (!repost) {

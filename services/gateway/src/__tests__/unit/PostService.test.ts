@@ -593,7 +593,7 @@ describe('PostService', () => {
       prisma.post.create.mockResolvedValue(makePost());
       prisma.post.update.mockResolvedValue(original);
 
-      await service.repostPost('original-1', 'user-reposter', 'Great post!', true);
+      await service.repostPost('original-1', 'user-reposter', { content: 'Great post!', isQuote: true });
 
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({
