@@ -92,6 +92,7 @@ export const CreateCommentSchema = z.object({
 });
 
 export const RepostSchema = z.object({
+  targetType: z.enum(['POST', 'STORY', 'STATUS']).optional(),
   content: z.string().max(5000).optional(),
   isQuote: z.boolean().default(false),
 });
