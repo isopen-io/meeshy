@@ -19,6 +19,17 @@ struct RepostStorySourceWrapper: Identifiable {
     let authorHandle: String
 }
 
+/// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
+/// repost-as-post composer launched from the kebab menu's "Editer et republier
+/// en post" action (C.2). Mirrors `RepostStorySourceWrapper` but feeds the
+/// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
+/// init introduced in B.7.
+struct RepostPostSourceWrapper: Identifiable {
+    let id = UUID()
+    let story: StoryItem
+    let authorHandle: String
+}
+
 /// Draft state for a single story's composer
 struct StoryDraft {
     var text: String = ""
@@ -271,6 +282,79 @@ struct StoryViewerView: View {
                 onDismiss: { repostStoryComposerSource = nil }
             )
         }
+        // Repost-as-post composer (C.2). Opened from the kebab menu's
+        // "Editer et republier en post" action. Uses the new
+        // `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
+        // init introduced in B.7 — locks the type to `.post` and embeds a
+        // story preview canvas. Submission goes through `PostService.repost`
+        // with `targetType: .post` so the gateway records the correct shape.
+        .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: {
+            resumeTimer()
+        }) { wrapper in
+            UnifiedPostComposer(
+                repostingStory: wrapper.story,
+                authorHandle: wrapper.authorHandle,
+                onPublishRepost: { content, sourceStory in
+                    Task {
+                        do {
+                            _ = try await PostService.shared.repost(
+                                postId: sourceStory.id,
+                                targetType: .post,
+                                content: content.isEmpty ? nil : content,
+                                isQuote: !content.isEmpty
+                            )
+                            await MainActor.run {
+                                editAndRepostAsPostSource = nil
+                                ToastManager.shared.show("Publié")
+                            }
+                        } catch {
+                            await MainActor.run {
+                                ToastManager.shared.showError("Échec de la publication")
+                            }
+                        }
+                    }
+                },
+                onDismiss: { editAndRepostAsPostSource = nil }
+            )
+        }
+    }
+
+    /// Direct repost-as-post action wired to the kebab menu's "Republier en
+    /// post" item. Mirrors the share-button repost UX (C.1) but skips the
+    /// composer — fires `PostService.repost` immediately with no content and
+    /// `isQuote: false`. Surfaces user-facing toasts on success / known error
+    /// codes (404 = source story gone, 403 = repost forbidden) and a generic
+    /// failure otherwise. Errors are mapped against `APIError.serverError`'s
+    /// status-code payload since that's the shape `APIClient` throws.
+    private func repostAsPostDirect() {
+        guard let story = currentStory else { return }
+        HapticFeedback.light()
+        Task {
+            do {
+                _ = try await PostService.shared.repost(
+                    postId: story.id,
+                    targetType: .post,
+                    content: nil,
+                    isQuote: false
+                )
+                await MainActor.run {
+                    HapticFeedback.success()
+                    ToastManager.shared.show("Republié dans ton feed")
+                }
+            } catch APIError.serverError(404, _) {
+                await MainActor.run {
+                    ToastManager.shared.showError("La story n'est plus disponible")
+                }
+            } catch APIError.serverError(403, _) {
+                await MainActor.run {
+                    ToastManager.shared.showError("Cette story ne peut pas être repartagée")
+                }
+            } catch {
+                await MainActor.run {
+                    ToastManager.shared.showError("Échec de la republication")
+                }
+            }
+        }
     }
 
     // MARK: - Computed Card Transforms
@@ -300,6 +384,7 @@ struct StoryViewerView: View {
     @State private var bigReactionPhase: Int = 0
     @State private var sharedContentWrapper: SharedContentWrapper?
     @State private var repostStoryComposerSource: RepostStorySourceWrapper?
+    @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
 
     private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
 
@@ -1314,7 +1399,29 @@ struct StoryViewerView: View {
                             Label("Voir le profil", systemImage: "person.fill")
                         }
 
-                        // TODO C.2 : add Republier en post + Éditer et republier en post
+                        // C.2: repost-as-post entry points. Gated on
+                        // `story.isPublic` (B.2 helper) so we never expose
+                        // these for FRIENDS / PRIVATE visibilities.
+                        if let story = currentStory, story.isPublic {
+                            Button {
+                                repostAsPostDirect()
+                            } label: {
+                                Label("Republier en post", systemImage: "arrow.2.squarepath")
+                            }
+
+                            Button {
+                                HapticFeedback.light()
+                                pauseTimer()
+                                if let group = currentGroup {
+                                    editAndRepostAsPostSource = RepostPostSourceWrapper(
+                                        story: story,
+                                        authorHandle: group.username
+                                    )
+                                }
+                            } label: {
+                                Label("Éditer et republier en post", systemImage: "square.and.pencil")
+                            }
+                        }
 
                         Divider()
 
