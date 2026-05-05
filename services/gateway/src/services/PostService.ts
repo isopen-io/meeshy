@@ -20,6 +20,12 @@ interface StoryTextObjectRaw {
 const STORY_EXPIRY_HOURS = 21;
 const STATUS_EXPIRY_HOURS = 1;
 
+function computeExpiresAt(type: PostType): Date | undefined {
+  if (type === PostType.STORY) return new Date(Date.now() + STORY_EXPIRY_HOURS * 3600_000);
+  if (type === PostType.STATUS) return new Date(Date.now() + STATUS_EXPIRY_HOURS * 3600_000);
+  return undefined;
+}
+
 // Minimal language detection (first word heuristics + fallback)
 function detectLanguage(text: string): string {
   if (!text) return 'en';
@@ -776,6 +782,8 @@ export class PostService {
       ?? original.repostOfId
       ?? original.id;
 
+    const expiresAt = computeExpiresAt(targetType);
+
     const isStoryToPostRepost = original.type === PostType.STORY && targetType === PostType.POST;
 
     type SnapshotMediaCreate = {
@@ -848,6 +856,7 @@ export class PostService {
         repostOfId: postId,
         originalRepostOfId,
         isQuote,
+        ...(expiresAt !== undefined ? { expiresAt } : {}),
         ...(snapshotAudioUrl !== undefined ? { audioUrl: snapshotAudioUrl } : {}),
         ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),
         ...(snapshotMedia !== undefined ? { media: { create: snapshotMedia } } : {}),
