@@ -65,6 +65,8 @@ export const CreatePostSchema = z.object({
   mediaIds: z.array(z.string()).max(10).optional(),
   // Mobile transcription for audio media
   mobileTranscription: MobileTranscriptionSchema.optional(),
+  // Repost source ID (for StoryComposer publishing a repost via POST /posts)
+  repostOfId: z.string().optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;
@@ -96,6 +98,7 @@ export const CreateCommentSchema = z.object({
 });
 
 export const RepostSchema = z.object({
+  targetType: z.enum(['POST', 'STORY', 'STATUS']).optional(),
   content: z.string().max(5000).optional(),
   isQuote: z.boolean().default(false),
 });

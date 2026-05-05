@@ -168,10 +168,15 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var fadeIn: Float?               // animation d'entrée (secondes)
     public var fadeOut: Float?              // animation de sortie (secondes)
 
+    /// Lock flag — Patch B.3 : true = composer skips drag/edit/delete (used for repost badge sticker).
+    /// nil/false = editable. Synthesized Codable handles `Bool?` via decodeIfPresent / encodeIfPresent.
+    public var isLocked: Bool?
+
     enum CodingKeys: String, CodingKey {
         case id, content, x, y, scale, rotation, translations, sourceLanguage, zIndex
         case textStyle, textColor, textSize, textAlign, textBg
         case startTime, displayDuration, fadeIn, fadeOut
+        case isLocked
     }
 
     public init(id: String = UUID().uuidString, content: String,
@@ -183,7 +188,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 textSize: CGFloat? = 28, textAlign: String? = "center",
                 textBg: String? = nil,
                 startTime: Float? = nil, displayDuration: Float? = nil,
-                fadeIn: Float? = nil, fadeOut: Float? = nil) {
+                fadeIn: Float? = nil, fadeOut: Float? = nil,
+                isLocked: Bool? = nil) {
         self.id = id; self.content = content
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
         self.translations = translations
@@ -192,6 +198,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.textSize = textSize; self.textAlign = textAlign; self.textBg = textBg
         self.startTime = startTime; self.displayDuration = displayDuration
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
+        self.isLocked = isLocked
     }
 
     // MARK: - Computed properties (non-SwiftUI)
@@ -783,7 +790,10 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public let createdAt: Date
     public let expiresAt: Date?
     public let repostOfId: String?
+    public let originalRepostOfId: String?
     public let repostAuthorName: String?
+    public let visibility: String?
+    public let audioUrl: String?
     public var isViewed: Bool
     public let translations: [StoryTranslation]?
     public let backgroundAudio: StoryBackgroundAudioEntry?
@@ -798,6 +808,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         return "\(seconds / 86400)d"
     }
 
+    /// Computed convenience used by C.1 / C.2 to gate the Partager button and kebab items.
+    /// Defaults to **false** when visibility is nil (unknown) so we don't accidentally expose
+    /// non-public content for repost.
+    public var isPublic: Bool {
+        (visibility ?? "").uppercased() == "PUBLIC"
+    }
+
     /// Résout le contenu dans la langue préférée via le Prisme Linguistique.
     /// Retourne la traduction si disponible, sinon le contenu original.
     /// Pas de fallback implicite vers l'anglais — l'absence de traduction signifie
@@ -810,12 +827,17 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     }
 
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,
-                createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil, repostAuthorName: String? = nil,
+                createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil,
+                originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
+                visibility: String? = nil, audioUrl: String? = nil,
                 isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
-        self.repostAuthorName = repostAuthorName; self.isViewed = isViewed
+        self.originalRepostOfId = originalRepostOfId
+        self.repostAuthorName = repostAuthorName
+        self.visibility = visibility; self.audioUrl = audioUrl
+        self.isViewed = isViewed
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
     }
@@ -909,7 +931,10 @@ extension Array where Element == APIPost {
                                  storyEffects: post.storyEffects,
                                  createdAt: post.createdAt, expiresAt: effectiveExpiresAt,
                                  repostOfId: post.repostOf?.id,
+                                 originalRepostOfId: post.originalRepostOfId,
                                  repostAuthorName: post.repostOf?.author.name,
+                                 visibility: post.visibility,
+                                 audioUrl: post.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,
                                  translations: storyTranslations,
                                  reactionCount: totalReactions, commentCount: post.commentCount ?? 0)
@@ -974,7 +999,13 @@ public struct ReactionRequest: Encodable {
 public struct RepostRequest: Encodable {
     public let content: String?
     public let isQuote: Bool
-    public init(content: String? = nil, isQuote: Bool = false) { self.content = content; self.isQuote = isQuote }
+    public let targetType: String?
+
+    public init(content: String? = nil, isQuote: Bool = false, targetType: String? = nil) {
+        self.content = content
+        self.isQuote = isQuote
+        self.targetType = targetType
+    }
 }
 
 public struct StatusCreateRequest: Encodable {

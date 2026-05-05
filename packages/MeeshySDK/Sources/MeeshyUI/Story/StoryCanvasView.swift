@@ -414,9 +414,16 @@ struct StoryCanvasView: View {
     private func textObjectsLayer(interactive: Bool) -> some View {
         ForEach(textObjects, id: \.id) { obj in
             if !obj.content.isEmpty, isElementVisible(startTime: obj.startTime, duration: obj.displayDuration) {
-                DraggableTextObjectView(
+                // Locked text objects (e.g. the repost-attribution badge from
+                // `StoryComposerViewModel.init(reposting:authorHandle:)`) skip
+                // selection glow + context menu in addition to the gestures
+                // already disabled inside DraggableTextObjectView itself —
+                // otherwise long-pressing the badge would expose a Supprimer
+                // action that could strip the attribution.
+                let isLocked = obj.isLocked == true
+                let baseView = DraggableTextObjectView(
                     textObject: textObjectBinding(for: obj.id),
-                    isEditing: interactive,
+                    isEditing: interactive && !isLocked,
                     onTapToFront: {
                         viewModel.selectedElementId = obj.id
                         viewModel.bringToFront(id: obj.id)
@@ -438,13 +445,19 @@ struct StoryCanvasView: View {
                     onDragEnd: {}
                 )
                 .opacity(elementOpacity(startTime: obj.startTime, duration: obj.displayDuration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
-                .selectionGlow(viewModel.selectedElementId == obj.id)
-                .canvasContextMenu(
-                    elementId: obj.id,
-                    elementType: .text,
-                    viewModel: viewModel
-                )
-                .zIndex(Double(viewModel.zIndex(for: obj.id)))
+
+                if isLocked {
+                    baseView.zIndex(Double(viewModel.zIndex(for: obj.id)))
+                } else {
+                    baseView
+                        .selectionGlow(viewModel.selectedElementId == obj.id)
+                        .canvasContextMenu(
+                            elementId: obj.id,
+                            elementType: .text,
+                            viewModel: viewModel
+                        )
+                        .zIndex(Double(viewModel.zIndex(for: obj.id)))
+                }
             }
         }
     }

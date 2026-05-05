@@ -13,6 +13,15 @@ public final class StoryMediaCoordinator: StoppablePlayer {
     private var isRegistered = false
     private var stopHandler: (() -> Void)?
 
+    /// Test-only introspection : id of the media currently providing background
+    /// audio for an active story (`postMediaId` of the resolved background audio).
+    /// Set by `ReaderState.startBackgroundAudio` when audio activation actually
+    /// proceeds, and cleared on `deactivate()` / `stopAllMedia()`. Stays `nil`
+    /// when the reader is in `mute=true` mode.
+    ///
+    /// - Note: `internal` so it's visible via `@testable import MeeshyUI`.
+    internal var backgroundAudioSourceId: String?
+
     private init() {}
 
     /// Claim exclusive audio for story playback. Stops all other app audio.
@@ -37,6 +46,7 @@ public final class StoryMediaCoordinator: StoppablePlayer {
     public func deactivate() {
         stopHandler?()
         stopHandler = nil
+        backgroundAudioSourceId = nil
     }
 
     /// Called by PlaybackCoordinator when other app audio needs to play.

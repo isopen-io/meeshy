@@ -24,7 +24,8 @@ final class DependencyContainer {
             try MessageDatabaseMigrations.runAll(on: pool)
             try FeedDatabaseMigrations.runAll(on: pool)
             self.dbPool = pool
-            self.messagePersistence = MessagePersistenceActor(dbWriter: pool)
+            let persistence = MessagePersistenceActor(dbWriter: pool)
+            self.messagePersistence = persistence
             self.feedPersistence = FeedPersistenceActor(dbWriter: pool)
             self.thumbnailPrefetcher = ThumbnailPrefetcher.shared
             self.mediaSnapshotStore = MediaSnapshotStore.shared

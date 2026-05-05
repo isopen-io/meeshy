@@ -30,6 +30,10 @@ public struct StoryCanvasReaderView: View {
     public let preloadedImages: [String: UIImage]
     public let preloadedVideoURLs: [String: URL]
     public let preloadedAudioURLs: [String: URL]
+    /// When `true`, all audio (background + foreground audio + foreground video sound)
+    /// is suppressed. Used by feed-cell embeds where the canvas renders silently as a
+    /// thumbnail. Default `false` preserves the in-viewer behavior.
+    public let mute: Bool
 
     // Mutable local state managed by a StateObject to support socket updates
     @StateObject private var state: ReaderState
@@ -38,14 +42,107 @@ public struct StoryCanvasReaderView: View {
                 preferredContentLanguages: [String]? = nil,
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
-                preloadedAudioURLs: [String: URL] = [:]) {
+                preloadedAudioURLs: [String: URL] = [:],
+                mute: Bool = false) {
         self.story = story
         self.preferredLanguage = preferredLanguage
         self.preferredContentLanguages = preferredContentLanguages
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
-        self._state = StateObject(wrappedValue: ReaderState(story: story))
+        self.mute = mute
+        self._state = StateObject(wrappedValue: ReaderState(story: story, mute: mute))
+    }
+
+    /// Alternate init for feed cells that have an `APIPost` (not a `StoryItem`).
+    /// Reuses `[APIPost].toStoryGroups` for the canonical `APIPost -> StoryItem`
+    /// conversion (single source of truth). Falls back to a synthetic minimal
+    /// `StoryItem` if the post is not type=STORY (e.g., a STATUS post embedded
+    /// for preview).
+    public init(post: APIPost, preferredLanguage: String? = nil,
+                preferredContentLanguages: [String]? = nil,
+                preloadedImages: [String: UIImage] = [:],
+                preloadedVideoURLs: [String: URL] = [:],
+                preloadedAudioURLs: [String: URL] = [:],
+                mute: Bool = false) {
+        let story: StoryItem = {
+            if let item = [post].toStoryGroups().first?.stories.first {
+                return item
+            }
+            // Synthesize a minimal StoryItem from the post (used for non-STORY
+            // posts rendered in a feed cell — e.g., audio status preview).
+            let media: [FeedMedia] = (post.media ?? []).map { m in
+                FeedMedia(
+                    id: m.id, type: m.mediaType, url: m.fileUrl,
+                    thumbnailColor: "4ECDC4",
+                    width: m.width, height: m.height,
+                    duration: m.duration.map { $0 / 1000 }
+                )
+            }
+            return StoryItem(
+                id: post.id,
+                content: post.content,
+                media: media,
+                storyEffects: post.storyEffects,
+                createdAt: post.createdAt,
+                expiresAt: post.expiresAt,
+                repostOfId: post.repostOf?.id,
+                originalRepostOfId: post.originalRepostOfId,
+                repostAuthorName: post.repostOf?.author.name,
+                visibility: post.visibility,
+                audioUrl: post.audioUrl,
+                isViewed: post.isViewedByMe ?? false,
+                translations: nil,
+                reactionCount: post.reactionSummary?.values.reduce(0, +) ?? 0,
+                commentCount: post.commentCount ?? 0
+            )
+        }()
+        self.init(story: story,
+                  preferredLanguage: preferredLanguage,
+                  preferredContentLanguages: preferredContentLanguages,
+                  preloadedImages: preloadedImages,
+                  preloadedVideoURLs: preloadedVideoURLs,
+                  preloadedAudioURLs: preloadedAudioURLs,
+                  mute: mute)
+    }
+
+    /// Alternate init for feed cells that have a `RepostContent` (the embedded
+    /// story snapshot exposed inside a `FeedPost.repost`). Synthesizes a
+    /// `StoryItem` from the snapshot fields. Used by `StoryRepostEmbedCell`
+    /// when a feed POST reposts a STORY (`type == "STORY"` on the snapshot).
+    public init(repost: RepostContent, preferredLanguage: String? = nil,
+                preferredContentLanguages: [String]? = nil,
+                preloadedImages: [String: UIImage] = [:],
+                preloadedVideoURLs: [String: URL] = [:],
+                preloadedAudioURLs: [String: URL] = [:],
+                mute: Bool = false) {
+        let translations: [StoryTranslation]? = repost.translations.map { dict in
+            dict.map { lang, entry in StoryTranslation(language: lang, content: entry.text) }
+        }
+        let story = StoryItem(
+            id: repost.id,
+            content: repost.content.isEmpty ? nil : repost.content,
+            media: repost.media,
+            storyEffects: repost.storyEffects,
+            createdAt: repost.timestamp,
+            expiresAt: repost.expiresAt,
+            repostOfId: nil,
+            originalRepostOfId: repost.originalRepostOfId,
+            repostAuthorName: repost.author,
+            visibility: repost.visibility,
+            audioUrl: repost.audioUrl,
+            isViewed: false,
+            translations: translations,
+            reactionCount: 0,
+            commentCount: 0
+        )
+        self.init(story: story,
+                  preferredLanguage: preferredLanguage,
+                  preferredContentLanguages: preferredContentLanguages,
+                  preloadedImages: preloadedImages,
+                  preloadedVideoURLs: preloadedVideoURLs,
+                  preloadedAudioURLs: preloadedAudioURLs,
+                  mute: mute)
     }
 
     /// Chaine de resolution finale : array si fourni, sinon preferredLanguage en
@@ -523,7 +620,13 @@ private final class ReaderState: ObservableObject {
     /// Average color extracted from thumbHash (< 0.01ms). Ultra-instant background tint.
     let thumbHashAverageColor: UIColor?
 
-    init(story: StoryItem) {
+    /// When `true`, all audio playback is suppressed (background audio activation
+    /// is skipped, foreground video players start muted, foreground audios are
+    /// not started). Set once at init from `StoryCanvasReaderView.mute`.
+    let mute: Bool
+
+    init(story: StoryItem, mute: Bool = false) {
+        self.mute = mute
         // Migrate legacy text -> textObjects si necessaire
         var objects = story.storyEffects?.textObjects ?? []
         if objects.isEmpty, let content = story.content, !content.isEmpty {
@@ -728,6 +831,7 @@ private final class ReaderState: ObservableObject {
 
     func startBackgroundAudio(effects: StoryEffects?, story: StoryItem, preferredLanguages: [String],
                               preloadedAudioURLs: [String: URL] = [:]) {
+        guard !mute else { return }
         guard let effects, let bgAudio = effects.resolvedBackgroundAudio else { return }
 
         // Resolution Prisme : on essaie chaque langue de la chaine preferee dans
@@ -748,6 +852,9 @@ private final class ReaderState: ObservableObject {
         } else {
             return
         }
+
+        // Publish for test introspection (see `StoryMediaCoordinator.backgroundAudioSourceId`).
+        StoryMediaCoordinator.shared.backgroundAudioSourceId = resolvedMediaId
 
         let userVolume = bgAudio.volume
         targetBackgroundVolume = userVolume
@@ -978,6 +1085,14 @@ private final class ReaderState: ObservableObject {
                 }
             }
         }
+        // Apply mute flag on any players already created synchronously by the
+        // registration path (the rest will be created by the timing scheduler;
+        // they pick up `mute` via `injectPrerolledVideoPlayer` / `createAndStartVideoPlayer`).
+        if mute {
+            for (_, player) in foregroundVideoPlayers {
+                player.isMuted = true
+            }
+        }
     }
 
     private func registerPendingVideoStart(media: StoryMediaObject, url: URL) {
@@ -1005,7 +1120,7 @@ private final class ReaderState: ObservableObject {
         guard !startedForegroundVideos.contains(media.id) else { return }
         startedForegroundVideos.insert(media.id)
 
-        player.isMuted = false
+        player.isMuted = mute
         let targetVolume = media.volume
         let hasFadeIn = (media.fadeIn ?? 0) > 0
         player.volume = hasFadeIn ? 0.0 : targetVolume
@@ -1094,7 +1209,7 @@ private final class ReaderState: ObservableObject {
             item.preferredForwardBufferDuration = 2.0
             player = AVQueuePlayer(playerItem: item)
         }
-        player.isMuted = false
+        player.isMuted = mute
         let targetVolume = media.volume
         let hasFadeIn = (media.fadeIn ?? 0) > 0
 
@@ -1159,6 +1274,7 @@ private final class ReaderState: ObservableObject {
     // MARK: Foreground audio players (timing-aware start)
 
     func startForegroundAudios(story: StoryItem, preloadedAudioURLs: [String: URL] = [:]) {
+        guard !mute else { return }
         // Seuls les audios foreground sont démarrés ici — l'audio background (si présent)
         // est géré séparément par `startBackgroundAudio`.
         let foregroundAudios = story.storyEffects?.resolvedForegroundAudioPlayers ?? []

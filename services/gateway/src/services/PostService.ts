@@ -3,6 +3,7 @@ import type { Prisma } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
+import { MediaService } from './MediaService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 
@@ -18,6 +19,12 @@ interface StoryTextObjectRaw {
 
 const STORY_EXPIRY_HOURS = 21;
 const STATUS_EXPIRY_HOURS = 1;
+
+function computeExpiresAt(type: PostType): Date | undefined {
+  if (type === PostType.STORY) return new Date(Date.now() + STORY_EXPIRY_HOURS * 3600_000);
+  if (type === PostType.STATUS) return new Date(Date.now() + STATUS_EXPIRY_HOURS * 3600_000);
+  return undefined;
+}
 
 // Minimal language detection (first word heuristics + fallback)
 function detectLanguage(text: string): string {
@@ -89,9 +96,13 @@ const postInclude = {
   repostOf: {
     select: {
       id: true,
+      type: true,
       content: true,
       originalLanguage: true,
       translations: true,
+      storyEffects: true,
+      audioUrl: true,
+      originalRepostOfId: true,
       author: { select: authorSelect },
       media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
       createdAt: true,
@@ -102,7 +113,10 @@ const postInclude = {
 };
 
 export class PostService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly mediaService: MediaService = new MediaService(),
+  ) {}
 
   async createPost(data: {
     type: PostType;
@@ -117,6 +131,7 @@ export class PostService {
     audioDuration?: number;
     mediaIds?: string[];
     mobileTranscription?: MobileTranscription;
+    repostOfId?: string;
   }, userId: string) {
     const now = new Date();
     let expiresAt: Date | undefined;
@@ -128,6 +143,25 @@ export class PostService {
     }
 
     const originalLanguage = data.originalLanguage ?? (data.content ? detectLanguage(data.content) : undefined);
+
+    let repostOfId: string | undefined;
+    let originalRepostOfId: string | undefined;
+
+    if (data.repostOfId) {
+      const sourcePost = await this.prisma.post.findFirst({
+        where: { id: data.repostOfId, isDeleted: false },
+        select: { id: true, repostOfId: true, originalRepostOfId: true },
+      });
+      if (!sourcePost) {
+        const err: any = new Error('Repost source not found');
+        err.statusCode = 404;
+        throw err;
+      }
+      repostOfId = sourcePost.id;
+      originalRepostOfId = (sourcePost.originalRepostOfId as string | null)
+        ?? (sourcePost.repostOfId as string | null)
+        ?? sourcePost.id;
+    }
 
     const post = await this.prisma.post.create({
       data: {
@@ -143,6 +177,7 @@ export class PostService {
         audioUrl: data.audioUrl,
         audioDuration: data.audioDuration,
         expiresAt,
+        ...(repostOfId !== undefined ? { repostOfId, originalRepostOfId } : {}),
       },
       include: postInclude,
     });
@@ -737,23 +772,148 @@ export class PostService {
     return { viewers, total, hasMore: offset + limit < total };
   }
 
-  async repostPost(postId: string, userId: string, content?: string, isQuote: boolean = false) {
+  async repostPost(
+    postId: string,
+    userId: string,
+    opts: {
+      targetType?: PostType;
+      content?: string;
+      isQuote?: boolean;
+    } = {},
+  ) {
     const original = await this.prisma.post.findFirst({
       where: { id: postId, isDeleted: false },
+      include: { media: { select: mediaSelect, orderBy: { order: 'asc' as const } } },
     });
     if (!original) return null;
 
+    if (original.expiresAt && (original.expiresAt as Date).getTime() < Date.now()) {
+      return null;
+    }
+
+    if (original.visibility !== 'PUBLIC') {
+      const err: any = new Error('Cannot repost private content');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const targetType = opts.targetType ?? original.type;
+    const content = opts.content;
+    const isQuote = opts.isQuote ?? false;
+
     const originalLanguage = content ? detectLanguage(content) : undefined;
+
+    const originalRepostOfId = original.originalRepostOfId
+      ?? original.repostOfId
+      ?? original.id;
+
+    const expiresAt = computeExpiresAt(targetType);
+
+    const isStoryToPostRepost = original.type === PostType.STORY && targetType === PostType.POST;
+
+    type SnapshotMediaCreate = {
+      fileName: string;
+      originalName: string;
+      mimeType: string;
+      fileSize: number;
+      filePath: string;
+      fileUrl: string;
+      thumbnailUrl?: string;
+      order: number;
+    };
+
+    let snapshotMedia: SnapshotMediaCreate[] | undefined;
+    let snapshotAudioUrl: string | undefined;
+    let snapshotStoryEffects: Prisma.InputJsonValue | undefined;
+
+    if (isStoryToPostRepost) {
+      const duplicatedMedia: SnapshotMediaCreate[] = [];
+      let duplicatedAudioUrl: string | undefined;
+      try {
+        const originalMedia = (original.media ?? []) as Array<{
+          fileUrl: string;
+          mimeType: string;
+          thumbnailUrl?: string | null;
+          order?: number;
+        }>;
+
+        for (const [idx, m] of originalMedia.entries()) {
+          const dup = await this.mediaService.duplicateMedia(m.fileUrl);
+          let dupThumbUrl: string | undefined;
+          if (m.thumbnailUrl) {
+            const dupThumb = await this.mediaService.duplicateMedia(m.thumbnailUrl);
+            dupThumbUrl = dupThumb.fileUrl;
+          }
+          duplicatedMedia.push({
+            fileName: dup.fileName,
+            originalName: dup.fileName,
+            mimeType: dup.mimeType,
+            fileSize: dup.fileSize,
+            filePath: dup.filePath,
+            fileUrl: dup.fileUrl,
+            thumbnailUrl: dupThumbUrl,
+            order: idx,
+          });
+        }
+
+        const audioUrl = original.audioUrl as string | null | undefined;
+        if (audioUrl) {
+          const dupAudio = await this.mediaService.duplicateMedia(audioUrl);
+          duplicatedAudioUrl = dupAudio.fileUrl;
+          snapshotAudioUrl = dupAudio.fileUrl;
+        }
+
+        snapshotMedia = duplicatedMedia;
+        snapshotStoryEffects = original.storyEffects as Prisma.InputJsonValue | undefined;
+
+        const repost = await this.prisma.post.create({
+          data: {
+            authorId: userId,
+            type: targetType,
+            visibility: original.visibility,
+            content: content ?? undefined,
+            originalLanguage,
+            repostOfId: postId,
+            originalRepostOfId,
+            isQuote,
+            ...(expiresAt !== undefined ? { expiresAt } : {}),
+            ...(snapshotAudioUrl !== undefined ? { audioUrl: snapshotAudioUrl } : {}),
+            ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),
+            ...(snapshotMedia !== undefined ? { media: { create: snapshotMedia } } : {}),
+          },
+          include: postInclude,
+        });
+
+        await this.prisma.post.update({
+          where: { id: postId },
+          data: { repostCount: { increment: 1 } },
+        });
+
+        return repost;
+      } catch (err) {
+        for (const dup of duplicatedMedia) {
+          await this.mediaService.deleteMedia(dup.fileUrl).catch(() => {});
+        }
+        if (duplicatedAudioUrl) {
+          await this.mediaService.deleteMedia(duplicatedAudioUrl).catch(() => {});
+        }
+        throw err instanceof Error
+          ? new Error('Media snapshot or post creation failed during repost', { cause: err })
+          : new Error('Media snapshot failed during repost');
+      }
+    }
 
     const repost = await this.prisma.post.create({
       data: {
         authorId: userId,
-        type: PostType.POST,
+        type: targetType,
         visibility: original.visibility,
         content: content ?? undefined,
         originalLanguage,
         repostOfId: postId,
+        originalRepostOfId,
         isQuote,
+        ...(expiresAt !== undefined ? { expiresAt } : {}),
       },
       include: postInclude,
     });

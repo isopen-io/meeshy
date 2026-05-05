@@ -45,6 +45,15 @@ struct FeedPostCard: View {
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
 
+    /// True when the post is a feed POST that reposts a STORY — the cell then
+    /// renders the embedded story canvas via `StoryRepostEmbedCell` instead of
+    /// the standard media preview + quote-style repost block. Phase C.3.
+    private var isStoryRepost: Bool {
+        let postType = (post.type ?? "").uppercased()
+        let repostType = (post.repost?.type ?? "").uppercased()
+        return postType == "POST" && repostType == "STORY"
+    }
+
     private var truncatedContent: (text: String, isTruncated: Bool) {
         let words = effectiveContent.split(separator: " ", omittingEmptySubsequences: true)
         if words.count <= 20 { return (effectiveContent, false) }
@@ -200,14 +209,26 @@ struct FeedPostCard: View {
                     onTapPost?(post)
                 }
 
-                // Media preview (outside nav tap target — has its own fullscreen gesture)
-                if post.hasMedia {
-                    mediaPreview
-                }
+                // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
+                // For this branch the gateway has snapshotted the original story media
+                // into the outer POST, but the canonical source is `post.repost` —
+                // we reuse `StoryCanvasReaderView(repost:)` so the rendering matches
+                // the in-viewer experience pixel-for-pixel.
+                if isStoryRepost {
+                    StoryRepostEmbedCell(
+                        post: post,
+                        preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages
+                    )
+                } else {
+                    // Media preview (outside nav tap target — has its own fullscreen gesture)
+                    if post.hasMedia {
+                        mediaPreview
+                    }
 
-                // Reposted content (outside parent tap target so its own Button works)
-                if let repost = post.repost {
-                    repostView(repost)
+                    // Reposted content (outside parent tap target so its own Button works)
+                    if let repost = post.repost {
+                        repostView(repost)
+                    }
                 }
 
                 // Actions bar (not inside the tap target)

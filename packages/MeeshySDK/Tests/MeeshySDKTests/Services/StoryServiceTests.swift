@@ -27,7 +27,8 @@ final class StoryServiceTests: XCTestCase {
             author: APIAuthor(id: "author1", username: "bob", displayName: "Bob", avatar: nil),
             likeCount: 5, commentCount: 0, repostCount: 0, viewCount: 10,
             bookmarkCount: 0, shareCount: 0, reactionSummary: nil, isPinned: false,
-            isEdited: false, media: nil, comments: nil, repostOf: nil, isQuote: nil,
+            isEdited: false, media: nil, comments: nil, repostOf: nil,
+            originalRepostOfId: nil, isQuote: nil,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
             translations: nil, isLikedByMe: nil
         )

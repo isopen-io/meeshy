@@ -290,6 +290,36 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(withoutSize.resolvedSize, 28)
     }
 
+    // MARK: - StoryTextObject isLocked (Patch B.3)
+
+    func test_StoryTextObject_decodes_isLocked() throws {
+        let json = """
+        {"id": "t1", "content": "Reposté de @alice", "x": 0.5, "y": 0.92,
+         "scale": 1, "rotation": 0, "textStyle": "bold", "textColor": "FFFFFF",
+         "textSize": 14, "textAlign": "center", "textBg": "6366F1",
+         "isLocked": true, "zIndex": 1000}
+        """.data(using: .utf8)!
+        let obj = try JSONDecoder().decode(StoryTextObject.self, from: json)
+        XCTAssertEqual(obj.isLocked, true)
+    }
+
+    func test_StoryTextObject_isLocked_optional_defaults_nil() throws {
+        let json = """
+        {"id": "t1", "content": "hello", "x": 0.5, "y": 0.5,
+         "scale": 1, "rotation": 0}
+        """.data(using: .utf8)!
+        let obj = try JSONDecoder().decode(StoryTextObject.self, from: json)
+        XCTAssertNil(obj.isLocked)
+    }
+
+    func test_StoryTextObject_encodes_isLocked() throws {
+        var obj = StoryTextObject(content: "x")
+        obj.isLocked = true
+        let data = try JSONEncoder().encode(obj)
+        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(dict["isLocked"] as? Bool, true)
+    }
+
     // MARK: - StorySticker
 
     func testStoryStickerInit() {
@@ -382,5 +412,78 @@ final class StoryModelsTests: XCTestCase {
     func testStoryEffectsInitIncludesBackgroundTransform() {
         let effects = StoryEffects()
         XCTAssertNil(effects.backgroundTransform)
+    }
+
+    // MARK: - StoryItem (Patch B.2) — originalRepostOfId / visibility / audioUrl
+
+    private func makeAPIPost(
+        id: String = "story-1",
+        type: String = "STORY",
+        visibility: String? = "PUBLIC",
+        audioUrl: String? = nil,
+        repostOfId: String? = nil,
+        originalRepostOfId: String? = nil
+    ) -> APIPost {
+        let author = APIAuthor(id: "author-1", username: "alice", displayName: "Alice", avatar: nil)
+        let repostOf: APIRepostOf? = repostOfId.map { rid in
+            APIRepostOf(
+                id: rid, type: "STORY", content: nil, originalLanguage: nil, translations: nil,
+                storyEffects: nil, audioUrl: nil, originalRepostOfId: nil,
+                author: author, media: nil, createdAt: Date(), likeCount: nil,
+                commentCount: nil, isQuote: nil
+            )
+        }
+        return APIPost(
+            id: id, type: type, visibility: visibility, content: "Hello",
+            originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
+            author: author, likeCount: 0, commentCount: 0, repostCount: 0,
+            viewCount: 0, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,
+            isPinned: false, isEdited: false, media: nil, comments: nil,
+            repostOf: repostOf, originalRepostOfId: originalRepostOfId, isQuote: false,
+            moodEmoji: nil, audioUrl: audioUrl, audioDuration: nil, storyEffects: nil,
+            translations: nil, isLikedByMe: nil
+        )
+    }
+
+    private func makeStoryItem(
+        id: String = "story-x",
+        visibility: String? = nil
+    ) -> StoryItem {
+        StoryItem(
+            id: id,
+            content: "Hello",
+            media: [],
+            storyEffects: nil,
+            createdAt: Date(),
+            expiresAt: nil,
+            visibility: visibility,
+            isViewed: false
+        )
+    }
+
+    func test_StoryItem_carries_originalRepostOfId_visibility_audioUrl() {
+        let post = makeAPIPost(
+            id: "story-1",
+            type: "STORY",
+            visibility: "PUBLIC",
+            audioUrl: "/api/v1/attachments/file/audio.mp3",
+            repostOfId: "intermediate-1",
+            originalRepostOfId: "root-1"
+        )
+        let groups = [post].toStoryGroups()
+        let firstStory = groups.first?.stories.first
+        XCTAssertEqual(firstStory?.originalRepostOfId, "root-1")
+        XCTAssertEqual(firstStory?.visibility, "PUBLIC")
+        XCTAssertEqual(firstStory?.audioUrl, "/api/v1/attachments/file/audio.mp3")
+    }
+
+    func test_StoryItem_publicVisibility_isCurrentStoryIsPublic() {
+        let publicStory = makeStoryItem(visibility: "PUBLIC")
+        let privateStory = makeStoryItem(visibility: "PRIVATE")
+        let unknownStory = makeStoryItem(visibility: nil)
+
+        XCTAssertTrue(publicStory.isPublic)
+        XCTAssertFalse(privateStory.isPublic)
+        XCTAssertFalse(unknownStory.isPublic, "Unknown visibility must default to non-public to be safe")
     }
 }

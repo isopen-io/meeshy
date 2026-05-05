@@ -26,7 +26,7 @@ final class MockPostService: PostServiceProviding {
     var bookmarkResult: Result<Void, Error> = .success(())
     var addCommentResult: Result<APIPostComment, Error> = .success(stubComment)
     var likeCommentResult: Result<Void, Error> = .success(())
-    var repostResult: Result<Void, Error> = .success(())
+    var repostResult: Result<APIPost, Error> = .success(stubPost)
     var shareResult: Result<Void, Error> = .success(())
     var createStoryResult: Result<APIPost, Error> = .success(stubPost)
     var createWithTypeResult: Result<APIPost, Error> = .success(stubPost)
@@ -40,6 +40,7 @@ final class MockPostService: PostServiceProviding {
     var createCallCount = 0
     var lastCreateContent: String?
     var lastCreateType: String?
+    var lastCreateRepostOfId: String?
 
     var deleteCallCount = 0
     var lastDeletePostId: String?
@@ -64,13 +65,16 @@ final class MockPostService: PostServiceProviding {
 
     var repostCallCount = 0
     var lastRepostPostId: String?
-    var lastRepostQuote: String?
+    var lastRepostTargetType: PostType?
+    var lastRepostContent: String?
+    var lastRepostIsQuote: Bool?
 
     var shareCallCount = 0
     var lastSharePostId: String?
 
     var createStoryCallCount = 0
     var lastCreateStoryContent: String?
+    var lastCreateStoryRepostOfId: String?
 
     var createWithTypeCallCount = 0
     var lastCreateWithTypeType: PostType?
@@ -122,10 +126,12 @@ final class MockPostService: PostServiceProviding {
     func create(content: String?, type: String, visibility: String, moodEmoji: String?,
                 mediaIds: [String]?, audioUrl: String?, audioDuration: Int?,
                 originalLanguage: String?,
-                mobileTranscription: MobileTranscriptionPayload?) async throws -> APIPost {
+                mobileTranscription: MobileTranscriptionPayload?,
+                repostOfId: String?) async throws -> APIPost {
         createCallCount += 1
         lastCreateContent = content
         lastCreateType = type
+        lastCreateRepostOfId = repostOfId
         return try createResult.get()
     }
 
@@ -168,11 +174,13 @@ final class MockPostService: PostServiceProviding {
         try likeCommentResult.get()
     }
 
-    func repost(postId: String, quote: String?) async throws {
+    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost {
         repostCallCount += 1
         lastRepostPostId = postId
-        lastRepostQuote = quote
-        try repostResult.get()
+        lastRepostTargetType = targetType
+        lastRepostContent = content
+        lastRepostIsQuote = isQuote
+        return try repostResult.get()
     }
 
     func share(postId: String) async throws {
@@ -182,9 +190,11 @@ final class MockPostService: PostServiceProviding {
     }
 
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String,
-                     originalLanguage: String?, mediaIds: [String]?) async throws -> APIPost {
+                     originalLanguage: String?, mediaIds: [String]?,
+                     repostOfId: String?) async throws -> APIPost {
         createStoryCallCount += 1
         lastCreateStoryContent = content
+        lastCreateStoryRepostOfId = repostOfId
         return try createStoryResult.get()
     }
 
@@ -277,6 +287,7 @@ final class MockPostService: PostServiceProviding {
         createCallCount = 0
         lastCreateContent = nil
         lastCreateType = nil
+        lastCreateRepostOfId = nil
 
         deleteResult = .success(())
         deleteCallCount = 0
@@ -305,10 +316,12 @@ final class MockPostService: PostServiceProviding {
         lastLikeCommentPostId = nil
         lastLikeCommentCommentId = nil
 
-        repostResult = .success(())
+        repostResult = .success(stubPost)
         repostCallCount = 0
         lastRepostPostId = nil
-        lastRepostQuote = nil
+        lastRepostTargetType = nil
+        lastRepostContent = nil
+        lastRepostIsQuote = nil
 
         shareResult = .success(())
         shareCallCount = 0
@@ -317,6 +330,7 @@ final class MockPostService: PostServiceProviding {
         createStoryResult = .success(stubPost)
         createStoryCallCount = 0
         lastCreateStoryContent = nil
+        lastCreateStoryRepostOfId = nil
 
         createWithTypeResult = .success(stubPost)
         createWithTypeCallCount = 0

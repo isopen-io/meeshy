@@ -274,7 +274,8 @@ class FeedViewModel: ObservableObject {
                 audioUrl: audioUrl,
                 audioDuration: audioDuration,
                 originalLanguage: originalLanguage,
-                mobileTranscription: mobileTranscription
+                mobileTranscription: mobileTranscription,
+                repostOfId: nil
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             posts.insert(feedPost, at: 0)
@@ -338,7 +339,12 @@ class FeedViewModel: ObservableObject {
 
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
         do {
-            try await postService.repost(postId: postId, quote: isQuote ? content : nil)
+            _ = try await postService.repost(
+                postId: postId,
+                targetType: nil,           // nil = server defaults to original post type
+                content: isQuote ? content : nil,
+                isQuote: isQuote ? (content != nil) : false
+            )
         } catch {
             ToastManager.shared.showError("Erreur lors du repost")
         }

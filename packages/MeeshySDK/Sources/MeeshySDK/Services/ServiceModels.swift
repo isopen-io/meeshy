@@ -81,13 +81,15 @@ public struct CreatePostRequest: Encodable {
     public let originalLanguage: String?
     public let mobileTranscription: MobileTranscriptionPayload?
     public let viaUsername: String?
+    public let repostOfId: String?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
         self.originalLanguage = originalLanguage
         self.mobileTranscription = mobileTranscription; self.viaUsername = viaUsername
+        self.repostOfId = repostOfId
     }
 }
 
@@ -130,10 +132,12 @@ public struct CreateStoryRequest: Encodable {
     public let visibility: String
     public let originalLanguage: String?
     public let mediaIds: [String]?
+    public let repostOfId: String?
 
-    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", originalLanguage: String? = nil, mediaIds: [String]? = nil) {
+    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) {
         self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
         self.originalLanguage = originalLanguage; self.mediaIds = mediaIds
+        self.repostOfId = repostOfId
     }
 }
 
