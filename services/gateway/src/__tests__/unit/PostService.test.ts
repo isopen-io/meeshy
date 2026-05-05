@@ -647,6 +647,24 @@ describe('PostService', () => {
         })
       );
     });
+
+    it('accepts targetType option to override default repost type', async () => {
+      const original = makePost({ id: 'story-1', type: PostType.STORY });
+      prisma.post.findFirst.mockResolvedValue(original);
+      const repost = makePost({ id: 'repost-3', repostOfId: 'story-1', type: PostType.STORY });
+      prisma.post.create.mockResolvedValue(repost);
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('story-1', 'user-reposter', { targetType: PostType.STORY });
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: PostType.STORY,
+          }),
+        })
+      );
+    });
   });
 
   // -----------------------------------------------------------------------
