@@ -21,11 +21,12 @@ public final class FeedStore {
 
     // MARK: - Observation
 
-    func startObserving(dbPool: any DatabaseReader) {
+    func startObserving(dbPool: any DatabaseWriter) {
+        stopObserving()
         let request = PostRecord.order(Column("createdAt").desc)
 
         regionCancellable = DatabaseRegionObservation(tracking: request)
-            .start(in: dbPool as! any DatabaseWriter, onError: { _ in }) { [weak self] _ in
+            .start(in: dbPool, onError: { _ in }) { [weak self] _ in
                 Task { [weak self] in
                     await self?.refreshFromDB()
                 }

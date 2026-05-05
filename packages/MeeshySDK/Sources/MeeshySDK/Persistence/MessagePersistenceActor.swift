@@ -269,7 +269,7 @@ public actor MessagePersistenceActor {
 
     // MARK: - Reads (nonisolated — zero contention with writer)
 
-    public nonisolated var reader: any DatabaseReader { dbWriter as! any DatabaseReader }
+    public nonisolated var reader: any DatabaseWriter { dbWriter }
 
     public nonisolated func messages(for conversationId: String, before: Date? = nil,
                                       after: Date? = nil, limit: Int = 50) throws -> [MessageRecord] {

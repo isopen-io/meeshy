@@ -34,7 +34,7 @@ public enum MessageEvent: Sendable {
     case serverAck(serverId: String, at: Date)
     case delivered(count: Int, at: Date)
     case readBy(userId: String, at: Date)
-    case sendFailed(Error)
+    case sendFailed(any Error & Sendable)
     case retry
     case retryExhausted
 }

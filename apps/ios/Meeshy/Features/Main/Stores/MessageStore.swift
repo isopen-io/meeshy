@@ -43,7 +43,8 @@ public final class MessageStore {
 
     // MARK: - Observation
 
-    func startObserving(dbPool: any DatabaseReader) {
+    func startObserving(dbPool: any DatabaseWriter) {
+        stopObserving()
         let convId = conversationId
         let request = MessageRecord
             .filter(Column("conversationId") == convId)
@@ -51,7 +52,7 @@ public final class MessageStore {
         var refreshTask: Task<Void, Never>?
 
         regionCancellable = DatabaseRegionObservation(tracking: request)
-            .start(in: dbPool as! any DatabaseWriter, onError: { _ in }) { [weak self] _ in
+            .start(in: dbPool, onError: { _ in }) { [weak self] _ in
                 refreshTask?.cancel()
                 refreshTask = Task { [weak self] in
                     guard let self else { return }

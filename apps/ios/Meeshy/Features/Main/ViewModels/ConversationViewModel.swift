@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import UIKit
+import GRDB
 import MeeshySDK
 import MeeshyUI
 import os
@@ -414,6 +415,15 @@ class ConversationViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var messagesPersistCancellable: AnyCancellable?
     private var socketHandler: ConversationSocketHandler?
+
+    // MARK: - GRDB Persistence (additive — parallel data source alongside @Published messages)
+
+    /// GRDB-backed observable store for UICollectionView bridge.
+    /// Set via `setupPersistence(store:persistence:dbPool:)`.
+    private(set) var messageStore: MessageStore?
+
+    /// Actor for optimistic inserts and state-machine transitions.
+    private(set) var messagePersistence: MessagePersistenceActor?
     private var lastOlderPaginationTime: Date = .distantPast
     private var lastNewerPaginationTime: Date = .distantPast
     private static let paginationDebounceInterval: TimeInterval = 1.0
@@ -431,6 +441,8 @@ class ConversationViewModel: ObservableObject {
     private static let mentionDebounceMs: UInt64 = 300_000_000
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
+    /// Public read-only accessor for the view layer (UIKit bridge needs the user id).
+    var currentUserIdForView: String { currentUserId }
     private var currentUsername: String? { authManager.currentUser?.username }
     private var _resolvedParticipantId: String?
 
@@ -659,6 +671,20 @@ class ConversationViewModel: ObservableObject {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
         }
+    }
+
+    // MARK: - Persistence Setup
+
+    /// Wire up the GRDB-backed message store and persistence actor.
+    /// Called from the view layer once `DependencyContainer` is available.
+    /// This is ADDITIVE — the existing `@Published var messages` stays as
+    /// the primary data source for the SwiftUI path; `MessageStore` powers
+    /// the UIKit `MessageListView` bridge in parallel.
+    func setupPersistence(store: MessageStore, persistence: MessagePersistenceActor, dbPool: any DatabaseWriter) {
+        self.messageStore = store
+        self.messagePersistence = persistence
+        store.startObserving(dbPool: dbPool)
+        socketHandler?.persistence = persistence
     }
 
     /// Reconcile optimistic messages with their server-assigned ids when the
@@ -1321,11 +1347,49 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
+        // GRDB optimistic insert (parallel persistence path)
+        if let persistence = messagePersistence, existingTempId == nil {
+            let optimisticRecord = MessageRecord(
+                localId: tempId, serverId: nil,
+                conversationId: conversationId, senderId: currentUserId,
+                content: text.isEmpty ? nil : text,
+                originalLanguage: originalLanguage ?? "fr",
+                messageType: optimisticMessageType.rawValue,
+                messageSource: "user", contentType: "text",
+                state: .sending, retryCount: 0, lastError: nil,
+                isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+                replyToId: replyToId, storyReplyToId: storyReplyToId,
+                forwardedFromId: forwardedFromId,
+                forwardedFromConversationId: forwardedFromConversationId,
+                replyToJson: nil, forwardedFromJson: nil,
+                expiresAt: resolvedExpiresAt, effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : 0,
+                maxViewOnceCount: resolvedMaxViewOnceCount, viewOnceCount: 0,
+                isEdited: false, editedAt: nil, deletedAt: nil,
+                pinnedAt: nil, pinnedBy: nil,
+                senderName: authManager.currentUser?.displayName,
+                senderUsername: authManager.currentUser?.username,
+                senderColor: nil, senderAvatarURL: authManager.currentUser?.avatarUrl,
+                deliveredCount: 0, readCount: 0,
+                deliveredToAllAt: nil, readByAllAt: nil,
+                createdAt: Date(), sentAt: nil,
+                deliveredAt: nil, readAt: nil, updatedAt: Date(),
+                attachmentsJson: nil, reactionsJson: nil,
+                reactionCount: 0, currentUserReactionsJson: nil,
+                mentionedUsersJson: nil,
+                cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+                cachedLastLineWidth: nil, cachedLineCount: nil,
+                cachedTimestampInline: nil,
+                layoutVersion: 0, layoutMaxWidth: nil,
+                changeVersion: 0
+            )
+            try? await persistence.insertOptimistic(optimisticRecord)
+        }
+
         do {
             var finalContent: String? = text.isEmpty ? nil : text
             var isEncrypted = false
             var encryptionMode: String? = nil
-            
+
             // E2EE logic for Direct Messages
             if isDirect, let targetUserId = participantUserId, let textContent = finalContent {
                 do {
@@ -1370,6 +1434,14 @@ class ConversationViewModel: ObservableObject {
                 messages[idx].deliveryStatus = .sent
                 messages[idx].updatedAt = responseData.createdAt
                 pendingServerIds[tempId] = responseData.id
+            }
+
+            // GRDB server ack (parallel persistence path)
+            if let persistence = messagePersistence {
+                _ = try? await persistence.applyEvent(
+                    localId: tempId,
+                    event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
+                )
             }
 
             // Move conversation to top of list immediately (optimistic)

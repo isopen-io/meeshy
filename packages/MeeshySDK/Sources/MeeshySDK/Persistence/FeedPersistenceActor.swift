@@ -64,7 +64,7 @@ public actor FeedPersistenceActor {
 
     // MARK: - Reads (nonisolated)
 
-    public nonisolated var reader: any DatabaseReader { dbWriter as! any DatabaseReader }
+    public nonisolated var reader: any DatabaseWriter { dbWriter }
 
     public nonisolated func posts(cursor: Date? = nil, limit: Int = 20) throws -> [PostRecord] {
         try dbWriter.read { db in
