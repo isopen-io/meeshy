@@ -8,6 +8,17 @@ struct SharedContentWrapper: Identifiable {
     let content: SharedContentType
 }
 
+/// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
+/// repost-as-story composer launched from the bottom-bar Partager button (C.1).
+/// Carrying both the source `StoryItem` and the original author's handle keeps
+/// the cover identifiable + supplies what `StoryComposerViewModel(reposting:authorHandle:)`
+/// needs without leaking optionals through the binding.
+struct RepostStorySourceWrapper: Identifiable {
+    let id = UUID()
+    let story: StoryItem
+    let authorHandle: String
+}
+
 /// Draft state for a single story's composer
 struct StoryDraft {
     var text: String = ""
@@ -222,6 +233,44 @@ struct StoryViewerView: View {
             )
             .presentationDetents([.medium, .large])
         }
+        // Repost-as-story composer (C.1). Opened from the bottom-bar "Partager"
+        // action; uses the new `init(viewModel:onPublishSlide:onPublishAllInBackground:onDismiss:)`
+        // exposed by `StoryComposerView` so we can hand it a pre-built VM seeded
+        // by `StoryComposerViewModel(reposting:authorHandle:)`. The publish path
+        // delegates to `viewModel.publishStoryInBackground(...)` exactly like the
+        // tray-launched composer (StoryTrayView) — keeping a single upload flow.
+        // Note: full `repostOfId` propagation through `publishStoryInBackground`
+        // is the responsibility of a follow-up patch (the VM still carries the
+        // chain via `repostOfId` / `originalRepostOfId` for that wiring).
+        .fullScreenCover(item: $repostStoryComposerSource, onDismiss: {
+            resumeTimer()
+        }) { wrapper in
+            StoryComposerView(
+                viewModel: StoryComposerViewModel(
+                    reposting: wrapper.story,
+                    authorHandle: wrapper.authorHandle
+                ),
+                onPublishSlide: { _, _, _, _, _ in
+                    // No-op: background-publish path (`onPublishAllInBackground`)
+                    // is what `publishStoryInBackground` consumes. Keeping this
+                    // symmetric with the tray-launched composer keeps a single
+                    // upload code path.
+                },
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility in
+                    viewModel.publishStoryInBackground(
+                        slides: slides,
+                        slideImages: slideImages,
+                        loadedImages: loadedImages,
+                        loadedVideoURLs: loadedVideoURLs,
+                        loadedAudioURLs: loadedAudioURLs,
+                        originalLanguage: originalLanguage,
+                        visibility: visibility
+                    )
+                    repostStoryComposerSource = nil
+                },
+                onDismiss: { repostStoryComposerSource = nil }
+            )
+        }
     }
 
     // MARK: - Computed Card Transforms
@@ -250,6 +299,7 @@ struct StoryViewerView: View {
     @State private var bigReactionEmoji: String?
     @State private var bigReactionPhase: Int = 0
     @State private var sharedContentWrapper: SharedContentWrapper?
+    @State private var repostStoryComposerSource: RepostStorySourceWrapper?
 
     private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
 
@@ -569,16 +619,24 @@ struct StoryViewerView: View {
                 }
             }
 
-            // 4. Reshare (republish to own story) — hidden for own stories
-            if !isOwnStory {
+            // 4. Reshare (republish to own story) — hidden for own stories.
+            // Visibility-gated on `currentStory?.isPublic` (B.2 helper) so we never
+            // expose Partager for non-public visibility (FRIENDS / PRIVATE).
+            if !isOwnStory, currentStory?.isPublic == true {
                 storyActionButton(
                     icon: "arrow.2.squarepath",
                     label: "Partager"
                 ) {
-                    // TODO C.2 : wire repostAsPostDirect() using PostService.repost(postId:targetType:content:isQuote:)
                     HapticFeedback.light()
+                    pauseTimer()
+                    if let story = currentStory, let group = currentGroup {
+                        repostStoryComposerSource = RepostStorySourceWrapper(
+                            story: story,
+                            authorHandle: group.username
+                        )
+                    }
                 }
-            } else {
+            } else if isOwnStory {
                 storyActionButton(
                     icon: "eye.fill",
                     label: "Vues"

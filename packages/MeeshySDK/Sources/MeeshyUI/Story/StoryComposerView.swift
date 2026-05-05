@@ -203,6 +203,27 @@ public struct StoryComposerView: View {
         self.onDismiss = onDismiss
     }
 
+    /// Repost-aware initializer (C.1). Lets a caller hand the composer a
+    /// pre-built `StoryComposerViewModel` — typically one constructed via
+    /// `StoryComposerViewModel(reposting:authorHandle:)` so the canvas opens
+    /// already populated with the source slide + locked attribution badge.
+    ///
+    /// `onPreview` is left as a no-op default here because the repost flow does
+    /// not branch through the preview cycle (the slide is already known).
+    public init(
+        viewModel: StoryComposerViewModel,
+        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String) -> Void,
+        onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
+        onDismiss: @escaping () -> Void
+    ) {
+        self._viewModel = State(wrappedValue: viewModel)
+        self.onPublishSlide = onPublishSlide
+        self.onPublishAllInBackground = onPublishAllInBackground
+        self.onPreview = onPreview
+        self.onDismiss = onDismiss
+    }
+
     // MARK: - Body
 
     public var body: some View {

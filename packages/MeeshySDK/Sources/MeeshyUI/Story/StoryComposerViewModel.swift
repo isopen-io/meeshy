@@ -52,7 +52,7 @@ enum MediaAsset {
 
 @Observable
 @MainActor
-final class StoryComposerViewModel {
+public final class StoryComposerViewModel {
 
     // MARK: - Keyboard Language Detection
 
@@ -802,7 +802,7 @@ final class StoryComposerViewModel {
 
     /// Default initializer (kept explicit so the convenience init below has a designated
     /// init to delegate to). All stored properties default-initialise, so the body is empty.
-    init() {}
+    public init() {}
 
     /// Initializes the composer pre-populated for reposting `story`.
     ///
@@ -824,7 +824,7 @@ final class StoryComposerViewModel {
     /// `onPublishSlide` callback (`StoryComposerView.swift`) implemented by the iOS app
     /// caller (Phase C), which reads `vm.repostOfId` and forwards it to
     /// `PostService.create(...)` / `createStory(...)` (B.5c).
-    convenience init(reposting story: StoryItem, authorHandle: String) {
+    public convenience init(reposting story: StoryItem, authorHandle: String) {
         self.init()
 
         // Repost chain IDs (root-flatten):
