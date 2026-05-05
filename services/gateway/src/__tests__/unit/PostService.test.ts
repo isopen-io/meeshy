@@ -732,6 +732,31 @@ describe('PostService', () => {
         })
       );
     });
+
+    it('returns null when original is deleted', async () => {
+      prisma.post.findFirst.mockResolvedValue(null);
+      const result = await service.repostPost('deleted-1', 'user-reposter');
+      expect(result).toBeNull();
+    });
+
+    it('returns null when original is expired', async () => {
+      const expiredOriginal = makePost({
+        id: 'expired-1',
+        type: PostType.STORY,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+      prisma.post.findFirst.mockResolvedValue(expiredOriginal);
+      const result = await service.repostPost('expired-1', 'user-reposter');
+      expect(result).toBeNull();
+    });
+
+    it('throws 403 when original visibility is not PUBLIC', async () => {
+      const privateOriginal = makePost({ id: 'private-1', visibility: 'PRIVATE' });
+      prisma.post.findFirst.mockResolvedValue(privateOriginal);
+      await expect(
+        service.repostPost('private-1', 'user-reposter')
+      ).rejects.toMatchObject({ statusCode: 403 });
+    });
   });
 
   // -----------------------------------------------------------------------
