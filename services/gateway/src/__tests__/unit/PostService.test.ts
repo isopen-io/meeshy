@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PostService } from '../../services/PostService';
 import { PostCommentService } from '../../services/PostCommentService';
+import { MediaService } from '../../services/MediaService';
 import { PostType, PostVisibility } from '@meeshy/shared/prisma/client';
 
 // PostAudioService uses a singleton that requires initialization — mock it entirely
@@ -104,12 +105,14 @@ function makeComment(overrides: Record<string, unknown> = {}) {
 
 describe('PostService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
+  let mediaService: MediaService;
   let service: PostService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma = createMockPrisma();
-    service = new PostService(prisma);
+    mediaService = new MediaService();
+    service = new PostService(prisma, mediaService);
   });
 
   // -----------------------------------------------------------------------
@@ -661,6 +664,43 @@ describe('PostService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             type: PostType.STORY,
+          }),
+        })
+      );
+    });
+
+    it('duplicates media to new CDN URLs when reposting STORY as POST', async () => {
+      const original = makePost({
+        id: 'story-1',
+        type: PostType.STORY,
+        media: [
+          { id: 'm1', fileUrl: '/api/v1/attachments/file/m1.jpg', mimeType: 'image/jpeg', filePath: '2026/05/user/m1.jpg', fileName: 'm1.jpg', originalName: 'm1.jpg', fileSize: 1000 },
+          { id: 'm2', fileUrl: '/api/v1/attachments/file/m2.mp4', mimeType: 'video/mp4', filePath: '2026/05/user/m2.mp4', fileName: 'm2.mp4', originalName: 'm2.mp4', fileSize: 5000 },
+        ],
+        storyEffects: { someEffect: 'value' },
+        audioUrl: '/api/v1/attachments/file/audio.mp3',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'repost-snap' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      const duplicateMediaSpy = jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-m1.jpg', filePath: '2026/05/snapshot/new-m1.jpg', fileName: 'new-m1.jpg', fileSize: 1000, mimeType: 'image/jpeg' })
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-m2.mp4', filePath: '2026/05/snapshot/new-m2.mp4', fileName: 'new-m2.mp4', fileSize: 5000, mimeType: 'video/mp4' })
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-audio.mp3', filePath: '2026/05/snapshot/new-audio.mp3', fileName: 'new-audio.mp3', fileSize: 2000, mimeType: 'audio/mpeg' });
+
+      await service.repostPost('story-1', 'user-reposter', { targetType: PostType.POST });
+
+      expect(duplicateMediaSpy).toHaveBeenCalledWith('/api/v1/attachments/file/m1.jpg');
+      expect(duplicateMediaSpy).toHaveBeenCalledWith('/api/v1/attachments/file/m2.mp4');
+      expect(duplicateMediaSpy).toHaveBeenCalledWith('/api/v1/attachments/file/audio.mp3');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: PostType.POST,
+            audioUrl: '/api/v1/attachments/file/new-audio.mp3',
+            storyEffects: { someEffect: 'value' },
           }),
         })
       );
