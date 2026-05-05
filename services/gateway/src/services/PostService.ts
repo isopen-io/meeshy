@@ -828,6 +828,7 @@ export class PostService {
 
     if (isStoryToPostRepost) {
       const duplicatedMedia: SnapshotMediaCreate[] = [];
+      let duplicatedAudioUrl: string | undefined;
       try {
         const originalMedia = (original.media ?? []) as Array<{
           fileUrl: string;
@@ -858,16 +859,47 @@ export class PostService {
         const audioUrl = original.audioUrl as string | null | undefined;
         if (audioUrl) {
           const dupAudio = await this.mediaService.duplicateMedia(audioUrl);
+          duplicatedAudioUrl = dupAudio.fileUrl;
           snapshotAudioUrl = dupAudio.fileUrl;
         }
 
         snapshotMedia = duplicatedMedia;
         snapshotStoryEffects = original.storyEffects as Prisma.InputJsonValue | undefined;
+
+        const repost = await this.prisma.post.create({
+          data: {
+            authorId: userId,
+            type: targetType,
+            visibility: original.visibility,
+            content: content ?? undefined,
+            originalLanguage,
+            repostOfId: postId,
+            originalRepostOfId,
+            isQuote,
+            ...(expiresAt !== undefined ? { expiresAt } : {}),
+            ...(snapshotAudioUrl !== undefined ? { audioUrl: snapshotAudioUrl } : {}),
+            ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),
+            ...(snapshotMedia !== undefined ? { media: { create: snapshotMedia } } : {}),
+          },
+          include: postInclude,
+        });
+
+        await this.prisma.post.update({
+          where: { id: postId },
+          data: { repostCount: { increment: 1 } },
+        });
+
+        return repost;
       } catch (err) {
         for (const dup of duplicatedMedia) {
           await this.mediaService.deleteMedia(dup.fileUrl).catch(() => {});
         }
-        throw new Error('Media snapshot failed during repost', { cause: err });
+        if (duplicatedAudioUrl) {
+          await this.mediaService.deleteMedia(duplicatedAudioUrl).catch(() => {});
+        }
+        throw err instanceof Error
+          ? new Error('Media snapshot or post creation failed during repost', { cause: err })
+          : new Error('Media snapshot failed during repost');
       }
     }
 
@@ -882,9 +914,6 @@ export class PostService {
         originalRepostOfId,
         isQuote,
         ...(expiresAt !== undefined ? { expiresAt } : {}),
-        ...(snapshotAudioUrl !== undefined ? { audioUrl: snapshotAudioUrl } : {}),
-        ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),
-        ...(snapshotMedia !== undefined ? { media: { create: snapshotMedia } } : {}),
       },
       include: postInclude,
     });

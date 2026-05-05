@@ -740,7 +740,7 @@ describe('PostService', () => {
 
       await expect(
         service.repostPost('story-1', 'user-reposter', { targetType: PostType.POST })
-      ).rejects.toThrow('Media snapshot failed');
+      ).rejects.toThrow('Media snapshot or post creation failed during repost');
 
       // Verify the first duplicated media was rolled back
       expect(deleteMediaSpy).toHaveBeenCalledWith('/api/v1/attachments/file/new-m1.jpg');
