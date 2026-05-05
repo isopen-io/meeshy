@@ -18,21 +18,87 @@ public struct UnifiedPostComposer: View {
     @State private var showImagePreview = false
     @State private var showVideoPreview = false
 
+    /// Source story when in repost mode (nil for normal compose).
+    @State private var repostSourceStory: StoryItem? = nil
+
+    /// When non-nil, the type selector is locked to this value (B.7 = `.post`).
+    private let lockedType: PostType?
+
+    /// Test-only mirror of the repost source story. Captured at init time so tests
+    /// can verify the value without traversing the `@State` storage (whose
+    /// `wrappedValue` is only safe to access while the view body is being evaluated).
+    /// Marked `internal` so it stays inside the package.
+    internal let repostSourceForTests: StoryItem?
+
     @ObservedObject private var theme = ThemeManager.shared
 
     public var onPublish: (PostType, String, String?, StoryEffects?, UIImage?) -> Void
     public var onDismiss: () -> Void
 
+    /// Repost-mode publish callback: `(content, sourceStory)`.
+    /// Set by the repost-mode init; nil for normal compose flow.
+    public var onPublishRepost: ((String, StoryItem) -> Void)?
+
     public init(onPublish: @escaping (PostType, String, String?, StoryEffects?, UIImage?) -> Void,
                 onDismiss: @escaping () -> Void) {
-        self.onPublish = onPublish; self.onDismiss = onDismiss
+        self.onPublish = onPublish
+        self.onDismiss = onDismiss
+        self.lockedType = nil
+        self.repostSourceForTests = nil
+        self.onPublishRepost = nil
+    }
+
+    /// Initializes the composer in repost-as-post mode with an embedded story preview.
+    ///
+    /// - Parameters:
+    ///   - story: The source `StoryItem` being reposted. Rendered inside the composer
+    ///     via `StoryCanvasReaderView` so the user sees exactly what they are sharing.
+    ///   - authorHandle: The original author's handle (accepted for symmetry with the
+    ///     `StoryComposerViewModel` init introduced in B.6 — not displayed here because
+    ///     the embedded `StoryCanvasReaderView` already shows the original story with
+    ///     its locked badge and metadata).
+    ///   - onPublishRepost: Called when the user taps Publish. Receives the typed
+    ///     commentary plus the source story.
+    ///   - onDismiss: Called when the user cancels.
+    public init(
+        repostingStory story: StoryItem,
+        authorHandle: String,
+        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem) -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
+        self._selectedType = State(initialValue: .post)
+        self.lockedType = .post
+        self._repostSourceStory = State(initialValue: story)
+        self.repostSourceForTests = story
+        self.onPublishRepost = onPublishRepost
+        self.onDismiss = onDismiss
+        // Default no-op for the non-repost callback so existing call sites keep working.
+        self.onPublish = { _, _, _, _, _ in }
+        // `authorHandle` is reserved for future polish (e.g., a small attribution row);
+        // for now the embedded reader view shows author/locked-badge metadata itself.
+        _ = authorHandle
+    }
+
+    /// Test-only entry point for invoking the publish action without driving the
+    /// SwiftUI button hierarchy. Mirrors the production publish behavior:
+    /// when in repost mode, calls `onPublishRepost(content, sourceStory)`;
+    /// otherwise calls the regular `onPublish` callback.
+    /// Marked `internal` so it stays inside the package.
+    internal func triggerPublishForTests(content: String) {
+        if let story = repostSourceForTests, let onPublishRepost {
+            onPublishRepost(content, story)
+        } else {
+            onPublish(selectedType, content, moodEmoji, nil, selectedImage)
+        }
     }
 
     public var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                typeSelector
-                Divider().overlay(Color.white.opacity(0.1))
+                if lockedType == nil {
+                    typeSelector
+                    Divider().overlay(Color.white.opacity(0.1))
+                }
                 contentArea
                 Spacer()
                 bottomBar
@@ -152,23 +218,40 @@ public struct UnifiedPostComposer: View {
                 .lineLimit(3...12)
                 .padding(16)
 
-            if let image = selectedImage {
-                imagePreview(image)
-            } else if let videoURL = selectedVideoURL {
-                videoPreview(videoURL)
-            }
+            if let story = repostSourceStory {
+                // Repost mode: embed the source story canvas instead of the
+                // image-attachment slot. The composer is interactive, so audio
+                // is desired (mute=false).
+                StoryCanvasReaderView(story: story, mute: false)
+                    .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 16)
 
-            HStack(spacing: 16) {
-                PhotosPicker(selection: $selectedPhotoItem, matching: .any(of: [.images, .videos])) {
-                    Label(String(localized: "story.post.media", defaultValue: "Média", bundle: .module), systemImage: "photo.on.rectangle")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(theme.textSecondary)
+                HStack(spacing: 16) {
+                    visibilityPicker
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+            } else {
+                if let image = selectedImage {
+                    imagePreview(image)
+                } else if let videoURL = selectedVideoURL {
+                    videoPreview(videoURL)
                 }
 
-                visibilityPicker
-                Spacer()
+                HStack(spacing: 16) {
+                    PhotosPicker(selection: $selectedPhotoItem, matching: .any(of: [.images, .videos])) {
+                        Label(String(localized: "story.post.media", defaultValue: "Média", bundle: .module), systemImage: "photo.on.rectangle")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(theme.textSecondary)
+                    }
+
+                    visibilityPicker
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
         }
     }
 
@@ -303,7 +386,11 @@ public struct UnifiedPostComposer: View {
         Button {
             guard !content.isEmpty || selectedType == .story else { return }
             isPublishing = true
-            onPublish(selectedType, content, moodEmoji, nil, selectedImage)
+            if let story = repostSourceStory, let onPublishRepost {
+                onPublishRepost(content, story)
+            } else {
+                onPublish(selectedType, content, moodEmoji, nil, selectedImage)
+            }
             HapticFeedback.success()
         } label: {
             Text(String(localized: "story.post.publish", defaultValue: "Post", bundle: .module))
