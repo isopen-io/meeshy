@@ -228,6 +228,7 @@
 		INVFS0000000004F01 /* InviteFriendsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = INVFS0000000003F01 /* InviteFriendsSheet.swift */; };
 		IOFFT001000100010001001 /* OfflineFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = IOFFT001000100010001000 /* OfflineFlowTests.swift */; };
 		ISPFT001000100010001001 /* StoryPublishFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ISPFT001000100010001000 /* StoryPublishFlowTests.swift */; };
+		SRFT001A001A001A001A0002 /* StoryRepostFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRFT001A001A001A001A0001 /* StoryRepostFlowTests.swift */; };
 		ITRFT001000100010001001 /* TranslationFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ITRFT001000100010001000 /* TranslationFlowTests.swift */; };
 		L10N0001B001B001B001B0002 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = L10N0001A001A001A001A0001 /* Localizable.xcstrings */; };
 		L10N0002B002B002B002B0002 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = L10N0002A002A002A002A0001 /* InfoPlist.xcstrings */; };
@@ -594,6 +595,7 @@
 		INVFS0000000003F01 /* InviteFriendsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteFriendsSheet.swift; sourceTree = "<group>"; };
 		IOFFT001000100010001000 /* OfflineFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineFlowTests.swift; sourceTree = "<group>"; };
 		ISPFT001000100010001000 /* StoryPublishFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishFlowTests.swift; sourceTree = "<group>"; };
+		SRFT001A001A001A001A0001 /* StoryRepostFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryRepostFlowTests.swift; sourceTree = "<group>"; };
 		ITRFT001000100010001000 /* TranslationFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationFlowTests.swift; sourceTree = "<group>"; };
 		L10N0001A001A001A001A0001 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		L10N0002A002A002A002A0001 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
@@ -1186,6 +1188,7 @@
 				IOFFT001000100010001000 /* OfflineFlowTests.swift */,
 				IFRFT001000100010001000 /* FriendRequestFlowTests.swift */,
 				ISPFT001000100010001000 /* StoryPublishFlowTests.swift */,
+				SRFT001A001A001A001A0001 /* StoryRepostFlowTests.swift */,
 				ICFLT001000100010001000 /* CallFlowTests.swift */,
 			);
 			path = Integration;
@@ -1788,6 +1791,7 @@
 				IOFFT001000100010001001 /* OfflineFlowTests.swift in Sources */,
 				IFRFT001000100010001001 /* FriendRequestFlowTests.swift in Sources */,
 				ISPFT001000100010001001 /* StoryPublishFlowTests.swift in Sources */,
+				SRFT001A001A001A001A0002 /* StoryRepostFlowTests.swift in Sources */,
 				ICFLT001000100010001001 /* CallFlowTests.swift in Sources */,
 				91664E56C9958BA865B3A608 /* MockFriendService.swift in Sources */,
 				443B3C791B4DDEDC517D35DF /* MockCacheService.swift in Sources */,
