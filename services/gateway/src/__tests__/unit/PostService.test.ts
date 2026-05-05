@@ -232,6 +232,58 @@ describe('PostService', () => {
   });
 
   // -----------------------------------------------------------------------
+  // createPost with repostOfId
+  // -----------------------------------------------------------------------
+
+  describe('createPost with repostOfId', () => {
+    it('calculates originalRepostOfId from repostOfId', async () => {
+      const original = makePost({ id: 'orig-1', repostOfId: null, originalRepostOfId: null });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'new-1', ...args.data }));
+
+      await service.createPost({
+        type: PostType.STORY,
+        visibility: PostVisibility.PUBLIC,
+        content: 'hi',
+        repostOfId: 'orig-1',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.repostOfId).toBe('orig-1');
+      expect(createCall.data.originalRepostOfId).toBe('orig-1');
+    });
+
+    it('flattens originalRepostOfId when chained', async () => {
+      const intermediate = makePost({ id: 'inter-1', repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+      prisma.post.findFirst.mockResolvedValue(intermediate);
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'new-2', ...args.data }));
+
+      await service.createPost({
+        type: PostType.STORY,
+        visibility: PostVisibility.PUBLIC,
+        repostOfId: 'inter-1',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.originalRepostOfId).toBe('root-1');
+    });
+
+    it('does not set repost fields when repostOfId is omitted', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'new-3', ...args.data }));
+
+      await service.createPost({
+        type: PostType.POST,
+        visibility: PostVisibility.PUBLIC,
+        content: 'normal post',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.repostOfId).toBeUndefined();
+      expect(createCall.data.originalRepostOfId).toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // likePost
   // -----------------------------------------------------------------------
 
