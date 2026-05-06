@@ -738,9 +738,16 @@ class ConversationViewModel: ObservableObject {
             .sink { [weak self] in
                 guard let self else { return }
                 let userId = self.currentUserId
+                let previousCount = self.messages.count
                 let mapped = self.messageStore.messages.map { $0.toMessage(currentUserId: userId) }
                 self.objectWillChange.send()
                 self.messages = mapped
+                // Increment scroll-to-bottom counter when an optimistic send
+                // surfaces via store observation (replaces the former increment
+                // that sat next to messages.append in sendMessage).
+                if mapped.count > previousCount {
+                    self.newMessageAppended += 1
+                }
             }
     }
 
@@ -749,7 +756,15 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
-                self.reconcileQueuedSend(tempId: payload.tempId, serverId: payload.serverId)
+                pendingServerIds[payload.tempId] = payload.serverId
+                let localId = payload.tempId
+                let serverId = payload.serverId
+                Task { [weak self] in
+                    _ = try? await self?.messagePersistence.applyEvent(
+                        localId: localId,
+                        event: .serverAck(serverId: serverId, at: Date())
+                    )
+                }
             }
             .store(in: &cancellables)
 
@@ -757,7 +772,15 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
-                self.reconcileQueuedSend(tempId: payload.tempId, serverId: payload.serverId)
+                pendingServerIds[payload.tempId] = payload.serverId
+                let localId = payload.tempId
+                let serverId = payload.serverId
+                Task { [weak self] in
+                    _ = try? await self?.messagePersistence.applyEvent(
+                        localId: localId,
+                        event: .serverAck(serverId: serverId, at: Date())
+                    )
+                }
             }
             .store(in: &cancellables)
 
@@ -765,8 +788,13 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
-                guard let idx = self.messageIndex(for: payload.tempId) else { return }
-                self.messages[idx].deliveryStatus = .failed
+                let localId = payload.tempId
+                Task { [weak self] in
+                    _ = try? await self?.messagePersistence.applyEvent(
+                        localId: localId,
+                        event: .retryExhausted
+                    )
+                }
             }
             .store(in: &cancellables)
 
@@ -811,14 +839,6 @@ class ConversationViewModel: ObservableObject {
                 self?._cachedPreferredLanguagesUserId = nil
             }
             .store(in: &cancellables)
-    }
-
-    private func reconcileQueuedSend(tempId: String, serverId: String) {
-        guard let idx = messageIndex(for: tempId) else { return }
-        messages[idx].deliveryStatus = .sent
-        // The socket handler now matches on `pendingServerIds.value == apiMsg.id`
-        // and performs the atomic id swap when `message:new` arrives.
-        pendingServerIds[tempId] = serverId
     }
 
     deinit {
@@ -1357,52 +1377,8 @@ class ConversationViewModel: ObservableObject {
             case .location: return .location
             }
         }()
-        if existingTempId == nil {
-            let optimisticMessage = Message(
-                id: tempId,
-                conversationId: conversationId,
-                senderId: currentUserId,
-                content: text,
-                messageType: optimisticMessageType,
-                replyToId: replyToId,
-                storyReplyToId: storyReplyToId,
-                forwardedFromId: forwardedFromId,
-                forwardedFromConversationId: forwardedFromConversationId,
-                expiresAt: resolvedExpiresAt,
-                effects: {
-                    var e = pendingEffects
-                    if resolvedIsViewOnce { e.flags.insert(.viewOnce) }
-                    if resolvedBlur == true { e.flags.insert(.blurred) }
-                    if resolvedExpiresAt != nil { e.flags.insert(.ephemeral) }
-                    return e
-                }(),
-                maxViewOnceCount: resolvedMaxViewOnceCount,
-                viewOnceCount: 0,
-                createdAt: Date(),
-                updatedAt: Date(),
-                attachments: resolvedAttachments,
-                replyTo: replyRef,
-                deliveryStatus: .sending,
-                isMe: true
-            )
-            messages.append(optimisticMessage)
-            newMessageAppended += 1
-
-            // Persister le message optimiste en cache pour qu'il survive
-            // si l'utilisateur quitte la conversation avant la confirmation serveur.
-            let convId = conversationId
-            let snapshot = messages
-            Task.detached(priority: .utility) {
-                await CacheCoordinator.shared.messages.mergeUpdate(for: convId) { cached in
-                    let cachedIds = Set(cached.map(\.id))
-                    let newOnly = snapshot.filter { !cachedIds.contains($0.id) }
-                    guard !newOnly.isEmpty else { return cached }
-                    return (cached + newOnly).sorted { $0.createdAt < $1.createdAt }
-                }
-            }
-        }
-
-        // GRDB optimistic insert (parallel persistence path)
+        // GRDB optimistic insert — the store observation surfaces the row in `messages`
+        // automatically (Task 1.5: no direct messages.append here).
         if existingTempId == nil {
             let persistence = messagePersistence
             let optimisticRecord = MessageRecord(
@@ -1417,7 +1393,7 @@ class ConversationViewModel: ObservableObject {
                 replyToId: replyToId, storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
-                replyToJson: nil, forwardedFromJson: nil,
+                replyToJson: replyRef.flatMap { try? JSONEncoder().encode($0) }, forwardedFromJson: nil,
                 expiresAt: resolvedExpiresAt, effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : 0,
                 maxViewOnceCount: resolvedMaxViewOnceCount, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
@@ -1482,17 +1458,13 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId, request: body
             )
 
-            // Marquer comme envoyé sans changer l'id — évite le flash SwiftUI
-            // (ForEach utilise message.id comme clé, un changement d'id cause un
-            // unmount/remount du composant). Le remplacement complet se fera
-            // atomiquement quand message:new arrivera via le socket handler.
-            if let idx = messageIndex(for: tempId) {
-                messages[idx].deliveryStatus = .sent
-                messages[idx].updatedAt = responseData.createdAt
-                pendingServerIds[tempId] = responseData.id
-            }
+            // Register tempId → serverId mapping so the socket handler can reconcile
+            // the `message:new` broadcast without creating a duplicate row.
+            // UI update (sent state) flows through persistence → store observation.
+            pendingServerIds[tempId] = responseData.id
 
-            // GRDB server ack (parallel persistence path)
+            // GRDB server ack — state machine transitions to .sent; store observation
+            // surfaces the change to the view without a direct messages[idx] write.
             _ = try? await messagePersistence.applyEvent(
                 localId: tempId,
                 event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
@@ -1503,11 +1475,8 @@ class ConversationViewModel: ObservableObject {
             let msgContent = text
             let msgTime = responseData.createdAt
 
-            // Persist with the authoritative server id so that a future
-            // cold-start REST fetch reconciles without duplicate `temp_…`
-            // / server-id pairs. The in-memory `messages[idx].id` stays as
-            // `tempId` so SwiftUI ForEach keeps a stable key (no flash when
-            // the socket broadcast arrives — see ConversationSocketHandler).
+            // Persist the server-id mapping so that a future cold-start REST fetch
+            // reconciles without duplicate `temp_…` / server-id pairs.
             Task { [weak self] in
                 await self?.persistMessagesUsingServerIds()
             }
@@ -1537,17 +1506,13 @@ class ConversationViewModel: ObservableObject {
             isSending = false
             return true
         } catch {
-            // Mark optimistic message as sending (retry in progress)
-            if let idx = messageIndex(for: tempId) {
-                messages[idx].deliveryStatus = .sending
-            }
-
-            // Persist with the `sending` status so the bubble (with its clock
-            // glyph) survives navigation. The tempId stays in cache because
-            // no server id exists yet — it will be swapped in when
-            // `MessageRetryQueue.retrySucceeded` fires or the row flips to
-            // `.failed` via `retryExhausted`.
-            Task { [weak self] in await self?.persistMessagesUsingServerIds() }
+            // Apply sendFailed — state machine increments retryCount and transitions
+            // to .queued (retries remaining) or .failed (budget exhausted).
+            // The store observation surfaces the updated state to the view.
+            _ = try? await messagePersistence.applyEvent(
+                localId: tempId,
+                event: .sendFailed(error)
+            )
 
             // Enqueue for persistent auto-retry (5 attempts × 10s interval).
             // Pass the optimistic tempId so `MessageRetryQueue.retrySucceeded`

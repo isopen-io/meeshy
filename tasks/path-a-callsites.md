@@ -1,5 +1,30 @@
 # Path A Mutation Callsites — migration status
 
+## Task 1.5 COMPLETE — sendMessage optimistic send + queue reconciliation
+
+`sendMessage()` no longer appends directly to `self.messages`. The optimistic
+insert and all state transitions (serverAck, sendFailed, retryExhausted) go
+through `MessagePersistenceActor`; the `MessageStore → ConversationViewModel`
+store observation surfaces every change automatically.
+
+Sites migrated:
+- `messages.append(optimisticMessage)` in online send path → removed; GRDB `insertOptimistic` was already there
+- `messages[idx].deliveryStatus = .sent` after server ack → removed; `applyEvent(.serverAck)` was already there
+- `messages[idx].deliveryStatus = .sending` in catch block → replaced with `persistence.applyEvent(.sendFailed(error))`
+- `reconcileQueuedSend(tempId:serverId:)` → removed entirely (was the only caller of `messages[idx].deliveryStatus = .sent` in queue path)
+- `subscribeToQueueReconciliation` OfflineQueue/RetryQueue `.retrySucceeded` sinks → now call `persistence.applyEvent(.serverAck(...))`
+- `subscribeToQueueReconciliation` RetryQueue `.retryExhausted` sink → now calls `persistence.applyEvent(.retryExhausted)`
+- `newMessageAppended` increment → moved into `subscribeToMessageStore` (fires when store emits a count increase)
+
+Side effects preserved:
+- `OfflineQueue.shared.enqueue` in offline path — unchanged
+- `MessageRetryQueue.shared.enqueue` in catch block — unchanged
+- `pendingServerIds[tempId] = responseData.id` — retained (socket handler reconciliation)
+- `persistMessagesUsingServerIds()` call on success — retained (CacheCoordinator legacy cache sync)
+- All non-messages effects (ephemeralDuration, isBlurEnabled, pendingEffects, draftMentions, isSending) — unchanged
+
+---
+
 ## Task 1.4 COMPLETE — ConversationSocketHandler.swift
 
 All `delegate.messages` direct mutations have been removed from
@@ -55,11 +80,11 @@ These represent optimistic UI updates that need matching `MessageRecord` updates
 
 | Line range | Context | Proposed persistence call |
 |------------|---------|--------------------------|
-| 769        | `subscribeToQueueReconciliation` — mark `.failed` | `persistence.applyEvent(.failPermanent)` |
+| ~~769~~    | ~~`subscribeToQueueReconciliation` — mark `.failed`~~ | ✅ DONE Task 1.5 — `persistence.applyEvent(.retryExhausted)` |
 | 785–792    | `subscribeToQueueReconciliation` — reconcile reactions from queue | `persistence.updateReactions(localId:reactionsJson:)` |
-| 818        | `reconcileQueuedSend` — mark `.sent` after server ack | `persistence.applyEvent(.serverAck(...))` |
-| 1490–1491  | `sendMessage()` — mark sent + timestamp after success | `persistence.applyEvent(.serverAck(...))` |
-| 1542       | `sendMessage()` — mark `.sending` on retry | `persistence.applyEvent(.retry)` |
+| ~~818~~    | ~~`reconcileQueuedSend` — mark `.sent` after server ack~~ | ✅ DONE Task 1.5 — method removed; replaced by `persistence.applyEvent(.serverAck(...))` in `subscribeToQueueReconciliation` |
+| ~~1490–1491~~ | ~~`sendMessage()` — mark sent + timestamp after success~~ | ✅ DONE Task 1.5 — removed; GRDB `applyEvent(.serverAck)` was already called; store observation surfaces state |
+| ~~1542~~   | ~~`sendMessage()` — mark `.sending` on retry~~ | ✅ DONE Task 1.5 — replaced with `persistence.applyEvent(.sendFailed(error))` |
 | 1696–1713  | `toggleReaction()` — optimistic add/remove reaction | `persistence.updateReactions(...)` |
 | 1781–1782  | `deleteMessage()` — optimistic delete | `persistence.applyEvent(.softDelete)` |
 | 1788       | `deleteMessage()` — rollback on failure | `persistence.applyEvent(.restoreDeleted)` |
