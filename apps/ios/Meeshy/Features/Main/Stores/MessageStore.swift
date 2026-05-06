@@ -27,6 +27,58 @@ private final class WeakBox<T: AnyObject>: @unchecked Sendable {
 // `packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift`
 // so both MessageStore (iOS app) and MessagePersistenceActor (SDK) can use it.
 
+/// Fetches the message window from GRDB based on `WindowMode`. Declared at
+/// file scope so the closure(s) passed to `reader.read` don't inherit any
+/// actor isolation context (which would trigger Swift 6 strict concurrency
+/// runtime checks at GRDB invocation).
+private func fetchMessageWindow(
+    reader: any DatabaseWriter,
+    convId: String,
+    mode: WindowMode,
+    anchor: Date?,
+    windowSize: Int
+) throws -> [MessageRecord] {
+    switch mode {
+    case .around(let centerDate):
+        return try reader.read { db in
+            let half = windowSize / 2
+            let before = try MessageRecord
+                .filter(Column("conversationId") == convId)
+                .filter(Column("createdAt") <= centerDate)
+                .order(Column("createdAt").desc)
+                .limit(half)
+                .fetchAll(db)
+            let after = try MessageRecord
+                .filter(Column("conversationId") == convId)
+                .filter(Column("createdAt") > centerDate)
+                .order(Column("createdAt").asc)
+                .limit(half)
+                .fetchAll(db)
+            return Array(before.reversed()) + after
+        }
+    case .latest:
+        if let anchor {
+            return try reader.read { db in
+                try MessageRecord
+                    .filter(Column("conversationId") == convId)
+                    .filter(Column("createdAt") >= anchor)
+                    .order(Column("createdAt").asc)
+                    .limit(windowSize)
+                    .fetchAll(db)
+            }
+        } else {
+            return try reader.read { db in
+                try Array(MessageRecord
+                    .filter(Column("conversationId") == convId)
+                    .order(Column("createdAt").desc)
+                    .limit(windowSize)
+                    .fetchAll(db)
+                    .reversed())
+            }
+        }
+    }
+}
+
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
 /// Explicitly non-isolated so its methods can be called from any context.
 private final class ObservationTokens: @unchecked Sendable {
@@ -151,48 +203,20 @@ public final class MessageStore {
         let windowSize = Self.windowSize
         let reader = persistence.reader
 
-        let newRecords = await Task.detached(priority: .userInitiated) {
-            switch mode {
-            case .around(let centerDate):
-                // Window centered on centerDate: half-window before + half-window after.
-                return try? reader.read { db in
-                    let half = windowSize / 2
-                    let before = try MessageRecord
-                        .filter(Column("conversationId") == convId)
-                        .filter(Column("createdAt") <= centerDate)
-                        .order(Column("createdAt").desc)
-                        .limit(half)
-                        .fetchAll(db)
-                    let after = try MessageRecord
-                        .filter(Column("conversationId") == convId)
-                        .filter(Column("createdAt") > centerDate)
-                        .order(Column("createdAt").asc)
-                        .limit(half)
-                        .fetchAll(db)
-                    return Array(before.reversed()) + after
-                }
-            case .latest:
-                if let anchor {
-                    return try? reader.read { db in
-                        try MessageRecord
-                            .filter(Column("conversationId") == convId)
-                            .filter(Column("createdAt") >= anchor)
-                            .order(Column("createdAt").asc)
-                            .limit(windowSize)
-                            .fetchAll(db)
-                    }
-                } else {
-                    return try? reader.read { db in
-                        try Array(MessageRecord
-                            .filter(Column("conversationId") == convId)
-                            .order(Column("createdAt").desc)
-                            .limit(windowSize)
-                            .fetchAll(db)
-                            .reversed())
-                    }
-                }
-            }
-        }.value
+        // Read on the calling actor (MainActor). Direct reads via GRDB are
+        // fast (a single SELECT) and avoid the Swift 6 strict concurrency
+        // closure-isolation crash that hit Task.detached + reader.read
+        // combinations.
+        let newRecords: [MessageRecord]?
+        do {
+            newRecords = try fetchMessageWindow(
+                reader: reader, convId: convId, mode: mode,
+                anchor: anchor, windowSize: windowSize
+            )
+        } catch {
+            print("[MessageStore] refreshFromDB failed: \(error.localizedDescription)")
+            return
+        }
 
         guard let newRecords, newRecords != messages else { return }
 
