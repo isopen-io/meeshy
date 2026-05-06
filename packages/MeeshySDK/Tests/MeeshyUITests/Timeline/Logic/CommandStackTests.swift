@@ -279,7 +279,11 @@ final class CommandStackTests: XCTestCase {
         // Undo three times, expect d, c, b in order
         var ids: [String] = []
         for _ in 0..<3 {
-            if case let .addClip(cmd) = stack.undo() {
+            guard let result = stack.undo() else {
+                XCTFail("Expected non-nil undo result")
+                return
+            }
+            if case let .addClip(cmd) = result {
                 ids.append(cmd.clipId)
             }
         }
