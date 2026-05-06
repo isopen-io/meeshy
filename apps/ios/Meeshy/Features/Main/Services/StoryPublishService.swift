@@ -64,16 +64,19 @@ final class StoryPublishService: ObservableObject {
 
     private init() {}
 
-    /// Idempotent. Call once during app bootstrap (RootView.task or
-    /// MeeshyApp.onAppear) to register the publish handler and start
-    /// listening to the queue's events.
+    /// Sets up listeners and pendingCount refresh. Idempotent. Safe to
+    /// call early in app bootstrap (before any executor is mounted) — the
+    /// publish handler is NOT registered here. `setExecutor` is the single
+    /// entry point that registers the handler so the queue never invokes
+    /// it without an executor backing the call.
+    ///
+    /// This separation closes the race that existed when configure() was
+    /// called before the StoryViewModel mounted : the M5 auto-drain on
+    /// setPublishHandler would fire with a nil executor and burn retry
+    /// budget on a guaranteed-to-fail handler.
     func configure() {
         guard !configured else { return }
         configured = true
-
-        Task { [weak self] in
-            await self?.registerPublishHandler()
-        }
 
         // Subscribe to the success / failure streams. The publishers are
         // exposed as nonisolated SendablePassthrough so we can subscribe
@@ -105,7 +108,19 @@ final class StoryPublishService: ObservableObject {
             }
             .store(in: &cancellables)
 
-        logger.info("StoryPublishService configured")
+        logger.info("StoryPublishService configured (listeners only — executor pending)")
+    }
+
+    /// Registers the upload executor AND the queue's publish handler. Call
+    /// this AFTER the executor object is fully initialized — typically
+    /// from RootView.task once the ViewModel exists. Calling it triggers
+    /// the M5 auto-drain on the queue, which now has a real executor to
+    /// delegate to.
+    func setExecutor(_ executor: StoryPublishExecutor) {
+        self.executor = executor
+        Task { [weak self] in
+            await self?.registerPublishHandler()
+        }
     }
 
     // MARK: - Public surface

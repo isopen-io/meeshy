@@ -314,11 +314,15 @@ struct RootView: View {
             conversationViewModel.observeSync()
 
             // Pilier 22 V3 wiring — register the StoryViewModel as the
-            // queue's upload executor. The queue handler delegates here
-            // when items become eligible for retry. Set BEFORE loadStories
-            // so any previously-pending publishes start surfacing toasts
-            // as soon as the user lands on the home screen.
-            StoryPublishService.shared.executor = storyViewModel
+            // queue's upload executor. setExecutor also registers the
+            // queue's publish handler in the same call, so the M5 auto-
+            // drain that fires next has a guaranteed-non-nil executor to
+            // delegate to. Calling configure() at app boot (in MeeshyApp)
+            // intentionally only sets up listeners — the handler is
+            // registered HERE, atomic with the executor assignment, to
+            // avoid the boot race that would burn retry budget on a
+            // guaranteed-fail call.
+            StoryPublishService.shared.setExecutor(storyViewModel)
 
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
