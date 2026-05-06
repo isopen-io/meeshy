@@ -425,4 +425,21 @@ final class StoryModelsExtensionsTests: XCTestCase {
         }
         XCTAssertEqual(acceptsAny(LocalNoop()), "noop")
     }
+
+    // MARK: - TimelineClipKind
+
+    func test_timelineClipKind_rawValues_matchSpec() {
+        XCTAssertEqual(TimelineClipKind.video.rawValue, "video")
+        XCTAssertEqual(TimelineClipKind.image.rawValue, "image")
+        XCTAssertEqual(TimelineClipKind.audio.rawValue, "audio")
+        XCTAssertEqual(TimelineClipKind.text.rawValue, "text")
+    }
+
+    func test_timelineClipKind_codableRoundTrip_allCases() throws {
+        for kind in TimelineClipKind.allCases {
+            let data = try JSONEncoder().encode(kind)
+            let decoded = try JSONDecoder().decode(TimelineClipKind.self, from: data)
+            XCTAssertEqual(decoded, kind)
+        }
+    }
 }

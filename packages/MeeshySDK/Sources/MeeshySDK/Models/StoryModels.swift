@@ -1157,6 +1157,18 @@ public enum EditCommandError: Error, Sendable, Equatable {
     case invalidState(reason: String)
 }
 
+// MARK: - Timeline Clip Kind (target collection identifier)
+
+/// Identifies which collection of a `TimelineProject` a command targets.
+/// `video` and `image` both live in `mediaObjects` but the kind is preserved
+/// to drive UI / engine routing without re-deriving from `mediaType`.
+public enum TimelineClipKind: String, Codable, CaseIterable, Sendable {
+    case video
+    case image
+    case audio
+    case text
+}
+
 // MARK: - Story Easing (Timeline V2)
 
 /// Easing curve applied between two interpolated values (transitions, keyframes).
