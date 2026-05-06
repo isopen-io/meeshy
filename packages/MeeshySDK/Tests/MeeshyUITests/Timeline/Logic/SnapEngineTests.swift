@@ -1,7 +1,6 @@
 import XCTest
 @testable import MeeshyUI
 
-@MainActor
 final class SnapEngineTests: XCTestCase {
 
     // MARK: - SnapCandidate / SnapResult value semantics

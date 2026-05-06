@@ -3,10 +3,10 @@ import Foundation
 // MARK: - SnapCandidate
 
 /// A candidate point in time that the SnapEngine can snap a raw user time to.
-public struct SnapCandidate: Equatable, Sendable {
+public struct SnapCandidate: Sendable {
 
     /// The semantic kind of a snap candidate. Used to break ties (priority order).
-    public enum Kind: Sendable, Equatable {
+    public enum Kind: Sendable {
         case playhead
         case clipStart
         case clipEnd
@@ -17,14 +17,38 @@ public struct SnapCandidate: Equatable, Sendable {
         case slideEnd
     }
 
-    public let kind: Kind
-    public let time: Float
-    public let label: String?
+    public nonisolated let kind: Kind
+    public nonisolated let time: Float
+    public nonisolated let label: String?
 
-    public init(kind: Kind, time: Float, label: String? = nil) {
+    public nonisolated init(kind: Kind, time: Float, label: String? = nil) {
         self.kind = kind
         self.time = time
         self.label = label
+    }
+}
+
+extension SnapCandidate: Equatable {
+    public nonisolated static func == (lhs: SnapCandidate, rhs: SnapCandidate) -> Bool {
+        lhs.kind == rhs.kind && lhs.time == rhs.time && lhs.label == rhs.label
+    }
+}
+
+extension SnapCandidate.Kind: Equatable {
+    public nonisolated static func == (lhs: SnapCandidate.Kind, rhs: SnapCandidate.Kind) -> Bool {
+        switch (lhs, rhs) {
+        case (.playhead, .playhead),
+             (.clipStart, .clipStart),
+             (.clipEnd, .clipEnd),
+             (.gridMajor, .gridMajor),
+             (.gridMinor, .gridMinor),
+             (.keyframe, .keyframe),
+             (.slideStart, .slideStart),
+             (.slideEnd, .slideEnd):
+            return true
+        default:
+            return false
+        }
     }
 }
 
@@ -32,13 +56,19 @@ public struct SnapCandidate: Equatable, Sendable {
 
 /// The output of `SnapEngine.snap`. `matched == nil` means no snap occurred
 /// (raw time was returned unchanged).
-public struct SnapResult: Equatable, Sendable {
-    public let snappedTime: Float
-    public let matched: SnapCandidate?
+public struct SnapResult: Sendable {
+    public nonisolated let snappedTime: Float
+    public nonisolated let matched: SnapCandidate?
 
-    public init(snappedTime: Float, matched: SnapCandidate?) {
+    public nonisolated init(snappedTime: Float, matched: SnapCandidate?) {
         self.snappedTime = snappedTime
         self.matched = matched
+    }
+}
+
+extension SnapResult: Equatable {
+    public nonisolated static func == (lhs: SnapResult, rhs: SnapResult) -> Bool {
+        lhs.snappedTime == rhs.snappedTime && lhs.matched == rhs.matched
     }
 }
 
@@ -52,9 +82,9 @@ public struct SnapEngine: Sendable {
 
     /// Tolerance in seconds. A candidate is eligible if `|candidate.time - rawTime| <= tolerance`.
     /// Clamped to 0 if a negative value is provided.
-    public let toleranceSeconds: Float
+    public nonisolated let toleranceSeconds: Float
 
-    public init(toleranceSeconds: Float) {
+    public nonisolated init(toleranceSeconds: Float) {
         self.toleranceSeconds = max(0, toleranceSeconds)
     }
 }
@@ -63,7 +93,7 @@ extension SnapEngine {
 
     /// Higher value = higher priority (wins tie-break at equal distance).
     /// Order matches spec section 4.1 priority hierarchy.
-    static func priority(for kind: SnapCandidate.Kind) -> Int {
+    nonisolated static func priority(for kind: SnapCandidate.Kind) -> Int {
         switch kind {
         case .playhead:                return 70
         case .clipStart, .clipEnd:     return 60
@@ -85,7 +115,7 @@ extension SnapEngine {
     ///            and `matched` (the winning candidate or nil).
     ///
     /// - Complexity: O(n) over `candidates`. Safe to call at 60 fps.
-    public func snap(
+    public nonisolated func snap(
         rawTime: Float,
         candidates: [SnapCandidate],
         disabled: Bool = false
@@ -96,7 +126,7 @@ extension SnapEngine {
         return Self.pickBest(rawTime: rawTime, candidates: candidates, tolerance: toleranceSeconds)
     }
 
-    static func pickBest(rawTime: Float, candidates: [SnapCandidate], tolerance: Float) -> SnapResult {
+    nonisolated static func pickBest(rawTime: Float, candidates: [SnapCandidate], tolerance: Float) -> SnapResult {
         guard !candidates.isEmpty else {
             return SnapResult(snappedTime: rawTime, matched: nil)
         }
