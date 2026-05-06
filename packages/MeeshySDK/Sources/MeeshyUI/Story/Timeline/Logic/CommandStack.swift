@@ -139,3 +139,20 @@ extension CommandStack {
         return cmd
     }
 }
+
+extension CommandStack {
+
+    /// Capture the current state for persistence. Safe to call on the main actor.
+    public func snapshot() -> CommandStackSnapshot {
+        return CommandStackSnapshot(commands: commands, cursor: cursor)
+    }
+
+    /// Replace the current state with a previously captured snapshot.
+    /// Cursor is clamped to `[0, commands.count]` to tolerate corrupted snapshots.
+    /// Calls `didChange` after the restore completes.
+    public func restore(_ snapshot: CommandStackSnapshot) {
+        self.commands = snapshot.commands
+        self.cursor = max(0, min(snapshot.cursor, snapshot.commands.count))
+        didChange?(self)
+    }
+}

@@ -295,4 +295,46 @@ final class CommandStackTests: XCTestCase {
         XCTAssertTrue(stack.canUndo)
         XCTAssertFalse(stack.canRedo)
     }
+
+    // MARK: - CommandStack — snapshot / restore
+
+    func test_snapshot_capturesCommandsAndCursor() {
+        let stack = CommandStack(coalesceWindow: 0)
+        stack.push(makeAddCmd(clipId: "a"))
+        stack.push(makeAddCmd(clipId: "b"))
+        _ = stack.undo()
+        let snap = stack.snapshot()
+        XCTAssertEqual(snap.commands.count, 2)
+        XCTAssertEqual(snap.cursor, 1)
+    }
+
+    func test_restore_rebuildsStackState() {
+        let original = CommandStack(coalesceWindow: 0)
+        original.push(makeAddCmd(clipId: "a"))
+        original.push(makeAddCmd(clipId: "b"))
+        original.push(makeAddCmd(clipId: "c"))
+        _ = original.undo()
+        let snap = original.snapshot()
+
+        let restored = CommandStack(coalesceWindow: 0)
+        restored.restore(snap)
+        XCTAssertEqual(restored.count, 3)
+        XCTAssertTrue(restored.canUndo)
+        XCTAssertTrue(restored.canRedo)
+        // Calling redo on restored should give us back command 'c'
+        if case let .addClip(cmd) = restored.redo() {
+            XCTAssertEqual(cmd.clipId, "c")
+        } else {
+            XCTFail("Expected restored stack to expose c on redo")
+        }
+    }
+
+    func test_restore_clampsCursorToCommandCount() {
+        let stack = CommandStack()
+        let bogus = CommandStackSnapshot(commands: [], cursor: 99)
+        stack.restore(bogus)
+        XCTAssertEqual(stack.count, 0)
+        XCTAssertFalse(stack.canUndo)
+        XCTAssertFalse(stack.canRedo)
+    }
 }
