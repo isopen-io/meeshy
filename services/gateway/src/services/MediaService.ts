@@ -1,4 +1,4 @@
-import { promises as fs } from 'fs';
+import { promises as fs, constants as fsConstants } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -77,7 +77,11 @@ export class MediaService {
     const destPath = path.join(this.uploadBasePath, newRelativePath);
 
     await fs.mkdir(path.dirname(destPath), { recursive: true });
-    await fs.copyFile(srcPath, destPath);
+    // COPYFILE_FICLONE = best-effort copy-on-write reflink (zero-copy on APFS,
+    // btrfs, XFS, ext4 5.6+) ; falls back to full byte copy on filesystems
+    // that do not support reflinks. COPYFILE_EXCL guards against overwriting
+    // a destination that somehow already exists (defensive against UUID race).
+    await fs.copyFile(srcPath, destPath, fsConstants.COPYFILE_FICLONE | fsConstants.COPYFILE_EXCL);
 
     const stat = await fs.stat(destPath);
 
