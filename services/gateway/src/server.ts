@@ -1045,8 +1045,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       logger.warn('⚠️ ZMQ client not available, voice routes not registered');
     }
 
-    // Register post/feed routes with /api/v1 prefix
+    // Register post/feed routes with /api/v1 prefix.
+    // Decorate the scoped instance with orphanMediaCleanup so the repost
+    // path in PostService can register snapshot files in the outbox before
+    // the surrounding transaction commits (Pilier 4 producer side).
     await this.server.register(async (instance) => {
+      instance.decorate('orphanMediaCleanup', this.orphanMediaCleanup);
       await postRoutes(instance);
     }, { prefix: API_PREFIX });
     logger.info('✓ Post/Feed routes registered');

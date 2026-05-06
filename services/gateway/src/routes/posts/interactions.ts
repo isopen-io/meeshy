@@ -4,6 +4,8 @@ import { PostType } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
+import { MediaService } from '../../services/MediaService';
+import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, RepostSchema, PostParams } from './types';
 import { sendSuccess, sendForbidden } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
@@ -12,9 +14,14 @@ import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  requiredAuth: any
+  requiredAuth: any,
+  orphanCleanup?: OrphanMediaCleanupService
 ) {
-  const postService = new PostService(prisma);
+  // Inject orphanCleanup so repostPost registers snapshot files in the
+  // outbox before commit (Pilier 4 producer side). The MediaService
+  // argument is the default — passed explicitly so the constructor chain
+  // is readable.
+  const postService = new PostService(prisma, new MediaService(), orphanCleanup);
 
   // POST /posts/:postId/like
   fastify.post('/posts/:postId/like', {

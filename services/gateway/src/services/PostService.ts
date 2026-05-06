@@ -5,6 +5,7 @@ import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { MediaService } from './MediaService';
 import type { MediaStorage } from './storage/MediaStorage';
+import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 
@@ -120,6 +121,15 @@ export class PostService {
     // (Pilier 7 SOTA migration path) does not need to touch this class.
     // The default value remains the local-filesystem implementation.
     private readonly mediaService: MediaStorage = new MediaService(),
+    // Optional outbox tracker — when injected (production server bootstrap),
+    // every snapshot file produced inside `repostPost` is registered before
+    // the surrounding transaction commits, and the registration is removed
+    // on commit. If the process crashes mid-call, the worker reaps the
+    // orphan files. When omitted (unit tests, ad-hoc invocations), the
+    // path-based inline rollback in the catch block remains the only
+    // safety net — same behavior as before the outbox was introduced.
+    // Reference: SOTA audit Pilier 4.
+    private readonly orphanCleanup?: OrphanMediaCleanupService,
   ) {}
 
   async createPost(data: {
@@ -833,6 +843,10 @@ export class PostService {
     if (isStoryToPostRepost) {
       const duplicatedMedia: SnapshotMediaCreate[] = [];
       let duplicatedAudioUrl: string | undefined;
+      // Outbox row IDs to release once the surrounding transaction commits.
+      // If we crash before reaching the untrack call, the worker will reap
+      // the snapshot files on the next sweep cycle.
+      const orphanRowIds: string[] = [];
       try {
         const originalMedia = (original.media ?? []) as Array<{
           fileUrl: string;
@@ -843,9 +857,15 @@ export class PostService {
 
         for (const [idx, m] of originalMedia.entries()) {
           const dup = await this.mediaService.duplicate(m.fileUrl);
+          if (this.orphanCleanup) {
+            orphanRowIds.push(await this.orphanCleanup.track(dup.fileUrl, 'repost-snapshot'));
+          }
           let dupThumbUrl: string | undefined;
           if (m.thumbnailUrl) {
             const dupThumb = await this.mediaService.duplicate(m.thumbnailUrl);
+            if (this.orphanCleanup) {
+              orphanRowIds.push(await this.orphanCleanup.track(dupThumb.fileUrl, 'repost-snapshot'));
+            }
             dupThumbUrl = dupThumb.fileUrl;
           }
           duplicatedMedia.push({
@@ -863,6 +883,9 @@ export class PostService {
         const audioUrl = original.audioUrl as string | null | undefined;
         if (audioUrl) {
           const dupAudio = await this.mediaService.duplicate(audioUrl);
+          if (this.orphanCleanup) {
+            orphanRowIds.push(await this.orphanCleanup.track(dupAudio.fileUrl, 'repost-snapshot'));
+          }
           duplicatedAudioUrl = dupAudio.fileUrl;
           snapshotAudioUrl = dupAudio.fileUrl;
         }
@@ -893,14 +916,32 @@ export class PostService {
           data: { repostCount: { increment: 1 } },
         });
 
+        // Post created — release the outbox rows. Done in a fire-and-forget
+        // catch since failure here only means the worker will still see the
+        // rows past their cleanup window and try to delete files that are
+        // now legitimately referenced by the new Post. The worker handles
+        // that case via MediaStorage.delete idempotence + the row's TTL,
+        // but to be safe we use the typed batch helper.
+        if (this.orphanCleanup && orphanRowIds.length > 0) {
+          await this.orphanCleanup.untrackBatch(orphanRowIds);
+        }
+
         return repost;
       } catch (err) {
+        // Inline (best-effort) compensation. Same as before — fast-path
+        // cleanup. The outbox rows stay registered, so the worker provides
+        // a second-line safety net if a delete here fails (or if the
+        // process dies before reaching this catch).
         for (const dup of duplicatedMedia) {
           await this.mediaService.delete(dup.fileUrl).catch(() => {});
         }
         if (duplicatedAudioUrl) {
           await this.mediaService.delete(duplicatedAudioUrl).catch(() => {});
         }
+        // Note : on failure we deliberately do NOT untrack the outbox
+        // rows. They remain so the worker can verify the files are
+        // actually gone (idempotent delete) and reap any that the inline
+        // compensation missed.
         throw err instanceof Error
           ? new Error('Media snapshot or post creation failed during repost', { cause: err })
           : new Error('Media snapshot failed during repost');
