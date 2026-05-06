@@ -732,19 +732,26 @@ class ConversationViewModel: ObservableObject {
     /// `objectWillChange` so SwiftUI re-renders.
     private func subscribeToMessageStore() {
         storeObservation = messageStore.messagesDidChange
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] in
-                guard let self else { return }
-                let userId = self.currentUserId
-                let previousCount = self.messages.count
-                let mapped = self.messageStore.messages.map { $0.toMessage(currentUserId: userId) }
-                self.objectWillChange.send()
-                self.messages = mapped
-                // Increment scroll-to-bottom counter when an optimistic send
-                // surfaces via store observation (replaces the former increment
-                // that sat next to messages.append in sendMessage).
-                if mapped.count > previousCount {
-                    self.newMessageAppended += 1
+                // Defer to a fresh runloop tick via DispatchQueue.main.async — a
+                // synchronous .receive(on: DispatchQueue.main) handler can fire
+                // mid-view-update on the SwiftUI render runloop, which trips
+                // "Publishing changes from within view updates" when @Published
+                // self.messages is mutated. async-dispatch from any thread
+                // guarantees the @Published mutation lands on a fresh runloop
+                // iteration AFTER the current view body evaluation completes.
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    let userId = self.currentUserId
+                    let previousCount = self.messages.count
+                    let mapped = self.messageStore.messages.map { $0.toMessage(currentUserId: userId) }
+                    self.messages = mapped
+                    // Increment scroll-to-bottom counter when an optimistic send
+                    // surfaces via store observation (replaces the former increment
+                    // that sat next to messages.append in sendMessage).
+                    if mapped.count > previousCount {
+                        self.newMessageAppended += 1
+                    }
                 }
             }
     }

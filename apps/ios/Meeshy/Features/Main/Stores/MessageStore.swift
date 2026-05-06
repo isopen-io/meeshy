@@ -80,15 +80,24 @@ public final class MessageStore {
 
         tokens.regionCancellable = DatabaseRegionObservation(tracking: request)
             .start(in: dbPool, onError: { _ in }) { [weak self] _ in
-                self?.tokens.refreshTask?.cancel()
-                self?.tokens.refreshTask = Task { [weak self] in
+                // GRDB invokes this closure on its writer's serial queue, NOT
+                // MainActor. Accessing `self.tokens` (property of @MainActor
+                // class) from off-actor trips Swift 6's strict concurrency
+                // assertion (`_swift_task_checkIsolatedSwift` →
+                // `dispatch_assert_queue_fail`). Hop to MainActor before any
+                // self.* access.
+                Task { @MainActor [weak self] in
                     guard let self else { return }
-                    let delay: Duration = self.isUserScrolling
-                        ? .milliseconds(200)
-                        : .milliseconds(16)
-                    try? await Task.sleep(for: delay)
-                    guard !Task.isCancelled else { return }
-                    await self.refreshFromDB()
+                    self.tokens.refreshTask?.cancel()
+                    self.tokens.refreshTask = Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        let delay: Duration = self.isUserScrolling
+                            ? .milliseconds(200)
+                            : .milliseconds(16)
+                        try? await Task.sleep(for: delay)
+                        guard !Task.isCancelled else { return }
+                        await self.refreshFromDB()
+                    }
                 }
             }
     }
