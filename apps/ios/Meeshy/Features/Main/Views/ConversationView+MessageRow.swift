@@ -239,7 +239,6 @@ extension ConversationView {
                 removal: .opacity
             )
         )
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
         .onTapGesture {
             if overlayState.quickReactionMessageId != nil && overlayState.quickReactionMessageId != msg.id {
                 closeReactionBar()
