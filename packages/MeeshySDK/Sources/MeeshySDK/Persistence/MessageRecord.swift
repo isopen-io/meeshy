@@ -85,6 +85,9 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     public var layoutVersion: Int
     public var layoutMaxWidth: Double?
 
+    // Pre-computed display string for the bubble timestamp (avoids DateFormatter in body)
+    public var cachedTimeString: String?
+
     // Change tracking
     public var changeVersion: Int64
 
@@ -117,6 +120,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         cachedLastLineWidth: Double?, cachedLineCount: Int?,
         cachedTimestampInline: Bool?,
         layoutVersion: Int, layoutMaxWidth: Double?,
+        cachedTimeString: String? = nil,
         changeVersion: Int64
     ) {
         self.localId = localId
@@ -174,7 +178,34 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.cachedTimestampInline = cachedTimestampInline
         self.layoutVersion = layoutVersion
         self.layoutMaxWidth = layoutMaxWidth
+        self.cachedTimeString = cachedTimeString
         self.changeVersion = changeVersion
+    }
+
+    // MARK: - Timestamp pre-compute helper
+
+    public static func computeTimeString(for date: Date) -> String {
+        TimeStringCache.shared.format(date)
+    }
+}
+
+// Thread-safe singleton formatter — avoids per-call DateFormatter allocations.
+// DateFormatter.string(from:) is not thread-safe; NSLock guards concurrent callers.
+public final class TimeStringCache: @unchecked Sendable {
+    public static let shared = TimeStringCache()
+
+    private let lock = NSLock()
+    private let formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        f.locale = Locale.current
+        return f
+    }()
+
+    public func format(_ date: Date) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return formatter.string(from: date)
     }
 }
 

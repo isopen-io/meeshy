@@ -61,6 +61,8 @@
 		7797E2B5166F5EDAF70FAB38 /* FeedSocketHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B604508315DF24C24B5BD8 /* FeedSocketHandler.swift */; };
 		79D7E73605F1F2D22F0CA4F3 /* TextPostCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F428B4BBE411144826BD5F /* TextPostCell.swift */; };
 		7E4ACB96705AA96ECDF87640 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEFC47F367886DA4FF305C8D /* DependencyContainer.swift */; };
+		IDSC0001000100010001BLD1 /* ImageDownsamplingConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = IDSC0001000100010001REF1 /* ImageDownsamplingConfig.swift */; };
+		IDSC0001000100010002BLD1 /* ImageDownsamplingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = IDSC0001000100010002REF1 /* ImageDownsamplingTests.swift */; };
 		7FCC2F965C3421351E49E5E0 /* UserStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D8B8C79D3A388D45C5B5EEF /* UserStatsView.swift */; };
 		81D7463D392AC72672A45647 /* AudioBubbleCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2A08DB67EE64A4EEE71EBC /* AudioBubbleCell.swift */; };
 		8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0340CB5A3610F80C0D53F08 /* MediaCompressorTests.swift */; };
@@ -598,6 +600,8 @@
 		DD0100000000003F01 /* ConversationDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDashboardView.swift; sourceTree = "<group>"; };
 		DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
 		DEFC47F367886DA4FF305C8D /* DependencyContainer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
+		IDSC0001000100010001REF1 /* ImageDownsamplingConfig.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageDownsamplingConfig.swift; sourceTree = "<group>"; };
+		IDSC0001000100010002REF1 /* ImageDownsamplingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageDownsamplingTests.swift; sourceTree = "<group>"; };
 		DELA001A001A001A001A0001 /* DeleteAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteAccountView.swift; sourceTree = "<group>"; };
 		DEXV001A001A001A001A0001 /* DataExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExportView.swift; sourceTree = "<group>"; };
 		DF83D8A3D5241D7D38A0C6B0 /* MeeshyNotificationExtension.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = MeeshyNotificationExtension.entitlements; sourceTree = "<group>"; };
@@ -950,6 +954,7 @@
 			isa = PBXGroup;
 			children = (
 				DEFC47F367886DA4FF305C8D /* DependencyContainer.swift */,
+				IDSC0001000100010001REF1 /* ImageDownsamplingConfig.swift */,
 			);
 			name = Core;
 			path = Core;
@@ -1469,6 +1474,7 @@
 				THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */,
 				DKFD0001000100010001F001 /* DarkFrameDetectorTests.swift */,
 				D76BBB5EB4ED2304836A9E37 /* CrashDiagnosticsManagerTests.swift */,
+				IDSC0001000100010002REF1 /* ImageDownsamplingTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1892,6 +1898,7 @@
 				NSEPC002 /* NSEPendingMessageConsumer.swift in Sources */,
 				3030AF23EF81FAEF5970931A /* CrashlyticsReporter.swift in Sources */,
 				7E4ACB96705AA96ECDF87640 /* DependencyContainer.swift in Sources */,
+				IDSC0001000100010001BLD1 /* ImageDownsamplingConfig.swift in Sources */,
 				4A2C3C40E1AC07C9F9EDD570 /* CommentStore.swift in Sources */,
 				A09DDAFA06FAFA1D6FBC4ED8 /* FeedStore.swift in Sources */,
 				BC20CA996A5E2D0E46BB3F06 /* MessageStore.swift in Sources */,
@@ -2006,6 +2013,7 @@
 				91664E56C9958BA865B3A608 /* MockFriendService.swift in Sources */,
 				443B3C791B4DDEDC517D35DF /* MockCacheService.swift in Sources */,
 				689F77EEC404C2A855F716E2 /* CrashDiagnosticsManagerTests.swift in Sources */,
+				IDSC0001000100010002BLD1 /* ImageDownsamplingTests.swift in Sources */,
 				SSOT0001000100010001BLD /* SingleSourceOfTruthTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

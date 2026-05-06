@@ -21,6 +21,14 @@ public actor SessionManager {
     private let keychainPrefix = "me.meeshy.e2ee.session."
     private let peerListKey = "me.meeshy.e2ee.knownPeers"
 
+    // MARK: - Per-user Keychain Namespace
+
+    /// Returns the current user ID from AuthManager (MainActor hop required since
+    /// SessionManager is an actor and AuthManager is @MainActor).
+    private func currentUserId() async -> String? {
+        await MainActor.run { AuthManager.shared.currentUser?.id }
+    }
+
     private var activeSessions: [String: SymmetricKey] = [:]
 
     private init() {}
@@ -45,8 +53,13 @@ public actor SessionManager {
 
     private func persistSession(peerId: String, key: SymmetricKey) async {
         let keyData = key.withUnsafeBytes { Data($0) }
+        let userId = await currentUserId()
         do {
-            try await KeychainManager.shared.saveAsync(keyData.base64EncodedString(), forKey: keychainPrefix + peerId)
+            try await KeychainManager.shared.saveAsync(
+                keyData.base64EncodedString(),
+                forKey: keychainPrefix + peerId,
+                account: userId
+            )
         } catch {
             Logger.e2ee.error("Failed to persist session key for peer \(peerId): \(error)")
         }
@@ -56,8 +69,11 @@ public actor SessionManager {
 
     private func loadSession(peerId: String) async -> SymmetricKey? {
         if let cached = activeSessions[peerId] { return cached }
-        guard let base64 = await KeychainManager.shared.loadAsync(forKey: keychainPrefix + peerId),
-              let data = Data(base64Encoded: base64) else { return nil }
+        let userId = await currentUserId()
+        guard let base64 = await KeychainManager.shared.loadAsync(
+            forKey: keychainPrefix + peerId,
+            account: userId
+        ), let data = Data(base64Encoded: base64) else { return nil }
         let key = SymmetricKey(data: data)
         activeSessions[peerId] = key
         return key
@@ -65,7 +81,10 @@ public actor SessionManager {
 
     public func removeSession(peerId: String) {
         activeSessions.removeValue(forKey: peerId)
-        KeychainManager.shared.delete(forKey: keychainPrefix + peerId)
+        Task {
+            let userId = await currentUserId()
+            KeychainManager.shared.delete(forKey: keychainPrefix + peerId, account: userId)
+        }
         unregisterPeer(peerId)
     }
 
@@ -136,10 +155,34 @@ public actor SessionManager {
         return try E2EEService.shared.decrypt(combinedData: ciphertext, symmetricKey: sessionKey)
     }
 
-    public func clearSessions() {
+    // MARK: - Keychain Namespace Migration
+
+    /// One-time migration of legacy un-namespaced session keys to the per-user namespace.
+    ///
+    /// Must be called after login once `AuthManager.shared.currentUser` is set.
+    /// A UserDefaults flag scoped to the userId prevents the migration from running twice.
+    ///
+    /// Dynamic peer keys (keychainPrefix + peerId) can only be migrated for peers that are
+    /// already tracked in the peerList at the time of migration. Sessions with peers not yet
+    /// in the list will be re-established via normal E2E handshake on next use.
+    public func migrateKeychainIfNeeded() async {
+        guard let userId = await currentUserId() else { return }
+
+        let flagKey = "meeshy.keychain.namespaceMigration.\(userId)"
+        guard !UserDefaults.standard.bool(forKey: flagKey) else { return }
+
+        let knownPeers = UserDefaults.standard.stringArray(forKey: peerListKey) ?? []
+        let legacyKeys = knownPeers.map { keychainPrefix + $0 }
+
+        KeychainManager.shared.migrateToNamespaced(userId: userId, keys: legacyKeys)
+        UserDefaults.standard.set(true, forKey: flagKey)
+    }
+
+    public func clearSessions() async {
+        let userId = await currentUserId()
         let allPeers = UserDefaults.standard.stringArray(forKey: peerListKey) ?? []
         for peerId in allPeers {
-            KeychainManager.shared.delete(forKey: keychainPrefix + peerId)
+            KeychainManager.shared.delete(forKey: keychainPrefix + peerId, account: userId)
         }
         UserDefaults.standard.removeObject(forKey: peerListKey)
         activeSessions.removeAll()

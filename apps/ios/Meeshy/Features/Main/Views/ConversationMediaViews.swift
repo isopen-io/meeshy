@@ -42,8 +42,8 @@ struct DownloadBadgeView: View {
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: downloader.isCached)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: downloader.isDownloading)
+        .animation(.easeInOut(duration: 0.15), value: downloader.isCached)
+        .animation(.easeInOut(duration: 0.15), value: downloader.isDownloading)
     }
 
     private var idleBadge: some View {
@@ -257,7 +257,7 @@ struct CachedPlayIcon: View {
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isCached)
+        .animation(.easeInOut(duration: 0.15), value: isCached)
         .task {
             let resolved = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
             while !Task.isCancelled && !isCached {

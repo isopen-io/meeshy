@@ -32,4 +32,12 @@ public final class DecodedImageCache: @unchecked Sendable {
     public func remove(_ key: String) {
         cache.removeObject(forKey: key as NSString)
     }
+
+    public func setTotalCostLimit(_ bytes: Int) {
+        cache.totalCostLimit = bytes
+    }
+
+    public var totalCostLimit: Int {
+        cache.totalCostLimit
+    }
 }

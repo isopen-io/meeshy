@@ -118,7 +118,8 @@ extension MessageRecord {
             deliveredToAllAt: deliveredToAllAt,
             readByAllAt: readByAllAt,
             deliveredCount: deliveredCount,
-            readCount: readCount
+            readCount: readCount,
+            cachedTimeString: cachedTimeString
         )
     }
 }

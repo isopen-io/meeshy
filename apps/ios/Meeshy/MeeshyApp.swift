@@ -114,6 +114,7 @@ struct MeeshyApp: App {
                     let _ = deepLinkRouter.handle(url: url)
                 }
                 .task {
+                    ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
                     MeeshyConfig.shared.restoreEnvironment()
                     // Bridge iOS Focus filter selection into the SDK so in-app
@@ -294,6 +295,7 @@ struct MeeshyApp: App {
                                 Logger.e2ee.error("E2EE bundle upload failed: \(error)")
                             }
                         }
+                        Task { await SessionManager.shared.migrateKeychainIfNeeded() }
                         if let pending = pushManager.pendingNotificationPayload {
                             handlePushNavigation(payload: pending)
                         }
