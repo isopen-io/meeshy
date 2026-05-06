@@ -73,3 +73,19 @@ extension CommandStack {
         didChange?(self)
     }
 }
+
+extension CommandStack {
+
+    /// Move the cursor one step back and return the command that was undone.
+    /// Returns `nil` if there is nothing to undo (cursor at 0).
+    /// The command is **not** removed from the stack — it remains available for redo.
+    /// Calls `didChange` after the mutation completes.
+    @discardableResult
+    public func undo() -> AnyEditCommand? {
+        guard canUndo else { return nil }
+        cursor -= 1
+        let cmd = commands[cursor]
+        didChange?(self)
+        return cmd
+    }
+}

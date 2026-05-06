@@ -95,4 +95,42 @@ final class CommandStackTests: XCTestCase {
         XCTAssertTrue(stack.canUndo)
         XCTAssertEqual(stack.count, 2)
     }
+
+    // MARK: - CommandStack.undo
+
+    func test_undo_emptyStack_returnsNil() {
+        let stack = CommandStack()
+        XCTAssertNil(stack.undo())
+    }
+
+    func test_undo_oneCommand_returnsItAndCanRedo() {
+        let stack = CommandStack(coalesceWindow: 0)
+        let cmd = makeAddCmd(clipId: "x")
+        stack.push(cmd)
+        let undone = stack.undo()
+        XCTAssertNotNil(undone)
+        XCTAssertFalse(stack.canUndo)
+        XCTAssertTrue(stack.canRedo)
+    }
+
+    func test_undo_returnsCommandsInLIFOOrder() {
+        let stack = CommandStack(coalesceWindow: 0)
+        let a = makeAddCmd(clipId: "a")
+        let b = makeAddCmd(clipId: "b")
+        stack.push(a)
+        stack.push(b)
+        let firstUndone = stack.undo()
+        let secondUndone = stack.undo()
+        // We compare clipId via the underlying command (b first because LIFO)
+        if case let .addClip(cmd) = firstUndone {
+            XCTAssertEqual(cmd.clipId, "b")
+        } else {
+            XCTFail("Expected first undo to return last pushed (b)")
+        }
+        if case let .addClip(cmd) = secondUndone {
+            XCTAssertEqual(cmd.clipId, "a")
+        } else {
+            XCTFail("Expected second undo to return first pushed (a)")
+        }
+    }
 }
