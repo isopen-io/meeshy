@@ -534,6 +534,9 @@ public struct StoryEffects: Codable, Sendable {
     // Durée totale du slide (sérialisée au publish)
     public var slideDuration: Float?
 
+    // Timeline V2 — transitions between adjacent clips of this slide
+    public var clipTransitions: [StoryClipTransition]?
+
     // Deprecated — conservé pour compatibilité ascendante
     @available(*, deprecated, renamed: "backgroundAudioId")
     public var musicTrackId: String?
@@ -556,7 +559,8 @@ public struct StoryEffects: Codable, Sendable {
                 audioPlayerObjects: [StoryAudioPlayerObject]? = nil,
                 backgroundAudioVariants: [StoryAudioVariant]? = nil,
                 backgroundTransform: StoryBackgroundTransform? = nil,
-                slideDuration: Float? = nil) {
+                slideDuration: Float? = nil,
+                clipTransitions: [StoryClipTransition]? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
         self.textPosition = textPosition; self.filter = filter; self.filterIntensity = filterIntensity; self.stickers = stickers
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
@@ -576,6 +580,7 @@ public struct StoryEffects: Codable, Sendable {
         self.backgroundAudioVariants = backgroundAudioVariants
         self.backgroundTransform = backgroundTransform
         self.slideDuration = slideDuration
+        self.clipTransitions = clipTransitions
     }
 
     public var parsedTextStyle: StoryTextStyle? {

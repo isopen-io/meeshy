@@ -198,4 +198,30 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertNil(decoded.opacity)
         XCTAssertNil(decoded.easing)
     }
+
+    // MARK: - StoryEffects.clipTransitions extension
+
+    func test_storyEffects_clipTransitions_defaultsToNil() {
+        let effects = StoryEffects()
+        XCTAssertNil(effects.clipTransitions)
+    }
+
+    func test_storyEffects_clipTransitions_canBeAssignedAndPersisted() throws {
+        var effects = StoryEffects()
+        effects.clipTransitions = [
+            StoryClipTransition(fromClipId: "a", toClipId: "b",
+                                kind: .crossfade, duration: 0.5)
+        ]
+        let data = try JSONEncoder().encode(effects)
+        let decoded = try JSONDecoder().decode(StoryEffects.self, from: data)
+        XCTAssertEqual(decoded.clipTransitions?.count, 1)
+        XCTAssertEqual(decoded.clipTransitions?.first?.kind, .crossfade)
+    }
+
+    func test_storyEffects_decodeOldJSON_withoutClipTransitions_succeeds() throws {
+        let json = #"{"background":"FFFFFF","mediaObjects":[]}"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(StoryEffects.self, from: json)
+        XCTAssertNil(decoded.clipTransitions)
+        XCTAssertEqual(decoded.background, "FFFFFF")
+    }
 }
