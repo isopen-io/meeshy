@@ -86,7 +86,20 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
 
         await MainActor.run { objectWillChange.send() }
 
-        logger.info("Friendship cache hydrated: \(self._friendIds.count) friends, \(self._sentPending.count) sent pending, \(self._receivedPending.count) received pending")
+        // Capture counts as plain Int locals BEFORE the log interpolation.
+        // Letting os_log interpolate `\(self._friendIds.count)` directly was
+        // crashing with -[NSObject doesNotRecognizeSelector:] on this build:
+        // OSLog's lazy-evaluation closure was generating a `@unowned Int`
+        // thunk that hit a Swift→ObjC bridging edge case when reaching back
+        // through `self` to access the property under lock contention.
+        // Plain `Int` locals avoid the closure capture entirely. Reading the
+        // counts without the lock is safe: applyHydration has already
+        // committed under the lock above, and we just want a snapshot for
+        // logging — a slightly-stale count is acceptable for a log line.
+        let friendsCount = _friendIds.count
+        let sentCount = _sentPending.count
+        let receivedCount = _receivedPending.count
+        logger.info("Friendship cache hydrated: \(friendsCount) friends, \(sentCount) sent pending, \(receivedCount) received pending")
     }
 
     private func applyHydration(sent: [FriendRequest], received: [FriendRequest]) {
