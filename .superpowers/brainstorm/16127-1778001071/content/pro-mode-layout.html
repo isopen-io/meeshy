@@ -1,0 +1,576 @@
+<h2>Pro Mode — Layout paysage</h2>
+<p class="subtitle">Activé par rotation paysage OU bouton "PRO ↗". Tout reste persistent, juste le layout change. Inspecteur s'ouvre à la sélection d'un clip.</p>
+
+<style>
+  .ipad-frame {
+    background: #0F0E1F;
+    border: 6px solid #2A2438;
+    border-radius: 24px;
+    padding: 12px;
+    width: 720px;
+    height: 480px;
+    margin: 0 auto;
+    display: flex;
+    gap: 10px;
+    font-family: -apple-system, "SF Pro Display", system-ui, sans-serif;
+    color: #E0E7FF;
+    position: relative;
+  }
+  .pro-left {
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pro-canvas {
+    aspect-ratio: 9/16;
+    background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.5);
+    font-size: 11px;
+  }
+  .pro-canvas-text-1 {
+    position: absolute;
+    top: 18%; left: 14%;
+    color: white;
+    font-weight: 700;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  .pro-canvas-text-2 {
+    position: absolute;
+    bottom: 14%; right: 12%;
+    color: white;
+    font-size: 9px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .canvas-controls {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    background: rgba(99, 102, 241, 0.08);
+    padding: 6px 8px;
+    border-radius: 8px;
+  }
+  .icon-btn {
+    width: 22px; height: 22px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    color: #818CF8;
+    font-size: 10px;
+  }
+  .pro-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .pro-topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(99, 102, 241, 0.08);
+    padding: 6px 10px;
+    border-radius: 10px;
+  }
+  .nav-btn {
+    width: 26px; height: 26px;
+    background: rgba(99, 102, 241, 0.15);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #818CF8;
+  }
+  .slide-tabs {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+  }
+  .slide-tab {
+    padding: 3px 8px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    font-size: 9px;
+    color: rgba(255,255,255,0.5);
+  }
+  .slide-tab.active {
+    background: linear-gradient(135deg, #6366F1, #4338CA);
+    color: white;
+    font-weight: 700;
+  }
+  .next-btn {
+    background: linear-gradient(135deg, #6366F1, #4338CA);
+    padding: 5px 14px;
+    border-radius: 14px;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+  }
+  .pro-transport {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(99, 102, 241, 0.08);
+    padding: 6px 10px;
+    border-radius: 10px;
+  }
+  .play-btn {
+    width: 26px; height: 26px;
+    background: linear-gradient(135deg, #6366F1, #4338CA);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 10px;
+    box-shadow: 0 0 8px rgba(99,102,241,0.4);
+  }
+  .time-readout {
+    font-size: 11px;
+    font-family: "SF Mono", monospace;
+    color: #E0E7FF;
+  }
+  .time-readout .total { color: rgba(224,231,255,0.5); }
+  .zoom-cluster {
+    display: flex;
+    gap: 2px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 5px;
+    padding: 2px;
+  }
+  .undo-btn { color: #818CF8; }
+  .undo-btn.disabled { color: rgba(255,255,255,0.2); }
+  .quick-btn {
+    background: rgba(255,255,255,0.06);
+    color: #C7D2FE;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 9px;
+    font-weight: 700;
+  }
+  .pro-tracks-area {
+    flex: 1;
+    background: rgba(15, 14, 31, 0.5);
+    border-radius: 10px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .ruler {
+    height: 14px;
+    background:
+      repeating-linear-gradient(to right, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 1px, transparent 1px, transparent 40px),
+      repeating-linear-gradient(to right, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 1px, transparent 1px, transparent 8px);
+    border-radius: 2px;
+    position: relative;
+    margin-left: 64px;
+  }
+  .ruler-time {
+    position: absolute;
+    top: 0;
+    font-size: 7px;
+    color: rgba(129,140,248,0.7);
+    font-family: "SF Mono", monospace;
+    transform: translate(-50%, -100%);
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-left: 4px;
+    margin-top: 4px;
+    margin-left: 64px;
+  }
+  .section-header .icon { color: rgba(129,140,248,0.6); font-size: 8px; }
+  .section-header .name { font-size: 8px; font-weight: 700; color: rgba(129,140,248,0.6); letter-spacing: 0.5px; }
+  .section-header .line { flex: 1; height: 1px; background: rgba(129,140,248,0.15); }
+  .pro-track-row {
+    display: flex;
+    align-items: center;
+    margin-top: 2px;
+    height: 28px;
+  }
+  .track-label {
+    width: 60px;
+    padding-right: 4px;
+    text-align: right;
+    font-size: 9px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+  .track-label.selected { color: #818CF8; font-weight: 700; }
+  .track-label .lock-icon { font-size: 7px; opacity: 0.5; }
+  .pro-track {
+    flex: 1;
+    height: 28px;
+    background: rgba(99, 102, 241, 0.06);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .clip {
+    position: absolute;
+    top: 3px; bottom: 3px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding-left: 4px;
+    font-size: 8px;
+    color: white;
+    font-weight: 600;
+  }
+  .clip.video { background: linear-gradient(135deg, #6366F1, #312E81); }
+  .clip.image { background: linear-gradient(135deg, #34D399, #059669); }
+  .clip.audio { background: linear-gradient(135deg, #FBBF24, #D97706); }
+  .clip.text  { background: linear-gradient(135deg, #F87171, #DC2626); }
+  .clip.selected {
+    box-shadow: 0 0 0 2px #818CF8, 0 0 8px rgba(129,140,248,0.5);
+  }
+  .clip-handle-l, .clip-handle-r {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px; height: 18px;
+    background: white;
+    border-radius: 1px;
+    opacity: 0.9;
+  }
+  .clip-handle-l { left: 1px; }
+  .clip-handle-r { right: 1px; }
+  .clip-fade-in {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 0;
+    width: 12px;
+    background: linear-gradient(to right, rgba(0,0,0,0.55), transparent);
+    pointer-events: none;
+  }
+  .clip-fade-out {
+    position: absolute;
+    top: 0; bottom: 0;
+    right: 0;
+    width: 14px;
+    background: linear-gradient(to left, rgba(0,0,0,0.55), transparent);
+    pointer-events: none;
+  }
+  .transition-badge {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(45deg);
+    width: 11px; height: 11px;
+    background: linear-gradient(135deg, #FBBF24, #DC2626);
+    border: 1.5px solid white;
+    z-index: 5;
+  }
+  .keyframe {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(45deg);
+    width: 5px; height: 5px;
+    background: #FBBF24;
+    z-index: 4;
+  }
+  .playhead {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1.5px;
+    background: white;
+    box-shadow: 0 0 4px white, 0 0 8px #818CF8;
+    z-index: 10;
+  }
+  .playhead::before {
+    content: '';
+    position: absolute;
+    top: -3px; left: -4px;
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid white;
+  }
+  .snap-guide {
+    position: absolute;
+    top: -16px; bottom: -120px;
+    width: 1px;
+    background: #EC4899;
+    z-index: 15;
+    box-shadow: 0 0 4px #EC4899;
+  }
+  .snap-label {
+    position: absolute;
+    top: -22px;
+    left: 4px;
+    background: #EC4899;
+    color: white;
+    font-size: 8px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-family: "SF Mono", monospace;
+    font-weight: 700;
+  }
+  .inspector {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    width: 230px;
+    background: rgba(15, 14, 31, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 9px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .inspector h4 {
+    font-size: 10px;
+    color: #818CF8;
+    margin: 0 0 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .inspector-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    color: rgba(255,255,255,0.7);
+  }
+  .inspector-row .value {
+    color: white;
+    font-family: "SF Mono", monospace;
+    font-weight: 600;
+  }
+  .inspector-row .slider-mock {
+    width: 60px;
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    position: relative;
+  }
+  .inspector-row .slider-mock::after {
+    content: '';
+    position: absolute;
+    left: 70%;
+    top: -3px;
+    width: 10px; height: 10px;
+    background: #818CF8;
+    border-radius: 50%;
+  }
+  .toggle-mock {
+    width: 22px; height: 12px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+    position: relative;
+  }
+  .toggle-mock.on { background: #6366F1; }
+  .toggle-mock::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 8px; height: 8px;
+    background: white;
+    border-radius: 50%;
+  }
+  .toggle-mock.on::after { left: 12px; }
+</style>
+
+<div class="ipad-frame">
+  <div class="pro-left">
+    <div class="canvas-controls">
+      <div class="icon-btn">×</div>
+      <div style="flex:1; font-size:9px; color: rgba(255,255,255,0.6);">slide 1 / 3</div>
+      <div class="icon-btn">⊕</div>
+      <div class="icon-btn">⤢</div>
+    </div>
+    <div class="pro-canvas">
+      <span>PREVIEW (9:16)</span>
+      <div class="pro-canvas-text-1">Titre</div>
+      <div class="pro-canvas-text-2">@user</div>
+    </div>
+    <div class="canvas-controls">
+      <div class="play-btn">▶</div>
+      <div class="time-readout"><b>0:04.250</b> <span class="total">/ 0:10</span></div>
+      <div style="flex:1"></div>
+      <div class="icon-btn">🔇</div>
+    </div>
+  </div>
+
+  <div class="pro-right">
+    <div class="pro-topbar">
+      <div class="nav-btn">‹</div>
+      <div class="slide-tabs">
+        <div class="slide-tab active">slide 1</div>
+        <div class="slide-tab">slide 2</div>
+        <div class="slide-tab">slide 3</div>
+        <div class="slide-tab" style="border:1px dashed rgba(255,255,255,0.2)">+</div>
+      </div>
+      <div class="quick-btn">QUICK ↗</div>
+      <div class="next-btn">Suivant</div>
+    </div>
+
+    <div class="pro-transport">
+      <div class="undo-btn">↶</div>
+      <div class="undo-btn disabled">↷</div>
+      <div style="width:1px; height:14px; background: rgba(255,255,255,0.15); margin: 0 4px;"></div>
+      <div style="font-size: 9px; color: rgba(255,255,255,0.6); display:flex; align-items:center; gap:4px;">
+        <span>SNAP</span>
+        <div class="toggle-mock on"></div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="zoom-cluster">
+        <div class="icon-btn" style="background:transparent">−</div>
+        <div style="font-size:9px; color:#C7D2FE; padding: 0 4px; align-self:center; font-weight:700">100%</div>
+        <div class="icon-btn" style="background:transparent">+</div>
+      </div>
+      <div style="font-size: 9px; color: rgba(255,255,255,0.6);">RULER: 0.5s</div>
+    </div>
+
+    <div class="pro-tracks-area">
+      <div class="ruler">
+        <div class="ruler-time" style="left:0">0s</div>
+        <div class="ruler-time" style="left:25%">2.5s</div>
+        <div class="ruler-time" style="left:50%">5s</div>
+        <div class="ruler-time" style="left:75%">7.5s</div>
+        <div class="ruler-time" style="left:100%">10s</div>
+      </div>
+
+      <div class="section-header">
+        <div class="icon">▦</div>
+        <div class="name">CONTENU</div>
+        <div class="line"></div>
+      </div>
+
+      <div class="pro-track-row">
+        <div class="track-label">VIDEO 1</div>
+        <div class="pro-track">
+          <div class="clip video selected" style="left: 5%; width: 50%;">
+            <div class="clip-handle-l"></div>
+            <div class="clip-fade-in"></div>
+            intro.mp4
+            <div class="clip-fade-out"></div>
+            <div class="clip-handle-r"></div>
+          </div>
+          <div class="transition-badge" style="left: 56%;"></div>
+          <div class="clip image" style="left: 58%; width: 35%;">photo.jpg</div>
+          <div class="playhead" style="left: 42%;"></div>
+        </div>
+      </div>
+      <div class="pro-track-row">
+        <div class="track-label">VIDEO 2 <span class="lock-icon">🔒</span></div>
+        <div class="pro-track">
+          <div class="clip video" style="left: 30%; width: 25%; opacity: 0.5;">overlay PiP</div>
+          <div class="playhead" style="left: 42%;"></div>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <div class="icon">♪</div>
+        <div class="name">AUDIO</div>
+        <div class="line"></div>
+      </div>
+
+      <div class="pro-track-row">
+        <div class="track-label">AUDIO 1</div>
+        <div class="pro-track">
+          <div class="clip audio" style="left: 0%; width: 100%; opacity: 0.85;">
+            music_bg
+            <div class="clip-fade-out"></div>
+          </div>
+          <div class="keyframe" style="left: 25%;"></div>
+          <div class="keyframe" style="left: 70%;"></div>
+          <div class="playhead" style="left: 42%;"></div>
+        </div>
+      </div>
+      <div class="pro-track-row">
+        <div class="track-label">AUDIO 2</div>
+        <div class="pro-track">
+          <div class="clip audio" style="left: 12%; width: 35%;">
+            <div class="clip-fade-in"></div>
+            vocal
+            <div class="clip-fade-out"></div>
+          </div>
+          <div class="playhead" style="left: 42%;"></div>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <div class="icon">T</div>
+        <div class="name">EFFETS</div>
+        <div class="line"></div>
+      </div>
+
+      <div class="pro-track-row">
+        <div class="track-label">TEXTE 1</div>
+        <div class="pro-track">
+          <div class="clip text" style="left: 12%; width: 30%;">
+            <div class="clip-fade-in"></div>
+            titre
+            <div class="clip-fade-out"></div>
+          </div>
+          <div class="playhead" style="left: 42%;"></div>
+          <div class="snap-guide" style="left: 42%;"><div class="snap-label">PLAYHEAD 4.250s</div></div>
+        </div>
+      </div>
+      <div class="pro-track-row">
+        <div class="track-label">TEXTE 2</div>
+        <div class="pro-track">
+          <div class="clip text" style="left: 50%; width: 30%;">CTA</div>
+          <div class="playhead" style="left: 42%;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="inspector">
+    <h4>◆ intro.mp4 — sélectionné</h4>
+    <div class="inspector-row"><span>Start</span><span class="value">0:00.500</span></div>
+    <div class="inspector-row"><span>Duration</span><span class="value">5.000s</span></div>
+    <div class="inspector-row"><span>Volume</span><div class="slider-mock"></div><span class="value">85%</span></div>
+    <div class="inspector-row"><span>Fade in</span><span class="value">0.4s</span></div>
+    <div class="inspector-row"><span>Fade out</span><span class="value">0.6s</span></div>
+    <div class="inspector-row"><span>Loop</span><div class="toggle-mock"></div></div>
+    <div class="inspector-row"><span>Background</span><div class="toggle-mock on"></div></div>
+    <div style="margin-top:6px; padding-top:6px; border-top: 1px solid rgba(255,255,255,0.1); display:flex; gap:6px;">
+      <div style="flex:1; background: rgba(99,102,241,0.15); padding: 4px; text-align:center; border-radius:4px; color:#C7D2FE; font-weight:700;">◆ Keyframe</div>
+      <div style="flex:1; background: rgba(248,113,113,0.15); padding: 4px; text-align:center; border-radius:4px; color:#F87171; font-weight:700;">🗑 Suppr</div>
+    </div>
+  </div>
+</div>
+
+<div style="max-width:720px; margin:24px auto;">
+  <h3 style="color:#C7D2FE">Différences clés vs Quick Mode</h3>
+  <ul style="font-size:13px; line-height:1.7; color:#E0E7FF;">
+    <li><b>Tabs slides en haut</b> au lieu de bullets : on garde un accès rapide aux autres slides + bouton "+" pour en ajouter</li>
+    <li><b>Undo / Redo + toggle SNAP</b> visibles en permanence dans la transport bar</li>
+    <li><b>Toutes les pistes visibles</b>, scroll vertical si plus de 6 pistes</li>
+    <li><b>Groupes "CONTENU" / "AUDIO" / "EFFETS"</b> avec headers (déjà présent dans TimelinePanel actuel — on garde)</li>
+    <li><b>Inspector flottant</b> en bas-gauche dès qu'un clip est sélectionné. Dismiss au tap dans le vide.</li>
+    <li><b>Cadenas 🔒 sur track</b> = piste verrouillée (ne reçoit pas de drag/drop)</li>
+    <li><b>Snap guide (rose)</b> apparaît pendant un drag avec son label : "PLAYHEAD 4.250s", "CLIP A end", etc.</li>
+    <li><b>Bouton "QUICK ↗"</b> pour revenir au mode portrait sans rotation physique</li>
+    <li><b>Canvas réduit à gauche (~30 % largeur)</b>, format 9:16 préservé</li>
+  </ul>
+
+  <h3 style="color:#C7D2FE">Activation</h3>
+  <ul style="font-size:13px; line-height:1.7; color:#E0E7FF;">
+    <li>Auto au passage portrait → paysage (UIInterfaceOrientation), animé en spring</li>
+    <li>Manuel via bouton "PRO ↗" en Quick Mode (force le paysage si possible, sinon affiche en portrait élargi sur iPhone Mini, fonctionne nativement sur iPad)</li>
+    <li>État global persisté dans <code>StoryComposerViewModel.timelineMode: .quick / .pro</code></li>
+  </ul>
+</div>
+
+<p class="subtitle" style="margin-top:24px;font-size:13px">Réponds dans le terminal : <b>OK</b> pour valider, ou indique les ajustements (placement de l'inspector, contenu de la transport bar, etc.).</p>

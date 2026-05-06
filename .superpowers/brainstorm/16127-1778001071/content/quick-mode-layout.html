@@ -1,0 +1,460 @@
+<h2>Quick Mode — Layout détaillé</h2>
+<p class="subtitle">Mode portrait par défaut. Deux états : compact (init) et déployé (au tap sur "+ pistes" ou swipe up).</p>
+
+<style>
+  .iphone-frame {
+    background: #0F0E1F;
+    border: 8px solid #2A2438;
+    border-radius: 36px;
+    padding: 20px 12px;
+    width: 320px;
+    height: 640px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: -apple-system, "SF Pro Display", system-ui, sans-serif;
+    color: #E0E7FF;
+    position: relative;
+  }
+  .topnav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+  }
+  .nav-btn {
+    width: 28px; height: 28px;
+    background: rgba(99, 102, 241, 0.15);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #818CF8;
+  }
+  .slide-dots {
+    display: flex;
+    gap: 4px;
+  }
+  .slide-dot {
+    width: 6px; height: 6px;
+    background: rgba(129, 140, 248, 0.3);
+    border-radius: 50%;
+  }
+  .slide-dot.active { background: #818CF8; width: 18px; border-radius: 3px; }
+  .next-btn {
+    background: linear-gradient(135deg, #6366F1, #4338CA);
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+  }
+  .canvas-area {
+    flex: 1;
+    background:
+      linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.5);
+    font-size: 11px;
+  }
+  .canvas-overlay-text {
+    position: absolute;
+    color: white;
+    font-weight: 700;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  .transport-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(99, 102, 241, 0.08);
+    backdrop-filter: blur(20px);
+    padding: 6px 10px;
+    border-radius: 10px;
+  }
+  .play-btn {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, #6366F1, #4338CA);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 11px;
+    box-shadow: 0 0 8px rgba(99,102,241,0.4);
+  }
+  .time-readout {
+    font-size: 10px;
+    font-family: "SF Mono", monospace;
+    color: #E0E7FF;
+  }
+  .time-readout .total { color: rgba(224,231,255,0.5); }
+  .icon-btn {
+    width: 22px; height: 22px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    color: #818CF8;
+    font-size: 10px;
+  }
+  .pro-btn {
+    background: linear-gradient(135deg, rgba(99,102,241,0.3), rgba(67,56,202,0.3));
+    border: 1px solid rgba(129,140,248,0.4);
+    color: #C7D2FE;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .ruler {
+    height: 12px;
+    background:
+      repeating-linear-gradient(to right, rgba(255,255,255,0.4) 0, rgba(255,255,255,0.4) 1px, transparent 1px, transparent 32px),
+      repeating-linear-gradient(to right, rgba(255,255,255,0.15) 0, rgba(255,255,255,0.15) 1px, transparent 1px, transparent 8px);
+    border-radius: 2px;
+    position: relative;
+  }
+  .ruler-labels {
+    display: flex;
+    font-size: 7px;
+    color: rgba(129,140,248,0.7);
+    font-family: "SF Mono", monospace;
+    margin-top: -10px;
+    padding-left: 2px;
+  }
+  .ruler-labels span { width: 32px; }
+  .track {
+    height: 32px;
+    background: rgba(99, 102, 241, 0.06);
+    border-radius: 5px;
+    position: relative;
+    overflow: hidden;
+  }
+  .track-label {
+    position: absolute;
+    left: 4px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 7px;
+    color: rgba(255,255,255,0.6);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    z-index: 2;
+  }
+  .clip {
+    position: absolute;
+    top: 3px; bottom: 3px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding-left: 4px;
+    font-size: 7px;
+    color: white;
+    font-weight: 600;
+  }
+  .clip.video { background: linear-gradient(135deg, #6366F1, #312E81); }
+  .clip.image { background: linear-gradient(135deg, #34D399, #059669); }
+  .clip.audio { background: linear-gradient(135deg, #FBBF24, #D97706); }
+  .clip.text  { background: linear-gradient(135deg, #F87171, #DC2626); }
+  .clip.selected {
+    box-shadow: 0 0 0 2px #818CF8, 0 0 8px rgba(129,140,248,0.5);
+  }
+  .clip-handle-l, .clip-handle-r {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px; height: 18px;
+    background: white;
+    border-radius: 1px;
+    opacity: 0.9;
+  }
+  .clip-handle-l { left: 1px; }
+  .clip-handle-r { right: 1px; }
+  .transition-badge {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(45deg);
+    width: 12px; height: 12px;
+    background: linear-gradient(135deg, #FBBF24, #DC2626);
+    border: 1.5px solid white;
+    z-index: 5;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  .keyframe {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(45deg);
+    width: 6px; height: 6px;
+    background: #FBBF24;
+    z-index: 4;
+  }
+  .playhead {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1.5px;
+    background: white;
+    box-shadow: 0 0 4px white, 0 0 8px #818CF8;
+    z-index: 10;
+  }
+  .playhead::before {
+    content: '';
+    position: absolute;
+    top: -3px; left: -4px;
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid white;
+  }
+  .duration-handle {
+    position: absolute;
+    width: 14px; height: 14px;
+    background: #818CF8;
+    border: 1.5px solid white;
+    transform: rotate(45deg);
+    top: 50%;
+    margin-top: -7px;
+    z-index: 8;
+  }
+  .deploy-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: rgba(129, 140, 248, 0.1);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .deploy-trigger .label {
+    font-size: 9px;
+    color: #818CF8;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .deploy-trigger .line {
+    flex: 1;
+    height: 1px;
+    background: rgba(129,140,248,0.3);
+  }
+  .bottom-toolbar {
+    display: flex;
+    justify-content: space-around;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 12px;
+    padding: 8px 4px;
+  }
+  .tool-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    color: rgba(224,231,255,0.7);
+  }
+  .tool-icon {
+    width: 22px; height: 22px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+  }
+  .tool-btn.active .tool-icon {
+    background: linear-gradient(135deg, #6366F1, #4338CA);
+    color: white;
+  }
+  .tool-label { font-size: 7px; }
+  .annot {
+    color: #FBBF24;
+    font-size: 11px;
+    line-height: 1.5;
+    margin: 4px 0;
+  }
+  .frame-pair { display: flex; gap: 24px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .frame-col { flex: 0 0 auto; }
+  .frame-title { text-align: center; font-size: 13px; font-weight: 700; color: #C7D2FE; margin-bottom: 8px; }
+</style>
+
+<div class="frame-pair">
+
+  <div class="frame-col">
+    <div class="frame-title">État compact (par défaut)</div>
+    <div class="iphone-frame">
+      <div class="topnav">
+        <div class="nav-btn">×</div>
+        <div class="slide-dots">
+          <div class="slide-dot active"></div>
+          <div class="slide-dot"></div>
+          <div class="slide-dot"></div>
+        </div>
+        <div class="next-btn">Suivant</div>
+      </div>
+
+      <div class="canvas-area" style="flex: 2.4">
+        <span>PREVIEW (canvas WYSIWYG)</span>
+        <div class="canvas-overlay-text" style="top: 20%; left: 20%;">titre</div>
+        <div class="canvas-overlay-text" style="bottom: 18%; right: 18%; font-size:10px;">@user</div>
+      </div>
+
+      <div class="transport-bar">
+        <div class="play-btn">▶</div>
+        <div class="time-readout"><b>0:04.250</b> <span class="total">/ 0:10</span></div>
+        <div style="flex:1"></div>
+        <div class="icon-btn">⊖</div>
+        <div class="icon-btn">⊕</div>
+        <div class="icon-btn">🔇</div>
+        <div class="pro-btn">PRO ↗</div>
+      </div>
+
+      <div class="ruler"></div>
+
+      <div class="track">
+        <div class="track-label">VIDEO</div>
+        <div class="clip video selected" style="left: 8%; width: 50%;">
+          <div class="clip-handle-l"></div>
+          intro.mp4
+          <div class="clip-handle-r"></div>
+        </div>
+        <div class="transition-badge" style="left: 58%;"></div>
+        <div class="clip image" style="left: 60%; width: 35%;">
+          photo.jpg
+        </div>
+        <div class="playhead" style="left: 42%;"></div>
+        <div class="duration-handle" style="right: -7px;"></div>
+      </div>
+
+      <div class="track">
+        <div class="track-label">AUDIO</div>
+        <div class="clip audio" style="left: 0%; width: 100%; opacity: 0.85;">
+          music_bg
+        </div>
+        <div class="keyframe" style="left: 25%;"></div>
+        <div class="keyframe" style="left: 70%;"></div>
+        <div class="playhead" style="left: 42%;"></div>
+      </div>
+
+      <div class="deploy-trigger">
+        <div class="label">+ TEXTE • +1 PISTE</div>
+        <div class="line"></div>
+        <div class="label">⌄</div>
+      </div>
+
+      <div class="bottom-toolbar">
+        <div class="tool-btn"><div class="tool-icon">📷</div><div class="tool-label">Média</div></div>
+        <div class="tool-btn"><div class="tool-icon">T</div><div class="tool-label">Texte</div></div>
+        <div class="tool-btn"><div class="tool-icon">🎵</div><div class="tool-label">Audio</div></div>
+        <div class="tool-btn active"><div class="tool-icon">⏱</div><div class="tool-label">Time</div></div>
+        <div class="tool-btn"><div class="tool-icon">✦</div><div class="tool-label">Filtres</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="frame-col">
+    <div class="frame-title">État déployé (après tap sur ⌄)</div>
+    <div class="iphone-frame">
+      <div class="topnav">
+        <div class="nav-btn">×</div>
+        <div class="slide-dots">
+          <div class="slide-dot active"></div>
+          <div class="slide-dot"></div>
+          <div class="slide-dot"></div>
+        </div>
+        <div class="next-btn">Suivant</div>
+      </div>
+
+      <div class="canvas-area" style="flex: 1.2">
+        <span>PREVIEW (réduite)</span>
+      </div>
+
+      <div class="transport-bar">
+        <div class="play-btn">▶</div>
+        <div class="time-readout"><b>0:04.250</b> <span class="total">/ 0:10</span></div>
+        <div style="flex:1"></div>
+        <div class="icon-btn">⊖</div>
+        <div class="icon-btn">⊕</div>
+        <div class="pro-btn">PRO ↗</div>
+      </div>
+
+      <div class="ruler"></div>
+
+      <div class="track">
+        <div class="track-label">VIDEO 1</div>
+        <div class="clip video" style="left: 8%; width: 50%;">intro.mp4</div>
+        <div class="transition-badge" style="left: 58%;"></div>
+        <div class="clip image" style="left: 60%; width: 35%;">photo.jpg</div>
+        <div class="playhead" style="left: 42%;"></div>
+      </div>
+
+      <div class="track">
+        <div class="track-label">VIDEO 2</div>
+        <div class="clip video" style="left: 30%; width: 25%; opacity: 0.7;">overlay</div>
+        <div class="playhead" style="left: 42%;"></div>
+      </div>
+
+      <div class="track">
+        <div class="track-label">AUDIO 1</div>
+        <div class="clip audio" style="left: 0%; width: 100%; opacity: 0.85;">music_bg</div>
+        <div class="keyframe" style="left: 25%;"></div>
+        <div class="keyframe" style="left: 70%;"></div>
+        <div class="playhead" style="left: 42%;"></div>
+      </div>
+
+      <div class="track">
+        <div class="track-label">AUDIO 2</div>
+        <div class="clip audio" style="left: 12%; width: 35%;">vocal</div>
+        <div class="playhead" style="left: 42%;"></div>
+      </div>
+
+      <div class="track">
+        <div class="track-label">TEXTE</div>
+        <div class="clip text selected" style="left: 12%; width: 30%;">titre</div>
+        <div class="clip text" style="left: 50%; width: 30%;">CTA</div>
+        <div class="playhead" style="left: 42%;"></div>
+      </div>
+
+      <div class="deploy-trigger">
+        <div class="label">⌃ REPLIER</div>
+        <div class="line"></div>
+      </div>
+
+      <div class="bottom-toolbar" style="opacity: 0.4">
+        <div class="tool-btn"><div class="tool-icon">📷</div><div class="tool-label">Média</div></div>
+        <div class="tool-btn"><div class="tool-icon">T</div><div class="tool-label">Texte</div></div>
+        <div class="tool-btn"><div class="tool-icon">🎵</div><div class="tool-label">Audio</div></div>
+        <div class="tool-btn active"><div class="tool-icon">⏱</div><div class="tool-label">Time</div></div>
+        <div class="tool-btn"><div class="tool-icon">✦</div><div class="tool-label">Filtres</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="max-width:680px; margin:24px auto;">
+  <h3 style="color:#C7D2FE">Annotations</h3>
+  <ul style="font-size:13px; line-height:1.7; color:#E0E7FF;">
+    <li><b style="color:#FBBF24">Losange jaune</b> = transition entre deux clips. Tap = inspector (kind, durée, easing). Drag = ajuste duration.</li>
+    <li><b style="color:#FBBF24">Petit losange jaune sur clip</b> = keyframe. Tap = sélection. Long-press + drag = déplacer dans le temps.</li>
+    <li><b style="color:#818CF8">Losange indigo</b> = "duration handle" du slide. Drag horizontal = change la durée totale.</li>
+    <li><b style="color:white">Trait blanc + triangle</b> = playhead. Drag = scrub.</li>
+    <li><b>Poignées blanches gauche/droite sur clip sélectionné</b> = trim (start / duration). Cap automatique sur la durée intrinsèque du média (sauf si <i>loop</i> activé).</li>
+    <li><b>"+ TEXTE • +1 PISTE"</b> = piste cachée disponible (texte n'a pas de clip dans cet état). Tap = déploie tout. Swipe up sur la zone timeline aussi.</li>
+    <li><b>"PRO ↗"</b> = bascule en mode Pro plein écran. Rotation paysage déclenche aussi automatiquement.</li>
+    <li><b>Fond noir + nav top semi-trans</b> garde toute l'attention sur le canvas, comme sur Stories.</li>
+  </ul>
+
+  <h3 style="color:#C7D2FE">Règles de visibilité par défaut (état compact)</h3>
+  <ol style="font-size:13px; line-height:1.7; color:#E0E7FF;">
+    <li>Toujours afficher la piste contenant le clip actuellement <b>sélectionné</b>.</li>
+    <li>Sinon, afficher en priorité : <b>VIDEO 1</b> (background) puis <b>AUDIO 1</b>.</li>
+    <li>Max 3 pistes en compact. Au-delà → trigger "+N PISTES" devient visible.</li>
+    <li>Aucun élément d'un type → la piste ne compte pas (pas de slot vide affiché).</li>
+  </ol>
+</div>
+
+<p class="subtitle" style="margin-top:24px;font-size:13px">Réponds dans le terminal : <b>OK</b> pour valider, ou décris les ajustements souhaités (taille canvas, position des contrôles, autres pistes par défaut, etc.).</p>
