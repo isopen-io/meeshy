@@ -25,26 +25,26 @@ final class MessageTimestampPrecomputeTests: XCTestCase {
             "cachedTimeString must not be empty")
     }
 
-    func test_migration_backfillsExistingRows() async throws {
+    func test_strftime_localtime_returnsDeviceLocalTime() throws {
         let pool = try DatabaseQueue()
-        // Run all migrations EXCEPT the new one to seed legacy data.
-        // If your migration is registered AFTER all current ones (it should be),
-        // a fresh migrate-all run + insert + verify works:
-        try MessageDatabaseMigrations.runAll(on: pool)
         try pool.write { db in
-            // Force-reset the column to NULL to simulate pre-migration state
-            try db.execute(sql: "UPDATE messages SET cachedTimeString = NULL WHERE 1")
-            try MessageRecordFactory.make(localId: "old", content: "vintage").insert(db)
+            try db.execute(sql: "CREATE TABLE t (createdAt DATETIME)")
+            let date = ISO8601DateFormatter().date(from: "2026-05-06T14:32:00Z")!
+            try db.execute(
+                sql: "INSERT INTO t (createdAt) VALUES (?)",
+                arguments: [date]
+            )
         }
-        // Verify a fresh fetch shows the column was populated for the new insert
-        // (insert via PersistableRecord runs the regular insert, which the actor's
-        // pre-compute path doesn't touch — this verifies the backfill semantics
-        // would handle pre-existing rows when migration runs on real upgrade).
 
-        // The TRUE "old row" semantics test would require running an older migration
-        // set, then adding the new migration, then re-running. That's complex.
-        // For this PR, the backfill SQL is written and verified by inspection;
-        // the test validates the precompute hook works correctly.
-        XCTAssertTrue(true, "Backfill semantics verified by inspection of migration SQL")
+        let result: String? = try pool.read { db in
+            try String.fetchOne(db, sql: "SELECT strftime('%H:%M', createdAt, 'localtime') FROM t")
+        }
+        XCTAssertNotNil(result, "strftime must return a value")
+
+        let expected = TimeStringCache.shared.format(
+            ISO8601DateFormatter().date(from: "2026-05-06T14:32:00Z")!
+        )
+        XCTAssertEqual(result, expected,
+            "strftime localtime must match TimeStringCache (both use device timezone)")
     }
 }

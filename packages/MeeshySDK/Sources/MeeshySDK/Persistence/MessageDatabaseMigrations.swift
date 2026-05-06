@@ -175,11 +175,13 @@ public enum MessageDatabaseMigrations {
             try db.alter(table: "messages") { t in
                 t.add(column: "cachedTimeString", .text)
             }
-            // Backfill existing rows — strftime('%H:%M', createdAt) works because
-            // GRDB stores Date columns as ISO8601 strings ("2026-05-06T14:32:00.000")
+            // Backfill existing rows — GRDB stores Date columns as UTC text
+            // ("yyyy-MM-dd HH:mm:ss.SSS" with a space separator). The 'localtime'
+            // modifier converts from UTC to the device's local timezone so the
+            // cached string matches what TimeStringCache.shared.format() produces.
             try db.execute(sql: """
                 UPDATE messages SET cachedTimeString =
-                    strftime('%H:%M', createdAt)
+                    strftime('%H:%M', createdAt, 'localtime')
                 WHERE cachedTimeString IS NULL
                 """)
         }

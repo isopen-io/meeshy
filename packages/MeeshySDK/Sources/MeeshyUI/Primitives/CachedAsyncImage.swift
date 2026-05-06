@@ -76,6 +76,10 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         }
     }
 
+    @MainActor private static func pixelSize(for points: CGSize) -> CGFloat {
+        max(points.width, points.height) * UIScreen.main.scale
+    }
+
     private func loadImage(for currentUrlString: String?) async {
         guard let currentUrlString, !currentUrlString.isEmpty else { return }
 
@@ -83,7 +87,13 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
 
         isLoading = true; hasFailed = false
-        let loaded = await CacheCoordinator.shared.images.image(for: resolved)
+        let loaded: UIImage?
+        if let targetSize {
+            let maxPixel = await Self.pixelSize(for: targetSize)
+            loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel)
+        } else {
+            loaded = await CacheCoordinator.shared.images.image(for: resolved)
+        }
         if !Task.isCancelled {
             if let loaded, self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
