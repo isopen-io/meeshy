@@ -49,4 +49,19 @@ final class StoryModelsExtensionsTests: XCTestCase {
             XCTAssertEqual(decoded, easing)
         }
     }
+
+    // MARK: - StoryTransitionKind
+
+    func test_storyTransitionKind_rawValues_matchSpec() {
+        XCTAssertEqual(StoryTransitionKind.crossfade.rawValue, "crossfade")
+        XCTAssertEqual(StoryTransitionKind.dissolve.rawValue, "dissolve")
+    }
+
+    func test_storyTransitionKind_codableRoundTrip_allCases() throws {
+        for kind in StoryTransitionKind.allCases {
+            let data = try JSONEncoder().encode(kind)
+            let decoded = try JSONDecoder().decode(StoryTransitionKind.self, from: data)
+            XCTAssertEqual(decoded, kind)
+        }
+    }
 }
