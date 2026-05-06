@@ -1631,6 +1631,11 @@ public struct ChangeTransitionCommand: EditCommand {
 // MARK: - Keyframe array helpers (private to this file)
 
 private extension TimelineProject {
+    /// Normalises the keyframes array on a clip so that "no keyframes" is
+    /// always represented as `nil` (not `[]`). This canonical form lets
+    /// `apply -> revert` produce a project byte-equal to the pre-apply state
+    /// even when the original clip had `keyframes == nil` and a single add
+    /// would otherwise leave it as `[]` after removal.
     mutating func mutateKeyframes(clipId: String,
                                   kind: TimelineClipKind,
                                   block: (inout [StoryKeyframe]) throws -> Void) throws {
@@ -1641,14 +1646,14 @@ private extension TimelineProject {
             }
             var arr = mediaObjects[idx].keyframes ?? []
             try block(&arr)
-            mediaObjects[idx].keyframes = arr
+            mediaObjects[idx].keyframes = arr.isEmpty ? nil : arr
         case .text:
             guard let idx = textObjects.firstIndex(where: { $0.id == clipId }) else {
                 throw EditCommandError.clipNotFound(id: clipId)
             }
             var arr = textObjects[idx].keyframes ?? []
             try block(&arr)
-            textObjects[idx].keyframes = arr
+            textObjects[idx].keyframes = arr.isEmpty ? nil : arr
         case .audio:
             throw EditCommandError.invalidState(reason: "audio clips do not support keyframes")
         }
