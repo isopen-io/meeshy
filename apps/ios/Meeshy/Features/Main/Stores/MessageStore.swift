@@ -18,6 +18,14 @@ private final class ObservationTokens: @unchecked Sendable {
     }
 }
 
+/// Describes which slice of the conversation the store is currently displaying.
+public enum WindowMode: Equatable, Sendable {
+    /// Latest window — show the most recent N messages.
+    case latest
+    /// Jumped window — show messages centered around a specific date.
+    case around(date: Date)
+}
+
 @Observable
 @MainActor
 public final class MessageStore {
@@ -31,6 +39,12 @@ public final class MessageStore {
     private(set) var unreadBelowCount: Int = 0
     var currentVisibleMessageIds: Set<String> = []
     var isUserScrolling = false
+
+    // MARK: - Window Mode
+
+    /// The current display window. `.latest` shows the most recent messages;
+    /// `.around(date:)` shows a centered slice used during jump-to-message UX.
+    private(set) var windowMode: WindowMode = .latest
 
     // MARK: - Internal
 
@@ -97,30 +111,52 @@ public final class MessageStore {
 
     // MARK: - Off-main DB read + progressive decrypt
 
-    private func refreshFromDB() async {
+    func refreshFromDB() async {
         let convId = conversationId
+        let mode = windowMode
         let anchor = windowAnchor
         let windowSize = Self.windowSize
         let reader = persistence.reader
 
         let newRecords = await Task.detached(priority: .userInitiated) {
-            if let anchor {
+            switch mode {
+            case .around(let centerDate):
+                // Window centered on centerDate: half-window before + half-window after.
                 return try? reader.read { db in
-                    try MessageRecord
+                    let half = windowSize / 2
+                    let before = try MessageRecord
                         .filter(Column("conversationId") == convId)
-                        .filter(Column("createdAt") >= anchor)
-                        .order(Column("createdAt").asc)
-                        .limit(windowSize)
-                        .fetchAll(db)
-                }
-            } else {
-                return try? reader.read { db in
-                    try Array(MessageRecord
-                        .filter(Column("conversationId") == convId)
+                        .filter(Column("createdAt") <= centerDate)
                         .order(Column("createdAt").desc)
-                        .limit(windowSize)
+                        .limit(half)
                         .fetchAll(db)
-                        .reversed())
+                    let after = try MessageRecord
+                        .filter(Column("conversationId") == convId)
+                        .filter(Column("createdAt") > centerDate)
+                        .order(Column("createdAt").asc)
+                        .limit(half)
+                        .fetchAll(db)
+                    return Array(before.reversed()) + after
+                }
+            case .latest:
+                if let anchor {
+                    return try? reader.read { db in
+                        try MessageRecord
+                            .filter(Column("conversationId") == convId)
+                            .filter(Column("createdAt") >= anchor)
+                            .order(Column("createdAt").asc)
+                            .limit(windowSize)
+                            .fetchAll(db)
+                    }
+                } else {
+                    return try? reader.read { db in
+                        try Array(MessageRecord
+                            .filter(Column("conversationId") == convId)
+                            .order(Column("createdAt").desc)
+                            .limit(windowSize)
+                            .fetchAll(db)
+                            .reversed())
+                    }
                 }
             }
         }.value
@@ -160,6 +196,23 @@ public final class MessageStore {
         windowAnchor = older.last?.createdAt
         await refreshFromDB()
         return true
+    }
+
+    // MARK: - Window Switching
+
+    /// Switches the window to be centered around `date`, then refreshes from DB.
+    /// Used by jump-to-message UX. Returns when the new window has been loaded.
+    public func loadWindow(around date: Date) async {
+        windowMode = .around(date: date)
+        windowAnchor = nil
+        await refreshFromDB()
+    }
+
+    /// Restores the latest window. Used when returning from a jumped state.
+    public func restoreLatestWindow() async {
+        windowMode = .latest
+        windowAnchor = nil
+        await refreshFromDB()
     }
 
     // MARK: - Lookup

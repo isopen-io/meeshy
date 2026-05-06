@@ -84,10 +84,10 @@ UI-only signals retained as-is (not messages mutations):
 
 ---
 
-## Task 2 COMPLETE — Group B migration (Followup #2)
+## Task 2 COMPLETE — Group B migration 100% (including jump-to-message window switch)
 
-All Group B sites have been migrated to persistence-driven observation, except the
-3 deferred jump-to-message windowed state callsites (architectural skip, documented below).
+All Group B sites have been migrated to persistence-driven observation. The 3 deferred
+jump-to-message callsites are now fully migrated via the `MessageStore` window-switching mechanism.
 
 ### New persistence APIs added to `MessagePersistenceActor.swift`
 
@@ -95,6 +95,14 @@ All Group B sites have been migrated to persistence-driven observation, except t
 - `deleteAll(conversationId:)` — wipes all GRDB rows for a conversation (403/access revoked)
 - `deleteExpiredEphemeral(before: Date)` — removes expired ephemeral messages
 - `updateDeliveryCounters(localId:deliveredCount:readCount:deliveredToAllAt:readByAllAt:)` — merge-only delivery counter update (no downgrade)
+
+### New MessageStore window-switching APIs
+
+- `WindowMode` enum (`Equatable`, `Sendable`) — `.latest` / `.around(date:)`
+- `private(set) var windowMode: WindowMode` — current window, read-only from outside
+- `loadWindow(around date: Date) async` — switches to centered window, refreshes from GRDB
+- `restoreLatestWindow() async` — restores latest window, refreshes from GRDB
+- `refreshFromDB()` visibility changed from `private` to `internal` — needed by ViewModel for explicit refresh after newer-page upsert
 
 ### Group B sites migrated
 
@@ -113,24 +121,22 @@ All Group B sites have been migrated to persistence-driven observation, except t
 | `messages.remove(at:)` + `removeAll` | `retryMessage` / `removeFailedMessage` | `persistence.markDeleted(localId:deletedAt:)` |
 | `removeAll { expiresAt <= now }` | `removeExpiredMessages` | `persistence.deleteExpiredEphemeral(before:)` |
 | `messages.append(contentsOf: newMessages)` | `syncMissedMessages` | `persistence.upsertFromAPIMessages` |
+| ~2128 | `loadMessagesAround()` — `messages = fetchedMessages` | `upsertFromAPIMessages` + `messageStore.loadWindow(around:)` |
+| ~2168 | `loadNewerMessages()` — `messages.append(contentsOf: genuinelyNew)` | `upsertFromAPIMessages` + GRDB observation auto-fires |
+| ~2199 | `returnToLatest()` — `messages = saved` | `messageStore.restoreLatestWindow()` |
 
-### Group B sites SKIPPED (jump-to-message windowed state — architectural constraint)
+### Snapshot state removed
 
-These 3 callsites are part of a temporary windowed view (jump to search result, paginate newer,
-return to latest). Migrating them requires a window-switching mechanism in `MessageStore` that
-is out of scope for this task.
+`savedMessages: [Message]?`, `savedCursor: String?`, and `savedHasOlder: Bool` properties removed
+from `ConversationViewModel`. `returnToLatest()` now re-reads the latest window from GRDB — which
+is always warm — making snapshot-restore unnecessary.
 
-| Line (current) | Context | Reason |
-|----------------|---------|--------|
-| ~2128 | `loadMessagesAround()` — `messages = fetchedMessages` | Jump-window replacement — requires MessageStore window switch |
-| ~2168 | `loadNewerMessages()` — `messages.append(contentsOf: genuinelyNew)` | Jump-window pagination — same |
-| ~2199 | `returnToLatest()` — `messages = saved` | Jump-window restore — saves/restores pre-jump state |
+### Lint tightening (fully realised)
 
-### Lint tightening
-
-`SingleSourceOfTruthTests.swift` now has TWO lint tests:
-1. `test_noDirectOptimisticMutation_of_conversationViewModel_messages` — Group A patterns (unchanged, still passes)
-2. `test_wholeArrayMessagesWrite_countIsExact` — asserts exactly 3 whole-array `messages = ...` writes exist (1 legitimate + 2 deferred jump-window). Any new addition triggers failure.
+`SingleSourceOfTruthTests.swift` now asserts exactly **1** whole-array `messages = ...` write
+(the GRDB observation output in `subscribeToMessageStore`). Both lint tests pass:
+1. `test_noDirectOptimisticMutation_of_conversationViewModel_messages` — Group A patterns (passes)
+2. `test_wholeArrayMessagesWrite_countIsExact` — asserts exactly 1 write (was 3; passes)
 
 ## Group C — Test fixtures (DEFERRED, leave as-is)
 
