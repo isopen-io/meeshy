@@ -51,4 +51,32 @@ final class KeyframeInterpolatorTests: XCTestCase {
     func test_float_lerp_pastOne_extrapolates() {
         XCTAssertEqual(Float.lerp(from: 0, to: 10, t: 1.5), 15, accuracy: 0.0001)
     }
+
+    // MARK: - KeyframeInterpolator.interpolate — degenerate
+
+    func test_interpolate_emptyKeyframes_returnsNil() {
+        let result: Float? = KeyframeInterpolator.interpolate(
+            keyframes: [],
+            at: 0.5
+        )
+        XCTAssertNil(result)
+    }
+
+    func test_interpolate_singleKeyframe_atKeyframeTime_returnsValue() {
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 1.0, value: 42.0, easing: .linear)
+        ]
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 1.0)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result!, 42.0, accuracy: 0.0001 as Float)
+    }
+
+    func test_interpolate_singleKeyframe_afterKeyframeTime_returnsValue() {
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 1.0, value: 42.0, easing: .linear)
+        ]
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 5.0)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result!, 42.0, accuracy: 0.0001 as Float)
+    }
 }
