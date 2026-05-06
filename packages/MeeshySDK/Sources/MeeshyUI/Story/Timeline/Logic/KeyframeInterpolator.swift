@@ -18,3 +18,27 @@ extension Float: Lerpable {
         return from + (to - from) * t
     }
 }
+
+extension CGFloat: Lerpable {
+    public nonisolated static func lerp(from: CGFloat, to: CGFloat, t: Float) -> CGFloat {
+        return from + (to - from) * CGFloat(t)
+    }
+}
+
+extension CGPoint: Lerpable {
+    public nonisolated static func lerp(from: CGPoint, to: CGPoint, t: Float) -> CGPoint {
+        return CGPoint(
+            x: CGFloat.lerp(from: from.x, to: to.x, t: t),
+            y: CGFloat.lerp(from: from.y, to: to.y, t: t)
+        )
+    }
+}
+
+extension CGSize: Lerpable {
+    public nonisolated static func lerp(from: CGSize, to: CGSize, t: Float) -> CGSize {
+        return CGSize(
+            width:  CGFloat.lerp(from: from.width,  to: to.width,  t: t),
+            height: CGFloat.lerp(from: from.height, to: to.height, t: t)
+        )
+    }
+}
