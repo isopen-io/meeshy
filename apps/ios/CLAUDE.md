@@ -4,10 +4,10 @@
 - SwiftUI (NOT UIKit), iOS 17.0+, Swift 6 (swift-tools-version 6.2)
 - MVVM architecture
 - Swift Package Manager (SPM)
-- Firebase 10.29 (Analytics, Crashlytics, Messaging, Performance)
+- Firebase 12.12 (Analytics, Crashlytics, Messaging, Performance)
 - Socket.IO Client 16.1
-- WebRTC 120.0 (calls)
-- Kingfisher 7.10 (image caching)
+- WebRTC 141.0 (calls)
+- Image caching: AsyncImage (SwiftUI native iOS 15+) + CachedAsyncImage + CacheCoordinator 3-tier (no Kingfisher — removed 2026-05)
 - WhisperKit 0.9 (on-device speech recognition)
 
 ## Project Structure
@@ -613,11 +613,15 @@ AsyncImage(url: avatarURL) { image in
 .frame(width: 40, height: 40)
 .clipShape(Circle())
 
-// For lists: use Kingfisher with disk cache
-KFImage(url)
-    .placeholder { ShimmerView() }
-    .fade(duration: 0.2)
-    .cacheMemoryOnly(false)
+// For lists: use CachedAsyncImage (custom, SwiftUI + DiskCacheStore 3-tier)
+CachedAsyncImage(url: thumbUrl) {
+    ShimmerPlaceholder()
+}
+.frame(width: 80, height: 80)
+.clipShape(RoundedRectangle(cornerRadius: 12))
+
+// For programmatic preload: CacheCoordinator.shared.images.image(for: url)
+// (3-tier: NSCache memory → FileManager disk → URLSession network)
 ```
 
 ## Accessibility

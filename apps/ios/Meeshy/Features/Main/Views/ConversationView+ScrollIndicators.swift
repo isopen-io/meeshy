@@ -238,7 +238,7 @@ extension ConversationView {
                     )
             }
         }
-        .onReceive(typingDotTimer) { _ in
+        .onReceive(typingDotPublisher) { _ in
             guard !viewModel.typingUsernames.isEmpty else { return }
             headerState.typingDotPhase = (headerState.typingDotPhase + 1) % 3
         }
@@ -269,7 +269,7 @@ extension ConversationView {
                         )
                 }
             }
-            .onReceive(typingDotTimer) { _ in
+            .onReceive(typingDotPublisher) { _ in
                 guard !viewModel.typingUsernames.isEmpty else { return }
                 headerState.inlineTypingDotPhase = (headerState.inlineTypingDotPhase + 1) % 3
             }

@@ -95,6 +95,8 @@ import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredStoriesCleanupService } from './services/ExpiredStoriesCleanupService';
+import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
+import { MediaService } from './services/MediaService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
 import { AuthenticationError, ValidationError, TranslationError } from './errors/custom-errors';
 
@@ -270,6 +272,7 @@ class MeeshyServer {
   private jobMappingCache: MultiLevelJobMappingCache;
   private tusCleanup: TusCleanupService;
   private expiredStoriesCleanup: ExpiredStoriesCleanupService;
+  private orphanMediaCleanup: OrphanMediaCleanupService;
   private deliveryQueue: RedisDeliveryQueue;
   private agentClient: ZmqAgentClient | null = null;
 
@@ -381,6 +384,11 @@ class MeeshyServer {
     // Cron de purge des stories expirees (soft-delete passe le `expiresAt`,
     // hard-delete au-dela de la fenetre de retention).
     this.expiredStoriesCleanup = new ExpiredStoriesCleanupService(this.prisma);
+    // SOTA audit Pilier 4 — outbox-based ghost media file cleanup. Reaps
+    // any orphaned files left behind by partial uploads or crashed
+    // transactions (e.g. story repost media snapshots that never made it
+    // to the final Post.media row).
+    this.orphanMediaCleanup = new OrphanMediaCleanupService(this.prisma, new MediaService());
 
     // Expose emailService for use in routes (friend requests, etc.)
     this.server.decorate('emailService', emailService);
@@ -1037,8 +1045,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       logger.warn('⚠️ ZMQ client not available, voice routes not registered');
     }
 
-    // Register post/feed routes with /api/v1 prefix
+    // Register post/feed routes with /api/v1 prefix.
+    // Decorate the scoped instance with orphanMediaCleanup so the repost
+    // path in PostService can register snapshot files in the outbox before
+    // the surrounding transaction commits (Pilier 4 producer side).
     await this.server.register(async (instance) => {
+      instance.decorate('orphanMediaCleanup', this.orphanMediaCleanup);
       await postRoutes(instance);
     }, { prefix: API_PREFIX });
     logger.info('✓ Post/Feed routes registered');
@@ -1243,6 +1255,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       this.expiredStoriesCleanup.start();
       logger.info('✓ Expired stories cleanup service started');
 
+      // Start orphan-media cleanup worker (5-min sweep, deletes files
+      // referenced in OrphanMediaCleanup whose cleanupAfter has passed).
+      this.orphanMediaCleanup.start();
+      logger.info('✓ Orphan media cleanup service started');
+
     } catch (error) {
       logger.error('❌ Failed to start server: ', error);
       process.exit(1);
@@ -1275,6 +1292,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (this.expiredStoriesCleanup) {
         this.expiredStoriesCleanup.stop();
         logger.info('✓ Expired stories cleanup service stopped');
+      }
+
+      // Stop orphan-media cleanup worker
+      if (this.orphanMediaCleanup) {
+        this.orphanMediaCleanup.stop();
+        logger.info('✓ Orphan media cleanup service stopped');
       }
 
       // SECURITY: Clear all cryptographic material from memory

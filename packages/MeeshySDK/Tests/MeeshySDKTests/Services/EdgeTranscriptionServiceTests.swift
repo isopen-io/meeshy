@@ -1,6 +1,8 @@
 import XCTest
+import Speech
 @testable import MeeshySDK
 
+@MainActor
 final class EdgeTranscriptionServiceTests: XCTestCase {
 
     // MARK: - OnDeviceTranscription model tests
@@ -75,13 +77,43 @@ final class EdgeTranscriptionServiceTests: XCTestCase {
         XCTAssertEqual(error.errorDescription, "Audio file not found")
     }
 
+    func test_unsupportedLocale_includesIdentifierInDescription() {
+        let error = EdgeTranscriptionError.unsupportedLocale("xx-ZZ")
+        XCTAssertEqual(
+            error.errorDescription,
+            "Locale 'xx-ZZ' is not supported for on-device transcription"
+        )
+    }
+
+    func test_transcriptionFailed_includesUnderlyingMessage() {
+        let error = EdgeTranscriptionError.transcriptionFailed("Network down")
+        XCTAssertEqual(error.errorDescription, "Transcription failed: Network down")
+    }
+
+    func test_cancelled_hasErrorDescription() {
+        let error = EdgeTranscriptionError.cancelled
+        XCTAssertEqual(error.errorDescription, "Transcription cancelled")
+    }
+
+    func test_errors_areEquatable() {
+        XCTAssertEqual(EdgeTranscriptionError.notAuthorized, .notAuthorized)
+        XCTAssertEqual(
+            EdgeTranscriptionError.unsupportedLocale("fr"),
+            .unsupportedLocale("fr")
+        )
+        XCTAssertNotEqual(
+            EdgeTranscriptionError.unsupportedLocale("fr"),
+            .unsupportedLocale("en")
+        )
+        XCTAssertNotEqual(EdgeTranscriptionError.notAuthorized, .cancelled)
+    }
+
     // MARK: - supportedLocales (basic validation)
 
     func test_supportedLocales_returnsNonEmptyList() {
         let service = EdgeTranscriptionService.shared
         let locales = service.supportedLocales
 
-        // SFSpeechRecognizer should always have some supported locales on any Apple platform
         XCTAssertFalse(locales.isEmpty)
     }
 
@@ -96,12 +128,72 @@ final class EdgeTranscriptionServiceTests: XCTestCase {
 
     func test_isLocaleSupported_enUS_returnsTrue() {
         let service = EdgeTranscriptionService.shared
-        // en-US is universally supported on Apple platforms
         XCTAssertTrue(service.isLocaleSupported(Locale(identifier: "en-US")))
     }
 
     func test_isLocaleSupported_inventedLocale_returnsFalse() {
         let service = EdgeTranscriptionService.shared
         XCTAssertFalse(service.isLocaleSupported(Locale(identifier: "xx-ZZ")))
+    }
+
+    // MARK: - normalizedLocale (regression coverage for the crash fix)
+
+    func test_normalizedLocale_fullIdentifier_isPassedThrough() {
+        let input = Locale(identifier: "en-US")
+        let normalized = EdgeTranscriptionService.normalizedLocale(for: input)
+        XCTAssertEqual(normalized.identifier, "en-US")
+    }
+
+    func test_normalizedLocale_languageOnlyEn_promotedToFullIdentifier() {
+        let input = Locale(identifier: "en")
+        let normalized = EdgeTranscriptionService.normalizedLocale(for: input)
+        XCTAssertEqual(normalized.language.languageCode?.identifier, "en")
+        XCTAssertNotNil(normalized.region, "Expected promoted locale to carry a region")
+    }
+
+    func test_normalizedLocale_languageOnlyFr_promotedToFullIdentifier() {
+        let input = Locale(identifier: "fr")
+        let normalized = EdgeTranscriptionService.normalizedLocale(for: input)
+        XCTAssertEqual(normalized.language.languageCode?.identifier, "fr")
+        XCTAssertNotNil(normalized.region, "Expected promoted locale to carry a region")
+    }
+
+    func test_normalizedLocale_languageOnly_resolvesToSupportedRecognizerLocale() {
+        // Whatever region is picked, it MUST be a locale SFSpeechRecognizer
+        // accepts — otherwise the original crash returns.
+        for code in ["fr", "en", "es", "de", "it", "pt", "ja", "zh", "ko", "ar"] {
+            let normalized = EdgeTranscriptionService.normalizedLocale(
+                for: Locale(identifier: code)
+            )
+            XCTAssertTrue(
+                SFSpeechRecognizer.supportedLocales().contains(normalized),
+                "Normalized locale '\(normalized.identifier)' for input '\(code)' is not supported by SFSpeechRecognizer"
+            )
+        }
+    }
+
+    func test_normalizedLocale_unknownLanguage_returnsInputUntouched() {
+        let input = Locale(identifier: "xx")
+        let normalized = EdgeTranscriptionService.normalizedLocale(for: input)
+        // No supported recognizer for "xx" -> keep input so the caller can
+        // surface unsupportedLocale().
+        XCTAssertEqual(normalized.identifier, "xx")
+    }
+
+    // MARK: - availableLocales
+
+    func test_availableLocales_isSubsetOfSupportedLocales() {
+        let service = EdgeTranscriptionService.shared
+        let supported = Set(service.supportedLocales.map(\.identifier))
+        let available = Set(service.availableLocales.map(\.identifier))
+        XCTAssertTrue(available.isSubset(of: supported))
+    }
+
+    // MARK: - cancel (smoke test — should be safe to call when idle)
+
+    func test_cancel_whenIdle_doesNotCrash() {
+        let service = EdgeTranscriptionService.shared
+        service.cancel()
+        XCTAssertFalse(service.isTranscribing)
     }
 }

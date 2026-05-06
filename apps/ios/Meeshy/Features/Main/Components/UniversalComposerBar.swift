@@ -314,6 +314,10 @@ struct UniversalComposerBar: View {
         .onAppear {
             isMinimized = startMinimized
         }
+        .onDisappear {
+            recordingTimer?.invalidate()
+            recordingTimer = nil
+        }
     }
 
     // MARK: - Minimized Floating Button

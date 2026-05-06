@@ -8,6 +8,7 @@ import os
 @main
 struct MeeshyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    private let dependencies = DependencyContainer.shared
     @StateObject private var authManager = AuthManager.shared
     @StateObject private var toastManager = ToastManager.shared
     @StateObject private var pushManager = PushNotificationManager.shared
@@ -113,6 +114,7 @@ struct MeeshyApp: App {
                     let _ = deepLinkRouter.handle(url: url)
                 }
                 .task {
+                    ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
                     MeeshyConfig.shared.restoreEnvironment()
                     // Bridge iOS Focus filter selection into the SDK so in-app
@@ -121,6 +123,18 @@ struct MeeshyApp: App {
                         MeeshyFocusStore.shared.current.toSDKSnapshot()
                     }
                     await CacheCoordinator.shared.start()
+                    // Wire the outbox pool so OfflineQueue and MessageRetryQueue
+                    // can persist items to SQLite on enqueue. Must run before
+                    // any enqueue calls to avoid silent no-ops.
+                    let bootPool = dependencies.dbPool
+                    await OfflineQueue.shared.configure(pool: bootPool)
+                    await MessageRetryQueue.shared.configure(pool: bootPool)
+                    // Wire the in-memory retry handlers so the reconnection
+                    // path (socket reconnect → retryAll/retryPending) can
+                    // send queued items without going through the outbox
+                    // flusher. The outbox flusher handles items that survive
+                    // a crash or cold start; these handlers handle the hot
+                    // reconnection path for items that were in-memory.
                     await OfflineQueue.shared.setRetrySend { @Sendable item in
                         do {
                             let request = SendMessageRequest(
@@ -177,6 +191,50 @@ struct MeeshyApp: App {
                             return .transient
                         }
                     }
+                    await SettingsActionQueue.shared.setFlushHandler { @Sendable action in
+                        do {
+                            // Most settings endpoints return the updated user.
+                            // We only care that the request succeeded; the
+                            // optimistic UI already reflects the new value.
+                            let _: APIResponse<MeeshyUser> = try await APIClient.shared.request(
+                                endpoint: action.endpoint,
+                                method: action.httpMethod,
+                                body: action.payload
+                            )
+                            return true
+                        } catch APIError.serverError(let code, _) where code >= 400 && code < 500 {
+                            // Treat client-side validation errors as terminal —
+                            // replaying the same payload won't help. Drop the
+                            // action so the queue doesn't bounce forever.
+                            return true
+                        } catch {
+                            // Transient (5xx / connectivity): keep the action
+                            // queued; the next NetworkMonitor `online` edge
+                            // will replay it.
+                            return false
+                        }
+                    }
+                    // Delete legacy JSON queue files from disk on the first boot
+                    // after migration to the SQLite outbox pipeline. The files are
+                    // no longer written to; this removes any stale data on device.
+                    let didDeleteLegacyKey = "meeshy.outbox.legacyFilesDeleted"
+                    if !UserDefaults.standard.bool(forKey: didDeleteLegacyKey) {
+                        Task.detached(priority: .background) {
+                            OfflineQueue.deleteLegacyFile()
+                            MessageRetryQueue.deleteLegacyFile()
+                            await MainActor.run {
+                                UserDefaults.standard.set(true, forKey: didDeleteLegacyKey)
+                            }
+                        }
+                    }
+                    // Drain any outbox rows that survived a crash or cold start.
+                    // This runs at every boot (not just once) so items from the
+                    // previous session are retried as soon as the app is active.
+                    Task.detached(priority: .background) {
+                        let flusher = OutboxFlusher(pool: bootPool, dispatcher: OutboxDispatcher())
+                        await flusher.flush()
+                    }
+
                     // Parallelize: friendship hydration + session check are independent
                     async let friendshipHydration: () = FriendshipCache.shared.hydrate()
                     async let sessionCheck: () = authManager.checkExistingSession()
@@ -212,6 +270,15 @@ struct MeeshyApp: App {
                         // BGTasks → sync widgets) and guarantees the task id
                         // is ended even if a step throws.
                         Task { await BackgroundTransitionCoordinator.shared.enterBackground() }
+                        // Compact free pages and refresh query-planner stats on
+                        // every background transition. Runs at background priority
+                        // so the system can defer or kill it under memory pressure.
+                        // Capture dbPool before crossing the actor boundary.
+                        let pool = dependencies.dbPool
+                        Task.detached(priority: .background) {
+                            try? DatabaseMaintenance.runIncrementalVacuum(on: pool)
+                            try? DatabaseMaintenance.runOptimize(on: pool)
+                        }
                     case .inactive:
                         break
                     @unknown default:
@@ -236,6 +303,11 @@ struct MeeshyApp: App {
                         NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
                         NotificationCoordinator.shared.start()
                         Task { await CacheCoordinator.shared.start() }
+                        // SOTA audit Pilier 22 V2 — register the publish-queue
+                        // handler + listeners so any pending stories from a
+                        // previous session start surfacing to the UI as soon
+                        // as the user authenticates.
+                        StoryPublishService.shared.configure()
                         // Re-hydrate the friendship cache for the now-active
                         // user. `MeeshyApp.task` only hydrates once per view
                         // lifecycle, so without this call an account switch
@@ -261,6 +333,7 @@ struct MeeshyApp: App {
                                 Logger.e2ee.error("E2EE bundle upload failed: \(error)")
                             }
                         }
+                        Task { await SessionManager.shared.migrateKeychainIfNeeded() }
                         if let pending = pushManager.pendingNotificationPayload {
                             handlePushNavigation(payload: pending)
                         }
@@ -570,6 +643,11 @@ struct SplashScreen: View {
             // Transition to main app
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 onFinish()
+            }
+        }
+        .onDisappear {
+            withTransaction(Transaction(animation: nil)) {
+                glowPulse = false
             }
         }
     }

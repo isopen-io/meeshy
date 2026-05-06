@@ -5,12 +5,13 @@ final class MeeshyUserTests: XCTestCase {
 
     // MARK: - preferredContentLanguages
 
-    func test_preferredContentLanguages_noLanguagesSet_returnsEmpty() {
+    func test_preferredContentLanguages_noLanguagesSet_returnsFrenchFallback() {
         let user = MeeshyUser(
             id: "u1", username: "test"
         )
 
-        XCTAssertEqual(user.preferredContentLanguages, [])
+        // Prisme: when no language is configured, fallback is "fr" (per resolveUserLanguage in shared)
+        XCTAssertEqual(user.preferredContentLanguages, ["fr"])
     }
 
     func test_preferredContentLanguages_onlySystemLanguage_returnsSystemLanguage() {
@@ -38,7 +39,8 @@ final class MeeshyUserTests: XCTestCase {
             customDestinationLanguage: "de"
         )
 
-        XCTAssertEqual(user.preferredContentLanguages, ["de", "fr", "en"])
+        // Order per resolveUserLanguage(): system → regional → custom
+        XCTAssertEqual(user.preferredContentLanguages, ["fr", "en", "de"])
     }
 
     func test_preferredContentLanguages_customOnly_includesCustom() {
@@ -48,7 +50,8 @@ final class MeeshyUserTests: XCTestCase {
             customDestinationLanguage: "de"
         )
 
-        XCTAssertEqual(user.preferredContentLanguages, ["de", "fr"])
+        // Order per resolveUserLanguage(): system → custom
+        XCTAssertEqual(user.preferredContentLanguages, ["fr", "de"])
     }
 
     func test_preferredContentLanguages_duplicateLanguages_deduplicates() {

@@ -8,6 +8,28 @@ struct SharedContentWrapper: Identifiable {
     let content: SharedContentType
 }
 
+/// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
+/// repost-as-story composer launched from the bottom-bar Partager button (C.1).
+/// Carrying both the source `StoryItem` and the original author's handle keeps
+/// the cover identifiable + supplies what `StoryComposerViewModel(reposting:authorHandle:)`
+/// needs without leaking optionals through the binding.
+struct RepostStorySourceWrapper: Identifiable {
+    let id = UUID()
+    let story: StoryItem
+    let authorHandle: String
+}
+
+/// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
+/// repost-as-post composer launched from the kebab menu's "Editer et republier
+/// en post" action (C.2). Mirrors `RepostStorySourceWrapper` but feeds the
+/// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
+/// init introduced in B.7.
+struct RepostPostSourceWrapper: Identifiable {
+    let id = UUID()
+    let story: StoryItem
+    let authorHandle: String
+}
+
 /// Draft state for a single story's composer
 struct StoryDraft {
     var text: String = ""
@@ -53,7 +75,7 @@ struct StoryViewerView: View {
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var emojiToInject = ""
     @State private var composerFocusTrigger = false
-    @State private var composerLanguage: String = "fr"
+    @State var composerLanguage: String = DefaultComposerLanguage.resolve() // internal for cross-file extension access
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State var showLanguageOptions = false // internal for cross-file extension access
@@ -222,6 +244,128 @@ struct StoryViewerView: View {
             )
             .presentationDetents([.medium, .large])
         }
+        // Repost-as-story composer (C.1). Opened from the bottom-bar "Partager"
+        // action; uses the new `init(viewModel:onPublishSlide:onPublishAllInBackground:onDismiss:)`
+        // exposed by `StoryComposerView` so we can hand it a pre-built VM seeded
+        // by `StoryComposerViewModel(reposting:authorHandle:)`. The publish path
+        // delegates to `viewModel.publishStoryInBackground(...)` exactly like the
+        // tray-launched composer (StoryTrayView) — keeping a single upload flow.
+        // Note: full `repostOfId` propagation through `publishStoryInBackground`
+        // is the responsibility of a follow-up patch (the VM still carries the
+        // chain via `repostOfId` / `originalRepostOfId` for that wiring).
+        .fullScreenCover(item: $repostStoryComposerSource, onDismiss: {
+            resumeTimer()
+        }) { wrapper in
+            StoryComposerView(
+                viewModel: StoryComposerViewModel(
+                    reposting: wrapper.story,
+                    authorHandle: wrapper.authorHandle
+                ),
+                onPublishSlide: { _, _, _, _, _ in
+                    // No-op: background-publish path (`onPublishAllInBackground`)
+                    // is what `publishStoryInBackground` consumes. Keeping this
+                    // symmetric with the tray-launched composer keeps a single
+                    // upload code path.
+                },
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility in
+                    viewModel.publishStoryInBackground(
+                        slides: slides,
+                        slideImages: slideImages,
+                        loadedImages: loadedImages,
+                        loadedVideoURLs: loadedVideoURLs,
+                        loadedAudioURLs: loadedAudioURLs,
+                        originalLanguage: originalLanguage,
+                        visibility: visibility
+                    )
+                    repostStoryComposerSource = nil
+                },
+                onDismiss: { repostStoryComposerSource = nil }
+            )
+        }
+        // Repost-as-post composer (C.2). Opened from the kebab menu's
+        // "Editer et republier en post" action. Uses the new
+        // `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
+        // init introduced in B.7 — locks the type to `.post` and embeds a
+        // story preview canvas. Submission goes through `PostService.repost`
+        // with `targetType: .post` so the gateway records the correct shape.
+        .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: {
+            resumeTimer()
+        }) { wrapper in
+            UnifiedPostComposer(
+                repostingStory: wrapper.story,
+                authorHandle: wrapper.authorHandle,
+                onPublishRepost: { content, sourceStory in
+                    Task {
+                        do {
+                            _ = try await PostService.shared.repost(
+                                postId: sourceStory.id,
+                                targetType: .post,
+                                content: content.isEmpty ? nil : content,
+                                isQuote: !content.isEmpty
+                            )
+                            await MainActor.run {
+                                editAndRepostAsPostSource = nil
+                                ToastManager.shared.show("Publié")
+                            }
+                        } catch {
+                            await MainActor.run {
+                                ToastManager.shared.showError("Échec de la publication")
+                            }
+                        }
+                    }
+                },
+                onDismiss: { editAndRepostAsPostSource = nil }
+            )
+        }
+    }
+
+    /// Direct repost-as-post action wired to the kebab menu's "Republier en
+    /// post" item. Mirrors the share-button repost UX (C.1) but skips the
+    /// composer — fires `PostService.repost` immediately with no content and
+    /// `isQuote: false`. Surfaces user-facing toasts on success / known error
+    /// codes (404 = source story gone, 403 = repost forbidden) and a generic
+    /// failure otherwise. Errors are mapped against `APIError.serverError`'s
+    /// status-code payload since that's the shape `APIClient` throws.
+    private func repostAsPostDirect() {
+        guard let story = currentStory else { return }
+        HapticFeedback.light()
+        Task {
+            do {
+                _ = try await PostService.shared.repost(
+                    postId: story.id,
+                    targetType: .post,
+                    content: nil,
+                    isQuote: false
+                )
+                await MainActor.run {
+                    HapticFeedback.success()
+                    ToastManager.shared.show("Republié dans ton feed")
+                }
+            } catch APIError.serverError(404, _) {
+                await MainActor.run {
+                    ToastManager.shared.showError("La story n'est plus disponible")
+                }
+            } catch APIError.serverError(403, _) {
+                await MainActor.run {
+                    ToastManager.shared.showError("Cette story ne peut pas être repartagée")
+                }
+            } catch {
+                await MainActor.run {
+                    ToastManager.shared.showError("Échec de la republication")
+                }
+            }
+        }
+    }
+
+    // MARK: - External share URL builder
+
+    /// Builds the public web URL surfaced through ShareLink so the story can
+    /// be shared outside Meeshy (Messages, Mail, other apps). Aligned with
+    /// the existing pattern in `SharePickerView.swift` that already references
+    /// `https://meeshy.me/story/<id>`. Returns nil if the story id is empty.
+    private func makeStoryExternalShareURL(_ storyId: String) -> URL? {
+        guard !storyId.isEmpty else { return nil }
+        return URL(string: "https://meeshy.me/story/\(storyId)")
     }
 
     // MARK: - Computed Card Transforms
@@ -250,6 +394,8 @@ struct StoryViewerView: View {
     @State private var bigReactionEmoji: String?
     @State private var bigReactionPhase: Int = 0
     @State private var sharedContentWrapper: SharedContentWrapper?
+    @State private var repostStoryComposerSource: RepostStorySourceWrapper?
+    @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
 
     private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
 
@@ -569,15 +715,24 @@ struct StoryViewerView: View {
                 }
             }
 
-            // 4. Reshare (republish to own story) — hidden for own stories
-            if !isOwnStory {
+            // 4. Reshare (republish to own story) — hidden for own stories.
+            // Visibility-gated on `currentStory?.isPublic` (B.2 helper) so we never
+            // expose Partager for non-public visibility (FRIENDS / PRIVATE).
+            if !isOwnStory, currentStory?.isPublic == true {
                 storyActionButton(
                     icon: "arrow.2.squarepath",
                     label: "Partager"
                 ) {
-                    reshareStory()
+                    HapticFeedback.light()
+                    pauseTimer()
+                    if let story = currentStory, let group = currentGroup {
+                        repostStoryComposerSource = RepostStorySourceWrapper(
+                            story: story,
+                            authorHandle: group.username
+                        )
+                    }
                 }
-            } else {
+            } else if isOwnStory {
                 storyActionButton(
                     icon: "eye.fill",
                     label: "Vues"
@@ -1241,8 +1396,20 @@ struct StoryViewerView: View {
 
             // Options menu (three dots)
             Menu {
-                if let _ = currentStory, let group = currentGroup {
+                if let story = currentStory, let group = currentGroup {
                     if isOwnStory {
+                        // External share via system share sheet (Messages,
+                        // Mail, other apps). Only for public stories.
+                        if story.isPublic, let externalShareURL = makeStoryExternalShareURL(story.id) {
+                            ShareLink(
+                                item: externalShareURL,
+                                subject: Text("Story de @\(group.username)"),
+                                message: Text("Regardez cette story sur Meeshy")
+                            ) {
+                                Label("Partager hors Meeshy", systemImage: "square.and.arrow.up")
+                            }
+                            Divider()
+                        }
                         Button(role: .destructive) {
                             deleteCurrentStory()
                         } label: {
@@ -1255,10 +1422,41 @@ struct StoryViewerView: View {
                             Label("Voir le profil", systemImage: "person.fill")
                         }
 
-                        Button {
-                            reshareStory()
-                        } label: {
-                            Label("Republier", systemImage: "arrow.2.squarepath")
+                        // C.2: repost-as-post entry points. Gated on
+                        // `story.isPublic` (B.2 helper) so we never expose
+                        // these for FRIENDS / PRIVATE visibilities.
+                        if story.isPublic {
+                            Button {
+                                repostAsPostDirect()
+                            } label: {
+                                Label("Republier en post", systemImage: "arrow.2.squarepath")
+                            }
+
+                            Button {
+                                HapticFeedback.light()
+                                pauseTimer()
+                                if let group = currentGroup {
+                                    editAndRepostAsPostSource = RepostPostSourceWrapper(
+                                        story: story,
+                                        authorHandle: group.username
+                                    )
+                                }
+                            } label: {
+                                Label("Éditer et republier en post", systemImage: "square.and.pencil")
+                            }
+
+                            // Pilier 18 SOTA — external share complement
+                            // (Messages, Mail, other apps) alongside the
+                            // internal SharePicker flow that lives elsewhere.
+                            if let externalShareURL = makeStoryExternalShareURL(story.id) {
+                                ShareLink(
+                                    item: externalShareURL,
+                                    subject: Text("Story de @\(group.username)"),
+                                    message: Text("Regardez cette story sur Meeshy")
+                                ) {
+                                    Label("Partager hors Meeshy", systemImage: "square.and.arrow.up")
+                                }
+                            }
                         }
 
                         Divider()

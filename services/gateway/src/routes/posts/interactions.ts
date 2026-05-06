@@ -1,19 +1,27 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PostType } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
+import { MediaService } from '../../services/MediaService';
+import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, RepostSchema, PostParams } from './types';
-import { sendSuccess } from '../../utils/response';
+import { sendSuccess, sendForbidden } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  requiredAuth: any
+  requiredAuth: any,
+  orphanCleanup?: OrphanMediaCleanupService
 ) {
-  const postService = new PostService(prisma);
+  // Inject orphanCleanup so repostPost registers snapshot files in the
+  // outbox before commit (Pilier 4 producer side). The MediaService
+  // argument is the default — passed explicitly so the constructor chain
+  // is readable.
+  const postService = new PostService(prisma, new MediaService(), orphanCleanup);
 
   // POST /posts/:postId/like
   fastify.post('/posts/:postId/like', {
@@ -431,8 +439,11 @@ export function registerInteractionRoutes(
       const repost = await postService.repostPost(
         postId,
         authContext.registeredUser.id,
-        data.content,
-        data.isQuote
+        {
+          targetType: data.targetType as PostType | undefined,
+          content: data.content,
+          isQuote: data.isQuote,
+        },
       );
 
       if (!repost) {
@@ -464,6 +475,9 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, repost, { statusCode: 201 });
     } catch (error) {
+      if (error instanceof Error && (error as any).statusCode === 403) {
+        return sendForbidden(reply, error.message);
+      }
       fastify.log.error(`[POST /posts/:postId/repost] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
     }

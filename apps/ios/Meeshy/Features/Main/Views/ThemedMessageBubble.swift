@@ -871,14 +871,8 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Message Meta (timestamp + delivery status)
 
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-
     private var timeString: String {
-        Self.timeFormatter.string(from: message.createdAt)
+        message.cachedTimeString ?? TimeStringCache.shared.format(message.createdAt)
     }
 
     private var timestampSpacerText: Text {
@@ -1134,7 +1128,7 @@ struct ThemedMessageBubble: View {
 
                 // Attachment thumbnail or story thumbnail
                 if let thumbUrl = (reply.isStoryReply ? reply.storyThumbnailUrl : reply.attachmentThumbnailUrl), !thumbUrl.isEmpty {
-                    CachedAsyncImage(url: thumbUrl) {
+                    CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 38, height: 38)) {
                         Color(hex: reply.authorColor).opacity(0.3)
                     }
                     .aspectRatio(contentMode: .fill)
@@ -1495,7 +1489,8 @@ struct ThemedMessageBubble: View {
                 message: message,
                 contactColor: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
                 visualAttachments: visualAttachments,
-                theme: theme,
+                isDark: isDark,
+                accentColor: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
                 textTranslations: textTranslations,
@@ -1510,6 +1505,7 @@ struct ThemedMessageBubble: View {
                 onRequestTranslation: onRequestTranslation,
                 activeAudioLanguageOverride: activeAudioLanguage
             )
+            .equatable()
 
         default:
             EmptyView()

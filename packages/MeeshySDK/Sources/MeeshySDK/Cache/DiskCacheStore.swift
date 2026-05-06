@@ -300,6 +300,10 @@ public actor DiskCacheStore: ReadableCacheStore {
     }
 
     public func image(for urlString: String) async -> UIImage? {
+        await image(for: urlString, maxPixelSize: 1200)
+    }
+
+    public func image(for urlString: String, maxPixelSize: CGFloat) async -> UIImage? {
         let fileKey = Self.fileKey(for: urlString)
 
         if let cached = Self._imageCache.object(forKey: fileKey as NSString) {
@@ -307,7 +311,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
 
         let result = await load(for: urlString)
-        if let data = result.value?.first, let image = Self.downsampledImage(data: data) {
+        if let data = result.value?.first, let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
             Self.cacheIfWithinBudget(image, key: fileKey)
             return image
         }
@@ -316,7 +320,7 @@ public actor DiskCacheStore: ReadableCacheStore {
 
         // Local file:// URLs — load directly from filesystem
         if url.scheme == "file" {
-            if let data = try? Data(contentsOf: url), let image = Self.downsampledImage(data: data) {
+            if let data = try? Data(contentsOf: url), let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
                 Self.cacheIfWithinBudget(image, key: fileKey)
                 return image
             }
@@ -328,7 +332,7 @@ public actor DiskCacheStore: ReadableCacheStore {
             let (data, response) = try await URLSession.shared.data(from: url)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode),
-                  let image = Self.downsampledImage(data: data) else { return nil }
+                  let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) else { return nil }
             await save(data, for: urlString)
             Self.cacheIfWithinBudget(image, key: fileKey)
             return image
@@ -348,6 +352,17 @@ public actor DiskCacheStore: ReadableCacheStore {
         Task { @MainActor in
             Self._imageCache.setObject(image, forKey: key as NSString, cost: cost)
         }
+    }
+
+    /// Configure the in-memory UIImage cache limits at app startup.
+    /// Call once from `ImageDownsamplingConfig.applyGlobal()` before any image
+    /// is loaded. Thread-safe: `NSCache` property writes are atomic.
+    ///
+    /// - Parameter memoryCostLimitBytes: Maximum total decoded-pixel cost kept
+    ///   resident. Default at init-time is 80 MB; recommended app-level value
+    ///   is 60 MB to leave headroom for UIKit/Metal allocations.
+    public nonisolated static func configureImageCache(memoryCostLimitBytes: Int) {
+        _imageCache.totalCostLimit = memoryCostLimitBytes
     }
 
     /// Pre-cache an image in the static UIImage NSCache for immediate display

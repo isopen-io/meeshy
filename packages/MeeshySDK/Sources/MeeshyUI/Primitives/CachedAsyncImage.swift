@@ -3,6 +3,12 @@ import MeeshySDK
 
 public struct CachedAsyncImage<Placeholder: View>: View {
     public let urlString: String?
+    /// Optional rendered size (in SwiftUI points) used for downsampling.
+    /// When provided the image is decoded at `max(width, height) × screenScale`
+    /// pixels instead of the pipeline's default 1200 px cap, keeping small
+    /// thumbnails (avatars, covers) from allocating full-resolution bitmaps.
+    /// Pass `nil` (default) to keep the existing behaviour unchanged.
+    public let targetSize: CGSize?
     public let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
@@ -10,8 +16,14 @@ public struct CachedAsyncImage<Placeholder: View>: View {
     @State private var hasFailed = false
     @State private var retryCount = 0
 
-    public init(url urlString: String?, @ViewBuilder placeholder: @escaping () -> Placeholder) {
-        self.urlString = urlString; self.placeholder = placeholder
+    public init(
+        url urlString: String?,
+        targetSize: CGSize? = nil,
+        @ViewBuilder placeholder: @escaping () -> Placeholder
+    ) {
+        self.urlString = urlString
+        self.targetSize = targetSize
+        self.placeholder = placeholder
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
             _image = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
@@ -64,6 +76,10 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         }
     }
 
+    @MainActor private static func pixelSize(for points: CGSize) -> CGFloat {
+        max(points.width, points.height) * UIScreen.main.scale
+    }
+
     private func loadImage(for currentUrlString: String?) async {
         guard let currentUrlString, !currentUrlString.isEmpty else { return }
 
@@ -71,7 +87,13 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
 
         isLoading = true; hasFailed = false
-        let loaded = await CacheCoordinator.shared.images.image(for: resolved)
+        let loaded: UIImage?
+        if let targetSize {
+            let maxPixel = await Self.pixelSize(for: targetSize)
+            loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel)
+        } else {
+            loaded = await CacheCoordinator.shared.images.image(for: resolved)
+        }
         if !Task.isCancelled {
             if let loaded, self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
@@ -84,8 +106,8 @@ public struct CachedAsyncImage<Placeholder: View>: View {
 }
 
 extension CachedAsyncImage where Placeholder == Color {
-    public init(url urlString: String?) {
-        self.init(url: urlString) { Color.gray.opacity(0.2) }
+    public init(url urlString: String?, targetSize: CGSize? = nil) {
+        self.init(url: urlString, targetSize: targetSize) { Color.gray.opacity(0.2) }
     }
 }
 

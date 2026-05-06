@@ -2619,6 +2619,10 @@ model Post {
   // ============================================
   /// Post original si repost/quote
   repostOfId String?  @db.ObjectId
+  /// Racine de la chaîne de reposts. Pointe vers l'auteur original quand
+  /// le post intermédiaire (repostOf) est lui-même un repost.
+  /// null si ce post n'est pas un repost.
+  originalRepostOfId String?  @db.ObjectId
   /// true = quote (avec contenu ajouté), false = repost simple
   isQuote    Boolean  @default(false)
 
@@ -2712,6 +2716,7 @@ model Post {
   @@index([type, visibility, createdAt])
   @@index([expiresAt])
   @@index([type, createdAt])
+  @@index([originalRepostOfId])
 }
 
 /// Bibliothèque de sons d'arrière-plan pour les stories
@@ -3357,4 +3362,38 @@ model AgentScanLog {
   @@index([startedAt])
   @@index([trigger])
   @@index([outcome])
+}
+
+/// Tracks media files that may end up orphaned by a partial upload or
+/// a crashed transaction. A worker scans this collection on a schedule
+/// and deletes any file whose `cleanupAfter` is in the past — providing
+/// a safety net behind the inline saga compensation in PostService.
+///
+/// Producer pattern :
+///   1. Insert OrphanMediaCleanup row BEFORE the storage write.
+///   2. Perform the storage write + parent record creation in a Prisma
+///      transaction.
+///   3. On commit, delete the OrphanMediaCleanup row.
+///   4. On crash / failure between (2) and (3), the row stays. The worker
+///      reaps it once `cleanupAfter` is reached.
+///
+/// Reference: SOTA audit Pilier 4 — outbox-based ghost file cleanup.
+model OrphanMediaCleanup {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// Canonical /api/v1/attachments/file/<encoded> URL. Same shape as
+  /// PostMedia.fileUrl so MediaService can resolve and delete the file.
+  fileUrl       String
+  /// Free-form context label (e.g. "repost-snapshot", "tus-upload",
+  /// "audio-output") so operators can grep the collection and reason about
+  /// which flow is producing orphans.
+  source        String   @default("unknown")
+  createdAt     DateTime @default(now())
+  /// Earliest time the worker may delete this row + file. Set by the
+  /// producer based on the worst-case duration of the surrounding
+  /// transaction (default 1 hour for repost-snapshot, longer for slow
+  /// audio pipelines if needed).
+  cleanupAfter  DateTime
+
+  @@index([cleanupAfter])
+  @@index([source])
 }

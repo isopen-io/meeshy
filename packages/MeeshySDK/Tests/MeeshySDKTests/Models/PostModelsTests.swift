@@ -320,4 +320,76 @@ final class PostModelsTests: XCTestCase {
         let feedPost = apiPost.toFeedPost()
         XCTAssertFalse(feedPost.isQuote)
     }
+
+    // MARK: - APIRepostOf new fields (Phase A backend exposure)
+
+    func test_APIRepostOf_decodes_newFields() throws {
+        let json = """
+        {
+          "id": "r1",
+          "type": "STORY",
+          "content": "hi",
+          "originalLanguage": "fr",
+          "translations": {"en": {"text": "hi en", "translationModel": "nllb-200"}},
+          "storyEffects": {"background": "color:#FF00FF", "textColor": "#FFFFFF"},
+          "audioUrl": "/api/v1/attachments/file/audio.mp3",
+          "originalRepostOfId": "root-1",
+          "author": {"id": "a", "username": "alice", "displayName": "Alice"},
+          "media": [],
+          "createdAt": "2026-05-05T10:00:00.000Z",
+          "likeCount": 5,
+          "commentCount": 2,
+          "isQuote": false
+        }
+        """.data(using: .utf8)!
+        let repostOf = try makeDecoder().decode(APIRepostOf.self, from: json)
+
+        XCTAssertEqual(repostOf.type, "STORY")
+        XCTAssertEqual(repostOf.originalLanguage, "fr")
+        XCTAssertNotNil(repostOf.translations)
+        XCTAssertEqual(repostOf.translations?["en"]?.text, "hi en")
+        XCTAssertNotNil(repostOf.storyEffects)
+        XCTAssertEqual(repostOf.storyEffects?.textColor, "#FFFFFF")
+        XCTAssertEqual(repostOf.audioUrl, "/api/v1/attachments/file/audio.mp3")
+        XCTAssertEqual(repostOf.originalRepostOfId, "root-1")
+    }
+
+    func test_APIRepostOf_decodes_legacyResponse_withoutNewFields() throws {
+        // Older API responses don't have the new fields — must still decode cleanly
+        let json = """
+        {
+          "id": "r1",
+          "content": "hi",
+          "author": {"id": "a", "username": "alice", "displayName": "Alice"},
+          "media": [],
+          "createdAt": "2026-05-05T10:00:00.000Z",
+          "likeCount": 0,
+          "commentCount": 0,
+          "isQuote": false
+        }
+        """.data(using: .utf8)!
+        let decoder = makeDecoder()
+        XCTAssertNoThrow(try decoder.decode(APIRepostOf.self, from: json))
+        let repostOf = try decoder.decode(APIRepostOf.self, from: json)
+        XCTAssertNil(repostOf.type)
+        XCTAssertNil(repostOf.originalLanguage)
+        XCTAssertNil(repostOf.translations)
+        XCTAssertNil(repostOf.storyEffects)
+        XCTAssertNil(repostOf.audioUrl)
+        XCTAssertNil(repostOf.originalRepostOfId)
+    }
+
+    func test_APIPost_decodes_originalRepostOfId() throws {
+        let json = """
+        {
+          "id": "p1",
+          "type": "POST",
+          "originalRepostOfId": "root-1",
+          "createdAt": "2026-05-05T10:00:00.000Z",
+          "author": {"id": "a", "username": "alice", "displayName": "Alice"}
+        }
+        """.data(using: .utf8)!
+        let post = try makeDecoder().decode(APIPost.self, from: json)
+        XCTAssertEqual(post.originalRepostOfId, "root-1")
+    }
 }

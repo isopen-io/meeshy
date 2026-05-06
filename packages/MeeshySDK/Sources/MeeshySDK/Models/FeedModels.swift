@@ -119,26 +119,56 @@ public struct RepostContent: Identifiable, Sendable {
     public let id: String
     public let author: String
     public let authorId: String
+    public let authorUsername: String?
     public let authorColor: String
     public let authorAvatarURL: String?
     public let content: String
     public let timestamp: Date
     public var likes: Int
     public let isQuote: Bool
+    /// Type of the reposted entity ("STORY" / "POST" / "STATUS"). Used by the
+    /// feed cell to decide whether to render the embedded story canvas.
+    public let type: String?
+    public let originalLanguage: String?
+    public let audioUrl: String?
+    public let storyEffects: StoryEffects?
+    public let media: [FeedMedia]
+    public let translations: [String: PostTranslation]?
+    public let originalRepostOfId: String?
+    public let visibility: String?
+    public let expiresAt: Date?
 
-    public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
-                content: String, timestamp: Date = Date(), likes: Int = 0, isQuote: Bool = false) {
+    public init(id: String = UUID().uuidString, author: String, authorId: String = "",
+                authorUsername: String? = nil, authorAvatarURL: String? = nil,
+                content: String, timestamp: Date = Date(), likes: Int = 0, isQuote: Bool = false,
+                type: String? = nil, originalLanguage: String? = nil, audioUrl: String? = nil,
+                storyEffects: StoryEffects? = nil, media: [FeedMedia] = [],
+                translations: [String: PostTranslation]? = nil,
+                originalRepostOfId: String? = nil, visibility: String? = nil,
+                expiresAt: Date? = nil) {
         self.id = id; self.author = author; self.authorId = authorId
+        self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL
         self.content = content; self.timestamp = timestamp; self.likes = likes
         self.isQuote = isQuote
+        self.type = type
+        self.originalLanguage = originalLanguage
+        self.audioUrl = audioUrl
+        self.storyEffects = storyEffects
+        self.media = media
+        self.translations = translations
+        self.originalRepostOfId = originalRepostOfId
+        self.visibility = visibility
+        self.expiresAt = expiresAt
     }
 }
 
 extension RepostContent: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, author, authorId, authorAvatarURL, content, timestamp, likes, isQuote
+        case id, author, authorId, authorUsername, authorAvatarURL, content, timestamp, likes, isQuote
+        case type, originalLanguage, audioUrl, storyEffects, media, translations
+        case originalRepostOfId, visibility, expiresAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -146,11 +176,21 @@ extension RepostContent: Codable {
         id = try c.decode(String.self, forKey: .id)
         author = try c.decode(String.self, forKey: .author)
         authorId = try c.decode(String.self, forKey: .authorId)
+        authorUsername = try c.decodeIfPresent(String.self, forKey: .authorUsername)
         authorAvatarURL = try c.decodeIfPresent(String.self, forKey: .authorAvatarURL)
         content = try c.decode(String.self, forKey: .content)
         timestamp = try c.decode(Date.self, forKey: .timestamp)
         likes = try c.decode(Int.self, forKey: .likes)
         isQuote = try c.decode(Bool.self, forKey: .isQuote)
+        type = try c.decodeIfPresent(String.self, forKey: .type)
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
+        audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
+        storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        media = try c.decodeIfPresent([FeedMedia].self, forKey: .media) ?? []
+        translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
+        originalRepostOfId = try c.decodeIfPresent(String.self, forKey: .originalRepostOfId)
+        visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -159,11 +199,21 @@ extension RepostContent: Codable {
         try c.encode(id, forKey: .id)
         try c.encode(author, forKey: .author)
         try c.encode(authorId, forKey: .authorId)
+        try c.encodeIfPresent(authorUsername, forKey: .authorUsername)
         try c.encodeIfPresent(authorAvatarURL, forKey: .authorAvatarURL)
         try c.encode(content, forKey: .content)
         try c.encode(timestamp, forKey: .timestamp)
         try c.encode(likes, forKey: .likes)
         try c.encode(isQuote, forKey: .isQuote)
+        try c.encodeIfPresent(type, forKey: .type)
+        try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
+        try c.encodeIfPresent(audioUrl, forKey: .audioUrl)
+        try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
+        if !media.isEmpty { try c.encode(media, forKey: .media) }
+        try c.encodeIfPresent(translations, forKey: .translations)
+        try c.encodeIfPresent(originalRepostOfId, forKey: .originalRepostOfId)
+        try c.encodeIfPresent(visibility, forKey: .visibility)
+        try c.encodeIfPresent(expiresAt, forKey: .expiresAt)
     }
 }
 

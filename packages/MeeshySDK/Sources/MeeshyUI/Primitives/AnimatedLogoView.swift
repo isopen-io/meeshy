@@ -77,6 +77,11 @@ public struct AnimatedLogoView: View {
                 }
             }
         }
+        .onDisappear {
+            withTransaction(Transaction(animation: nil)) {
+                breathe = false
+            }
+        }
         .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: breathe)
     }
 }

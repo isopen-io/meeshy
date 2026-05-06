@@ -103,7 +103,7 @@ final class AffiliateModelsTests: XCTestCase {
         XCTAssertEqual(stats.totalTokens, 5)
         XCTAssertEqual(stats.totalReferrals, 200)
         XCTAssertEqual(stats.totalVisits, 1500)
-        XCTAssertEqual(stats.conversionRate, 0.133, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(stats.conversionRate), 0.133, accuracy: 0.001)
     }
 
     func test_affiliateStats_decodesWithAllFieldsNil() throws {

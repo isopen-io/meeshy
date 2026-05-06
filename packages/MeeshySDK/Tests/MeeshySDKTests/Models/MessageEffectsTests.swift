@@ -137,13 +137,13 @@ final class MessageEffectsTests: XCTestCase {
         XCTAssertTrue(effects.hasAnyEffect)
         XCTAssertEqual(effects.ephemeralDuration, 30)
         XCTAssertEqual(effects.maxViewOnceCount, 1)
-        XCTAssertEqual(effects.blurRevealDuration, 5.0, accuracy: 0.001)
-        XCTAssertEqual(effects.zoomScale, 2.5, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(effects.blurRevealDuration), 5.0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(effects.zoomScale), 2.5, accuracy: 0.001)
         XCTAssertEqual(effects.explodeStyle, .burst)
-        XCTAssertEqual(effects.glowIntensity, 0.8, accuracy: 0.001)
-        XCTAssertEqual(effects.pulseFrequency, 1.5, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(effects.glowIntensity), 0.8, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(effects.pulseFrequency), 1.5, accuracy: 0.001)
         XCTAssertEqual(effects.rainbowColors, ["#FF0000", "#00FF00", "#0000FF"])
-        XCTAssertEqual(effects.sparkleIntensity, 0.6, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(effects.sparkleIntensity), 0.6, accuracy: 0.001)
     }
 
     func test_messageEffects_decodesWithOnlyFlags() throws {
@@ -178,8 +178,8 @@ final class MessageEffectsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(MessageEffects.self, from: data)
         XCTAssertEqual(decoded.flags, effects.flags)
         XCTAssertEqual(decoded.maxViewOnceCount, 3)
-        XCTAssertEqual(decoded.zoomScale, 1.5, accuracy: 0.001)
-        XCTAssertEqual(decoded.glowIntensity, 0.9, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(decoded.zoomScale), 1.5, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(decoded.glowIntensity), 0.9, accuracy: 0.001)
         XCTAssertNil(decoded.rainbowColors)
     }
 

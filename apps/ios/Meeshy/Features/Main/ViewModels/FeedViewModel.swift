@@ -27,6 +27,15 @@ class FeedViewModel: ObservableObject {
     private let postService: PostServiceProviding
     private var cacheSaveTask: Task<Void, Never>?
     private var isFeedLoadInProgress = false
+    /// Tracks postIds whose comments are currently being prefetched, to coalesce
+    /// duplicate calls triggered by repeated cell .onAppear events.
+    private var prefetchingComments: Set<String> = []
+
+    // MARK: - Persistence Layer
+
+    private(set) var feedStore: FeedStore?
+    private(set) var feedSocketHandler: FeedSocketHandler?
+    private var feedPersistence: FeedPersistenceActor?
 
     init(
         api: APIClientProviding = APIClient.shared,
@@ -36,6 +45,15 @@ class FeedViewModel: ObservableObject {
         self.api = api
         self.socialSocket = socialSocket
         self.postService = postService
+    }
+
+    /// Wire persistence store and socket handler for GRDB-backed feed.
+    /// Call once after init when the dependency container is available.
+    func setupPersistence(store: FeedStore, socketHandler: FeedSocketHandler, persistence: FeedPersistenceActor) {
+        self.feedStore = store
+        self.feedSocketHandler = socketHandler
+        self.feedPersistence = persistence
+        socketHandler.arm()
     }
 
     private var preferredLanguages: [String] {
@@ -101,6 +119,15 @@ class FeedViewModel: ObservableObject {
                 Task.detached(priority: .utility) { [fetched] in
                     await CacheCoordinator.shared.feed.save(fetched, for: "main-feed")
                 }
+
+                // Persist to GRDB alongside cache
+                if let persistence = feedPersistence {
+                    let apiPosts = response.data
+                    Task.detached(priority: .utility) {
+                        let records = apiPosts.compactMap { PostRecord(from: $0) }
+                        try? await persistence.insertPosts(records)
+                    }
+                }
             } else {
                 if posts.isEmpty {
                     error = response.error ?? String(localized: "Impossible de charger le fil", defaultValue: "Impossible de charger le fil")
@@ -152,6 +179,15 @@ class FeedViewModel: ObservableObject {
                 hasMore = response.pagination?.hasMore ?? false
 
                 prefetchMedia(around: posts.count - uniqueNew.count)
+
+                // Persist to GRDB
+                if let persistence = feedPersistence {
+                    let apiPosts = response.data
+                    Task.detached(priority: .utility) {
+                        let records = apiPosts.compactMap { PostRecord(from: $0) }
+                        try? await persistence.insertPosts(records)
+                    }
+                }
             }
         } catch {
             // Silently fail on load more -- user can scroll again
@@ -168,6 +204,49 @@ class FeedViewModel: ObservableObject {
         newPostsCount = 0
         Task.detached { await CacheCoordinator.shared.feed.invalidate(for: "main-feed") }
         await loadFeed()
+    }
+
+    // MARK: - Comments Prefetch
+
+    /// Pre-loads comments for a visible post into the cache so that opening the post
+    /// detail does not require a network round-trip. Cache-first: skips the network
+    /// call when the cache is already fresh. Coalesced: concurrent calls for the
+    /// same `postId` are no-ops while a prefetch is in flight.
+    func prefetchComments(_ postId: String) {
+        guard !prefetchingComments.contains(postId) else { return }
+        prefetchingComments.insert(postId)
+
+        Task(priority: .utility) { [weak self] in
+            guard let self else { return }
+            defer { self.prefetchingComments.remove(postId) }
+
+            let cacheKey = "post-\(postId)"
+            let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+            if case .fresh = cached { return }
+
+            do {
+                let response = try await self.postService.getComments(postId: postId, cursor: nil, limit: 20)
+                let langs = self.preferredLanguages
+                let comments = response.data.map { c -> FeedComment in
+                    let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+                        translations: c.translations,
+                        originalLanguage: c.originalLanguage,
+                        preferredLanguages: langs
+                    )
+                    return FeedComment(
+                        id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorAvatarURL: c.author.avatar,
+                        content: c.content, timestamp: c.createdAt,
+                        likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                        parentId: c.parentId,
+                        originalLanguage: c.originalLanguage, translatedContent: translatedContent
+                    )
+                }
+                await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+            } catch {
+                // Silent fail on prefetch — user-triggered open will retry the network.
+            }
+        }
     }
 
     // MARK: - New Posts Banner
@@ -199,6 +278,15 @@ class FeedViewModel: ObservableObject {
                 let _ = try await api.delete(endpoint: "/posts/\(postId)/like")
             }
             debouncedCacheSave()
+
+            // Sync like state to GRDB
+            if let persistence = feedPersistence {
+                let liked = posts[index].isLiked
+                let count = posts[index].likes
+                Task.detached(priority: .utility) {
+                    try? await persistence.updateLikeCount(postId: postId, count: count, isLikedByMe: liked)
+                }
+            }
         } catch {
             // Revert on failure — batch mutations
             var revert = posts[index]
@@ -209,12 +297,29 @@ class FeedViewModel: ObservableObject {
     }
 
     func bookmarkPost(_ postId: String) async {
+        guard let post = posts.first(where: { $0.id == postId }) else { return }
+
+        // Optimistic: insert into the local "bookmarks" cache so opening the
+        // Favoris tab shows the post immediately. Mirror BookmarksViewModel's
+        // snapshot/rollback pattern on failure.
+        let bookmarksKey = "bookmarks"
+        let cachedBookmarks = await CacheCoordinator.shared.feed.load(for: bookmarksKey).value ?? []
+        let snapshot = cachedBookmarks
+        if !cachedBookmarks.contains(where: { $0.id == postId }) {
+            var updated = cachedBookmarks
+            updated.insert(post, at: 0)
+            await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
+        }
+        ToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+
         do {
             let _: APIResponse<[String: Bool]> = try await api.request(
                 endpoint: "/posts/\(postId)/bookmark",
                 method: "POST"
             )
         } catch {
+            // Rollback the optimistic cache insertion.
+            await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
             ToastManager.shared.showError("Erreur lors de l'enregistrement")
         }
     }
@@ -232,12 +337,20 @@ class FeedViewModel: ObservableObject {
                 audioUrl: audioUrl,
                 audioDuration: audioDuration,
                 originalLanguage: originalLanguage,
-                mobileTranscription: mobileTranscription
+                mobileTranscription: mobileTranscription,
+                repostOfId: nil
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             posts.insert(feedPost, at: 0)
             debouncedCacheSave()
             publishSuccess = true
+
+            // Persist to GRDB
+            if let persistence = feedPersistence, let record = PostRecord(from: apiPost) {
+                Task.detached(priority: .utility) {
+                    try? await persistence.insertPost(record)
+                }
+            }
         } catch {
             publishError = error.localizedDescription
         }
@@ -257,6 +370,16 @@ class FeedViewModel: ObservableObject {
                 )
                 posts[index].comments.insert(feedComment, at: 0)
                 posts[index].commentCount += 1
+
+                // Persist comment + updated count to GRDB
+                if let persistence = feedPersistence,
+                   let record = CommentRecord(from: apiComment, postId: postId) {
+                    let newCount = posts[index].commentCount
+                    Task.detached(priority: .utility) {
+                        try? await persistence.insertComment(record)
+                        try? await persistence.updateCommentCount(postId: postId, count: newCount)
+                    }
+                }
             }
         } catch {
             ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
@@ -279,7 +402,12 @@ class FeedViewModel: ObservableObject {
 
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
         do {
-            try await postService.repost(postId: postId, quote: isQuote ? content : nil)
+            _ = try await postService.repost(
+                postId: postId,
+                targetType: nil,           // nil = server defaults to original post type
+                content: isQuote ? content : nil,
+                isQuote: isQuote ? (content != nil) : false
+            )
         } catch {
             ToastManager.shared.showError("Erreur lors du repost")
         }
@@ -308,6 +436,14 @@ class FeedViewModel: ObservableObject {
         do {
             try await postService.delete(postId: postId)
             debouncedCacheSave()
+
+            // Remove from GRDB
+            if let persistence = feedPersistence {
+                Task.detached(priority: .utility) {
+                    try? await persistence.deletePost(id: postId)
+                }
+            }
+
             ToastManager.shared.showSuccess("Post supprime")
         } catch {
             posts = snapshot
@@ -520,6 +656,7 @@ class FeedViewModel: ObservableObject {
     func unsubscribeFromSocketEvents() {
         cancellables.removeAll()
         socialSocket.unsubscribeFeed()
+        feedSocketHandler?.disarm()
     }
 
     // MARK: - Media Prefetch

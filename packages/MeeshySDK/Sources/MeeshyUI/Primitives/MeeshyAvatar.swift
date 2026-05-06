@@ -285,6 +285,11 @@ public struct MeeshyAvatar: View {
                 }
             }
         }
+        .onDisappear {
+            withTransaction(Transaction(animation: nil)) {
+                ringRotation = 0
+            }
+        }
 
         let tappable = Group {
             if hasTapHandler {
@@ -399,6 +404,11 @@ public struct MeeshyAvatar: View {
                         .delay(Double.random(in: 0...1.5))
                     ) {
                         moodScale = 1.18
+                    }
+                }
+                .onDisappear {
+                    withTransaction(Transaction(animation: nil)) {
+                        moodScale = 1.0
                     }
                 }
         }

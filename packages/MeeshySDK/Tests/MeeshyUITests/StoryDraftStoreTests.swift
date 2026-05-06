@@ -170,6 +170,73 @@ final class StoryDraftStoreTests: XCTestCase {
         XCTAssertTrue(media.videoURLs["v1"]?.pathExtension == "mov")
     }
 
+    // MARK: - Lost media (Pilier 21 SOTA audit)
+
+    func test_loadMedia_returnsLostElementIds_whenFilesDisappear() {
+        let image = createTestImage()
+        let videoURL = createTempFile(name: "v.mp4", content: "video-data")
+        store.saveMedia(
+            images: ["img-keep": image],
+            videoURLs: ["vid-disappear": videoURL],
+            audioURLs: [:]
+        )
+
+        // Sanity check: both are loadable initially
+        let before = store.loadMedia()
+        XCTAssertEqual(before.images.count, 1)
+        XCTAssertEqual(before.videoURLs.count, 1)
+        XCTAssertTrue(before.lostElementIds.isEmpty)
+
+        // Simulate OS purge / external deletion of the video file
+        let mediaDir = tempDir.appendingPathComponent("media")
+        let videoFiles = (try? FileManager.default.contentsOfDirectory(at: mediaDir, includingPropertiesForKeys: nil)) ?? []
+        for url in videoFiles where url.pathExtension == "mp4" {
+            try? FileManager.default.removeItem(at: url)
+        }
+
+        let after = store.loadMedia()
+        XCTAssertEqual(after.images.count, 1, "image survived")
+        XCTAssertTrue(after.videoURLs.isEmpty, "video file was removed")
+        XCTAssertEqual(after.lostElementIds, ["vid-disappear"], "video element flagged as lost")
+    }
+
+    func test_purgeLostMedia_removesOrphanRows() {
+        let image = createTestImage()
+        let videoURL = createTempFile(name: "v.mp4", content: "data")
+        store.saveMedia(
+            images: ["img-keep": image],
+            videoURLs: ["vid-orphan": videoURL],
+            audioURLs: [:]
+        )
+
+        // Remove the video file from disk (DB row remains pointing to ghost)
+        let mediaDir = tempDir.appendingPathComponent("media")
+        let files = (try? FileManager.default.contentsOfDirectory(at: mediaDir, includingPropertiesForKeys: nil)) ?? []
+        for url in files where url.pathExtension == "mp4" {
+            try? FileManager.default.removeItem(at: url)
+        }
+
+        let lost = store.loadMedia().lostElementIds
+        XCTAssertEqual(lost, ["vid-orphan"])
+
+        store.purgeLostMedia(lost)
+
+        // Re-load: the lost row is gone, so lostElementIds is empty.
+        let final = store.loadMedia()
+        XCTAssertTrue(final.lostElementIds.isEmpty)
+        XCTAssertEqual(final.images.count, 1)
+    }
+
+    func test_purgeLostMedia_emptySetIsNoOp() {
+        let image = createTestImage()
+        store.saveMedia(images: ["img": image], videoURLs: [:], audioURLs: [:])
+
+        store.purgeLostMedia([])
+
+        let media = store.loadMedia()
+        XCTAssertEqual(media.images.count, 1, "valid media untouched by empty purge")
+    }
+
     // MARK: - Helpers
 
     private func createTestImage() -> UIImage {

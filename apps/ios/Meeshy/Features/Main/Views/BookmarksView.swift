@@ -29,6 +29,7 @@ struct BookmarksView: View {
                                 }
                             }
                         )
+                        .equatable()
                     }
 
                     if viewModel.isLoading {

@@ -9,187 +9,405 @@ struct AudioPostComposerView: View {
     let onPublish: (URL, String, MobileTranscriptionPayload?) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var audioRecorder = AudioRecorderManager()
+
     @State private var transcription: OnDeviceTranscription?
-    @State private var isTranscribing = false
     @State private var transcriptionError: String?
     @State private var recordedURL: URL?
     @State private var recordedDuration: TimeInterval = 0
     @State private var phase: ComposerPhase = .idle
-    @State private var selectedLocale: Locale = {
-        let user = AuthManager.shared.currentUser
-        if let lang = user?.systemLanguage {
-            return Locale(identifier: lang)
-        }
-        return Locale(identifier: "fr")
-    }()
+    @State private var selectedLocale: Locale = AudioPostComposerView.initialLocale()
     @State private var showLanguagePicker = false
-    @Environment(\.dismiss) private var dismiss
-
-    // MARK: - Phase
 
     private enum ComposerPhase {
-        case idle
-        case recording
-        case transcribing
-        case preview
+        case idle, recording, transcribing, preview
     }
+
+    private var isDark: Bool { theme.mode.isDark }
 
     // MARK: - Body
 
     var body: some View {
         NavigationStack {
             ZStack {
-                theme.backgroundGradient.ignoresSafeArea()
+                background
 
-                VStack(spacing: 32) {
-                    Spacer()
-
-                    recordingSection
-
-                    languageChip
-
-                    if let error = transcriptionError {
-                        Text(error)
-                            .font(.system(size: 14))
-                            .foregroundColor(MeeshyColors.error)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 24) {
+                        recordingCard
+                        languageSelector
+                        contentPanel
+                        Color.clear.frame(height: 100)
                     }
-
-                    if phase == .preview, let transcription {
-                        transcriptionPreview(transcription)
-                    }
-
-                    Spacer()
-
-                    actionBar
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
                 }
-                .padding(.bottom, 32)
+
+                VStack {
+                    Spacer()
+                    actionBar
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 16)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.clear, backgroundBaseColor.opacity(0.7), backgroundBaseColor],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                            .ignoresSafeArea(edges: .bottom)
+                        )
+                }
             }
             .navigationTitle(String(localized: "Post audio", defaultValue: "Post audio"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(String(localized: "Annuler", defaultValue: "Annuler")) {
-                        audioRecorder.cancelRecording()
-                        dismiss()
+                        cancelAndDismiss()
                     }
                     .foregroundColor(theme.textSecondary)
                 }
             }
         }
-    }
-
-    // MARK: - Recording Section
-
-    private var recordingSection: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [MeeshyColors.error.opacity(0.15), MeeshyColors.error.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 140, height: 140)
-
-                if audioRecorder.isRecording {
-                    WaveformView(levels: audioRecorder.audioLevels)
-                        .frame(width: 100, height: 60)
-                } else if phase == .transcribing {
-                    ProgressView()
-                        .tint(MeeshyColors.error)
-                        .scaleEffect(1.4)
-                } else {
-                    Image(systemName: phase == .preview ? "checkmark.circle.fill" : "mic.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(
-                            phase == .preview
-                                ? MeeshyColors.success
-                                : MeeshyColors.error
-                        )
-                }
-            }
-
-            if audioRecorder.isRecording || phase == .preview {
-                Text(formattedDuration)
-                    .font(.system(size: 32, weight: .light, design: .monospaced))
-                    .foregroundColor(theme.textPrimary)
-            } else if phase == .transcribing {
-                Text(String(localized: "Transcription en cours...", defaultValue: "Transcription en cours..."))
-                    .font(.system(size: 15))
-                    .foregroundColor(theme.textSecondary)
-            } else {
-                Text(String(localized: "Appuyez pour enregistrer", defaultValue: "Appuyez pour enregistrer"))
-                    .font(.system(size: 15))
-                    .foregroundColor(theme.textSecondary)
-            }
+        .onChange(of: colorScheme) { _, newScheme in
+            theme.syncWithSystem(newScheme)
         }
     }
 
-    // MARK: - Transcription Preview
+    // MARK: - Background
+
+    private var backgroundBaseColor: Color {
+        isDark ? Color(hex: "13111C") : Color(hex: "EEF2FF")
+    }
+
+    private var background: some View {
+        LinearGradient(
+            colors: isDark
+                ? [Color(hex: "0F0D19"), Color(hex: "13111C"), Color(hex: "1E1B4B").opacity(0.85)]
+                : [Color(hex: "EEF2FF"), Color(hex: "E0E7FF"), Color(hex: "C7D2FE").opacity(0.55)],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+    }
+
+    // MARK: - Recording Card
+
+    private var recordingCard: some View {
+        VStack(spacing: 18) {
+            ZStack {
+                Circle()
+                    .fill(haloColor.opacity(audioRecorder.isRecording ? 0.28 : 0.12))
+                    .frame(width: 168, height: 168)
+                    .blur(radius: audioRecorder.isRecording ? 10 : 4)
+
+                Circle()
+                    .fill(haloColor.opacity(0.08))
+                    .frame(width: 132, height: 132)
+
+                centerContent
+            }
+            .frame(height: 168)
+
+            durationLabel
+        }
+        .padding(.vertical, 24)
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(MeeshyColors.indigo300.opacity(isDark ? 0.25 : 0.4), lineWidth: 1)
+                )
+        )
+    }
+
+    @ViewBuilder
+    private var centerContent: some View {
+        if audioRecorder.isRecording {
+            WaveformView(levels: audioRecorder.audioLevels)
+                .frame(width: 100, height: 60)
+        } else if phase == .transcribing {
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: MeeshyColors.indigo500))
+                .scaleEffect(1.6)
+        } else if phase == .preview {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+        } else {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(MeeshyColors.brandGradient)
+        }
+    }
+
+    private var haloColor: Color {
+        if audioRecorder.isRecording { return MeeshyColors.error }
+        if phase == .preview { return MeeshyColors.success }
+        return MeeshyColors.indigo500
+    }
+
+    @ViewBuilder
+    private var durationLabel: some View {
+        if audioRecorder.isRecording || phase == .preview {
+            Text(formattedDuration)
+                .font(.system(size: 36, weight: .light, design: .monospaced))
+                .foregroundColor(theme.textPrimary)
+        } else if phase == .transcribing {
+            VStack(spacing: 4) {
+                Text(String(localized: "Transcription en cours...", defaultValue: "Transcription en cours..."))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.textSecondary)
+                Text(formattedDuration)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(theme.textMuted)
+            }
+        } else {
+            Text(String(localized: "Appuyez pour enregistrer", defaultValue: "Appuyez pour enregistrer"))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+        }
+    }
+
+    // MARK: - Language Selector
+
+    private var languageSelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "globe")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(String(localized: "Langue de transcription",
+                            defaultValue: "Langue de transcription"))
+                    .font(.system(size: 12, weight: .semibold))
+                Spacer()
+            }
+            .foregroundColor(theme.textSecondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(suggestedLocales, id: \.identifier) { loc in
+                        languageChip(for: loc)
+                    }
+                    moreLanguagesButton
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+        .disabled(phase == .recording || phase == .transcribing)
+        .opacity(phase == .recording || phase == .transcribing ? 0.5 : 1)
+        .sheet(isPresented: $showLanguagePicker) {
+            AudioLanguagePickerView(selectedLocale: $selectedLocale)
+        }
+    }
+
+    private func languageChip(for loc: Locale) -> some View {
+        let isSelected = loc.identifier == selectedLocale.identifier
+        return Button {
+            selectedLocale = loc
+            HapticFeedback.light()
+        } label: {
+            Text(Self.shortDisplayName(for: loc))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(isSelected ? .white : theme.textPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule().fill(
+                        isSelected
+                            ? AnyShapeStyle(MeeshyColors.brandGradient)
+                            : AnyShapeStyle(theme.surface(tint: "C7D2FE"))
+                    )
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(MeeshyColors.indigo400.opacity(isSelected ? 0 : 0.3), lineWidth: 1)
+                )
+        }
+    }
+
+    private var moreLanguagesButton: some View {
+        Button {
+            showLanguagePicker = true
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                    .font(.system(size: 13))
+                Text(String(localized: "Plus", defaultValue: "Plus"))
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(MeeshyColors.indigo500)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule().stroke(MeeshyColors.indigo400.opacity(0.4), lineWidth: 1)
+            )
+        }
+    }
+
+    private var suggestedLocales: [Locale] {
+        var seeds: [String] = []
+        let user = AuthManager.shared.currentUser
+        if let lang = user?.systemLanguage { seeds.append(lang) }
+        if let lang = user?.regionalLanguage, lang != user?.systemLanguage {
+            seeds.append(lang)
+        }
+        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
+            seeds.append(String(kbd.prefix(2)))
+        }
+        seeds.append(contentsOf: ["fr", "en"])
+
+        let normalized = seeds.map { code in
+            EdgeTranscriptionService.normalizedLocale(for: Locale(identifier: code))
+        }
+
+        var seen = Set<String>()
+        return normalized.filter { seen.insert($0.identifier).inserted }.prefix(4).map { $0 }
+    }
+
+    private static func shortDisplayName(for locale: Locale) -> String {
+        if let lang = locale.language.languageCode?.identifier {
+            return lang.uppercased()
+        }
+        return locale.identifier.uppercased()
+    }
+
+    // MARK: - Content Panel
+
+    @ViewBuilder
+    private var contentPanel: some View {
+        if let error = transcriptionError {
+            errorPanel(error)
+        } else if phase == .preview, let transcription {
+            transcriptionPreview(transcription)
+        }
+    }
 
     private func transcriptionPreview(_ t: OnDeviceTranscription) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "text.bubble.fill")
                     .font(.system(size: 13))
-                    .foregroundColor(MeeshyColors.indigo300)
+                    .foregroundColor(MeeshyColors.indigo400)
                 Text(String(localized: "Transcription", defaultValue: "Transcription"))
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo300)
+                    .foregroundColor(MeeshyColors.indigo400)
                 Spacer()
-                Text(t.language)
-                    .font(.system(size: 12))
+                Text(t.language.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(theme.textMuted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(theme.surface(tint: "A5B4FC")))
             }
 
             Text(t.text.isEmpty
-                 ? String(localized: "Aucune transcription disponible.", defaultValue: "Aucune transcription disponible.")
+                 ? String(localized: "Aucune transcription disponible.",
+                          defaultValue: "Aucune transcription disponible.")
                  : t.text)
                 .font(.system(size: 15))
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .lineSpacing(4)
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(theme.surfaceGradient(tint: "A5B4FC"))
+                .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(MeeshyColors.indigo300.opacity(0.25), lineWidth: 1)
+                        .stroke(MeeshyColors.indigo300.opacity(isDark ? 0.25 : 0.35), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 24)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private func errorPanel(_ error: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(MeeshyColors.error)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(String(localized: "Transcription indisponible",
+                                defaultValue: "Transcription indisponible"))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                    Text(error)
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(4)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if recordedURL != nil {
+                Button(action: retryTranscription) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.clockwise")
+                        Text(String(localized: "Reessayer",
+                                    defaultValue: "R\u{00E9}essayer"))
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(MeeshyColors.brandGradient))
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
+                )
+        )
     }
 
     // MARK: - Action Bar
 
+    @ViewBuilder
     private var actionBar: some View {
-        HStack(spacing: 24) {
-            if phase == .preview {
+        switch phase {
+        case .preview:
+            HStack(spacing: 12) {
                 Button(action: resetToIdle) {
                     Label(
                         String(localized: "Refaire", defaultValue: "Refaire"),
                         systemImage: "arrow.counterclockwise"
                     )
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(theme.textSecondary)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .background(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                Capsule()
+                                    .stroke(MeeshyColors.indigo300.opacity(0.4), lineWidth: 1)
+                            )
+                    )
                 }
-
-                Spacer()
 
                 Button(action: publish) {
                     Text(String(localized: "Publier", defaultValue: "Publier"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 32)
+                        .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(
                             Capsule()
@@ -197,89 +415,81 @@ struct AudioPostComposerView: View {
                                 .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 12, y: 4)
                         )
                 }
-            } else {
+            }
+        case .transcribing:
+            Button(action: cancelTranscription) {
+                Label(
+                    String(localized: "Annuler la transcription",
+                           defaultValue: "Annuler la transcription"),
+                    systemImage: "xmark.circle.fill"
+                )
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(MeeshyColors.error)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Capsule().stroke(MeeshyColors.error.opacity(0.4), lineWidth: 1)
+                        )
+                )
+            }
+        case .idle, .recording:
+            HStack {
                 Spacer()
-
                 Button(action: toggleRecording) {
                     ZStack {
                         Circle()
                             .fill(
                                 audioRecorder.isRecording
-                                    ? Color.red
-                                    : MeeshyColors.error
+                                    ? AnyShapeStyle(MeeshyColors.error)
+                                    : AnyShapeStyle(MeeshyColors.brandGradient)
                             )
-                            .frame(width: 72, height: 72)
-                            .shadow(color: MeeshyColors.error.opacity(0.5), radius: 16, y: 6)
-
+                            .frame(width: 76, height: 76)
+                            .shadow(
+                                color: (audioRecorder.isRecording
+                                            ? MeeshyColors.error
+                                            : MeeshyColors.indigo500).opacity(0.45),
+                                radius: 16, y: 6
+                            )
                         if audioRecorder.isRecording {
-                            RoundedRectangle(cornerRadius: 4)
+                            RoundedRectangle(cornerRadius: 5)
                                 .fill(.white)
-                                .frame(width: 24, height: 24)
+                                .frame(width: 26, height: 26)
                         } else {
                             Image(systemName: "mic.fill")
-                                .font(.system(size: 28))
+                                .font(.system(size: 30))
                                 .foregroundColor(.white)
                         }
                     }
                 }
                 .accessibilityLabel(
                     audioRecorder.isRecording
-                        ? String(localized: "Arreter l'enregistrement", defaultValue: "Arr\u{00EA}ter l'enregistrement")
-                        : String(localized: "Demarrer l'enregistrement", defaultValue: "D\u{00E9}marrer l'enregistrement")
+                        ? String(localized: "Arreter l'enregistrement",
+                                 defaultValue: "Arr\u{00EA}ter l'enregistrement")
+                        : String(localized: "Demarrer l'enregistrement",
+                                 defaultValue: "D\u{00E9}marrer l'enregistrement")
                 )
-                .disabled(phase == .transcribing)
-
                 Spacer()
             }
         }
-        .padding(.horizontal, 32)
-        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: phase)
-    }
-
-    // MARK: - Language Chip
-
-    private var languageChip: some View {
-        Button {
-            showLanguagePicker = true
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "globe")
-                    .font(.system(size: 13, weight: .medium))
-                Text(languageDisplayName)
-                    .font(.system(size: 14, weight: .semibold))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-            }
-            .foregroundStyle(
-                LinearGradient(colors: [MeeshyColors.indigo400, MeeshyColors.indigo600], startPoint: .leading, endPoint: .trailing)
-            )
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(MeeshyColors.indigo100.opacity(isDark ? 0.12 : 0.8))
-                    .overlay(
-                        Capsule()
-                            .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
-                    )
-            )
-        }
-        .disabled(phase == .recording || phase == .transcribing)
-        .opacity(phase == .recording || phase == .transcribing ? 0.5 : 1)
-        .sheet(isPresented: $showLanguagePicker) {
-            AudioLanguagePickerView(
-                selectedLocale: $selectedLocale
-            )
-        }
-    }
-
-    private var languageDisplayName: String {
-        let name = Locale.current.localizedString(forIdentifier: selectedLocale.identifier) ?? selectedLocale.identifier
-        return name.prefix(1).uppercased() + name.dropFirst()
     }
 
     // MARK: - Helpers
+
+    private static func initialLocale() -> Locale {
+        let user = AuthManager.shared.currentUser
+        if let lang = user?.systemLanguage {
+            return EdgeTranscriptionService.normalizedLocale(for: Locale(identifier: lang))
+        }
+        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
+            return EdgeTranscriptionService.normalizedLocale(
+                for: Locale(identifier: String(kbd.prefix(2)))
+            )
+        }
+        return Locale(identifier: "fr-FR")
+    }
 
     private var formattedDuration: String {
         let d = audioRecorder.isRecording ? audioRecorder.duration : recordedDuration
@@ -314,28 +524,43 @@ struct AudioPostComposerView: View {
         recordedURL = url
         phase = .transcribing
         HapticFeedback.light()
+        runTranscription(url: url)
+    }
 
+    private func retryTranscription() {
+        guard let url = recordedURL else { return }
+        transcriptionError = nil
+        phase = .transcribing
+        runTranscription(url: url)
+    }
+
+    private func runTranscription(url: URL) {
         Task {
             do {
                 let result = try await EdgeTranscriptionService.shared.transcribe(
                     audioURL: url,
                     locale: selectedLocale
                 )
-                await MainActor.run {
-                    transcription = result
-                    transcriptionError = nil
-                    phase = .preview
-                }
+                transcription = result
+                transcriptionError = nil
+                phase = .preview
+            } catch let error as EdgeTranscriptionError {
+                transcriptionError = error.errorDescription
+                phase = .preview
             } catch {
-                await MainActor.run {
-                    transcriptionError = String(
-                        localized: "Transcription indisponible",
-                        defaultValue: "Transcription indisponible : \(error.localizedDescription)"
-                    )
-                    phase = .preview
-                }
+                transcriptionError = error.localizedDescription
+                phase = .preview
             }
         }
+    }
+
+    private func cancelTranscription() {
+        EdgeTranscriptionService.shared.cancel()
+        transcriptionError = String(
+            localized: "Transcription annulee",
+            defaultValue: "Transcription annul\u{00E9}e"
+        )
+        phase = .preview
     }
 
     private func resetToIdle() {
@@ -347,6 +572,19 @@ struct AudioPostComposerView: View {
         transcription = nil
         transcriptionError = nil
         phase = .idle
+    }
+
+    private func cancelAndDismiss() {
+        if audioRecorder.isRecording {
+            audioRecorder.cancelRecording()
+        }
+        if EdgeTranscriptionService.shared.isTranscribing {
+            EdgeTranscriptionService.shared.cancel()
+        }
+        if let url = recordedURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        dismiss()
     }
 
     private func publish() {
@@ -393,60 +631,97 @@ private struct WaveformView: View {
 
 struct AudioLanguagePickerView: View {
     @Binding var selectedLocale: Locale
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    private var theme: ThemeManager { ThemeManager.shared }
+    @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
+    @State private var showAllLanguages = false
 
-    private var languages: [(locale: Locale, name: String)] {
-        EdgeTranscriptionService.shared.supportedLocales.compactMap { locale in
-            guard let name = Locale.current.localizedString(forIdentifier: locale.identifier) else { return nil }
-            let capitalized = name.prefix(1).uppercased() + name.dropFirst()
-            return (locale, capitalized)
+    private var listedLocales: [(locale: Locale, name: String)] {
+        let locales = showAllLanguages
+            ? EdgeTranscriptionService.shared.supportedLocales
+            : EdgeTranscriptionService.shared.availableLocales
+        return locales.compactMap { locale -> (Locale, String)? in
+            guard let name = Locale.current.localizedString(forIdentifier: locale.identifier) else {
+                return nil
+            }
+            let cap = name.prefix(1).uppercased() + name.dropFirst()
+            return (locale, cap)
         }
-        .sorted { $0.name < $1.name }
+        .sorted { $0.1 < $1.1 }
     }
 
-    private var filteredLanguages: [(locale: Locale, name: String)] {
-        guard !searchText.isEmpty else { return languages }
-        let query = searchText.lowercased()
-        return languages.filter { $0.name.lowercased().contains(query) || $0.locale.identifier.lowercased().contains(query) }
+    private var filteredLocales: [(locale: Locale, name: String)] {
+        guard !searchText.isEmpty else { return listedLocales }
+        let q = searchText.lowercased()
+        return listedLocales.filter {
+            $0.name.lowercased().contains(q) ||
+            $0.locale.identifier.lowercased().contains(q)
+        }
     }
 
     var body: some View {
         NavigationStack {
-            List(filteredLanguages, id: \.locale.identifier) { item in
-                Button {
-                    selectedLocale = item.locale
-                    HapticFeedback.light()
-                    dismiss()
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.name)
-                                .font(.system(size: 16, weight: selectedLocale.identifier == item.locale.identifier ? .semibold : .regular))
-                                .foregroundColor(theme.textPrimary)
-                            Text(item.locale.identifier)
-                                .font(.system(size: 12))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        Spacer()
-                        if selectedLocale.identifier == item.locale.identifier {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(MeeshyColors.indigo500)
+            List {
+                Section {
+                    Toggle(isOn: $showAllLanguages) {
+                        Text(String(localized: "Afficher toutes les langues",
+                                    defaultValue: "Afficher toutes les langues"))
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textPrimary)
+                    }
+                    .tint(MeeshyColors.indigo500)
+                } footer: {
+                    Text(String(
+                        localized: "Par defaut, seules les langues disponibles sur cet appareil sont listees.",
+                        defaultValue: "Par d\u{00E9}faut, seules les langues disponibles sur cet appareil sont list\u{00E9}es."
+                    ))
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textMuted)
+                }
+
+                Section {
+                    ForEach(filteredLocales, id: \.locale.identifier) { item in
+                        Button {
+                            selectedLocale = item.locale
+                            HapticFeedback.light()
+                            dismiss()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.name)
+                                        .font(.system(
+                                            size: 16,
+                                            weight: selectedLocale.identifier == item.locale.identifier
+                                                ? .semibold : .regular
+                                        ))
+                                        .foregroundColor(theme.textPrimary)
+                                    Text(item.locale.identifier)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(theme.textMuted)
+                                }
+                                Spacer()
+                                if selectedLocale.identifier == item.locale.identifier {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(MeeshyColors.indigo500)
+                                }
+                            }
                         }
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: String(localized: "Rechercher une langue", defaultValue: "Rechercher une langue"))
-            .navigationTitle(String(localized: "Langue de l'audio", defaultValue: "Langue de l'audio"))
+            .searchable(text: $searchText,
+                        prompt: String(localized: "Rechercher une langue",
+                                       defaultValue: "Rechercher une langue"))
+            .navigationTitle(String(localized: "Langue de l'audio",
+                                    defaultValue: "Langue de l'audio"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(String(localized: "Fermer", defaultValue: "Fermer")) { dismiss() }
-                        .foregroundColor(MeeshyColors.indigo500)
+                    Button(String(localized: "Fermer", defaultValue: "Fermer")) {
+                        dismiss()
+                    }
+                    .foregroundColor(MeeshyColors.indigo500)
                 }
             }
         }

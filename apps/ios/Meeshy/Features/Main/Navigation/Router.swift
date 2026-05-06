@@ -100,6 +100,13 @@ final class Router: ObservableObject {
     @Published var deepLinkProfileUser: ProfileSheetUser?
     @Published var pendingShareContent: SharedContentType? = nil
 
+    /// Reply context awaiting consumption by the next ConversationView that
+    /// appears (on tap of a story's reply button). Cleared when the conversation
+    /// view applies it. Lives on Router so any view can set it (StoryViewerContainer
+    /// is presented from multiple parents — RootView, iPadRootView, ConversationView,
+    /// FeedOverlay) without each parent maintaining its own copy.
+    @Published var pendingReplyContext: ReplyContext?
+
     /// iPad two-column mode: when set, route requests are forwarded here
     /// instead of being pushed onto the NavigationStack path.
     var onRouteRequested: ((Route) -> Bool)?

@@ -26,8 +26,20 @@ class PostDetailViewModel: ObservableObject {
     private let socialSocket = SocialSocketManager.shared
     private var cancellables = Set<AnyCancellable>()
 
+    // MARK: - Persistence Layer
+
+    private(set) var commentStore: CommentStore?
+    private var feedPersistence: FeedPersistenceActor?
+
     init(postService: PostServiceProviding = PostService.shared) {
         self.postService = postService
+    }
+
+    /// Wire persistence store for GRDB-backed comments.
+    /// Call once after init when the post ID and dependency container are available.
+    func setupPersistence(commentStore: CommentStore, persistence: FeedPersistenceActor) {
+        self.commentStore = commentStore
+        self.feedPersistence = persistence
     }
 
     var preferredLanguages: [String] {
@@ -64,6 +76,13 @@ class PostDetailViewModel: ObservableObject {
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             post = feedPost
             await CacheCoordinator.shared.feed.save([feedPost], for: postId)
+
+            // Persist to GRDB
+            if let persistence = feedPersistence, let record = PostRecord(from: apiPost) {
+                Task.detached(priority: .utility) {
+                    try? await persistence.insertPost(record)
+                }
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -118,6 +137,19 @@ class PostDetailViewModel: ObservableObject {
             commentCursor = response.pagination?.nextCursor
             hasMoreComments = response.pagination?.hasMore ?? false
             await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+
+            // Persist fetched comments to GRDB
+            if let persistence = feedPersistence {
+                let apiComments = response.data
+                let pid = postId
+                Task.detached(priority: .utility) {
+                    for c in apiComments {
+                        if let record = CommentRecord(from: c, postId: pid) {
+                            try? await persistence.insertComment(record)
+                        }
+                    }
+                }
+            }
         } catch {
             if comments.isEmpty {
                 ToastManager.shared.showError("Erreur lors du chargement des commentaires")
@@ -210,6 +242,16 @@ class PostDetailViewModel: ObservableObject {
             comments.insert(comment, at: 0)
             self.post?.commentCount += 1
             await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+
+            // Persist to GRDB
+            if let persistence = feedPersistence,
+               let record = CommentRecord(from: apiComment, postId: post.id) {
+                let newCount = self.post?.commentCount ?? 0
+                Task.detached(priority: .utility) {
+                    try? await persistence.insertComment(record)
+                    try? await persistence.updateCommentCount(postId: post.id, count: newCount)
+                }
+            }
         } catch {
             ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
         }
@@ -238,6 +280,16 @@ class PostDetailViewModel: ObservableObject {
             }
             self.post?.commentCount += 1
             await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+
+            // Persist reply to GRDB
+            if let persistence = feedPersistence,
+               let record = CommentRecord(from: apiComment, postId: post.id) {
+                let newCount = self.post?.commentCount ?? 0
+                Task.detached(priority: .utility) {
+                    try? await persistence.insertComment(record)
+                    try? await persistence.updateCommentCount(postId: post.id, count: newCount)
+                }
+            }
         } catch {
             ToastManager.shared.showError("Erreur lors de l'envoi de la r\u{00E9}ponse")
         }

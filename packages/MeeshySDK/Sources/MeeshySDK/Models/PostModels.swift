@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - API Post Models
 
-public struct APIAuthor: Decodable, Sendable {
+public struct APIAuthor: Codable, Sendable {
     public let id: String
     public let username: String?
     public let displayName: String?
@@ -11,7 +11,7 @@ public struct APIAuthor: Decodable, Sendable {
     public var name: String { displayName ?? username ?? "Anonymous" }
 }
 
-public struct APIPostMedia: Decodable, Sendable {
+public struct APIPostMedia: Codable, Sendable {
     public let id: String
     public let fileName: String?
     public let originalName: String?
@@ -38,9 +38,15 @@ public struct APIPostMedia: Decodable, Sendable {
     }
 }
 
-public struct APIRepostOf: Decodable, Sendable {
+public struct APIRepostOf: Codable, Sendable {
     public let id: String
+    public let type: String?
     public let content: String?
+    public let originalLanguage: String?
+    public let translations: [String: APIPostTranslationEntry]?
+    public let storyEffects: StoryEffects?
+    public let audioUrl: String?
+    public let originalRepostOfId: String?
     public let author: APIAuthor
     public let media: [APIPostMedia]?
     public let createdAt: Date
@@ -62,7 +68,7 @@ public struct APIPostComment: Decodable, Sendable {
     public let author: APIAuthor
 }
 
-public struct APIPostTranslationEntry: Decodable, Sendable {
+public struct APIPostTranslationEntry: Codable, Sendable {
     public let text: String
     public let translationModel: String?
     public let confidenceScore: Double?
@@ -91,6 +97,7 @@ public struct APIPost: Decodable, Sendable {
     public let media: [APIPostMedia]?
     public let comments: [APIPostComment]?
     public let repostOf: APIRepostOf?
+    public let originalRepostOfId: String?
     public let isQuote: Bool?
     public let moodEmoji: String?
     public let audioUrl: String?
@@ -193,11 +200,35 @@ extension APIPost {
 
         var repost: RepostContent?
         if let r = repostOf {
+            let repostMedia: [FeedMedia] = (r.media ?? []).map { m in
+                FeedMedia(
+                    id: m.id, type: m.mediaType, url: m.fileUrl,
+                    thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
+                    thumbnailColor: thumbnailColorForMime(m.mimeType),
+                    width: m.width, height: m.height,
+                    duration: m.duration.map { $0 / 1000 },
+                    fileName: m.originalName ?? m.fileName,
+                    fileSize: m.fileSize.map { formatFileSize($0) }
+                )
+            }
+            let repostTranslations: [String: PostTranslation]? = r.translations?.mapValues { entry in
+                PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
+            }
             repost = RepostContent(id: r.id, author: r.author.name, authorId: r.author.id,
+                                   authorUsername: r.author.username,
                                    authorAvatarURL: r.author.avatar,
                                    content: r.content ?? "",
                                    timestamp: r.createdAt, likes: r.likeCount ?? 0,
-                                   isQuote: r.isQuote ?? false)
+                                   isQuote: r.isQuote ?? false,
+                                   type: r.type,
+                                   originalLanguage: r.originalLanguage,
+                                   audioUrl: r.audioUrl,
+                                   storyEffects: r.storyEffects,
+                                   media: repostMedia,
+                                   translations: repostTranslations,
+                                   originalRepostOfId: r.originalRepostOfId,
+                                   visibility: nil,
+                                   expiresAt: nil)
         }
 
         let postTranslations: [String: PostTranslation]? = translations?.mapValues { entry in

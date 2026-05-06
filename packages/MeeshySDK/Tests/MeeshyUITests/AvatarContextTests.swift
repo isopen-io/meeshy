@@ -1,6 +1,7 @@
 import XCTest
 @testable import MeeshyUI
 
+@MainActor
 final class AvatarContextTests: XCTestCase {
 
     // MARK: - Size

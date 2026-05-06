@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import GRDB
 import MeeshySDK
 import MeeshyUI
 
@@ -87,6 +88,7 @@ class GlobalSearchViewModel: ObservableObject {
     private let api: APIClientProviding
     private let userService: UserServiceProviding
     private let authManager: AuthManaging
+    private let searchService: MessageSearchService
 
     // MARK: - Private
 
@@ -99,11 +101,15 @@ class GlobalSearchViewModel: ObservableObject {
     init(
         api: APIClientProviding = APIClient.shared,
         userService: UserServiceProviding = UserService.shared,
-        authManager: AuthManaging = AuthManager.shared
+        authManager: AuthManaging = AuthManager.shared,
+        searchService: MessageSearchService? = nil
     ) {
         self.api = api
         self.userService = userService
         self.authManager = authManager
+        self.searchService = searchService ?? MessageSearchService(
+            reader: DependencyContainer.shared.dbPool
+        )
         loadRecentSearches()
         setupDebounce()
     }
@@ -146,9 +152,42 @@ class GlobalSearchViewModel: ObservableObject {
         isSearching = false
     }
 
-    // MARK: - Search Conversations
+    // MARK: - Search Conversations (FTS5-first, network fallback)
 
     private func searchConversations(query: String) async -> [GlobalSearchConversationResult] {
+        let localResults = await searchLocalConversations(query: query)
+        // Surface local hits immediately so the UI feels instant; the
+        // remote results merge in once the round-trip lands.
+        conversationResults = localResults
+
+        let remoteResults = await fetchRemoteConversationResults(query: query)
+        return mergeUniqueConversationResults(local: localResults, remote: remoteResults)
+    }
+
+    private func searchLocalConversations(query: String) async -> [GlobalSearchConversationResult] {
+        let ids = (try? await SearchIndex.shared.searchConversations(query: query, limit: 50)) ?? []
+        guard !ids.isEmpty else { return [] }
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").value ?? []
+        let byId = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
+
+        return ids.compactMap { id -> GlobalSearchConversationResult? in
+            guard let conv = byId[id] else { return nil }
+            return GlobalSearchConversationResult(
+                id: conv.id,
+                name: conv.name,
+                avatar: conv.avatar ?? conv.participantAvatarURL,
+                type: conv.type,
+                memberCount: conv.memberCount,
+                lastMessagePreview: conv.lastMessagePreview,
+                lastMessageAt: conv.lastMessageAt,
+                unreadCount: conv.unreadCount,
+                conversation: conv
+            )
+        }
+    }
+
+    private func fetchRemoteConversationResults(query: String) async -> [GlobalSearchConversationResult] {
         do {
             let response: APIResponse<[APIConversation]> = try await api.request(
                 endpoint: "/conversations/search",
@@ -174,9 +213,59 @@ class GlobalSearchViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Search Users
+    private func mergeUniqueConversationResults(
+        local: [GlobalSearchConversationResult],
+        remote: [GlobalSearchConversationResult]
+    ) -> [GlobalSearchConversationResult] {
+        var seen = Set<String>()
+        var merged: [GlobalSearchConversationResult] = []
+        // Remote first: server-side payloads carry the freshest counts /
+        // last-message previews. Local hits fill the gap for items the
+        // server didn't return (e.g., we are offline).
+        for result in remote + local {
+            if seen.insert(result.id).inserted {
+                merged.append(result)
+            }
+        }
+        return merged.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    }
+
+    // MARK: - Search Users (FTS5-first, network fallback)
 
     private func searchUsers(query: String) async -> [GlobalSearchUserResult] {
+        let localResults = await searchLocalUsers(query: query)
+        userResults = localResults
+
+        let remoteResults = await fetchRemoteUserResults(query: query)
+        return mergeUniqueUserResults(local: localResults, remote: remoteResults)
+    }
+
+    private func searchLocalUsers(query: String) async -> [GlobalSearchUserResult] {
+        let ids = (try? await SearchIndex.shared.searchUsers(query: query, limit: 50)) ?? []
+        guard !ids.isEmpty else { return [] }
+
+        // Resolve each id via the per-key profile cache. Misses are dropped
+        // (profile evicted from LRU since last index write — falls back to
+        // remote results once they arrive).
+        var users: [MeeshyUser] = []
+        for id in ids {
+            if let cached = await CacheCoordinator.shared.profiles.load(for: id).value?.first {
+                users.append(cached)
+            }
+        }
+
+        return users.map { user in
+            GlobalSearchUserResult(
+                id: user.id,
+                username: user.username,
+                displayName: user.displayName,
+                avatar: user.avatar,
+                isOnline: user.isOnline ?? false
+            )
+        }
+    }
+
+    private func fetchRemoteUserResults(query: String) async -> [GlobalSearchUserResult] {
         do {
             let results = try await userService.searchUsers(query: query, limit: 20, offset: 0)
             return results.map { user in
@@ -193,46 +282,102 @@ class GlobalSearchViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Search Messages (across all conversations)
+    private func mergeUniqueUserResults(
+        local: [GlobalSearchUserResult],
+        remote: [GlobalSearchUserResult]
+    ) -> [GlobalSearchUserResult] {
+        var seen = Set<String>()
+        var merged: [GlobalSearchUserResult] = []
+        // Remote first: it carries fresh online status; locals fill the gap.
+        for result in remote + local {
+            if seen.insert(result.id).inserted {
+                merged.append(result)
+            }
+        }
+        return merged
+    }
+
+    // MARK: - Search Messages (FTS5-first, network fallback)
 
     private func searchMessages(query: String) async -> [GlobalSearchMessageResult] {
-        // Search within each of the user's conversations for matching messages
-        // Using the conversation search endpoint to find relevant conversations first,
-        // then searching within those conversations for message matches
+        // FTS5 local results — instant, available offline
+        let localResults = await searchLocalMessages(query: query)
+        messageResults = localResults
+
+        // Network in parallel — merge fresh server-side hits
+        let remoteResults = await fetchRemoteMessageResults(query: query)
+        return mergeUniqueMessageResults(local: localResults, remote: remoteResults)
+    }
+
+    private func searchLocalMessages(query: String) async -> [GlobalSearchMessageResult] {
+        let records = (try? await searchService.search(
+            query: query,
+            limit: 50,
+            conversationId: nil
+        )) ?? []
+        return records.map { record in
+            GlobalSearchMessageResult(
+                id: record.localId,
+                conversationId: record.conversationId,
+                // conversationName is not stored in MessageRecord; use conversationId as
+                // placeholder — network results will supply the proper name via merge.
+                conversationName: record.conversationId,
+                conversationAvatar: nil,
+                content: record.content ?? "",
+                senderName: record.senderName ?? record.senderUsername ?? "?",
+                senderAvatar: record.senderAvatarURL,
+                createdAt: record.createdAt
+            )
+        }
+    }
+
+    private func fetchRemoteMessageResults(query: String) async -> [GlobalSearchMessageResult] {
         do {
-            // First get conversations that might have matching messages
             let response: APIResponse<[APIConversation]> = try await api.request(
                 endpoint: "/conversations/search",
                 queryItems: [URLQueryItem(name: "q", value: query)]
             )
             let userId = authManager.currentUser?.id ?? ""
             let conversations = response.data.map { $0.toConversation(currentUserId: userId) }
-
-            // Search for messages in the first few conversations (limit to avoid too many requests)
-            var allResults: [GlobalSearchMessageResult] = []
             let searchConvs = Array(conversations.prefix(10))
 
+            var allResults: [GlobalSearchMessageResult] = []
             await withTaskGroup(of: [GlobalSearchMessageResult].self) { group in
                 for conv in searchConvs {
                     group.addTask { [weak self] in
-                        guard self != nil else { return [] }
-                        return await self?.searchMessagesInConversation(
+                        guard let self else { return [] }
+                        return await self.searchMessagesInConversation(
                             conversationId: conv.id,
                             conversationName: conv.name,
                             conversationAvatar: conv.avatar ?? conv.participantAvatarURL,
                             query: query
-                        ) ?? []
+                        )
                     }
                 }
                 for await results in group {
                     allResults.append(contentsOf: results)
                 }
             }
-
             return allResults.sorted { $0.createdAt > $1.createdAt }
         } catch {
             return []
         }
+    }
+
+    private func mergeUniqueMessageResults(
+        local: [GlobalSearchMessageResult],
+        remote: [GlobalSearchMessageResult]
+    ) -> [GlobalSearchMessageResult] {
+        var seen = Set<String>()
+        var merged: [GlobalSearchMessageResult] = []
+        // Remote results take precedence (they carry full conversationName, avatar, etc.);
+        // local results fill the gap for any message not returned by the network.
+        for result in remote + local {
+            if seen.insert(result.id).inserted {
+                merged.append(result)
+            }
+        }
+        return merged.sorted { $0.createdAt > $1.createdAt }
     }
 
     private func searchMessagesInConversation(

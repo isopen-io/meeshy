@@ -15,6 +15,9 @@ struct FeedView: View {
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @StateObject var viewModel = FeedViewModel()
+    /// When true, use the UIKit-backed FeedListView for high-performance scrolling.
+    /// Set to false to keep the existing SwiftUI ScrollView path.
+    @State private var useUIKitList = false
     @State private var searchText = ""
     @State var showComposer = false
     @FocusState var isComposerFocused: Bool
@@ -23,7 +26,7 @@ struct FeedView: View {
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
     @State private var showAudioComposer = false
-    @State var composerLanguage: String = AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+    @State var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State var showComposerLanguagePicker = false
     @State private var headerScrollOffset: CGFloat = 0
 
@@ -84,7 +87,11 @@ struct FeedView: View {
                     .offset(x: orb.offset.x, y: orb.offset.y)
             }
 
-            feedScrollView
+            if useUIKitList, let store = viewModel.feedStore {
+                FeedListView(store: store)
+            } else {
+                feedScrollView
+            }
 
             if sizeClass != .regular {
                 VStack(spacing: 0) {
@@ -393,6 +400,7 @@ struct FeedView: View {
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                                 viewModel.prefetchMediaForPost(post.id)
+                                viewModel.prefetchComments(post.id)
                                 trackImpression(postId: post.id)
                             }
                     }
@@ -454,6 +462,16 @@ struct FeedView: View {
             }
         }
         .task {
+            // Wire persistence layer on first appearance
+            if viewModel.feedStore == nil {
+                let deps = DependencyContainer.shared
+                let store = FeedStore(persistence: deps.feedPersistence)
+                let socketHandler = FeedSocketHandler(persistence: deps.feedPersistence)
+                viewModel.setupPersistence(store: store, socketHandler: socketHandler, persistence: deps.feedPersistence)
+                store.startObserving(dbPool: deps.dbPool)
+                await store.loadInitial()
+            }
+
             if viewModel.posts.isEmpty {
                 await viewModel.loadFeed()
             }
@@ -461,6 +479,9 @@ struct FeedView: View {
         }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
+            viewModel.feedStore?.stopObserving()
+            impressionTimer?.invalidate()
+            impressionTimer = nil
         }
         .sheet(isPresented: $showAudioComposer) {
             AudioPostComposerView { audioURL, mimeType, transcription in

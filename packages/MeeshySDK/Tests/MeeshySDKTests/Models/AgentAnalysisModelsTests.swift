@@ -169,7 +169,7 @@ final class AgentAnalysisModelsTests: XCTestCase {
         XCTAssertEqual(analysis.history.count, 1)
         XCTAssertEqual(analysis.history[0].snapshotDate, "2026-04-01")
         XCTAssertEqual(analysis.history[0].participantSnapshots.count, 1)
-        XCTAssertEqual(analysis.history[0].participantSnapshots[0].sentimentScore, 0.9, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(analysis.history[0].participantSnapshots[0].sentimentScore), 0.9, accuracy: 0.001)
     }
 
     func test_conversationAnalysis_decodesMinimalPayload() throws {

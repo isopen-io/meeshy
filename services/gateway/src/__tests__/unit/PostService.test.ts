@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PostService } from '../../services/PostService';
 import { PostCommentService } from '../../services/PostCommentService';
+import { MediaService } from '../../services/MediaService';
 import { PostType, PostVisibility } from '@meeshy/shared/prisma/client';
 
 // PostAudioService uses a singleton that requires initialization — mock it entirely
@@ -104,12 +105,14 @@ function makeComment(overrides: Record<string, unknown> = {}) {
 
 describe('PostService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
+  let mediaService: MediaService;
   let service: PostService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma = createMockPrisma();
-    service = new PostService(prisma);
+    mediaService = new MediaService();
+    service = new PostService(prisma, mediaService);
   });
 
   // -----------------------------------------------------------------------
@@ -225,6 +228,58 @@ describe('PostService', () => {
       );
       // No audio media → no transcription update
       expect(prisma.postMedia.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // createPost with repostOfId
+  // -----------------------------------------------------------------------
+
+  describe('createPost with repostOfId', () => {
+    it('calculates originalRepostOfId from repostOfId', async () => {
+      const original = makePost({ id: 'orig-1', repostOfId: null, originalRepostOfId: null });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'new-1', ...args.data }));
+
+      await service.createPost({
+        type: PostType.STORY,
+        visibility: PostVisibility.PUBLIC,
+        content: 'hi',
+        repostOfId: 'orig-1',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.repostOfId).toBe('orig-1');
+      expect(createCall.data.originalRepostOfId).toBe('orig-1');
+    });
+
+    it('flattens originalRepostOfId when chained', async () => {
+      const intermediate = makePost({ id: 'inter-1', repostOfId: 'root-1', originalRepostOfId: 'root-1' });
+      prisma.post.findFirst.mockResolvedValue(intermediate);
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'new-2', ...args.data }));
+
+      await service.createPost({
+        type: PostType.STORY,
+        visibility: PostVisibility.PUBLIC,
+        repostOfId: 'inter-1',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.originalRepostOfId).toBe('root-1');
+    });
+
+    it('does not set repost fields when repostOfId is omitted', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'new-3', ...args.data }));
+
+      await service.createPost({
+        type: PostType.POST,
+        visibility: PostVisibility.PUBLIC,
+        content: 'normal post',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.repostOfId).toBeUndefined();
+      expect(createCall.data.originalRepostOfId).toBeUndefined();
     });
   });
 
@@ -588,22 +643,238 @@ describe('PostService', () => {
     });
 
     it('creates a quote repost with content', async () => {
-      const original = makePost({ id: 'original-1', visibility: 'FRIENDS' });
+      const original = makePost({ id: 'original-1', visibility: 'PUBLIC' });
       prisma.post.findFirst.mockResolvedValue(original);
       prisma.post.create.mockResolvedValue(makePost());
       prisma.post.update.mockResolvedValue(original);
 
-      await service.repostPost('original-1', 'user-reposter', 'Great post!', true);
+      await service.repostPost('original-1', 'user-reposter', { content: 'Great post!', isQuote: true });
 
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             content: 'Great post!',
             isQuote: true,
-            visibility: 'FRIENDS',
+            visibility: 'PUBLIC',
           }),
         }),
       );
+    });
+
+    it('sets originalRepostOfId to original.id when original is a root post', async () => {
+      const original = makePost({ id: 'original-1', repostOfId: null, originalRepostOfId: null });
+      prisma.post.findFirst.mockResolvedValue(original);
+      const repost = makePost({ id: 'repost-1', repostOfId: 'original-1', originalRepostOfId: 'original-1' });
+      prisma.post.create.mockResolvedValue(repost);
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('original-1', 'user-reposter');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            repostOfId: 'original-1',
+            originalRepostOfId: 'original-1',
+          }),
+        })
+      );
+    });
+
+    it('flattens originalRepostOfId when original is itself a repost', async () => {
+      const original = makePost({
+        id: 'intermediate-1',
+        repostOfId: 'root-1',
+        originalRepostOfId: 'root-1',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      const repost = makePost({ id: 'repost-2', repostOfId: 'intermediate-1' });
+      prisma.post.create.mockResolvedValue(repost);
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('intermediate-1', 'user-reposter');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            repostOfId: 'intermediate-1',
+            originalRepostOfId: 'root-1',
+          }),
+        })
+      );
+    });
+
+    it('accepts targetType option to override default repost type', async () => {
+      const original = makePost({ id: 'story-1', type: PostType.STORY });
+      prisma.post.findFirst.mockResolvedValue(original);
+      const repost = makePost({ id: 'repost-3', repostOfId: 'story-1', type: PostType.STORY });
+      prisma.post.create.mockResolvedValue(repost);
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('story-1', 'user-reposter', { targetType: PostType.STORY });
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: PostType.STORY,
+          }),
+        })
+      );
+    });
+
+    it('rolls back media snapshot if a duplication fails partway', async () => {
+      const original = makePost({
+        id: 'story-1',
+        type: PostType.STORY,
+        media: [
+          { id: 'm1', fileUrl: '/api/v1/attachments/file/m1.jpg', mimeType: 'image/jpeg', filePath: '2026/05/user/m1.jpg', fileName: 'm1.jpg', originalName: 'm1.jpg', fileSize: 1000 },
+          { id: 'm2', fileUrl: '/api/v1/attachments/file/m2.mp4', mimeType: 'video/mp4', filePath: '2026/05/user/m2.mp4', fileName: 'm2.mp4', originalName: 'm2.mp4', fileSize: 5000 },
+        ],
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+
+      // First media duplication succeeds, second fails
+      const duplicateMediaSpy = jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-m1.jpg', filePath: 'snapshots/new-m1.jpg', fileName: 'new-m1.jpg', fileSize: 1000, mimeType: 'image/jpeg' })
+        .mockRejectedValueOnce(new Error('Upload failed'));
+      const deleteMediaSpy = jest.spyOn(mediaService, 'deleteMedia').mockResolvedValue(undefined);
+
+      await expect(
+        service.repostPost('story-1', 'user-reposter', { targetType: PostType.POST })
+      ).rejects.toThrow('Media snapshot or post creation failed during repost');
+
+      // Verify the first duplicated media was rolled back
+      expect(deleteMediaSpy).toHaveBeenCalledWith('/api/v1/attachments/file/new-m1.jpg');
+      // Verify NO Post was created
+      expect(prisma.post.create).not.toHaveBeenCalled();
+    });
+
+    it('duplicates media to new CDN URLs when reposting STORY as POST', async () => {
+      const original = makePost({
+        id: 'story-1',
+        type: PostType.STORY,
+        media: [
+          { id: 'm1', fileUrl: '/api/v1/attachments/file/m1.jpg', mimeType: 'image/jpeg', filePath: '2026/05/user/m1.jpg', fileName: 'm1.jpg', originalName: 'm1.jpg', fileSize: 1000 },
+          { id: 'm2', fileUrl: '/api/v1/attachments/file/m2.mp4', mimeType: 'video/mp4', filePath: '2026/05/user/m2.mp4', fileName: 'm2.mp4', originalName: 'm2.mp4', fileSize: 5000 },
+        ],
+        storyEffects: { someEffect: 'value' },
+        audioUrl: '/api/v1/attachments/file/audio.mp3',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'repost-snap' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      const duplicateMediaSpy = jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-m1.jpg', filePath: '2026/05/snapshot/new-m1.jpg', fileName: 'new-m1.jpg', fileSize: 1000, mimeType: 'image/jpeg' })
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-m2.mp4', filePath: '2026/05/snapshot/new-m2.mp4', fileName: 'new-m2.mp4', fileSize: 5000, mimeType: 'video/mp4' })
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-audio.mp3', filePath: '2026/05/snapshot/new-audio.mp3', fileName: 'new-audio.mp3', fileSize: 2000, mimeType: 'audio/mpeg' });
+
+      await service.repostPost('story-1', 'user-reposter', { targetType: PostType.POST });
+
+      expect(duplicateMediaSpy).toHaveBeenCalledWith('/api/v1/attachments/file/m1.jpg');
+      expect(duplicateMediaSpy).toHaveBeenCalledWith('/api/v1/attachments/file/m2.mp4');
+      expect(duplicateMediaSpy).toHaveBeenCalledWith('/api/v1/attachments/file/audio.mp3');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: PostType.POST,
+            audioUrl: '/api/v1/attachments/file/new-audio.mp3',
+            storyEffects: { someEffect: 'value' },
+          }),
+        })
+      );
+    });
+
+    it('returns null when original is deleted', async () => {
+      prisma.post.findFirst.mockResolvedValue(null);
+      const result = await service.repostPost('deleted-1', 'user-reposter');
+      expect(result).toBeNull();
+    });
+
+    it('returns null when original is expired', async () => {
+      const expiredOriginal = makePost({
+        id: 'expired-1',
+        type: PostType.STORY,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+      prisma.post.findFirst.mockResolvedValue(expiredOriginal);
+      const result = await service.repostPost('expired-1', 'user-reposter');
+      expect(result).toBeNull();
+    });
+
+    it('throws 403 when original visibility is not PUBLIC', async () => {
+      const privateOriginal = makePost({ id: 'private-1', visibility: 'PRIVATE' });
+      prisma.post.findFirst.mockResolvedValue(privateOriginal);
+      await expect(
+        service.repostPost('private-1', 'user-reposter')
+      ).rejects.toMatchObject({ statusCode: 403 });
+    });
+
+    it('rolls back media AND audio when prisma.post.create fails', async () => {
+      const original = makePost({
+        id: 'story-x',
+        type: PostType.STORY,
+        media: [{ id: 'm1', fileUrl: '/api/v1/attachments/file/m1.jpg', mimeType: 'image/jpeg' }],
+        audioUrl: '/api/v1/attachments/file/audio.mp3',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+
+      jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-m1.jpg', filePath: 'p', fileName: 'new-m1.jpg', fileSize: 100, mimeType: 'image/jpeg' })
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-audio.mp3', filePath: 'p', fileName: 'new-audio.mp3', fileSize: 200, mimeType: 'audio/mpeg' });
+      const deleteSpy = jest.spyOn(mediaService, 'deleteMedia').mockResolvedValue(undefined);
+
+      prisma.post.create.mockRejectedValue(new Error('DB constraint violation'));
+
+      await expect(
+        service.repostPost('story-x', 'user-1', { targetType: PostType.POST })
+      ).rejects.toThrow();
+
+      expect(deleteSpy).toHaveBeenCalledWith('/api/v1/attachments/file/new-m1.jpg');
+      expect(deleteSpy).toHaveBeenCalledWith('/api/v1/attachments/file/new-audio.mp3');
+    });
+
+    it('sets expiresAt to 21h from now when reposting as STORY', async () => {
+      const original = makePost({ id: 'src-1', type: PostType.STORY });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'r-1', ...args.data }));
+      prisma.post.update.mockResolvedValue(original);
+
+      const before = Date.now();
+      await service.repostPost('src-1', 'user-1', { targetType: PostType.STORY });
+      const after = Date.now();
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      const expiresAt = createCall.data.expiresAt as Date;
+      expect(expiresAt).toBeInstanceOf(Date);
+      const expectedMs = before + 21 * 3600_000;
+      const actualMs = expiresAt.getTime();
+      expect(actualMs).toBeGreaterThanOrEqual(expectedMs);
+      expect(actualMs).toBeLessThanOrEqual(after + 21 * 3600_000);
+    });
+
+    it('sets expiresAt to 1h from now when reposting as STATUS', async () => {
+      const original = makePost({ id: 'src-2', type: PostType.STATUS });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'r-2', ...args.data }));
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('src-2', 'user-1', { targetType: PostType.STATUS });
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.expiresAt).toBeInstanceOf(Date);
+    });
+
+    it('does NOT set expiresAt when reposting as POST', async () => {
+      const original = makePost({ id: 'src-3', type: PostType.POST });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'r-3', ...args.data }));
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('src-3', 'user-1', { targetType: PostType.POST });
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.expiresAt).toBeUndefined();
     });
   });
 

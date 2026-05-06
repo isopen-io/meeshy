@@ -46,6 +46,24 @@ public actor CacheCoordinator {
         DiskCacheStore.cachedImage(for: urlString)
     }
 
+    /// Configures memory caps for the image pipeline. Call once at app launch.
+    ///
+    /// Sets:
+    /// - The decoded UIImage cache (NSCache in `DiskCacheStore.images`) at the
+    ///   given byte limit, used by `CachedAsyncImage` and `ProgressiveCachedImage`.
+    /// - The decoded CGImage cache (`DecodedImageCache.shared`) proportionally —
+    ///   we leave 5/6 of the budget for UIImages (more frequent) and 1/6 for
+    ///   CGImages (used by full-screen viewers).
+    ///
+    /// - Parameter budgetBytes: Total budget for both decoded image caches combined.
+    ///   Recommended: 60 MB on iPhone, 100 MB on iPad.
+    nonisolated public static func configureImageMemory(budgetBytes: Int) {
+        let uiImageCap = (budgetBytes * 5) / 6
+        let cgImageCap = budgetBytes / 6
+        DiskCacheStore.configureImageCache(memoryCostLimitBytes: uiImageCap)
+        DecodedImageCache.shared.setTotalCostLimit(cgImageCap)
+    }
+
     // MARK: - In-Memory Translation/Transcription/Audio Caches (keyed by messageId)
 
     private static let maxTranslationCacheEntries = 500
@@ -145,6 +163,28 @@ public actor CacheCoordinator {
         resolveCurrentUserId()
         loadTranslationCaches()
         subscribeToLifecycle()
+        Task { await self.backfillSearchIndexIfNeeded() }
+    }
+
+    // MARK: - Search Index Backfill
+
+    /// Seeds the FTS5 conversations index from the cache the first time we
+    /// boot a user that has cached data already. Gated by a UserDefaults
+    /// flag so subsequent cold starts skip the work — the per-save hooks
+    /// keep the index live afterwards. Users are NOT backfilled here because
+    /// the `.profiles` store is keyed per-user (no canonical "list" key);
+    /// they get indexed naturally as the user navigates and `UserProfileViewModel`
+    /// calls `SearchIndex.shared.indexUsers` after each fetch.
+    private func backfillSearchIndexIfNeeded() async {
+        let key = "meeshy.searchindex.backfillDone.v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+
+        if let cachedConversations = await conversations.load(for: "list").value,
+           !cachedConversations.isEmpty {
+            await SearchIndex.shared.indexConversations(cachedConversations)
+        }
+
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     /// Tear the coordinator down after logout/account-switch so a subsequent
@@ -181,8 +221,13 @@ public actor CacheCoordinator {
         await video.invalidateAll()
         await thumbnails.invalidateAll()
         await UserColorCache.shared.invalidateAll()
+        await SearchIndex.shared.clearAll()
         // No translation persist task to cancel — persistence is now incremental
         clearTranslationCacheDB()
+
+        // Reset the search-index backfill flag so the next user's first
+        // `start()` re-runs the backfill against their freshly hydrated cache.
+        UserDefaults.standard.removeObject(forKey: "meeshy.searchindex.backfillDone.v1")
 
         // 2. Tear down the coordinator state so the next `start()` re-arms.
         isStarted = false

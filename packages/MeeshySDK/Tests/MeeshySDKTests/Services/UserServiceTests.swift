@@ -65,7 +65,7 @@ final class UserServiceTests: XCTestCase {
 
     // MARK: - updateProfile
 
-    func testUpdateProfileCallsPutOnUsersMe() async throws {
+    func testUpdateProfileCallsPatchOnUsersMe() async throws {
         let user = makeMeeshyUser()
         let updateResponse = UpdateProfileResponse(user: user)
         let response = APIResponse<UpdateProfileResponse>(success: true, data: updateResponse, error: nil)
@@ -76,7 +76,7 @@ final class UserServiceTests: XCTestCase {
 
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/users/me")
-        XCTAssertEqual(mock.lastRequest?.method, "PUT")
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
         XCTAssertEqual(result.id, "user123")
         XCTAssertEqual(result.username, "testuser")
     }

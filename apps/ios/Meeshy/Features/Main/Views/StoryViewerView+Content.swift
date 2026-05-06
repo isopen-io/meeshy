@@ -740,10 +740,13 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendComment(text: String, effectFlags: Int? = nil) {
+    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil) {
         guard !text.isEmpty, let story = currentStory else { return }
 
-        // Optimistic local insert
+        // Optimistic local insert. Reply nesting is currently flat in the UI
+        // (Threads-style max-1-niveau pour MVP) — the parentId is forwarded
+        // to the backend so the comment graph stays correct, but rendering
+        // does not yet visually indent replies. See SOTA audit Pilier 19.
         let currentUser = AuthManager.shared.currentUser
         let authorName: String = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let authorId: String = currentUser?.id ?? ""
@@ -754,17 +757,25 @@ extension StoryViewerView {
             authorUsername: currentUser?.username,
             authorAvatarURL: currentUser?.avatar,
             content: text,
+            parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            originalLanguage: currentUser?.systemLanguage
+            originalLanguage: composerLanguage
         )
         storyComments.append(optimisticComment)
         storyCommentCount += 1
 
         // Send to API
+        let language = composerLanguage
         Task {
-            var body: [String: AnyCodable] = ["content": AnyCodable(text)]
+            var body: [String: AnyCodable] = [
+                "content": AnyCodable(text),
+                "originalLanguage": AnyCodable(language),
+            ]
             if let effectFlags {
                 body["effectFlags"] = AnyCodable(effectFlags)
+            }
+            if let parentId {
+                body["parentId"] = AnyCodable(parentId)
             }
             let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
                 endpoint: "/posts/\(story.id)/comments",
@@ -790,24 +801,6 @@ extension StoryViewerView {
                 endpoint: "/posts/\(story.id)/like",
                 body: body
             )
-        }
-    }
-
-    func reshareStory() {
-        guard let story = currentStory else { return }
-        HapticFeedback.light()
-
-        Task {
-            do {
-                let body = RepostRequest(content: nil, isQuote: false)
-                let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
-                    endpoint: "/posts/\(story.id)/repost",
-                    body: body
-                )
-                HapticFeedback.success()
-            } catch {
-                HapticFeedback.error()
-            }
         }
     }
 
@@ -1166,7 +1159,7 @@ extension StoryViewerView {
             // Avatar
             if let avatarURL = comment.authorAvatarURL,
                let url = MeeshyConfig.resolveMediaURL(avatarURL) {
-                CachedAsyncImage(url: url.absoluteString) {
+                CachedAsyncImage(url: url.absoluteString, targetSize: CGSize(width: 28, height: 28)) {
                     commentAvatarPlaceholder(color: comment.authorColor)
                 }
                 .frame(width: 28, height: 28)

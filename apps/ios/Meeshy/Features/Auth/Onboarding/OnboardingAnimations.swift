@@ -30,6 +30,7 @@ struct AnimatedStepBackground: View {
         }
         .ignoresSafeArea()
         .onAppear { startAnimations() }
+        .onDisappear { stopAnimations() }
         .onChange(of: step) { _, _ in restartAnimations() }
         .animation(.easeInOut(duration: 0.6), value: step)
     }
@@ -59,6 +60,15 @@ struct AnimatedStepBackground: View {
             withAnimation(.linear(duration: 5).repeatForever(autoreverses: false)) {
                 wavePhase = .pi * 2
             }
+        }
+    }
+
+    private func stopAnimations() {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            animate = false
+            wavePhase = 0
         }
     }
 

@@ -12,10 +12,18 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
     let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
     let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+    let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
     let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
     let conversationJoinError = PassthroughSubject<ConversationJoinErrorEvent, Never>()
     let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
     let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
+    let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
+    let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
+    let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
+    let participantUnbanned = PassthroughSubject<ParticipantUnbannedEvent, Never>()
+    let conversationClosed = PassthroughSubject<ConversationClosedEvent, Never>()
+    let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+    let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
     let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
     let locationShared = PassthroughSubject<LocationSharedEvent, Never>()
     let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
@@ -43,9 +51,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callError = PassthroughSubject<CallErrorData, Never>()
     let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
     let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
-    let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
-    let conversationClosed = PassthroughSubject<ConversationClosedEvent, Never>()
 
     var isConnected: Bool = false
     var connectionState: ConnectionState = .disconnected
@@ -68,7 +74,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitLiveLocationStart(payload: LiveLocationStartPayload) {}
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload) {}
     func emitLiveLocationStop(conversationId: String) {}
-    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, originalLanguage: String?, isEncrypted: Bool) {}
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool) {}
     func emitCallInitiate(conversationId: String, isVideo: Bool) {}
     func emitCallJoin(callId: String) {}
     func emitCallLeave(callId: String) {}

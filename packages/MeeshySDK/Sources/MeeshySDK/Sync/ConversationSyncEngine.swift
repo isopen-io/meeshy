@@ -116,6 +116,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             firstPage = response.data.map { $0.toConversation(currentUserId: userId) }
             totalCount = response.pagination?.total
             await cache.conversations.save(firstPage, for: "list")
+            await SearchIndex.shared.indexConversations(firstPage)
             _conversationsDidChange.send()
         } catch {
             Self.logger.error("[SyncEngine] fullSync first-page error: \(error.localizedDescription)")
@@ -204,6 +205,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
 
             await cache.conversations.save(merged, for: "list")
+            await SearchIndex.shared.indexConversations(merged)
             _conversationsDidChange.send()
         } else {
             // No known total count: fall back to sequential paging from page 2.
@@ -217,6 +219,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     let newItems = page.filter { !existingIds.contains($0.id) }
                     merged.append(contentsOf: newItems)
                     await cache.conversations.save(merged, for: "list")
+                    await SearchIndex.shared.indexConversations(newItems)
                     _conversationsDidChange.send()
                     hasMore = response.pagination?.hasMore ?? false
                     offset += page.count
@@ -276,6 +279,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
 
             await cache.conversations.save(merged, for: "list")
+            await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
             _conversationsDidChange.send()
 
             lastSyncTimestamp = Date()

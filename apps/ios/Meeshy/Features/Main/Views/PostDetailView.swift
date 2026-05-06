@@ -20,7 +20,7 @@ struct PostDetailView: View {
     @State private var activeDisplayLangCode: String? = nil
     @State private var fullscreenMediaId: String? = nil
     @State private var showFullscreenGallery = false
-    @State private var composerLanguage: String = "fr"
+    @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
@@ -204,6 +204,14 @@ struct PostDetailView: View {
         .background(theme.backgroundGradient.ignoresSafeArea())
         .navigationBarHidden(true)
         .task {
+            // Wire persistence layer on first appearance
+            if viewModel.commentStore == nil {
+                let deps = DependencyContainer.shared
+                let commentStore = CommentStore(postId: postId, persistence: deps.feedPersistence)
+                viewModel.setupPersistence(commentStore: commentStore, persistence: deps.feedPersistence)
+                await commentStore.loadInitial()
+            }
+
             if viewModel.post == nil {
                 await viewModel.loadPost(postId)
             }

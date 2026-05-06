@@ -539,7 +539,7 @@ struct FeedComposerSheet: View {
     @State private var postVisibility: String = "PUBLIC"
     @State private var showEmojiPicker = false
     @State private var showAudioComposer = false
-    @State private var composerLanguage: String = AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+    @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var showLanguagePicker = false
 
     private var composerLanguageDisplayName: String {

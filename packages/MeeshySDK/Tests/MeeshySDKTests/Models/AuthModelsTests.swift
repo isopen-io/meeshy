@@ -66,8 +66,6 @@ final class AuthModelsTests: XCTestCase {
             createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-15T10:30:00.000Z",
             isActive: true, isAnonymous: false, isMeeshyer: true,
             customDestinationLanguage: "en", autoTranslateEnabled: true,
-            translateToSystemLanguage: true, translateToRegionalLanguage: false,
-            useCustomDestination: true,
             timezone: "Europe/Paris", registrationCountry: "FR", profileCompletionRate: 85
         )
         let data = try JSONEncoder().encode(original)
@@ -114,16 +112,10 @@ final class AuthModelsTests: XCTestCase {
         let user = MeeshyUser(
             id: "u2", username: "translator",
             customDestinationLanguage: "es",
-            autoTranslateEnabled: true,
-            translateToSystemLanguage: false,
-            translateToRegionalLanguage: true,
-            useCustomDestination: true
+            autoTranslateEnabled: true
         )
         XCTAssertEqual(user.customDestinationLanguage, "es")
         XCTAssertEqual(user.autoTranslateEnabled, true)
-        XCTAssertEqual(user.translateToSystemLanguage, false)
-        XCTAssertEqual(user.translateToRegionalLanguage, true)
-        XCTAssertEqual(user.useCustomDestination, true)
     }
 
     func testMeeshyUserDecodableFromJSON() throws {

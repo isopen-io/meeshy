@@ -113,6 +113,9 @@ test_env/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Claude Code runtime (ephemeral lock files, scheduled task state)
+.claude/scheduled_tasks.lock
 ./gateway/node_modules
 ./gateway/libs
 ./gateway/dist

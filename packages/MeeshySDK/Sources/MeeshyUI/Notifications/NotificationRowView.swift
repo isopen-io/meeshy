@@ -8,7 +8,8 @@ public struct NotificationRowView: View {
     public var onMarkRead: (() -> Void)?
     public var onDelete: (() -> Void)?
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(
         notification: APINotification,

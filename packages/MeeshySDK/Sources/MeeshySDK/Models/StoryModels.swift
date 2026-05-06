@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 // MARK: - Story Text Style
@@ -168,10 +169,18 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var fadeIn: Float?               // animation d'entrée (secondes)
     public var fadeOut: Float?              // animation de sortie (secondes)
 
+    /// Lock flag — Patch B.3 : true = composer skips drag/edit/delete (used for repost badge sticker).
+    /// nil/false = editable. Synthesized Codable handles `Bool?` via decodeIfPresent / encodeIfPresent.
+    public var isLocked: Bool?
+    // Timeline V2 — animation keyframes (position/scale/opacity)
+    public var keyframes: [StoryKeyframe]?
+
     enum CodingKeys: String, CodingKey {
         case id, content, x, y, scale, rotation, translations, sourceLanguage, zIndex
         case textStyle, textColor, textSize, textAlign, textBg
         case startTime, displayDuration, fadeIn, fadeOut
+        case isLocked
+        case keyframes
     }
 
     public init(id: String = UUID().uuidString, content: String,
@@ -183,7 +192,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 textSize: CGFloat? = 28, textAlign: String? = "center",
                 textBg: String? = nil,
                 startTime: Float? = nil, displayDuration: Float? = nil,
-                fadeIn: Float? = nil, fadeOut: Float? = nil) {
+                fadeIn: Float? = nil, fadeOut: Float? = nil,
+                isLocked: Bool? = nil,
+                keyframes: [StoryKeyframe]? = nil) {
         self.id = id; self.content = content
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
         self.translations = translations
@@ -192,6 +203,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.textSize = textSize; self.textAlign = textAlign; self.textBg = textBg
         self.startTime = startTime; self.displayDuration = displayDuration
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
+        self.isLocked = isLocked
+        self.keyframes = keyframes
     }
 
     // MARK: - Computed properties (non-SwiftUI)
@@ -246,11 +259,14 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var fadeIn: Float?               // fade-in (secondes)
     public var fadeOut: Float?              // fade-out (secondes)
     public var sourceLanguage: String?
+    // Timeline V2 — animation keyframes (position/scale/opacity)
+    public var keyframes: [StoryKeyframe]?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaType, placement, x, y, scale, rotation, volume
         case isBackground, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
+        case keyframes
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -261,7 +277,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 isBackground: Bool? = nil,
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
-                sourceLanguage: String? = nil) {
+                sourceLanguage: String? = nil,
+                keyframes: [StoryKeyframe]? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.mediaType = mediaType; self.placement = placement
         self.x = x; self.y = y; self.scale = scale
@@ -270,6 +287,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.startTime = startTime; self.duration = duration
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
+        self.keyframes = keyframes
     }
 
     /// Convenience init that takes a typed `StoryMediaKind` instead of a raw string.
@@ -281,14 +299,16 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 isBackground: Bool? = nil,
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
-                sourceLanguage: String? = nil) {
+                sourceLanguage: String? = nil,
+                keyframes: [StoryKeyframe]? = nil) {
         self.init(id: id, postMediaId: postMediaId,
                   mediaType: kind.rawValue, placement: placement,
                   x: x, y: y, scale: scale, rotation: rotation,
                   volume: volume, isBackground: isBackground,
                   startTime: startTime, duration: duration,
                   loop: loop, fadeIn: fadeIn, fadeOut: fadeOut,
-                  sourceLanguage: sourceLanguage)
+                  sourceLanguage: sourceLanguage,
+                  keyframes: keyframes)
     }
 
     /// Type-safe view on `mediaType`. Returns `nil` if the persisted value is unrecognized
@@ -526,6 +546,9 @@ public struct StoryEffects: Codable, Sendable {
     // Durée totale du slide (sérialisée au publish)
     public var slideDuration: Float?
 
+    // Timeline V2 — transitions between adjacent clips of this slide
+    public var clipTransitions: [StoryClipTransition]?
+
     // Deprecated — conservé pour compatibilité ascendante
     @available(*, deprecated, renamed: "backgroundAudioId")
     public var musicTrackId: String?
@@ -548,7 +571,8 @@ public struct StoryEffects: Codable, Sendable {
                 audioPlayerObjects: [StoryAudioPlayerObject]? = nil,
                 backgroundAudioVariants: [StoryAudioVariant]? = nil,
                 backgroundTransform: StoryBackgroundTransform? = nil,
-                slideDuration: Float? = nil) {
+                slideDuration: Float? = nil,
+                clipTransitions: [StoryClipTransition]? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
         self.textPosition = textPosition; self.filter = filter; self.filterIntensity = filterIntensity; self.stickers = stickers
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
@@ -568,6 +592,7 @@ public struct StoryEffects: Codable, Sendable {
         self.backgroundAudioVariants = backgroundAudioVariants
         self.backgroundTransform = backgroundTransform
         self.slideDuration = slideDuration
+        self.clipTransitions = clipTransitions
     }
 
     public var parsedTextStyle: StoryTextStyle? {
@@ -783,7 +808,10 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public let createdAt: Date
     public let expiresAt: Date?
     public let repostOfId: String?
+    public let originalRepostOfId: String?
     public let repostAuthorName: String?
+    public let visibility: String?
+    public let audioUrl: String?
     public var isViewed: Bool
     public let translations: [StoryTranslation]?
     public let backgroundAudio: StoryBackgroundAudioEntry?
@@ -798,6 +826,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         return "\(seconds / 86400)d"
     }
 
+    /// Computed convenience used by C.1 / C.2 to gate the Partager button and kebab items.
+    /// Defaults to **false** when visibility is nil (unknown) so we don't accidentally expose
+    /// non-public content for repost.
+    public var isPublic: Bool {
+        (visibility ?? "").uppercased() == "PUBLIC"
+    }
+
     /// Résout le contenu dans la langue préférée via le Prisme Linguistique.
     /// Retourne la traduction si disponible, sinon le contenu original.
     /// Pas de fallback implicite vers l'anglais — l'absence de traduction signifie
@@ -810,12 +845,17 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     }
 
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,
-                createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil, repostAuthorName: String? = nil,
+                createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil,
+                originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
+                visibility: String? = nil, audioUrl: String? = nil,
                 isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
-        self.repostAuthorName = repostAuthorName; self.isViewed = isViewed
+        self.originalRepostOfId = originalRepostOfId
+        self.repostAuthorName = repostAuthorName
+        self.visibility = visibility; self.audioUrl = audioUrl
+        self.isViewed = isViewed
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
     }
@@ -909,7 +949,10 @@ extension Array where Element == APIPost {
                                  storyEffects: post.storyEffects,
                                  createdAt: post.createdAt, expiresAt: effectiveExpiresAt,
                                  repostOfId: post.repostOf?.id,
+                                 originalRepostOfId: post.originalRepostOfId,
                                  repostAuthorName: post.repostOf?.author.name,
+                                 visibility: post.visibility,
+                                 audioUrl: post.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,
                                  translations: storyTranslations,
                                  reactionCount: totalReactions, commentCount: post.commentCount ?? 0)
@@ -974,7 +1017,13 @@ public struct ReactionRequest: Encodable {
 public struct RepostRequest: Encodable {
     public let content: String?
     public let isQuote: Bool
-    public init(content: String? = nil, isQuote: Bool = false) { self.content = content; self.isQuote = isQuote }
+    public let targetType: String?
+
+    public init(content: String? = nil, isQuote: Bool = false, targetType: String? = nil) {
+        self.content = content
+        self.isQuote = isQuote
+        self.targetType = targetType
+    }
 }
 
 public struct StatusCreateRequest: Encodable {
@@ -998,18 +1047,1129 @@ public struct StoryViewRequest: Encodable {
 
 extension StorySlide {
     /// Convertit un StorySlide (local, non encore publié) en StoryItem pour la preview.
+    /// Les médias sont reconstruits depuis mediaObjects/audioPlayerObjects avec les bons types
+    /// pour que le reader puisse les résoudre via postMediaId → story.media.
     public func toPreviewStoryItem() -> StoryItem {
-        StoryItem(
+        var mediaEntries: [FeedMedia] = []
+
+        // Legacy background image
+        if let url = mediaURL {
+            mediaEntries.append(FeedMedia(id: id, type: .image, url: url,
+                                          thumbnailColor: "4ECDC4", width: nil, height: nil))
+        }
+
+        // Canvas media objects (images + videos)
+        if let mediaObjects = effects.mediaObjects {
+            for obj in mediaObjects {
+                let feedType: FeedMediaType = obj.kind == .video ? .video : .image
+                mediaEntries.append(FeedMedia(
+                    id: obj.postMediaId.isEmpty ? obj.id : obj.postMediaId,
+                    type: feedType,
+                    thumbnailColor: "4ECDC4"
+                ))
+            }
+        }
+
+        // Canvas audio player objects
+        if let audioObjects = effects.audioPlayerObjects {
+            for obj in audioObjects {
+                mediaEntries.append(FeedMedia(
+                    id: obj.postMediaId.isEmpty ? obj.id : obj.postMediaId,
+                    type: .audio,
+                    thumbnailColor: "9B59B6"
+                ))
+            }
+        }
+
+        return StoryItem(
             id: id,
             content: content,
-            media: mediaURL.map { url in
-                [FeedMedia(id: id, type: .image, url: url,
-                           thumbnailColor: "4ECDC4", width: nil, height: nil)]
-            } ?? [],
+            media: mediaEntries,
             storyEffects: effects,
             createdAt: Date(),
             expiresAt: Calendar.current.date(byAdding: .hour, value: 21, to: Date()),
             isViewed: false
         )
+    }
+}
+
+// MARK: - Timeline Project (Snapshot for Command Pattern)
+
+/// Snapshot Codable d'un slide pour le pattern Command (undo/redo).
+/// Round-trip garanti : `TimelineProject(from: slide).apply(to: &slide)` est no-op.
+public struct TimelineProject: Codable, Sendable {
+    public var slideId: String
+    public var slideDuration: Float
+    public var mediaObjects: [StoryMediaObject]
+    public var audioPlayerObjects: [StoryAudioPlayerObject]
+    public var textObjects: [StoryTextObject]
+    public var clipTransitions: [StoryClipTransition]
+
+    public init(slideId: String,
+                slideDuration: Float,
+                mediaObjects: [StoryMediaObject] = [],
+                audioPlayerObjects: [StoryAudioPlayerObject] = [],
+                textObjects: [StoryTextObject] = [],
+                clipTransitions: [StoryClipTransition] = []) {
+        self.slideId = slideId
+        self.slideDuration = slideDuration
+        self.mediaObjects = mediaObjects
+        self.audioPlayerObjects = audioPlayerObjects
+        self.textObjects = textObjects
+        self.clipTransitions = clipTransitions
+    }
+
+    public init(from slide: StorySlide) {
+        self.slideId = slide.id
+        self.slideDuration = Float(slide.duration)
+        self.mediaObjects = slide.effects.mediaObjects ?? []
+        self.audioPlayerObjects = slide.effects.audioPlayerObjects ?? []
+        self.textObjects = slide.effects.textObjects ?? []
+        self.clipTransitions = slide.effects.clipTransitions ?? []
+    }
+
+    public func apply(to slide: inout StorySlide) {
+        slide.duration = TimeInterval(slideDuration)
+        slide.effects.mediaObjects = mediaObjects
+        slide.effects.audioPlayerObjects = audioPlayerObjects
+        slide.effects.textObjects = textObjects
+        slide.effects.clipTransitions = clipTransitions
+    }
+}
+
+// MARK: - Edit Command (Pattern Command for Undo/Redo)
+
+/// Atomic, reversible operation on a `TimelineProject`. Each conforming type
+/// captures the minimum delta required to apply and to revert the operation.
+public protocol EditCommand: Codable, Sendable {
+    var id: String { get }
+    var timestamp: Date { get }
+    func apply(to project: inout TimelineProject) throws
+    func revert(from project: inout TimelineProject) throws
+}
+
+/// Errors thrown when applying or reverting an `EditCommand` against a project
+/// whose state no longer matches the assumptions captured at command creation.
+public enum EditCommandError: Error, Sendable, Equatable {
+    case clipNotFound(id: String)
+    case transitionNotFound(id: String)
+    case keyframeNotFound(id: String)
+    case invalidState(reason: String)
+}
+
+// MARK: - Timeline Clip Kind (target collection identifier)
+
+/// Identifies which collection of a `TimelineProject` a command targets.
+/// `video` and `image` both live in `mediaObjects` but the kind is preserved
+/// to drive UI / engine routing without re-deriving from `mediaType`.
+public enum TimelineClipKind: String, Codable, CaseIterable, Sendable {
+    case video
+    case image
+    case audio
+    case text
+}
+
+// MARK: - Edit Commands (12 concrete cases)
+
+public struct AddClipCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let postMediaId: String
+    public let kind: TimelineClipKind
+    public let startTime: Float
+    public let duration: Float
+    public let content: String?
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                postMediaId: String,
+                kind: TimelineClipKind,
+                startTime: Float,
+                duration: Float,
+                content: String? = nil) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.postMediaId = postMediaId
+        self.kind = kind
+        self.startTime = startTime
+        self.duration = duration
+        self.content = content
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        switch kind {
+        case .video, .image:
+            let mediaType = kind == .video ? "video" : "image"
+            project.mediaObjects.append(
+                StoryMediaObject(id: clipId, postMediaId: postMediaId,
+                                 mediaType: mediaType, placement: "media",
+                                 startTime: startTime, duration: duration)
+            )
+        case .audio:
+            project.audioPlayerObjects.append(
+                StoryAudioPlayerObject(id: clipId, postMediaId: postMediaId,
+                                       placement: "overlay",
+                                       waveformSamples: [],
+                                       startTime: startTime, duration: duration)
+            )
+        case .text:
+            project.textObjects.append(
+                StoryTextObject(id: clipId, content: content ?? "",
+                                startTime: startTime,
+                                displayDuration: duration)
+            )
+        }
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        switch kind {
+        case .video, .image:
+            project.mediaObjects.removeAll { $0.id == clipId }
+        case .audio:
+            project.audioPlayerObjects.removeAll { $0.id == clipId }
+        case .text:
+            project.textObjects.removeAll { $0.id == clipId }
+        }
+    }
+}
+
+public struct DeleteClipCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let snapshotMedia: StoryMediaObject?
+    public let snapshotAudio: StoryAudioPlayerObject?
+    public let snapshotText: StoryTextObject?
+    public let insertionIndex: Int
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                snapshotMedia: StoryMediaObject?,
+                snapshotAudio: StoryAudioPlayerObject?,
+                snapshotText: StoryTextObject?,
+                insertionIndex: Int) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.snapshotMedia = snapshotMedia
+        self.snapshotAudio = snapshotAudio
+        self.snapshotText = snapshotText
+        self.insertionIndex = insertionIndex
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        switch kind {
+        case .video, .image:
+            guard project.mediaObjects.contains(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.mediaObjects.removeAll { $0.id == clipId }
+        case .audio:
+            guard project.audioPlayerObjects.contains(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.audioPlayerObjects.removeAll { $0.id == clipId }
+        case .text:
+            guard project.textObjects.contains(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.textObjects.removeAll { $0.id == clipId }
+        }
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        switch kind {
+        case .video, .image:
+            guard let snap = snapshotMedia else {
+                throw EditCommandError.invalidState(reason: "missing media snapshot")
+            }
+            let idx = min(insertionIndex, project.mediaObjects.count)
+            project.mediaObjects.insert(snap, at: idx)
+        case .audio:
+            guard let snap = snapshotAudio else {
+                throw EditCommandError.invalidState(reason: "missing audio snapshot")
+            }
+            let idx = min(insertionIndex, project.audioPlayerObjects.count)
+            project.audioPlayerObjects.insert(snap, at: idx)
+        case .text:
+            guard let snap = snapshotText else {
+                throw EditCommandError.invalidState(reason: "missing text snapshot")
+            }
+            let idx = min(insertionIndex, project.textObjects.count)
+            project.textObjects.insert(snap, at: idx)
+        }
+    }
+}
+
+public struct MoveClipCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let oldStartTime: Float
+    public let newStartTime: Float
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                oldStartTime: Float,
+                newStartTime: Float) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.oldStartTime = oldStartTime
+        self.newStartTime = newStartTime
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try mutate(project: &project, startTime: newStartTime)
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try mutate(project: &project, startTime: oldStartTime)
+    }
+
+    private func mutate(project: inout TimelineProject, startTime: Float) throws {
+        switch kind {
+        case .video, .image:
+            guard let idx = project.mediaObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.mediaObjects[idx].startTime = startTime
+        case .audio:
+            guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.audioPlayerObjects[idx].startTime = startTime
+        case .text:
+            guard let idx = project.textObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.textObjects[idx].startTime = startTime
+        }
+    }
+}
+
+public struct TrimClipCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let oldStartTime: Float
+    public let oldDuration: Float
+    public let newStartTime: Float
+    public let newDuration: Float
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                oldStartTime: Float,
+                oldDuration: Float,
+                newStartTime: Float,
+                newDuration: Float) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.oldStartTime = oldStartTime
+        self.oldDuration = oldDuration
+        self.newStartTime = newStartTime
+        self.newDuration = newDuration
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try mutate(project: &project, startTime: newStartTime, duration: newDuration)
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try mutate(project: &project, startTime: oldStartTime, duration: oldDuration)
+    }
+
+    private func mutate(project: inout TimelineProject,
+                        startTime: Float, duration: Float) throws {
+        switch kind {
+        case .video, .image:
+            guard let idx = project.mediaObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.mediaObjects[idx].startTime = startTime
+            project.mediaObjects[idx].duration = duration
+        case .audio:
+            guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.audioPlayerObjects[idx].startTime = startTime
+            project.audioPlayerObjects[idx].duration = duration
+        case .text:
+            guard let idx = project.textObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.textObjects[idx].startTime = startTime
+            project.textObjects[idx].displayDuration = duration
+        }
+    }
+}
+
+public struct SplitClipCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let splitAtRelativeTime: Float
+    public let leftId: String
+    public let rightId: String
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                splitAtRelativeTime: Float,
+                leftId: String,
+                rightId: String) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.splitAtRelativeTime = splitAtRelativeTime
+        self.leftId = leftId
+        self.rightId = rightId
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        switch kind {
+        case .video, .image:
+            guard let idx = project.mediaObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            let original = project.mediaObjects[idx]
+            let originalStart = original.startTime ?? 0
+            let originalDuration = original.duration ?? 0
+            var left = original
+            left.id = leftId
+            left.duration = splitAtRelativeTime
+            var right = original
+            right.id = rightId
+            right.startTime = originalStart + splitAtRelativeTime
+            right.duration = max(0, originalDuration - splitAtRelativeTime)
+            project.mediaObjects.replaceSubrange(idx...idx, with: [left, right])
+        case .audio:
+            guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            let original = project.audioPlayerObjects[idx]
+            let originalStart = original.startTime ?? 0
+            let originalDuration = original.duration ?? 0
+            var left = original
+            left.id = leftId
+            left.duration = splitAtRelativeTime
+            var right = original
+            right.id = rightId
+            right.startTime = originalStart + splitAtRelativeTime
+            right.duration = max(0, originalDuration - splitAtRelativeTime)
+            project.audioPlayerObjects.replaceSubrange(idx...idx, with: [left, right])
+        case .text:
+            guard let idx = project.textObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            let original = project.textObjects[idx]
+            let originalStart = original.startTime ?? 0
+            let originalDuration = original.displayDuration ?? 0
+            var left = original
+            left.id = leftId
+            left.displayDuration = splitAtRelativeTime
+            var right = original
+            right.id = rightId
+            right.startTime = originalStart + splitAtRelativeTime
+            right.displayDuration = max(0, originalDuration - splitAtRelativeTime)
+            project.textObjects.replaceSubrange(idx...idx, with: [left, right])
+        }
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        switch kind {
+        case .video, .image:
+            guard let leftIdx = project.mediaObjects.firstIndex(where: { $0.id == leftId }),
+                  let rightIdx = project.mediaObjects.firstIndex(where: { $0.id == rightId }) else {
+                throw EditCommandError.clipNotFound(id: leftId)
+            }
+            let left = project.mediaObjects[leftIdx]
+            let right = project.mediaObjects[rightIdx]
+            var restored = left
+            restored.id = clipId
+            restored.duration = (left.duration ?? 0) + (right.duration ?? 0)
+            let lower = min(leftIdx, rightIdx)
+            let upper = max(leftIdx, rightIdx)
+            project.mediaObjects.replaceSubrange(lower...upper, with: [restored])
+        case .audio:
+            guard let leftIdx = project.audioPlayerObjects.firstIndex(where: { $0.id == leftId }),
+                  let rightIdx = project.audioPlayerObjects.firstIndex(where: { $0.id == rightId }) else {
+                throw EditCommandError.clipNotFound(id: leftId)
+            }
+            let left = project.audioPlayerObjects[leftIdx]
+            let right = project.audioPlayerObjects[rightIdx]
+            var restored = left
+            restored.id = clipId
+            restored.duration = (left.duration ?? 0) + (right.duration ?? 0)
+            let lower = min(leftIdx, rightIdx)
+            let upper = max(leftIdx, rightIdx)
+            project.audioPlayerObjects.replaceSubrange(lower...upper, with: [restored])
+        case .text:
+            guard let leftIdx = project.textObjects.firstIndex(where: { $0.id == leftId }),
+                  let rightIdx = project.textObjects.firstIndex(where: { $0.id == rightId }) else {
+                throw EditCommandError.clipNotFound(id: leftId)
+            }
+            let left = project.textObjects[leftIdx]
+            let right = project.textObjects[rightIdx]
+            var restored = left
+            restored.id = clipId
+            restored.displayDuration = (left.displayDuration ?? 0) + (right.displayDuration ?? 0)
+            let lower = min(leftIdx, rightIdx)
+            let upper = max(leftIdx, rightIdx)
+            project.textObjects.replaceSubrange(lower...upper, with: [restored])
+        }
+    }
+}
+
+public struct AddTransitionCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let transition: StoryClipTransition
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                transition: StoryClipTransition) {
+        self.id = id
+        self.timestamp = timestamp
+        self.transition = transition
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        project.clipTransitions.append(transition)
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        project.clipTransitions.removeAll { $0.id == transition.id }
+    }
+}
+
+public struct RemoveTransitionCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let transitionId: String
+    public let snapshot: StoryClipTransition
+    public let insertionIndex: Int
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                transitionId: String,
+                snapshot: StoryClipTransition,
+                insertionIndex: Int) {
+        self.id = id
+        self.timestamp = timestamp
+        self.transitionId = transitionId
+        self.snapshot = snapshot
+        self.insertionIndex = insertionIndex
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        guard project.clipTransitions.contains(where: { $0.id == transitionId }) else {
+            throw EditCommandError.transitionNotFound(id: transitionId)
+        }
+        project.clipTransitions.removeAll { $0.id == transitionId }
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        let idx = min(insertionIndex, project.clipTransitions.count)
+        project.clipTransitions.insert(snapshot, at: idx)
+    }
+}
+
+public struct ChangeTransitionCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let transitionId: String
+    public let previous: StoryClipTransition
+    public let updated: StoryClipTransition
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                transitionId: String,
+                previous: StoryClipTransition,
+                updated: StoryClipTransition) {
+        self.id = id
+        self.timestamp = timestamp
+        self.transitionId = transitionId
+        self.previous = previous
+        self.updated = updated
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        guard let idx = project.clipTransitions.firstIndex(where: { $0.id == transitionId }) else {
+            throw EditCommandError.transitionNotFound(id: transitionId)
+        }
+        project.clipTransitions[idx] = updated
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        guard let idx = project.clipTransitions.firstIndex(where: { $0.id == transitionId }) else {
+            throw EditCommandError.transitionNotFound(id: transitionId)
+        }
+        project.clipTransitions[idx] = previous
+    }
+}
+
+// MARK: - Keyframe array helpers (private to this file)
+
+private extension TimelineProject {
+    /// Normalises the keyframes array on a clip so that "no keyframes" is
+    /// always represented as `nil` (not `[]`). This canonical form lets
+    /// `apply -> revert` produce a project byte-equal to the pre-apply state
+    /// even when the original clip had `keyframes == nil` and a single add
+    /// would otherwise leave it as `[]` after removal.
+    mutating func mutateKeyframes(clipId: String,
+                                  kind: TimelineClipKind,
+                                  block: (inout [StoryKeyframe]) throws -> Void) throws {
+        switch kind {
+        case .video, .image:
+            guard let idx = mediaObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            var arr = mediaObjects[idx].keyframes ?? []
+            try block(&arr)
+            mediaObjects[idx].keyframes = arr.isEmpty ? nil : arr
+        case .text:
+            guard let idx = textObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            var arr = textObjects[idx].keyframes ?? []
+            try block(&arr)
+            textObjects[idx].keyframes = arr.isEmpty ? nil : arr
+        case .audio:
+            throw EditCommandError.invalidState(reason: "audio clips do not support keyframes")
+        }
+    }
+}
+
+public struct AddKeyframeCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let keyframe: StoryKeyframe
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                keyframe: StoryKeyframe) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.keyframe = keyframe
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
+            arr.append(keyframe)
+        }
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
+            arr.removeAll { $0.id == keyframe.id }
+        }
+    }
+}
+
+public struct MoveKeyframeCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let keyframeId: String
+    public let oldTime: Float
+    public let newTime: Float
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                keyframeId: String,
+                oldTime: Float,
+                newTime: Float) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.keyframeId = keyframeId
+        self.oldTime = oldTime
+        self.newTime = newTime
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try setTime(project: &project, time: newTime)
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try setTime(project: &project, time: oldTime)
+    }
+
+    private func setTime(project: inout TimelineProject, time: Float) throws {
+        try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
+            guard let idx = arr.firstIndex(where: { $0.id == keyframeId }) else {
+                throw EditCommandError.keyframeNotFound(id: keyframeId)
+            }
+            arr[idx].time = time
+        }
+    }
+}
+
+public struct DeleteKeyframeCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let keyframeId: String
+    public let snapshot: StoryKeyframe
+    public let insertionIndex: Int
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                keyframeId: String,
+                snapshot: StoryKeyframe,
+                insertionIndex: Int) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.keyframeId = keyframeId
+        self.snapshot = snapshot
+        self.insertionIndex = insertionIndex
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
+            guard arr.contains(where: { $0.id == keyframeId }) else {
+                throw EditCommandError.keyframeNotFound(id: keyframeId)
+            }
+            arr.removeAll { $0.id == keyframeId }
+        }
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
+            let idx = min(insertionIndex, arr.count)
+            arr.insert(snapshot, at: idx)
+        }
+    }
+}
+
+public struct SetClipPropertyCommand: EditCommand {
+    public enum ClipProperty: Codable, Sendable, Equatable {
+        case volume(old: Float, new: Float)
+        case fadeIn(old: Float?, new: Float?)
+        case fadeOut(old: Float?, new: Float?)
+        case loop(old: Bool?, new: Bool?)
+        case isBackground(old: Bool?, new: Bool?)
+        case isLocked(old: Bool?, new: Bool?)
+
+        private enum CodingKeys: String, CodingKey {
+            case type, oldFloat, newFloat, oldBool, newBool
+        }
+
+        private enum Tag: String, Codable {
+            case volume, fadeIn, fadeOut, loop, isBackground, isLocked
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let tag = try c.decode(Tag.self, forKey: .type)
+            switch tag {
+            case .volume:
+                let old = try c.decode(Float.self, forKey: .oldFloat)
+                let new = try c.decode(Float.self, forKey: .newFloat)
+                self = .volume(old: old, new: new)
+            case .fadeIn:
+                let old = try c.decodeIfPresent(Float.self, forKey: .oldFloat)
+                let new = try c.decodeIfPresent(Float.self, forKey: .newFloat)
+                self = .fadeIn(old: old, new: new)
+            case .fadeOut:
+                let old = try c.decodeIfPresent(Float.self, forKey: .oldFloat)
+                let new = try c.decodeIfPresent(Float.self, forKey: .newFloat)
+                self = .fadeOut(old: old, new: new)
+            case .loop:
+                let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
+                let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
+                self = .loop(old: old, new: new)
+            case .isBackground:
+                let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
+                let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
+                self = .isBackground(old: old, new: new)
+            case .isLocked:
+                let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
+                let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
+                self = .isLocked(old: old, new: new)
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case .volume(let old, let new):
+                try c.encode(Tag.volume, forKey: .type)
+                try c.encode(old, forKey: .oldFloat)
+                try c.encode(new, forKey: .newFloat)
+            case .fadeIn(let old, let new):
+                try c.encode(Tag.fadeIn, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldFloat)
+                try c.encodeIfPresent(new, forKey: .newFloat)
+            case .fadeOut(let old, let new):
+                try c.encode(Tag.fadeOut, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldFloat)
+                try c.encodeIfPresent(new, forKey: .newFloat)
+            case .loop(let old, let new):
+                try c.encode(Tag.loop, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldBool)
+                try c.encodeIfPresent(new, forKey: .newBool)
+            case .isBackground(let old, let new):
+                try c.encode(Tag.isBackground, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldBool)
+                try c.encodeIfPresent(new, forKey: .newBool)
+            case .isLocked(let old, let new):
+                try c.encode(Tag.isLocked, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldBool)
+                try c.encodeIfPresent(new, forKey: .newBool)
+            }
+        }
+    }
+
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let property: ClipProperty
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                property: ClipProperty) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.property = property
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try mutate(project: &project, useNew: true)
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try mutate(project: &project, useNew: false)
+    }
+
+    private func mutate(project: inout TimelineProject, useNew: Bool) throws {
+        switch kind {
+        case .video, .image:
+            guard let idx = project.mediaObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            apply(property: property, to: &project.mediaObjects[idx], useNew: useNew)
+        case .audio:
+            guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            apply(property: property, to: &project.audioPlayerObjects[idx], useNew: useNew)
+        case .text:
+            guard let idx = project.textObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            apply(property: property, to: &project.textObjects[idx], useNew: useNew)
+        }
+    }
+
+    private func apply(property: ClipProperty,
+                       to media: inout StoryMediaObject,
+                       useNew: Bool) {
+        switch property {
+        case .volume(let old, let new):
+            media.volume = useNew ? new : old
+        case .fadeIn(let old, let new):
+            media.fadeIn = useNew ? new : old
+        case .fadeOut(let old, let new):
+            media.fadeOut = useNew ? new : old
+        case .loop(let old, let new):
+            media.loop = useNew ? new : old
+        case .isBackground(let old, let new):
+            media.isBackground = useNew ? new : old
+        case .isLocked:
+            break
+        }
+    }
+
+    private func apply(property: ClipProperty,
+                       to audio: inout StoryAudioPlayerObject,
+                       useNew: Bool) {
+        switch property {
+        case .volume(let old, let new):
+            audio.volume = useNew ? new : old
+        case .fadeIn(let old, let new):
+            audio.fadeIn = useNew ? new : old
+        case .fadeOut(let old, let new):
+            audio.fadeOut = useNew ? new : old
+        case .loop(let old, let new):
+            audio.loop = useNew ? new : old
+        case .isBackground(let old, let new):
+            audio.isBackground = useNew ? new : old
+        case .isLocked:
+            break
+        }
+    }
+
+    private func apply(property: ClipProperty,
+                       to text: inout StoryTextObject,
+                       useNew: Bool) {
+        switch property {
+        case .isLocked(let old, let new):
+            text.isLocked = useNew ? new : old
+        case .fadeIn(let old, let new):
+            text.fadeIn = useNew ? new : old
+        case .fadeOut(let old, let new):
+            text.fadeOut = useNew ? new : old
+        case .volume, .loop, .isBackground:
+            break
+        }
+    }
+}
+
+// MARK: - Story Easing (Timeline V2)
+
+/// Easing curve applied between two interpolated values (transitions, keyframes).
+/// All curves map [0, 1] -> [0, 1] monotonically with `apply(0) == 0` and `apply(1) == 1`.
+public enum StoryEasing: String, Codable, CaseIterable, Sendable {
+    case linear
+    case easeIn
+    case easeOut
+    case easeInOut
+
+    public func apply(_ t: Float) -> Float {
+        switch self {
+        case .linear:
+            return t
+        case .easeIn:
+            return t * t
+        case .easeOut:
+            return 1 - (1 - t) * (1 - t)
+        case .easeInOut:
+            return t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2
+        }
+    }
+}
+
+// MARK: - Story Transition Kind (Timeline V2)
+
+/// Kind of inter-clip transition rendered by the timeline compositor.
+/// Launch-supported: `crossfade` (opacity ramp) and `dissolve` (CIDissolveTransition mask).
+/// Future: `push`, `wipe`, `swipeLeft`, `swipeRight`, `zoomIn`, `zoomOut`.
+public enum StoryTransitionKind: String, Codable, CaseIterable, Sendable {
+    case crossfade
+    case dissolve
+}
+
+// MARK: - Story Clip Transition (Timeline V2)
+
+/// Transition between two adjacent clips of the same slide (intra-slide).
+/// Distinct from `StoryTransitionEffect` which is the inter-slide opening/closing animation.
+public struct StoryClipTransition: Codable, Identifiable, Sendable {
+    public let id: String
+    public let fromClipId: String
+    public let toClipId: String
+    public let kind: StoryTransitionKind
+    public let duration: Float
+    public let easing: StoryEasing?
+
+    public init(id: String = UUID().uuidString,
+                fromClipId: String,
+                toClipId: String,
+                kind: StoryTransitionKind,
+                duration: Float,
+                easing: StoryEasing? = nil) {
+        self.id = id
+        self.fromClipId = fromClipId
+        self.toClipId = toClipId
+        self.kind = kind
+        self.duration = duration
+        self.easing = easing
+    }
+}
+
+// MARK: - Story Keyframe (Timeline V2)
+
+/// Single keyframe for animating an object's position / scale / opacity over time.
+/// `time` is the offset (seconds) relative to the owning object's `startTime`.
+/// All transform fields are optional — only non-nil fields are interpolated.
+///
+/// Note de déviation par rapport au spec §2.1 : `time` est `var` (mutable) et non
+/// `let`, car `MoveKeyframeCommand` (Task 19) doit pouvoir muter ce champ pour
+/// l'undo/redo. `id` reste `let`. Aucune propagation visible côté consumer car
+/// `StoryKeyframe` reste un value type (les copies sont indépendantes).
+public struct StoryKeyframe: Codable, Identifiable, Sendable {
+    public let id: String
+    public var time: Float
+    public var x: CGFloat?
+    public var y: CGFloat?
+    public var scale: CGFloat?
+    public var opacity: CGFloat?
+    public var easing: StoryEasing?
+
+    public init(id: String = UUID().uuidString,
+                time: Float,
+                x: CGFloat? = nil,
+                y: CGFloat? = nil,
+                scale: CGFloat? = nil,
+                opacity: CGFloat? = nil,
+                easing: StoryEasing? = nil) {
+        self.id = id
+        self.time = time
+        self.x = x
+        self.y = y
+        self.scale = scale
+        self.opacity = opacity
+        self.easing = easing
+    }
+}
+
+// MARK: - AnyEditCommand (type-erased Codable wrapper)
+
+/// Type-erased wrapper around `EditCommand` allowing the 12 concrete command
+/// types to be persisted as a single homogeneous array (`CommandStack`).
+/// Encoded as `{"type": "<tag>", "payload": <concrete>}`.
+public enum AnyEditCommand: Codable, Sendable {
+    case addClip(AddClipCommand)
+    case deleteClip(DeleteClipCommand)
+    case moveClip(MoveClipCommand)
+    case trimClip(TrimClipCommand)
+    case splitClip(SplitClipCommand)
+    case addTransition(AddTransitionCommand)
+    case removeTransition(RemoveTransitionCommand)
+    case changeTransition(ChangeTransitionCommand)
+    case addKeyframe(AddKeyframeCommand)
+    case moveKeyframe(MoveKeyframeCommand)
+    case deleteKeyframe(DeleteKeyframeCommand)
+    case setClipProperty(SetClipPropertyCommand)
+
+    public var underlying: any EditCommand {
+        switch self {
+        case .addClip(let c):           return c
+        case .deleteClip(let c):        return c
+        case .moveClip(let c):          return c
+        case .trimClip(let c):          return c
+        case .splitClip(let c):         return c
+        case .addTransition(let c):     return c
+        case .removeTransition(let c):  return c
+        case .changeTransition(let c):  return c
+        case .addKeyframe(let c):       return c
+        case .moveKeyframe(let c):      return c
+        case .deleteKeyframe(let c):    return c
+        case .setClipProperty(let c):   return c
+        }
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try underlying.apply(to: &project)
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try underlying.revert(from: &project)
+    }
+
+    public var typeTag: String {
+        switch self {
+        case .addClip:           return "addClip"
+        case .deleteClip:        return "deleteClip"
+        case .moveClip:          return "moveClip"
+        case .trimClip:          return "trimClip"
+        case .splitClip:         return "splitClip"
+        case .addTransition:     return "addTransition"
+        case .removeTransition:  return "removeTransition"
+        case .changeTransition:  return "changeTransition"
+        case .addKeyframe:       return "addKeyframe"
+        case .moveKeyframe:      return "moveKeyframe"
+        case .deleteKeyframe:    return "deleteKeyframe"
+        case .setClipProperty:   return "setClipProperty"
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type, payload
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let tag = try c.decode(String.self, forKey: .type)
+        switch tag {
+        case "addClip":
+            self = .addClip(try c.decode(AddClipCommand.self, forKey: .payload))
+        case "deleteClip":
+            self = .deleteClip(try c.decode(DeleteClipCommand.self, forKey: .payload))
+        case "moveClip":
+            self = .moveClip(try c.decode(MoveClipCommand.self, forKey: .payload))
+        case "trimClip":
+            self = .trimClip(try c.decode(TrimClipCommand.self, forKey: .payload))
+        case "splitClip":
+            self = .splitClip(try c.decode(SplitClipCommand.self, forKey: .payload))
+        case "addTransition":
+            self = .addTransition(try c.decode(AddTransitionCommand.self, forKey: .payload))
+        case "removeTransition":
+            self = .removeTransition(try c.decode(RemoveTransitionCommand.self, forKey: .payload))
+        case "changeTransition":
+            self = .changeTransition(try c.decode(ChangeTransitionCommand.self, forKey: .payload))
+        case "addKeyframe":
+            self = .addKeyframe(try c.decode(AddKeyframeCommand.self, forKey: .payload))
+        case "moveKeyframe":
+            self = .moveKeyframe(try c.decode(MoveKeyframeCommand.self, forKey: .payload))
+        case "deleteKeyframe":
+            self = .deleteKeyframe(try c.decode(DeleteKeyframeCommand.self, forKey: .payload))
+        case "setClipProperty":
+            self = .setClipProperty(try c.decode(SetClipPropertyCommand.self, forKey: .payload))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type, in: c,
+                debugDescription: "Unknown AnyEditCommand type: \(tag)"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(typeTag, forKey: .type)
+        switch self {
+        case .addClip(let v):           try c.encode(v, forKey: .payload)
+        case .deleteClip(let v):        try c.encode(v, forKey: .payload)
+        case .moveClip(let v):          try c.encode(v, forKey: .payload)
+        case .trimClip(let v):          try c.encode(v, forKey: .payload)
+        case .splitClip(let v):         try c.encode(v, forKey: .payload)
+        case .addTransition(let v):     try c.encode(v, forKey: .payload)
+        case .removeTransition(let v):  try c.encode(v, forKey: .payload)
+        case .changeTransition(let v):  try c.encode(v, forKey: .payload)
+        case .addKeyframe(let v):       try c.encode(v, forKey: .payload)
+        case .moveKeyframe(let v):      try c.encode(v, forKey: .payload)
+        case .deleteKeyframe(let v):    try c.encode(v, forKey: .payload)
+        case .setClipProperty(let v):   try c.encode(v, forKey: .payload)
+        }
     }
 }

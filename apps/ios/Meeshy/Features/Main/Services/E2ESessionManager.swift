@@ -21,6 +21,14 @@ public actor SessionManager {
     private let keychainPrefix = "me.meeshy.e2ee.session."
     private let peerListKey = "me.meeshy.e2ee.knownPeers"
 
+    // MARK: - Per-user Keychain Namespace
+
+    /// Returns the current user ID from AuthManager (MainActor hop required since
+    /// SessionManager is an actor and AuthManager is @MainActor).
+    private func currentUserId() async -> String? {
+        await MainActor.run { AuthManager.shared.currentUser?.id }
+    }
+
     private var activeSessions: [String: SymmetricKey] = [:]
 
     private init() {}
@@ -43,10 +51,15 @@ public actor SessionManager {
 
     // MARK: - Keychain Persistence
 
-    private func persistSession(peerId: String, key: SymmetricKey) {
+    private func persistSession(peerId: String, key: SymmetricKey) async {
         let keyData = key.withUnsafeBytes { Data($0) }
+        let userId = await currentUserId()
         do {
-            try KeychainManager.shared.save(keyData.base64EncodedString(), forKey: keychainPrefix + peerId)
+            try await KeychainManager.shared.saveAsync(
+                keyData.base64EncodedString(),
+                forKey: keychainPrefix + peerId,
+                account: userId
+            )
         } catch {
             Logger.e2ee.error("Failed to persist session key for peer \(peerId): \(error)")
         }
@@ -54,10 +67,13 @@ public actor SessionManager {
         activeSessions[peerId] = key
     }
 
-    private func loadSession(peerId: String) -> SymmetricKey? {
+    private func loadSession(peerId: String) async -> SymmetricKey? {
         if let cached = activeSessions[peerId] { return cached }
-        guard let base64 = KeychainManager.shared.load(forKey: keychainPrefix + peerId),
-              let data = Data(base64Encoded: base64) else { return nil }
+        let userId = await currentUserId()
+        guard let base64 = await KeychainManager.shared.loadAsync(
+            forKey: keychainPrefix + peerId,
+            account: userId
+        ), let data = Data(base64Encoded: base64) else { return nil }
         let key = SymmetricKey(data: data)
         activeSessions[peerId] = key
         return key
@@ -65,7 +81,10 @@ public actor SessionManager {
 
     public func removeSession(peerId: String) {
         activeSessions.removeValue(forKey: peerId)
-        KeychainManager.shared.delete(forKey: keychainPrefix + peerId)
+        Task {
+            let userId = await currentUserId()
+            KeychainManager.shared.delete(forKey: keychainPrefix + peerId, account: userId)
+        }
         unregisterPeer(peerId)
     }
 
@@ -73,7 +92,7 @@ public actor SessionManager {
 
     /// Récupère la session pour un utilisateur, ou l'établit via Diffie-Hellman si elle n'existe pas.
     public func getOrCreateSession(with userId: String, conversationId: String) async throws -> SymmetricKey {
-        if let key = loadSession(peerId: userId) {
+        if let key = await loadSession(peerId: userId) {
             return key
         }
 
@@ -96,13 +115,13 @@ public actor SessionManager {
             publicKeyData: signedPreKeyData
         )
 
-        persistSession(peerId: userId, key: symmetricKey)
+        await persistSession(peerId: userId, key: symmetricKey)
         return symmetricKey
     }
 
     /// Appelé lors de la réception du premier message E2EE d'un User B.
     /// Dérive la clé symétrique à partir de l'identité publique de l'expéditeur.
-    public func deriveSessionFromIncoming(senderId: String, senderIdentityPublic: Data) throws -> SymmetricKey {
+    public func deriveSessionFromIncoming(senderId: String, senderIdentityPublic: Data) async throws -> SymmetricKey {
         // MVP: On utilise notre SignedPreKey locale combinée à la clé publique de l'expéditeur
         let mySignedPreKey = try E2EEService.shared.getOrGenerateSignedPreKey()
 
@@ -111,7 +130,7 @@ public actor SessionManager {
             publicKeyData: senderIdentityPublic
         )
 
-        persistSession(peerId: senderId, key: symmetricKey)
+        await persistSession(peerId: senderId, key: symmetricKey)
         return symmetricKey
     }
 
@@ -125,10 +144,10 @@ public actor SessionManager {
     public func decryptMessage(_ ciphertext: Data, from userId: String, senderIdentity: Data? = nil) async throws -> Data {
         let sessionKey: SymmetricKey
 
-        if let key = loadSession(peerId: userId) {
+        if let key = await loadSession(peerId: userId) {
             sessionKey = key
         } else if let pubKey = senderIdentity {
-            sessionKey = try deriveSessionFromIncoming(senderId: userId, senderIdentityPublic: pubKey)
+            sessionKey = try await deriveSessionFromIncoming(senderId: userId, senderIdentityPublic: pubKey)
         } else {
             throw SessionError.missingSession
         }
@@ -136,14 +155,49 @@ public actor SessionManager {
         return try E2EEService.shared.decrypt(combinedData: ciphertext, symmetricKey: sessionKey)
     }
 
-    public func clearSessions() {
+    // MARK: - Keychain Namespace Migration
+
+    /// One-time migration of legacy un-namespaced session keys to the per-user namespace.
+    ///
+    /// Must be called after login once `AuthManager.shared.currentUser` is set.
+    /// A UserDefaults flag scoped to the userId prevents the migration from running twice.
+    ///
+    /// Dynamic peer keys (keychainPrefix + peerId) can only be migrated for peers that are
+    /// already tracked in the peerList at the time of migration. Sessions with peers not yet
+    /// in the list will be re-established via normal E2E handshake on next use.
+    public func migrateKeychainIfNeeded() async {
+        guard let userId = await currentUserId() else { return }
+
+        let flagKey = "meeshy.keychain.namespaceMigration.\(userId)"
+        guard !UserDefaults.standard.bool(forKey: flagKey) else { return }
+
+        let knownPeers = UserDefaults.standard.stringArray(forKey: peerListKey) ?? []
+        let legacyKeys = knownPeers.map { keychainPrefix + $0 }
+
+        KeychainManager.shared.migrateToNamespaced(userId: userId, keys: legacyKeys)
+        UserDefaults.standard.set(true, forKey: flagKey)
+    }
+
+    public func clearSessions() async {
+        let userId = await currentUserId()
         let allPeers = UserDefaults.standard.stringArray(forKey: peerListKey) ?? []
         for peerId in allPeers {
-            KeychainManager.shared.delete(forKey: keychainPrefix + peerId)
+            KeychainManager.shared.delete(forKey: keychainPrefix + peerId, account: userId)
         }
         UserDefaults.standard.removeObject(forKey: peerListKey)
         activeSessions.removeAll()
         E2EEService.shared.clearAllKeys()
+    }
+}
+
+// MARK: - DecryptionSessionProviding Adapter
+
+/// Bridges SessionManager (actor) to DecryptionSessionProviding.
+/// SessionManager.decryptMessage has an extra `senderIdentity` parameter,
+/// so direct protocol conformance is not possible — this thin adapter bridges the gap.
+struct LiveSessionProvider: DecryptionSessionProviding {
+    func decryptMessage(_ ciphertext: Data, from senderId: String) async throws -> Data {
+        try await SessionManager.shared.decryptMessage(ciphertext, from: senderId)
     }
 }
 

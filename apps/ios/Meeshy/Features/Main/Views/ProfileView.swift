@@ -741,23 +741,63 @@ struct ProfileView: View {
     // MARK: - Actions
 
     private func saveProfile() {
+        guard let original = authManager.currentUser else { return }
+
+        // Optimistic update — apply the edits to the local user immediately
+        // so the UI reflects them without waiting for the round-trip. Server
+        // response replaces this with the canonical form on success; on
+        // failure we roll back to the snapshot and re-open the editor.
+        let optimistic = original.applyingProfileEdits(
+            firstName: firstName.isEmpty ? nil : firstName,
+            lastName: lastName.isEmpty ? nil : lastName,
+            displayName: displayName.isEmpty ? nil : displayName,
+            bio: bio.isEmpty ? nil : bio,
+            systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
+            regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
+            customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage
+        )
+        authManager.currentUser = optimistic
+        isEditing = false
+        HapticFeedback.success()
+
+        let request = UpdateProfileRequest(
+            firstName: firstName.isEmpty ? nil : firstName,
+            lastName: lastName.isEmpty ? nil : lastName,
+            displayName: displayName.isEmpty ? nil : displayName,
+            bio: bio.isEmpty ? nil : bio,
+            systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
+            regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
+            customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage
+        )
+
+        // Offline path — persist the request to SettingsActionQueue so it
+        // replays automatically once connectivity returns. The optimistic
+        // UI is already in place; the user gets a confirmation toast.
+        if NetworkMonitor.shared.isOffline {
+            if let payload = try? JSONEncoder().encode(request) {
+                let action = SettingsAction(
+                    endpoint: "/users/me/profile",
+                    httpMethod: "PATCH",
+                    payload: payload
+                )
+                Task { await SettingsActionQueue.shared.enqueue(action) }
+                ToastManager.shared.showSuccess(String(
+                    localized: "Modifications enregistrees — seront synchronisees au retour en ligne",
+                    defaultValue: "Modifications enregistrees — seront synchronisees au retour en ligne"
+                ))
+            }
+            return
+        }
+
         isSaving = true
         Task {
             do {
-                let request = UpdateProfileRequest(
-                    firstName: firstName.isEmpty ? nil : firstName,
-                    lastName: lastName.isEmpty ? nil : lastName,
-                    displayName: displayName.isEmpty ? nil : displayName,
-                    bio: bio.isEmpty ? nil : bio,
-                    systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
-                    regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
-                    customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage
-                )
                 let updatedUser = try await UserService.shared.updateProfile(request)
                 authManager.currentUser = updatedUser
-                HapticFeedback.success()
-                isEditing = false
             } catch {
+                // Rollback to the pre-edit snapshot so the user can fix the issue.
+                authManager.currentUser = original
+                isEditing = true
                 HapticFeedback.error()
                 withAnimation { errorMessage = error.localizedDescription }
             }
@@ -814,6 +854,57 @@ struct ProfileView: View {
         formatter.dateStyle = .medium
         formatter.locale = Locale(identifier: "fr_FR")
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Optimistic Profile Builder
+
+private extension MeeshyUser {
+    /// Returns a copy with the supplied fields overridden. Used by the
+    /// profile editor to apply optimistic local updates before the server
+    /// response lands. Only fields that the editor can touch are exposed;
+    /// everything else is carried over verbatim.
+    func applyingProfileEdits(
+        firstName: String? = nil,
+        lastName: String? = nil,
+        displayName: String? = nil,
+        bio: String? = nil,
+        systemLanguage: String? = nil,
+        regionalLanguage: String? = nil,
+        customDestinationLanguage: String? = nil
+    ) -> MeeshyUser {
+        MeeshyUser(
+            id: id,
+            username: username,
+            email: email,
+            firstName: firstName ?? self.firstName,
+            lastName: lastName ?? self.lastName,
+            displayName: displayName ?? self.displayName,
+            bio: bio ?? self.bio,
+            avatar: avatar,
+            banner: banner,
+            role: role,
+            systemLanguage: systemLanguage ?? self.systemLanguage,
+            regionalLanguage: regionalLanguage ?? self.regionalLanguage,
+            isOnline: isOnline,
+            lastActiveAt: lastActiveAt,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            blockedUserIds: blockedUserIds,
+            isActive: isActive,
+            deactivatedAt: deactivatedAt,
+            isAnonymous: isAnonymous,
+            isMeeshyer: isMeeshyer,
+            phoneNumber: phoneNumber,
+            emailVerifiedAt: emailVerifiedAt,
+            phoneVerifiedAt: phoneVerifiedAt,
+            customDestinationLanguage: customDestinationLanguage ?? self.customDestinationLanguage,
+            autoTranslateEnabled: autoTranslateEnabled,
+            timezone: timezone,
+            registrationCountry: registrationCountry,
+            profileCompletionRate: profileCompletionRate,
+            signalIdentityKeyPublic: signalIdentityKeyPublic
+        )
     }
 }
 

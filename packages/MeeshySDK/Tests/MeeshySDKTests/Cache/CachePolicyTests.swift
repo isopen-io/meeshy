@@ -34,8 +34,8 @@ final class CachePolicyTests: XCTestCase {
     func test_predefined_messages() {
         let p = CachePolicy.messages
         XCTAssertEqual(p.ttl, TimeInterval.months(6))
-        XCTAssertNil(p.staleTTL)
-        XCTAssertEqual(p.maxItemCount, 50)
+        XCTAssertEqual(p.staleTTL, TimeInterval.minutes(2))
+        XCTAssertEqual(p.maxItemCount, 600)
     }
 
     func test_predefined_mediaImages() {

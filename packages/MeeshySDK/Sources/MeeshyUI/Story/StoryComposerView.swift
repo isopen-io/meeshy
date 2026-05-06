@@ -168,6 +168,7 @@ public struct StoryComposerView: View {
     @State private var mediaLoadProgress: Double = 0
     @State private var mediaLoadLabel: String = ""
     @State private var visibility: String = "PUBLIC"
+    @State private var lostMediaCount: Int = 0  // > 0 triggers an alert after restoreDraft
 
     // MARK: - Transition effects (local until synced to effects)
 
@@ -197,6 +198,27 @@ public struct StoryComposerView: View {
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
+        self.onPublishSlide = onPublishSlide
+        self.onPublishAllInBackground = onPublishAllInBackground
+        self.onPreview = onPreview
+        self.onDismiss = onDismiss
+    }
+
+    /// Repost-aware initializer (C.1). Lets a caller hand the composer a
+    /// pre-built `StoryComposerViewModel` — typically one constructed via
+    /// `StoryComposerViewModel(reposting:authorHandle:)` so the canvas opens
+    /// already populated with the source slide + locked attribution badge.
+    ///
+    /// `onPreview` is left as a no-op default here because the repost flow does
+    /// not branch through the preview cycle (the slide is already known).
+    public init(
+        viewModel: StoryComposerViewModel,
+        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String) -> Void,
+        onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
+        onDismiss: @escaping () -> Void
+    ) {
+        self._viewModel = State(wrappedValue: viewModel)
         self.onPublishSlide = onPublishSlide
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPreview = onPreview
@@ -441,6 +463,29 @@ public struct StoryComposerView: View {
             Button(String(localized: "story.composer.quit", defaultValue: "Quitter", bundle: .module), role: .destructive) { cancelAndDismiss() }
             Button(String(localized: "story.composer.cancelAction", defaultValue: "Annuler", bundle: .module), role: .cancel) { }
         }
+        .alert(
+            String(localized: "story.composer.mediaLostTitle", defaultValue: "Médias indisponibles", bundle: .module),
+            isPresented: Binding(
+                get: { lostMediaCount > 0 },
+                set: { if !$0 { lostMediaCount = 0 } }
+            )
+        ) {
+            Button(String(localized: "story.composer.ok", defaultValue: "OK", bundle: .module)) { lostMediaCount = 0 }
+        } message: {
+            Text(
+                lostMediaCount == 1
+                ? String(
+                    localized: "story.composer.mediaLostSingle",
+                    defaultValue: "Un média de votre brouillon n'est plus disponible (fichier supprimé). Le slide a été restauré sans ce média — retake si nécessaire.",
+                    bundle: .module
+                  )
+                : String(
+                    localized: "story.composer.mediaLostMultiple",
+                    defaultValue: "\(lostMediaCount) médias de votre brouillon ne sont plus disponibles (fichiers supprimés). Les slides ont été restaurés sans ces médias.",
+                    bundle: .module
+                  )
+            )
+        }
         .onAppear { checkForDraft() }
     }
 
@@ -675,14 +720,14 @@ public struct StoryComposerView: View {
     @ViewBuilder
     private var activeToolPanel: some View {
         switch viewModel.activeTool {
-        case .photo:
-            bgMediaPanel
+        case .media:
+            mediaPanel
+        case .texture:
+            texturePanel
         case .drawing:
             drawingPanel
         case .text:
             textPanel.padding(.bottom, 8)
-        case .audio:
-            fgAudioPanel
         case .filters:
             StoryFilterGridView(viewModel: viewModel, previewImage: selectedImage)
         case .timeline:
@@ -690,76 +735,6 @@ public struct StoryComposerView: View {
         case .none:
             EmptyView()
         }
-    }
-
-    // MARK: - Background Media Panel
-
-    private var bgMediaPanel: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text(String(localized: "story.composer.backgroundLabel", defaultValue: "Arriere-plan", bundle: .module))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.6))
-                Spacer()
-                PhotosPicker(selection: $bgPhotoItem, matching: .any(of: [.images, .videos])) {
-                    HStack(spacing: 4) {
-                        Image(systemName: selectedImage != nil ? "photo.fill" : "photo.on.rectangle")
-                            .font(.system(size: 12, weight: .medium))
-                        Text(selectedImage != nil
-                            ? String(localized: "story.composer.changeMedia", defaultValue: "Changer", bundle: .module)
-                            : String(localized: "story.composer.photoOrVideo", defaultValue: "Photo/Video", bundle: .module))
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundColor(selectedImage != nil ? MeeshyColors.brandPrimary : .white.opacity(0.7))
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().fill(selectedImage != nil ? MeeshyColors.brandPrimary.opacity(0.15) : Color.white.opacity(0.1)))
-                }
-                if selectedImage != nil {
-                    Button {
-                        editingBgImage = selectedImage
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 12, weight: .medium))
-                            Text(String(localized: "story.composer.edit", defaultValue: "\u{00C9}diter", bundle: .module))
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        .foregroundColor(MeeshyColors.brandPrimary)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.15)))
-                    }
-                    Button {
-                        withAnimation(.spring(response: 0.25)) { selectedImage = nil; viewModel.hasBackgroundImage = false }
-                        HapticFeedback.light()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundColor(.white.opacity(0.5))
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
-                        Button {
-                            viewModel.backgroundColor = "#\(hex)"
-                            selectedImage = nil; viewModel.hasBackgroundImage = false
-                            HapticFeedback.light()
-                        } label: {
-                            Circle().fill(Color(hex: hex)).frame(width: 36, height: 36)
-                                .overlay(
-                                    Circle().stroke(Color.white, lineWidth: viewModel.backgroundColor == "#\(hex)" && selectedImage == nil ? 2.5 : 0).padding(1)
-                                )
-                                .frame(width: 44, height: 44).contentShape(Circle())
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-
-            mediaElementList()
-        }
-        .padding(.vertical, 12)
     }
 
     // MARK: - Drawing Panel
@@ -841,32 +816,133 @@ public struct StoryComposerView: View {
         }
     }
 
-    // MARK: - Media Panel (Image + Video merged)
+    // MARK: - Unified Media Panel (images, videos, audio — background & foreground)
 
     private var mediaPanel: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(String(localized: "story.composer.media", defaultValue: "Media", bundle: .module))
-                            .font(.system(size: 13, weight: .medium))
+        VStack(spacing: 10) {
+            // Background section (max 1)
+            VStack(spacing: 6) {
+                HStack {
+                    Label(String(localized: "story.composer.bgMedia", defaultValue: "Arriere-plan", bundle: .module),
+                          systemImage: "rectangle.inset.filled")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.6))
+                    Spacer()
+                    if viewModel.currentEffects.resolvedBackgroundMedia != nil {
+                        Text("1/1")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.4))
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
                 }
-            }
-            .padding(.horizontal, 16)
+                .padding(.horizontal, 16)
 
+                HStack(spacing: 8) {
+                    if viewModel.currentEffects.resolvedBackgroundMedia == nil {
+                        PhotosPicker(selection: $bgPhotoItem, matching: .any(of: [.images, .videos])) {
+                            mediaPillLabel(icon: "photo.fill", text: String(localized: "story.composer.setBackground", defaultValue: "Definir le fond", bundle: .module))
+                        }
+                    } else {
+                        PhotosPicker(selection: $bgPhotoItem, matching: .any(of: [.images, .videos])) {
+                            mediaPillLabel(icon: "arrow.triangle.2.circlepath", text: String(localized: "story.composer.changeBackground", defaultValue: "Changer", bundle: .module))
+                        }
+                        Button {
+                            if let bgMedia = viewModel.currentEffects.resolvedBackgroundMedia {
+                                viewModel.deleteElement(id: bgMedia.id)
+                            }
+                            selectedImage = nil
+                            viewModel.hasBackgroundImage = false
+                            HapticFeedback.light()
+                        } label: {
+                            mediaPillLabel(icon: "trash", text: String(localized: "story.composer.removeBackground", defaultValue: "Retirer", bundle: .module), destructive: true)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+
+            Divider().opacity(0.2).padding(.horizontal, 16)
+
+            // Foreground section (multiple)
+            VStack(spacing: 6) {
+                HStack {
+                    Label(String(localized: "story.composer.fgMedia", defaultValue: "Medias", bundle: .module),
+                          systemImage: "square.stack.3d.up")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.6))
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+
+                HStack(spacing: 8) {
+                    if viewModel.canAddMedia {
+                        PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
+                            mediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module))
+                        }
+                    }
+                    if viewModel.canAddAudio {
+                        Button { showAudioDocumentPicker = true } label: {
+                            mediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module))
+                        }
+                        Button { showVoiceRecorderSheet = true } label: {
+                            mediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module))
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+
+            // Element list (all media + audio objects)
             mediaElementList()
+            audioElementList()
         }
         .padding(.vertical, 10)
     }
 
-    // MARK: - Foreground Audio Panel
+    private func mediaPillLabel(icon: String, text: String, destructive: Bool = false) -> MediaPillLabel {
+        MediaPillLabel(icon: icon, text: text, destructive: destructive)
+    }
+
+    // MARK: - Texture Panel (background color / patterns)
+
+
+    private var texturePanel: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Label(String(localized: "story.composer.bgColor", defaultValue: "Couleur de fond", bundle: .module),
+                      systemImage: "paintpalette")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+
+            // Color grid — large touch targets (50pt circles, 56pt hit area)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 56), spacing: 10)], spacing: 10) {
+                ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
+                    Button {
+                        viewModel.backgroundColor = "#\(hex)"
+                        selectedImage = nil
+                        viewModel.hasBackgroundImage = false
+                        HapticFeedback.light()
+                    } label: {
+                        Circle().fill(Color(hex: hex))
+                            .frame(width: 50, height: 50)
+                            .overlay(
+                                Circle().stroke(Color.white, lineWidth: viewModel.backgroundColor == "#\(hex)" && selectedImage == nil ? 3 : 0)
+                                    .padding(2)
+                            )
+                            .shadow(color: Color(hex: hex).opacity(viewModel.backgroundColor == "#\(hex)" ? 0.5 : 0), radius: 6)
+                    }
+                    .frame(width: 56, height: 56)
+                    .contentShape(Circle())
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.vertical, 14)
+    }
+
+    // MARK: - Foreground Audio Panel (legacy — kept for voice recorder sheet wiring)
 
     private var fgAudioPanel: some View {
         VStack(spacing: 8) {
@@ -931,11 +1007,24 @@ public struct StoryComposerView: View {
                     .background(Capsule().fill(MeeshyColors.indigo300))
             }
             Spacer()
+            // Edit button
+            Button {
+                openMediaEditor(elementId: obj.id)
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: obj.kind == .video ? "film" : "crop")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandPrimary)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(MeeshyColors.brandPrimary.opacity(0.15)))
+            }
+            .accessibilityLabel(String(localized: "story.composer.editMedia", defaultValue: "Editer", bundle: .module))
+            // Background/foreground toggle
             Button {
                 viewModel.toggleBackground(id: obj.id)
                 HapticFeedback.light()
             } label: {
-                Image(systemName: isBackground ? "rectangle.fill" : "rectangle")
+                Image(systemName: isBackground ? "square.filled.on.square" : "square.on.square")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(isBackground ? MeeshyColors.indigo200 : MeeshyColors.indigo400)
                     .frame(width: 28, height: 28)
@@ -944,16 +1033,18 @@ public struct StoryComposerView: View {
             .accessibilityLabel(isBackground
                 ? String(localized: "story.composer.moveToForeground", defaultValue: "Mettre en premier plan", bundle: .module)
                 : String(localized: "story.composer.moveToBackground", defaultValue: "Mettre en fond", bundle: .module))
+            // Timeline
             Button {
                 viewModel.selectedElementId = obj.id
-                viewModel.isTimelineVisible = true
+                viewModel.activeTool = .timeline
             } label: {
-                Image(systemName: "timeline.selection")
+                Image(systemName: "timer")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(MeeshyColors.indigo400)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
             }
+            // Delete
             Button {
                 viewModel.deleteElement(id: obj.id)
                 HapticFeedback.medium()
@@ -1088,11 +1179,25 @@ public struct StoryComposerView: View {
                     .background(Capsule().fill(MeeshyColors.indigo300))
             }
             Spacer()
+            // Edit (timeline for audio)
+            Button {
+                viewModel.selectedElementId = obj.id
+                viewModel.activeTool = .timeline
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: "waveform.and.magnifyingglass")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandPrimary)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(MeeshyColors.brandPrimary.opacity(0.15)))
+            }
+            .accessibilityLabel(String(localized: "story.composer.editAudio", defaultValue: "Editer l'audio", bundle: .module))
+            // Background/foreground toggle
             Button {
                 viewModel.toggleBackground(id: obj.id)
                 HapticFeedback.light()
             } label: {
-                Image(systemName: isBackground ? "rectangle.fill" : "rectangle")
+                Image(systemName: isBackground ? "square.filled.on.square" : "square.on.square")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(isBackground ? MeeshyColors.indigo200 : MeeshyColors.indigo400)
                     .frame(width: 28, height: 28)
@@ -1101,16 +1206,18 @@ public struct StoryComposerView: View {
             .accessibilityLabel(isBackground
                 ? String(localized: "story.composer.moveToForeground", defaultValue: "Mettre en premier plan", bundle: .module)
                 : String(localized: "story.composer.moveToBackground", defaultValue: "Mettre en fond", bundle: .module))
+            // Timeline
             Button {
                 viewModel.selectedElementId = obj.id
-                viewModel.isTimelineVisible = true
+                viewModel.activeTool = .timeline
             } label: {
-                Image(systemName: "timeline.selection")
+                Image(systemName: "timer")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(MeeshyColors.indigo400)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
             }
+            // Delete
             Button {
                 viewModel.deleteElement(id: obj.id)
                 HapticFeedback.medium()
@@ -1592,6 +1699,14 @@ public struct StoryComposerView: View {
             viewModel.loadedImages.merge(media.images) { _, new in new }
             viewModel.loadedVideoURLs.merge(media.videoURLs) { _, new in new }
             viewModel.loadedAudioURLs.merge(media.audioURLs) { _, new in new }
+
+            // Surface lost media (file purged by OS, deleted via Files app, etc.)
+            // explicitly to the user via an alert. The DB rows are also purged
+            // so the next restore doesn't repeat the warning.
+            if !media.lostElementIds.isEmpty {
+                StoryDraftStore.shared.purgeLostMedia(media.lostElementIds)
+                lostMediaCount = media.lostElementIds.count
+            }
         } else if let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey),
                   let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) {
             viewModel.slides = draft.slides.isEmpty ? [StorySlide()] : draft.slides
@@ -1713,5 +1828,26 @@ struct StoryLanguagePickerView: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+}
+
+// MARK: - Media Pill Label (extracted for Sendable conformance)
+
+struct MediaPillLabel: View {
+    let icon: String
+    let text: String
+    var destructive: Bool = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 12, weight: .medium))
+            Text(text).font(.system(size: 11, weight: .medium))
+        }
+        .foregroundColor(destructive ? MeeshyColors.error : .white.opacity(0.8))
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(destructive ? MeeshyColors.error.opacity(0.15) : Color.white.opacity(0.08))
+        )
     }
 }

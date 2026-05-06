@@ -345,6 +345,9 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var deliveredCount: Int = 0
     public var readCount: Int = 0
 
+    // Pre-computed "HH:mm" string set at ingestion time — avoids DateFormatter in bubble body
+    public var cachedTimeString: String?
+
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending   // optimistic, not confirmed
         case sent      // server confirmed (single check)
@@ -388,7 +391,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
-                deliveredCount: Int = 0, readCount: Int = 0) {
+                deliveredCount: Int = 0, readCount: Int = 0,
+                cachedTimeString: String? = nil) {
         self.id = id; self.conversationId = conversationId; self.senderId = senderId
         self.content = content
         self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
@@ -405,6 +409,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
+        self.cachedTimeString = cachedTimeString
         self.effects = effects
     }
 
@@ -419,6 +424,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId
         case deliveryStatus, isMe
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount
+        case cachedTimeString
         // Legacy keys for migration from old cached data
         case isViewOnce, isBlurred
     }
@@ -464,6 +470,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
+        cachedTimeString = try c.decodeIfPresent(String.self, forKey: .cachedTimeString)
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
         if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
             effects.flags.insert(.viewOnce)
@@ -514,6 +521,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(readByAllAt, forKey: .readByAllAt)
         try c.encode(deliveredCount, forKey: .deliveredCount)
         try c.encode(readCount, forKey: .readCount)
+        try c.encodeIfPresent(cachedTimeString, forKey: .cachedTimeString)
     }
 
     public var text: String { content }

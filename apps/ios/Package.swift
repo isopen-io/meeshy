@@ -49,12 +49,6 @@ let package = Package(
             from: "141.0.0"
         ),
 
-        // Kingfisher for efficient image loading, caching, and processing
-        .package(
-            url: "https://github.com/onevcat/Kingfisher.git",
-            from: "7.10.0"
-        ),
-
         // WhisperKit for on-device speech recognition (OpenAI Whisper)
         .package(
             url: "https://github.com/argmaxinc/WhisperKit.git",
@@ -80,8 +74,9 @@ let package = Package(
                 .product(name: "SocketIO", package: "socket.io-client-swift"),
                 .product(name: "WebRTC", package: "WebRTC"),
 
-                // Image Handling
-                .product(name: "Kingfisher", package: "Kingfisher"),
+                // Image handling: SwiftUI AsyncImage + custom DiskCacheStore
+                // (CachedAsyncImage in MeeshyUI). Kingfisher was previously
+                // declared but never imported — removed 2026-05-06.
 
                 // On-device Speech Recognition
                 .product(name: "WhisperKit", package: "WhisperKit")

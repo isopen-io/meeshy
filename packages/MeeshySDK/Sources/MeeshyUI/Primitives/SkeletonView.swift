@@ -31,6 +31,11 @@ public struct ShimmerModifier: ViewModifier {
                         offset = 400
                     }
                 }
+                .onDisappear {
+                    withTransaction(Transaction(animation: nil)) {
+                        offset = -200
+                    }
+                }
             )
             .clipped()
     }
@@ -48,7 +53,8 @@ public struct SkeletonShape: View {
     private let width: CGFloat?
     private let height: CGFloat
     private let cornerRadius: CGFloat
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(width: CGFloat? = nil, height: CGFloat = 16, cornerRadius: CGFloat = MeeshyRadius.md) {
         self.width = width
@@ -67,7 +73,8 @@ public struct SkeletonShape: View {
 // MARK: - Skeleton Conversation Row
 
 public struct SkeletonConversationRow: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
 
     public init() {}
 
@@ -113,7 +120,8 @@ public struct SkeletonConversationRow: View {
 
 public struct SkeletonMessageBubble: View {
     private let index: Int
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(index: Int) {
         self.index = index

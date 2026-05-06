@@ -4,7 +4,7 @@ import Foundation
 
 public protocol PostServiceProviding: Sendable {
     func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
-    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?) async throws -> APIPost
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?) async throws -> APIPost
     func update(postId: String, content: String?, visibility: String?, moodEmoji: String?) async throws -> APIPost
     func delete(postId: String) async throws
     func like(postId: String) async throws
@@ -16,9 +16,9 @@ public protocol PostServiceProviding: Sendable {
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
-    func repost(postId: String, quote: String?) async throws
+    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost
     func share(postId: String) async throws
-    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, originalLanguage: String?, mediaIds: [String]?) async throws -> APIPost
+    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
     func pinPost(postId: String) async throws
@@ -43,8 +43,8 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         try await api.paginatedRequest(endpoint: "/posts/feed", cursor: cursor, limit: limit)
     }
 
-    public func create(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) async throws -> APIPost {
-        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription)
+    public func create(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil) async throws -> APIPost {
+        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }
@@ -77,9 +77,19 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         )
     }
 
-    public func repost(postId: String, quote: String? = nil) async throws {
-        let body = RepostRequest(content: quote, isQuote: quote != nil)
-        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/posts/\(postId)/repost", body: body)
+    public func repost(
+        postId: String,
+        targetType: PostType? = nil,
+        content: String? = nil,
+        isQuote: Bool = false
+    ) async throws -> APIPost {
+        let body = RepostRequest(
+            content: content,
+            isQuote: isQuote,
+            targetType: targetType?.rawValue
+        )
+        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts/\(postId)/repost", body: body)
+        return response.data
     }
 
     public func share(postId: String) async throws {
@@ -129,8 +139,8 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/comments/\(commentId)")
     }
 
-    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", originalLanguage: String? = nil, mediaIds: [String]? = nil) async throws -> APIPost {
-        let body = CreateStoryRequest(content: content, storyEffects: storyEffects, visibility: visibility, originalLanguage: originalLanguage, mediaIds: mediaIds)
+    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) async throws -> APIPost {
+        let body = CreateStoryRequest(content: content, storyEffects: storyEffects, visibility: visibility, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }

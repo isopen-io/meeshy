@@ -1,5 +1,7 @@
 @preconcurrency import UserNotifications
 import Intents
+import GRDB
+import MeeshySDK
 
 /// Rich-push service extension.
 ///
@@ -31,6 +33,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         applyThreading(to: bestAttemptContent)
         updateSharedUnreadCount(from: bestAttemptContent.userInfo)
         prefetchMessageData(from: bestAttemptContent.userInfo)
+        prePersistMessage(from: bestAttemptContent.userInfo)
 
         let userInfo = bestAttemptContent.userInfo
 
@@ -210,6 +213,81 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             messageId: messageId,
             apiBaseURL: apiBase
         ) { _ in }
+    }
+
+    // MARK: - GRDB Pre-persist
+
+    /// Writes the incoming message directly to the App Group GRDB store so that
+    /// when the user taps the notification banner the message is already available
+    /// locally — no network round-trip required on cold launch.
+    ///
+    /// This is a best-effort, fire-and-forget operation. Any failure is silently
+    /// swallowed; the main app will fetch the message from the REST API on resume.
+    private static let sharedPool: DatabasePool? = {
+        do {
+            let pool = try DatabasePool(path: appGroupDatabasePath())
+            try MessageDatabaseMigrations.runAll(on: pool)
+            return pool
+        } catch { return nil }
+    }()
+
+    private func prePersistMessage(from userInfo: [AnyHashable: Any]) {
+        guard let messageId = userInfo["messageId"] as? String,
+              let conversationId = userInfo["conversationId"] as? String,
+              let senderId = userInfo["senderId"] as? String,
+              let pool = Self.sharedPool
+        else { return }
+
+        let content = userInfo["content"] as? String ?? ""
+
+        do {
+
+            let now = Date()
+            let record = MessageRecord(
+                localId: messageId, serverId: messageId,
+                conversationId: conversationId, senderId: senderId,
+                content: content, originalLanguage: "fr",
+                messageType: "text", messageSource: "user", contentType: "text",
+                state: .sent, retryCount: 0, lastError: nil,
+                isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+                replyToId: nil, storyReplyToId: nil,
+                forwardedFromId: nil, forwardedFromConversationId: nil,
+                replyToJson: nil, forwardedFromJson: nil,
+                expiresAt: nil, effectFlags: 0,
+                maxViewOnceCount: nil, viewOnceCount: 0,
+                isEdited: false, editedAt: nil, deletedAt: nil,
+                pinnedAt: nil, pinnedBy: nil,
+                senderName: userInfo["senderName"] as? String,
+                senderUsername: nil, senderColor: nil, senderAvatarURL: nil,
+                deliveredCount: 0, readCount: 0,
+                deliveredToAllAt: nil, readByAllAt: nil,
+                createdAt: now, sentAt: nil,
+                deliveredAt: nil, readAt: nil, updatedAt: now,
+                attachmentsJson: nil, reactionsJson: nil,
+                reactionCount: 0, currentUserReactionsJson: nil,
+                mentionedUsersJson: nil,
+                cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+                cachedLastLineWidth: nil, cachedLineCount: nil,
+                cachedTimestampInline: nil,
+                layoutVersion: 0, layoutMaxWidth: nil,
+                changeVersion: 0
+            )
+
+            try pool.write { db in try record.save(db) }
+        } catch {
+            // Silent fail — the app will fetch the message from the API on launch.
+        }
+    }
+
+    /// Returns the path to the shared App Group SQLite database.
+    /// Mirrors `DependencyContainer.databasePath()` from the main app target.
+    private static func appGroupDatabasePath() -> String {
+        let container = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
+        )!
+        let dbDir = container.appendingPathComponent("Database")
+        try? FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
+        return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
     }
 
     // MARK: - Communication Notifications

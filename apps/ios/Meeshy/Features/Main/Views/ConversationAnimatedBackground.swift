@@ -147,6 +147,7 @@ struct ConversationAnimatedBackground: View {
         }
         .ignoresSafeArea()
         .onAppear { startAnimations() }
+        .onDisappear { stopAnimations() }
     }
 
     // MARK: - Base Gradient
@@ -188,6 +189,17 @@ struct ConversationAnimatedBackground: View {
             withAnimation(.easeInOut(duration: config.groupColorFadeDuration).repeatForever(autoreverses: true)) {
                 groupColorPhase = true
             }
+        }
+    }
+
+    private func stopAnimations() {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            animate = false
+            wavePhase = 0
+            orbitPhase = 0
+            groupColorPhase = false
         }
     }
 

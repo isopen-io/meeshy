@@ -100,19 +100,10 @@ struct ConversationComposerState {
     var uploadProgress: UploadQueueProgress? = nil
     var showLocationPicker = false
     
-    // Language (source language for outgoing messages)
-    // Priority: keyboard layout > system language > "fr" fallback
-    var selectedLanguage: String = {
-        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            let code = String(kbd.prefix(2))
-            if LanguageOption.defaults.contains(where: { $0.code == code }) { return code }
-        }
-        if let sysLang = Locale.current.language.languageCode?.identifier,
-           LanguageOption.defaults.contains(where: { $0.code == sysLang }) {
-            return sysLang
-        }
-        return "fr"
-    }()
+    // Language (source language for outgoing messages).
+    // Resolved via DefaultComposerLanguage: keyboard layout > "fr" fallback.
+    // TextAnalyzer overrides this once the user types enough characters.
+    var selectedLanguage: String = DefaultComposerLanguage.resolve()
 
     // Reply & Edit
     var pendingReplyReference: ReplyReference? = nil
@@ -177,7 +168,8 @@ struct ConversationView: View {
     @State private var keyboardHeight: CGFloat = 0
     @State private var initialScrollCompleted: Bool = false
 
-    @State var typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    @State var typingDotPublisher = Timer.publish(every: 0.5, on: .main, in: .common)
+    @State var typingDotConnection: Cancellable?
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
@@ -516,6 +508,10 @@ struct ConversationView: View {
                     viewModel: storyViewModel,
                     userId: headerState.storyUserIdForHeader,
                     isPresented: $headerState.showStoryViewerFromHeader,
+                    onReplyToStory: { replyContext in
+                        headerState.showStoryViewerFromHeader = false
+                        router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                    },
                     singleGroup: true,
                     presentationSource: "ConversationView.header"
                 )
@@ -525,6 +521,10 @@ struct ConversationView: View {
                     viewModel: storyViewModel,
                     userId: overlayState.storyViewerUserId,
                     isPresented: $overlayState.showStoryViewer,
+                    onReplyToStory: { replyContext in
+                        overlayState.showStoryViewer = false
+                        router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                    },
                     singleGroup: true,
                     initialStoryIndex: overlayState.storyViewerSlideIndex,
                     presentationSource: "ConversationView.overlay"
@@ -696,6 +696,13 @@ struct ConversationView: View {
                     }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { overlayState.longPressEnabled = true }
+                if typingDotConnection == nil {
+                    typingDotConnection = typingDotPublisher.connect()
+                }
+            }
+            .onDisappear {
+                typingDotConnection?.cancel()
+                typingDotConnection = nil
             }
             .onChange(of: messageText) { _, newValue in
                 persistDraft(text: newValue)
@@ -741,7 +748,13 @@ struct ConversationView: View {
         ZStack {
             conversationBackground
 
-            messageScrollView
+            // UIKit bridge powered by GRDB store (always available after eager init)
+            MessageListView(
+                store: viewModel.messageStore,
+                currentUserId: viewModel.currentUserIdForView
+            ) { count in
+                scrollState.unreadBadgeCount = count
+            }
 
             floatingHeaderSection
 
@@ -894,201 +907,6 @@ struct ConversationView: View {
         .background(.ultraThinMaterial)
     }
 
-    // MARK: - Message Scroll View (extracted to help type-checker)
-
-    @ViewBuilder
-    private var messageListContent: some View {
-        if viewModel.hasOlderMessages {
-            if viewModel.isLoadingOlder {
-                HStack(spacing: 8) {
-                    ProgressView().tint(Color(hex: accentColor))
-                    Text(String(localized: "loading", defaultValue: "Chargement..."))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-                .frame(height: 36).transition(.opacity)
-            } else {
-                Color.clear.frame(height: 1)
-                    .onAppear {
-                        guard !viewModel.isProgrammaticScroll else { return }
-                        Task { await viewModel.loadOlderMessages() }
-                    }
-            }
-        } else if !viewModel.messages.isEmpty, let joinedAt = viewModel.memberJoinedAt {
-            joinedBanner(date: joinedAt)
-        }
-
-        Color.clear.frame(height: 70)
-
-        if viewModel.isLoadingInitial && viewModel.messages.isEmpty {
-            ForEach(0..<6, id: \.self) { index in
-                SkeletonMessageBubble(index: index)
-            }
-        } else if viewModel.messages.isEmpty && !viewModel.isLoadingInitial {
-            conversationEmptyState
-        } else {
-            encryptionDisclaimer
-        }
-
-        ForEach(viewModel.messagesByDate) { group in
-            Section {
-                ForEach(group.messages) { msg in
-                    let index = viewModel.messageIndex(for: msg.id) ?? 0
-                    if msg.id == viewModel.firstUnreadMessageId { unreadSeparator }
-                    messageRow(index: index, msg: msg)
-                        .onAppear {
-                            if index < 5 && viewModel.hasOlderMessages && !viewModel.isLoadingOlder && !viewModel.isProgrammaticScroll {
-                                Task { await viewModel.loadOlderMessages() }
-                            }
-                        }
-                }
-            } header: {
-                dateSectionView(for: group.date)
-            }
-        }
-
-        if !viewModel.typingUsernames.isEmpty {
-            inlineTypingIndicator
-                .id("typing_indicator")
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.typingUsernames.count)
-        }
-
-        if viewModel.hasNewerMessages && !viewModel.isLoadingNewer {
-            Color.clear.frame(height: 1)
-                .onAppear {
-                    guard !viewModel.isProgrammaticScroll else { return }
-                    Task { await viewModel.loadNewerMessages() }
-                }
-        }
-
-        Color.clear.frame(height: 1).id("near_bottom_anchor")
-            .onAppear {
-                guard initialScrollCompleted else { return }
-                scrollState.isNearBottom = true; scrollState.unreadBadgeCount = 0; viewModel.lastUnreadMessage = nil
-                if viewModel.firstUnreadMessageId != nil {
-                    withAnimation(.easeOut(duration: 0.3)) { viewModel.firstUnreadMessageId = nil }
-                }
-            }
-            .onDisappear {
-                guard initialScrollCompleted, !viewModel.isProgrammaticScroll else { return }
-                scrollState.isNearBottom = false
-            }
-
-        Color.clear.frame(height: max(composerHeight, 60)).id("bottom_spacer")
-    }
-
-    @ViewBuilder
-    private var messageScrollView: some View {
-        ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    messageListContent
-                }
-                .padding(.horizontal, 16)
-            }
-            // Hide the *populated* scroll until we've explicitly anchored
-            // at the bottom on first paint — without this the user briefly
-            // sees the oldest messages at the top before our scrollTo runs.
-            // Skeleton/empty-state (rendered while messages is empty) stays
-            // visible so loading still has a placeholder.
-            .opacity(initialScrollCompleted || viewModel.messages.isEmpty ? 1 : 0)
-            .onChange(of: viewModel.isLoadingInitial) { wasLoading, isLoading in
-                guard wasLoading && !isLoading else { return }
-                // Empty conversation — nothing to scroll. Reveal the
-                // (empty-state) view and exit so the opacity gate never
-                // gets stuck at 0.
-                guard !viewModel.messages.isEmpty else {
-                    initialScrollCompleted = true
-                    return
-                }
-                // Anchor to bottom WITHOUT animation. We deliberately avoid
-                // .defaultScrollAnchor(.bottom): it keeps re-anchoring as
-                // bubble heights grow asynchronously (audio placeholder ->
-                // player swap, transcriptions/translations populating after
-                // the API refresh), which renders to the user as the scroll
-                // "repeating indefinitely" on conversation open.
-                viewModel.markProgrammaticScroll()
-                proxy.scrollTo("bottom_spacer", anchor: .bottom)
-                initialScrollCompleted = true
-
-                // Single delayed re-anchor to absorb the bulk of async
-                // layout settling (audio caching ~1s, late translation
-                // payloads, etc.). One-shot — never periodic — so the
-                // scroll cannot oscillate.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                    guard scrollState.isNearBottom else { return }
-                    viewModel.markProgrammaticScroll()
-                    proxy.scrollTo("bottom_spacer", anchor: .bottom)
-                }
-            }
-            .onChange(of: viewModel.newMessageAppended) { _, _ in
-                guard initialScrollCompleted, let lastMsg = viewModel.messages.last else { return }
-                if scrollState.isNearBottom || lastMsg.isMe {
-                    // Éviter les animations spring concurrentes qui causent la boucle de scroll
-                    guard !viewModel.isProgrammaticScroll else { return }
-                    viewModel.markProgrammaticScroll()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { proxy.scrollTo("bottom_spacer", anchor: .bottom) }
-                    if scrollState.isNearBottom && !lastMsg.isMe {
-                        viewModel.markAsRead()
-                    }
-                } else { scrollState.unreadBadgeCount += 1 }
-            }
-            .onChange(of: viewModel.isLoadingOlder) { wasLoading, isLoading in
-                if wasLoading && !isLoading, let anchorId = viewModel.scrollAnchorId {
-                    viewModel.markProgrammaticScroll()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        proxy.scrollTo(anchorId, anchor: .top); viewModel.scrollAnchorId = nil
-                    }
-                }
-            }
-            .onChange(of: composerState.pendingAttachments.count) { _, _ in
-                if initialScrollCompleted, scrollState.isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
-            }
-            .onChange(of: audioRecorder.isRecording) { _, _ in
-                if initialScrollCompleted, scrollState.isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
-            }
-            .onChange(of: scrollState.scrollToBottomTrigger) { _, _ in
-                viewModel.markProgrammaticScroll()
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { proxy.scrollTo("bottom_spacer", anchor: .bottom) }
-            }
-            .onChange(of: scrollState.scrollToMessageId) { _, targetId in
-                guard let targetId else { return }
-                scrollState.scrollToMessageId = nil
-                scrollToAndHighlight(targetId, proxy: proxy)
-            }
-            .onChange(of: viewModel.typingUsernames.isEmpty) { _, isEmpty in
-                guard !isEmpty, scrollState.isNearBottom else { return }
-                viewModel.markProgrammaticScroll()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                    proxy.scrollTo("typing_indicator", anchor: .bottom)
-                }
-            }
-            .onChange(of: composerState.isUploading) { wasUploading, isUploading in
-                guard wasUploading && !isUploading else { return }
-                viewModel.markProgrammaticScroll()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                    proxy.scrollTo("bottom_spacer", anchor: .bottom)
-                }
-            }
-            .onChange(of: keyboardHeight) { oldHeight, newHeight in
-                guard initialScrollCompleted, newHeight > oldHeight, scrollState.isNearBottom else { return }
-                viewModel.markProgrammaticScroll()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                    proxy.scrollTo("bottom_spacer", anchor: .bottom)
-                }
-            }
-            .onChange(of: composerHeight) { oldHeight, newHeight in
-                // Ignore pendant que le clavier est visible : le GeometryReader fire en boucle
-                // pendant l'animation du clavier, ce qui déclencherait plusieurs spring animations.
-                guard initialScrollCompleted, keyboardHeight == 0, newHeight > oldHeight + 20, scrollState.isNearBottom else { return }
-                viewModel.markProgrammaticScroll()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                    proxy.scrollTo("bottom_spacer", anchor: .bottom)
-                }
-            }
-        }
-    }
 
     // MARK: - Floating Header Section (extracted to help type-checker)
 

@@ -145,6 +145,11 @@ struct ThemedActionButton: View {
                 isGlowing = true
             }
         }
+        .onDisappear {
+            withTransaction(Transaction(animation: nil)) {
+                isGlowing = false
+            }
+        }
     }
 }
 
@@ -285,6 +290,7 @@ struct ThemedFeedOverlay: View {
                             .staggeredAppear(index: index, baseDelay: 0.06)
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
+                                viewModel.prefetchComments(post.id)
                             }
                     }
 
@@ -319,6 +325,10 @@ struct ThemedFeedOverlay: View {
                 viewModel: storyViewModel,
                 userId: selectedStoryUserId,
                 isPresented: $showStoryViewer,
+                onReplyToStory: { replyContext in
+                    showStoryViewer = false
+                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                },
                 presentationSource: "FeedOverlay"
             )
             .environmentObject(router)

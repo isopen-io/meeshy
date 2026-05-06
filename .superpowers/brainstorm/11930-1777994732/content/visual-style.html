@@ -1,0 +1,205 @@
+<h2>Question 7 — Style visuel & densité de la timeline</h2>
+<p class="subtitle">Trois traditions UX d'éditeurs vidéo mobiles. Choisis l'inspiration. Tu peux aussi écrire ta préférence ou un mix dans le terminal.</p>
+
+<style>
+  .tl-mock {
+    background: #0F0E1F;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 12px;
+    padding: 12px;
+    font-family: -apple-system, "SF Pro Display", system-ui, sans-serif;
+    color: #E0E7FF;
+    height: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .tl-canvas {
+    flex: 1;
+    background: linear-gradient(135deg, #6366F1, #4338CA);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0.6;
+  }
+  .tl-toolbar {
+    display: flex;
+    gap: 4px;
+    padding: 6px;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 6px;
+  }
+  .tl-btn {
+    width: 24px; height: 24px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+  }
+  .tl-btn.primary {
+    background: linear-gradient(135deg, #6366F1, #4338CA);
+  }
+  .tl-ruler {
+    height: 14px;
+    background:
+      repeating-linear-gradient(to right,
+        rgba(255,255,255,0.4) 0,
+        rgba(255,255,255,0.4) 1px,
+        transparent 1px,
+        transparent 30px),
+      repeating-linear-gradient(to right,
+        rgba(255,255,255,0.15) 0,
+        rgba(255,255,255,0.15) 1px,
+        transparent 1px,
+        transparent 6px);
+    border-radius: 2px;
+  }
+  .tl-track {
+    height: 28px;
+    background: rgba(99, 102, 241, 0.08);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .tl-clip {
+    position: absolute;
+    top: 2px; bottom: 2px;
+    background: linear-gradient(135deg, #818CF8, #4338CA);
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+  .tl-clip.image { background: linear-gradient(135deg, #34D399, #059669); }
+  .tl-clip.audio { background: linear-gradient(135deg, #FBBF24, #D97706); }
+  .tl-clip.text  { background: linear-gradient(135deg, #F87171, #DC2626); }
+  .tl-clip.video { background: linear-gradient(135deg, #6366F1, #312E81); }
+  .tl-playhead {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1.5px;
+    background: #FFFFFF;
+    box-shadow: 0 0 4px #818CF8;
+  }
+  .tl-label {
+    position: absolute;
+    left: 4px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 8px;
+    color: white;
+    text-shadow: 0 0 2px rgba(0,0,0,0.5);
+  }
+  .tl-section-label {
+    font-size: 8px;
+    color: #818CF8;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+  .tl-bottom-bar {
+    display: flex;
+    justify-content: space-around;
+    padding: 6px 0;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 6px;
+  }
+  .tl-tab {
+    font-size: 9px;
+    color: rgba(224, 231, 255, 0.6);
+  }
+  .tl-tab.active { color: #818CF8; font-weight: 700; }
+  .card-style { font-size: 10px; line-height: 1.4; color: #6B7280; }
+</style>
+
+<div class="cards">
+
+  <div class="card" data-choice="capcut" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="tl-mock">
+        <div class="tl-canvas">PREVIEW (compact)</div>
+        <div class="tl-toolbar">
+          <div class="tl-btn primary"></div>
+          <div class="tl-btn"></div>
+          <div class="tl-btn"></div>
+          <div class="tl-btn"></div>
+          <div class="tl-btn"></div>
+          <div style="flex:1"></div>
+          <div class="tl-btn"></div>
+        </div>
+        <div class="tl-ruler"></div>
+        <div class="tl-section-label">CONTENU</div>
+        <div class="tl-track"><div class="tl-clip video" style="left:2%;width:55%"><div class="tl-label">vid_intro</div></div><div class="tl-playhead" style="left:30%"></div></div>
+        <div class="tl-track"><div class="tl-clip image" style="left:25%;width:25%"><div class="tl-label">photo</div></div><div class="tl-clip image" style="left:55%;width:30%"><div class="tl-label">photo2</div></div><div class="tl-playhead" style="left:30%"></div></div>
+        <div class="tl-track"><div class="tl-clip video" style="left:60%;width:35%"><div class="tl-label">overlay</div></div><div class="tl-playhead" style="left:30%"></div></div>
+        <div class="tl-section-label">EFFETS</div>
+        <div class="tl-track"><div class="tl-clip text" style="left:10%;width:40%"><div class="tl-label">titre 1</div></div><div class="tl-clip text" style="left:60%;width:35%"><div class="tl-label">titre 2</div></div><div class="tl-playhead" style="left:30%"></div></div>
+        <div class="tl-track"><div class="tl-clip audio" style="left:0%;width:100%"><div class="tl-label">music_bg</div></div><div class="tl-playhead" style="left:30%"></div></div>
+        <div class="tl-track"><div class="tl-clip audio" style="left:15%;width:35%"><div class="tl-label">vocal</div></div><div class="tl-playhead" style="left:30%"></div></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="letter">A</div>
+      <h3>CapCut / Pro</h3>
+      <p class="card-style">Multi-track dense. Toutes les pistes visibles en permanence (groupes Contenu/Effets), preview compacte en haut. Gros zoom horizontal, scroll sans limite.</p>
+      <p class="card-style"><b>Force :</b> tout sous les yeux, ultra-précis<br><b>Faiblesse :</b> intimidant pour usage casual</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="imovie" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="tl-mock">
+        <div class="tl-canvas" style="flex:1.6">PREVIEW (large)</div>
+        <div class="tl-ruler"></div>
+        <div class="tl-track" style="height:42px"><div class="tl-clip video" style="left:0%;width:50%"><div class="tl-label">scene 1</div></div><div class="tl-clip video" style="left:50%;width:50%;background:linear-gradient(135deg,#34D399,#059669)"><div class="tl-label">scene 2</div></div><div class="tl-playhead" style="left:35%"></div></div>
+        <div class="tl-track" style="height:24px"><div class="tl-clip audio" style="left:0%;width:100%;opacity:0.7"><div class="tl-label">musique</div></div><div class="tl-playhead" style="left:35%"></div></div>
+        <div class="tl-track" style="height:24px"><div class="tl-clip text" style="left:10%;width:35%;opacity:0.7"><div class="tl-label">titre</div></div><div class="tl-playhead" style="left:35%"></div></div>
+        <div class="tl-bottom-bar">
+          <div class="tl-tab">Media</div>
+          <div class="tl-tab active">Timeline</div>
+          <div class="tl-tab">Effets</div>
+          <div class="tl-tab">Texte</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="letter">B</div>
+      <h3>iMovie / Lisible</h3>
+      <p class="card-style">Preview proéminente, timeline réduite à 3 pistes max (vidéo principale, audio, texte). Tabs en bas pour switcher contenu.</p>
+      <p class="card-style"><b>Force :</b> aucune surcharge cognitive<br><b>Faiblesse :</b> moins de contrôle simultané</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="hybrid" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="tl-mock">
+        <div class="tl-canvas">PREVIEW (mode normal)</div>
+        <div class="tl-ruler" style="height:10px"></div>
+        <div class="tl-track" style="height:36px"><div class="tl-clip video" style="left:0%;width:60%"><div class="tl-label">video</div></div><div class="tl-clip image" style="left:60%;width:40%"><div class="tl-label">photo</div></div><div class="tl-playhead" style="left:40%"></div></div>
+        <div style="display:flex;gap:4px;align-items:center">
+          <div style="font-size:8px;color:#818CF8;font-weight:700">+ PISTES</div>
+          <div style="flex:1;height:2px;background:rgba(129,140,248,0.3);border-radius:1px"></div>
+          <div style="font-size:8px;color:#818CF8">⌄ DÉPLOYER</div>
+        </div>
+        <div class="tl-track" style="height:20px;opacity:0.6"><div class="tl-clip audio" style="left:0%;width:100%"></div><div class="tl-playhead" style="left:40%"></div></div>
+        <div class="tl-track" style="height:20px;opacity:0.6"><div class="tl-clip text" style="left:10%;width:30%"></div><div class="tl-clip text" style="left:50%;width:25%"></div><div class="tl-playhead" style="left:40%"></div></div>
+        <div class="tl-toolbar" style="margin-top:auto">
+          <div class="tl-btn primary"></div>
+          <div style="flex:1"></div>
+          <div style="font-size:9px;color:#818CF8;align-self:center">0:04.250 / 0:10.000</div>
+          <div style="flex:1"></div>
+          <div class="tl-btn"></div>
+          <div class="tl-btn"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="letter">C</div>
+      <h3>Adaptive (notre proposition)</h3>
+      <p class="card-style">Mode normal : 1-2 pistes visibles, le reste se déploie au tap. Mode "Pro" plein écran à la demande (rotation paysage ou bouton).</p>
+      <p class="card-style"><b>Force :</b> mobile-first, scale au besoin<br><b>Faiblesse :</b> deux modes à designer</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:24px;font-size:13px">Réponds dans le terminal : <b>A / B / C</b>, ou décris un mix (ex: "C pour normal, A pour pro").</p>

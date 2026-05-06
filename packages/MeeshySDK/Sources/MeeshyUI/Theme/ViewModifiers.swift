@@ -82,6 +82,11 @@ public struct ShimmerEffect: ViewModifier {
                     phase = 1
                 }
             }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    phase = 0
+                }
+            }
     }
 }
 
@@ -103,6 +108,11 @@ public struct PulseEffect: ViewModifier {
                 value: isPulsing
             )
             .onAppear { isPulsing = true }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    isPulsing = false
+                }
+            }
     }
 }
 
@@ -130,6 +140,11 @@ public struct BreathingGlow: ViewModifier {
                 value: isGlowing
             )
             .onAppear { isGlowing = true }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    isGlowing = false
+                }
+            }
     }
 }
 
@@ -204,6 +219,11 @@ public struct FloatingAnimation: ViewModifier {
                 value: isFloating
             )
             .onAppear { isFloating = true }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    isFloating = false
+                }
+            }
     }
 }
 

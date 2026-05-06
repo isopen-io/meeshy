@@ -30,7 +30,6 @@ struct RootView: View {
     @State private var showFeed = false
     @State private var feedWasVisibleBeforeNav = false
     @State private var showMenu = false
-    @State private var pendingReplyContext: ReplyContext?
     @State private var storyViewerRequest: StoryViewerRequest?
 
     // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
@@ -87,10 +86,10 @@ struct RootView: View {
                     case .conversation(let conv):
                         ConversationView(
                             conversation: conv,
-                            replyContext: pendingReplyContext
+                            replyContext: router.pendingReplyContext
                         )
                         .navigationBarHidden(true)
-                        .onAppear { pendingReplyContext = nil }
+                        .onAppear { router.pendingReplyContext = nil }
                     case .settings:
                         SettingsView()
                             .navigationBarHidden(true)
@@ -254,6 +253,8 @@ struct RootView: View {
                 }
                 .animation(.spring(response: 0.4, dampingFraction: 0.8), value: networkMonitor.isOffline)
                 .zIndex(190)
+            } else {
+                pendingSettingsBannerOverlay
             }
 
             // 8. Toast overlay — handled at MeeshyApp level to avoid duplicates
@@ -314,6 +315,17 @@ struct RootView: View {
             // Observe sync events for conversation list
             conversationViewModel.observeSync()
 
+            // Pilier 22 V3 wiring — register the StoryViewModel as the
+            // queue's upload executor. setExecutor also registers the
+            // queue's publish handler in the same call, so the M5 auto-
+            // drain that fires next has a guaranteed-non-nil executor to
+            // delegate to. Calling configure() at app boot (in MeeshyApp)
+            // intentionally only sets up listeners — the handler is
+            // registered HERE, atomic with the executor assignment, to
+            // avoid the boot race that would burn retry budget on a
+            // guaranteed-fail call.
+            StoryPublishService.shared.setExecutor(storyViewModel)
+
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
             await conversationViewModel.loadConversations()
@@ -339,7 +351,7 @@ struct RootView: View {
                 ),
                 onReplyToStory: { replyContext in
                     storyViewerRequest = nil
-                    handleStoryReply(replyContext)
+                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
                 presentationSource: "RootView.fromConv"
             )
@@ -539,49 +551,6 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Handle Story Reply
-    private func handleStoryReply(_ context: ReplyContext) {
-        let authId: String
-        switch context {
-        case .story(_, let authorId, _, _, _, _, _, _): authId = authorId
-        case .status(_, let authorId, _, _, _): authId = authorId
-        }
-
-        // 1. Check local cache first
-        if let existingConv = conversationViewModel.conversations.first(where: {
-            $0.type == .direct && $0.participantUserId == authId
-        }) {
-            pendingReplyContext = context
-            router.navigateToConversation(existingConv)
-            return
-        }
-
-        // 2. Not in local cache — ask the API for an existing DM, or create one
-        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-        Task {
-            do {
-                let conv: Conversation
-                if let existingApi = try await ConversationService.shared.findDirectWith(userId: authId) {
-                    conv = existingApi.toConversation(currentUserId: currentUserId)
-                } else {
-                    let created = try await ConversationService.shared.create(
-                        type: "direct",
-                        participantIds: [authId]
-                    )
-                    let apiConv = try await ConversationService.shared.getById(created.id)
-                    conv = apiConv.toConversation(currentUserId: currentUserId)
-                }
-
-                await MainActor.run {
-                    pendingReplyContext = context
-                    router.navigateToConversation(conv)
-                }
-            } catch {
-                ToastManager.shared.showError("Impossible d'ouvrir la conversation")
-            }
-        }
-    }
-
     // MARK: - Unified Notification Navigation
 
     private struct NotificationNavContext {
@@ -702,6 +671,7 @@ struct RootView: View {
     }
 
     private func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil, ensureUnread: Bool = false) {
+        // 1. Fast path: in-memory list (post-load happy path)
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
             var conv = existing
             if ensureUnread && conv.unreadCount == 0 {
@@ -710,7 +680,44 @@ struct RootView: View {
             router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
             return
         }
+
         Task {
+            // 2. Cache-first: GRDB conversations list (cold-start deep link path).
+            // Avoids forcing a network round-trip when previous-session data is
+            // already on disk; the network fetch then runs silently in the
+            // background to refresh the cache.
+            let cachedList = await CacheCoordinator.shared.conversations.load(for: "list")
+            let cachedConversations: [MeeshyConversation]? = {
+                switch cachedList {
+                case .fresh(let list, _), .stale(let list, _): return list
+                case .expired, .empty: return nil
+                }
+            }()
+            if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
+                var c = cached
+                if ensureUnread && c.unreadCount == 0 { c.unreadCount = 1 }
+                router.navigateToConversation(c, highlightMessageId: highlightMessageId)
+                // Background refresh — keeps the displayed conversation in sync
+                // without blocking navigation. Failures are silent: the user
+                // already sees the cached version.
+                Task.detached(priority: .utility) {
+                    let currentUserId = await AuthManager.shared.currentUser?.id ?? ""
+                    if let apiConv = try? await ConversationService.shared.getById(conversationId) {
+                        let refreshed = apiConv.toConversation(currentUserId: currentUserId)
+                        var merged = cachedConversations ?? []
+                        if let i = merged.firstIndex(where: { $0.id == refreshed.id }) {
+                            merged[i] = refreshed
+                        } else {
+                            merged.insert(refreshed, at: 0)
+                        }
+                        await CacheCoordinator.shared.conversations.save(merged, for: "list")
+                        await SearchIndex.shared.indexConversations([refreshed])
+                    }
+                }
+                return
+            }
+
+            // 3. Network fallback: cache miss + offline-aware error UX.
             do {
                 let currentUserId = AuthManager.shared.currentUser?.id ?? ""
                 let apiConv = try await ConversationService.shared.getById(conversationId)
@@ -725,6 +732,21 @@ struct RootView: View {
                 )
             }
         }
+    }
+
+    // MARK: - Pending Settings Banner
+    /// Surfaces the count of user-settings changes still queued in
+    /// `SettingsActionQueue` (typed offline, replayed on reconnect). Self-
+    /// hides when the queue drains. Shown only when the device is online so
+    /// it does not stack with `OfflineBanner`.
+    private var pendingSettingsBannerOverlay: some View {
+        VStack(spacing: 6) {
+            PendingSettingsBannerInline()
+            PendingStoryBannerInline()
+            Spacer()
+        }
+        .padding(.top, 50)
+        .zIndex(189)
     }
 
     // MARK: - Themed Background
@@ -899,5 +921,115 @@ extension View {
                     .delay(showMenu ? delay : 0),
                 value: showMenu
             )
+    }
+}
+
+// MARK: - Pending Settings Banner (inline)
+
+/// Inlined alongside `RootView` so the file remains self-contained without
+/// requiring a project.pbxproj entry for a separate component file.
+private struct PendingSettingsBannerInline: View {
+    @State private var pendingCount: Int = 0
+    @State private var subscription: AnyCancellable?
+
+    var body: some View {
+        Group {
+            if pendingCount > 0 {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text("Modifications en attente (\(pendingCount))")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    Text("Synchronisation au retour en ligne")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.white.opacity(0.85))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            MeeshyColors.indigo500.opacity(0.92),
+                            MeeshyColors.indigo700.opacity(0.88)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
+                .padding(.horizontal, 16)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: pendingCount)
+        .task {
+            pendingCount = await SettingsActionQueue.shared.count
+            subscription = SettingsActionQueue.shared.pendingCountChanged.publisher
+                .receive(on: DispatchQueue.main)
+                .sink { count in
+                    pendingCount = count
+                }
+        }
+        .onDisappear {
+            subscription?.cancel()
+            subscription = nil
+        }
+    }
+}
+
+// MARK: - Pending Story Banner (inline)
+
+/// Surfaces the count of stories waiting in `StoryPublishQueue` (typically
+/// composed offline). Mirrors `PendingSettingsBannerInline`. Self-hides
+/// when the queue drains. Inlined to avoid a project.pbxproj edit.
+private struct PendingStoryBannerInline: View {
+    @StateObject private var publishService = StoryPublishService.shared
+
+    var body: some View {
+        Group {
+            if publishService.pendingCount > 0 {
+                HStack(spacing: 8) {
+                    Image(systemName: "photo.stack")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text("Stories en attente (\(publishService.pendingCount))")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    Text("Publication au retour en ligne")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.white.opacity(0.85))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            MeeshyColors.indigo500.opacity(0.92),
+                            MeeshyColors.indigo700.opacity(0.88)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
+                .padding(.horizontal, 16)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: publishService.pendingCount)
     }
 }

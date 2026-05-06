@@ -92,6 +92,13 @@ struct IncomingCallView: View {
             ringOpacity = 0.6
             avatarBounce = true
         }
+        .onDisappear {
+            withTransaction(Transaction(animation: nil)) {
+                ringScale = 1.0
+                ringOpacity = 0.0
+                avatarBounce = false
+            }
+        }
     }
 
     private var avatarView: some View {

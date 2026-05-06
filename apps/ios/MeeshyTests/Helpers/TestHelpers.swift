@@ -49,7 +49,7 @@ extension XCTestCase {
 
 extension XCTestCase {
     /// Assert arrays are equal ignoring order
-    func assertArraysEqualIgnoringOrder<T: Equatable>(_ lhs: [T], _ rhs: [T], file: StaticString = #file, line: UInt = #line) {
+    func assertArraysEqualIgnoringOrder<T: Hashable>(_ lhs: [T], _ rhs: [T], file: StaticString = #file, line: UInt = #line) {
         XCTAssertEqual(Set(lhs), Set(rhs), "Arrays contain different elements", file: file, line: line)
     }
 
@@ -111,31 +111,32 @@ extension XCTestCase {
 // MARK: - Performance Helpers
 
 extension XCTestCase {
-    /// Measure async operation performance
+    /// Measure async operation performance.
+    ///
+    /// `Task { }` defaults to the current actor; when used inside XCTest's
+    /// synchronous `measure {}` block on `@MainActor` test classes, the
+    /// scheduled task can deadlock against `wait(for:timeout:)` because both
+    /// want the main runloop. `Task.detached` escapes the actor, runs on a
+    /// background thread, and signals the expectation cleanly.
     func measureAsync(
+        timeout: TimeInterval = 60.0,
         options: XCTMeasureOptions = XCTMeasureOptions.default,
-        block: @escaping () async throws -> Void
+        block: @Sendable @escaping () async throws -> Void
     ) {
         measure(options: options) {
             let expectation = XCTestExpectation(description: "Async operation")
-            Task {
+            Task.detached {
                 try? await block()
                 expectation.fulfill()
             }
-            wait(for: [expectation], timeout: 10.0)
+            wait(for: [expectation], timeout: timeout)
         }
     }
 }
 
 // MARK: - Memory Leak Detection
 
-class MemoryLeakTracker {
-    static func trackForMemoryLeaks(_ instance: AnyObject, file: StaticString = #file, line: UInt = #line) {
-        addTeardownBlock { [weak instance] in
-            XCTAssertNil(instance, "Instance should have been deallocated. Potential memory leak.", file: file, line: line)
-        }
-    }
-}
+// MemoryLeakTracker: use XCTestCase.addTeardownBlock directly in test methods instead of this class.
 
 // MARK: - Test Data Cleanup
 
@@ -145,12 +146,7 @@ class TestDataCleaner {
         if let bundleID = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundleID)
         }
-
-        // Clear Keychain (test data only)
-        // Implementation depends on KeychainService
-
-        // Clear cache
-        CacheService.shared.clearAll()
+        // Note: Keychain and cache cleanup should be performed via their respective service instances in tearDown
     }
 }
 

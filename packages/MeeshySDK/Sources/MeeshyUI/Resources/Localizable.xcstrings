@@ -113,7 +113,13 @@
     "🏘️" : {
 
     },
+    "1/1" : {
+
+    },
     "1min" : {
+
+    },
+    "1x" : {
 
     },
     "5min" : {
@@ -13413,6 +13419,28 @@
         }
       }
     },
+    "story.composer.addAudioFile" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Audio"
+          }
+        }
+      }
+    },
+    "story.composer.addPhotoVideo" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo/Video"
+          }
+        }
+      }
+    },
     "story.composer.addText" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -13530,7 +13558,7 @@
       }
     },
     "story.composer.backgroundLabel" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -13560,6 +13588,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fundo"
+          }
+        }
+      }
+    },
+    "story.composer.bgColor" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couleur de fond"
+          }
+        }
+      }
+    },
+    "story.composer.bgMedia" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arriere-plan"
           }
         }
       }
@@ -13634,7 +13684,7 @@
         }
       }
     },
-    "story.composer.changeMedia" : {
+    "story.composer.changeBackground" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "fr" : {
@@ -13867,7 +13917,7 @@
       }
     },
     "story.composer.edit" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -13901,6 +13951,28 @@
         }
       }
     },
+    "story.composer.editAudio" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Editer l'audio"
+          }
+        }
+      }
+    },
+    "story.composer.editMedia" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Editer"
+          }
+        }
+      }
+    },
     "story.composer.emptyText" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -13908,6 +13980,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Texte vide"
+          }
+        }
+      }
+    },
+    "story.composer.fgMedia" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Medias"
           }
         }
       }
@@ -14090,13 +14173,35 @@
         }
       }
     },
-    "story.composer.media" : {
+    "story.composer.mediaLostMultiple" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Media"
+            "value" : "%lld médias de votre brouillon ne sont plus disponibles (fichiers supprimés). Les slides ont été restaurés sans ces médias."
+          }
+        }
+      }
+    },
+    "story.composer.mediaLostSingle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Un média de votre brouillon n'est plus disponible (fichier supprimé). Le slide a été restauré sans ce média — retake si nécessaire."
+          }
+        }
+      }
+    },
+    "story.composer.mediaLostTitle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Médias indisponibles"
           }
         }
       }
@@ -14154,6 +14259,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Nenhum"
+          }
+        }
+      }
+    },
+    "story.composer.ok" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OK"
           }
         }
       }
@@ -14224,17 +14340,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Foto"
-          }
-        }
-      }
-    },
-    "story.composer.photoOrVideo" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Photo/Video"
           }
         }
       }
@@ -14414,6 +14519,17 @@
         }
       }
     },
+    "story.composer.record" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enregistrer"
+          }
+        }
+      }
+    },
     "story.composer.recordAudio" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14480,6 +14596,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Gravar uma nota de voz"
+          }
+        }
+      }
+    },
+    "story.composer.removeBackground" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Retirer"
           }
         }
       }
@@ -14620,6 +14747,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Salvar rascunho"
+          }
+        }
+      }
+    },
+    "story.composer.setBackground" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Definir le fond"
           }
         }
       }
@@ -16437,7 +16575,7 @@
       }
     },
     "story.toolbar.audio" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16645,7 +16783,7 @@
       }
     },
     "story.toolbar.media" : {
-      "extractionState" : "stale",
+      "extractionState" : "extracted_with_value",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16668,24 +16806,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Media"
+            "value" : "Medias"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Mídia"
-          }
-        }
-      }
-    },
-    "story.toolbar.photo" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Photo"
           }
         }
       }
@@ -16721,6 +16848,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Texto"
+          }
+        }
+      }
+    },
+    "story.toolbar.texture" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Texture"
           }
         }
       }

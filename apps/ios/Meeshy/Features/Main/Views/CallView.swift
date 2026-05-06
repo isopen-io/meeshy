@@ -65,6 +65,9 @@ struct CallView: View {
         .onAppear {
             startPulseAnimation()
         }
+        .onDisappear {
+            stopPulseAnimation()
+        }
     }
 
     // MARK: - Background
@@ -623,6 +626,12 @@ struct CallView: View {
         }
     }
 
+    private func stopPulseAnimation() {
+        withTransaction(Transaction(animation: nil)) {
+            pulseScale = 1.0
+        }
+    }
+
     private func endReasonText(_ reason: CallEndReason) -> String {
         switch reason {
         case .local: return String(localized: "call.ended.local")
@@ -630,7 +639,15 @@ struct CallView: View {
         case .rejected: return String(localized: "call.ended.rejected")
         case .missed: return String(localized: "call.ended.missed")
         case .connectionLost: return String(localized: "call.ended.connectionLost")
-        case .failed(let msg): return String(localized: "call.ended.failed \(msg)")
+        case .failed(let msg):
+            // Use a static key with the message as a separate interpolation
+            // arg via String.LocalizationValue. Putting `\(msg)` directly in
+            // the key argument violates the StaticString requirement of
+            // String(localized:) under Swift 6 strict mode.
+            return String(
+                localized: "call.ended.failed",
+                defaultValue: "Échec de l'appel : \(msg)"
+            )
         }
     }
 }

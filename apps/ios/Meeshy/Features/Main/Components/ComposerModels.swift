@@ -96,6 +96,34 @@ struct LanguageOption: Identifiable {
 }
 
 // ============================================================================
+// MARK: - Default Composer Language
+// ============================================================================
+
+/// Resolves the initial source language used when composing a new piece of content
+/// (message, post, comment, story reply).
+///
+/// Priority chain:
+///   1. Active keyboard layout (QWERTY -> "en", AZERTY -> "fr", ...) when its
+///      `primaryLanguage` matches a supported `LanguageOption`.
+///   2. `"fr"` fallback.
+///
+/// `Locale.current` (device UI language) is intentionally excluded — see the
+/// Prisme Linguistique section in the root `CLAUDE.md`. The composer's
+/// `TextAnalyzer` overrides this value once the user types enough characters
+/// for reliable on-device detection.
+enum DefaultComposerLanguage {
+    static func resolve() -> String {
+        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
+            let code = String(kbd.prefix(2))
+            if LanguageOption.defaults.contains(where: { $0.code == code }) {
+                return code
+            }
+        }
+        return "fr"
+    }
+}
+
+// ============================================================================
 // MARK: - Keyboard Observer
 // ============================================================================
 
@@ -156,6 +184,11 @@ struct ComposerWaveformBar: View {
             )
             .frame(width: 3, height: height)
             .onAppear { animate() }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    height = 4
+                }
+            }
             .onChange(of: isRecording) { _, rec in
                 if rec { animate() } else { height = 4 }
             }

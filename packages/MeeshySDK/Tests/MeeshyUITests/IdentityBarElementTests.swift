@@ -1,7 +1,9 @@
 import XCTest
+import SwiftUI
 @testable import MeeshyUI
 @testable import MeeshySDK
 
+@MainActor
 final class IdentityBarElementTests: XCTestCase {
 
     func test_element_name_hasStableId() {
@@ -82,20 +84,24 @@ final class UserIdentityBarLayoutTests: XCTestCase {
     }
 
     func test_barWithAvatarOnly_doesNotCrash() {
-        let bar = UserIdentityBar(avatar: AvatarConfig(accentColor: "FF0000"))
-        XCTAssertNotNil(bar.body)
+        MainActor.assumeIsolated {
+            let bar = UserIdentityBar(avatar: AvatarConfig(accentColor: "FF0000"))
+            XCTAssertNotNil(bar.body)
+        }
     }
 
     func test_barWithAllZones_doesNotCrash() {
-        let bar = UserIdentityBar(
-            avatar: AvatarConfig(accentColor: "6366F1"),
-            name: "Alice",
-            leadingPrimary: [.name, .roleBadge(.admin)],
-            trailingPrimary: [.time("19:47"), .delivery(.read)],
-            leadingSecondary: [.username("@alice")],
-            trailingSecondary: [.text("info")]
-        )
-        XCTAssertNotNil(bar.body)
+        MainActor.assumeIsolated {
+            let bar = UserIdentityBar(
+                avatar: AvatarConfig(accentColor: "6366F1"),
+                name: "Alice",
+                leadingPrimary: [.name, .roleBadge(.admin)],
+                trailingPrimary: [.time("19:47"), .delivery(.read)],
+                leadingSecondary: [.username("@alice")],
+                trailingSecondary: [.text("info")]
+            )
+            XCTAssertNotNil(bar.body)
+        }
     }
 
     func test_barWithEmptySecondaryZones_hidesSecondLine() {
@@ -145,15 +151,17 @@ final class UserIdentityBarLayoutTests: XCTestCase {
     }
 
     func test_barWithActionMenu_doesNotCrash() {
-        let items = [
-            ActionMenuItem(label: "Edit", icon: "pencil", action: {}),
-            ActionMenuItem(label: "Delete", icon: "trash", role: .destructive, action: {})
-        ]
-        let bar = UserIdentityBar(
-            name: "Alice",
-            trailingSecondary: [.actionMenu("Options", items: items)]
-        )
-        XCTAssertNotNil(bar.body)
+        MainActor.assumeIsolated {
+            let items = [
+                ActionMenuItem(label: "Edit", icon: "pencil", action: {}),
+                ActionMenuItem(label: "Delete", icon: "trash", role: .destructive, action: {})
+            ]
+            let bar = UserIdentityBar(
+                name: "Alice",
+                trailingSecondary: [.actionMenu("Options", items: items)]
+            )
+            XCTAssertNotNil(bar.body)
+        }
     }
 
     func test_barWithMemberRole_doesNotCrash() {
@@ -186,10 +194,15 @@ final class UserIdentityBarPresetTests: XCTestCase {
         )
         XCTAssertNotNil(bar.avatar)
         XCTAssertEqual(bar.name, "Alice")
-        XCTAssertEqual(bar.leadingPrimary.count, 2)
+        // leadingPrimary now packs: name + roleBadge(.admin) + "·" separator
+        // + flags element (4 elements when role + flags are both present).
+        XCTAssertEqual(bar.leadingPrimary.count, 4)
+        // trailingPrimary: time + delivery
         XCTAssertEqual(bar.trailingPrimary.count, 2)
+        // leadingSecondary: username when provided
         XCTAssertEqual(bar.leadingSecondary.count, 1)
-        XCTAssertEqual(bar.trailingSecondary.count, 1)
+        // trailingSecondary is intentionally empty in the messageBubble preset.
+        XCTAssertTrue(bar.trailingSecondary.isEmpty)
     }
 
     func test_messageBubblePreset_noRole_omitsRoleBadge() {

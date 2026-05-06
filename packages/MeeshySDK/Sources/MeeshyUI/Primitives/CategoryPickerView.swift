@@ -8,7 +8,8 @@ public struct CategoryPickerView: View {
     @State private var isCreating = false
     @State private var newCategoryName = ""
     @State private var isLoading = false
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(selectedCategoryId: Binding<String?>) {
         self._selectedCategoryId = selectedCategoryId

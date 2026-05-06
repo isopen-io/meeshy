@@ -361,7 +361,7 @@ extension ConversationView {
         switch type {
         case "image":
             if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
-                CachedAsyncImage(url: thumbUrl) {
+                CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40)) {
                     accent.opacity(0.3)
                 }
                 .aspectRatio(contentMode: .fill)
@@ -377,7 +377,7 @@ extension ConversationView {
         case "video":
             if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
                 ZStack {
-                    CachedAsyncImage(url: thumbUrl) {
+                    CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40)) {
                         accent.opacity(0.3)
                     }
                     .aspectRatio(contentMode: .fill)
