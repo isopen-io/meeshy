@@ -266,4 +266,33 @@ final class CommandStackTests: XCTestCase {
                                timestamp: now.addingTimeInterval(0.5))) // beyond window
         XCTAssertEqual(stack.count, 2)
     }
+
+    // MARK: - CommandStack — FIFO cap
+
+    func test_push_overMaxSize_dropsOldestFIFO() {
+        let stack = CommandStack(maxSize: 3, coalesceWindow: 0)
+        stack.push(makeAddCmd(clipId: "a"))
+        stack.push(makeAddCmd(clipId: "b"))
+        stack.push(makeAddCmd(clipId: "c"))
+        stack.push(makeAddCmd(clipId: "d")) // should evict 'a'
+        XCTAssertEqual(stack.count, 3)
+        // Undo three times, expect d, c, b in order
+        var ids: [String] = []
+        for _ in 0..<3 {
+            if case let .addClip(cmd) = stack.undo() {
+                ids.append(cmd.clipId)
+            }
+        }
+        XCTAssertEqual(ids, ["d", "c", "b"])
+    }
+
+    func test_push_overMaxSize_cursorStaysAtTop() {
+        let stack = CommandStack(maxSize: 2, coalesceWindow: 0)
+        stack.push(makeAddCmd(clipId: "a"))
+        stack.push(makeAddCmd(clipId: "b"))
+        stack.push(makeAddCmd(clipId: "c"))
+        XCTAssertEqual(stack.count, 2)
+        XCTAssertTrue(stack.canUndo)
+        XCTAssertFalse(stack.canRedo)
+    }
 }

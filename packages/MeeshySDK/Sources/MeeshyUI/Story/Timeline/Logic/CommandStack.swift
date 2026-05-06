@@ -70,6 +70,10 @@ extension CommandStack {
             commands[commands.count - 1] = merged
         } else {
             commands.append(command)
+            // Enforce FIFO cap (only when we actually grew the stack).
+            while commands.count > maxSize {
+                commands.removeFirst()
+            }
         }
         cursor = commands.count
         didChange?(self)
