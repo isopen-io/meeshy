@@ -312,6 +312,7 @@
 		ROUT0001000100010001001 /* RouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ROUT0001000100010001000 /* RouterTests.swift */; };
 		RPTU002A002A002A002A0002 /* ReportUserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = RPTU001A001A001A001A0001 /* ReportUserView.swift */; };
 		RR1100000000002F01 /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = RR1100000000001F01 /* Router.swift */; };
+		RSR1100000000002F01 /* Router+StoryReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = RSR1100000000001F01 /* Router+StoryReply.swift */; };
 		SBC0000000000002SBC /* StatusBubbleController.swift in Sources */ = {isa = PBXBuildFile; fileRef = SBC0000000000001SBC /* StatusBubbleController.swift */; };
 		SBCT0001000100010001B001 /* StatusBubbleControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SBCT0001000100010001F001 /* StatusBubbleControllerTests.swift */; };
 		SD6001A001A001A001A00001 /* ShareLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SD6002A002A002A002A00002 /* ShareLinkDetailView.swift */; };
@@ -702,6 +703,7 @@
 		ROUT0001000100010001000 /* RouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouterTests.swift; sourceTree = "<group>"; };
 		RPTU001A001A001A001A0001 /* ReportUserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportUserView.swift; sourceTree = "<group>"; };
 		RR1100000000001F01 /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
+		RSR1100000000001F01 /* Router+StoryReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Router+StoryReply.swift"; sourceTree = "<group>"; };
 		SBC0000000000001SBC /* StatusBubbleController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleController.swift; sourceTree = "<group>"; };
 		SBCT0001000100010001F001 /* StatusBubbleControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleControllerTests.swift; sourceTree = "<group>"; };
 		SD6002A002A002A002A00002 /* ShareLinkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkDetailView.swift; sourceTree = "<group>"; };
@@ -1360,6 +1362,7 @@
 			children = (
 				DL1100000000001F01 /* DeepLinkRouter.swift */,
 				RR1100000000001F01 /* Router.swift */,
+				RSR1100000000001F01 /* Router+StoryReply.swift */,
 				DLNK001A001A001A001A0001 /* DeepLinkRouter.swift */,
 			);
 			path = Navigation;
@@ -1720,6 +1723,7 @@
 				RPTU002A002A002A002A0002 /* ReportUserView.swift in Sources */,
 				WDMGR001B001B001B00002 /* WidgetDataManager.swift in Sources */,
 				RR1100000000002F01 /* Router.swift in Sources */,
+				RSR1100000000002F01 /* Router+StoryReply.swift in Sources */,
 				DL1100000000002F01 /* DeepLinkRouter.swift in Sources */,
 				AA00BB11CC22DD33EE440001 /* Conversation.swift in Sources */,
 				AA00BB11CC22DD33EE440002 /* Message.swift in Sources */,

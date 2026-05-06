@@ -30,7 +30,6 @@ struct RootView: View {
     @State private var showFeed = false
     @State private var feedWasVisibleBeforeNav = false
     @State private var showMenu = false
-    @State private var pendingReplyContext: ReplyContext?
     @State private var storyViewerRequest: StoryViewerRequest?
 
     // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
@@ -87,10 +86,10 @@ struct RootView: View {
                     case .conversation(let conv):
                         ConversationView(
                             conversation: conv,
-                            replyContext: pendingReplyContext
+                            replyContext: router.pendingReplyContext
                         )
                         .navigationBarHidden(true)
-                        .onAppear { pendingReplyContext = nil }
+                        .onAppear { router.pendingReplyContext = nil }
                     case .settings:
                         SettingsView()
                             .navigationBarHidden(true)
@@ -339,7 +338,7 @@ struct RootView: View {
                 ),
                 onReplyToStory: { replyContext in
                     storyViewerRequest = nil
-                    handleStoryReply(replyContext)
+                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
                 presentationSource: "RootView.fromConv"
             )
@@ -535,49 +534,6 @@ struct RootView: View {
                 ToastManager.shared.showError(
                     String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
                 )
-            }
-        }
-    }
-
-    // MARK: - Handle Story Reply
-    private func handleStoryReply(_ context: ReplyContext) {
-        let authId: String
-        switch context {
-        case .story(_, let authorId, _, _, _, _, _, _): authId = authorId
-        case .status(_, let authorId, _, _, _): authId = authorId
-        }
-
-        // 1. Check local cache first
-        if let existingConv = conversationViewModel.conversations.first(where: {
-            $0.type == .direct && $0.participantUserId == authId
-        }) {
-            pendingReplyContext = context
-            router.navigateToConversation(existingConv)
-            return
-        }
-
-        // 2. Not in local cache — ask the API for an existing DM, or create one
-        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-        Task {
-            do {
-                let conv: Conversation
-                if let existingApi = try await ConversationService.shared.findDirectWith(userId: authId) {
-                    conv = existingApi.toConversation(currentUserId: currentUserId)
-                } else {
-                    let created = try await ConversationService.shared.create(
-                        type: "direct",
-                        participantIds: [authId]
-                    )
-                    let apiConv = try await ConversationService.shared.getById(created.id)
-                    conv = apiConv.toConversation(currentUserId: currentUserId)
-                }
-
-                await MainActor.run {
-                    pendingReplyContext = context
-                    router.navigateToConversation(conv)
-                }
-            } catch {
-                ToastManager.shared.showError("Impossible d'ouvrir la conversation")
             }
         }
     }

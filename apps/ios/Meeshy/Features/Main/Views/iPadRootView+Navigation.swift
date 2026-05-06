@@ -6,10 +6,13 @@ import MeeshySDK
 extension iPadRootView {
 
     func openConversation(_ conversation: Conversation) {
+        // Do NOT clear router.pendingReplyContext here: when openConversation is
+        // invoked through navigateToStoryReply, the context was just set and must
+        // survive until ConversationView consumes it. ConversationView clears it
+        // in .onAppear (see rightColumn).
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             activeConversation = conversation
             rightPanelRoute = nil
-            pendingReplyContext = nil
         }
     }
 
@@ -17,7 +20,7 @@ extension iPadRootView {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             activeConversation = nil
             rightPanelRoute = nil
-            pendingReplyContext = nil
+            router.pendingReplyContext = nil
         }
     }
 
@@ -127,37 +130,10 @@ extension iPadRootView {
     // MARK: - Handle Story Reply
 
     func handleStoryReply(_ context: ReplyContext) {
-        let authId: String
-        switch context {
-        case .story(_, let authorId, _, _, _, _, _, _): authId = authorId
-        case .status(_, let authorId, _, _, _): authId = authorId
-        }
-
-        if let existingConv = conversationViewModel.conversations.first(where: {
-            $0.type == .direct && $0.participantUserId == authId
-        }) {
-            pendingReplyContext = context
-            openConversation(existingConv)
-            return
-        }
-
-        Task {
-            do {
-                let response = try await ConversationService.shared.create(
-                    type: "direct",
-                    participantIds: [authId]
-                )
-                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                let apiConv = try await ConversationService.shared.getById(response.id)
-                let conv = apiConv.toConversation(currentUserId: currentUserId)
-                await MainActor.run {
-                    pendingReplyContext = context
-                    openConversation(conv)
-                }
-            } catch {
-                ToastManager.shared.showError("Impossible de creer la conversation")
-            }
-        }
+        // Delegate to the centralized helper. iPad's openConversation is wired
+        // through router.onRouteRequested, so navigateToConversation dispatches
+        // into the two-column flow automatically.
+        router.navigateToStoryReply(context, conversationListViewModel: conversationViewModel)
     }
 
     // MARK: - Handle Notification Tap

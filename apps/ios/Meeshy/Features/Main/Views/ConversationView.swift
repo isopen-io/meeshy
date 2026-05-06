@@ -507,6 +507,10 @@ struct ConversationView: View {
                     viewModel: storyViewModel,
                     userId: headerState.storyUserIdForHeader,
                     isPresented: $headerState.showStoryViewerFromHeader,
+                    onReplyToStory: { replyContext in
+                        headerState.showStoryViewerFromHeader = false
+                        router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                    },
                     singleGroup: true,
                     presentationSource: "ConversationView.header"
                 )
@@ -516,6 +520,10 @@ struct ConversationView: View {
                     viewModel: storyViewModel,
                     userId: overlayState.storyViewerUserId,
                     isPresented: $overlayState.showStoryViewer,
+                    onReplyToStory: { replyContext in
+                        overlayState.showStoryViewer = false
+                        router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                    },
                     singleGroup: true,
                     initialStoryIndex: overlayState.storyViewerSlideIndex,
                     presentationSource: "ConversationView.overlay"

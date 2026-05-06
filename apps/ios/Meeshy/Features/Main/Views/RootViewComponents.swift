@@ -319,6 +319,10 @@ struct ThemedFeedOverlay: View {
                 viewModel: storyViewModel,
                 userId: selectedStoryUserId,
                 isPresented: $showStoryViewer,
+                onReplyToStory: { replyContext in
+                    showStoryViewer = false
+                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                },
                 presentationSource: "FeedOverlay"
             )
             .environmentObject(router)

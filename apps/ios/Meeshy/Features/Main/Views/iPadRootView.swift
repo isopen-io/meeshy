@@ -37,7 +37,6 @@ struct iPadRootView: View {
 
     @State var activeConversation: Conversation?
     @State var rightPanelRoute: Route?
-    @State var pendingReplyContext: ReplyContext?
     @State var showStoryViewerFromConv = false
     @State var selectedStoryUserIdFromConv: String?
     @State var showSharePicker = false
@@ -181,10 +180,11 @@ struct iPadRootView: View {
         if let conversation = activeConversation {
             ConversationView(
                 conversation: conversation,
-                replyContext: pendingReplyContext
+                replyContext: router.pendingReplyContext
             )
             .id(conversation.id)
             .navigationBarHidden(true)
+            .onAppear { router.pendingReplyContext = nil }
         } else if let route = rightPanelRoute {
             rightPanelContent(for: route)
         } else {
