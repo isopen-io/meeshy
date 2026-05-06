@@ -87,6 +87,7 @@ final class TimelinePlaybackEngineTests: XCTestCase {
 
 // MARK: - Audio Spectrogram Tests
 
+@MainActor
 final class AudioSpectrogramRendererTests: XCTestCase {
 
     func test_computeBins_withSufficientSamples_returnsColumns() {
@@ -125,6 +126,7 @@ final class AudioSpectrogramRendererTests: XCTestCase {
 
 // MARK: - Timeline Track Model Tests
 
+@MainActor
 final class TimelineTrackModelTests: XCTestCase {
 
     func test_trackType_sortOrder_fondBeforeFront() {
@@ -173,6 +175,7 @@ final class TimelineTrackModelTests: XCTestCase {
 
 // MARK: - Time Formatting Tests
 
+@MainActor
 final class TimeFormattingTests: XCTestCase {
 
     func test_formatTimePrecise_zero() {
@@ -222,6 +225,7 @@ final class TimeFormattingTests: XCTestCase {
 
 // MARK: - Zoom Scale Tests
 
+@MainActor
 final class ZoomScaleTests: XCTestCase {
 
     func test_zoomScale_clampMin() {
@@ -281,6 +285,7 @@ final class ZoomScaleTests: XCTestCase {
 
 // MARK: - Duration Handle Tests
 
+@MainActor
 final class DurationHandleTests: XCTestCase {
 
     func test_durationClamp_minimum() {

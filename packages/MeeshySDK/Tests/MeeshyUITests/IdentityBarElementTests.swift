@@ -1,7 +1,9 @@
 import XCTest
+import SwiftUI
 @testable import MeeshyUI
 @testable import MeeshySDK
 
+@MainActor
 final class IdentityBarElementTests: XCTestCase {
 
     func test_element_name_hasStableId() {
@@ -82,20 +84,24 @@ final class UserIdentityBarLayoutTests: XCTestCase {
     }
 
     func test_barWithAvatarOnly_doesNotCrash() {
-        let bar = UserIdentityBar(avatar: AvatarConfig(accentColor: "FF0000"))
-        XCTAssertNotNil(bar.body)
+        MainActor.assumeIsolated {
+            let bar = UserIdentityBar(avatar: AvatarConfig(accentColor: "FF0000"))
+            XCTAssertNotNil(bar.body)
+        }
     }
 
     func test_barWithAllZones_doesNotCrash() {
-        let bar = UserIdentityBar(
-            avatar: AvatarConfig(accentColor: "6366F1"),
-            name: "Alice",
-            leadingPrimary: [.name, .roleBadge(.admin)],
-            trailingPrimary: [.time("19:47"), .delivery(.read)],
-            leadingSecondary: [.username("@alice")],
-            trailingSecondary: [.text("info")]
-        )
-        XCTAssertNotNil(bar.body)
+        MainActor.assumeIsolated {
+            let bar = UserIdentityBar(
+                avatar: AvatarConfig(accentColor: "6366F1"),
+                name: "Alice",
+                leadingPrimary: [.name, .roleBadge(.admin)],
+                trailingPrimary: [.time("19:47"), .delivery(.read)],
+                leadingSecondary: [.username("@alice")],
+                trailingSecondary: [.text("info")]
+            )
+            XCTAssertNotNil(bar.body)
+        }
     }
 
     func test_barWithEmptySecondaryZones_hidesSecondLine() {
@@ -145,15 +151,17 @@ final class UserIdentityBarLayoutTests: XCTestCase {
     }
 
     func test_barWithActionMenu_doesNotCrash() {
-        let items = [
-            ActionMenuItem(label: "Edit", icon: "pencil", action: {}),
-            ActionMenuItem(label: "Delete", icon: "trash", role: .destructive, action: {})
-        ]
-        let bar = UserIdentityBar(
-            name: "Alice",
-            trailingSecondary: [.actionMenu("Options", items: items)]
-        )
-        XCTAssertNotNil(bar.body)
+        MainActor.assumeIsolated {
+            let items = [
+                ActionMenuItem(label: "Edit", icon: "pencil", action: {}),
+                ActionMenuItem(label: "Delete", icon: "trash", role: .destructive, action: {})
+            ]
+            let bar = UserIdentityBar(
+                name: "Alice",
+                trailingSecondary: [.actionMenu("Options", items: items)]
+            )
+            XCTAssertNotNil(bar.body)
+        }
     }
 
     func test_barWithMemberRole_doesNotCrash() {

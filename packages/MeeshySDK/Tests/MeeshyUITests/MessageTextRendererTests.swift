@@ -2,6 +2,7 @@ import XCTest
 import SwiftUI
 @testable import MeeshyUI
 
+@MainActor
 final class MessageTextRendererTests: XCTestCase {
 
     // MARK: - Highlight Term

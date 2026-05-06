@@ -64,7 +64,13 @@ let package = Package(
         .testTarget(
             name: "MeeshyUITests",
             dependencies: ["MeeshyUI", "MeeshySDK"],
-            swiftSettings: uiSwiftSettings
+            // Test target keeps default `nonisolated` to match XCTestCase's
+            // parent isolation. UI-touching test bodies opt into `@MainActor`
+            // explicitly when they need to. Using `uiSwiftSettings` here
+            // (with defaultIsolation MainActor per SE-0466) breaks every
+            // XCTestCase override (init/setUp/tearDown) because the inherited
+            // declaration is nonisolated.
+            swiftSettings: coreSwiftSettings
         ),
     ]
 )
