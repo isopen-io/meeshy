@@ -69,7 +69,7 @@ final class VoiceProfileModelsTests: XCTestCase {
         XCTAssertEqual(profile.sampleCount, 5)
         XCTAssertEqual(profile.totalDurationMs, 45000)
         XCTAssertEqual(profile.totalDurationSeconds, 45)
-        XCTAssertEqual(profile.quality, 0.87, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(profile.quality), 0.87, accuracy: 0.001)
         XCTAssertNotNil(profile.lastUsedAt)
     }
 
