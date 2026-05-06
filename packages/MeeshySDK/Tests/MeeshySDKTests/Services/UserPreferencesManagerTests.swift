@@ -65,7 +65,7 @@ final class UserPreferencesManagerTests: XCTestCase {
 
     func test_resetToDefaults_restoresAllCategories() {
         manager.updatePrivacy { $0.showOnlineStatus = false }
-        manager.updateAudio { $0.autoPlayAudio = true }
+        manager.updateAudio { $0.ttsEnabled = true }
         manager.updateDocument { $0.autoDownloadEnabled = true }
 
         manager.resetToDefaults()
