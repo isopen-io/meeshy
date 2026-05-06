@@ -79,4 +79,33 @@ final class KeyframeInterpolatorTests: XCTestCase {
         XCTAssertNotNil(result)
         XCTAssertEqual(result!, 42.0, accuracy: 0.0001 as Float)
     }
+
+    // MARK: - KeyframeInterpolator — clamp
+
+    func test_interpolate_beforeFirstKeyframe_clampsToFirstValue() {
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 1.0, value: 10.0, easing: .linear),
+            (time: 3.0, value: 30.0, easing: .linear)
+        ]
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 0.0)
+        XCTAssertEqual(result!, 10.0, accuracy: 0.0001 as Float)
+    }
+
+    func test_interpolate_afterLastKeyframe_clampsToLastValue() {
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 1.0, value: 10.0, easing: .linear),
+            (time: 3.0, value: 30.0, easing: .linear)
+        ]
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 100.0)
+        XCTAssertEqual(result!, 30.0, accuracy: 0.0001 as Float)
+    }
+
+    func test_interpolate_negativeTime_clampsToFirstValue() {
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 0.0, value: 5.0, easing: .linear),
+            (time: 2.0, value: 25.0, easing: .linear)
+        ]
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: -1.0)
+        XCTAssertEqual(result!, 5.0, accuracy: 0.0001 as Float)
+    }
 }
