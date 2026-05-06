@@ -100,6 +100,31 @@ public final class KeychainManager: @unchecked Sendable {
         SecItemDelete(query as CFDictionary)
     }
 
+    // MARK: - Async
+
+    /// Loads a keychain value off the caller's actor queue to avoid blocking crypto actors.
+    public func loadAsync(forKey key: String) async -> String? {
+        await withCheckedContinuation { (cont: CheckedContinuation<String?, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                cont.resume(returning: self.load(forKey: key))
+            }
+        }
+    }
+
+    /// Saves a keychain value off the caller's actor queue to avoid blocking crypto actors.
+    public func saveAsync(_ value: String, forKey key: String) async throws {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try self.save(value, forKey: key)
+                    cont.resume(returning: ())
+                } catch {
+                    cont.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     // MARK: - Migration
 
     /// Migrate existing Keychain items from WhenUnlocked to AfterFirstUnlock accessibility.

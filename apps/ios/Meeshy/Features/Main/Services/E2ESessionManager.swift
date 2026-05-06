@@ -43,10 +43,10 @@ public actor SessionManager {
 
     // MARK: - Keychain Persistence
 
-    private func persistSession(peerId: String, key: SymmetricKey) {
+    private func persistSession(peerId: String, key: SymmetricKey) async {
         let keyData = key.withUnsafeBytes { Data($0) }
         do {
-            try KeychainManager.shared.save(keyData.base64EncodedString(), forKey: keychainPrefix + peerId)
+            try await KeychainManager.shared.saveAsync(keyData.base64EncodedString(), forKey: keychainPrefix + peerId)
         } catch {
             Logger.e2ee.error("Failed to persist session key for peer \(peerId): \(error)")
         }
@@ -54,9 +54,9 @@ public actor SessionManager {
         activeSessions[peerId] = key
     }
 
-    private func loadSession(peerId: String) -> SymmetricKey? {
+    private func loadSession(peerId: String) async -> SymmetricKey? {
         if let cached = activeSessions[peerId] { return cached }
-        guard let base64 = KeychainManager.shared.load(forKey: keychainPrefix + peerId),
+        guard let base64 = await KeychainManager.shared.loadAsync(forKey: keychainPrefix + peerId),
               let data = Data(base64Encoded: base64) else { return nil }
         let key = SymmetricKey(data: data)
         activeSessions[peerId] = key
@@ -73,7 +73,7 @@ public actor SessionManager {
 
     /// Récupère la session pour un utilisateur, ou l'établit via Diffie-Hellman si elle n'existe pas.
     public func getOrCreateSession(with userId: String, conversationId: String) async throws -> SymmetricKey {
-        if let key = loadSession(peerId: userId) {
+        if let key = await loadSession(peerId: userId) {
             return key
         }
 
@@ -96,13 +96,13 @@ public actor SessionManager {
             publicKeyData: signedPreKeyData
         )
 
-        persistSession(peerId: userId, key: symmetricKey)
+        await persistSession(peerId: userId, key: symmetricKey)
         return symmetricKey
     }
 
     /// Appelé lors de la réception du premier message E2EE d'un User B.
     /// Dérive la clé symétrique à partir de l'identité publique de l'expéditeur.
-    public func deriveSessionFromIncoming(senderId: String, senderIdentityPublic: Data) throws -> SymmetricKey {
+    public func deriveSessionFromIncoming(senderId: String, senderIdentityPublic: Data) async throws -> SymmetricKey {
         // MVP: On utilise notre SignedPreKey locale combinée à la clé publique de l'expéditeur
         let mySignedPreKey = try E2EEService.shared.getOrGenerateSignedPreKey()
 
@@ -111,7 +111,7 @@ public actor SessionManager {
             publicKeyData: senderIdentityPublic
         )
 
-        persistSession(peerId: senderId, key: symmetricKey)
+        await persistSession(peerId: senderId, key: symmetricKey)
         return symmetricKey
     }
 
@@ -125,10 +125,10 @@ public actor SessionManager {
     public func decryptMessage(_ ciphertext: Data, from userId: String, senderIdentity: Data? = nil) async throws -> Data {
         let sessionKey: SymmetricKey
 
-        if let key = loadSession(peerId: userId) {
+        if let key = await loadSession(peerId: userId) {
             sessionKey = key
         } else if let pubKey = senderIdentity {
-            sessionKey = try deriveSessionFromIncoming(senderId: userId, senderIdentityPublic: pubKey)
+            sessionKey = try await deriveSessionFromIncoming(senderId: userId, senderIdentityPublic: pubKey)
         } else {
             throw SessionError.missingSession
         }
