@@ -6,6 +6,18 @@ import Combine
 import GRDB
 import MeeshySDK
 
+/// Sendable weak-reference box. Used to capture a weak reference to a
+/// `@MainActor`-isolated class in a `@Sendable` closure WITHOUT triggering
+/// Swift 6 strict concurrency's `_swift_task_checkIsolatedSwift` assertion
+/// at closure invocation (which would fire when the closure runs off-actor).
+/// The box itself is `@unchecked Sendable` because the wrapped reference
+/// is `weak` and access is gated by the unwrap site (callers must hop to
+/// the right actor before touching the value).
+private final class WeakBox<T: AnyObject>: @unchecked Sendable {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
+}
+
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
 /// Explicitly non-isolated so its methods can be called from any context.
 private final class ObservationTokens: @unchecked Sendable {
@@ -78,27 +90,32 @@ public final class MessageStore {
         let request = MessageRecord
             .filter(Column("conversationId") == convId)
 
+        // Capture only nonisolated values up front. GRDB invokes the onChange
+        // closure on its writer's serial queue, NOT MainActor. Capturing a
+        // `weak self` of a @MainActor class in the outer closure causes Swift 6
+        // strict concurrency to insert a `_swift_task_checkIsolatedSwift` call
+        // at closure invocation, which crashes when GRDB invokes off-actor.
+        // Capture only `tokens` (an `@unchecked Sendable` holder) and a
+        // dedicated `WeakBox` for self — both nonisolated.
+        let tokensRef = tokens
+        let weakStore = WeakBox(self)
         tokens.regionCancellable = DatabaseRegionObservation(tracking: request)
-            .start(in: dbPool, onError: { _ in }) { [weak self] _ in
-                // GRDB invokes this closure on its writer's serial queue, NOT
-                // MainActor. Even creating a `Task { @MainActor in ... }` from
-                // here trips Swift 6's strict concurrency assertion because the
-                // Task creation queries the current executor. We use
-                // DispatchQueue.main.async (a nonisolated dispatch primitive)
-                // to escape the GRDB queue WITHOUT a runtime isolation check,
-                // landing on MainActor's serial queue where self.tokens
-                // mutation is safe.
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    self.tokens.refreshTask?.cancel()
-                    self.tokens.refreshTask = Task { @MainActor [weak self] in
-                        guard let self else { return }
-                        let delay: Duration = self.isUserScrolling
+            .start(in: dbPool, onError: { _ in }) { _ in
+                // No `self` capture in the outer closure — only nonisolated
+                // values. The hop to MainActor happens via DispatchQueue.main.async
+                // (a nonisolated primitive that does NOT query the current
+                // executor), and `tokens` is `@unchecked Sendable` so it can be
+                // mutated from the main queue without isolation friction.
+                DispatchQueue.main.async {
+                    tokensRef.refreshTask?.cancel()
+                    tokensRef.refreshTask = Task { @MainActor in
+                        guard let store = weakStore.value else { return }
+                        let delay: Duration = store.isUserScrolling
                             ? .milliseconds(200)
                             : .milliseconds(16)
                         try? await Task.sleep(for: delay)
                         guard !Task.isCancelled else { return }
-                        await self.refreshFromDB()
+                        await store.refreshFromDB()
                     }
                 }
             }
