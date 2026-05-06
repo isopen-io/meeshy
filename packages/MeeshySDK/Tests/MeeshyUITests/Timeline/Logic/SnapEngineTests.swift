@@ -172,4 +172,22 @@ final class SnapEngineTests: XCTestCase {
         let result = engine.snap(rawTime: 2.0, candidates: [slideStart, gridMinor])
         XCTAssertEqual(result.matched, gridMinor)
     }
+
+    // MARK: - SnapEngine.snap — exact match
+
+    func test_snap_exactMatch_returnsExactCandidate() {
+        let engine = SnapEngine(toleranceSeconds: 0.5)
+        let candidate = SnapCandidate(kind: .playhead, time: 4.0, label: nil)
+        let result = engine.snap(rawTime: 4.0, candidates: [candidate])
+        XCTAssertEqual(result.snappedTime, 4.0, accuracy: 0.0001)
+        XCTAssertEqual(result.matched, candidate)
+    }
+
+    func test_snap_exactMatch_higherPriorityWinsOverEqualDistanceLowerPriority() {
+        let engine = SnapEngine(toleranceSeconds: 0.5)
+        let lowPri  = SnapCandidate(kind: .slideStart, time: 4.0, label: nil)
+        let highPri = SnapCandidate(kind: .playhead,   time: 4.0, label: nil)
+        let result = engine.snap(rawTime: 4.0, candidates: [lowPri, highPri])
+        XCTAssertEqual(result.matched, highPri)
+    }
 }
