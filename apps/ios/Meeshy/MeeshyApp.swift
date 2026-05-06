@@ -237,6 +237,11 @@ struct MeeshyApp: App {
                         NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
                         NotificationCoordinator.shared.start()
                         Task { await CacheCoordinator.shared.start() }
+                        // SOTA audit Pilier 22 V2 — register the publish-queue
+                        // handler + listeners so any pending stories from a
+                        // previous session start surfacing to the UI as soon
+                        // as the user authenticates.
+                        StoryPublishService.shared.configure()
                         // Re-hydrate the friendship cache for the now-active
                         // user. `MeeshyApp.task` only hydrates once per view
                         // lifecycle, so without this call an account switch

@@ -337,6 +337,7 @@
 		THSM0001000100010001B001 /* ThermalStateMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */; };
 		TL6001A001A001A001A00001 /* TrackingLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TL6002A002A002A002A00002 /* TrackingLinksView.swift */; };
 		TM2800000000002F28 /* ToastManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM2800000000001F28 /* ToastManager.swift */; };
+		SPS2800000000002F28 /* StoryPublishService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPS2800000000001F28 /* StoryPublishService.swift */; };
 		TNAV0001000100010001001 /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TNAV0001000100010001000 /* TabNavigationTests.swift */; };
 		TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */; };
 		TSTM0001000100010001B001 /* ToastManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSTM0001000100010001F001 /* ToastManagerTests.swift */; };
@@ -733,6 +734,7 @@
 		THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThermalStateMonitorTests.swift; sourceTree = "<group>"; };
 		TL6002A002A002A002A00002 /* TrackingLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinksView.swift; sourceTree = "<group>"; };
 		TM2800000000001F28 /* ToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManager.swift; sourceTree = "<group>"; };
+		SPS2800000000001F28 /* StoryPublishService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishService.swift; sourceTree = "<group>"; };
 		TNAV0001000100010001000 /* TabNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNavigationTests.swift; sourceTree = "<group>"; };
 		TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
 		TSTM0001000100010001F001 /* ToastManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManagerTests.swift; sourceTree = "<group>"; };
@@ -1107,6 +1109,7 @@
 				PQ7000000000001FPQ /* PendingStatusQueue.swift */,
 				CC2400000000001F24 /* ConversationLockManager.swift */,
 				TM2800000000001F28 /* ToastManager.swift */,
+				SPS2800000000001F28 /* StoryPublishService.swift */,
 				CM3600000000001F36 /* CallManager.swift */,
 				BT3600000000001F36 /* BackgroundTaskManager.swift */,
 				VP3600000000001F36 /* VoIPPushManager.swift */,
@@ -1796,6 +1799,7 @@
 				PP2600000000002F26 /* AddParticipantSheet.swift in Sources */,
 				ML2700000000002F27 /* MagicLinkView.swift in Sources */,
 				TM2800000000002F28 /* ToastManager.swift in Sources */,
+				SPS2800000000002F28 /* StoryPublishService.swift in Sources */,
 				PS3900000000002F39 /* ParticipantService.swift in Sources */,
 				OB2900000000002F29 /* OnboardingView.swift in Sources */,
 				OF3000000000002F30 /* OfflineBanner.swift in Sources */,
