@@ -221,4 +221,23 @@ final class SnapEngineTests: XCTestCase {
         let result = engine.snap(rawTime: 500.4, candidates: candidates)
         XCTAssertEqual(result.matched, target)
     }
+
+    // MARK: - SnapEngine.snap — NaN / Infinity contract
+
+    func test_snap_rawTimeIsNaN_returnsRawTimeUnchanged() {
+        let engine = SnapEngine(toleranceSeconds: 1.0)
+        let candidate = SnapCandidate(kind: .playhead, time: 1.0, label: nil)
+        let result = engine.snap(rawTime: Float.nan, candidates: [candidate])
+        XCTAssertTrue(result.snappedTime.isNaN)
+        XCTAssertNil(result.matched)
+    }
+
+    func test_snap_candidateTimeIsNaN_skipsCandidate() {
+        let engine = SnapEngine(toleranceSeconds: 1.0)
+        let nanCandidate   = SnapCandidate(kind: .playhead,  time: Float.nan, label: nil)
+        let validCandidate = SnapCandidate(kind: .gridMinor, time: 1.0,       label: nil)
+        let result = engine.snap(rawTime: 1.0, candidates: [nanCandidate, validCandidate])
+        XCTAssertEqual(result.matched, validCandidate)
+        XCTAssertEqual(result.snappedTime, 1.0, accuracy: 0.0001)
+    }
 }

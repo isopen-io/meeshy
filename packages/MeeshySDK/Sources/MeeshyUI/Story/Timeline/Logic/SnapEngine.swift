@@ -110,7 +110,9 @@ extension SnapEngine {
     ///
     /// - Parameters:
     ///   - rawTime: The raw user-input time (e.g. from a drag gesture).
+    ///             If non-finite (NaN, ±inf), returns `rawTime` unchanged with `matched: nil`.
     ///   - candidates: All snap candidates to consider for the current frame.
+    ///             Candidates with non-finite `time` are silently skipped.
     ///   - disabled: If `true` (e.g. user is doing a 2-finger override drag),
     ///               returns `rawTime` unchanged with `matched: nil`.
     /// - Returns: A `SnapResult` with `snappedTime` (= candidate.time when matched)
@@ -125,6 +127,9 @@ extension SnapEngine {
         if disabled {
             return SnapResult(snappedTime: rawTime, matched: nil)
         }
+        guard rawTime.isFinite else {
+            return SnapResult(snappedTime: rawTime, matched: nil)
+        }
         return Self.pickBest(rawTime: rawTime, candidates: candidates, tolerance: toleranceSeconds)
     }
 
@@ -134,6 +139,7 @@ extension SnapEngine {
         }
         var best: (candidate: SnapCandidate, distance: Float, priority: Int)?
         for c in candidates {
+            guard c.time.isFinite else { continue }
             let d = abs(c.time - rawTime)
             if d > tolerance { continue }
             let p = priority(for: c.kind)
