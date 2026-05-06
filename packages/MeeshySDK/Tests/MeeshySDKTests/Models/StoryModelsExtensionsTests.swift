@@ -616,4 +616,61 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertEqual(decoded.clipId, "v1")
         XCTAssertEqual(decoded.newStartTime, 1)
     }
+
+    // MARK: - TrimClipCommand
+
+    func test_trimClipCommand_apply_changesStartAndDuration() throws {
+        var project = makeEmptyProject()
+        project.mediaObjects = [
+            StoryMediaObject(id: "v1", postMediaId: "pm",
+                             mediaType: "video", placement: "media",
+                             startTime: 0, duration: 5.0)
+        ]
+        let cmd = TrimClipCommand(clipId: "v1", kind: .video,
+                                  oldStartTime: 0, oldDuration: 5.0,
+                                  newStartTime: 1.0, newDuration: 3.0)
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects[0].startTime, 1.0)
+        XCTAssertEqual(project.mediaObjects[0].duration, 3.0)
+    }
+
+    func test_trimClipCommand_apply_textUsesDisplayDuration() throws {
+        var project = makeEmptyProject()
+        project.textObjects = [
+            StoryTextObject(id: "t1", content: "hi",
+                            startTime: 0, displayDuration: 5.0)
+        ]
+        let cmd = TrimClipCommand(clipId: "t1", kind: .text,
+                                  oldStartTime: 0, oldDuration: 5.0,
+                                  newStartTime: 0.5, newDuration: 4.0)
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.textObjects[0].startTime, 0.5)
+        XCTAssertEqual(project.textObjects[0].displayDuration, 4.0)
+    }
+
+    func test_trimClipCommand_revert_restoresOldValues() throws {
+        var project = makeEmptyProject()
+        project.audioPlayerObjects = [
+            StoryAudioPlayerObject(id: "a1", postMediaId: "pm",
+                                   placement: "overlay",
+                                   waveformSamples: [],
+                                   startTime: 0, duration: 4.0)
+        ]
+        let cmd = TrimClipCommand(clipId: "a1", kind: .audio,
+                                  oldStartTime: 0, oldDuration: 4.0,
+                                  newStartTime: 1.0, newDuration: 2.0)
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertEqual(project.audioPlayerObjects[0].startTime, 0)
+        XCTAssertEqual(project.audioPlayerObjects[0].duration, 4.0)
+    }
+
+    func test_trimClipCommand_codableRoundTrip() throws {
+        let cmd = TrimClipCommand(clipId: "v1", kind: .video,
+                                  oldStartTime: 0, oldDuration: 5,
+                                  newStartTime: 1, newDuration: 3)
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(TrimClipCommand.self, from: data)
+        XCTAssertEqual(decoded.newDuration, 3)
+    }
 }
