@@ -84,7 +84,7 @@ public struct ImageViewerView: View {
             : attachment.fileUrl
 
         if !urlStr.isEmpty {
-            CachedAsyncImage(url: urlStr) {
+            CachedAsyncImage(url: urlStr, targetSize: CGSize(width: 280, height: 280)) {
                 placeholder(icon: "photo")
                     .shimmer()
             }

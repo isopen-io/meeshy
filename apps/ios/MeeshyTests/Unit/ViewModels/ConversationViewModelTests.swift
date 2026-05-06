@@ -1104,7 +1104,7 @@ final class ConversationViewModelTests: XCTestCase {
             changeVersion: 1
         )
 
-        try persistence.insertOptimistic(record)
+        try await persistence.insertOptimistic(record)
 
         // Allow observation pipeline to propagate:
         // GRDB region observation → MessageStore.refreshFromDB() → messagesDidChange → ViewModel

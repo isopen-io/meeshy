@@ -51,6 +51,26 @@ final class DatabaseMaintenanceTests: XCTestCase {
         XCTAssertNoThrow(try DatabaseMaintenance.runOptimize(on: pool))
     }
 
+    func test_enableIncrementalAutoVacuumOneShot_persistsAcrossOpens() throws {
+        let path = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("test_av_\(UUID().uuidString).sqlite").path
+        do {
+            let pool = try DatabaseQueue(path: path)
+            // Create an existing populated DB (auto_vacuum=NONE by default on a new DB with data)
+            try pool.write { db in
+                try db.execute(sql: "CREATE TABLE t (x INTEGER)")
+                try db.execute(sql: "INSERT INTO t VALUES (1), (2), (3)")
+            }
+            try DatabaseMaintenance.enableIncrementalAutoVacuumOneShot(on: pool)
+        }
+        // Re-open and verify the mode persisted across the close/re-open cycle
+        let pool2 = try DatabaseQueue(path: path)
+        try pool2.read { db in
+            let mode = try Int.fetchOne(db, sql: "PRAGMA auto_vacuum") ?? 0
+            XCTAssertEqual(mode, 2, "INCREMENTAL (2) must persist across opens after VACUUM")
+        }
+    }
+
     private func makeFreshPool() throws -> DatabaseQueue {
         let path = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("test_maint_\(UUID().uuidString).sqlite").path

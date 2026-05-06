@@ -132,7 +132,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
         // Arrange: in-memory DB with one matching message
         let pool = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: pool)
-        try pool.write { db in
+        try await pool.write { db in
             try SearchTestMessageRecordFactory.make(
                 localId: "local-fts-1",
                 conversationId: "conv-fts",
@@ -165,7 +165,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
         // Arrange: in-memory DB with one message already matching
         let pool = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: pool)
-        try pool.write { db in
+        try await pool.write { db in
             try SearchTestMessageRecordFactory.make(
                 localId: "shared-id",
                 conversationId: "conv-1",

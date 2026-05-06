@@ -43,6 +43,17 @@ final class DependencyContainer {
             await messagePersistence.start()
             await retryEngine.start()
         }
+
+        let autoVacuumKey = "meeshy.db.autoVacuumOneShotDone"
+        if !UserDefaults.standard.bool(forKey: autoVacuumKey) {
+            let pool = self.dbPool
+            Task.detached(priority: .background) {
+                try? DatabaseMaintenance.enableIncrementalAutoVacuumOneShot(on: pool)
+                await MainActor.run {
+                    UserDefaults.standard.set(true, forKey: autoVacuumKey)
+                }
+            }
+        }
     }
 
     // MARK: - App Group shared path (O6)

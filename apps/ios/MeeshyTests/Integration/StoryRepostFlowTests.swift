@@ -1,5 +1,5 @@
 import XCTest
-import MeeshySDK
+@testable import MeeshySDK
 @testable import MeeshyUI
 @testable import Meeshy
 
@@ -74,7 +74,8 @@ final class StoryRepostFlowTests: XCTestCase {
             isPinned: false, isEdited: false, media: nil, comments: nil,
             repostOf: repostOf, originalRepostOfId: nil, isQuote: false,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
-            translations: nil, isLikedByMe: nil
+            translations: nil, isLikedByMe: nil, isViewedByMe: nil,
+            mentionedUsers: nil, viaUsername: nil
         )
     }
 

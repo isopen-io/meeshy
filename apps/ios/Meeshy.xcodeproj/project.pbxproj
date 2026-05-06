@@ -247,6 +247,8 @@
 		CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */; };
 		TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = TDTH0001000100010001000 /* TypingDotTimerHarness.swift */; };
 		HLPR0001000100010001001 /* JSONStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPR0001000100010001000 /* JSONStub.swift */; };
+		HLPR0002000200020002001 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPR0002000200020002000 /* TestHelpers.swift */; };
+		HLPR0003000300030003001 /* FriendRequestTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPR0003000300030003000 /* FriendRequestTestHelpers.swift */; };
 		IAFLT001000100010001001 /* AuthFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = IAFLT001000100010001000 /* AuthFlowTests.swift */; };
 		IC3900000000002F39 /* IncomingCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IC3900000000001F39 /* IncomingCallView.swift */; };
 		ICFLT001000100010001001 /* CallFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ICFLT001000100010001000 /* CallFlowTests.swift */; };
@@ -650,6 +652,8 @@
 		CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewLifecycleTests.swift; sourceTree = "<group>"; };
 		TDTH0001000100010001000 /* TypingDotTimerHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingDotTimerHarness.swift; sourceTree = "<group>"; };
 		HLPR0001000100010001000 /* JSONStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONStub.swift; sourceTree = "<group>"; };
+		HLPR0002000200020002000 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
+		HLPR0003000300030003000 /* FriendRequestTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendRequestTestHelpers.swift; sourceTree = "<group>"; };
 		IAFLT001000100010001000 /* AuthFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowTests.swift; sourceTree = "<group>"; };
 		IC3900000000001F39 /* IncomingCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallView.swift; sourceTree = "<group>"; };
 		ICFLT001000100010001000 /* CallFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFlowTests.swift; sourceTree = "<group>"; };
@@ -1343,6 +1347,8 @@
 			isa = PBXGroup;
 			children = (
 				HLPR0001000100010001000 /* JSONStub.swift */,
+				HLPR0002000200020002000 /* TestHelpers.swift */,
+				HLPR0003000300030003000 /* FriendRequestTestHelpers.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -1954,6 +1960,8 @@
 				MCKS0004000400040004001 /* MockReactionService.swift in Sources */,
 				MCKS0005000500050005001 /* MockReportService.swift in Sources */,
 				HLPR0001000100010001001 /* JSONStub.swift in Sources */,
+				HLPR0002000200020002001 /* TestHelpers.swift in Sources */,
+				HLPR0003000300030003001 /* FriendRequestTestHelpers.swift in Sources */,
 				MOCK0007000700070007001 /* MockStoryService.swift in Sources */,
 				MOCK0008000800080008001 /* MockPostService.swift in Sources */,
 				MOCK0009000900090009001 /* MockStatusService.swift in Sources */,
