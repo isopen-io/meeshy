@@ -357,6 +357,17 @@ struct StoryViewerView: View {
         }
     }
 
+    // MARK: - External share URL builder
+
+    /// Builds the public web URL surfaced through ShareLink so the story can
+    /// be shared outside Meeshy (Messages, Mail, other apps). Aligned with
+    /// the existing pattern in `SharePickerView.swift` that already references
+    /// `https://meeshy.me/story/<id>`. Returns nil if the story id is empty.
+    private func makeStoryExternalShareURL(_ storyId: String) -> URL? {
+        guard !storyId.isEmpty else { return nil }
+        return URL(string: "https://meeshy.me/story/\(storyId)")
+    }
+
     // MARK: - Computed Card Transforms
 
     private var cardScale: CGFloat {
@@ -1385,8 +1396,20 @@ struct StoryViewerView: View {
 
             // Options menu (three dots)
             Menu {
-                if let _ = currentStory, let group = currentGroup {
+                if let story = currentStory, let group = currentGroup {
                     if isOwnStory {
+                        // External share via system share sheet (Messages,
+                        // Mail, other apps). Only for public stories.
+                        if story.isPublic, let externalShareURL = makeStoryExternalShareURL(story.id) {
+                            ShareLink(
+                                item: externalShareURL,
+                                subject: Text("Story de @\(group.username)"),
+                                message: Text("Regardez cette story sur Meeshy")
+                            ) {
+                                Label("Partager hors Meeshy", systemImage: "square.and.arrow.up")
+                            }
+                            Divider()
+                        }
                         Button(role: .destructive) {
                             deleteCurrentStory()
                         } label: {
@@ -1402,7 +1425,7 @@ struct StoryViewerView: View {
                         // C.2: repost-as-post entry points. Gated on
                         // `story.isPublic` (B.2 helper) so we never expose
                         // these for FRIENDS / PRIVATE visibilities.
-                        if let story = currentStory, story.isPublic {
+                        if story.isPublic {
                             Button {
                                 repostAsPostDirect()
                             } label: {
@@ -1420,6 +1443,19 @@ struct StoryViewerView: View {
                                 }
                             } label: {
                                 Label("Éditer et republier en post", systemImage: "square.and.pencil")
+                            }
+
+                            // Pilier 18 SOTA — external share complement
+                            // (Messages, Mail, other apps) alongside the
+                            // internal SharePicker flow that lives elsewhere.
+                            if let externalShareURL = makeStoryExternalShareURL(story.id) {
+                                ShareLink(
+                                    item: externalShareURL,
+                                    subject: Text("Story de @\(group.username)"),
+                                    message: Text("Regardez cette story sur Meeshy")
+                                ) {
+                                    Label("Partager hors Meeshy", systemImage: "square.and.arrow.up")
+                                }
                             }
                         }
 
