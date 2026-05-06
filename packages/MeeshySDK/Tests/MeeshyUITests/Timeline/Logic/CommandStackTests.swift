@@ -238,4 +238,32 @@ final class CommandStackTests: XCTestCase {
         }
         XCTAssertEqual(stack.count, 1)
     }
+
+    // MARK: - CommandStack — coalescing rejection rules
+
+    func test_push_coalesce_rejectsDifferentClipId() {
+        let stack = CommandStack(coalesceWindow: 0.5)
+        let now = Date()
+        stack.push(makeMoveCmd(clipId: "c1", oldStart: 0, newStart: 1, timestamp: now))
+        stack.push(makeMoveCmd(clipId: "c2", oldStart: 0, newStart: 1,
+                               timestamp: now.addingTimeInterval(0.1)))
+        XCTAssertEqual(stack.count, 2)
+    }
+
+    func test_push_coalesce_rejectsDifferentCommandType() {
+        let stack = CommandStack(coalesceWindow: 0.5)
+        let now = Date()
+        stack.push(makeMoveCmd(clipId: "c1", oldStart: 0, newStart: 1, timestamp: now))
+        stack.push(makeAddCmd(clipId: "c1", timestamp: now.addingTimeInterval(0.1)))
+        XCTAssertEqual(stack.count, 2)
+    }
+
+    func test_push_coalesce_rejectsOutsideTimeWindow() {
+        let stack = CommandStack(coalesceWindow: 0.1)
+        let now = Date()
+        stack.push(makeMoveCmd(clipId: "c1", oldStart: 0, newStart: 1, timestamp: now))
+        stack.push(makeMoveCmd(clipId: "c1", oldStart: 1, newStart: 2,
+                               timestamp: now.addingTimeInterval(0.5))) // beyond window
+        XCTAssertEqual(stack.count, 2)
+    }
 }
