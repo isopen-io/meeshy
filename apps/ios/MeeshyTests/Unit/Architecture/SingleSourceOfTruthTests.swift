@@ -65,20 +65,16 @@ final class SingleSourceOfTruthTests: XCTestCase {
         )
     }
 
-    /// Group B Phase 2 invariant: whole-array `messages = ...` writes must only
-    /// exist in `subscribeToMessageStore` (the GRDB observation OUTPUT) plus the
-    /// deferred jump-to-message windowed state.
+    /// Group B Phase 2 invariant (fully realised): whole-array `messages = ...` writes
+    /// must only exist in `subscribeToMessageStore` (the GRDB observation OUTPUT).
     ///
-    /// Allowed writes (3 total):
-    /// 1. `self.messages = mapped` — inside `subscribeToMessageStore` (legitimate output)
-    /// 2. `messages = fetchedMessages` — `loadMessagesAround` (jump window, deferred)
-    /// 3. `messages = saved` — `returnToLatest` (jump window restore, deferred)
+    /// All 3 jump-to-message sites have been migrated to window-switching via
+    /// `MessageStore.loadWindow(around:)` and `MessageStore.restoreLatestWindow()`.
     ///
-    /// Note: `messages.append(contentsOf: genuinelyNew)` in `loadNewerMessages` is
-    /// a fourth deferred jump-window site but is not matched by this pattern (no `=`).
+    /// Exactly 1 whole-array write is allowed:
+    ///   `self.messages = mapped` — inside `subscribeToMessageStore`
     ///
-    /// This test asserts the exact count so any new whole-array `messages = ...`
-    /// write triggers a failure that forces the author to justify the addition.
+    /// Any new addition triggers a failure that forces the author to justify it.
     func test_wholeArrayMessagesWrite_countIsExact() throws {
         let filePath = #filePath
         let projectRoot = filePath
@@ -105,12 +101,15 @@ final class SingleSourceOfTruthTests: XCTestCase {
             }
         }
 
-        // Expected: exactly 3 whole-array writes (1 legitimate + 2 deferred jump-window)
-        let expectedCount = 3
+        // Expected: exactly 1 whole-array write (the subscribeToMessageStore GRDB output).
+        // All jump-to-message sites now route through MessageStore.loadWindow(around:)
+        // and MessageStore.restoreLatestWindow() — single source of truth fully realised.
+        let expectedCount = 1
         XCTAssertEqual(
             matchingLines.count, expectedCount,
-            "Expected exactly \(expectedCount) whole-array `messages = ...` writes in ConversationViewModel.swift " +
-            "(1 in subscribeToMessageStore + 2 deferred jump-window sites). " +
+            "Expected exactly \(expectedCount) whole-array `messages = ...` write in ConversationViewModel.swift " +
+            "(the subscribeToMessageStore GRDB output). Single-source-of-truth is fully realised — " +
+            "any new whole-array write must go through MessageStore instead. " +
             "Found \(matchingLines.count):\n" +
             matchingLines.map { "Line \($0.0): \($0.1)" }.joined(separator: "\n")
         )

@@ -192,9 +192,6 @@ class ConversationViewModel: ObservableObject {
 
     /// True when the user jumped to a search result and messages are loaded around that point
     @Published var isInJumpedState = false
-    private var savedMessages: [Message]?
-    private var savedCursor: String?
-    private var savedHasOlder: Bool = true
 
     // Permanent mapping `optimistic id → server id` for the lifetime of the
     // ViewModel. The optimistic id (`temp_…` / `offline_…` / `retry_…`) is
@@ -2112,22 +2109,20 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Jump to Message (load messages around a specific message)
 
     func loadMessagesAround(messageId: String) async {
-        // Save current state so we can return later
-        if !isInJumpedState {
-            savedMessages = messages
-            savedCursor = nextMessageCursor
-            savedHasOlder = hasOlderMessages
-        }
-
         do {
             let response = try await messageService.listAround(
                 conversationId: conversationId, around: messageId, limit: limit, includeReplies: true
             )
 
-            let userId = currentUserId
-            var fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
-            await decryptMessagesIfNeeded(&fetchedMessages)
-            messages = fetchedMessages
+            // Upsert the API batch into GRDB so the window has fresh content.
+            try? await messagePersistence.upsertFromAPIMessages(response.data)
+
+            // Switch the store window to be centered on the target message.
+            let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
+                ?? response.data.last?.createdAt
+                ?? Date()
+            await messageStore.loadWindow(around: targetDate)
+
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             nextMessageCursor = response.cursorPagination?.nextCursor
@@ -2157,24 +2152,16 @@ class ConversationViewModel: ObservableObject {
                     conversationId: conversationId, around: lastMsg.id, limit: limit, includeReplies: true
                 )
 
-                let userId = currentUserId
-                var newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
-                await decryptMessagesIfNeeded(&newMessages)
+                // Upsert newer messages into GRDB; the GRDB DatabaseRegionObservation
+                // fires automatically and the store refreshes its window — no direct
+                // messages mutation needed.
+                try? await messagePersistence.upsertFromAPIMessages(response.data)
                 extractAttachmentTranscriptions(from: response.data)
                 extractTextTranslations(from: response.data)
-                let genuinelyNew = newMessages.filter { !self.containsMessage(id: $0.id) }
-
-                if !genuinelyNew.isEmpty {
-                    // Data is already chronologically sorted by the reversed() map and strictly newer,
-                    // so purely appending maintains order optimally in O(k).
-                    messages.append(contentsOf: genuinelyNew)
-                }
 
                 hasNewerMessages = response.hasNewer ?? false
                 if !hasNewerMessages {
                     isInJumpedState = false
-                    savedMessages = nil
-                    savedCursor = nil
                 }
                 lastError = nil
                 break
@@ -2197,23 +2184,18 @@ class ConversationViewModel: ObservableObject {
     func returnToLatest() async {
         guard isInJumpedState else { return }
 
-        if let saved = savedMessages {
-            messages = saved
-            nextMessageCursor = savedCursor
-            hasOlderMessages = savedHasOlder
-        } else {
-            isInJumpedState = false
-            hasNewerMessages = false
-            await loadMessages()
-            return
-        }
-
-        savedMessages = nil
-        savedCursor = nil
-        savedHasOlder = true
         isInJumpedState = false
         hasNewerMessages = false
         currentSearchQuery = nil
+
+        // Restore the latest window from GRDB; the store observation surfaces
+        // the updated messages slice automatically — no snapshot-restore needed.
+        await messageStore.restoreLatestWindow()
+
+        // nextMessageCursor will be lazily re-fetched on the next loadOlderMessages
+        // call; hasOlderMessages defaults to true until corrected by the first page.
+        nextMessageCursor = nil
+        hasOlderMessages = true
     }
 
     // MARK: - Extract Text Translations from REST Responses
