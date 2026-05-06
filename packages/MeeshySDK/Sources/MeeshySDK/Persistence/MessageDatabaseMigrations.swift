@@ -145,6 +145,32 @@ public enum MessageDatabaseMigrations {
             }
         }
 
+        migrator.registerMigration("outbox") { db in
+            try db.execute(sql: """
+                CREATE TABLE outbox (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    kind TEXT NOT NULL,
+                    conversationId TEXT NOT NULL,
+                    messageLocalId TEXT,
+                    payload BLOB NOT NULL,
+                    status TEXT NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    lastError TEXT,
+                    createdAt DATETIME NOT NULL,
+                    updatedAt DATETIME NOT NULL,
+                    nextAttemptAt DATETIME NOT NULL
+                )
+                """)
+
+            try db.execute(sql: """
+                CREATE INDEX idx_outbox_status_next ON outbox(status, nextAttemptAt)
+                """)
+
+            try db.execute(sql: """
+                CREATE INDEX idx_outbox_conv ON outbox(conversationId)
+                """)
+        }
+
         migrator.registerMigration("msg_v1_messages_fts5") { db in
             // External-content FTS5 — content lives in `messages`, FTS just indexes
             // unicode61 remove_diacritics 2 gives French-aware accent folding:
