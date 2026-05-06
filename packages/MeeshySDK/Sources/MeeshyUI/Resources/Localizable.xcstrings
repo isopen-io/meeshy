@@ -14173,6 +14173,39 @@
         }
       }
     },
+    "story.composer.mediaLostMultiple" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld médias de votre brouillon ne sont plus disponibles (fichiers supprimés). Les slides ont été restaurés sans ces médias."
+          }
+        }
+      }
+    },
+    "story.composer.mediaLostSingle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Un média de votre brouillon n'est plus disponible (fichier supprimé). Le slide a été restauré sans ce média — retake si nécessaire."
+          }
+        }
+      }
+    },
+    "story.composer.mediaLostTitle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Médias indisponibles"
+          }
+        }
+      }
+    },
     "story.composer.moveToBackground" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14226,6 +14259,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Nenhum"
+          }
+        }
+      }
+    },
+    "story.composer.ok" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OK"
           }
         }
       }
