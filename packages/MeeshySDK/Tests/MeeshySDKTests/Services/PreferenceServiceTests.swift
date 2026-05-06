@@ -29,7 +29,8 @@ final class PreferenceServiceTests: XCTestCase {
         APIConversationPreferences(
             isPinned: true, isMuted: false, isArchived: false,
             deletedForUserAt: nil, tags: ["important"],
-            categoryId: "cat1", reaction: nil
+            categoryId: "cat1", reaction: nil,
+            customName: nil, mentionsOnly: nil
         )
     }
 

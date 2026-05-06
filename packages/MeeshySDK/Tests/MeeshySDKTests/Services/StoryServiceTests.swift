@@ -30,14 +30,18 @@ final class StoryServiceTests: XCTestCase {
             isEdited: false, media: nil, comments: nil, repostOf: nil,
             originalRepostOfId: nil, isQuote: nil,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
-            translations: nil, isLikedByMe: nil
+            translations: nil, isLikedByMe: nil,
+            isViewedByMe: nil, mentionedUsers: nil, viaUsername: nil
         )
     }
 
     private func makeComment(id: String = "comment1") -> APIPostComment {
         APIPostComment(
             id: id, content: "Nice!", originalLanguage: "en",
-            translations: nil, likeCount: 0, replyCount: 0, createdAt: Date(),
+            parentId: nil,
+            translations: nil, likeCount: 0, replyCount: 0,
+            effectFlags: nil,
+            createdAt: Date(),
             author: APIAuthor(id: "author2", username: "alice", displayName: "Alice", avatar: nil)
         )
     }
