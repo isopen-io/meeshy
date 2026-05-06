@@ -1093,6 +1093,50 @@ extension StorySlide {
     }
 }
 
+// MARK: - Timeline Project (Snapshot for Command Pattern)
+
+/// Snapshot Codable d'un slide pour le pattern Command (undo/redo).
+/// Round-trip garanti : `TimelineProject(from: slide).apply(to: &slide)` est no-op.
+public struct TimelineProject: Codable, Sendable {
+    public var slideId: String
+    public var slideDuration: Float
+    public var mediaObjects: [StoryMediaObject]
+    public var audioPlayerObjects: [StoryAudioPlayerObject]
+    public var textObjects: [StoryTextObject]
+    public var clipTransitions: [StoryClipTransition]
+
+    public init(slideId: String,
+                slideDuration: Float,
+                mediaObjects: [StoryMediaObject] = [],
+                audioPlayerObjects: [StoryAudioPlayerObject] = [],
+                textObjects: [StoryTextObject] = [],
+                clipTransitions: [StoryClipTransition] = []) {
+        self.slideId = slideId
+        self.slideDuration = slideDuration
+        self.mediaObjects = mediaObjects
+        self.audioPlayerObjects = audioPlayerObjects
+        self.textObjects = textObjects
+        self.clipTransitions = clipTransitions
+    }
+
+    public init(from slide: StorySlide) {
+        self.slideId = slide.id
+        self.slideDuration = Float(slide.duration)
+        self.mediaObjects = slide.effects.mediaObjects ?? []
+        self.audioPlayerObjects = slide.effects.audioPlayerObjects ?? []
+        self.textObjects = slide.effects.textObjects ?? []
+        self.clipTransitions = slide.effects.clipTransitions ?? []
+    }
+
+    public func apply(to slide: inout StorySlide) {
+        slide.duration = TimeInterval(slideDuration)
+        slide.effects.mediaObjects = mediaObjects
+        slide.effects.audioPlayerObjects = audioPlayerObjects
+        slide.effects.textObjects = textObjects
+        slide.effects.clipTransitions = clipTransitions
+    }
+}
+
 // MARK: - Story Easing (Timeline V2)
 
 /// Easing curve applied between two interpolated values (transitions, keyframes).

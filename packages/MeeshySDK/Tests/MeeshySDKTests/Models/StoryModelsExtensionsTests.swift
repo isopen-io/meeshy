@@ -328,4 +328,85 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertEqual(decoded.effects.clipTransitions?.first?.kind, .dissolve)
         XCTAssertEqual(decoded.effects.mediaObjects?.first?.keyframes?.count, 2)
     }
+
+    // MARK: - TimelineProject
+
+    private func makeSlideForProject() -> StorySlide {
+        var effects = StoryEffects()
+        effects.mediaObjects = [
+            StoryMediaObject(id: "m1", postMediaId: "pm-1",
+                             mediaType: "video", placement: "media",
+                             startTime: 0, duration: 3.0)
+        ]
+        effects.audioPlayerObjects = [
+            StoryAudioPlayerObject(id: "a1", postMediaId: "pm-2",
+                                   placement: "overlay",
+                                   volume: 0.8, waveformSamples: [0.1, 0.2])
+        ]
+        effects.textObjects = [
+            StoryTextObject(id: "t1", content: "Hello",
+                            startTime: 0, displayDuration: 2.0)
+        ]
+        effects.clipTransitions = [
+            StoryClipTransition(id: "tr1",
+                                fromClipId: "m1", toClipId: "m2",
+                                kind: .crossfade, duration: 0.4)
+        ]
+        return StorySlide(id: "slide-1", effects: effects, duration: 8.0, order: 0)
+    }
+
+    func test_timelineProject_initFromSlide_capturesAllArrays() {
+        let slide = makeSlideForProject()
+        let project = TimelineProject(from: slide)
+        XCTAssertEqual(project.slideId, "slide-1")
+        XCTAssertEqual(project.slideDuration, 8.0)
+        XCTAssertEqual(project.mediaObjects.count, 1)
+        XCTAssertEqual(project.audioPlayerObjects.count, 1)
+        XCTAssertEqual(project.textObjects.count, 1)
+        XCTAssertEqual(project.clipTransitions.count, 1)
+    }
+
+    func test_timelineProject_initFromSlide_handlesNilArraysAsEmpty() {
+        let slide = StorySlide(id: "empty", effects: StoryEffects(),
+                               duration: 5, order: 0)
+        let project = TimelineProject(from: slide)
+        XCTAssertTrue(project.mediaObjects.isEmpty)
+        XCTAssertTrue(project.audioPlayerObjects.isEmpty)
+        XCTAssertTrue(project.textObjects.isEmpty)
+        XCTAssertTrue(project.clipTransitions.isEmpty)
+    }
+
+    func test_timelineProject_apply_writesArraysBackToSlide() {
+        let original = makeSlideForProject()
+        let project = TimelineProject(from: original)
+        var blank = StorySlide(id: "slide-1", effects: StoryEffects(),
+                               duration: 0, order: 0)
+        project.apply(to: &blank)
+        XCTAssertEqual(blank.duration, 8.0)
+        XCTAssertEqual(blank.effects.mediaObjects?.count, 1)
+        XCTAssertEqual(blank.effects.audioPlayerObjects?.count, 1)
+        XCTAssertEqual(blank.effects.textObjects?.count, 1)
+        XCTAssertEqual(blank.effects.clipTransitions?.count, 1)
+    }
+
+    func test_timelineProject_roundTrip_initThenApply_isIdempotent() throws {
+        var slide = makeSlideForProject()
+        let project = TimelineProject(from: slide)
+        project.apply(to: &slide)
+        let json1 = try JSONEncoder().encode(slide.effects.mediaObjects)
+        let json2 = try JSONEncoder().encode(project.mediaObjects)
+        XCTAssertEqual(json1, json2)
+        XCTAssertEqual(slide.effects.clipTransitions?.count, 1)
+    }
+
+    func test_timelineProject_codableRoundTrip() throws {
+        let slide = makeSlideForProject()
+        let project = TimelineProject(from: slide)
+        let data = try JSONEncoder().encode(project)
+        let decoded = try JSONDecoder().decode(TimelineProject.self, from: data)
+        XCTAssertEqual(decoded.slideId, project.slideId)
+        XCTAssertEqual(decoded.slideDuration, project.slideDuration, accuracy: 0.0001)
+        XCTAssertEqual(decoded.mediaObjects.count, project.mediaObjects.count)
+        XCTAssertEqual(decoded.clipTransitions.first?.kind, .crossfade)
+    }
 }
