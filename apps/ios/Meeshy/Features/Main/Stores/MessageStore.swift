@@ -3,7 +3,12 @@
 import Foundation
 import Observation
 import Combine
-import GRDB
+// `@preconcurrency` relaxes Swift 6 strict concurrency interop checks for the
+// GRDB module. Without it, the runtime injects `_swift_task_checkIsolatedSwift`
+// at the invocation of @Sendable closures we pass to GRDB observation APIs,
+// which then aborts because GRDB calls the closure from its own reader/writer
+// dispatch queue (not from any actor's executor).
+@preconcurrency import GRDB
 import MeeshySDK
 
 /// Sendable weak-reference box. Used to capture a weak reference to a
