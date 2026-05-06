@@ -730,4 +730,73 @@ final class StoryModelsExtensionsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(SplitClipCommand.self, from: data)
         XCTAssertEqual(decoded.splitAtRelativeTime, 1.5)
     }
+
+    // MARK: - AddTransitionCommand & RemoveTransitionCommand
+
+    private func makeTransitionFixture() -> StoryClipTransition {
+        StoryClipTransition(id: "tr1", fromClipId: "v1", toClipId: "v2",
+                            kind: .crossfade, duration: 0.5)
+    }
+
+    func test_addTransitionCommand_apply_appendsToArray() throws {
+        var project = makeEmptyProject()
+        let cmd = AddTransitionCommand(transition: makeTransitionFixture())
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.clipTransitions.count, 1)
+        XCTAssertEqual(project.clipTransitions.first?.id, "tr1")
+    }
+
+    func test_addTransitionCommand_revert_removesIt() throws {
+        var project = makeEmptyProject()
+        let cmd = AddTransitionCommand(transition: makeTransitionFixture())
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertTrue(project.clipTransitions.isEmpty)
+    }
+
+    func test_addTransitionCommand_codableRoundTrip() throws {
+        let cmd = AddTransitionCommand(transition: makeTransitionFixture())
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(AddTransitionCommand.self, from: data)
+        XCTAssertEqual(decoded.transition.id, "tr1")
+    }
+
+    func test_removeTransitionCommand_apply_removesByIdAndStoresSnapshot() throws {
+        var project = makeEmptyProject()
+        let snap = makeTransitionFixture()
+        project.clipTransitions = [snap]
+        let cmd = RemoveTransitionCommand(transitionId: "tr1", snapshot: snap, insertionIndex: 0)
+        try cmd.apply(to: &project)
+        XCTAssertTrue(project.clipTransitions.isEmpty)
+    }
+
+    func test_removeTransitionCommand_revert_restoresAtIndex() throws {
+        var project = makeEmptyProject()
+        let snap = makeTransitionFixture()
+        project.clipTransitions = [snap]
+        let cmd = RemoveTransitionCommand(transitionId: "tr1", snapshot: snap, insertionIndex: 0)
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertEqual(project.clipTransitions.first?.id, "tr1")
+    }
+
+    func test_removeTransitionCommand_apply_throwsWhenMissing() {
+        var project = makeEmptyProject()
+        let cmd = RemoveTransitionCommand(transitionId: "ghost",
+                                          snapshot: makeTransitionFixture(),
+                                          insertionIndex: 0)
+        XCTAssertThrowsError(try cmd.apply(to: &project)) { error in
+            XCTAssertEqual(error as? EditCommandError,
+                           .transitionNotFound(id: "ghost"))
+        }
+    }
+
+    func test_removeTransitionCommand_codableRoundTrip() throws {
+        let cmd = RemoveTransitionCommand(transitionId: "tr1",
+                                          snapshot: makeTransitionFixture(),
+                                          insertionIndex: 0)
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(RemoveTransitionCommand.self, from: data)
+        XCTAssertEqual(decoded.transitionId, "tr1")
+    }
 }
