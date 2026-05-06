@@ -194,10 +194,15 @@ final class UserIdentityBarPresetTests: XCTestCase {
         )
         XCTAssertNotNil(bar.avatar)
         XCTAssertEqual(bar.name, "Alice")
-        XCTAssertEqual(bar.leadingPrimary.count, 2)
+        // leadingPrimary now packs: name + roleBadge(.admin) + "·" separator
+        // + flags element (4 elements when role + flags are both present).
+        XCTAssertEqual(bar.leadingPrimary.count, 4)
+        // trailingPrimary: time + delivery
         XCTAssertEqual(bar.trailingPrimary.count, 2)
+        // leadingSecondary: username when provided
         XCTAssertEqual(bar.leadingSecondary.count, 1)
-        XCTAssertEqual(bar.trailingSecondary.count, 1)
+        // trailingSecondary is intentionally empty in the messageBubble preset.
+        XCTAssertTrue(bar.trailingSecondary.isEmpty)
     }
 
     func test_messageBubblePreset_noRole_omitsRoleBadge() {

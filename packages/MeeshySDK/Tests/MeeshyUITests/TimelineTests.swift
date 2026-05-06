@@ -129,11 +129,15 @@ final class AudioSpectrogramRendererTests: XCTestCase {
 @MainActor
 final class TimelineTrackModelTests: XCTestCase {
 
-    func test_trackType_sortOrder_fondBeforeFront() {
-        XCTAssertLessThan(TrackType.bgVideo.sortOrder, TrackType.fgImage.sortOrder)
-        XCTAssertLessThan(TrackType.bgImage.sortOrder, TrackType.fgVideo.sortOrder)
-        XCTAssertLessThan(TrackType.bgAudio.sortOrder, TrackType.fgAudio.sortOrder)
-        XCTAssertLessThan(TrackType.fgAudio.sortOrder, TrackType.text.sortOrder)
+    func test_trackType_sortOrder_visualLayersBeforeText() {
+        // TrackType collapsed bg/fg variants into shared cases (bgVideo == video,
+        // fgImage == image, etc.). The sort order now represents the rendering
+        // stack: image (0) → video (1) → drawing (2) → audio (3) → text (4),
+        // so visual layers always sort before text overlays and audio tracks.
+        XCTAssertLessThan(TrackType.image.sortOrder, TrackType.video.sortOrder)
+        XCTAssertLessThan(TrackType.video.sortOrder, TrackType.drawing.sortOrder)
+        XCTAssertLessThan(TrackType.drawing.sortOrder, TrackType.audio.sortOrder)
+        XCTAssertLessThan(TrackType.audio.sortOrder, TrackType.text.sortOrder)
     }
 
     func test_trackType_hasIcon() {

@@ -29,11 +29,15 @@ final class StoryCanvasReaderViewMuteTests: XCTestCase {
 
         let view = StoryCanvasReaderView(story: story, mute: true)
         let host = UIHostingController(rootView: view)
-        host.view.frame = CGRect(x: 0, y: 0, width: 360, height: 640)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 360, height: 640))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+
         host.view.layoutIfNeeded()
-        // Let SwiftUI's `.onAppear` propagate.
-        await Task.yield()
-        await Task.yield()
+        // Let SwiftUI's `.onAppear` propagate (hosting controller needs a
+        // real window to fire the lifecycle callbacks).
+        await waitForOnAppear()
 
         XCTAssertNil(StoryMediaCoordinator.shared.backgroundAudioSourceId,
                      "mute=true must NOT activate background audio")
@@ -44,14 +48,29 @@ final class StoryCanvasReaderViewMuteTests: XCTestCase {
 
         let view = StoryCanvasReaderView(story: story, mute: false)
         let host = UIHostingController(rootView: view)
-        host.view.frame = CGRect(x: 0, y: 0, width: 360, height: 640)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 360, height: 640))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+
         host.view.layoutIfNeeded()
-        await Task.yield()
-        await Task.yield()
+        await waitForOnAppear()
 
         XCTAssertEqual(StoryMediaCoordinator.shared.backgroundAudioSourceId,
                        "media-bg-1",
                        "mute=false must activate background audio for the resolved media id")
+    }
+
+    /// SwiftUI delivers `.onAppear` on the next runloop turn after the host
+    /// view is added to a window. Yield several times so the side effect
+    /// (`StoryMediaCoordinator.shared.backgroundAudioSourceId` mutation) lands
+    /// before the assertion runs.
+    private func waitForOnAppear() async {
+        for _ in 0..<20 {
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 25_000_000)
+            if StoryMediaCoordinator.shared.backgroundAudioSourceId != nil { return }
+        }
     }
 
     // MARK: - Fixtures
