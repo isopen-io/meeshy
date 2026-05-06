@@ -168,6 +168,7 @@ public struct StoryComposerView: View {
     @State private var mediaLoadProgress: Double = 0
     @State private var mediaLoadLabel: String = ""
     @State private var visibility: String = "PUBLIC"
+    @State private var lostMediaCount: Int = 0  // > 0 triggers an alert after restoreDraft
 
     // MARK: - Transition effects (local until synced to effects)
 
@@ -461,6 +462,29 @@ public struct StoryComposerView: View {
             Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
             Button(String(localized: "story.composer.quit", defaultValue: "Quitter", bundle: .module), role: .destructive) { cancelAndDismiss() }
             Button(String(localized: "story.composer.cancelAction", defaultValue: "Annuler", bundle: .module), role: .cancel) { }
+        }
+        .alert(
+            String(localized: "story.composer.mediaLostTitle", defaultValue: "Médias indisponibles", bundle: .module),
+            isPresented: Binding(
+                get: { lostMediaCount > 0 },
+                set: { if !$0 { lostMediaCount = 0 } }
+            )
+        ) {
+            Button(String(localized: "story.composer.ok", defaultValue: "OK", bundle: .module)) { lostMediaCount = 0 }
+        } message: {
+            Text(
+                lostMediaCount == 1
+                ? String(
+                    localized: "story.composer.mediaLostSingle",
+                    defaultValue: "Un média de votre brouillon n'est plus disponible (fichier supprimé). Le slide a été restauré sans ce média — retake si nécessaire.",
+                    bundle: .module
+                  )
+                : String(
+                    localized: "story.composer.mediaLostMultiple",
+                    defaultValue: "\(lostMediaCount) médias de votre brouillon ne sont plus disponibles (fichiers supprimés). Les slides ont été restaurés sans ces médias.",
+                    bundle: .module
+                  )
+            )
         }
         .onAppear { checkForDraft() }
     }
@@ -1675,6 +1699,14 @@ public struct StoryComposerView: View {
             viewModel.loadedImages.merge(media.images) { _, new in new }
             viewModel.loadedVideoURLs.merge(media.videoURLs) { _, new in new }
             viewModel.loadedAudioURLs.merge(media.audioURLs) { _, new in new }
+
+            // Surface lost media (file purged by OS, deleted via Files app, etc.)
+            // explicitly to the user via an alert. The DB rows are also purged
+            // so the next restore doesn't repeat the warning.
+            if !media.lostElementIds.isEmpty {
+                StoryDraftStore.shared.purgeLostMedia(media.lostElementIds)
+                lostMediaCount = media.lostElementIds.count
+            }
         } else if let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey),
                   let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) {
             viewModel.slides = draft.slides.isEmpty ? [StorySlide()] : draft.slides

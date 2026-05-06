@@ -179,10 +179,28 @@ public final class StoryDraftStore: @unchecked Sendable {
     // MARK: - Load Media
 
     #if canImport(UIKit)
-    public func loadMedia() -> (images: [String: UIImage], videoURLs: [String: URL], audioURLs: [String: URL]) {
+    /// Outcome of `loadMedia()`. `lostElementIds` lists element IDs that had a
+    /// row in `story_draft_media` but whose underlying file disappeared from
+    /// the FileManager (OS purge under storage pressure, manual deletion via
+    /// the Files app, sandbox migration on app reinstall…). Callers should
+    /// surface these explicitly to the user (e.g. "Media indisponible, retake")
+    /// rather than silently dropping the slide.
+    public struct LoadMediaResult: Sendable {
+        public let images: [String: UIImage]
+        public let videoURLs: [String: URL]
+        public let audioURLs: [String: URL]
+        public let lostElementIds: Set<String>
+
+        public var isEmpty: Bool {
+            images.isEmpty && videoURLs.isEmpty && audioURLs.isEmpty && lostElementIds.isEmpty
+        }
+    }
+
+    public func loadMedia() -> LoadMediaResult {
         var images: [String: UIImage] = [:]
         var videoURLs: [String: URL] = [:]
         var audioURLs: [String: URL] = [:]
+        var lost: Set<String> = []
 
         do {
             let rows = try db.read { db in
@@ -194,13 +212,19 @@ public final class StoryDraftStore: @unchecked Sendable {
                 let fileName: String = row["file_name"]
                 let fileURL = mediaDir.appendingPathComponent(fileName)
 
-                guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
+                guard FileManager.default.fileExists(atPath: fileURL.path) else {
+                    lost.insert(elementId)
+                    continue
+                }
 
                 switch mediaType {
                 case "image":
                     if let data = try? Data(contentsOf: fileURL),
                        let image = UIImage(data: data) {
                         images[elementId] = image
+                    } else {
+                        // File is on disk but unreadable — treat as lost too.
+                        lost.insert(elementId)
                     }
                 case "video":
                     videoURLs[elementId] = fileURL
@@ -214,7 +238,31 @@ public final class StoryDraftStore: @unchecked Sendable {
             print("[StoryDraftStore] Erreur loadMedia: \(error)")
         }
 
-        return (images, videoURLs, audioURLs)
+        return LoadMediaResult(
+            images: images,
+            videoURLs: videoURLs,
+            audioURLs: audioURLs,
+            lostElementIds: lost
+        )
+    }
+
+    /// Removes the given element IDs from the `story_draft_media` table, used
+    /// to purge orphans returned in `LoadMediaResult.lostElementIds` once the
+    /// caller has informed the user. Idempotent.
+    public func purgeLostMedia(_ elementIds: Set<String>) {
+        guard !elementIds.isEmpty else { return }
+        do {
+            try db.write { db in
+                for id in elementIds {
+                    try db.execute(
+                        sql: "DELETE FROM story_draft_media WHERE element_id = ?",
+                        arguments: [id]
+                    )
+                }
+            }
+        } catch {
+            print("[StoryDraftStore] Erreur purgeLostMedia: \(error)")
+        }
     }
     #endif
 
