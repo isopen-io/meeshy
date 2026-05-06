@@ -799,4 +799,68 @@ final class StoryModelsExtensionsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(RemoveTransitionCommand.self, from: data)
         XCTAssertEqual(decoded.transitionId, "tr1")
     }
+
+    // MARK: - ChangeTransitionCommand
+
+    func test_changeTransitionCommand_apply_replacesTransitionAtSameIndex() throws {
+        var project = makeEmptyProject()
+        let original = StoryClipTransition(id: "tr1", fromClipId: "a",
+                                           toClipId: "b", kind: .crossfade,
+                                           duration: 0.5)
+        project.clipTransitions = [original]
+        let updated = StoryClipTransition(id: "tr1", fromClipId: "a",
+                                          toClipId: "b", kind: .dissolve,
+                                          duration: 1.2,
+                                          easing: .easeInOut)
+        let cmd = ChangeTransitionCommand(transitionId: "tr1",
+                                          previous: original,
+                                          updated: updated)
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.clipTransitions.first?.kind, .dissolve)
+        XCTAssertEqual(project.clipTransitions.first?.duration, 1.2)
+    }
+
+    func test_changeTransitionCommand_revert_restoresPrevious() throws {
+        var project = makeEmptyProject()
+        let original = StoryClipTransition(id: "tr1", fromClipId: "a",
+                                           toClipId: "b", kind: .crossfade,
+                                           duration: 0.5)
+        project.clipTransitions = [original]
+        let updated = StoryClipTransition(id: "tr1", fromClipId: "a",
+                                          toClipId: "b", kind: .dissolve,
+                                          duration: 1.0)
+        let cmd = ChangeTransitionCommand(transitionId: "tr1",
+                                          previous: original,
+                                          updated: updated)
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertEqual(project.clipTransitions.first?.kind, .crossfade)
+    }
+
+    func test_changeTransitionCommand_apply_throwsWhenMissing() {
+        var project = makeEmptyProject()
+        let prev = StoryClipTransition(id: "tr1", fromClipId: "a",
+                                       toClipId: "b", kind: .crossfade,
+                                       duration: 0.5)
+        let cmd = ChangeTransitionCommand(transitionId: "tr1",
+                                          previous: prev, updated: prev)
+        XCTAssertThrowsError(try cmd.apply(to: &project)) { error in
+            XCTAssertEqual(error as? EditCommandError,
+                           .transitionNotFound(id: "tr1"))
+        }
+    }
+
+    func test_changeTransitionCommand_codableRoundTrip() throws {
+        let prev = StoryClipTransition(id: "tr1", fromClipId: "a",
+                                       toClipId: "b", kind: .crossfade,
+                                       duration: 0.5)
+        let updated = StoryClipTransition(id: "tr1", fromClipId: "a",
+                                          toClipId: "b", kind: .dissolve,
+                                          duration: 1.0)
+        let cmd = ChangeTransitionCommand(transitionId: "tr1",
+                                          previous: prev, updated: updated)
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(ChangeTransitionCommand.self, from: data)
+        XCTAssertEqual(decoded.updated.kind, .dissolve)
+    }
 }
