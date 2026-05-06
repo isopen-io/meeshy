@@ -669,4 +669,88 @@ final class StoryViewModelTests: XCTestCase {
             // schedules a retry per its exponential backoff policy.
         }
     }
+
+    // MARK: - executeQueuedPublish() Cleanup
+
+    func test_executeQueuedPublish_cleansUpMediaReferences_onSuccess() async throws {
+        mockAPI.authToken = "test-token"
+        // Create a real temp file so loadMediaFromReferences can resolve it,
+        // and we can later assert it was removed.
+        let tempPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-cleanup-\(UUID().uuidString).bin").path
+        FileManager.default.createFile(atPath: tempPath, contents: Data())
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempPath),
+            "Precondition: temp file exists")
+
+        // The reference uses "video" so `loadMediaFromReferences` does NOT
+        // attempt to decode it as an image (would fail on empty Data). Only
+        // the file path is plumbed; runStoryUpload skips video upload when
+        // there is no matching mediaObject in the slide effects.
+        let ref = StoryMediaReference(
+            elementId: "elt-\(UUID().uuidString)",
+            mediaType: "video",
+            localFilePath: tempPath
+        )
+        let item = try Self.makeQueueItem(
+            slides: [Self.makeTextOnlySlide()],
+            mediaReferences: [ref]
+        )
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost(
+            id: "post-1", content: "stub", authorId: "a1", authorUsername: "alice"
+        ))
+
+        _ = try await sut.executeQueuedPublish(item: item)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tempPath),
+            "Persisted draft media file should be deleted after successful publish")
+    }
+
+    // MARK: - enqueueStoryForOfflinePublish() Tests
+
+    func test_enqueueStoryForOfflinePublish_addsItemToQueue() async throws {
+        // Reset the queue so the count assertion is deterministic.
+        await StoryPublishQueue.shared.clearAll()
+        let initialCount = await StoryPublishQueue.shared.count
+        XCTAssertEqual(initialCount, 0, "Precondition: queue is empty")
+
+        let slide = Self.makeTextOnlySlide(content: "Offline story")
+
+        await sut.enqueueStoryForOfflinePublish(
+            slides: [slide],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:],
+            loadedAudioURLs: [:],
+            visibility: "PUBLIC"
+        )
+
+        let count = await StoryPublishQueue.shared.count
+        XCTAssertEqual(count, 1, "Queue should hold the enqueued item")
+
+        let items = await StoryPublishQueue.shared.pendingItems
+        XCTAssertEqual(items.first?.visibility, "PUBLIC")
+        XCTAssertNil(items.first?.repostOfId)
+
+        // Cleanup so unrelated tests don't see this item.
+        await StoryPublishQueue.shared.clearAll()
+    }
+
+    func test_enqueueStoryForOfflinePublish_doesNotMutate_activeUpload() async {
+        await StoryPublishQueue.shared.clearAll()
+        XCTAssertNil(sut.activeUpload, "Precondition: no active upload")
+
+        await sut.enqueueStoryForOfflinePublish(
+            slides: [Self.makeTextOnlySlide()],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:],
+            loadedAudioURLs: [:],
+            visibility: "PUBLIC"
+        )
+
+        XCTAssertNil(sut.activeUpload,
+            "Offline path must not touch activeUpload (no banner side-effect)")
+
+        await StoryPublishQueue.shared.clearAll()
+    }
 }

@@ -246,6 +246,39 @@ public final class StoryDraftStore: @unchecked Sendable {
         )
     }
 
+    /// Returns absolute-path `StoryMediaReference`s for every row in
+    /// `story_draft_media` whose backing file still exists on disk. Used by
+    /// the offline-first publish path to build a `StoryPublishQueueItem`
+    /// without re-encoding the media : the dictionaries passed to `saveMedia`
+    /// are already on disk, this method just exposes them as the queue's
+    /// transport type. Rows whose file has been purged by the OS or the
+    /// user are silently filtered out (the caller can run `purgeLostMedia`
+    /// to clean the table afterwards if desired).
+    public func loadMediaReferences() -> [StoryMediaReference] {
+        var refs: [StoryMediaReference] = []
+        do {
+            try db.read { db in
+                let rows = try Row.fetchAll(db, sql:
+                    "SELECT element_id, media_type, file_name FROM story_draft_media")
+                for row in rows {
+                    let elementId: String = row["element_id"]
+                    let mediaType: String = row["media_type"]
+                    let fileName: String = row["file_name"]
+                    let path = mediaDir.appendingPathComponent(fileName).path
+                    guard FileManager.default.fileExists(atPath: path) else { continue }
+                    refs.append(StoryMediaReference(
+                        elementId: elementId,
+                        mediaType: mediaType,
+                        localFilePath: path
+                    ))
+                }
+            }
+        } catch {
+            print("[StoryDraftStore] Erreur loadMediaReferences: \(error)")
+        }
+        return refs
+    }
+
     /// Removes the given element IDs from the `story_draft_media` table, used
     /// to purge orphans returned in `LoadMediaResult.lostElementIds` once the
     /// caller has informed the user. Idempotent.

@@ -125,6 +125,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
         cleanupUploadTempFiles(upload)
 
+        // Best-effort cleanup of the persisted draft media now that the
+        // server holds the canonical posts. Files are referenced ONLY by
+        // this queue item (StoryDraftStore.saveMedia clear-then-inserts in
+        // MVP), so deleting per-path is safe even if other items remain
+        // queued — each story will land here on its own success path.
+        for ref in item.mediaReferences {
+            try? FileManager.default.removeItem(atPath: ref.localFilePath)
+        }
+
         guard let last = ids.last else {
             throw StoryPublishUnrecoverableError("Upload returned no post ids")
         }
@@ -546,6 +555,26 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     ) {
         guard activeUpload == nil else { return }
 
+        // Offline-first: route through StoryPublishQueue instead of TUS so
+        // the publish survives a cold start and reconnect. The queue handler
+        // (registered via StoryPublishService.setExecutor in RootView)
+        // replays via executeQueuedPublish on reconnect, reusing the same
+        // runStoryUpload pipeline as the online path.
+        if NetworkMonitor.shared.isOffline {
+            Task { [weak self] in
+                await self?.enqueueStoryForOfflinePublish(
+                    slides: slides,
+                    slideImages: slideImages,
+                    loadedImages: loadedImages,
+                    loadedVideoURLs: loadedVideoURLs,
+                    loadedAudioURLs: loadedAudioURLs,
+                    visibility: visibility
+                )
+            }
+            showStoryComposer = false
+            return
+        }
+
         let user = AuthManager.shared.currentUser
         let thumbnail = slideImages.values.first?.preparingThumbnail(of: CGSize(width: 100, height: 178))
             ?? UIImage()
@@ -570,6 +599,80 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         showStoryComposer = false
 
         launchUploadTask()
+    }
+
+    /// Persists the in-memory composer state to disk and enqueues the
+    /// publish into `StoryPublishQueue` so it can be replayed when network
+    /// returns or on the next cold start. Called by `publishStoryInBackground`
+    /// when `NetworkMonitor.shared.isOffline` is true.
+    ///
+    /// The slide background images are re-keyed to the
+    /// `"slide-bg-{slide.id}"` convention expected by `loadMediaFromReferences`
+    /// so the executor (commit d3a57947) reconstructs them correctly on
+    /// replay. Foreground media (effect images / videos / audio) keep their
+    /// `elementId` as-is.
+    ///
+    /// `internal` access (not `private`) so unit tests can exercise the
+    /// enqueue branch without having to mutate `NetworkMonitor.shared`
+    /// (whose `isOffline` setter is `private(set)`).
+    func enqueueStoryForOfflinePublish(
+        slides: [StorySlide],
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL],
+        loadedAudioURLs: [String: URL],
+        visibility: String
+    ) async {
+        // 1. Re-key slide backgrounds for the loadMediaFromReferences contract.
+        let bgImages = Dictionary(
+            uniqueKeysWithValues: slideImages.map { (slideId, img) in
+                ("slide-bg-\(slideId)", img)
+            }
+        )
+        // Foreground images merged with backgrounds; collisions go to the
+        // foreground value (extremely unlikely — slide ids and effect ids
+        // are both UUIDs).
+        let allImages = bgImages.merging(loadedImages) { _, fg in fg }
+
+        // 2. Persist media on disk via StoryDraftStore (clear-then-insert ;
+        //    one queued story at a time in MVP).
+        StoryDraftStore.shared.saveMedia(
+            images: allImages,
+            videoURLs: loadedVideoURLs,
+            audioURLs: loadedAudioURLs
+        )
+        let mediaReferences = StoryDraftStore.shared.loadMediaReferences()
+
+        // 3. Encode the slides payload. The custom encoder excludes
+        //    `mediaData`, which is exactly why `mediaReferences` carries
+        //    the disk paths separately.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let payload = try? encoder.encode(slides) else {
+            ToastManager.shared.showError(String(
+                localized: "story.publish.queue.encodeError",
+                defaultValue: "Impossible d'enregistrer la story pour publication différée"
+            ))
+            return
+        }
+
+        // 4. Enqueue. The queue persists to disk synchronously so a crash
+        //    immediately after this call still preserves the item.
+        let item = StoryPublishQueueItem(
+            visibility: visibility,
+            slidesPayload: payload,
+            repostOfId: nil,
+            mediaReferences: mediaReferences
+        )
+        _ = await StoryPublishQueue.shared.enqueue(item)
+
+        // 5. User feedback. The PendingStoryBanner mounted in RootView
+        //    reflects the new pending count via StoryPublishService.
+        HapticFeedback.success()
+        ToastManager.shared.showSuccess(String(
+            localized: "story.publish.queue.enqueued",
+            defaultValue: "Story enregistrée — publication au retour en ligne"
+        ))
     }
 
     private func launchUploadTask() {

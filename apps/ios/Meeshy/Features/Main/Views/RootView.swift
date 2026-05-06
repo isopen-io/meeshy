@@ -740,11 +740,12 @@ struct RootView: View {
     /// hides when the queue drains. Shown only when the device is online so
     /// it does not stack with `OfflineBanner`.
     private var pendingSettingsBannerOverlay: some View {
-        VStack {
+        VStack(spacing: 6) {
             PendingSettingsBannerInline()
-                .padding(.top, 50)
+            PendingStoryBannerInline()
             Spacer()
         }
+        .padding(.top, 50)
         .zIndex(189)
     }
 
@@ -981,5 +982,54 @@ private struct PendingSettingsBannerInline: View {
             subscription?.cancel()
             subscription = nil
         }
+    }
+}
+
+// MARK: - Pending Story Banner (inline)
+
+/// Surfaces the count of stories waiting in `StoryPublishQueue` (typically
+/// composed offline). Mirrors `PendingSettingsBannerInline`. Self-hides
+/// when the queue drains. Inlined to avoid a project.pbxproj edit.
+private struct PendingStoryBannerInline: View {
+    @StateObject private var publishService = StoryPublishService.shared
+
+    var body: some View {
+        Group {
+            if publishService.pendingCount > 0 {
+                HStack(spacing: 8) {
+                    Image(systemName: "photo.stack")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text("Stories en attente (\(publishService.pendingCount))")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    Text("Publication au retour en ligne")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.white.opacity(0.85))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            MeeshyColors.indigo500.opacity(0.92),
+                            MeeshyColors.indigo700.opacity(0.88)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
+                .padding(.horizontal, 16)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: publishService.pendingCount)
     }
 }
