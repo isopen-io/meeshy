@@ -66,22 +66,72 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     ///      throwing on permanent failure (`StoryPublishUnrecoverableError`)
     ///      vs retryable failure (any other Error).
     ///
-    /// Until that integration is complete, the executor throws a marker
-    /// error so the queue preserves the item and a future build that
-    /// implements the actual upload reconstruction will pick it up. This
-    /// is strictly better than the previous V2 stub : the contract +
-    /// wiring + retry policy are now exercised end-to-end ; only the
-    /// final upload-runner remains.
+    /// Decodes the queued payload, materialises the local media files, and
+    /// drives the shared `runStoryUpload` pipeline to completion. Headless:
+    /// no UI mutations on `activeUpload` so the queue path can run from
+    /// cold start without ghost banners. Returns the server-assigned post
+    /// id of the LAST published slide (the one the queue uses to reconcile
+    /// the optimistic `pending_<uuid>` row).
+    ///
+    /// Error contract :
+    /// - `StoryPublishUnrecoverableError` for terminal failures (corrupt
+    ///   payload, missing/corrupt media, empty slides, server 4xx) so the
+    ///   queue drops the item instead of looping.
+    /// - any other `Error` (network, 5xx, TUS resume failure) → retryable.
     func executeQueuedPublish(item: StoryPublishQueueItem) async throws -> String {
         Logger.media.info(
-            "executeQueuedPublish called for tempId=\(item.tempStoryId, privacy: .public) — V3 upload reconstruction pending"
+            "executeQueuedPublish start tempId=\(item.tempStoryId, privacy: .public)"
         )
-        // Throwing a non-Unrecoverable error keeps the item in the queue
-        // and bumps retryCount. The queue's exponential backoff schedule
-        // (30s → 2min → 10min → 1h → 2h, max 5 retries) prevents a hot
-        // loop. When the V3 upload reconstruction lands, replace this
-        // throw with the actual upload logic.
-        throw StoryPublishV3PendingError()
+
+        let slides: [StorySlide]
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            slides = try decoder.decode([StorySlide].self, from: item.slidesPayload)
+        } catch {
+            throw StoryPublishUnrecoverableError("Invalid slidesPayload: \(error.localizedDescription)")
+        }
+        guard !slides.isEmpty else {
+            throw StoryPublishUnrecoverableError("Empty slides")
+        }
+
+        let media = try loadMediaFromReferences(item.mediaReferences)
+
+        let user = AuthManager.shared.currentUser
+        let upload = StoryUploadState(
+            id: item.tempStoryId,
+            thumbnailImage: media.slideImages.values.first?
+                .preparingThumbnail(of: CGSize(width: 100, height: 178)) ?? UIImage(),
+            progress: 0,
+            phase: .uploading,
+            authorId: user?.id ?? "",
+            authorName: user?.displayName ?? user?.username ?? "",
+            authorAvatar: user?.avatar,
+            slides: slides,
+            slideImages: media.slideImages,
+            loadedImages: media.loadedImages,
+            loadedVideoURLs: media.loadedVideoURLs,
+            loadedAudioURLs: media.loadedAudioURLs,
+            originalLanguage: nil,
+            visibility: item.visibility
+        )
+
+        let ids = try await runStoryUpload(
+            upload,
+            onProgress: { _ in },
+            onPhase: { _ in },
+            onPublishedSlide: { _ in }
+        )
+
+        cleanupUploadTempFiles(upload)
+
+        guard let last = ids.last else {
+            throw StoryPublishUnrecoverableError("Upload returned no post ids")
+        }
+        Logger.media.info(
+            "executeQueuedPublish done tempId=\(item.tempStoryId, privacy: .public) → \(last, privacy: .public)"
+        )
+        return last
     }
 
     // MARK: - Auto-retry on reconnect (SOTA audit Pilier 22, scope A)
@@ -525,141 +575,250 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private func launchUploadTask() {
         guard let upload = activeUpload else { return }
 
-        let serverOrigin = MeeshyConfig.shared.serverOrigin
-        guard let baseURL = URL(string: serverOrigin),
-              let token = api.authToken else {
-            activeUpload?.phase = .failed("Authentication required")
-            return
-        }
-
-        uploadTask = Task {
-            let uploader = TusUploadManager(baseURL: baseURL)
-            let slideCount = upload.slides.count
-            let slideShare = 1.0 / Double(max(1, slideCount))
-            // On retry, skip slides whose Posts already exist server-side. Without
-            // this, a partial-failure retry recreated the early slides and the
-            // user ended up with duplicates (e.g., slide 0 published twice).
-            let alreadyPublishedCount = upload.publishedPostIds.count
-
+        uploadTask = Task { [weak self] in
+            guard let self else { return }
             do {
-                for (slideIdx, slide) in upload.slides.enumerated() {
-                    guard !Task.isCancelled else { return }
-                    if slideIdx < alreadyPublishedCount {
-                        // Already committed during a previous attempt.
-                        activeUpload?.progress = Double(slideIdx + 1) * slideShare
-                        continue
-                    }
-                    let baseProgress = Double(slideIdx) * slideShare
-
-                    var uploadResult: TusUploadResult? = nil
-                    if let bgImage = upload.slideImages[slide.id] {
-                        let thumbHash = bgImage.toThumbHash()
-                        let compressed = await MediaCompressor.shared.compressImage(bgImage)
-                        let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try compressed.data.write(to: tempURL)
-                        defer { try? FileManager.default.removeItem(at: tempURL) }
-                        uploadResult = try await uploader.uploadFile(
-                            fileURL: tempURL, mimeType: compressed.mimeType,
-                            token: token, uploadContext: "story", thumbHash: thumbHash
+                _ = try await self.runStoryUpload(
+                    upload,
+                    onProgress: { [weak self] progress in
+                        self?.activeUpload?.progress = progress
+                    },
+                    onPhase: { [weak self] phase in
+                        self?.activeUpload?.phase = phase
+                    },
+                    onPublishedSlide: { [weak self] published in
+                        self?.activeUpload?.publishedPostIds.append(published.post.id)
+                        self?.insertOrAppendStoryItem(
+                            published.item, forAuthor: published.post.author
                         )
                     }
-                    activeUpload?.progress = baseProgress + 0.30 * slideShare
-
-                    var updatedEffects = slide.effects
-                    var foregroundMediaIds: [String] = []
-                    if var mediaObjects = updatedEffects.mediaObjects {
-                        let mediaCount = mediaObjects.filter({ $0.postMediaId.isEmpty }).count
-                        var mediaIdx = 0
-                        for i in mediaObjects.indices where mediaObjects[i].postMediaId.isEmpty {
-                            guard !Task.isCancelled else { return }
-                            let obj = mediaObjects[i]
-                            if obj.kind == .video, let videoURL = upload.loadedVideoURLs[obj.id] {
-                                let result = try await uploader.uploadFile(
-                                    fileURL: videoURL, mimeType: "video/mp4",
-                                    token: token, uploadContext: "story"
-                                )
-                                mediaObjects[i].postMediaId = result.id
-                                foregroundMediaIds.append(result.id)
-                            } else if obj.kind == .image, let uiImage = upload.loadedImages[obj.id] {
-                                let fgThumbHash = uiImage.toThumbHash()
-                                let compressed = await MediaCompressor.shared.compressImage(uiImage)
-                                let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
-                                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                                try compressed.data.write(to: tempURL)
-                                defer { try? FileManager.default.removeItem(at: tempURL) }
-                                let result = try await uploader.uploadFile(
-                                    fileURL: tempURL, mimeType: compressed.mimeType,
-                                    token: token, uploadContext: "story", thumbHash: fgThumbHash
-                                )
-                                mediaObjects[i].postMediaId = result.id
-                                foregroundMediaIds.append(result.id)
-                            }
-                            mediaIdx += 1
-                            let mediaProgress = Double(mediaIdx) / Double(max(1, mediaCount))
-                            activeUpload?.progress = baseProgress + (0.30 + mediaProgress * 0.50) * slideShare
-                        }
-                        updatedEffects.mediaObjects = mediaObjects
-                    }
-
-                    if var audioObjects = updatedEffects.audioPlayerObjects {
-                        for i in audioObjects.indices where audioObjects[i].postMediaId.isEmpty {
-                            guard !Task.isCancelled else { return }
-                            let obj = audioObjects[i]
-                            if let audioURL = upload.loadedAudioURLs[obj.id] ?? upload.loadedVideoURLs[obj.id] {
-                                let result = try await uploader.uploadFile(
-                                    fileURL: audioURL, mimeType: "audio/mp4",
-                                    token: token, uploadContext: "story"
-                                )
-                                audioObjects[i].postMediaId = result.id
-                                foregroundMediaIds.append(result.id)
-                            }
-                        }
-                        updatedEffects.audioPlayerObjects = audioObjects
-                    }
-
-                    activeUpload?.phase = .publishing
-                    var allMediaIds: [String] = []
-                    if let id = uploadResult?.id { allMediaIds.append(id) }
-                    allMediaIds.append(contentsOf: foregroundMediaIds)
-
-                    let post = try await postService.createStory(
-                        content: slide.content,
-                        storyEffects: updatedEffects,
-                        visibility: upload.visibility,
-                        originalLanguage: upload.originalLanguage,
-                        mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
-                        repostOfId: nil
-                    )
-
-                    // Track committed slide IDs so a later cancel/failure can delete
-                    // orphans and a retry can skip them.
-                    activeUpload?.publishedPostIds.append(post.id)
-
-                    let media = buildFeedMedia(from: post, fallback: uploadResult)
-                    let newItem = StoryItem(
-                        id: post.id, content: post.content, media: media,
-                        storyEffects: updatedEffects, createdAt: post.createdAt, isViewed: true
-                    )
-                    insertOrAppendStoryItem(newItem, forAuthor: post.author)
-                    activeUpload?.progress = Double(slideIdx + 1) * slideShare
-                    activeUpload?.phase = .uploading
-                }
+                )
 
                 // Upload complete — cleanup temp files now
-                cleanupUploadTempFiles(upload)
-                activeUpload = nil
-                uploadTask = nil
+                self.cleanupUploadTempFiles(upload)
+                self.activeUpload = nil
+                self.uploadTask = nil
                 HapticFeedback.success()
                 ToastManager.shared.showSuccess("Story publiee")
             } catch {
                 if !Task.isCancelled {
-                    activeUpload?.phase = .failed(error.localizedDescription)
+                    self.activeUpload?.phase = .failed(error.localizedDescription)
                     ToastManager.shared.showError("Echec de la publication de la story")
                     // Don't cleanup temp files on failure — retry may need them
                 }
             }
         }
+    }
+
+    // MARK: - Shared Upload Pipeline (UI-driven + queue-driven)
+
+    /// Lightweight handle for a slide that just landed server-side, surfaced
+    /// to callers of `runStoryUpload` so the UI path can prepend it to the
+    /// story tray and the queue path can ignore it.
+    fileprivate struct PublishedSlide {
+        let post: APIPost
+        let item: StoryItem
+    }
+
+    /// Headless story upload pipeline shared by:
+    ///   1. `launchUploadTask` (composer flow) — wraps progress/phase/published
+    ///       callbacks to drive the `activeUpload` banner and tray prepend.
+    ///   2. `executeQueuedPublish` (queue flow) — passes no-op callbacks since
+    ///       there is no banner to update on cold-start replay.
+    ///
+    /// Authentication is checked here (not in callers) because it can change
+    /// between an enqueue and a replay; the queue path needs the same gate.
+    /// Returns `[String]` of the post ids created in this invocation (excluding
+    /// any slides skipped via `upload.publishedPostIds`).
+    private func runStoryUpload(
+        _ upload: StoryUploadState,
+        onProgress: @escaping (Double) -> Void,
+        onPhase: @escaping (StoryUploadState.UploadPhase) -> Void,
+        onPublishedSlide: @escaping (PublishedSlide) -> Void
+    ) async throws -> [String] {
+        let serverOrigin = MeeshyConfig.shared.serverOrigin
+        guard let baseURL = URL(string: serverOrigin),
+              let token = api.authToken else {
+            throw URLError(.userAuthenticationRequired)
+        }
+        let uploader = TusUploadManager(baseURL: baseURL)
+        let slideCount = upload.slides.count
+        let slideShare = 1.0 / Double(max(1, slideCount))
+        // On retry, skip slides whose Posts already exist server-side. Without
+        // this, a partial-failure retry recreated the early slides and the
+        // user ended up with duplicates (e.g., slide 0 published twice).
+        let alreadyPublishedCount = upload.publishedPostIds.count
+        var newPostIds: [String] = []
+
+        for (slideIdx, slide) in upload.slides.enumerated() {
+            guard !Task.isCancelled else { return newPostIds }
+            if slideIdx < alreadyPublishedCount {
+                // Already committed during a previous attempt.
+                onProgress(Double(slideIdx + 1) * slideShare)
+                continue
+            }
+            let baseProgress = Double(slideIdx) * slideShare
+
+            var uploadResult: TusUploadResult? = nil
+            if let bgImage = upload.slideImages[slide.id] {
+                let thumbHash = bgImage.toThumbHash()
+                let compressed = await MediaCompressor.shared.compressImage(bgImage)
+                let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                try compressed.data.write(to: tempURL)
+                defer { try? FileManager.default.removeItem(at: tempURL) }
+                uploadResult = try await uploader.uploadFile(
+                    fileURL: tempURL, mimeType: compressed.mimeType,
+                    token: token, uploadContext: "story", thumbHash: thumbHash
+                )
+            }
+            onProgress(baseProgress + 0.30 * slideShare)
+
+            var updatedEffects = slide.effects
+            var foregroundMediaIds: [String] = []
+            if var mediaObjects = updatedEffects.mediaObjects {
+                let mediaCount = mediaObjects.filter({ $0.postMediaId.isEmpty }).count
+                var mediaIdx = 0
+                for i in mediaObjects.indices where mediaObjects[i].postMediaId.isEmpty {
+                    guard !Task.isCancelled else { return newPostIds }
+                    let obj = mediaObjects[i]
+                    if obj.kind == .video, let videoURL = upload.loadedVideoURLs[obj.id] {
+                        let result = try await uploader.uploadFile(
+                            fileURL: videoURL, mimeType: "video/mp4",
+                            token: token, uploadContext: "story"
+                        )
+                        mediaObjects[i].postMediaId = result.id
+                        foregroundMediaIds.append(result.id)
+                    } else if obj.kind == .image, let uiImage = upload.loadedImages[obj.id] {
+                        let fgThumbHash = uiImage.toThumbHash()
+                        let compressed = await MediaCompressor.shared.compressImage(uiImage)
+                        let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
+                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                        try compressed.data.write(to: tempURL)
+                        defer { try? FileManager.default.removeItem(at: tempURL) }
+                        let result = try await uploader.uploadFile(
+                            fileURL: tempURL, mimeType: compressed.mimeType,
+                            token: token, uploadContext: "story", thumbHash: fgThumbHash
+                        )
+                        mediaObjects[i].postMediaId = result.id
+                        foregroundMediaIds.append(result.id)
+                    }
+                    mediaIdx += 1
+                    let mediaProgress = Double(mediaIdx) / Double(max(1, mediaCount))
+                    onProgress(baseProgress + (0.30 + mediaProgress * 0.50) * slideShare)
+                }
+                updatedEffects.mediaObjects = mediaObjects
+            }
+
+            if var audioObjects = updatedEffects.audioPlayerObjects {
+                for i in audioObjects.indices where audioObjects[i].postMediaId.isEmpty {
+                    guard !Task.isCancelled else { return newPostIds }
+                    let obj = audioObjects[i]
+                    if let audioURL = upload.loadedAudioURLs[obj.id] ?? upload.loadedVideoURLs[obj.id] {
+                        let result = try await uploader.uploadFile(
+                            fileURL: audioURL, mimeType: "audio/mp4",
+                            token: token, uploadContext: "story"
+                        )
+                        audioObjects[i].postMediaId = result.id
+                        foregroundMediaIds.append(result.id)
+                    }
+                }
+                updatedEffects.audioPlayerObjects = audioObjects
+            }
+
+            onPhase(.publishing)
+            var allMediaIds: [String] = []
+            if let id = uploadResult?.id { allMediaIds.append(id) }
+            allMediaIds.append(contentsOf: foregroundMediaIds)
+
+            let post = try await postService.createStory(
+                content: slide.content,
+                storyEffects: updatedEffects,
+                visibility: upload.visibility,
+                originalLanguage: upload.originalLanguage,
+                mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
+                repostOfId: nil
+            )
+
+            newPostIds.append(post.id)
+            let media = buildFeedMedia(from: post, fallback: uploadResult)
+            let newItem = StoryItem(
+                id: post.id, content: post.content, media: media,
+                storyEffects: updatedEffects, createdAt: post.createdAt, isViewed: true
+            )
+            onPublishedSlide(PublishedSlide(post: post, item: newItem))
+            onProgress(Double(slideIdx + 1) * slideShare)
+            onPhase(.uploading)
+        }
+
+        return newPostIds
+    }
+
+    /// Hydrates the in-memory dictionaries that `runStoryUpload` consumes
+    /// from a flat `[StoryMediaReference]` list. The queue stores absolute
+    /// disk paths because the in-memory `UIImage` / `URL` graph is not
+    /// `Codable`; this helper does the inverse mapping at replay time.
+    ///
+    /// Convention : a reference whose `elementId` starts with `"slide-bg-"`
+    /// is a slide background image (keyed by the trailing `slide.id`);
+    /// any other id is treated as a canvas effect (image / video / audio)
+    /// keyed by `elementId` directly. Missing or undecodable files raise
+    /// `StoryPublishUnrecoverableError` so the queue drops the item rather
+    /// than looping forever.
+    private struct LoadedMedia {
+        let slideImages: [String: UIImage]
+        let loadedImages: [String: UIImage]
+        let loadedVideoURLs: [String: URL]
+        let loadedAudioURLs: [String: URL]
+    }
+
+    private func loadMediaFromReferences(_ refs: [StoryMediaReference]) throws -> LoadedMedia {
+        var slideImages: [String: UIImage] = [:]
+        var loadedImages: [String: UIImage] = [:]
+        var loadedVideoURLs: [String: URL] = [:]
+        var loadedAudioURLs: [String: URL] = [:]
+
+        let slideBgPrefix = "slide-bg-"
+
+        for ref in refs {
+            guard FileManager.default.fileExists(atPath: ref.localFilePath) else {
+                throw StoryPublishUnrecoverableError(
+                    "Missing local media at \(ref.localFilePath)"
+                )
+            }
+            let url = URL(fileURLWithPath: ref.localFilePath)
+            let isSlideBackground = ref.elementId.hasPrefix(slideBgPrefix)
+
+            switch ref.mediaType {
+            case "image":
+                guard let image = UIImage(contentsOfFile: ref.localFilePath) else {
+                    throw StoryPublishUnrecoverableError(
+                        "Could not decode image at \(ref.localFilePath)"
+                    )
+                }
+                if isSlideBackground {
+                    let slideId = String(ref.elementId.dropFirst(slideBgPrefix.count))
+                    slideImages[slideId] = image
+                } else {
+                    loadedImages[ref.elementId] = image
+                }
+            case "video":
+                loadedVideoURLs[ref.elementId] = url
+            case "audio":
+                loadedAudioURLs[ref.elementId] = url
+            default:
+                throw StoryPublishUnrecoverableError(
+                    "Unknown mediaType '\(ref.mediaType)' for elementId \(ref.elementId)"
+                )
+            }
+        }
+
+        return LoadedMedia(
+            slideImages: slideImages,
+            loadedImages: loadedImages,
+            loadedVideoURLs: loadedVideoURLs,
+            loadedAudioURLs: loadedAudioURLs
+        )
     }
 
     func retryUpload() {

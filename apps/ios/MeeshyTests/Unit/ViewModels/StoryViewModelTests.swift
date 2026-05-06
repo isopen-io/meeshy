@@ -487,4 +487,186 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertNotNil(sut.publishError)
         XCTAssertFalse(sut.isPublishing)
     }
+
+    // MARK: - executeQueuedPublish() Tests (V3 reconstruction)
+
+    private static func makeTextOnlySlide(
+        id: String = UUID().uuidString,
+        content: String = "Hello"
+    ) -> StorySlide {
+        StorySlide(id: id, content: content, effects: StoryEffects(), duration: 5, order: 0)
+    }
+
+    private static func makeQueueItem(
+        slides: [StorySlide],
+        mediaReferences: [StoryMediaReference] = [],
+        visibility: String = "PUBLIC"
+    ) throws -> StoryPublishQueueItem {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let payload = try encoder.encode(slides)
+        return StoryPublishQueueItem(
+            visibility: visibility,
+            slidesPayload: payload,
+            repostOfId: nil,
+            mediaReferences: mediaReferences
+        )
+    }
+
+    /// Exercises the queue-driven (headless) story upload path. Pure model
+    /// + mock-service tests; the TUS network branches in `runStoryUpload`
+    /// only fire when slides include local media, so the success-path
+    /// tests use text-only slides and validate the post-creation hops.
+    func test_executeQueuedPublish_corruptPayload_throwsUnrecoverable() async {
+        mockAPI.authToken = "test-token"
+        let item = StoryPublishQueueItem(
+            visibility: "PUBLIC",
+            slidesPayload: Data("not valid json".utf8),
+            mediaReferences: []
+        )
+
+        do {
+            _ = try await sut.executeQueuedPublish(item: item)
+            XCTFail("Expected throw")
+        } catch is StoryPublishUnrecoverableError {
+            // EXPECTED — terminal failure, queue should drop the item
+        } catch {
+            XCTFail("Expected StoryPublishUnrecoverableError, got \(type(of: error))")
+        }
+        XCTAssertEqual(mockPostService.createStoryCallCount, 0)
+    }
+
+    func test_executeQueuedPublish_emptySlides_throwsUnrecoverable() async {
+        mockAPI.authToken = "test-token"
+        let item = try? Self.makeQueueItem(slides: [])
+        XCTAssertNotNil(item)
+
+        do {
+            _ = try await sut.executeQueuedPublish(item: item!)
+            XCTFail("Expected throw")
+        } catch is StoryPublishUnrecoverableError {
+            // EXPECTED
+        } catch {
+            XCTFail("Expected StoryPublishUnrecoverableError, got \(type(of: error))")
+        }
+        XCTAssertEqual(mockPostService.createStoryCallCount, 0)
+    }
+
+    func test_executeQueuedPublish_missingMediaFile_throwsUnrecoverable() async throws {
+        mockAPI.authToken = "test-token"
+        let slide = Self.makeTextOnlySlide()
+        let bogusRef = StoryMediaReference(
+            elementId: "slide-bg-\(slide.id)",
+            mediaType: "image",
+            localFilePath: "/tmp/this-file-does-not-exist-\(UUID().uuidString).jpg"
+        )
+        let item = try Self.makeQueueItem(slides: [slide], mediaReferences: [bogusRef])
+
+        do {
+            _ = try await sut.executeQueuedPublish(item: item)
+            XCTFail("Expected throw")
+        } catch is StoryPublishUnrecoverableError {
+            // EXPECTED
+        } catch {
+            XCTFail("Expected StoryPublishUnrecoverableError, got \(type(of: error))")
+        }
+        XCTAssertEqual(mockPostService.createStoryCallCount, 0)
+    }
+
+    func test_executeQueuedPublish_unknownMediaType_throwsUnrecoverable() async throws {
+        mockAPI.authToken = "test-token"
+        let slide = Self.makeTextOnlySlide()
+        // Real temp file so the existence check passes — failure should
+        // come from the dispatch on `mediaType`, not the missing-file guard.
+        let tempPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-\(UUID().uuidString).bin").path
+        FileManager.default.createFile(atPath: tempPath, contents: Data())
+        defer { try? FileManager.default.removeItem(atPath: tempPath) }
+
+        let strangeRef = StoryMediaReference(
+            elementId: "weird",
+            mediaType: "hologram",
+            localFilePath: tempPath
+        )
+        let item = try Self.makeQueueItem(slides: [slide], mediaReferences: [strangeRef])
+
+        do {
+            _ = try await sut.executeQueuedPublish(item: item)
+            XCTFail("Expected throw")
+        } catch is StoryPublishUnrecoverableError {
+            // EXPECTED
+        } catch {
+            XCTFail("Expected StoryPublishUnrecoverableError, got \(type(of: error))")
+        }
+    }
+
+    func test_executeQueuedPublish_textOnlySingleSlide_returnsLastPostId() async throws {
+        mockAPI.authToken = "test-token"
+        let slide = Self.makeTextOnlySlide(content: "First story ever")
+        let item = try Self.makeQueueItem(slides: [slide])
+        let serverId = "post-server-\(UUID().uuidString)"
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost(
+            id: serverId, content: "First story ever",
+            authorId: "a1", authorUsername: "alice"
+        ))
+
+        let result = try await sut.executeQueuedPublish(item: item)
+
+        XCTAssertEqual(result, serverId,
+            "executeQueuedPublish should return the server-assigned post id")
+        XCTAssertEqual(mockPostService.createStoryCallCount, 1)
+    }
+
+    func test_executeQueuedPublish_textOnlyMultiSlide_returnsLastPostId() async throws {
+        mockAPI.authToken = "test-token"
+        let slides = [
+            Self.makeTextOnlySlide(content: "Slide 1"),
+            Self.makeTextOnlySlide(content: "Slide 2"),
+            Self.makeTextOnlySlide(content: "Slide 3")
+        ]
+        let item = try Self.makeQueueItem(slides: slides)
+        // Mock returns the same stub id for every call; we validate the
+        // call count, not the id-per-call mapping (mock isn't queue-aware).
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost(
+            id: "post-stub", content: "stub", authorId: "a1", authorUsername: "alice"
+        ))
+
+        let result = try await sut.executeQueuedPublish(item: item)
+
+        XCTAssertEqual(result, "post-stub")
+        XCTAssertEqual(mockPostService.createStoryCallCount, 3,
+            "createStory should be called once per slide")
+    }
+
+    func test_executeQueuedPublish_doesNotMutate_activeUpload() async throws {
+        mockAPI.authToken = "test-token"
+        XCTAssertNil(sut.activeUpload, "Precondition: no active upload")
+        let item = try Self.makeQueueItem(slides: [Self.makeTextOnlySlide()])
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost(
+            id: "post-1", content: "stub", authorId: "a1", authorUsername: "alice"
+        ))
+
+        _ = try await sut.executeQueuedPublish(item: item)
+
+        XCTAssertNil(sut.activeUpload,
+            "Queue path must not touch activeUpload (no banner side-effects)")
+    }
+
+    func test_executeQueuedPublish_createStoryFailure_throwsRetryable() async throws {
+        mockAPI.authToken = "test-token"
+        let item = try Self.makeQueueItem(slides: [Self.makeTextOnlySlide()])
+        mockPostService.createStoryResult = .failure(
+            APIError.networkError(URLError(.timedOut))
+        )
+
+        do {
+            _ = try await sut.executeQueuedPublish(item: item)
+            XCTFail("Expected throw")
+        } catch is StoryPublishUnrecoverableError {
+            XCTFail("Network errors should remain retryable, not unrecoverable")
+        } catch {
+            // EXPECTED — any non-Unrecoverable error bubbles so the queue
+            // schedules a retry per its exponential backoff policy.
+        }
+    }
 }
