@@ -56,4 +56,26 @@ final class CommandStackTests: XCTestCase {
         XCTAssertEqual(decoded.commands.count, 2)
         XCTAssertEqual(decoded.cursor, 2)
     }
+
+    // MARK: - CommandStack init
+
+    func test_init_default_emptyState() {
+        let stack = CommandStack()
+        XCTAssertFalse(stack.canUndo)
+        XCTAssertFalse(stack.canRedo)
+    }
+
+    func test_init_customParameters_storedCorrectly() {
+        let stack = CommandStack(maxSize: 10, coalesceWindow: 1.0)
+        XCTAssertEqual(stack.maxSize, 10)
+        XCTAssertEqual(stack.coalesceWindow, 1.0, accuracy: 0.0001)
+        XCTAssertFalse(stack.canUndo)
+        XCTAssertFalse(stack.canRedo)
+    }
+
+    func test_init_clampsMaxSize_atLeastOne() {
+        // maxSize 0 or negative would make push() unable to retain the new command — clamp to 1.
+        let stack = CommandStack(maxSize: 0)
+        XCTAssertEqual(stack.maxSize, 1)
+    }
 }
