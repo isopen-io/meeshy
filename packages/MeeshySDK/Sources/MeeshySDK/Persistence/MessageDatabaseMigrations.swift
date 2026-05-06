@@ -144,5 +144,50 @@ public enum MessageDatabaseMigrations {
                 t.column("uploadState", .text).notNull().defaults(to: "pending")
             }
         }
+
+        migrator.registerMigration("msg_v1_messages_fts5") { db in
+            // External-content FTS5 — content lives in `messages`, FTS just indexes
+            // unicode61 remove_diacritics 2 gives French-aware accent folding:
+            // "à", "é", "ç" all match their unaccented forms at query time
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE messages_fts USING fts5(
+                    content,
+                    content='messages',
+                    content_rowid='rowid',
+                    tokenize='unicode61 remove_diacritics 2'
+                )
+                """)
+
+            // Backfill existing rows (exclude soft-deleted messages)
+            try db.execute(sql: """
+                INSERT INTO messages_fts(rowid, content)
+                SELECT rowid, content FROM messages
+                WHERE content IS NOT NULL AND deletedAt IS NULL
+                """)
+
+            // Insert trigger — keep FTS in sync when a new message is stored
+            try db.execute(sql: """
+                CREATE TRIGGER msg_fts_ai AFTER INSERT ON messages BEGIN
+                    INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, new.content);
+                END
+                """)
+
+            // Delete trigger — use FTS5 'delete' command for external-content tables
+            try db.execute(sql: """
+                CREATE TRIGGER msg_fts_ad AFTER DELETE ON messages BEGIN
+                    INSERT INTO messages_fts(messages_fts, rowid, content)
+                    VALUES('delete', old.rowid, old.content);
+                END
+                """)
+
+            // Update trigger — remove stale index entry, insert updated one
+            try db.execute(sql: """
+                CREATE TRIGGER msg_fts_au AFTER UPDATE ON messages BEGIN
+                    INSERT INTO messages_fts(messages_fts, rowid, content)
+                    VALUES('delete', old.rowid, old.content);
+                    INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, new.content);
+                END
+                """)
+        }
     }
 }
