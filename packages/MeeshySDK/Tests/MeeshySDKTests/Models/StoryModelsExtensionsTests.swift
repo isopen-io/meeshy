@@ -224,4 +224,31 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertNil(decoded.clipTransitions)
         XCTAssertEqual(decoded.background, "FFFFFF")
     }
+
+    // MARK: - StoryMediaObject.keyframes extension
+
+    func test_storyMediaObject_keyframes_defaultsToNil() {
+        let media = StoryMediaObject()
+        XCTAssertNil(media.keyframes)
+    }
+
+    func test_storyMediaObject_keyframes_canBeAssignedAndPersisted() throws {
+        var media = StoryMediaObject(postMediaId: "pm-1", mediaType: "video")
+        media.keyframes = [
+            StoryKeyframe(time: 0.0, x: 0.0, y: 0.0, scale: 1.0, opacity: 0.0),
+            StoryKeyframe(time: 1.0, x: 0.5, y: 0.5, scale: 1.5, opacity: 1.0,
+                          easing: .easeOut)
+        ]
+        let data = try JSONEncoder().encode(media)
+        let decoded = try JSONDecoder().decode(StoryMediaObject.self, from: data)
+        XCTAssertEqual(decoded.keyframes?.count, 2)
+        XCTAssertEqual(decoded.keyframes?[1].easing, .easeOut)
+    }
+
+    func test_storyMediaObject_decodeOldJSON_withoutKeyframes_succeeds() throws {
+        let json = #"{"id":"m1","postMediaId":"pm","mediaType":"image","placement":"media","x":0.5,"y":0.5,"scale":1.0,"rotation":0,"volume":1.0}"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(StoryMediaObject.self, from: json)
+        XCTAssertNil(decoded.keyframes)
+        XCTAssertEqual(decoded.id, "m1")
+    }
 }

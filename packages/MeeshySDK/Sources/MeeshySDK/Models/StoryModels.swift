@@ -254,11 +254,14 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var fadeIn: Float?               // fade-in (secondes)
     public var fadeOut: Float?              // fade-out (secondes)
     public var sourceLanguage: String?
+    // Timeline V2 — animation keyframes (position/scale/opacity)
+    public var keyframes: [StoryKeyframe]?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaType, placement, x, y, scale, rotation, volume
         case isBackground, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
+        case keyframes
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -269,7 +272,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 isBackground: Bool? = nil,
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
-                sourceLanguage: String? = nil) {
+                sourceLanguage: String? = nil,
+                keyframes: [StoryKeyframe]? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.mediaType = mediaType; self.placement = placement
         self.x = x; self.y = y; self.scale = scale
@@ -278,6 +282,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.startTime = startTime; self.duration = duration
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
+        self.keyframes = keyframes
     }
 
     /// Convenience init that takes a typed `StoryMediaKind` instead of a raw string.
@@ -289,14 +294,16 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 isBackground: Bool? = nil,
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
-                sourceLanguage: String? = nil) {
+                sourceLanguage: String? = nil,
+                keyframes: [StoryKeyframe]? = nil) {
         self.init(id: id, postMediaId: postMediaId,
                   mediaType: kind.rawValue, placement: placement,
                   x: x, y: y, scale: scale, rotation: rotation,
                   volume: volume, isBackground: isBackground,
                   startTime: startTime, duration: duration,
                   loop: loop, fadeIn: fadeIn, fadeOut: fadeOut,
-                  sourceLanguage: sourceLanguage)
+                  sourceLanguage: sourceLanguage,
+                  keyframes: keyframes)
     }
 
     /// Type-safe view on `mediaType`. Returns `nil` if the persisted value is unrecognized
