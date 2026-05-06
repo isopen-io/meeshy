@@ -875,9 +875,7 @@ final class MockStoryTimelineEngine: TimelineEngineProviding {
     var onTimeUpdate: ((Float) -> Void)?
     var onPlaybackEnd: (() -> Void)?
     var onElementBecameActive: ((String) -> Void)?
-    var onError: ((Error) -> Void)?              // Patch deep-coherence-review HIGH-A4
-    var mode: TimelineEngineMode = .preview      // Patch deep-coherence-review HIGH-A4
-
+    var onError: ((Error) -> Void)?    var mode: TimelineEngineMode = .preview
     // Call counts
     private(set) var configureCallCount = 0
     private(set) var playCallCount = 0
@@ -904,16 +902,14 @@ final class MockStoryTimelineEngine: TimelineEngineProviding {
     func setMode(_ newMode: TimelineEngineMode) {
         setModeCallCount += 1
         lastSetMode = newMode
-        mode = newMode                            // Patch deep-coherence-review HIGH-A4
-    }
+        mode = newMode                  }
 
     func reset() {
         configureCallCount = 0; playCallCount = 0; pauseCallCount = 0
         seekCallCount = 0; stopCallCount = 0; setModeCallCount = 0
         lastConfiguredProject = nil; lastSeekTime = nil; lastSetMode = nil
         currentTime = 0; isPlaying = false
-        mode = .preview                           // Patch deep-coherence-review HIGH-A4
-    }
+        mode = .preview                 }
 }
 ```
 
@@ -968,14 +964,10 @@ import MeeshySDK
 
 // MARK: - Engine abstraction (testable seam for StoryTimelineEngine)
 
-// IMPORTANT (deep-coherence-review CH-1) : `TimelineEngineMode` doit être placé
-// dans un fichier dédié `Story/Timeline/Model/TimelineEngineMode.swift` (cf. Task 7.5)
-// pour être partagé par Plan 3 (StoryTimelineEngine) et Plan 4 (TimelineViewModel +
-// MockEngine) sans bridge fragile. Plan 3 Task D1 doit alors utiliser DIRECTEMENT
-// `TimelineEngineMode` au lieu de définir son propre nested `Mode` enum.
-//
-// Au moment de l'écriture de cette task, le type est défini ici pour ne pas casser
-// la lecture linéaire du plan ; le déplacement physique vers `Model/` est traité en Task 7.5.
+// `TimelineEngineMode` est placé dans `Story/Timeline/Model/TimelineEngineMode.swift`
+// pour être partagé par `StoryTimelineEngine` (Plan 3) et `TimelineViewModel` (ce plan)
+// sans bridge fragile. Définition dupliquée ici pour la lisibilité du plan ;
+// le fichier physique est créé au moment du wiring Phase 2 → Phase 3.
 public enum TimelineEngineMode: Sendable, Equatable {
     case editing
     case preview
@@ -991,11 +983,10 @@ public protocol TimelineEngineProviding: AnyObject {
     var onTimeUpdate: ((Float) -> Void)? { get set }
     var onPlaybackEnd: (() -> Void)? { get set }
     var onElementBecameActive: ((String) -> Void)? { get set }
-    var onError: ((Error) -> Void)? { get set }   // Patch deep-coherence-review HIGH-A4
+    var onError: ((Error) -> Void)? { get set }
 
     /// Read-only access to the current engine mode. Required so TimelineViewModel can
     /// observe playback mode (editing/preview) without exposing the setter ambiguity.
-    /// Patch deep-coherence-review HIGH-A4.
     var mode: TimelineEngineMode { get }
 
     func configure(project: TimelineProject, mediaURLs: [String: URL], images: [String: UIImage]) async
@@ -5903,8 +5894,7 @@ final class StoryTimelineEngineProvidingTests: XCTestCase {
                       "StoryTimelineEngine must conform to TimelineEngineProviding")
     }
 
-    /// Setting the protocol's TimelineEngineMode must reach the concrete engine's nested Mode.
-    /// Patch deep-coherence-review HIGH-A2 : la propriété correcte sur StoryTimelineEngine est `mode` (pas `currentMode`).
+    /// Setting the protocol's TimelineEngineMode must reach the concrete engine's mode.
     func test_setMode_editing_reachesConcreteEngine() {
         let engine = StoryTimelineEngine()
         let provider: any TimelineEngineProviding = engine
@@ -5921,8 +5911,8 @@ final class StoryTimelineEngineProvidingTests: XCTestCase {
     }
 
     /// The protocol exposes `mode` as a read-only property. The concrete engine's
-    /// nested `Mode` must be readable via the same property name when accessed
-    /// through the protocol existential. Patch deep-coherence-review HIGH-A4.
+    /// `mode` must be readable via the same property name when accessed
+    /// through the protocol existential.
     func test_mode_isReadableThroughProtocol() {
         let engine = StoryTimelineEngine()
         let provider: any TimelineEngineProviding = engine
@@ -5948,59 +5938,21 @@ import MeeshySDK
 /// protocol (Plan 4 / Task 7) so the composer can inject the real engine into
 /// `TimelineViewModel` without exposing AVFoundation internals to the ViewModel layer.
 ///
-/// The two `Mode` enums (`StoryTimelineEngine.Mode` and `TimelineEngineMode`) are kept
-/// separate intentionally to preserve testability: a mock engine in tests does not need
-/// to drag in AVFoundation just to expose a mode setter. The two enums share identical
-/// cases so the bridge is a single switch in `setMode(_:)` and a computed mirror in `mode`.
+/// `TimelineEngineMode` est partagé entre Plan 3 et Plan 4 via le fichier
+/// `Story/Timeline/Model/TimelineEngineMode.swift`. `StoryTimelineEngine.mode` est
+/// directement de type `TimelineEngineMode` — pas de mapping ni d'enum dupliqué.
 ///
-/// **Patch deep-coherence-review HIGH-A1, A2, A3** :
-/// - The previous version of this bridge tried to alias `_onTimeUpdate`/`_onPlaybackEnd`/`_onError`
-///   storage that does NOT exist on `StoryTimelineEngine` — those callbacks are already public
-///   stored properties on the concrete type matching the protocol shape, so NO bridging is needed.
-/// - The previous version of `setMode` used `setMode(.editing as Mode)` which created an
-///   ambiguous overload + risk of infinite recursion. Replaced with explicit local var typed
-///   to the nested `Mode` and a fully-qualified disambiguation via `Self.applyConcreteMode(_:)`.
-///   To avoid any overload ambiguity, Plan 3 Task D6 SHOULD rename its internal `setMode`
-///   to `applyConcreteMode` (kept here under the assumption Plan 3 will perform that rename
-///   at integration time, see deep-coherence-review section 7).
+/// L'extension est donc minimale : juste les callbacks et methods qui ne sont pas
+/// déjà conformes au protocol par les propriétés publiques de StoryTimelineEngine.
 extension StoryTimelineEngine: TimelineEngineProviding {
-
-    /// Mirror of the concrete engine's `mode` — protocol-friendly type.
-    /// The setter on the protocol is `setMode(_:)` ; this property is read-only by design.
-    public var mode: TimelineEngineMode {
-        switch self.modeInternal {           // `modeInternal` = renamed in Plan 3 D6 to disambiguate
-        case .editing: return .editing
-        case .preview: return .preview
-        }
-    }
-
-    /// Convert the protocol's enum to the concrete enum, then delegate to the
-    /// renamed concrete API `applyConcreteMode(_:)` (cf. Plan 3 D6 — to rename at integration).
-    /// If Plan 3 D6 cannot be renamed, use `(self as StoryTimelineEngine).setMode(concrete)`
-    /// inside a separate file scope where only the concrete API is visible — never call
-    /// `setMode(...)` from inside this extension to avoid recursive dispatch.
-    public func setMode(_ mode: TimelineEngineMode) {
-        let concrete: StoryTimelineEngine.Mode = (mode == .editing) ? .editing : .preview
-        self.applyConcreteMode(concrete)     // ← Plan 3 D6 rename target
-    }
+    // Toutes les properties (currentTime, isPlaying, isMuted, masterVolume,
+    // onTimeUpdate, onPlaybackEnd, onElementBecameActive, onError, mode) et toutes
+    // les méthodes (configure, play, pause, seek, stop, toggle, setMode) sont déjà
+    // exposées publiquement par `StoryTimelineEngine` avec exactement les signatures
+    // requises par le protocol. La conformance se fait par déclaration uniquement,
+    // sans corps d'extension.
 }
 ```
-
-> **Note critique** : ce bridge SUPPOSE que Plan 3 Task D6 a été renommée `setMode(_ newMode: Mode)` → `applyConcreteMode(_ newMode: Mode)` et que la propriété `mode` interne a été renommée en `modeInternal` (pour éviter le shadowing avec la property `mode` ajoutée par l'extension protocol). Si Plan 3 ne fait PAS ces renames, deux alternatives :
->
-> 1. Garder Plan 3 tel quel et renommer dans cette extension :
->    ```swift
->    public var mode: TimelineEngineMode {
->        // self.mode est ambigu — utiliser un local de type explicite
->        let internal: StoryTimelineEngine.Mode = self.modeAccessor()
->        return (internal == .editing) ? .editing : .preview
->    }
->    ```
->    Plus une méthode privée `modeAccessor()` dans Plan 3 qui retourne `Mode`.
->
-> 2. Définir `TimelineEngineMode` dans un module commun et l'utiliser DIRECTEMENT dans `StoryTimelineEngine` (un seul enum partagé). Cf. deep-coherence-review CH-1.
->
-> **Recommandation** : option 2 (un seul enum) est la plus propre. À aborder en pre-flight de l'execution.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -7960,217 +7912,6 @@ Expected : PASS, 2 tests.
 git add packages/MeeshySDK/Tests/MeeshyUITests/Integration/TransitionDragCreateTests.swift \
         packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift
 git commit -m "test(timeline-ui): integration transitionDragCreate auto-creates crossfade on overlap"
-```
-
----
-
-### Task 49: Self-review checklist (no code, methodology only)
-
-**Files:** none — this task is a review pass executed mentally before opening the PR.
-
-This task does not produce code. Run through every item below and tick it off
-explicitly. If any item fails, STOP and patch the offending task before moving
-on to Task 50.
-
-- [ ] **Step 1: Skim the plan 1 → 48 and verify the type/name graph is consistent**
-
-Run :
-
-```bash
-grep -nE "TimelineViewModel|StoryTimelineEngine|TimelineProject|StoryClipTransition|TimelineGeometry|CommandStack|SnapEngine|StoryMediaObject|StoryAudioPlayerObject|StoryTextObject|StoryTransitionKind" \
-    docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md | wc -l
-```
-
-Eyeball the matches : every reference must use the exact same spelling and
-case as the originating Plan (Plan 0 SDK Models, Plan 1 Logic Core, Plan 2
-Engine Playback). The known canonical names are :
-
-| Type | Canonical spelling | Originating plan |
-|------|---------------------|------------------|
-| Project root | `TimelineProject` | Plan 1 |
-| Media object | `StoryMediaObject` | Plan 1 (extension `keyframes`) — base existante SDK |
-| Audio object | `StoryAudioPlayerObject` | Base existante SDK |
-| Text object | `StoryTextObject` | Plan 1 (extension `keyframes`) — base existante SDK |
-| Transition | `StoryClipTransition` | Plan 1 |
-| Transition kind | `StoryTransitionKind` (`.crossfade` / `.dissolve`) | Plan 1 |
-| ViewModel | `TimelineViewModel` (`@Observable`) | Plan 4 — Task 7 |
-| Engine protocol | `TimelineEngineProviding` | Plan 4 — Task 7 (testability seam, miroir de `StoryTimelineEngine`) |
-| Engine concrete | `StoryTimelineEngine` | Plan 3 — Task D1 (conformance à `TimelineEngineProviding` ajoutée par Plan 4 — Task 35.5 via extension d'adapter `StoryTimelineEngine+Providing.swift`) |
-| Engine mock | `MockStoryTimelineEngine` | Plan 4 — Task 7 |
-| Geometry | `TimelineGeometry` (`zoomScale`, `width(for:)`, `x(for:)`, `time(forX:)`) | Plan 4 — Task 16 |
-| Snap engine | `SnapEngine` | Plan 2 |
-| Command stack | `CommandStack` | Plan 2 |
-| Mode enum | `TimelineMode` (`.quick` / `.pro`) | Plan 4 — Task 5 |
-| Selection | `ClipSelectionState` | Plan 4 — Task 6 |
-| Engine mode | `TimelineEngineMode` | Plan 4 — Task 7 (mirror de `StoryTimelineEngine.Mode` du Plan 3 pour découplage) |
-| Feature flag | `StoryTimelineFeatureFlag` + `RemoteFeatureFlagProviding` | Plan 4 — Task 3 |
-| Inspector presentation | `InspectorPresentation` | Plan 4 — Task 27 |
-
-Any deviation (e.g. `TimelineModel` instead of `TimelineProject`, or
-`AudioObject` instead of `StoryAudioPlayerObject`) is a correctness bug and
-must be fixed in the offending task before merge.
-
-- [ ] **Step 2: Verify each spec section is covered by ≥ 1 task**
-
-The Phase 3 scope from spec sections 1, 5, 6, 7, 8, 9.2 maps onto tasks as
-follows. Confirm each row before stamping the plan as complete.
-
-| Spec section | Task(s) covering it |
-|--------------|---------------------|
-| §1 Vision (Quick + Pro modes) | Tasks 5, 32, 33, 34, 35 |
-| §5.1 Quick layout (transport + ruler + max 3 tracks compact / all deployed) | Tasks 30, 32, 33 |
-| §5.2 Pro layout (preview left + tracks/inspector right, landscape-first) | Tasks 30, 31, 34 |
-| §5.3 Auto Quick ↔ Pro on rotation | Task 35 |
-| §6.1 Track types (video / image / audio / text + bg variants) | Tasks 17, 18, 19, 20 |
-| §6.2 Clip handles (trim, drag, lock, fades) | Task 18 |
-| §6.3 Transitions (badge + drag-to-create + inspector) | Tasks 21, 29, 48 |
-| §6.4 Keyframes (marker + inspector) | Tasks 26, 28 |
-| §6.5 Playhead + scrubbing | Task 23 |
-| §6.6 Snap guides | Task 24 |
-| §6.7 Duration handle | Task 25 |
-| §6.8 Ruler (adaptive) | Tasks 22, 44 |
-| §6.9 Inspectors (clip / keyframe / transition) | Tasks 27, 28, 29, 45 |
-| §6.10 Toolbar (Pro) + transport (shared) | Tasks 30, 31 |
-| §7 Localization (~70 keys) | Task 4 |
-| §7 Visual identity (Indigo gradient + semantic) | Tasks 17-34 (every view) |
-| §8.1 Logic unit tests | Plans 0/1 |
-| §8.2 ViewModel tests | Tasks 7-15 |
-| §8.3 SDK Models tests | Plan 0 |
-| §8.4 Snapshot UI (~80 PNGs) | Tasks 39-45 (60 PNGs Phase 3, balance in Plans 0-2) |
-| §8.5 Integration | Tasks 36, 37, 46, 47, 48 |
-| §8.7 Manual QA | covered by spec checklist, no automation |
-| §9.2 Phase 3 deliverables (Quick/Pro views, inspectors, gestures, flag) | Tasks 1-37 |
-| §9.3 Feature flag (3 levels) | Task 3 |
-| §9.4 Draft compatibility | Plan 0 + Task 15 (restoreDraft) |
-| §9.6 StoryCanvasReaderView compat | Plan 0 |
-
-- [ ] **Step 3: Verify zero placeholder ("TBD", "TODO", "...similar", "etc.")**
-
-Run :
-
-```bash
-grep -nE "TBD|TODO|FIXME|\.\.\.similar|\.\.\.same as above|\bxxx\b|<placeholder>" \
-    docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md
-```
-
-Expected : no matches. (`TODO` may appear inside a Task description as a
-narrative — flag and rewrite if so. `...` ellipsis inside a sentence is OK,
-but `...similar to above` or `...same as above` for code is forbidden.)
-
-- [ ] **Step 4: Verify commit-message convention is uniform**
-
-Run :
-
-```bash
-grep -nE 'git commit -m "[^"]+"' \
-    docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md \
-    | grep -vE '"(feat|fix|test|chore|i18n|refactor|perf|docs)\(' \
-    || echo "OK : every commit follows conventional prefix"
-```
-
-Expected : `OK : every commit follows conventional prefix`.
-
-The accepted prefixes for this plan are : `feat(timeline)`,
-`feat(timeline-ui)`, `feat(composer)`, `test(timeline-ui)`,
-`chore(timeline)`, `i18n(timeline)`. Any other prefix must be justified or
-rewritten.
-
-- [ ] **Step 5: Verify every `String(localized:)` key was added in Task 4 (or queued)**
-
-Run :
-
-```bash
-grep -oE 'String\(localized: "story\.timeline\.[a-zA-Z0-9.]+"' \
-    docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md \
-    | sort -u > /tmp/timeline-keys-used.txt
-grep -oE '"story\.timeline\.[a-zA-Z0-9.]+"' \
-    docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md \
-    | sort -u > /tmp/timeline-keys-defined.txt
-diff /tmp/timeline-keys-used.txt /tmp/timeline-keys-defined.txt | head -40
-```
-
-Every used key must appear in Task 4's table (annexe H of the spec). If a
-new key surfaced in Tasks 17-37 (e.g. an a11y label that was forgotten),
-add it to Task 4's localization table BEFORE merging that task — never let
-a `String(localized:)` ship without a corresponding entry in
-`Localizable.xcstrings`.
-
-- [ ] **Step 6: Verify file paths are absolute or workspace-relative**
-
-Every "Create" / "Modify" / "Test" line in every task must use the
-`packages/MeeshySDK/...` workspace-relative form. No `./` prefixes, no
-`apps/ios/Meeshy/...` (the plan is SDK-scoped — anything in `apps/ios/`
-would mean a misclassified change).
-
-Run :
-
-```bash
-grep -nE "Create:|Modify:|Test:" \
-    docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md \
-    | grep -vE 'packages/MeeshySDK/' \
-    || echo "OK : every file path lives under packages/MeeshySDK/"
-```
-
-Expected : `OK : every file path lives under packages/MeeshySDK/`.
-
-- [ ] **Step 7: Verify no unguarded production code lacks a failing test**
-
-Spot-check 5 random tasks (e.g. 11, 18, 28, 33, 44) — each MUST have
-the canonical RED-GREEN-REFACTOR shape :
-
-1. Step 1 : write the failing test
-2. Step 2 : run it, observe FAIL
-3. Step 3 : write the minimum production code
-4. Step 4 : re-run, observe PASS
-5. Step 5 : commit
-
-Tasks 1, 2, 38 (infra/scaffold) and Task 49 (this one) are the only
-exceptions allowed.
-
-- [ ] **Step 8: Stamp the review**
-
-If every step above passes, append the line below to `tasks/lessons.md` at
-the project root :
-
-```markdown
-- 2026-05-06: Plan 4 (Phase 3 Quick + Pro views) self-review passed — 50 tasks, ~60 snapshot PNGs, 3 integration tests, all naming aligned with Plans 0/1/2.
-```
-
-If any step fails, FIX the offending task and re-run the entire checklist.
-The review is binary : either every box ticks or the plan is not ready.
-
----
-
-### Task 50: Plan summary — execution metadata + hand-off
-
-**Files:** none (this task documents the plan, no code change).
-
-This task records the final shape of the plan : counts, file inventory,
-dependencies, downstream phases, success metrics. It exists so the next
-reviewer (Codex / staff engineer / release manager) can audit the scope at
-a glance without re-reading 7000+ lines.
-
-The deliverable is the `## Plan Complete — Hand-off` section appended at
-the bottom of this file. The team merges this section as part of the
-final commit of the plan.
-
-- [ ] **Step 1: Append the hand-off section**
-
-Verify the section below already lives at the bottom of this file (it is
-appended in the same patch as Task 50). Run :
-
-```bash
-grep -c "^## Plan Complete — Hand-off" \
-    docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md
-```
-
-Expected : `1`.
-
-- [ ] **Step 2: Commit the hand-off**
-
-```bash
-git add docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md
-git commit -m "docs(timeline): close Plan 4 with hand-off summary (50 tasks, ~250 steps)"
 ```
 
 ---
@@ -10575,10 +10316,9 @@ public final class TimelineViewModel: ObservableObject {
         if networkMonitor.isOnline {
             await publishImmediately(visibility: visibility)
         } else {
-            // Patch deep-coherence-review ZO-1 : `OfflineQueue` (existant SDK) est
-            // SPÉCIFIQUE aux MESSAGES (champs conversationId, content, replyToId).
-            // Pour les stories on utilise `StoryOfflineQueue` créé en Task 74,
-            // qui sérialise les slides en JSON pour découpler de l'évolution du modèle.
+            // `OfflineQueue` (SDK Meeshy existant) est spécifique aux messages.
+            // Pour les stories on utilise `StoryOfflineQueue` (Task 74) qui sérialise
+            // les slides en JSON pour découpler de l'évolution du modèle.
             let payloadData = try? JSONEncoder().encode(allSlides)
             let payloadJSON = payloadData.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
             let mediaPaths: [String: String] = loadedVideoURLs.mapValues { $0.path }
@@ -10966,7 +10706,7 @@ git commit -m "feat(timeline-ui): publish offline auto-queues without error dial
 
 ### Task 73: NetworkMonitor — global online/offline state via NWPathMonitor
 
-> **Why (deep-coherence-review ZO-2)** : Tasks 70/71/72 supposent un `NetworkMonitor.shared.isOnline` global, mais ce service N'EXISTE PAS dans le repo Meeshy actuel (verified `grep -r "NetworkMonitor" packages/MeeshySDK apps/ios/Meeshy` renvoie zéro hit non-Starscream). Cette task le crée comme pré-requis bloquant pour Tasks 70-72.
+> **Why** : Tasks 70/71/72 utilisent un `NetworkMonitor.shared.isOnline` global qui n'existe pas dans le repo Meeshy. Cette task le crée comme pré-requis bloquant pour Tasks 70-72.
 
 **Files:**
 - Create: `packages/MeeshySDK/Sources/MeeshySDK/Networking/NetworkMonitor.swift`
@@ -11090,7 +10830,7 @@ git commit -m "feat(networking): NetworkMonitor singleton via NWPathMonitor for 
 
 ### Task 74: StoryOfflineQueue — actor dédié aux stories en attente de publish
 
-> **Why (deep-coherence-review ZO-1)** : `OfflineQueue` existe dans le SDK Meeshy (`actor OfflineQueue`), MAIS son `OfflineQueueItem` est SPÉCIFIQUE aux MESSAGES (champs `conversationId`, `content`, `replyToId`, `attachmentIds`). Une story complète (avec ses slides, mediaURLs, audioURLs, images, transitions, keyframes) ne rentre pas dans ce schéma. Plutôt que de polluer `OfflineQueueItem` avec des champs optionnels, on crée un actor dédié `StoryOfflineQueue` modélisé sur le même pattern (singleton `actor`, persistance disque JSON, retry FIFO sur reconnect via `NetworkMonitor`).
+> **Why** : `OfflineQueue` existe dans le SDK Meeshy (`actor OfflineQueue`), mais son `OfflineQueueItem` est spécifique aux messages (champs `conversationId`, `content`, `replyToId`, `attachmentIds`). Une story complète (slides, mediaURLs, audioURLs, images, transitions, keyframes) ne rentre pas dans ce schéma. On crée donc un actor dédié `StoryOfflineQueue` modélisé sur le même pattern (singleton `actor`, persistance disque JSON, retry FIFO sur reconnect via `NetworkMonitor`).
 
 **Files:**
 - Create: `packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryOfflineQueue.swift`
@@ -11320,9 +11060,12 @@ git commit -m "feat(persistence): StoryOfflineQueue actor — story-specific que
 
 ### Task 75: Final self-review V2 + Final hand-off (covers all 75 tasks)
 
-> **Why (deep-coherence-review MED-2 + MED-3)** : Tasks 49 (initial self-review) et 50 (initial hand-off) ont été écrites avant que Tasks 35.5 + 52-72 + 73-74 soient ajoutées. Elles déclarent "50 tasks complete" alors que le plan en a maintenant 75 (50 + 35.5 + gap-on-51 + 52-74). Cette task remplace les compteurs et le hand-off final pour refléter l'état réel du plan.
+> **Why** : task finale qui valide que tous les compteurs sont corrects et produit le hand-off complet pour les phases suivantes.
 >
-> **À propos du gap Task 51** : la numérotation passe de Task 50 à Task 52 sans Task 51. Cela vient de l'extension du plan en deux phases successives (l'agent extension a démarré à 52 par convention). Plutôt que de renuméroter (risqué : toutes les références internes seraient à mettre à jour), on documente le gap explicitement comme une décision design. Aucun fichier n'est nommé "task 51" — pas d'impact opérationnel.
+> **À propos des gaps de numérotation** :
+> - Tasks 49 et 50 ont été supprimées (anciens self-review/hand-off remplacés par cette task)
+> - Task 51 n'a jamais existé (gap documenté, aucun fichier ni référence interne)
+> - Task 35.5 est insérée entre Task 35 et Task 36 (adapter `StoryTimelineEngine: TimelineEngineProviding`)
 
 **Files:**
 - Update: cette section (in-place dans le plan, pas de fichier Swift créé)
@@ -11361,7 +11104,7 @@ test -f /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK/Sources/MeeshySDK/N
 # StoryOfflineQueue.swift créé
 test -f /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryOfflineQueue.swift && echo OK || echo MANQUANT
 
-# TimelineEngineMode placé dans Model/ (CH-1, à exécuter en pre-flight)
+# TimelineEngineMode placé dans Model/ (à créer en pre-flight)
 test -f /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Model/TimelineEngineMode.swift && echo OK || echo À-CRÉER-EN-PRE-FLIGHT
 ```
 
@@ -11371,33 +11114,29 @@ Cette task est une checklist méthodologique. Ne génère aucun nouveau fichier 
 
 ---
 
-## Plan Complete — Hand-off V2 (FINAL — supersede Tasks 49 et 50)
+## Plan Complete — Hand-off
 
-**Cette section remplace les compteurs et l'inventaire des Tasks 49/50.**
+### Compteurs
 
-### Compteurs réels (post deep-coherence-review)
-
-| Métrique | Valeur réelle |
-|----------|--------------|
-| **Total tasks** | **75** (Tasks 1-50 + Task 35.5 + GAP-51 documenté + Tasks 52-75) |
-| **Total tasks ajoutées en review** | **5** (35.5 bridge + 73 NetworkMonitor + 74 StoryOfflineQueue + 75 final hand-off + 21 extensions Tasks 52-72) |
-| **Total steps** | **~370** (~5 steps par task) |
-| **Total commits** | **75** (1 par task) |
+| Métrique | Valeur |
+|----------|--------|
+| **Total tasks** | **73** (Tasks 1-48 + Task 35.5 + Tasks 52-75 ; gaps 49/50/51 documentés ci-dessous) |
+| **Total steps** | **~365** (~5 steps par task) |
+| **Total commits** | **73** (1 par task) |
 | **Total snapshot PNGs** | **60** |
 | **Total integration tests** | **6** (Tasks 46/47/48 end-to-end + Task 65 multi-audio + Task 66 video sync + Task 70 offline flow) |
-| **Total localization keys** | **73** (70 du Task 4 + 3 ajoutées pour offline indicator/snackbar) |
-| **Total Swift files créés (production)** | **~36** (32 initiaux + StoryTimelineEngine+Providing + NetworkMonitor + StoryOfflineQueue + TimelineEngineMode partagé) |
+| **Total localization keys** | **73** |
+| **Total Swift files créés (production)** | **~36** |
 | **Total Swift files créés (tests + mocks)** | **~32** |
 
-### Documentation du gap Task 51 (décision MED-2)
+### Note de numérotation
 
-La numérotation des tasks passe de **Task 50 directement à Task 52**, sans Task 51. C'est une **décision documentée**, pas un bug :
-- L'extension du plan a été faite en deux passes successives (agent A : Tasks 1-50 + 35.5 ; agent B : Tasks 52-66 + 67-72)
-- Renuméroter aurait obligé à mettre à jour toutes les références internes (commits, file inventories, dependencies cross-tasks) — risque trop élevé
-- Aucun fichier n'est nommé "Task 51" et aucune référence interne ne pointe vers Task 51
-- Cette section documente officiellement le gap pour les futurs developers
+La numérotation des tasks comporte 3 gaps explicites :
+- **Tasks 49 et 50** : supprimées car remplacées par Task 75 (hand-off final unique)
+- **Task 51** : n'a jamais existé. Aucun fichier ni référence interne ne pointe vers 51
+- **Task 35.5** : insérée entre Task 35 et Task 36 (adapter `StoryTimelineEngine: TimelineEngineProviding`)
 
-### Files inventory (V2 actualisé — supersede Task 50)
+### Files inventory
 
 #### Production code
 
@@ -11412,7 +11151,7 @@ packages/MeeshySDK/Sources/MeeshySDK/Persistence/
 
 packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/
   ├── Model/
-  │   └── TimelineEngineMode.swift                       (CH-1 NEW — partagé Plan 3 + Plan 4)
+  │   └── TimelineEngineMode.swift                       (partagé Plan 3 + Plan 4)
   ├── FeatureFlag/
   │   └── StoryTimelineFeatureFlag.swift                 (Task 3)
   ├── ViewModel/
@@ -11460,245 +11199,15 @@ packages/MeeshySDK/Sources/MeeshyUI/Resources/
   └── Localizable.xcstrings                              (+73 clés, Task 4 + 3 offline)
 ```
 
-### Pré-requis OBLIGATOIRES avant exécution Phase 3
+### Pré-requis pour exécution
 
-Le deep-coherence-review (rapport `2026-05-06-final-deep-coherence-review.md`) a identifié 2 décisions à exécuter en pre-flight de Phase 3 :
+Au moment du wiring Phase 2 → Phase 3 (Plan 3 → Plan 4), créer le fichier partagé :
+- `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Model/TimelineEngineMode.swift` qui contient l'enum `TimelineEngineMode { case editing, preview }` utilisé à la fois par `StoryTimelineEngine` (Plan 3) et `TimelineViewModel` (Plan 4 Task 7). Cela élimine le besoin d'enum interne dupliqué dans Plan 3 D1 et simplifie le bridge Task 35.5.
 
-1. **CH-1 — Unifier `TimelineEngineMode`** : créer `Story/Timeline/Model/TimelineEngineMode.swift` partagé, et modifier Plan 3 Task D1 pour utiliser ce type DIRECTEMENT (au lieu de `enum Mode`). Bénéfice : élimine le bridge fragile (Task 35.5) et réduit la dette technique. Effort : ~30 min.
+### Métriques de succès offline
 
-2. **MED-7 — Plan 3 G3 self-review** : étendre la checklist self-review du Plan 3 pour inclure les fichiers ajoutés en Section H (TimelineSignposter, StoryTimelineEngine extensions, CustomTransitionCompositor). Effort : ~5 min.
-
-### Métriques de succès offline (deep-coherence-review LOW-4)
-
-À ajouter dans spec section 11 :
+À surveiller en prod (cf. spec section 11) :
 - `% sessions composer offline qui complètent un publish queue` : cible > 95%
 - `Latence sync queue à reconnect (P95)` : cible < 5 secondes pour 1 story
 - `Taux de perte de drafts en mode offline` : cible 0%
 
----
-
-This is the FINAL hand-off. **Ne pas trust** Task 50 hand-off pour les compteurs : il est obsolète depuis l'extension du plan. **Toujours référencer** ce hand-off V2.
-
-## Plan Complete — Hand-off (V1 OBSOLÈTE — kept for diff history)
-
-This section closes Plan 4 (Phase 3 — Views Quick + Pro). Anything past this
-heading is metadata only; no further task numbers will be appended.
-
-### Counts
-
-- **Total tasks** : 50 (Tasks 1 → 50, every number consecutive, no gaps)
-- **Total steps** : ~250 (~5 steps per task : RED test, run-fail, GREEN code, run-pass, commit)
-- **Total commits** : 50 (one commit per task — no squashes, no force-pushes)
-- **Total snapshot PNGs** : 60 (Phase 3 only ; Plans 0-2 contribute the
-  remaining ~20 to reach the spec target of ~80)
-- **Total integration tests** : 5 (Tasks 36 + 37 from VM bridge, plus
-  Tasks 46/47/48 for end-to-end flows)
-- **Total localization keys** : 70 (Task 4)
-- **Total Swift files created** : ~32 (production) + ~28 (tests + mocks +
-  helpers + snapshot tests)
-
-### Files inventory by directory
-
-#### `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/`
-
-```
-FeatureFlag/
-  └── StoryTimelineFeatureFlag.swift                     (Task 3)
-
-ViewModel/
-  ├── TimelineViewModel.swift                            (Tasks 7-15, 32, 46, 48)
-  ├── TimelineMode.swift                                 (Task 5)
-  └── ClipSelectionState.swift                           (Task 6)
-
-Views/Container/
-  ├── QuickTimelineView.swift                            (Tasks 32, 33)
-  ├── ProTimelineView.swift                              (Task 34)
-  └── TimelineContainerSwitcher.swift                    (Task 35)
-
-Views/Track/
-  ├── TrackBarView.swift                                 (Task 17)
-  ├── VideoClipBar.swift                                 (Task 18)
-  ├── AudioClipBar.swift                                 (Task 19)
-  ├── TextClipBar.swift                                  (Task 20)
-  └── TransitionBadge.swift                              (Task 21)
-
-Views/Overlay/
-  ├── RulerView.swift                                    (Task 22)
-  ├── PlayheadView.swift                                 (Task 23)
-  ├── SnapGuideView.swift                                (Task 24)
-  ├── DurationHandle.swift                               (Task 25)
-  └── KeyframeMarkerView.swift                           (Task 26)
-
-Views/Inspector/
-  ├── InspectorPresentation.swift                        (Task 27)
-  ├── ClipInspector.swift                                (Task 27)
-  ├── KeyframeInspector.swift                            (Task 28)
-  └── TransitionInspector.swift                          (Task 29)
-
-Views/Controls/
-  ├── TransportBar.swift                                 (Task 30)
-  └── TimelineToolbar.swift                              (Task 31)
-
-Geometry/
-  └── TimelineGeometry.swift                             (Task 16)
-```
-
-#### `packages/MeeshySDK/Sources/MeeshyUI/Story/`
-
-```
-StoryComposerView.swift              (modified Tasks 36, 37)
-StoryComposerViewModel.swift         (modified Task 37)
-```
-
-#### `packages/MeeshySDK/Sources/MeeshyUI/Resources/`
-
-```
-Localizable.xcstrings                (+70 keys, Task 4)
-```
-
-#### `packages/MeeshySDK/Tests/MeeshyUITests/Timeline/`
-
-```
-Helpers/
-  ├── SnapshotHelpers.swift                              (Task 38)
-  ├── SnapshotHelpersSmokeTests.swift                    (Task 38)
-  └── TimelineProjectFactory.swift                       (Task 7)
-
-Mocks/
-  ├── MockStoryTimelineEngine.swift                      (Task 7)
-  └── MockPostService.swift                              (Task 46, in /Tests/MeeshyUITests/Mocks/)
-
-ViewModel/
-  └── TimelineViewModelTests.swift                       (Tasks 7-15)
-
-Views/
-  ├── VideoClipBarTests.swift                            (Task 18)
-  ├── VideoClipBarSnapshotTests.swift                    (Task 41)
-  ├── AudioClipBarTests.swift                            (Task 19)
-  ├── AudioClipBarSnapshotTests.swift                    (Task 42)
-  ├── TextClipBarTests.swift                             (Task 20)
-  ├── TransitionBadgeTests.swift                         (Task 21)
-  ├── TransitionBadgeSnapshotTests.swift                 (Task 43)
-  ├── RulerViewTests.swift                               (Task 22)
-  ├── RulerViewSnapshotTests.swift                       (Task 44)
-  ├── PlayheadViewTests.swift                            (Task 23)
-  ├── SnapGuideViewTests.swift                           (Task 24)
-  ├── DurationHandleTests.swift                          (Task 25)
-  ├── KeyframeMarkerViewTests.swift                      (Task 26)
-  ├── Container/
-  │   ├── QuickTimelineViewTests.swift                   (Tasks 32, 33)
-  │   ├── QuickTimelineViewSnapshotTests.swift           (Task 39)
-  │   ├── ProTimelineViewTests.swift                     (Task 34)
-  │   ├── ProTimelineViewSnapshotTests.swift             (Task 40)
-  │   └── TimelineContainerSwitcherTests.swift           (Task 35)
-  └── Inspector/
-      ├── ClipInspectorTests.swift                       (Task 27)
-      ├── ClipInspectorSnapshotTests.swift               (Task 45)
-      ├── KeyframeInspectorTests.swift                   (Task 28)
-      └── TransitionInspectorTests.swift                 (Task 29)
-
-StoryTimelineFeatureFlagTests.swift                      (Task 3)
-TimelineLocalizationTests.swift                          (Task 4)
-
-Integration/
-  ├── StoryComposerTimelineSwitchTests.swift             (Task 36)
-  ├── StoryComposerViewModelTimelineTests.swift          (Task 37)
-  ├── ComposeAndPublishFlowTests.swift                   (Task 46)
-  ├── QuickProSwitchTests.swift                          (Task 47)
-  └── TransitionDragCreateTests.swift                    (Task 48)
-```
-
-#### `packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/**/__Snapshots__/`
-
-60 PNG files generated on first record run :
-
-| Test class | PNGs |
-|------------|-----:|
-| `QuickTimelineViewSnapshotTests`     | 10 |
-| `ProTimelineViewSnapshotTests`       |  8 |
-| `VideoClipBarSnapshotTests`          | 10 |
-| `AudioClipBarSnapshotTests`          |  6 |
-| `TransitionBadgeSnapshotTests`       |  8 |
-| `RulerViewSnapshotTests`             |  8 |
-| `ClipInspectorSnapshotTests`         |  8 |
-| **Total**                            | **60** |
-
-### Dependencies (PRÉ-REQUIS MERGÉ)
-
-This plan assumes the three preceding plans are merged into `dev` BEFORE
-Task 1 starts :
-
-- **Plan 0 — SDK Models (PRÉ-REQUIS MERGÉ)**
-  Provides : `TimelineProject`, `StoryMediaObject`, `StoryAudioPlayerObject`,
-  `StoryTextObject`, `StoryClipTransition`, `StoryTransitionKind` enum,
-  Codable round-trip tests, `StoryCanvasReaderView` extension. Without this
-  plan, every `import MeeshySDK` in Plan 4 fails to resolve types.
-
-- **Plan 1 — Logic Core (PRÉ-REQUIS MERGÉ)**
-  Provides : `SnapEngine`, `CommandStack`, `KeyframeInterpolator`,
-  the `MoveCommand`/`AddTransitionCommand`/`AddKeyframeCommand` family,
-  58 unit tests. Without this plan, `TimelineViewModel.dragClip` /
-  `addTransition` / `addKeyframeAtPlayhead` (Tasks 9, 12, 13) cannot
-  compile.
-
-- **Plan 2 — Engine Playback (PRÉ-REQUIS MERGÉ)**
-  Provides : `TimelineEngineProviding` protocol, `StoryTimelineEngine`
-  concrete (AVFoundation), `AudioMixer`, `VideoCompositor`,
-  `TimelineEngineMode` enum. Without this plan, `MockStoryTimelineEngine`
-  (Task 7) has no protocol to conform to and the runtime previews crash on
-  `engine.configure(...)`.
-
-If any of the three plans is NOT yet merged when Plan 4 execution starts,
-STOP and merge them in the documented order (0 → 1 → 2 → 4). Skipping
-ahead will surface as cascading "cannot find type in scope" errors that
-eat hours of refactoring time.
-
-### Next steps after Plan 4 merges
-
-| Phase | Description | Effort | User-visible |
-|-------|-------------|--------|--------------|
-| **Phase 4 — Beta interne** | Activate `story_timeline_v2` for the internal accounts via the per-user flag (Task 3 documented this surface). Monitor crashes/memory/perf for 2-3 days on real devices (iPhone SE 3 minimum). | 2-3 j | Beta internal only |
-| **Phase 5 — Rollout progressif** | Use Firebase Remote Config to flip `story_timeline_v2_rollout` from 0% → 10% → 50% → 100% over 2 weeks. Watch the kill-switch thresholds defined in spec §9.7 (crash > 0.5%, OOM > 2% on SE 3). | 5 j calendaires | Yes |
-| **Phase 6 — Cleanup** | Remove the legacy `TimelinePanel`, drop the feature flag, delete the `if StoryTimelineFeatureFlag.shared.isV2Enabled` branches in `StoryComposerView` (Task 36), and archive Plans 0-4 under `docs/superpowers/plans/_archived/`. | 1 j | No |
-
-### Success metrics (cf. spec §11)
-
-#### Adoption (analytics — `MeeshyAnalytics`)
-
-| Metric | Baseline | Target |
-|--------|----------|--------|
-| Stories with ≥ 1 transition or keyframe | N/A (pre-Plan 4) | 30 % of new stories |
-| % stories with multiple clips per slide | ~5 % | 25 % |
-| % users using Pro Mode at least once / 30d | N/A | 10 % of active creators |
-| Composer abandon rate (open → close without publish) | TBD | -15 % |
-
-#### Performance (Firebase Performance + Crashlytics)
-
-| Metric | Target | Alarm threshold |
-|--------|--------|-----------------|
-| Composer crash rate | < 0.1 % of sessions | > 0.5 % |
-| OOM (Out of Memory) on iPhone SE 3 | < 0.5 % | > 2 % |
-| Time-to-interactive composer | < 500 ms (P95) | > 800 ms |
-| Time-to-first-frame preview | < 300 ms (P95) | > 600 ms |
-| Scrubbing frame rate | ≥ 55 fps (P50) | < 45 fps |
-| Lost drafts (non-restorable) | 0 | > 0.01 % |
-| Undo latency | < 200 ms (P95) | > 500 ms |
-
-If any alarm threshold trips during Phase 5 rollout, flip the kill switch
-(`story_timeline_v2_rollout = 0` in Firebase Remote Config) and roll back
-to the legacy `TimelinePanel` immediately. Do NOT debug live in production.
-
-### Spec reference
-
-Source of truth for every decision in this plan :
-`docs/superpowers/specs/2026-05-05-story-timeline-editor-design.md`
-
-Cross-cutting plan files (do NOT edit Plan 4 in isolation — these stay
-in lockstep) :
-
-- `docs/superpowers/plans/2026-05-05-timeline-plan-0-sdk-models.md`
-- `docs/superpowers/plans/2026-05-05-timeline-plan-1-logic-core.md`
-- `docs/superpowers/plans/2026-05-05-timeline-plan-2-engine-playback.md`
-- `docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md` (this file)
-
-End of plan.
