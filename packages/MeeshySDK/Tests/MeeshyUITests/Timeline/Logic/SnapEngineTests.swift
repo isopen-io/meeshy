@@ -50,4 +50,22 @@ final class SnapEngineTests: XCTestCase {
         let _: any Sendable = engine
         XCTAssertEqual(engine.toleranceSeconds, 0.1, accuracy: 0.0001)
     }
+
+    // MARK: - SnapEngine.snap — disabled
+
+    func test_snap_disabledTrue_returnsRawTime_evenWithCandidatesInRange() {
+        let engine = SnapEngine(toleranceSeconds: 1.0)
+        let candidate = SnapCandidate(kind: .playhead, time: 2.0, label: nil)
+        let result = engine.snap(rawTime: 2.05, candidates: [candidate], disabled: true)
+        XCTAssertEqual(result.snappedTime, 2.05, accuracy: 0.0001)
+        XCTAssertNil(result.matched)
+    }
+
+    func test_snap_disabledDefaultsToFalse() {
+        let engine = SnapEngine(toleranceSeconds: 1.0)
+        let candidate = SnapCandidate(kind: .playhead, time: 2.0, label: nil)
+        let result = engine.snap(rawTime: 2.05, candidates: [candidate])
+        XCTAssertEqual(result.snappedTime, 2.0, accuracy: 0.0001)
+        XCTAssertEqual(result.matched, candidate)
+    }
 }

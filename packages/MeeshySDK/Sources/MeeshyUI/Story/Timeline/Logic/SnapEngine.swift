@@ -58,3 +58,39 @@ public struct SnapEngine: Sendable {
         self.toleranceSeconds = max(0, toleranceSeconds)
     }
 }
+
+extension SnapEngine {
+
+    /// Returns the snapped time and matching candidate (if any).
+    ///
+    /// - Parameters:
+    ///   - rawTime: The raw user-input time (e.g. from a drag gesture).
+    ///   - candidates: All snap candidates to consider for the current frame.
+    ///   - disabled: If `true` (e.g. user is doing a 2-finger override drag),
+    ///               returns `rawTime` unchanged with `matched: nil`.
+    /// - Returns: A `SnapResult` with `snappedTime` (= candidate.time when matched)
+    ///            and `matched` (the winning candidate or nil).
+    ///
+    /// - Complexity: O(n) over `candidates`. Safe to call at 60 fps.
+    public func snap(
+        rawTime: Float,
+        candidates: [SnapCandidate],
+        disabled: Bool = false
+    ) -> SnapResult {
+        if disabled {
+            return SnapResult(snappedTime: rawTime, matched: nil)
+        }
+        return Self.pickBest(rawTime: rawTime, candidates: candidates, tolerance: toleranceSeconds)
+    }
+
+    static func pickBest(rawTime: Float, candidates: [SnapCandidate], tolerance: Float) -> SnapResult {
+        guard !candidates.isEmpty else {
+            return SnapResult(snappedTime: rawTime, matched: nil)
+        }
+        let inRange = candidates.filter { abs($0.time - rawTime) <= tolerance }
+        guard let winner = inRange.first else {
+            return SnapResult(snappedTime: rawTime, matched: nil)
+        }
+        return SnapResult(snappedTime: winner.time, matched: winner)
+    }
+}
