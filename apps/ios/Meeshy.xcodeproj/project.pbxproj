@@ -240,6 +240,8 @@
 		GS3300000000002F33 /* GlobalSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = GS3300000000001F33 /* GlobalSearchViewModel.swift */; };
 		GSTC002A3B4C5D6E7F890100 /* GuestConversationContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = GSTC001A3B4C5D6E7F890100 /* GuestConversationContainer.swift */; };
 		GSTC003A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = GSTC004A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift */; };
+		CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */; };
+		TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = TDTH0001000100010001000 /* TypingDotTimerHarness.swift */; };
 		HLPR0001000100010001001 /* JSONStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPR0001000100010001000 /* JSONStub.swift */; };
 		IAFLT001000100010001001 /* AuthFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = IAFLT001000100010001000 /* AuthFlowTests.swift */; };
 		IC3900000000002F39 /* IncomingCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IC3900000000001F39 /* IncomingCallView.swift */; };
@@ -631,6 +633,8 @@
 		GS3300000000001F33 /* GlobalSearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalSearchViewModel.swift; sourceTree = "<group>"; };
 		GSTC001A3B4C5D6E7F890100 /* GuestConversationContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestConversationContainer.swift; sourceTree = "<group>"; };
 		GSTC004A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestConversationContainerTests.swift; sourceTree = "<group>"; };
+		CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewLifecycleTests.swift; sourceTree = "<group>"; };
+		TDTH0001000100010001000 /* TypingDotTimerHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingDotTimerHarness.swift; sourceTree = "<group>"; };
 		HLPR0001000100010001000 /* JSONStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONStub.swift; sourceTree = "<group>"; };
 		IAFLT001000100010001000 /* AuthFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowTests.swift; sourceTree = "<group>"; };
 		IC3900000000001F39 /* IncomingCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallView.swift; sourceTree = "<group>"; };
@@ -1060,8 +1064,17 @@
 				00B3D9B4A2850060E2C9470D /* FloatingCallPillView.swift */,
 				823B2865CE9642B487B0FC22 /* VideoFilterControlView.swift */,
 				SMV0010010010010010001 /* StarredMessagesView.swift */,
+				VWHLPR000G000G000G00001 /* Helpers */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		VWHLPR000G000G000G00001 /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				TDTH0001000100010001000 /* TypingDotTimerHarness.swift */,
+			);
+			path = Helpers;
 			sourceTree = "<group>";
 		};
 		95E93FD3E2B5A90538EA3320 /* Main */ = {
@@ -1297,6 +1310,7 @@
 			isa = PBXGroup;
 			children = (
 				GSTC004A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift */,
+				CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1749,6 +1763,7 @@
 				GALLERY001B001B001B00002 /* ConversationMediaGalleryView.swift in Sources */,
 				AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */,
 				E73445377212602BE34F97F6 /* ConversationHelperViews.swift in Sources */,
+				TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */,
 				PP2500000000002F25 /* ParticipantsView.swift in Sources */,
 				PP2600000000002F26 /* AddParticipantSheet.swift in Sources */,
 				ML2700000000002F27 /* MagicLinkView.swift in Sources */,
@@ -1902,6 +1917,7 @@
 				D122AA121095AFDB22A7662F /* AuthServiceTests.swift in Sources */,
 				09B1C857CBCEAEE03639B305 /* AnonymousSessionStoreTests.swift in Sources */,
 				GSTC003A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift in Sources */,
+				CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */,
 				NTFY0001000100010001001 /* NotificationTests.swift in Sources */,
 				DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */,
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,

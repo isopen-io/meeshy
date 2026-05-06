@@ -168,7 +168,8 @@ struct ConversationView: View {
     @State private var keyboardHeight: CGFloat = 0
     @State private var initialScrollCompleted: Bool = false
 
-    @State var typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    @State var typingDotPublisher = Timer.publish(every: 0.5, on: .main, in: .common)
+    @State var typingDotConnection: Cancellable?
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
@@ -703,6 +704,13 @@ struct ConversationView: View {
                     }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { overlayState.longPressEnabled = true }
+                if typingDotConnection == nil {
+                    typingDotConnection = typingDotPublisher.connect()
+                }
+            }
+            .onDisappear {
+                typingDotConnection?.cancel()
+                typingDotConnection = nil
             }
             .onChange(of: messageText) { _, newValue in
                 persistDraft(text: newValue)
