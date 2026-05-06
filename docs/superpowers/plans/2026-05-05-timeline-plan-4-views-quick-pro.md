@@ -307,7 +307,7 @@ Expected: PASS, 4 tests.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/FeatureFlag/StoryTimelineFeatureFlag.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/StoryTimelineFeatureFlagTests.swift
-git commit -m "feat(timeline): add StoryTimelineFeatureFlag with UserDefaults + remote override"
+git commit -m "feat(timeline-ui): add StoryTimelineFeatureFlag with UserDefaults + remote override"
 ```
 
 ---
@@ -537,7 +537,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/TimelineLocalizationTests.swift
-git commit -m "i18n(timeline): add 70 fr+en strings for Phase 3 UI"
+git commit -m "feat(timeline-ui): add 70 fr+en i18n strings for Phase 3 UI"
 ```
 
 ---
@@ -623,7 +623,7 @@ Expected: PASS, 5 tests.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineMode.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineModeTests.swift
-git commit -m "feat(timeline): add TimelineMode enum (quick/pro) shared by both containers"
+git commit -m "feat(timeline-ui): add TimelineMode enum (quick/pro) shared by both containers"
 ```
 
 ---
@@ -782,7 +782,7 @@ Expected: PASS, 6 tests.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/ClipSelectionState.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/ClipSelectionStateTests.swift
-git commit -m "feat(timeline): add ClipSelectionState value type for selection + active drag"
+git commit -m "feat(timeline-ui): add ClipSelectionState value type for selection + active drag"
 ```
 
 ---
@@ -821,9 +821,9 @@ enum TimelineProjectFactory {
         startTime: Float = 0,
         duration: Float = 5
     ) -> TimelineProject {
-        var media = StoryMediaObject(id: clipId, kind: .video, url: "file:///tmp/\(clipId).mp4")
+        var media = StoryMediaObject(id: clipId, postMediaId: clipId, kind: .video)
         media.startTime = startTime
-        media.displayDuration = duration
+        media.duration = duration
         return TimelineProject(
             slideId: "slide-1",
             slideDuration: 10,
@@ -835,12 +835,12 @@ enum TimelineProjectFactory {
     }
 
     static func projectWithTwoContiguousClips() -> TimelineProject {
-        var a = StoryMediaObject(id: "clip-a", kind: .video, url: "file:///tmp/a.mp4")
+        var a = StoryMediaObject(id: "clip-a", postMediaId: "clip-a", kind: .video)
         a.startTime = 0
-        a.displayDuration = 4
-        var b = StoryMediaObject(id: "clip-b", kind: .video, url: "file:///tmp/b.mp4")
+        a.duration = 4
+        var b = StoryMediaObject(id: "clip-b", postMediaId: "clip-b", kind: .video)
         b.startTime = 4
-        b.displayDuration = 4
+        b.duration = 4
         return TimelineProject(
             slideId: "slide-1",
             slideDuration: 10,
@@ -1084,7 +1084,7 @@ git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineVie
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Helpers/TimelineProjectFactory.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Mocks/MockStoryTimelineEngine.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift
-git commit -m "feat(timeline): add TimelineViewModel skeleton + engine providing protocol"
+git commit -m "feat(timeline-ui): add TimelineViewModel skeleton + engine providing protocol"
 ```
 
 ---
@@ -1143,7 +1143,7 @@ Expected: PASS, 2 tests.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift
-git commit -m "feat(timeline): TimelineViewModel.selectClip(id:) updates selection state"
+git commit -m "feat(timeline-ui): TimelineViewModel.selectClip(id:) updates selection state"
 ```
 
 ---
@@ -1214,14 +1214,28 @@ Edit `TimelineViewModel.swift` — append :
     }
 
     public func endClipDrag() {
-        guard let drag = selection.activeDrag else { return }
+        guard let drag = selection.activeDrag,
+              let kind = clipKind(forId: drag.clipId) else { return }
         let cmd = MoveClipCommand(
             clipId: drag.clipId,
-            fromStartTime: drag.originalStartTime,
-            toStartTime: drag.currentStartTime
+            kind: kind,
+            oldStartTime: drag.originalStartTime,
+            newStartTime: drag.currentStartTime
         )
         commandStack.push(.moveClip(cmd))
         selection.endDrag()
+    }
+
+    /// Returns the timeline-clip kind for a given object id (used by EditCommand factories).
+    /// Looks up `mediaObjects` (image vs video via `kind`), `audioPlayerObjects` (.audio),
+    /// then `textObjects` (.text). Returns nil if the id is not found in the project.
+    public func clipKind(forId id: String) -> TimelineClipKind? {
+        if let media = project.mediaObjects.first(where: { $0.id == id }) {
+            return media.kind == .video ? .video : .image
+        }
+        if project.audioPlayerObjects.contains(where: { $0.id == id }) { return .audio }
+        if project.textObjects.contains(where: { $0.id == id }) { return .text }
+        return nil
     }
 
     // MARK: - Helpers
@@ -1275,7 +1289,7 @@ Expected: PASS (single coalesced command, clip moved to ~2.0).
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift
-git commit -m "feat(timeline): TimelineViewModel drag clip with snap + coalesced MoveClipCommand"
+git commit -m "feat(timeline-ui): TimelineViewModel drag clip with snap + coalesced MoveClipCommand"
 ```
 
 ---
@@ -1395,7 +1409,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift
-git commit -m "feat(timeline): TimelineViewModel undo/redo through CommandStack"
+git commit -m "feat(timeline-ui): TimelineViewModel undo/redo through CommandStack"
 ```
 
 ---
@@ -1420,7 +1434,7 @@ Edit `TimelineViewModelTests.swift` :
 
         let medias = sut.project.mediaObjects
         XCTAssertEqual(medias.count, 2, "split should produce two clips")
-        let totalDuration = medias.reduce(Float(0)) { $0 + $1.displayDuration }
+        let totalDuration = medias.reduce(Float(0)) { $0 + ($1.duration ?? 0) }
         XCTAssertEqual(totalDuration, 4, accuracy: 0.001, "total duration preserved")
     }
 ```
@@ -1444,8 +1458,17 @@ Edit `TimelineViewModel.swift` — append :
     }
 
     public func splitSelectedAtPlayhead() {
-        guard let id = selection.selectedClipId else { return }
-        let cmd = SplitClipCommand(clipId: id, atTime: currentTime)
+        guard let id = selection.selectedClipId,
+              let kind = clipKind(forId: id),
+              let clipStart = clipStartTime(forId: id) else { return }
+        let relativeTime = max(0.001, currentTime - clipStart)
+        let cmd = SplitClipCommand(
+            clipId: id,
+            kind: kind,
+            splitAtRelativeTime: relativeTime,
+            leftId: UUID().uuidString,
+            rightId: UUID().uuidString
+        )
         do {
             try cmd.apply(to: &project)
             commandStack.push(.splitClip(cmd))
@@ -1453,6 +1476,14 @@ Edit `TimelineViewModel.swift` — append :
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Returns the absolute startTime of any clip (media/audio/text) by id.
+    public func clipStartTime(forId id: String) -> Float? {
+        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.startTime ?? 0 }
+        if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.startTime ?? 0 }
+        if let t = project.textObjects.first(where: { $0.id == id }) { return t.startTime ?? 0 }
+        return nil
     }
 ```
 
@@ -1466,7 +1497,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift
-git commit -m "feat(timeline): TimelineViewModel scrub + split selected clip at playhead"
+git commit -m "feat(timeline-ui): TimelineViewModel scrub + split selected clip at playhead"
 ```
 
 ---
@@ -1545,7 +1576,7 @@ after `sut.addTransition(...)`.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift
-git commit -m "feat(timeline): TimelineViewModel add clip transition + engine reconfigure"
+git commit -m "feat(timeline-ui): TimelineViewModel add clip transition + engine reconfigure"
 ```
 
 ---
@@ -1603,7 +1634,8 @@ Edit `TimelineViewModel.swift` — append :
             x: x, y: y, scale: scale, opacity: opacity,
             easing: .linear
         )
-        let cmd = AddKeyframeCommand(targetClipId: id, keyframe: kf)
+        guard let kind = clipKind(forId: id) else { return }
+        let cmd = AddKeyframeCommand(clipId: id, kind: kind, keyframe: kf)
         do {
             try cmd.apply(to: &project)
             commandStack.push(.addKeyframe(cmd))
@@ -1624,7 +1656,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift
-git commit -m "feat(timeline): TimelineViewModel add keyframe at playhead with relative time"
+git commit -m "feat(timeline-ui): TimelineViewModel add keyframe at playhead with relative time"
 ```
 
 ---
@@ -1692,7 +1724,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift
-git commit -m "feat(timeline): TimelineViewModel mode switch + snap toggle preserve selection"
+git commit -m "feat(timeline-ui): TimelineViewModel mode switch + snap toggle preserve selection"
 ```
 
 ---
@@ -1779,7 +1811,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift
-git commit -m "feat(timeline): TimelineViewModel restore command history from draft snapshot"
+git commit -m "feat(timeline-ui): TimelineViewModel restore command history from draft snapshot"
 ```
 
 ---
@@ -1897,7 +1929,7 @@ Expected: PASS, 7 tests.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineGeometry.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineGeometryTests.swift
-git commit -m "feat(timeline): TimelineGeometry value type for px↔time conversions"
+git commit -m "feat(timeline-ui): TimelineGeometry value type for px↔time conversions"
 ```
 
 ---
@@ -2062,7 +2094,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Track/TrackBarView.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/TrackBarViewTests.swift
-git commit -m "feat(timeline): TrackBarView container row with lock badge + a11y label"
+git commit -m "feat(timeline-ui): TrackBarView container row with lock badge + a11y label"
 ```
 
 ---
@@ -2327,7 +2359,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Track/VideoClipBar.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/VideoClipBarTests.swift
-git commit -m "feat(timeline): VideoClipBar leaf view with frame strip + fade gradients + trim"
+git commit -m "feat(timeline-ui): VideoClipBar leaf view with frame strip + fade gradients + trim"
 ```
 
 ---
@@ -2512,7 +2544,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Track/AudioClipBar.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/AudioClipBarTests.swift
-git commit -m "feat(timeline): AudioClipBar with vertical waveform bars + mute badge"
+git commit -m "feat(timeline-ui): AudioClipBar with vertical waveform bars + mute badge"
 ```
 
 ---
@@ -2670,7 +2702,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Track/TextClipBar.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/TextClipBarTests.swift
-git commit -m "feat(timeline): TextClipBar leaf view with content preview + a11y"
+git commit -m "feat(timeline-ui): TextClipBar leaf view with content preview + a11y"
 ```
 
 ---
@@ -2820,7 +2852,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Track/TransitionBadge.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/TransitionBadgeTests.swift
-git commit -m "feat(timeline): TransitionBadge yellow diamond between clips with hit-zone +16"
+git commit -m "feat(timeline-ui): TransitionBadge yellow diamond between clips with hit-zone +16"
 ```
 
 ---
@@ -2981,7 +3013,7 @@ Expected: PASS, 7 tests.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Overlay/RulerView.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/RulerViewTests.swift
-git commit -m "feat(timeline): RulerView with adaptive tick interval (ms/s/min) per zoom"
+git commit -m "feat(timeline-ui): RulerView with adaptive tick interval (ms/s/min) per zoom"
 ```
 
 ---
@@ -3122,7 +3154,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Overlay/PlayheadView.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/PlayheadViewTests.swift
-git commit -m "feat(timeline): PlayheadView triangle + line + scrub drag + a11y adjustable"
+git commit -m "feat(timeline-ui): PlayheadView triangle + line + scrub drag + a11y adjustable"
 ```
 
 ---
@@ -3221,7 +3253,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Overlay/SnapGuideView.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/SnapGuideViewTests.swift
-git commit -m "feat(timeline): SnapGuideView magenta line + label (Final-Cut-style snap)"
+git commit -m "feat(timeline-ui): SnapGuideView magenta line + label (Final-Cut-style snap)"
 ```
 
 ---
@@ -3354,7 +3386,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Overlay/DurationHandle.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/DurationHandleTests.swift
-git commit -m "feat(timeline): DurationHandle indigo diamond with clamp 2..600s + a11y adjustable"
+git commit -m "feat(timeline-ui): DurationHandle indigo diamond with clamp 2..600s + a11y adjustable"
 ```
 
 ---
@@ -3484,7 +3516,7 @@ Expected: PASS.
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Overlay/KeyframeMarkerView.swift \
         packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/KeyframeMarkerViewTests.swift
-git commit -m "feat(timeline): KeyframeMarkerView small yellow diamond with hit-zone +16"
+git commit -m "feat(timeline-ui): KeyframeMarkerView small yellow diamond with hit-zone +16"
 ```
 
 ---
@@ -5163,8 +5195,8 @@ Edit `QuickTimelineViewTests.swift` — append :
     func test_deployedState_listsAllNonEmptyTracks() {
         var project = TimelineProjectFactory.projectWithVideoClip()
         project.audioPlayerObjects = [
-            StoryAudioPlayerObject(id: "a-1", url: URL(fileURLWithPath: "/dev/null"),
-                                   startTime: 0, duration: 5, volume: 1.0, isMuted: false)
+            StoryAudioPlayerObject(id: "a-1", postMediaId: "a-1",
+                                   startTime: 0, duration: 5, volume: 1.0)
         ]
         let resolved = QuickTimelineView.resolveAllTracks(project: project)
         XCTAssertGreaterThanOrEqual(resolved.count, 2)
@@ -5823,6 +5855,115 @@ git commit -m "feat(timeline-ui): TimelineContainerSwitcher auto Quick↔Pro on 
 
 ---
 
+### Task 35.5: StoryTimelineEngine+Providing — adapter conformance to TimelineEngineProviding
+
+**Why:** `TimelineViewModel` (Task 7) consumes `any TimelineEngineProviding` to keep tests injectable with `MockStoryTimelineEngine`. The concrete `StoryTimelineEngine` (Plan 3) does NOT declare conformance to `TimelineEngineProviding` (which is defined here in Plan 4 / Task 7). This adapter task adds the conformance via an extension so Task 36-37 can wire the real engine into the composer without a compile error. It also bridges `TimelineEngineMode` (Plan 4 protocol enum) to `StoryTimelineEngine.Mode` (Plan 3 internal enum) — the two enums share identical cases (`.editing`, `.preview`) so the bridge is a one-line `switch`.
+
+**Files:**
+- Create: `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine+Providing.swift`
+- Test: `packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/StoryTimelineEngineProvidingTests.swift`
+
+- [ ] **Step 1: Write the failing test**
+
+```swift
+import XCTest
+@testable import MeeshyUI
+@testable import MeeshySDK
+
+@MainActor
+final class StoryTimelineEngineProvidingTests: XCTestCase {
+
+    /// Sanity: the concrete engine must be assignable to a TimelineEngineProviding existential
+    /// so TimelineViewModel can take it as a dependency without unboxing.
+    func test_storyTimelineEngine_conformsTo_TimelineEngineProviding() {
+        let engine = StoryTimelineEngine()
+        let provider: any TimelineEngineProviding = engine
+        XCTAssertTrue(provider is StoryTimelineEngine,
+                      "StoryTimelineEngine must conform to TimelineEngineProviding")
+    }
+
+    /// Setting the protocol's TimelineEngineMode must reach the concrete engine's nested Mode.
+    func test_setMode_editing_reachesConcreteEngine() {
+        let engine = StoryTimelineEngine()
+        let provider: any TimelineEngineProviding = engine
+        provider.setMode(.editing)
+        XCTAssertEqual(engine.currentMode, .editing,
+                       "Bridged setMode(.editing) must update the concrete engine's mode")
+    }
+
+    func test_setMode_preview_reachesConcreteEngine() {
+        let engine = StoryTimelineEngine()
+        let provider: any TimelineEngineProviding = engine
+        provider.setMode(.preview)
+        XCTAssertEqual(engine.currentMode, .preview)
+    }
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd packages/MeeshySDK && swift test --filter MeeshyUITests.StoryTimelineEngineProvidingTests 2>&1 | tail -10`
+Expected: FAIL with "type 'StoryTimelineEngine' does not conform to protocol 'TimelineEngineProviding'".
+
+- [ ] **Step 3: Write minimal implementation**
+
+```swift
+import Foundation
+import MeeshySDK
+
+/// Bridges the concrete `StoryTimelineEngine` (Plan 3) to the `TimelineEngineProviding`
+/// protocol (Plan 4 / Task 7) so the composer can inject the real engine into
+/// `TimelineViewModel` without exposing AVFoundation internals to the ViewModel layer.
+///
+/// The two `Mode` enums (`StoryTimelineEngine.Mode` and `TimelineEngineMode`) are kept
+/// separate intentionally to preserve testability: a mock engine in tests does not need
+/// to drag in AVFoundation just to expose a mode setter.
+extension StoryTimelineEngine: TimelineEngineProviding {
+
+    public func setMode(_ mode: TimelineEngineMode) {
+        switch mode {
+        case .editing: setMode(.editing as Mode)
+        case .preview: setMode(.preview as Mode)
+        }
+    }
+
+    /// Bridge for the time-update callback signature used by TimelineViewModel.
+    public var onTimeUpdate: ((Float) -> Void)? {
+        get { _onTimeUpdate }
+        set { _onTimeUpdate = newValue }
+    }
+
+    /// Bridge for the playback-end callback signature used by TimelineViewModel.
+    public var onPlaybackEnd: (() -> Void)? {
+        get { _onPlaybackEnd }
+        set { _onPlaybackEnd = newValue }
+    }
+
+    /// Bridge for the error callback signature used by TimelineViewModel.
+    public var onError: ((Error) -> Void)? {
+        get { _onError }
+        set { _onError = newValue }
+    }
+}
+```
+
+> Note: the underscore-prefixed properties (`_onTimeUpdate`, `_onPlaybackEnd`, `_onError`) are the storage already declared in Plan 3 Section D (StoryTimelineEngine). The extension only re-exposes them under the protocol-required names so consumers can use either spelling.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `cd packages/MeeshySDK && swift test --filter MeeshyUITests.StoryTimelineEngineProvidingTests 2>&1 | tail -10`
+Expected: PASS (3 tests passed).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine+Providing.swift \
+        packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/StoryTimelineEngineProvidingTests.swift
+git commit -m "feat(timeline-ui): StoryTimelineEngine conforms to TimelineEngineProviding via adapter"
+```
+
+---
+
 ### Task 36: StoryComposerView — wire TimelineContainerSwitcher behind feature flag
 
 **Files:**
@@ -6335,10 +6476,10 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
     }
 
     private func projectWithThreeTracks() -> TimelineProject {
-        var video = StoryMediaObject(id: "clip-v", kind: .video, url: "file:///tmp/v.mp4")
-        video.startTime = 0; video.displayDuration = 5
-        var audio = StoryAudioPlayerObject(id: "clip-a", url: "file:///tmp/a.m4a")
-        audio.startTime = 1; audio.displayDuration = 4; audio.volume = 0.8
+        var video = StoryMediaObject(id: "clip-v", postMediaId: "clip-v", kind: .video)
+        video.startTime = 0; video.duration = 5
+        var audio = StoryAudioPlayerObject(id: "clip-a", postMediaId: "clip-a")
+        audio.startTime = 1; audio.duration = 4; audio.volume = 0.8
         var text = StoryTextObject(id: "clip-t", content: "Bienvenue")
         text.startTime = 2; text.displayDuration = 3
         return TimelineProject(
@@ -6514,12 +6655,12 @@ final class ProTimelineViewSnapshotTests: XCTestCase {
     }
 
     private func projectWithEditorialContent() -> TimelineProject {
-        var video1 = StoryMediaObject(id: "v1", kind: .video, url: "file:///tmp/v1.mp4")
-        video1.startTime = 0; video1.displayDuration = 4
-        var video2 = StoryMediaObject(id: "v2", kind: .video, url: "file:///tmp/v2.mp4")
-        video2.startTime = 4; video2.displayDuration = 4
-        var audio = StoryAudioPlayerObject(id: "a1", url: "file:///tmp/a.m4a")
-        audio.startTime = 0; audio.displayDuration = 8; audio.volume = 0.7
+        var video1 = StoryMediaObject(id: "v1", postMediaId: "v1", kind: .video)
+        video1.startTime = 0; video1.duration = 4
+        var video2 = StoryMediaObject(id: "v2", postMediaId: "v2", kind: .video)
+        video2.startTime = 4; video2.duration = 4
+        var audio = StoryAudioPlayerObject(id: "a1", postMediaId: "a1")
+        audio.startTime = 0; audio.duration = 8; audio.volume = 0.7
         var text = StoryTextObject(id: "t1", content: "Story")
         text.startTime = 1; text.displayDuration = 3
         let crossfade = StoryClipTransition(
@@ -7277,23 +7418,23 @@ final class ComposeAndPublishFlowTests: XCTestCase {
     }
 
     private func addPhoto(_ vm: TimelineViewModel, id: String, startTime: Float, duration: Float) {
-        var media = StoryMediaObject(id: id, kind: .image, url: "file:///tmp/\(id).jpg")
+        var media = StoryMediaObject(id: id, postMediaId: id, kind: .image)
         media.startTime = startTime
-        media.displayDuration = duration
+        media.duration = duration
         vm.addMedia(media)
     }
 
     private func addVideo(_ vm: TimelineViewModel, id: String, startTime: Float, duration: Float) {
-        var media = StoryMediaObject(id: id, kind: .video, url: "file:///tmp/\(id).mp4")
+        var media = StoryMediaObject(id: id, postMediaId: id, kind: .video)
         media.startTime = startTime
-        media.displayDuration = duration
+        media.duration = duration
         vm.addMedia(media)
     }
 
     private func addAudio(_ vm: TimelineViewModel, id: String, startTime: Float, duration: Float) {
-        var audio = StoryAudioPlayerObject(id: id, url: "file:///tmp/\(id).m4a")
+        var audio = StoryAudioPlayerObject(id: id, postMediaId: id)
         audio.startTime = startTime
-        audio.displayDuration = duration
+        audio.duration = duration
         audio.volume = 0.85
         vm.addAudio(audio)
     }
@@ -7322,8 +7463,8 @@ final class ComposeAndPublishFlowTests: XCTestCase {
         vm.selectClip(id: Fixtures.videoID)
         vm.trimClipEnd(id: Fixtures.videoID, deltaTimeSeconds: -1.0)
         let trimmed = vm.project.mediaObjects.first { $0.id == Fixtures.videoID }
-        XCTAssertEqual(trimmed?.displayDuration ?? -1, 3.0, accuracy: 0.001,
-                       "Trimming end by -1s must reduce displayDuration from 4s to 3s")
+        XCTAssertEqual(trimmed?.duration ?? -1, 3.0, accuracy: 0.001,
+                       "Trimming end by -1s must reduce media duration from 4s to 3s")
 
         // Act 3 : add a crossfade between photo-2 and video-1 (0.5s)
         vm.addTransition(
@@ -7460,7 +7601,7 @@ Edit `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewM
         var p = project
         guard let idx = p.mediaObjects.firstIndex(where: { $0.id == id }) else { return }
         var clip = p.mediaObjects[idx]
-        clip.displayDuration = max(0.1, clip.displayDuration + deltaTimeSeconds)
+        clip.duration = max(0.1, (clip.duration ?? 0) + deltaTimeSeconds)
         p.mediaObjects[idx] = clip
         project = p
         scheduleEngineReconfigure()
@@ -7661,15 +7802,15 @@ final class TransitionDragCreateTests: XCTestCase {
 
         let clipA = vm.project.mediaObjects.first { $0.id == "clip-a" }!
         let clipB = vm.project.mediaObjects.first { $0.id == "clip-b" }!
-        XCTAssertEqual(clipA.startTime + clipA.displayDuration,
-                       clipB.startTime, accuracy: 0.001,
+        XCTAssertEqual((clipA.startTime ?? 0) + (clipA.duration ?? 0),
+                       clipB.startTime ?? 0, accuracy: 0.001,
                        "Sanity : clips must be contiguous before the drag")
 
         // Act : drag the end of clip A to the right by +0.5s, creating an
         // overlap of 0.5s with clip B's start.
         vm.trimClipEnd(id: "clip-a", deltaTimeSeconds: 0.5)
         let trimmedA = vm.project.mediaObjects.first { $0.id == "clip-a" }!
-        XCTAssertEqual(trimmedA.displayDuration, 4.5, accuracy: 0.001,
+        XCTAssertEqual(trimmedA.duration ?? -1, 4.5, accuracy: 0.001,
                        "Trim end +0.5s must extend clip A from 4s to 4.5s")
 
         // The composer must have auto-created a crossfade transition between
@@ -7793,22 +7934,22 @@ Engine Playback). The known canonical names are :
 
 | Type | Canonical spelling | Originating plan |
 |------|---------------------|------------------|
-| Project root | `TimelineProject` | Plan 0 |
-| Media object | `StoryMediaObject` | Plan 0 |
-| Audio object | `StoryAudioPlayerObject` | Plan 0 |
-| Text object | `StoryTextObject` | Plan 0 |
-| Transition | `StoryClipTransition` | Plan 0 |
-| Transition kind | `StoryTransitionKind` (`.crossfade` / `.dissolve`) | Plan 0 |
+| Project root | `TimelineProject` | Plan 1 |
+| Media object | `StoryMediaObject` | Plan 1 (extension `keyframes`) — base existante SDK |
+| Audio object | `StoryAudioPlayerObject` | Base existante SDK |
+| Text object | `StoryTextObject` | Plan 1 (extension `keyframes`) — base existante SDK |
+| Transition | `StoryClipTransition` | Plan 1 |
+| Transition kind | `StoryTransitionKind` (`.crossfade` / `.dissolve`) | Plan 1 |
 | ViewModel | `TimelineViewModel` (`@Observable`) | Plan 4 — Task 7 |
-| Engine protocol | `TimelineEngineProviding` | Plan 2 |
-| Engine concrete | `StoryTimelineEngine` | Plan 2 |
+| Engine protocol | `TimelineEngineProviding` | Plan 4 — Task 7 (testability seam, miroir de `StoryTimelineEngine`) |
+| Engine concrete | `StoryTimelineEngine` | Plan 3 — Task D1 (conformance à `TimelineEngineProviding` ajoutée par Plan 4 — Task 35.5 via extension d'adapter `StoryTimelineEngine+Providing.swift`) |
 | Engine mock | `MockStoryTimelineEngine` | Plan 4 — Task 7 |
 | Geometry | `TimelineGeometry` (`zoomScale`, `width(for:)`, `x(for:)`, `time(forX:)`) | Plan 4 — Task 16 |
-| Snap engine | `SnapEngine` | Plan 1 |
-| Command stack | `CommandStack` | Plan 1 |
+| Snap engine | `SnapEngine` | Plan 2 |
+| Command stack | `CommandStack` | Plan 2 |
 | Mode enum | `TimelineMode` (`.quick` / `.pro`) | Plan 4 — Task 5 |
 | Selection | `ClipSelectionState` | Plan 4 — Task 6 |
-| Engine mode | `TimelineEngineMode` | Plan 2 |
+| Engine mode | `TimelineEngineMode` | Plan 4 — Task 7 (mirror de `StoryTimelineEngine.Mode` du Plan 3 pour découplage) |
 | Feature flag | `StoryTimelineFeatureFlag` + `RemoteFeatureFlagProviding` | Plan 4 — Task 3 |
 | Inspector presentation | `InspectorPresentation` | Plan 4 — Task 27 |
 
