@@ -1186,4 +1186,118 @@ final class StoryModelsExtensionsTests: XCTestCase {
         let json = #"{"type":"alienCommand","payload":{}}"#.data(using: .utf8)!
         XCTAssertThrowsError(try JSONDecoder().decode(AnyEditCommand.self, from: json))
     }
+
+    // MARK: - Apply/Revert idempotence sweep
+
+    private func makeRichProject() -> TimelineProject {
+        var project = makeEmptyProject()
+        project.mediaObjects = [
+            StoryMediaObject(id: "v1", postMediaId: "pm1",
+                             mediaType: "video", placement: "media",
+                             startTime: 0, duration: 5),
+            StoryMediaObject(id: "v2", postMediaId: "pm2",
+                             mediaType: "video", placement: "media",
+                             startTime: 5, duration: 3),
+        ]
+        project.mediaObjects[0].keyframes = [
+            StoryKeyframe(id: "kf-existing", time: 1, opacity: 0.5)
+        ]
+        project.audioPlayerObjects = [
+            StoryAudioPlayerObject(id: "a1", postMediaId: "pmA",
+                                   placement: "overlay", volume: 1.0,
+                                   waveformSamples: [], startTime: 0, duration: 8)
+        ]
+        project.textObjects = [
+            StoryTextObject(id: "t1", content: "Title",
+                            startTime: 0, displayDuration: 4)
+        ]
+        project.clipTransitions = [
+            StoryClipTransition(id: "tr-existing", fromClipId: "v1",
+                                toClipId: "v2", kind: .crossfade, duration: 0.5)
+        ]
+        return project
+    }
+
+    private func encodedJSON(_ project: TimelineProject) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return try encoder.encode(project)
+    }
+
+    func test_allEditCommands_applyThenRevert_isIdempotentOnRichProject() throws {
+        let media = StoryMediaObject(id: "v1", postMediaId: "pm1",
+                                     mediaType: "video", placement: "media",
+                                     startTime: 0, duration: 5,
+                                     keyframes: [StoryKeyframe(id: "kf-existing", time: 1, opacity: 0.5)])
+        let audio = StoryAudioPlayerObject(id: "a1", postMediaId: "pmA",
+                                           placement: "overlay", volume: 1.0,
+                                           waveformSamples: [],
+                                           startTime: 0, duration: 8)
+        let text = StoryTextObject(id: "t1", content: "Title",
+                                   startTime: 0, displayDuration: 4)
+        let existingTransition = StoryClipTransition(
+            id: "tr-existing", fromClipId: "v1", toClipId: "v2",
+            kind: .crossfade, duration: 0.5
+        )
+        let existingKf = StoryKeyframe(id: "kf-existing", time: 1, opacity: 0.5)
+
+        let cases: [AnyEditCommand] = [
+            // Add* uses NEW ids not in the baseline:
+            .addClip(AddClipCommand(clipId: "vNEW", postMediaId: "pmN",
+                                    kind: .video, startTime: 6, duration: 1)),
+            .addTransition(AddTransitionCommand(
+                transition: StoryClipTransition(id: "tr-NEW", fromClipId: "v1",
+                                                toClipId: "v2",
+                                                kind: .dissolve, duration: 0.4))),
+            .addKeyframe(AddKeyframeCommand(clipId: "v1", kind: .video,
+                                            keyframe: StoryKeyframe(id: "kf-NEW",
+                                                                    time: 2,
+                                                                    scale: 1.2))),
+            // Mutating commands (target existing ids):
+            .moveClip(MoveClipCommand(clipId: "v1", kind: .video,
+                                      oldStartTime: 0, newStartTime: 2)),
+            .trimClip(TrimClipCommand(clipId: "v1", kind: .video,
+                                      oldStartTime: 0, oldDuration: 5,
+                                      newStartTime: 1, newDuration: 3)),
+            .splitClip(SplitClipCommand(clipId: "v1", kind: .video,
+                                        splitAtRelativeTime: 2,
+                                        leftId: "v1L", rightId: "v1R")),
+            .changeTransition(ChangeTransitionCommand(
+                transitionId: "tr-existing",
+                previous: existingTransition,
+                updated: StoryClipTransition(id: "tr-existing",
+                                             fromClipId: "v1", toClipId: "v2",
+                                             kind: .dissolve, duration: 1.0))),
+            .moveKeyframe(MoveKeyframeCommand(clipId: "v1", kind: .video,
+                                              keyframeId: "kf-existing",
+                                              oldTime: 1, newTime: 3)),
+            .setClipProperty(SetClipPropertyCommand(
+                clipId: "a1", kind: .audio,
+                property: .volume(old: 1.0, new: 0.4))),
+            // Delete* commands carry snapshots equal to the existing entries:
+            .deleteClip(DeleteClipCommand(clipId: "v1", kind: .video,
+                                          snapshotMedia: media,
+                                          snapshotAudio: nil,
+                                          snapshotText: nil,
+                                          insertionIndex: 0)),
+            .removeTransition(RemoveTransitionCommand(
+                transitionId: "tr-existing",
+                snapshot: existingTransition, insertionIndex: 0)),
+            .deleteKeyframe(DeleteKeyframeCommand(
+                clipId: "v1", kind: .video,
+                keyframeId: "kf-existing",
+                snapshot: existingKf, insertionIndex: 0)),
+        ]
+        XCTAssertEqual(cases.count, 12, "Idempotence sweep must cover all 12 commands")
+
+        let baselineJSON = try encodedJSON(makeRichProject())
+        for any in cases {
+            var project = makeRichProject()
+            try any.apply(to: &project)
+            try any.revert(from: &project)
+            let after = try encodedJSON(project)
+            XCTAssertEqual(after, baselineJSON,
+                "Command \(any.typeTag) is not apply-revert idempotent")
+        }
+    }
 }
