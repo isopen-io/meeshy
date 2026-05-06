@@ -27,7 +27,7 @@ public enum ImageDownsamplingConfig {
     public static let recommendedMemoryCacheLimitBytes: Int = 60 * 1024 * 1024  // 60 MB
 
     /// Apply global image-pipeline defaults. Call exactly once at app launch,
-    /// before any `CachedAsyncImage` or `KFImage` view is rendered.
+    /// before any `CachedAsyncImage` view is rendered.
     ///
     /// Effects:
     /// - Routes the memory cap through `CacheCoordinator.configureImageMemory(budgetBytes:)`,

@@ -96,6 +96,11 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("push.retryPending") {
             await PushDeliveryReceiptService.shared.flushPending()
         }
+        await withBudget("outbox.flush") {
+            let pool = DependencyContainer.shared.dbPool
+            let flusher = OutboxFlusher(pool: pool, dispatcher: OutboxDispatcher())
+            await flusher.flush()
+        }
     }
 
     // MARK: - Private
