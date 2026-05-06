@@ -9,8 +9,8 @@ final class CommandStackTests: XCTestCase {
 
     /// Factory: produces a fresh AddClipCommand wrapped in AnyEditCommand.
     /// Each call creates a new UUID + timestamp.
-    private func makeAddCmd(clipId: String = UUID().uuidString,
-                            timestamp: Date = Date()) -> AnyEditCommand {
+    func makeAddCmd(clipId: String = UUID().uuidString,
+                    timestamp: Date = Date()) -> AnyEditCommand {
         return .addClip(AddClipCommand(
             id: UUID().uuidString,
             timestamp: timestamp,
@@ -23,10 +23,10 @@ final class CommandStackTests: XCTestCase {
         ))
     }
 
-    private func makeMoveCmd(clipId: String = "c1",
-                             oldStart: Float = 0,
-                             newStart: Float = 1,
-                             timestamp: Date = Date()) -> AnyEditCommand {
+    func makeMoveCmd(clipId: String = "c1",
+                     oldStart: Float = 0,
+                     newStart: Float = 1,
+                     timestamp: Date = Date()) -> AnyEditCommand {
         return .moveClip(MoveClipCommand(
             id: UUID().uuidString,
             timestamp: timestamp,
