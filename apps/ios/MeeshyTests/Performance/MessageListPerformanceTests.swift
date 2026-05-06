@@ -18,10 +18,8 @@ final class MessageListPerformanceTests: XCTestCase {
     // MARK: - Setup
 
     override func setUpWithError() throws {
-        try XCTSkipIf(
-            ProcessInfo.processInfo.environment["RUN_PERF_BENCHMARKS"] != "1",
-            "Perf benchmarks skipped — set RUN_PERF_BENCHMARKS=1 to run"
-        )
+        // Gate disabled for runbook execution — re-enable via the scheme env vars
+        // ("RUN_PERF_BENCHMARKS=1") in normal CI runs to keep the test suite fast.
     }
 
     // MARK: - Benchmark: 1000-message load + section recompute

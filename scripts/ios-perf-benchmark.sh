@@ -48,7 +48,7 @@ run_benchmark() {
         -project "$PROJECT" \
         -scheme "$SCHEME" \
         -destination "$DESTINATION" \
-        -configuration Release \
+        -configuration Debug \
         -only-testing:"MeeshyTests/$target" \
         -resultBundlePath "$result_path" \
         RUN_PERF_BENCHMARKS=1 \
