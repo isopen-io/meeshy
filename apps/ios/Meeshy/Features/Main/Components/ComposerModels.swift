@@ -184,6 +184,11 @@ struct ComposerWaveformBar: View {
             )
             .frame(width: 3, height: height)
             .onAppear { animate() }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    height = 4
+                }
+            }
             .onChange(of: isRecording) { _, rec in
                 if rec { animate() } else { height = 4 }
             }

@@ -544,6 +544,11 @@ public struct NotificationBadge: View {
                     isPulsing = true
                 }
             }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    isPulsing = false
+                }
+            }
         }
     }
 }

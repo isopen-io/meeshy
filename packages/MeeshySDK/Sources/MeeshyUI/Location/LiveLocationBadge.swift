@@ -66,6 +66,11 @@ public struct LiveLocationBadge: View {
                 )
         )
         .onAppear { isPulsing = true }
+        .onDisappear {
+            withTransaction(Transaction(animation: nil)) {
+                isPulsing = false
+            }
+        }
     }
 
     private var formattedRemaining: String {

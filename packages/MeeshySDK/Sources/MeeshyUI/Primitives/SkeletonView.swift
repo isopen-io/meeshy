@@ -31,6 +31,11 @@ public struct ShimmerModifier: ViewModifier {
                         offset = 400
                     }
                 }
+                .onDisappear {
+                    withTransaction(Transaction(animation: nil)) {
+                        offset = -200
+                    }
+                }
             )
             .clipped()
     }

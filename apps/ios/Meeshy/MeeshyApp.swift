@@ -607,5 +607,10 @@ struct SplashScreen: View {
                 onFinish()
             }
         }
+        .onDisappear {
+            withTransaction(Transaction(animation: nil)) {
+                glowPulse = false
+            }
+        }
     }
 }

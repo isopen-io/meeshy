@@ -139,6 +139,11 @@ struct LoginView: View {
                 showFields = true
             }
         }
+        .onDisappear {
+            withTransaction(Transaction(animation: nil)) {
+                glowPulse = false
+            }
+        }
         .onChange(of: authManager.errorMessage) { _, newValue in
             if newValue != nil {
                 withAnimation(MeeshyAnimation.springDefault) {

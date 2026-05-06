@@ -27,6 +27,12 @@ struct ConvBgPulseRing: View {
                     }
                 }
             }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    scale = 1.0
+                    opacity = 0.22
+                }
+            }
     }
 }
 
@@ -56,6 +62,7 @@ struct ConvBgFixedAvatar: View {
             y: sin(fixedAngle) * orbitRadius
         )
         .onAppear { startAnimations() }
+        .onDisappear { stopAnimations() }
     }
 
     private func startAnimations() {
@@ -64,6 +71,15 @@ struct ConvBgFixedAvatar: View {
         }
         withAnimation(.linear(duration: 2.0 * 100)) {
             beamPhase = 30 * 100
+        }
+    }
+
+    private func stopAnimations() {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            glowPulse = false
+            beamPhase = 0
         }
     }
 
@@ -126,6 +142,12 @@ struct ConvBgGlobePulseRing: View {
                     }
                 }
             }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    scale = 1.0
+                    opacity = 0.25
+                }
+            }
     }
 }
 
@@ -160,6 +182,7 @@ struct ConvBgSatellite: View {
             y: sin(currentAngle) * orbitRadius
         )
         .onAppear { startAnimations() }
+        .onDisappear { stopAnimations() }
     }
 
     private func startAnimations() {
@@ -171,6 +194,16 @@ struct ConvBgSatellite: View {
         }
         withAnimation(.linear(duration: 1.5 * 100)) {
             beamPhase = 20 * 100
+        }
+    }
+
+    private func stopAnimations() {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            orbitAngle = 0
+            signalPulse = false
+            beamPhase = 0
         }
     }
 
@@ -241,6 +274,11 @@ struct ConvBgSignalWave: View {
                     withAnimation(.easeIn(duration: 1.8).repeatForever(autoreverses: false)) {
                         progress = 1.0
                     }
+                }
+            }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    progress = 0
                 }
             }
     }

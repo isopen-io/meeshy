@@ -145,6 +145,11 @@ struct ThemedActionButton: View {
                 isGlowing = true
             }
         }
+        .onDisappear {
+            withTransaction(Transaction(animation: nil)) {
+                isGlowing = false
+            }
+        }
     }
 }
 

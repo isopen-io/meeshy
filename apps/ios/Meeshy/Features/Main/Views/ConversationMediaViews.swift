@@ -600,6 +600,11 @@ struct AnimatedWaveformBar: View {
                 guard isRecording else { return }
                 startAnimating()
             }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    barHeight = minHeight
+                }
+            }
             .onChange(of: isRecording) { _, recording in
                 if recording {
                     startAnimating()

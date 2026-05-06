@@ -167,6 +167,11 @@ struct OutOfBoundsWarningOverlay: View {
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
                     .onAppear { pulse = true }
+                    .onDisappear {
+                        withTransaction(Transaction(animation: nil)) {
+                            pulse = false
+                        }
+                    }
                     .animation(
                         .easeInOut(duration: 0.6).repeatForever(autoreverses: true),
                         value: pulse

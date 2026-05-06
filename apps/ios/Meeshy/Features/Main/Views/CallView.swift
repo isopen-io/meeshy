@@ -65,6 +65,9 @@ struct CallView: View {
         .onAppear {
             startPulseAnimation()
         }
+        .onDisappear {
+            stopPulseAnimation()
+        }
     }
 
     // MARK: - Background
@@ -620,6 +623,12 @@ struct CallView: View {
     private func startPulseAnimation() {
         withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
             pulseScale = 1.15
+        }
+    }
+
+    private func stopPulseAnimation() {
+        withTransaction(Transaction(animation: nil)) {
+            pulseScale = 1.0
         }
     }
 
