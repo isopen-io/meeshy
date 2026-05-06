@@ -49,3 +49,27 @@ public final class CommandStack: @unchecked Sendable {
     public var canUndo: Bool { cursor > 0 }
     public var canRedo: Bool { cursor < commands.count }
 }
+
+extension CommandStack {
+
+    /// Total number of commands currently retained on the stack
+    /// (includes both undone and applied).
+    public var count: Int { commands.count }
+
+    /// Push a command on top of the stack.
+    ///
+    /// Side effects:
+    ///   - Truncates any redo branch (commands at index >= cursor are dropped).
+    ///   - May coalesce with the previous command (Task 24).
+    ///   - May evict the oldest command FIFO if `maxSize` is exceeded (Task 26).
+    ///   - Calls `didChange` after the mutation completes.
+    public func push(_ command: AnyEditCommand) {
+        // Truncate redo branch first.
+        if cursor < commands.count {
+            commands.removeSubrange(cursor..<commands.count)
+        }
+        commands.append(command)
+        cursor = commands.count
+        didChange?(self)
+    }
+}

@@ -78,4 +78,21 @@ final class CommandStackTests: XCTestCase {
         let stack = CommandStack(maxSize: 0)
         XCTAssertEqual(stack.maxSize, 1)
     }
+
+    // MARK: - CommandStack.push
+
+    func test_push_singleCommand_canUndoBecomesTrue() {
+        let stack = CommandStack()
+        stack.push(makeAddCmd())
+        XCTAssertTrue(stack.canUndo)
+        XCTAssertFalse(stack.canRedo)
+    }
+
+    func test_push_twoCommands_bothUndoable() {
+        let stack = CommandStack(coalesceWindow: 0) // disable coalescing for this test
+        stack.push(makeAddCmd(clipId: "a"))
+        stack.push(makeAddCmd(clipId: "b"))
+        XCTAssertTrue(stack.canUndo)
+        XCTAssertEqual(stack.count, 2)
+    }
 }
