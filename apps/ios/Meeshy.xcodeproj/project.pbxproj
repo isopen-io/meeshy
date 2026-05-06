@@ -323,6 +323,7 @@
 		SL6001A001A001A001A00001 /* ShareLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SL6002A002A002A002A00002 /* ShareLinksView.swift */; };
 		SMS0020020020020020001 /* StarredMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMS0010010010010010001 /* StarredMessagesStore.swift */; };
 		SMST02002002002002001 /* StarredMessagesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMST01001001001001001 /* StarredMessagesStoreTests.swift */; };
+		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
 		SMV0020020020020020001 /* StarredMessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMV0010010010010010001 /* StarredMessagesView.swift */; };
 		SP3400000000002F34 /* SharePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SP3400000000001F34 /* SharePickerView.swift */; };
 		SUPV002A002A002A002A0002 /* SupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SUPV001A001A001A001A0001 /* SupportView.swift */; };
@@ -716,6 +717,7 @@
 		SL6002A002A002A002A00002 /* ShareLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinksView.swift; sourceTree = "<group>"; };
 		SMS0010010010010010001 /* StarredMessagesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStore.swift; sourceTree = "<group>"; };
 		SMST01001001001001001 /* StarredMessagesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStoreTests.swift; sourceTree = "<group>"; };
+		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
 		SMV0010010010010010001 /* StarredMessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesView.swift; sourceTree = "<group>"; };
 		SP3400000000001F34 /* SharePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePickerView.swift; sourceTree = "<group>"; };
 		SUPV001A001A001A001A0001 /* SupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportView.swift; sourceTree = "<group>"; };
@@ -1397,11 +1399,20 @@
 			isa = PBXGroup;
 			children = (
 				DLNK000G000G000G000G001 /* Navigation */,
+				MSTSGRP001001001001001 /* Stores */,
 				TSTS000D000D000D000D001 /* Services */,
 				B5D82DF7CB3102A810AE6A49 /* ViewModels */,
 				GSTC005A3B4C5D6E7F890100 /* Views */,
 			);
 			path = Unit;
+			sourceTree = "<group>";
+		};
+		MSTSGRP001001001001001 /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				MSTS01001001001001001 /* MessageStoreTests.swift */,
+			);
+			path = Stores;
 			sourceTree = "<group>";
 		};
 		TSTS000D000D000D000D001 /* Services */ = {
@@ -1931,6 +1942,7 @@
 				EHST02002002002002001 /* EditHistoryStoreTests.swift in Sources */,
 				LHMT02002002002002001 /* LocallyHiddenMessagesStoreTests.swift in Sources */,
 				SMST02002002002002001 /* StarredMessagesStoreTests.swift in Sources */,
+				MSTS02002002002002001 /* MessageStoreTests.swift in Sources */,
 				AUPL0001000100010001001 /* AudioPlayerManagerTests.swift in Sources */,
 				AURC0001000100010001001 /* AudioRecorderManagerTests.swift in Sources */,
 				MCAE000100010001000100B0 /* MockCallAudioEffectsService.swift in Sources */,

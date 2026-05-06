@@ -6,6 +6,18 @@ import Combine
 import GRDB
 import MeeshySDK
 
+/// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
+/// Explicitly non-isolated so its methods can be called from any context.
+private final class ObservationTokens: @unchecked Sendable {
+    nonisolated(unsafe) var regionCancellable: AnyDatabaseCancellable?
+    nonisolated(unsafe) var refreshTask: Task<Void, Never>?
+
+    nonisolated func cancelAll() {
+        regionCancellable?.cancel()
+        refreshTask?.cancel()
+    }
+}
+
 @Observable
 @MainActor
 public final class MessageStore {
@@ -26,7 +38,10 @@ public final class MessageStore {
     private let persistence: MessagePersistenceActor
     private var windowAnchor: Date?
     private var _idIndex: [String: Int]?
-    private var regionCancellable: AnyDatabaseCancellable?
+    /// Stored as `let` so it is accessible from `nonisolated deinit` without
+    /// crossing actor isolation boundaries. Mutation is via its own mutable properties,
+    /// guarded by the `@MainActor` isolation of MessageStore.
+    private let tokens = ObservationTokens()
 
     // Change signal for UICollectionView observation
     let messagesDidChange = PassthroughSubject<Void, Never>()
@@ -49,12 +64,10 @@ public final class MessageStore {
         let request = MessageRecord
             .filter(Column("conversationId") == convId)
 
-        var refreshTask: Task<Void, Never>?
-
-        regionCancellable = DatabaseRegionObservation(tracking: request)
+        tokens.regionCancellable = DatabaseRegionObservation(tracking: request)
             .start(in: dbPool, onError: { _ in }) { [weak self] _ in
-                refreshTask?.cancel()
-                refreshTask = Task { [weak self] in
+                self?.tokens.refreshTask?.cancel()
+                self?.tokens.refreshTask = Task { [weak self] in
                     guard let self else { return }
                     let delay: Duration = self.isUserScrolling
                         ? .milliseconds(200)
@@ -67,7 +80,19 @@ public final class MessageStore {
     }
 
     func stopObserving() {
-        regionCancellable = nil
+        tokens.regionCancellable = nil
+        tokens.refreshTask?.cancel()
+        tokens.refreshTask = nil
+    }
+
+    // MARK: - Lifecycle
+
+    nonisolated deinit {
+        // `tokens` is a `let` reference — accessible from nonisolated deinit.
+        // `ObservationTokens` is `@unchecked Sendable` with internal mutation
+        // guarded by MainActor at call sites. At deinit time, no concurrent
+        // access is possible (the object is being destroyed).
+        tokens.cancelAll()
     }
 
     // MARK: - Off-main DB read + progressive decrypt
