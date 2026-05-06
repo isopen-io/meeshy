@@ -253,6 +253,8 @@ struct RootView: View {
                 }
                 .animation(.spring(response: 0.4, dampingFraction: 0.8), value: networkMonitor.isOffline)
                 .zIndex(190)
+            } else {
+                pendingSettingsBannerOverlay
             }
 
             // 8. Toast overlay — handled at MeeshyApp level to avoid duplicates
@@ -731,6 +733,20 @@ struct RootView: View {
         }
     }
 
+    // MARK: - Pending Settings Banner
+    /// Surfaces the count of user-settings changes still queued in
+    /// `SettingsActionQueue` (typed offline, replayed on reconnect). Self-
+    /// hides when the queue drains. Shown only when the device is online so
+    /// it does not stack with `OfflineBanner`.
+    private var pendingSettingsBannerOverlay: some View {
+        VStack {
+            PendingSettingsBannerInline()
+                .padding(.top, 50)
+            Spacer()
+        }
+        .zIndex(189)
+    }
+
     // MARK: - Themed Background
     private var themedBackground: some View {
         ZStack {
@@ -903,5 +919,66 @@ extension View {
                     .delay(showMenu ? delay : 0),
                 value: showMenu
             )
+    }
+}
+
+// MARK: - Pending Settings Banner (inline)
+
+/// Inlined alongside `RootView` so the file remains self-contained without
+/// requiring a project.pbxproj entry for a separate component file.
+private struct PendingSettingsBannerInline: View {
+    @State private var pendingCount: Int = 0
+    @State private var subscription: AnyCancellable?
+
+    var body: some View {
+        Group {
+            if pendingCount > 0 {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text("Modifications en attente (\(pendingCount))")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    Text("Synchronisation au retour en ligne")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.white.opacity(0.85))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            MeeshyColors.indigo500.opacity(0.92),
+                            MeeshyColors.indigo700.opacity(0.88)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
+                .padding(.horizontal, 16)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: pendingCount)
+        .task {
+            pendingCount = await SettingsActionQueue.shared.count
+            subscription = SettingsActionQueue.shared.pendingCountChanged.publisher
+                .receive(on: DispatchQueue.main)
+                .sink { count in
+                    pendingCount = count
+                }
+        }
+        .onDisappear {
+            subscription?.cancel()
+            subscription = nil
+        }
     }
 }

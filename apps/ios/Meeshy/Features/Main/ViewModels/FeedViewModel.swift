@@ -297,12 +297,29 @@ class FeedViewModel: ObservableObject {
     }
 
     func bookmarkPost(_ postId: String) async {
+        guard let post = posts.first(where: { $0.id == postId }) else { return }
+
+        // Optimistic: insert into the local "bookmarks" cache so opening the
+        // Favoris tab shows the post immediately. Mirror BookmarksViewModel's
+        // snapshot/rollback pattern on failure.
+        let bookmarksKey = "bookmarks"
+        let cachedBookmarks = await CacheCoordinator.shared.feed.load(for: bookmarksKey).value ?? []
+        let snapshot = cachedBookmarks
+        if !cachedBookmarks.contains(where: { $0.id == postId }) {
+            var updated = cachedBookmarks
+            updated.insert(post, at: 0)
+            await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
+        }
+        ToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+
         do {
             let _: APIResponse<[String: Bool]> = try await api.request(
                 endpoint: "/posts/\(postId)/bookmark",
                 method: "POST"
             )
         } catch {
+            // Rollback the optimistic cache insertion.
+            await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
             ToastManager.shared.showError("Erreur lors de l'enregistrement")
         }
     }

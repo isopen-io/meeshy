@@ -179,6 +179,29 @@ struct MeeshyApp: App {
                             return .transient
                         }
                     }
+                    await SettingsActionQueue.shared.setFlushHandler { @Sendable action in
+                        do {
+                            // Most settings endpoints return the updated user.
+                            // We only care that the request succeeded; the
+                            // optimistic UI already reflects the new value.
+                            let _: APIResponse<MeeshyUser> = try await APIClient.shared.request(
+                                endpoint: action.endpoint,
+                                method: action.httpMethod,
+                                body: action.payload
+                            )
+                            return true
+                        } catch APIError.serverError(let code, _) where code >= 400 && code < 500 {
+                            // Treat client-side validation errors as terminal —
+                            // replaying the same payload won't help. Drop the
+                            // action so the queue doesn't bounce forever.
+                            return true
+                        } catch {
+                            // Transient (5xx / connectivity): keep the action
+                            // queued; the next NetworkMonitor `online` edge
+                            // will replay it.
+                            return false
+                        }
+                    }
                     // Migrate legacy JSON-file queues into the unified outbox table,
                     // then flush any pending outbox rows back through the queues'
                     // existing retry pipelines. Both ops run once per install
