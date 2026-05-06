@@ -223,10 +223,12 @@ private final class MockConversationService: ConversationServiceProviding, @unch
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { fatalError("Not used in tests") }
     func delete(conversationId: String) async throws {}
     func markRead(conversationId: String) async throws {}
+    func markAsReceived(conversationId: String) async throws {}
     func markUnread(conversationId: String) async throws {}
     func getParticipants(conversationId: String, limit: Int, cursor: String?) async throws -> PaginatedAPIResponse<[APIParticipant]> { fatalError("Not used in tests") }
     func deleteForMe(conversationId: String) async throws {}
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation] { [] }
+    func findDirectWith(userId: String) async throws -> APIConversation? { nil }
     func removeParticipant(conversationId: String, participantId: String) async throws {}
     func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws {}
     func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?, defaultWriteRole: String?, isAnnouncementChannel: Bool?, slowModeSeconds: Int?, autoTranslateEnabled: Bool?) async throws -> APIConversation { fatalError("Not used in tests") }
