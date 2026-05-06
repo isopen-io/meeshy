@@ -1,9 +1,34 @@
-# Path A Mutation Callsites — to migrate in Task 1.4
+# Path A Mutation Callsites — migration status
 
-The following sites still mutate `vm.messages` directly (either whole-array or
-element-level subscript mutation). Each must move to write through
-`MessagePersistenceActor` (for new/updated records) or a pending-state map
-(for optimistic field changes) once `messages` is a pure computed proxy.
+## Task 1.4 COMPLETE — ConversationSocketHandler.swift
+
+All `delegate.messages` direct mutations have been removed from
+`ConversationSocketHandler.swift`. Every event now writes through
+`MessagePersistenceActor`; the `MessageStore → ConversationViewModel`
+observation chain surfaces changes automatically.
+
+Sites migrated:
+- Server ACK in-place upgrade: `delegate.messages[idx] = existing` → `persistence.applyEvent(.serverAck) + persistence.updateServerAckedFields`
+- Attachment refresh for existing message: `delegate.messages[idx] = apiMsg.toMessage(...)` → `persistence.updateAttachmentsJson`
+- New message arrival: `delegate.messages.append(msg)` → `persistence.bufferIncoming` (already existed, Path A dropped)
+- Edit: `delegate.messages[idx] = updated` → `persistence.markEdited` (already existed, Path A dropped)
+- Delete: `delegate.messages[idx] = updated` → `persistence.markDeleted` (already existed, Path A dropped)
+- Reaction add: `delegate.messages[idx].reactions.append(reaction)` → `persistence.appendReaction` (new method)
+- Reaction remove: `delegate.messages[idx].reactions.removeAll` → `persistence.removeReaction` (new method)
+- Read status loop: `delegate.messages[i] = msg` → `persistence.bufferBatchDelivery` (already existed, Path A dropped)
+- Attachment status (touch): `delegate.messages[msgIdx].updatedAt = Date()` → `persistence.touchUpdatedAt` (new method)
+- ViewOnce count: `delegate.messages[idx].viewOnceCount = ...` → `persistence.updateViewOnceCount` (already existed, Path A dropped)
+
+UI-only signals retained as-is (not messages mutations):
+- `delegate.lastUnreadMessage = msg` — unread scroll anchor
+- `delegate.newMessageAppended += 1` — scroll-to-bottom trigger
+- `delegate.typingUsernames` — typing indicator
+- `delegate.evictViewOnceMedia(message:)` — media cache eviction (calls into media store, not messages array)
+- `delegate.markMessageAsConsumed` — view-once state flag
+
+---
+
+The following sites remain in `ConversationViewModel.swift` for Tasks 1.5/1.6:
 
 All sites are in `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift`
 unless otherwise noted.

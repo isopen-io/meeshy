@@ -253,6 +253,121 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// Update server-confirmed fields on an optimistic row after server ACK.
+    /// Called when the server echoes back our sent message — reconciles content,
+    /// attachments, reactions, pin state and delivery counters in GRDB so the
+    /// store observation surfaces the ground-truth values without a Path A write.
+    public func updateServerAckedFields(
+        localId: String,
+        content: String?,
+        attachmentsJson: Data?,
+        reactionsJson: Data?,
+        pinnedAt: Date?,
+        pinnedBy: String?,
+        isEdited: Bool,
+        editedAt: Date?,
+        deletedAt: Date?,
+        deliveredCount: Int,
+        readCount: Int,
+        deliveredToAllAt: Date?,
+        readByAllAt: Date?,
+        updatedAt: Date
+    ) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE messages
+                    SET content = ?, attachmentsJson = ?, reactionsJson = ?,
+                    pinnedAt = ?, pinnedBy = ?,
+                    isEdited = ?, editedAt = ?, deletedAt = ?,
+                    deliveredCount = ?, readCount = ?,
+                    deliveredToAllAt = ?, readByAllAt = ?,
+                    updatedAt = ?, changeVersion = changeVersion + 1
+                    WHERE localId = ?
+                    """,
+                arguments: [
+                    content, attachmentsJson, reactionsJson,
+                    pinnedAt, pinnedBy,
+                    isEdited ? 1 : 0, editedAt, deletedAt,
+                    deliveredCount, readCount,
+                    deliveredToAllAt, readByAllAt,
+                    updatedAt, localId
+                ]
+            )
+        }
+    }
+
+    /// Overwrite the attachments blob for an already-persisted message.
+    /// Used when the server echoes back an existing message with enriched
+    /// attachment data (e.g. processed media URLs).
+    public func updateAttachmentsJson(localId: String, attachmentsJson: Data?) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE messages SET attachmentsJson = ?,
+                    updatedAt = ?, changeVersion = changeVersion + 1
+                    WHERE localId = ?
+                    """,
+                arguments: [attachmentsJson, Date(), localId]
+            )
+        }
+    }
+
+    /// Append a reaction to a persisted message, deduplicating by emoji+participantId.
+    /// The GRDB change triggers store observation so the view re-renders.
+    public func appendReaction(localId: String, reactionId: String,
+                                messageId: String, participantId: String?,
+                                emoji: String) throws {
+        try dbWriter.write { db in
+            guard var record = try MessageRecord.filter(Column("localId") == localId).fetchOne(db) else { return }
+            var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                from: record.reactionsJson ?? Data())) ?? []
+            let alreadyExists = reactions.contains {
+                $0.emoji == emoji && $0.participantId == participantId
+            }
+            guard !alreadyExists else { return }
+            let reaction = MeeshyReaction(id: reactionId, messageId: messageId,
+                                          participantId: participantId, emoji: emoji)
+            reactions.append(reaction)
+            record.reactionsJson = try JSONEncoder().encode(reactions)
+            record.reactionCount = reactions.count
+            record.updatedAt = Date()
+            record.changeVersion += 1
+            try record.update(db)
+        }
+    }
+
+    /// Remove a reaction from a persisted message, matched by emoji+participantId.
+    /// The GRDB change triggers store observation so the view re-renders.
+    public func removeReaction(localId: String, emoji: String, participantId: String?) throws {
+        try dbWriter.write { db in
+            guard var record = try MessageRecord.filter(Column("localId") == localId).fetchOne(db) else { return }
+            var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                from: record.reactionsJson ?? Data())) ?? []
+            reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
+            record.reactionsJson = try JSONEncoder().encode(reactions)
+            record.reactionCount = reactions.count
+            record.updatedAt = Date()
+            record.changeVersion += 1
+            try record.update(db)
+        }
+    }
+
+    /// Bump `updatedAt` + `changeVersion` for a message without changing its
+    /// content — used when an attachment status event (listened/watched/viewed)
+    /// arrives so the store fires and bubbles re-render.
+    public func touchUpdatedAt(localId: String) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE messages SET updatedAt = ?,
+                    changeVersion = changeVersion + 1 WHERE localId = ?
+                    """,
+                arguments: [Date(), localId]
+            )
+        }
+    }
+
     public func updateLayout(localId: String, width: Double, height: Double,
                               lastLineWidth: Double, lineCount: Int, timestampInline: Bool,
                               epoch: Int, maxWidth: Double) throws {
