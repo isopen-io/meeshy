@@ -328,6 +328,8 @@
 		SMS0020020020020020001 /* StarredMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMS0010010010010010001 /* StarredMessagesStore.swift */; };
 		SMST02002002002002001 /* StarredMessagesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMST01001001001001001 /* StarredMessagesStoreTests.swift */; };
 		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
+		MLPT02002002002002001 /* MessageListPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MLPT01001001001001001 /* MessageListPerformanceTests.swift */; };
+		SRPT02002002002002001 /* SearchPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRPT01001001001001001 /* SearchPerformanceTests.swift */; };
 		SMV0020020020020020001 /* StarredMessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMV0010010010010010001 /* StarredMessagesView.swift */; };
 		SP3400000000002F34 /* SharePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SP3400000000001F34 /* SharePickerView.swift */; };
 		SUPV002A002A002A002A0002 /* SupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SUPV001A001A001A001A0001 /* SupportView.swift */; };
@@ -728,6 +730,8 @@
 		SMS0010010010010010001 /* StarredMessagesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStore.swift; sourceTree = "<group>"; };
 		SMST01001001001001001 /* StarredMessagesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesStoreTests.swift; sourceTree = "<group>"; };
 		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
+		MLPT01001001001001001 /* MessageListPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListPerformanceTests.swift; sourceTree = "<group>"; };
+		SRPT01001001001001001 /* SearchPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPerformanceTests.swift; sourceTree = "<group>"; };
 		SMV0010010010010010001 /* StarredMessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredMessagesView.swift; sourceTree = "<group>"; };
 		SP3400000000001F34 /* SharePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePickerView.swift; sourceTree = "<group>"; };
 		SUPV001A001A001A001A0001 /* SupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportView.swift; sourceTree = "<group>"; };
@@ -1406,9 +1410,19 @@
 				HLPR000G000G000G000G001 /* Helpers */,
 				INTG000G000G000G000G001 /* Integration */,
 				MOCK000G000G000G000G001 /* Mocks */,
+				PRFGRP001001001001001 /* Performance */,
 				TSTS000C000C000C000C001 /* Unit */,
 			);
 			path = MeeshyTests;
+			sourceTree = "<group>";
+		};
+		PRFGRP001001001001001 /* Performance */ = {
+			isa = PBXGroup;
+			children = (
+				MLPT01001001001001001 /* MessageListPerformanceTests.swift */,
+				SRPT01001001001001001 /* SearchPerformanceTests.swift */,
+			);
+			path = Performance;
 			sourceTree = "<group>";
 		};
 		TSTS000C000C000C000C001 /* Unit */ = {
@@ -1973,6 +1987,8 @@
 				LHMT02002002002002001 /* LocallyHiddenMessagesStoreTests.swift in Sources */,
 				SMST02002002002002001 /* StarredMessagesStoreTests.swift in Sources */,
 				MSTS02002002002002001 /* MessageStoreTests.swift in Sources */,
+				MLPT02002002002002001 /* MessageListPerformanceTests.swift in Sources */,
+				SRPT02002002002002001 /* SearchPerformanceTests.swift in Sources */,
 				AUPL0001000100010001001 /* AudioPlayerManagerTests.swift in Sources */,
 				AURC0001000100010001001 /* AudioRecorderManagerTests.swift in Sources */,
 				MCAE000100010001000100B0 /* MockCallAudioEffectsService.swift in Sources */,
