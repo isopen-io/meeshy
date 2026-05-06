@@ -49,7 +49,7 @@ extension XCTestCase {
 
 extension XCTestCase {
     /// Assert arrays are equal ignoring order
-    func assertArraysEqualIgnoringOrder<T: Equatable>(_ lhs: [T], _ rhs: [T], file: StaticString = #file, line: UInt = #line) {
+    func assertArraysEqualIgnoringOrder<T: Hashable>(_ lhs: [T], _ rhs: [T], file: StaticString = #file, line: UInt = #line) {
         XCTAssertEqual(Set(lhs), Set(rhs), "Arrays contain different elements", file: file, line: line)
     }
 
@@ -129,13 +129,7 @@ extension XCTestCase {
 
 // MARK: - Memory Leak Detection
 
-class MemoryLeakTracker {
-    static func trackForMemoryLeaks(_ instance: AnyObject, file: StaticString = #file, line: UInt = #line) {
-        addTeardownBlock { [weak instance] in
-            XCTAssertNil(instance, "Instance should have been deallocated. Potential memory leak.", file: file, line: line)
-        }
-    }
-}
+// MemoryLeakTracker: use XCTestCase.addTeardownBlock directly in test methods instead of this class.
 
 // MARK: - Test Data Cleanup
 
@@ -145,12 +139,7 @@ class TestDataCleaner {
         if let bundleID = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundleID)
         }
-
-        // Clear Keychain (test data only)
-        // Implementation depends on KeychainService
-
-        // Clear cache
-        CacheService.shared.clearAll()
+        // Note: Keychain and cache cleanup should be performed via their respective service instances in tearDown
     }
 }
 
