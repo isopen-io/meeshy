@@ -31,4 +31,23 @@ final class SnapEngineTests: XCTestCase {
         XCTAssertEqual(r.snappedTime, 1.0, accuracy: 0.0001)
         XCTAssertEqual(r.matched, c)
     }
+
+    // MARK: - SnapEngine init / tolerance
+
+    func test_snapEngine_init_storesTolerance() {
+        let engine = SnapEngine(toleranceSeconds: 0.25)
+        XCTAssertEqual(engine.toleranceSeconds, 0.25, accuracy: 0.0001)
+    }
+
+    func test_snapEngine_init_clampsNegativeToleranceToZero() {
+        let engine = SnapEngine(toleranceSeconds: -1.0)
+        XCTAssertEqual(engine.toleranceSeconds, 0.0, accuracy: 0.0001)
+    }
+
+    func test_snapEngine_isSendable_compileTimeCheck() {
+        // Compile-time only: this should compile without warnings.
+        let engine = SnapEngine(toleranceSeconds: 0.1)
+        let _: any Sendable = engine
+        XCTAssertEqual(engine.toleranceSeconds, 0.1, accuracy: 0.0001)
+    }
 }

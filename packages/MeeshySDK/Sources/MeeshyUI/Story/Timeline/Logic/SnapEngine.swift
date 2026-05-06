@@ -41,3 +41,20 @@ public struct SnapResult: Equatable, Sendable {
         self.matched = matched
     }
 }
+
+// MARK: - SnapEngine
+
+/// Pure value-type snap engine. Picks the best snap candidate within tolerance,
+/// using priority hierarchy to break ties.
+///
+/// This type is `Sendable` and contains no mutable state.
+public struct SnapEngine: Sendable {
+
+    /// Tolerance in seconds. A candidate is eligible if `|candidate.time - rawTime| <= tolerance`.
+    /// Clamped to 0 if a negative value is provided.
+    public let toleranceSeconds: Float
+
+    public init(toleranceSeconds: Float) {
+        self.toleranceSeconds = max(0, toleranceSeconds)
+    }
+}
