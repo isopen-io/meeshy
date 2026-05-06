@@ -172,12 +172,15 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     /// Lock flag — Patch B.3 : true = composer skips drag/edit/delete (used for repost badge sticker).
     /// nil/false = editable. Synthesized Codable handles `Bool?` via decodeIfPresent / encodeIfPresent.
     public var isLocked: Bool?
+    // Timeline V2 — animation keyframes (position/scale/opacity)
+    public var keyframes: [StoryKeyframe]?
 
     enum CodingKeys: String, CodingKey {
         case id, content, x, y, scale, rotation, translations, sourceLanguage, zIndex
         case textStyle, textColor, textSize, textAlign, textBg
         case startTime, displayDuration, fadeIn, fadeOut
         case isLocked
+        case keyframes
     }
 
     public init(id: String = UUID().uuidString, content: String,
@@ -190,7 +193,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 textBg: String? = nil,
                 startTime: Float? = nil, displayDuration: Float? = nil,
                 fadeIn: Float? = nil, fadeOut: Float? = nil,
-                isLocked: Bool? = nil) {
+                isLocked: Bool? = nil,
+                keyframes: [StoryKeyframe]? = nil) {
         self.id = id; self.content = content
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
         self.translations = translations
@@ -200,6 +204,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.startTime = startTime; self.displayDuration = displayDuration
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.isLocked = isLocked
+        self.keyframes = keyframes
     }
 
     // MARK: - Computed properties (non-SwiftUI)

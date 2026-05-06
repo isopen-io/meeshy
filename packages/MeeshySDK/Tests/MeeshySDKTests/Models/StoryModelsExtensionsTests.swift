@@ -251,4 +251,31 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertNil(decoded.keyframes)
         XCTAssertEqual(decoded.id, "m1")
     }
+
+    // MARK: - StoryTextObject.keyframes extension
+
+    func test_storyTextObject_keyframes_defaultsToNil() {
+        let text = StoryTextObject(content: "hello")
+        XCTAssertNil(text.keyframes)
+    }
+
+    func test_storyTextObject_keyframes_canBeAssignedAndPersisted() throws {
+        var text = StoryTextObject(content: "hi")
+        text.keyframes = [
+            StoryKeyframe(time: 0.5, opacity: 0.0),
+            StoryKeyframe(time: 1.5, opacity: 1.0, easing: .easeIn)
+        ]
+        let data = try JSONEncoder().encode(text)
+        let decoded = try JSONDecoder().decode(StoryTextObject.self, from: data)
+        XCTAssertEqual(decoded.keyframes?.count, 2)
+        XCTAssertEqual(decoded.keyframes?[0].opacity, 0.0)
+        XCTAssertEqual(decoded.keyframes?[1].easing, .easeIn)
+    }
+
+    func test_storyTextObject_decodeOldJSON_withoutKeyframes_succeeds() throws {
+        let json = #"{"id":"t1","content":"hello","x":0.5,"y":0.5,"scale":1.0,"rotation":0}"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(StoryTextObject.self, from: json)
+        XCTAssertNil(decoded.keyframes)
+        XCTAssertEqual(decoded.content, "hello")
+    }
 }
