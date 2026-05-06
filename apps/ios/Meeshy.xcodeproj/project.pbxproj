@@ -349,6 +349,7 @@
 		VP3600000000002F36 /* VoIPPushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP3600000000001F36 /* VoIPPushManager.swift */; };
 		VPMT0001000100010001001 /* VoiceProfileManageViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */; };
 		VPWT0001000100010001001 /* VoiceProfileWizardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VPWT0001000100010001000 /* VoiceProfileWizardViewModelTests.swift */; };
+		OBDP01A1A1A1A1A1A1A10001 /* OutboxDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = OBDP01A1A1A1A1A1A1A10002 /* OutboxDispatcher.swift */; };
 		WDFL01B1B1B1B1B1B1B10001 /* WidgetActionFlusher.swift in Sources */ = {isa = PBXBuildFile; fileRef = WDFL01B1B1B1B1B1B1B10002 /* WidgetActionFlusher.swift */; };
 		WDGM0001000100010001B001 /* WidgetDataManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WDGM0001000100010001F001 /* WidgetDataManagerTests.swift */; };
 		WDMGR001B001B001B00002 /* WidgetDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = WDMGR001A001A001A00001 /* WidgetDataManager.swift */; };
@@ -746,6 +747,7 @@
 		VP3600000000001F36 /* VoIPPushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPPushManager.swift; sourceTree = "<group>"; };
 		VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageViewModelTests.swift; sourceTree = "<group>"; };
 		VPWT0001000100010001000 /* VoiceProfileWizardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardViewModelTests.swift; sourceTree = "<group>"; };
+		OBDP01A1A1A1A1A1A1A10002 /* OutboxDispatcher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OutboxDispatcher.swift; sourceTree = "<group>"; };
 		WDFL01B1B1B1B1B1B1B10002 /* WidgetActionFlusher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetActionFlusher.swift; sourceTree = "<group>"; };
 		WDGM0001000100010001F001 /* WidgetDataManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataManagerTests.swift; sourceTree = "<group>"; };
 		WDMGR001A001A001A00001 /* WidgetDataManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetDataManager.swift; sourceTree = "<group>"; };
@@ -1130,6 +1132,7 @@
 				EC507BC8B27D02CB58CC096C /* DarkFrameDetector.swift */,
 				77988CFAAC714C1730B6ABD3 /* AudioPlayerManager.swift */,
 				FCFL01A1A1A1A1A1A1A10002 /* MeeshyFocusFilter.swift */,
+				OBDP01A1A1A1A1A1A1A10002 /* OutboxDispatcher.swift */,
 				WDFL01B1B1B1B1B1B1B10002 /* WidgetActionFlusher.swift */,
 				LABR01C1C1C1C1C1C1C10002 /* LiveActivityBridge.swift */,
 				4AA21AF99ADCE48E973EBF13 /* BackgroundTransitionCoordinator.swift */,
@@ -1878,6 +1881,7 @@
 				5C3EBC97C453A81EFEAE35E6 /* VideoFilterControlView.swift in Sources */,
 				1CBAAFC69D3A2A2F928B9349 /* AudioPlayerManager.swift in Sources */,
 				FCFL01A1A1A1A1A1A1A10001 /* MeeshyFocusFilter.swift in Sources */,
+				OBDP01A1A1A1A1A1A1A10001 /* OutboxDispatcher.swift in Sources */,
 				WDFL01B1B1B1B1B1B1B10001 /* WidgetActionFlusher.swift in Sources */,
 				LABR01C1C1C1C1C1C1C10001 /* LiveActivityBridge.swift in Sources */,
 				AD353A36327B0E4A819E01D3 /* BackgroundTransitionCoordinator.swift in Sources */,

@@ -302,6 +302,13 @@ public actor MessageRetryQueue {
         }
     }
 
+    // MARK: - Clear
+
+    public func clearAll() {
+        items.removeAll()
+        saveToDisk()
+    }
+
     // MARK: - Outbox Migration
 
     /// Migrates pending items from this JSON-file-backed queue into the unified
