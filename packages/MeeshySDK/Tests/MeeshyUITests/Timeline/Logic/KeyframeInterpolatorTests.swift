@@ -129,4 +129,37 @@ final class KeyframeInterpolatorTests: XCTestCase {
         let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 1.5)
         XCTAssertEqual(result!, 55.0, accuracy: 0.0001 as Float)
     }
+
+    // MARK: - KeyframeInterpolator — easing
+
+    func test_interpolate_easeIn_atMidpoint_isLessThanLinearMid() {
+        // For easeIn (t*t), at t=0.5 the eased value is 0.25, so the result
+        // is 0 + (10 - 0) * 0.25 = 2.5 (less than linear which would be 5.0)
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 0.0, value: 0.0,  easing: .easeIn),
+            (time: 2.0, value: 10.0, easing: .linear)
+        ]
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 1.0)
+        XCTAssertEqual(result!, 2.5, accuracy: 0.0001 as Float)
+    }
+
+    func test_interpolate_easeOut_atMidpoint_isGreaterThanLinearMid() {
+        // For easeOut (1 - (1-t)^2), at t=0.5 the eased value is 0.75
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 0.0, value: 0.0,  easing: .easeOut),
+            (time: 2.0, value: 10.0, easing: .linear)
+        ]
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 1.0)
+        XCTAssertEqual(result!, 7.5, accuracy: 0.0001 as Float)
+    }
+
+    func test_interpolate_easingComesFromOriginKeyframe_notDestination() {
+        // Verify the easing of the *origin* keyframe is applied, not the destination.
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 0.0, value: 0.0,  easing: .easeIn),
+            (time: 2.0, value: 10.0, easing: .easeOut)
+        ]
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 1.0)
+        XCTAssertEqual(result!, 2.5, accuracy: 0.0001 as Float)
+    }
 }
