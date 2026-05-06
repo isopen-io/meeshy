@@ -470,6 +470,7 @@ class ConversationViewModel: ObservableObject {
     private let syncEngine: ConversationSyncEngineProviding
     private let mentionService: MentionServiceProviding
     private var mentionDebounceTask: Task<Void, Never>?
+    private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
     private static let mentionDebounceMs: UInt64 = 300_000_000
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
@@ -1215,33 +1216,21 @@ class ConversationViewModel: ObservableObject {
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
         guard isDirect else { return }
 
-        await withTaskGroup(of: (Int, String?).self) { group in
-            for i in 0..<msgs.count {
-                let msg = msgs[i]
-                if msg.isEncrypted, !msg.senderId.isEmpty, !msg.content.isEmpty, let data = Data(base64Encoded: msg.content) {
-                    let senderId = msg.senderId
-                    let msgId = msg.id
-                    group.addTask {
-                        CryptoSignposts.beginDecrypt(messageId: msgId)
-                        do {
-                            let decrypted = try await SessionManager.shared.decryptMessage(data, from: senderId)
-                            CryptoSignposts.endDecrypt(messageId: msgId, bytes: decrypted.count)
-                            if let text = String(data: decrypted, encoding: .utf8) {
-                                return (i, text)
-                            }
-                        } catch {
-                            CryptoSignposts.endDecrypt(messageId: msgId, bytes: 0)
-                            return (i, "[Message chiffré - Échec du déchiffrement]")
-                        }
-                        return (i, nil)
-                    }
-                }
-            }
+        let payloads: [DecryptionPayload] = msgs.compactMap { msg in
+            guard msg.isEncrypted, !msg.senderId.isEmpty,
+                  !msg.content.isEmpty,
+                  let data = Data(base64Encoded: msg.content)
+            else { return nil }
+            return DecryptionPayload(messageId: msg.id, senderId: msg.senderId, ciphertext: data)
+        }
+        guard !payloads.isEmpty else { return }
 
-            for await result in group {
-                if let text = result.1 {
-                    msgs[result.0].content = text
-                }
+        let results = await decryptionActor.decrypt(payloads)
+        let resultsByMessageId = Dictionary(uniqueKeysWithValues: results.map { ($0.messageId, $0) })
+
+        for i in msgs.indices {
+            if let plaintext = resultsByMessageId[msgs[i].id]?.plaintext {
+                msgs[i].content = plaintext
             }
         }
     }

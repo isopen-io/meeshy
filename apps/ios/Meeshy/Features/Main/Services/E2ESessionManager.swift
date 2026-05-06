@@ -147,4 +147,15 @@ public actor SessionManager {
     }
 }
 
+// MARK: - DecryptionSessionProviding Adapter
+
+/// Bridges SessionManager (actor) to DecryptionSessionProviding.
+/// SessionManager.decryptMessage has an extra `senderIdentity` parameter,
+/// so direct protocol conformance is not possible — this thin adapter bridges the gap.
+struct LiveSessionProvider: DecryptionSessionProviding {
+    func decryptMessage(_ ciphertext: Data, from senderId: String) async throws -> Data {
+        try await SessionManager.shared.decryptMessage(ciphertext, from: senderId)
+    }
+}
+
 // Logger.e2ee is defined in Logger+Categories.swift
