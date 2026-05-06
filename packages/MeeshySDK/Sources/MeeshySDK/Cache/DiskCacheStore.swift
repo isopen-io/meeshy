@@ -350,6 +350,17 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
     }
 
+    /// Configure the in-memory UIImage cache limits at app startup.
+    /// Call once from `ImageDownsamplingConfig.applyGlobal()` before any image
+    /// is loaded. Thread-safe: `NSCache` property writes are atomic.
+    ///
+    /// - Parameter memoryCostLimitBytes: Maximum total decoded-pixel cost kept
+    ///   resident. Default at init-time is 80 MB; recommended app-level value
+    ///   is 60 MB to leave headroom for UIKit/Metal allocations.
+    public nonisolated static func configureImageCache(memoryCostLimitBytes: Int) {
+        _imageCache.totalCostLimit = memoryCostLimitBytes
+    }
+
     /// Pre-cache an image in the static UIImage NSCache for immediate display
     /// in ProgressiveCachedImage. Used for optimistic media messages where the
     /// local file URL is set as the attachment URL before upload.
