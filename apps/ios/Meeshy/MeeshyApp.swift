@@ -178,6 +178,24 @@ struct MeeshyApp: App {
                             return .transient
                         }
                     }
+                    // Migrate legacy JSON-file queues into the unified outbox table,
+                    // then flush any pending outbox rows back through the queues'
+                    // existing retry pipelines. Both ops run once per install
+                    // (idempotency-by-UserDefaults gate saves CPU on subsequent boots;
+                    // the underlying migrateToOutbox is also safe to call repeatedly).
+                    let didMigrateKey = "meeshy.outbox.legacyMigrationDone"
+                    if !UserDefaults.standard.bool(forKey: didMigrateKey) {
+                        let pool = dependencies.dbPool
+                        Task.detached(priority: .background) {
+                            await MigrateLegacyQueues.migrateOnce(into: pool)
+                            let flusher = OutboxFlusher(pool: pool, dispatcher: OutboxDispatcher())
+                            await flusher.flush()
+                            await MainActor.run {
+                                UserDefaults.standard.set(true, forKey: didMigrateKey)
+                            }
+                        }
+                    }
+
                     // Parallelize: friendship hydration + session check are independent
                     async let friendshipHydration: () = FriendshipCache.shared.hydrate()
                     async let sessionCheck: () = authManager.checkExistingSession()
@@ -213,6 +231,15 @@ struct MeeshyApp: App {
                         // BGTasks → sync widgets) and guarantees the task id
                         // is ended even if a step throws.
                         Task { await BackgroundTransitionCoordinator.shared.enterBackground() }
+                        // Compact free pages and refresh query-planner stats on
+                        // every background transition. Runs at background priority
+                        // so the system can defer or kill it under memory pressure.
+                        // Capture dbPool before crossing the actor boundary.
+                        let pool = dependencies.dbPool
+                        Task.detached(priority: .background) {
+                            try? DatabaseMaintenance.runIncrementalVacuum(on: pool)
+                            try? DatabaseMaintenance.runOptimize(on: pool)
+                        }
                     case .inactive:
                         break
                     @unknown default:

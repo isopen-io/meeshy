@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import GRDB
 import os
 
 // MARK: - Retry Queue Item
@@ -298,6 +299,47 @@ public actor MessageRetryQueue {
             return try decoder.decode([RetryQueueItem].self, from: data)
         } catch {
             return []
+        }
+    }
+
+    // MARK: - Clear
+
+    public func clearAll() {
+        items.removeAll()
+        saveToDisk()
+    }
+
+    // MARK: - Outbox Migration
+
+    /// Migrates pending items from this JSON-file-backed queue into the unified
+    /// `outbox` SQLite table. Idempotent — items already migrated (matching id)
+    /// are skipped. Safe to call on every app launch.
+    public func migrateToOutbox(pool: any DatabaseWriter) async {
+        let snapshot = items
+        guard !snapshot.isEmpty else { return }
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        try? await pool.write { db in
+            for item in snapshot {
+                let outboxId = "mrq_\(item.id)"
+                guard try OutboxRecord.fetchOne(db, key: outboxId) == nil else { continue }
+                let payload = (try? encoder.encode(item)) ?? Data()
+                try OutboxRecord(
+                    id: outboxId,
+                    kind: .sendMessage,
+                    conversationId: item.conversationId,
+                    messageLocalId: item.tempId,
+                    payload: payload,
+                    status: .pending,
+                    attempts: item.retryCount,
+                    lastError: nil,
+                    createdAt: item.createdAt,
+                    updatedAt: item.lastRetryAt ?? item.createdAt,
+                    nextAttemptAt: Date()
+                ).insert(db)
+            }
         }
     }
 }
