@@ -190,4 +190,27 @@ final class SnapEngineTests: XCTestCase {
         let result = engine.snap(rawTime: 4.0, candidates: [lowPri, highPri])
         XCTAssertEqual(result.matched, highPri)
     }
+
+    // MARK: - SnapEngine.snap — edge cases
+
+    func test_snap_negativeRawTime_handledAsNumber() {
+        // SnapEngine is a pure number cruncher — clamping to >= 0 is the caller's job.
+        let engine = SnapEngine(toleranceSeconds: 0.2)
+        let candidate = SnapCandidate(kind: .slideStart, time: 0.0, label: nil)
+        let result = engine.snap(rawTime: -0.1, candidates: [candidate])
+        XCTAssertEqual(result.snappedTime, 0.0, accuracy: 0.0001)
+        XCTAssertEqual(result.matched, candidate)
+    }
+
+    func test_snap_largeNumberOfCandidates_picksCorrectly() {
+        let engine = SnapEngine(toleranceSeconds: 0.5)
+        var candidates: [SnapCandidate] = []
+        for i in 0..<1_000 {
+            candidates.append(SnapCandidate(kind: .gridMinor, time: Float(i), label: nil))
+        }
+        let target = SnapCandidate(kind: .playhead, time: 500.4, label: nil)
+        candidates.append(target)
+        let result = engine.snap(rawTime: 500.4, candidates: candidates)
+        XCTAssertEqual(result.matched, target)
+    }
 }
