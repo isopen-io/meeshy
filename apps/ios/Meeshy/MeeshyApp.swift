@@ -295,6 +295,7 @@ struct MeeshyApp: App {
                                 Logger.e2ee.error("E2EE bundle upload failed: \(error)")
                             }
                         }
+                        Task { await SessionManager.shared.migrateKeychainIfNeeded() }
                         if let pending = pushManager.pendingNotificationPayload {
                             handlePushNavigation(payload: pending)
                         }
