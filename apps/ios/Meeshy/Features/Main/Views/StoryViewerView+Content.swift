@@ -740,10 +740,13 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendComment(text: String, effectFlags: Int? = nil) {
+    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil) {
         guard !text.isEmpty, let story = currentStory else { return }
 
-        // Optimistic local insert
+        // Optimistic local insert. Reply nesting is currently flat in the UI
+        // (Threads-style max-1-niveau pour MVP) — the parentId is forwarded
+        // to the backend so the comment graph stays correct, but rendering
+        // does not yet visually indent replies. See SOTA audit Pilier 19.
         let currentUser = AuthManager.shared.currentUser
         let authorName: String = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let authorId: String = currentUser?.id ?? ""
@@ -754,6 +757,7 @@ extension StoryViewerView {
             authorUsername: currentUser?.username,
             authorAvatarURL: currentUser?.avatar,
             content: text,
+            parentId: parentId,
             effectFlags: effectFlags ?? 0,
             originalLanguage: composerLanguage
         )
@@ -769,6 +773,9 @@ extension StoryViewerView {
             ]
             if let effectFlags {
                 body["effectFlags"] = AnyCodable(effectFlags)
+            }
+            if let parentId {
+                body["parentId"] = AnyCodable(parentId)
             }
             let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
                 endpoint: "/posts/\(story.id)/comments",
