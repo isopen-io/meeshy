@@ -84,31 +84,53 @@ UI-only signals retained as-is (not messages mutations):
 
 ---
 
-## Deferred to Phase 2 — Group B (cache/load/refresh paths)
+## Task 2 COMPLETE — Group B migration (Followup #2)
 
-These whole-array assignments remain in `ConversationViewModel.swift`. They touch
-the legacy CacheCoordinator + API merge logic that Phase 2 (FTS5 + outbox +
-GRDB-driven cache) will refactor. Migrating them now would conflict with Phase 2.
+All Group B sites have been migrated to persistence-driven observation, except the
+3 deferred jump-to-message windowed state callsites (architectural skip, documented below).
 
-| Line (approx) | Context | Phase 2 plan |
-|---------------|---------|--------------|
-| 744 | `subscribeToMessageStore()` — GRDB observation OUTPUT | This is the correct write site; not a violation |
-| 876 | `loadMessages()` — cache hit `.fresh` | `messageStore.loadInitial()` + store drives |
-| 880 | `loadMessages()` — cache hit `.stale` | same |
-| 898 | `loadMessages()` — cache miss, after API refresh | same |
-| 970 | `refreshMessagesFromAPI()` — after merge with API | move merge into persistence actor |
+### New persistence APIs added to `MessagePersistenceActor.swift`
+
+- `upsertFromAPIMessages([APIMessage])` — full-fidelity upsert of REST API batches (attachments, reactions, reply/forward blobs, delivery counters)
+- `deleteAll(conversationId:)` — wipes all GRDB rows for a conversation (403/access revoked)
+- `deleteExpiredEphemeral(before: Date)` — removes expired ephemeral messages
+- `updateDeliveryCounters(localId:deliveredCount:readCount:deliveredToAllAt:readByAllAt:)` — merge-only delivery counter update (no downgrade)
+
+### Group B sites migrated
+
+| Original line | Context | Migration applied |
+|---------------|---------|-------------------|
+| 744 | `subscribeToMessageStore()` — GRDB observation OUTPUT | **Kept** — correct write site |
+| 876 | `loadMessages()` — cache hit `.fresh` | `messageStore.loadInitial()` — no assignment |
+| 880 | `loadMessages()` — cache hit `.stale` | `messageStore.loadInitial()` — no assignment |
+| 898 | `loadMessages()` — cache miss | `refreshMessagesFromAPI()` → upsert + store drives |
+| 970 | `refreshMessagesFromAPI()` — after merge with API | `persistence.upsertFromAPIMessages` + `messageStore.loadInitial()` |
 | 1020 | `handleAccessRevoked()` — clear on 403 | `persistence.deleteAll(conversationId:)` + store emits empty |
-| 1137 | `subscribeToLanguagePreferenceChanges()` — delivery-status merge | update individual records via `persistence.applyEvent` |
-| 1140 | same (no new messages, delivery status only) | same |
-| 1180 | `loadOlderMessages()` — after fetching older page | `messageStore.loadOlder(before:)` already exists |
-| 2133 | `jumpToMessage()` — replace with messages around jump target | load window around target date |
-| 2204 | `clearSearch()` — restore saved messages after search | driven by store window; no explicit restore needed |
+| 1137/1140 | `observeSync()` — delivery-status merge | `persistence.updateDeliveryCounters` per record + `bufferIncoming` for new |
+| 1180 | `loadOlderMessages()` — after fetching older page | `messageStore.loadOlder(before:)` |
+| append(offlineMessage) | offline send path | `persistence.insertOptimistic` via `Task.detached` |
+| append(msg) | `insertOptimisticAudioMessage` | `persistence.insertOptimistic` via `Task.detached` |
+| `messages.remove(at:)` + `removeAll` | `retryMessage` / `removeFailedMessage` | `persistence.markDeleted(localId:deletedAt:)` |
+| `removeAll { expiresAt <= now }` | `removeExpiredMessages` | `persistence.deleteExpiredEphemeral(before:)` |
+| `messages.append(contentsOf: newMessages)` | `syncMissedMessages` | `persistence.upsertFromAPIMessages` |
 
-Also Group B (deferred):
-- `messages.append(offlineMessage)` — offline send path
-- `messages.append(msg)` — audio message insert (`insertOptimisticAudioMessage`)
-- `messages.remove(at: idx)` + `messages.append(contentsOf:)` — retry/resend path
-- `messages.removeAll { expiresAt <= now }` — ephemeral message cleanup
+### Group B sites SKIPPED (jump-to-message windowed state — architectural constraint)
+
+These 3 callsites are part of a temporary windowed view (jump to search result, paginate newer,
+return to latest). Migrating them requires a window-switching mechanism in `MessageStore` that
+is out of scope for this task.
+
+| Line (current) | Context | Reason |
+|----------------|---------|--------|
+| ~2128 | `loadMessagesAround()` — `messages = fetchedMessages` | Jump-window replacement — requires MessageStore window switch |
+| ~2168 | `loadNewerMessages()` — `messages.append(contentsOf: genuinelyNew)` | Jump-window pagination — same |
+| ~2199 | `returnToLatest()` — `messages = saved` | Jump-window restore — saves/restores pre-jump state |
+
+### Lint tightening
+
+`SingleSourceOfTruthTests.swift` now has TWO lint tests:
+1. `test_noDirectOptimisticMutation_of_conversationViewModel_messages` — Group A patterns (unchanged, still passes)
+2. `test_wholeArrayMessagesWrite_countIsExact` — asserts exactly 3 whole-array `messages = ...` writes exist (1 legitimate + 2 deferred jump-window). Any new addition triggers failure.
 
 ## Group C — Test fixtures (DEFERRED, leave as-is)
 

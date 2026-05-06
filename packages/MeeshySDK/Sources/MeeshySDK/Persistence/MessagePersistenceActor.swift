@@ -481,6 +481,252 @@ public actor MessagePersistenceActor {
         }
     }
 
+    // MARK: - Group B Migration APIs (cache/load/refresh paths)
+
+    /// Upsert a batch of API messages into GRDB, preserving any richer local
+    /// state (layout cache, optimistic fields) for rows that already exist.
+    /// Called from load/refresh paths so the MessageStore observation surfaces
+    /// the authoritative server data without a direct `messages = ...` write.
+    public func upsertFromAPIMessages(_ apiMessages: [APIMessage]) async throws {
+        let encoder = JSONEncoder()
+        try await dbWriter.write { db in
+            for api in apiMessages {
+                let senderName = api.sender?.name
+                let senderUsername = api.sender?.username
+                let senderAvatarURL = api.sender?.resolvedAvatar
+
+                let attachmentsJson: Data? = {
+                    guard let atts = api.attachments, !atts.isEmpty else { return nil }
+                    let ui: [MeeshyMessageAttachment] = atts.map { apiAtt in
+                        let thumbColor = senderName.map { DynamicColorGenerator.colorForName($0) }
+                            ?? DynamicColorGenerator.colorForName("?")
+                        return MeeshyMessageAttachment(
+                            id: apiAtt.id,
+                            fileName: apiAtt.fileName ?? "",
+                            originalName: apiAtt.originalName ?? "",
+                            mimeType: apiAtt.mimeType ?? "application/octet-stream",
+                            fileSize: apiAtt.fileSize ?? 0,
+                            fileUrl: apiAtt.fileUrl ?? "",
+                            width: apiAtt.width,
+                            height: apiAtt.height,
+                            thumbnailUrl: apiAtt.thumbnailUrl,
+                            thumbHash: apiAtt.thumbHash,
+                            duration: apiAtt.duration,
+                            uploadedBy: api.senderId,
+                            latitude: apiAtt.latitude,
+                            longitude: apiAtt.longitude,
+                            thumbnailColor: thumbColor
+                        )
+                    }
+                    return try? encoder.encode(ui)
+                }()
+
+                let reactionSummary = api.reactionSummary ?? [:]
+                let userReactions = Set(api.currentUserReactions ?? [])
+                let uiReactions: [MeeshyReaction] = reactionSummary.flatMap { emoji, count in
+                    (0..<count).map { index in
+                        MeeshyReaction(
+                            messageId: api.id,
+                            participantId: (userReactions.contains(emoji) && index == 0) ? api.senderId : nil,
+                            emoji: emoji
+                        )
+                    }
+                }
+                let reactionsJson: Data? = uiReactions.isEmpty ? nil : try? encoder.encode(uiReactions)
+
+                let replyToJson: Data? = api.replyTo.flatMap { reply in
+                    let isMe = reply.senderId == nil
+                    let authorName = reply.sender?.name ?? "?"
+                    let firstAtt = reply.attachments?.first
+                    let ref = ReplyReference(
+                        messageId: reply.id,
+                        authorName: authorName,
+                        previewText: reply.content ?? "",
+                        isMe: isMe,
+                        attachmentType: firstAtt?.mimeType,
+                        attachmentThumbnailUrl: firstAtt?.thumbnailUrl
+                    )
+                    return try? encoder.encode(ref)
+                }
+
+                let forwardedFromJson: Data? = api.forwardedFrom.flatMap { fwd in
+                    let fwdSenderName = fwd.sender?.name ?? "?"
+                    let firstAtt = fwd.attachments?.first
+                    let ref = ForwardReference(
+                        originalMessageId: fwd.id,
+                        senderName: fwdSenderName,
+                        senderAvatar: fwd.sender?.resolvedAvatar,
+                        previewText: fwd.content ?? "",
+                        conversationId: api.forwardedFromConversation?.id,
+                        conversationName: api.forwardedFromConversation?.title,
+                        attachmentType: firstAtt?.mimeType,
+                        attachmentThumbnailUrl: firstAtt?.thumbnailUrl
+                    )
+                    return try? encoder.encode(ref)
+                }
+
+                let mentionedUsersJson: Data? = api.mentionedUsers.flatMap {
+                    $0.isEmpty ? nil : try? encoder.encode($0)
+                }
+
+                var effectFlags: UInt32 = api.effectFlags ?? 0
+                if effectFlags == 0 {
+                    var flags = MessageEffectFlags()
+                    if api.isBlurred == true { flags.insert(.blurred) }
+                    if api.isViewOnce == true { flags.insert(.viewOnce) }
+                    if api.expiresAt != nil { flags.insert(.ephemeral) }
+                    effectFlags = flags.rawValue
+                }
+
+                let deliveredCount = api.deliveredCount ?? 0
+                let readCount = api.readCount ?? 0
+                let computedState: MessageState = {
+                    if readCount > 0 || api.readByAllAt != nil { return .delivered }
+                    if deliveredCount > 0 || api.deliveredToAllAt != nil { return .delivered }
+                    return .delivered
+                }()
+
+                let timeString = MessageRecord.computeTimeString(for: api.createdAt)
+
+                if var existing = try MessageRecord.fetchOne(db, key: api.id) {
+                    // Update mutable fields; preserve layout cache
+                    existing.content = api.content
+                    existing.isEdited = api.isEdited ?? false
+                    existing.editedAt = nil
+                    existing.deletedAt = api.deletedAt
+                    existing.attachmentsJson = attachmentsJson
+                    existing.reactionsJson = reactionsJson
+                    existing.reactionCount = uiReactions.count
+                    existing.deliveredCount = deliveredCount
+                    existing.readCount = readCount
+                    existing.deliveredToAllAt = api.deliveredToAllAt
+                    existing.readByAllAt = api.readByAllAt
+                    existing.state = max(existing.state, computedState)
+                    existing.senderName = senderName
+                    existing.senderUsername = senderUsername
+                    existing.senderAvatarURL = senderAvatarURL
+                    existing.replyToJson = replyToJson
+                    existing.forwardedFromJson = forwardedFromJson
+                    existing.mentionedUsersJson = mentionedUsersJson
+                    existing.effectFlags = effectFlags
+                    existing.updatedAt = api.updatedAt ?? Date()
+                    existing.changeVersion += 1
+                    try existing.update(db)
+                } else {
+                    let record = MessageRecord(
+                        localId: api.id, serverId: api.id,
+                        conversationId: api.conversationId,
+                        senderId: api.senderId,
+                        content: api.content,
+                        originalLanguage: api.originalLanguage ?? "fr",
+                        messageType: api.messageType ?? "text",
+                        messageSource: api.messageSource ?? "user",
+                        contentType: "text",
+                        state: computedState,
+                        retryCount: 0, lastError: nil,
+                        isEncrypted: api.isEncrypted ?? false,
+                        encryptionMode: api.encryptionMode,
+                        encryptedPayload: nil,
+                        replyToId: api.replyToId,
+                        storyReplyToId: api.storyReplyToId,
+                        forwardedFromId: api.forwardedFromId,
+                        forwardedFromConversationId: api.forwardedFromConversationId,
+                        replyToJson: replyToJson,
+                        forwardedFromJson: forwardedFromJson,
+                        expiresAt: api.expiresAt,
+                        effectFlags: effectFlags,
+                        maxViewOnceCount: nil,
+                        viewOnceCount: 0,
+                        isEdited: api.isEdited ?? false,
+                        editedAt: nil,
+                        deletedAt: api.deletedAt,
+                        pinnedAt: nil,
+                        pinnedBy: nil,
+                        senderName: senderName,
+                        senderUsername: senderUsername,
+                        senderColor: nil,
+                        senderAvatarURL: senderAvatarURL,
+                        deliveredCount: deliveredCount,
+                        readCount: readCount,
+                        deliveredToAllAt: api.deliveredToAllAt,
+                        readByAllAt: api.readByAllAt,
+                        createdAt: api.createdAt,
+                        sentAt: api.createdAt,
+                        deliveredAt: api.deliveredToAllAt,
+                        readAt: api.readByAllAt,
+                        updatedAt: api.updatedAt ?? Date(),
+                        attachmentsJson: attachmentsJson,
+                        reactionsJson: reactionsJson,
+                        reactionCount: uiReactions.count,
+                        currentUserReactionsJson: nil,
+                        mentionedUsersJson: mentionedUsersJson,
+                        cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+                        cachedLastLineWidth: nil, cachedLineCount: nil,
+                        cachedTimestampInline: nil,
+                        layoutVersion: 0, layoutMaxWidth: nil,
+                        cachedTimeString: timeString,
+                        changeVersion: 0
+                    )
+                    try record.insert(db)
+                    try PendingIdRecord(
+                        localId: api.id, serverId: api.id,
+                        conversationId: api.conversationId,
+                        reconciledAt: Date()
+                    ).insert(db)
+                }
+            }
+        }
+    }
+
+    /// Delete all message records for a conversation (called on 403/access revoked).
+    public func deleteAll(conversationId: String) async throws {
+        try await dbWriter.write { db in
+            try MessageRecord
+                .filter(Column("conversationId") == conversationId)
+                .deleteAll(db)
+        }
+    }
+
+    /// Delete ephemeral messages whose expiry has passed.
+    public func deleteExpiredEphemeral(before: Date) async throws {
+        try await dbWriter.write { db in
+            try MessageRecord
+                .filter(Column("expiresAt") != nil)
+                .filter(Column("expiresAt") <= before)
+                .deleteAll(db)
+        }
+    }
+
+    /// Update delivery counters on a set of message records, merging only
+    /// when the new values are strictly better than what is stored.
+    public func updateDeliveryCounters(
+        localId: String,
+        deliveredCount: Int,
+        readCount: Int,
+        deliveredToAllAt: Date?,
+        readByAllAt: Date?
+    ) throws {
+        try dbWriter.write { db in
+            guard var record = try MessageRecord.fetchOne(db, key: localId) else { return }
+            guard deliveredCount > record.deliveredCount
+                || readCount > record.readCount
+                || (deliveredToAllAt != nil && record.deliveredToAllAt == nil)
+                || (readByAllAt != nil && record.readByAllAt == nil)
+            else { return }
+            record.deliveredCount = max(record.deliveredCount, deliveredCount)
+            record.readCount = max(record.readCount, readCount)
+            if let dAt = deliveredToAllAt, record.deliveredToAllAt == nil {
+                record.deliveredToAllAt = dAt
+            }
+            if let rAt = readByAllAt, record.readByAllAt == nil {
+                record.readByAllAt = rAt
+            }
+            record.updatedAt = Date()
+            record.changeVersion += 1
+            try record.update(db)
+        }
+    }
+
     deinit {
         writeContinuation.finish()
         processorTask?.cancel()

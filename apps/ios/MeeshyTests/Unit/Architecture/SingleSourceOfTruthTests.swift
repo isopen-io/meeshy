@@ -9,7 +9,6 @@ final class SingleSourceOfTruthTests: XCTestCase {
     ///
     /// Exempt:
     /// - The single `subscribeToMessageStore` write (the observation OUTPUT)
-    /// - Cache/load/refresh paths (Group B — Phase 2 will refactor)
     /// - Test files (test fixtures legitimately seed state directly)
     func test_noDirectOptimisticMutation_of_conversationViewModel_messages() throws {
         let filePath = #filePath
@@ -63,6 +62,57 @@ final class SingleSourceOfTruthTests: XCTestCase {
             violations.isEmpty,
             "Direct optimistic mutations of vm.messages found — write through MessagePersistenceActor instead:\n" +
             violations.map { "Line \($0.0): \($0.1)" }.joined(separator: "\n")
+        )
+    }
+
+    /// Group B Phase 2 invariant: whole-array `messages = ...` writes must only
+    /// exist in `subscribeToMessageStore` (the GRDB observation OUTPUT) plus the
+    /// deferred jump-to-message windowed state.
+    ///
+    /// Allowed writes (3 total):
+    /// 1. `self.messages = mapped` — inside `subscribeToMessageStore` (legitimate output)
+    /// 2. `messages = fetchedMessages` — `loadMessagesAround` (jump window, deferred)
+    /// 3. `messages = saved` — `returnToLatest` (jump window restore, deferred)
+    ///
+    /// Note: `messages.append(contentsOf: genuinelyNew)` in `loadNewerMessages` is
+    /// a fourth deferred jump-window site but is not matched by this pattern (no `=`).
+    ///
+    /// This test asserts the exact count so any new whole-array `messages = ...`
+    /// write triggers a failure that forces the author to justify the addition.
+    func test_wholeArrayMessagesWrite_countIsExact() throws {
+        let filePath = #filePath
+        let projectRoot = filePath
+            .components(separatedBy: "/MeeshyTests/")
+            .first ?? ""
+        let viewModelPath = "\(projectRoot)/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift"
+
+        let content = try String(contentsOfFile: viewModelPath, encoding: .utf8)
+        let lines = content.components(separatedBy: "\n")
+
+        // Match lines that write the whole array: `messages = ...` or `self.messages = ...`
+        // Excludes: comments, variable declarations containing "messages", subscript writes (messages[i]).
+        let wholeArrayWritePattern = #"^\s+(self\.)?messages\s*="#
+
+        var matchingLines: [(Int, String)] = []
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("//"),
+                  !trimmed.hasPrefix("*"),
+                  !trimmed.contains("messages[")
+            else { continue }
+            if line.range(of: wholeArrayWritePattern, options: .regularExpression) != nil {
+                matchingLines.append((i + 1, trimmed))
+            }
+        }
+
+        // Expected: exactly 3 whole-array writes (1 legitimate + 2 deferred jump-window)
+        let expectedCount = 3
+        XCTAssertEqual(
+            matchingLines.count, expectedCount,
+            "Expected exactly \(expectedCount) whole-array `messages = ...` writes in ConversationViewModel.swift " +
+            "(1 in subscribeToMessageStore + 2 deferred jump-window sites). " +
+            "Found \(matchingLines.count):\n" +
+            matchingLines.map { "Line \($0.0): \($0.1)" }.joined(separator: "\n")
         )
     }
 }
