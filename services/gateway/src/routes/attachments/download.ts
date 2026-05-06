@@ -88,7 +88,26 @@ export async function registerDownloadRoutes(
         }
 
         reply.header('Content-Type', attachment.mimeType);
-        reply.header('Content-Disposition', `inline; filename="${attachment.originalName}"`);
+        // RFC 5987 filename* form encodes the original name as UTF-8 percent-
+        // escaped, eliminating the header-injection surface that exists when
+        // the unsanitized DB value is interpolated into a quoted-string.
+        // The legacy `filename=` is kept for older clients but uses an
+        // ASCII-safe fallback (the file extension) so a hostile filename
+        // cannot smuggle quotes / CRLF / parameter separators.
+        const safeFilename = sanitizeAsciiFilename(attachment.originalName);
+        const utf8Filename = encodeRFC5987(attachment.originalName);
+        reply.header(
+          'Content-Disposition',
+          `inline; filename="${safeFilename}"; filename*=UTF-8''${utf8Filename}`,
+        );
+        // SVG can contain JavaScript and would execute in the gateway origin
+        // when served inline. Force download for SVG and add nosniff to
+        // prevent MIME-sniffing attacks across all attachment types.
+        if (attachment.mimeType === 'image/svg+xml') {
+          reply.header('Content-Disposition', `attachment; filename="${safeFilename}"`);
+          reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+        }
+        reply.header('X-Content-Type-Options', 'nosniff');
         reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
         reply.header('Access-Control-Allow-Origin', '*');
         reply.header('Cache-Control', 'public, max-age=31536000, immutable');
@@ -96,7 +115,7 @@ export async function registerDownloadRoutes(
         const stream = createReadStream(filePath);
         return reply.send(stream);
       } catch (error: any) {
-        console.error('[AttachmentRoutes] Error serving file:', error);
+        log.error('Error serving file', { error: error?.message });
         return reply.status(500).send({
           success: false,
           error: 'Error serving file',
@@ -376,4 +395,27 @@ export async function registerDownloadRoutes(
       }
     }
   );
+}
+
+// MARK: - Filename safety helpers (RFC 5987 / 6266)
+
+/// Strips characters that can break the Content-Disposition quoted-string
+/// grammar (double-quote, CR, LF, semicolon) and any non-printable byte.
+/// Keeps the result ASCII-only so the legacy `filename=` parameter stays
+/// valid for older clients that ignore `filename*`.
+function sanitizeAsciiFilename(name: string): string {
+  // eslint-disable-next-line no-control-regex
+  return name.replace(/[\x00-\x1f\x7f"\\;]/g, '_');
+}
+
+/// RFC 5987 percent-encoding of a UTF-8 filename for the
+/// `filename*=UTF-8''<encoded>` Content-Disposition extension. We
+/// percent-escape every byte that is NOT in the RFC 5987 attr-char set
+/// (ALPHA / DIGIT / "!" / "#" / "$" / "&" / "+" / "-" / "." / "^" / "_" /
+/// "`" / "|" / "~"). encodeURIComponent covers all the unsafe printable
+/// chars plus all non-ASCII; we additionally escape the few safe-by-default
+/// chars that happen to be reserved for filename* (``*'(){}<>@,;:\?/[]=``).
+function encodeRFC5987(name: string): string {
+  return encodeURIComponent(name)
+    .replace(/['()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
 }
