@@ -23,44 +23,9 @@ private final class WeakBox<T: AnyObject>: @unchecked Sendable {
     init(_ value: T) { self.value = value }
 }
 
-/// Builds the ValueObservation used by MessageStore. Declared at file scope
-/// (NOT inside @MainActor MessageStore) so the closures inside are inferred
-/// as nonisolated. Swift 6 strict concurrency inserts
-/// `_swift_task_checkIsolatedSwift` at the invocation of any closure DECLARED
-/// in a @MainActor context — even when the closure has no isolated captures.
-/// Moving the closure declaration here breaks that inheritance.
-private func makeMessageStoreObservation(convId: String) -> ValueObservation<ValueReducers.Fetch<Int>> {
-    ValueObservation.tracking { db in
-        try Int.fetchOne(
-            db,
-            sql: "SELECT COUNT(*) FROM \(MessageRecord.databaseTableName) WHERE conversationId = ?",
-            arguments: [convId]
-        ) ?? 0
-    }
-}
-
-/// Schedules a refresh of `tokens.refreshTask` on MainActor, keying off
-/// the supplied weak store. Declared at file scope (nonisolated context)
-/// to prevent Swift 6 from injecting an isolation check at closure invocation
-/// when this is used as the ValueObservation `onChange` callback.
-/// The concrete types are private to this file but visible to the factory.
-private func makeMessageStoreOnChange(
-    tokens: ObservationTokens,
-    storeBox: WeakBox<MessageStore>
-) -> @Sendable (Int) -> Void {
-    return { _ in
-        tokens.refreshTask?.cancel()
-        tokens.refreshTask = Task { @MainActor in
-            guard let store = storeBox.value else { return }
-            let delay: Duration = store.isUserScrolling
-                ? .milliseconds(200)
-                : .milliseconds(16)
-            try? await Task.sleep(for: delay)
-            guard !Task.isCancelled else { return }
-            await store.refreshFromDB()
-        }
-    }
-}
+// Notification.Name `messageStoreShouldRefresh` is defined in
+// `packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift`
+// so both MessageStore (iOS app) and MessagePersistenceActor (SDK) can use it.
 
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
 /// Explicitly non-isolated so its methods can be called from any context.
@@ -132,22 +97,33 @@ public final class MessageStore {
         stopObserving()
         let convId = conversationId
 
-        // Build the observation + onChange callback at file scope (via the
-        // private factory functions defined above). The closures are declared
-        // in a non-@MainActor context, so Swift 6 strict concurrency does NOT
-        // insert `_swift_task_checkIsolatedSwift` at their invocation. GRDB
-        // can safely run the fetch closure on its reader queue and the change
-        // callback on the main queue without isolation friction.
-        let observation = makeMessageStoreObservation(convId: convId)
-        let tokensRef = tokens
+        // GRDB ValueObservation / DatabaseRegionObservation crash under Swift 6
+        // strict concurrency: passing any @Sendable closure to GRDB triggers
+        // _swift_task_checkIsolatedSwift at invocation from GRDB's dispatch
+        // queues, even with @preconcurrency import GRDB and zero isolated
+        // captures. Workaround: subscribe to a NotificationCenter signal that
+        // MessagePersistenceActor posts after every write. The notification
+        // handler already runs on .main queue, so the refresh is dispatched
+        // safely. Real-time updates lose nothing — every code path that
+        // mutates GRDB now also posts the notification.
         let weakStore = WeakBox(self)
-        let onChange = makeMessageStoreOnChange(tokens: tokensRef, storeBox: weakStore)
-        tokens.regionCancellable = AnyDatabaseCancellable(observation.start(
-            in: dbPool,
-            scheduling: .async(onQueue: .main),
-            onError: { _ in },
-            onChange: onChange
-        ))
+        let observer = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh,
+            object: nil,
+            queue: .main
+        ) { notif in
+            guard let notifConvId = notif.userInfo?["conversationId"] as? String,
+                  notifConvId == convId else { return }
+            Task { @MainActor in
+                guard let store = weakStore.value else { return }
+                await store.refreshFromDB()
+            }
+        }
+        // Wrap the NotificationCenter observer in an AnyDatabaseCancellable so
+        // stopObserving() cleans it up via the same `regionCancellable` slot.
+        tokens.regionCancellable = AnyDatabaseCancellable {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     func stopObserving() {

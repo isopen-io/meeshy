@@ -1,6 +1,37 @@
 import Foundation
 import GRDB
 
+/// Notification posted after MessagePersistenceActor commits a write that may
+/// have changed the messages of a conversation. MessageStore listens for this
+/// notification instead of using GRDB observation, which crashes under Swift 6
+/// strict concurrency interop with the GRDB Swift module.
+/// The notification's `userInfo["conversationId"]` is a `String` identifying
+/// the conversation. `nil` means "may affect any conversation".
+public extension Notification.Name {
+    static let messageStoreShouldRefresh = Notification.Name("me.meeshy.messageStore.shouldRefresh")
+}
+
+/// Posts the `messageStoreShouldRefresh` notification on the main thread for
+/// the given conversation IDs. Called after any write through
+/// MessagePersistenceActor that may affect the displayed message list.
+fileprivate func postMessageStoreRefresh(conversationIds: Set<String>) {
+    guard !conversationIds.isEmpty else {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .messageStoreShouldRefresh, object: nil)
+        }
+        return
+    }
+    DispatchQueue.main.async {
+        for convId in conversationIds {
+            NotificationCenter.default.post(
+                name: .messageStoreShouldRefresh,
+                object: nil,
+                userInfo: ["conversationId": convId]
+            )
+        }
+    }
+}
+
 public actor MessagePersistenceActor {
     private let dbWriter: any DatabaseWriter
 
@@ -62,10 +93,11 @@ public actor MessagePersistenceActor {
         var r = record
         r.cachedTimeString = MessageRecord.computeTimeString(for: r.createdAt)
         try dbWriter.write { db in try r.insert(db) }
+        postMessageStoreRefresh(conversationIds: [r.conversationId])
     }
 
     public func applyEvent(localId: String, event: MessageEvent) throws -> MessageState? {
-        try dbWriter.write { db in
+        let result = try dbWriter.write { db -> MessageState? in
             guard var record = try MessageRecord.fetchOne(db, key: localId) else { return nil }
 
             var machine = MessageStateMachine(
@@ -100,16 +132,23 @@ public actor MessagePersistenceActor {
             try record.update(db)
             return newState
         }
+        // applyEvent may not know the conversationId; post a global refresh so
+        // any listening MessageStore re-reads.
+        postMessageStoreRefresh(conversationIds: [])
+        return result
     }
 
     // MARK: - Buffered Writes
 
     public func bufferIncoming(_ messages: [IncomingMessageData]) {
         writeContinuation.yield(.reconcileBatch(messages))
+        let convIds = Set(messages.map(\.conversationId))
+        postMessageStoreRefresh(conversationIds: convIds)
     }
 
     public func bufferBatchDelivery(conversationId: String, event: MessageEvent) {
         writeContinuation.yield(.batchDeliveryUpdate(conversationId: conversationId, event: event))
+        postMessageStoreRefresh(conversationIds: [conversationId])
     }
 
     private func reconcileBatchSync(_ messages: [IncomingMessageData]) throws {
@@ -489,6 +528,8 @@ public actor MessagePersistenceActor {
     /// the authoritative server data without a direct `messages = ...` write.
     public func upsertFromAPIMessages(_ apiMessages: [APIMessage]) async throws {
         let encoder = JSONEncoder()
+        let convIds = Set(apiMessages.map(\.conversationId))
+        defer { postMessageStoreRefresh(conversationIds: convIds) }
         try await dbWriter.write { db in
             for api in apiMessages {
                 let senderName = api.sender?.name
