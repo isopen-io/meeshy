@@ -83,9 +83,22 @@ final class ConversationSocketHandler {
         self.conversationId = conversationId
         self.currentUserId = currentUserId
         self.messageSocket = messageSocket
-        joinRoom()
-        NotificationManager.shared.onConversationOpened(conversationId)
-        NotificationCoordinator.shared.markConversationRead(conversationId)
+        // Defer side-effects (socket join + notification updates) off the
+        // current runloop tick. These calls mutate @Published state on
+        // shared singletons (NotificationCoordinator.conversationUnreadCounts,
+        // NotificationManager.unreadCount). When ConversationSocketHandler
+        // is created inside ConversationViewModel.init — which itself runs
+        // during ConversationView's body evaluation as @StateObject is
+        // bootstrapped — those synchronous @Published mutations trip
+        // "Publishing changes from within view updates is not allowed",
+        // which causes SwiftUI to dismiss the navigation push and the user
+        // sees an empty conversation list again.
+        let convId = conversationId
+        DispatchQueue.main.async { [messageSocket] in
+            messageSocket.joinConversation(convId)
+            NotificationManager.shared.onConversationOpened(convId)
+            NotificationCoordinator.shared.markConversationRead(convId)
+        }
     }
 
     func armSocketSubscriptions() {
