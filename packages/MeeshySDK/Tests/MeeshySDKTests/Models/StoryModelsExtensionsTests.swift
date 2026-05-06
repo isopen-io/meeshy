@@ -509,4 +509,62 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertEqual(decoded.clipId, "v1")
         XCTAssertEqual(decoded.kind, .video)
     }
+
+    // MARK: - DeleteClipCommand
+
+    func test_deleteClipCommand_apply_removesVideo() throws {
+        var project = makeEmptyProject()
+        let media = StoryMediaObject(id: "v1", postMediaId: "pm",
+                                     mediaType: "video", placement: "media",
+                                     startTime: 0, duration: 2)
+        project.mediaObjects = [media]
+        let cmd = DeleteClipCommand(clipId: "v1", kind: .video,
+                                    snapshotMedia: media,
+                                    snapshotAudio: nil,
+                                    snapshotText: nil,
+                                    insertionIndex: 0)
+        try cmd.apply(to: &project)
+        XCTAssertTrue(project.mediaObjects.isEmpty)
+    }
+
+    func test_deleteClipCommand_revert_restoresClipAtOriginalIndex() throws {
+        var project = makeEmptyProject()
+        let m1 = StoryMediaObject(id: "v1", postMediaId: "pm1",
+                                  mediaType: "video", placement: "media")
+        let m2 = StoryMediaObject(id: "v2", postMediaId: "pm2",
+                                  mediaType: "video", placement: "media")
+        let m3 = StoryMediaObject(id: "v3", postMediaId: "pm3",
+                                  mediaType: "video", placement: "media")
+        project.mediaObjects = [m1, m2, m3]
+        let cmd = DeleteClipCommand(clipId: "v2", kind: .video,
+                                    snapshotMedia: m2, snapshotAudio: nil,
+                                    snapshotText: nil, insertionIndex: 1)
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects.map(\.id), ["v1", "v3"])
+        try cmd.revert(from: &project)
+        XCTAssertEqual(project.mediaObjects.map(\.id), ["v1", "v2", "v3"])
+    }
+
+    func test_deleteClipCommand_apply_throwsWhenClipMissing() {
+        var project = makeEmptyProject()
+        let cmd = DeleteClipCommand(clipId: "ghost", kind: .video,
+                                    snapshotMedia: nil, snapshotAudio: nil,
+                                    snapshotText: nil, insertionIndex: 0)
+        XCTAssertThrowsError(try cmd.apply(to: &project)) { error in
+            XCTAssertEqual(error as? EditCommandError,
+                           .clipNotFound(id: "ghost"))
+        }
+    }
+
+    func test_deleteClipCommand_codableRoundTrip() throws {
+        let media = StoryMediaObject(id: "v1", postMediaId: "pm",
+                                     mediaType: "video", placement: "media")
+        let cmd = DeleteClipCommand(clipId: "v1", kind: .video,
+                                    snapshotMedia: media, snapshotAudio: nil,
+                                    snapshotText: nil, insertionIndex: 0)
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(DeleteClipCommand.self, from: data)
+        XCTAssertEqual(decoded.clipId, "v1")
+        XCTAssertEqual(decoded.snapshotMedia?.id, "v1")
+    }
 }
