@@ -1772,6 +1772,185 @@ public struct DeleteKeyframeCommand: EditCommand {
     }
 }
 
+public struct SetClipPropertyCommand: EditCommand {
+    public enum ClipProperty: Codable, Sendable, Equatable {
+        case volume(old: Float, new: Float)
+        case fadeIn(old: Float?, new: Float?)
+        case fadeOut(old: Float?, new: Float?)
+        case loop(old: Bool?, new: Bool?)
+        case isBackground(old: Bool?, new: Bool?)
+        case isLocked(old: Bool?, new: Bool?)
+
+        private enum CodingKeys: String, CodingKey {
+            case type, oldFloat, newFloat, oldBool, newBool
+        }
+
+        private enum Tag: String, Codable {
+            case volume, fadeIn, fadeOut, loop, isBackground, isLocked
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let tag = try c.decode(Tag.self, forKey: .type)
+            switch tag {
+            case .volume:
+                let old = try c.decode(Float.self, forKey: .oldFloat)
+                let new = try c.decode(Float.self, forKey: .newFloat)
+                self = .volume(old: old, new: new)
+            case .fadeIn:
+                let old = try c.decodeIfPresent(Float.self, forKey: .oldFloat)
+                let new = try c.decodeIfPresent(Float.self, forKey: .newFloat)
+                self = .fadeIn(old: old, new: new)
+            case .fadeOut:
+                let old = try c.decodeIfPresent(Float.self, forKey: .oldFloat)
+                let new = try c.decodeIfPresent(Float.self, forKey: .newFloat)
+                self = .fadeOut(old: old, new: new)
+            case .loop:
+                let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
+                let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
+                self = .loop(old: old, new: new)
+            case .isBackground:
+                let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
+                let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
+                self = .isBackground(old: old, new: new)
+            case .isLocked:
+                let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
+                let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
+                self = .isLocked(old: old, new: new)
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case .volume(let old, let new):
+                try c.encode(Tag.volume, forKey: .type)
+                try c.encode(old, forKey: .oldFloat)
+                try c.encode(new, forKey: .newFloat)
+            case .fadeIn(let old, let new):
+                try c.encode(Tag.fadeIn, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldFloat)
+                try c.encodeIfPresent(new, forKey: .newFloat)
+            case .fadeOut(let old, let new):
+                try c.encode(Tag.fadeOut, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldFloat)
+                try c.encodeIfPresent(new, forKey: .newFloat)
+            case .loop(let old, let new):
+                try c.encode(Tag.loop, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldBool)
+                try c.encodeIfPresent(new, forKey: .newBool)
+            case .isBackground(let old, let new):
+                try c.encode(Tag.isBackground, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldBool)
+                try c.encodeIfPresent(new, forKey: .newBool)
+            case .isLocked(let old, let new):
+                try c.encode(Tag.isLocked, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldBool)
+                try c.encodeIfPresent(new, forKey: .newBool)
+            }
+        }
+    }
+
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let property: ClipProperty
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                property: ClipProperty) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.property = property
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try mutate(project: &project, useNew: true)
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try mutate(project: &project, useNew: false)
+    }
+
+    private func mutate(project: inout TimelineProject, useNew: Bool) throws {
+        switch kind {
+        case .video, .image:
+            guard let idx = project.mediaObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            apply(property: property, to: &project.mediaObjects[idx], useNew: useNew)
+        case .audio:
+            guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            apply(property: property, to: &project.audioPlayerObjects[idx], useNew: useNew)
+        case .text:
+            guard let idx = project.textObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            apply(property: property, to: &project.textObjects[idx], useNew: useNew)
+        }
+    }
+
+    private func apply(property: ClipProperty,
+                       to media: inout StoryMediaObject,
+                       useNew: Bool) {
+        switch property {
+        case .volume(let old, let new):
+            media.volume = useNew ? new : old
+        case .fadeIn(let old, let new):
+            media.fadeIn = useNew ? new : old
+        case .fadeOut(let old, let new):
+            media.fadeOut = useNew ? new : old
+        case .loop(let old, let new):
+            media.loop = useNew ? new : old
+        case .isBackground(let old, let new):
+            media.isBackground = useNew ? new : old
+        case .isLocked:
+            break
+        }
+    }
+
+    private func apply(property: ClipProperty,
+                       to audio: inout StoryAudioPlayerObject,
+                       useNew: Bool) {
+        switch property {
+        case .volume(let old, let new):
+            audio.volume = useNew ? new : old
+        case .fadeIn(let old, let new):
+            audio.fadeIn = useNew ? new : old
+        case .fadeOut(let old, let new):
+            audio.fadeOut = useNew ? new : old
+        case .loop(let old, let new):
+            audio.loop = useNew ? new : old
+        case .isBackground(let old, let new):
+            audio.isBackground = useNew ? new : old
+        case .isLocked:
+            break
+        }
+    }
+
+    private func apply(property: ClipProperty,
+                       to text: inout StoryTextObject,
+                       useNew: Bool) {
+        switch property {
+        case .isLocked(let old, let new):
+            text.isLocked = useNew ? new : old
+        case .fadeIn(let old, let new):
+            text.fadeIn = useNew ? new : old
+        case .fadeOut(let old, let new):
+            text.fadeOut = useNew ? new : old
+        case .volume, .loop, .isBackground:
+            break
+        }
+    }
+}
+
 // MARK: - Story Easing (Timeline V2)
 
 /// Easing curve applied between two interpolated values (transitions, keyframes).

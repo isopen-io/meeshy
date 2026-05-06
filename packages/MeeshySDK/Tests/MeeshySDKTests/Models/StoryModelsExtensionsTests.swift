@@ -986,4 +986,107 @@ final class StoryModelsExtensionsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(DeleteKeyframeCommand.self, from: data)
         XCTAssertEqual(decoded.keyframeId, "kf1")
     }
+
+    // MARK: - SetClipPropertyCommand
+
+    func test_setClipPropertyCommand_apply_setsVolumeOnAudio() throws {
+        var project = makeEmptyProject()
+        project.audioPlayerObjects = [
+            StoryAudioPlayerObject(id: "a1", postMediaId: "pm",
+                                   placement: "overlay", volume: 1.0,
+                                   waveformSamples: [])
+        ]
+        let cmd = SetClipPropertyCommand(clipId: "a1", kind: .audio,
+                                         property: .volume(old: 1.0, new: 0.4))
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.audioPlayerObjects[0].volume, 0.4)
+    }
+
+    func test_setClipPropertyCommand_revert_restoresOldVolume() throws {
+        var project = makeEmptyProject()
+        project.audioPlayerObjects = [
+            StoryAudioPlayerObject(id: "a1", postMediaId: "pm",
+                                   placement: "overlay", volume: 1.0,
+                                   waveformSamples: [])
+        ]
+        let cmd = SetClipPropertyCommand(clipId: "a1", kind: .audio,
+                                         property: .volume(old: 1.0, new: 0.4))
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertEqual(project.audioPlayerObjects[0].volume, 1.0)
+    }
+
+    func test_setClipPropertyCommand_apply_setsFadeInOnVideo() throws {
+        var project = makeEmptyProject()
+        project.mediaObjects = [
+            StoryMediaObject(id: "v1", postMediaId: "pm",
+                             mediaType: "video", placement: "media")
+        ]
+        let cmd = SetClipPropertyCommand(clipId: "v1", kind: .video,
+                                         property: .fadeIn(old: nil, new: 0.5))
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects[0].fadeIn, 0.5)
+    }
+
+    func test_setClipPropertyCommand_apply_setsLoopOnVideo() throws {
+        var project = makeEmptyProject()
+        project.mediaObjects = [
+            StoryMediaObject(id: "v1", postMediaId: "pm",
+                             mediaType: "video", placement: "media")
+        ]
+        let cmd = SetClipPropertyCommand(clipId: "v1", kind: .video,
+                                         property: .loop(old: nil, new: true))
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects[0].loop, true)
+    }
+
+    func test_setClipPropertyCommand_apply_setsIsBackgroundOnAudio() throws {
+        var project = makeEmptyProject()
+        project.audioPlayerObjects = [
+            StoryAudioPlayerObject(id: "a1", postMediaId: "pm",
+                                   placement: "overlay",
+                                   waveformSamples: [])
+        ]
+        let cmd = SetClipPropertyCommand(clipId: "a1", kind: .audio,
+                                         property: .isBackground(old: nil, new: true))
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.audioPlayerObjects[0].isBackground, true)
+    }
+
+    func test_setClipPropertyCommand_apply_setsIsLockedOnText() throws {
+        var project = makeEmptyProject()
+        project.textObjects = [StoryTextObject(id: "t1", content: "x")]
+        let cmd = SetClipPropertyCommand(clipId: "t1", kind: .text,
+                                         property: .isLocked(old: nil, new: true))
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.textObjects[0].isLocked, true)
+    }
+
+    func test_setClipPropertyCommand_apply_throwsWhenClipMissing() {
+        var project = makeEmptyProject()
+        let cmd = SetClipPropertyCommand(clipId: "ghost", kind: .video,
+                                         property: .volume(old: 1.0, new: 0.5))
+        XCTAssertThrowsError(try cmd.apply(to: &project)) { error in
+            XCTAssertEqual(error as? EditCommandError,
+                           .clipNotFound(id: "ghost"))
+        }
+    }
+
+    func test_setClipPropertyCommand_codableRoundTrip_eachVariant() throws {
+        let variants: [SetClipPropertyCommand.ClipProperty] = [
+            .volume(old: 1.0, new: 0.5),
+            .fadeIn(old: nil, new: 0.3),
+            .fadeOut(old: 0.2, new: nil),
+            .loop(old: false, new: true),
+            .isBackground(old: nil, new: true),
+            .isLocked(old: nil, new: true),
+        ]
+        for property in variants {
+            let cmd = SetClipPropertyCommand(clipId: "c", kind: .video, property: property)
+            let data = try JSONEncoder().encode(cmd)
+            let decoded = try JSONDecoder().decode(SetClipPropertyCommand.self, from: data)
+            XCTAssertEqual(decoded.clipId, "c")
+            XCTAssertEqual(decoded.property, property)
+        }
+    }
 }
