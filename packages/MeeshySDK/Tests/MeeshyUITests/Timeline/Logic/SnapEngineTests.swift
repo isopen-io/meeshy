@@ -97,4 +97,23 @@ final class SnapEngineTests: XCTestCase {
         XCTAssertEqual(exact.matched, candidate)
         XCTAssertNil(nearMiss.matched)
     }
+
+    // MARK: - SnapEngine.snap — single candidate
+
+    func test_snap_singleCandidateWithinTolerance_snapsAndReturnsMatch() {
+        let engine = SnapEngine(toleranceSeconds: 0.5)
+        let candidate = SnapCandidate(kind: .clipEnd, time: 3.0, label: "clipA end")
+        let result = engine.snap(rawTime: 3.2, candidates: [candidate])
+        XCTAssertEqual(result.snappedTime, 3.0, accuracy: 0.0001)
+        XCTAssertEqual(result.matched, candidate)
+    }
+
+    func test_snap_singleCandidateAtToleranceBoundary_snaps() {
+        let engine = SnapEngine(toleranceSeconds: 0.5)
+        let candidate = SnapCandidate(kind: .clipEnd, time: 3.0, label: nil)
+        // |2.5 - 3.0| == 0.5, exactly at the boundary
+        let result = engine.snap(rawTime: 2.5, candidates: [candidate])
+        XCTAssertEqual(result.snappedTime, 3.0, accuracy: 0.0001)
+        XCTAssertEqual(result.matched, candidate)
+    }
 }
