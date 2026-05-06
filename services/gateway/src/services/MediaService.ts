@@ -1,7 +1,7 @@
 import { promises as fs, constants as fsConstants } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
+import type { MediaStorage, MediaDuplicateResult, MediaDuplicatePlan } from './storage/MediaStorage';
 
 // Re-export for backwards compatibility with call sites that imported the
 // type from `MediaService` rather than from the new `storage/MediaStorage`
@@ -101,7 +101,11 @@ export class MediaService implements MediaStorage {
         // APFS, btrfs, XFS, ext4 5.6+) ; falls back to full byte copy on
         // filesystems that do not support reflinks. COPYFILE_EXCL guards
         // against overwriting an unexpected destination.
-        await fs.copyFile(srcPath, destPath, fsConstants.COPYFILE_FICLONE | fsConstants.COPYFILE_EXCL);
+        // Note : `fsConstants.COPYFILE_FICLONE` is undefined on macOS in
+        // Node — coalesce to 0 so we don't OR `undefined` with EXCL and
+        // silently drop the EXCL guard.
+        const ficlone = (fsConstants.COPYFILE_FICLONE as number | undefined) ?? 0;
+        await fs.copyFile(srcPath, destPath, ficlone | fsConstants.COPYFILE_EXCL);
 
         const stat = await fs.stat(destPath);
         const newFileUrl = `${ATTACHMENTS_FILE_PREFIX}${encodeURIComponent(newRelativePath)}`;
@@ -156,6 +160,52 @@ export class MediaService implements MediaStorage {
   /** {@inheritDoc MediaStorage.delete} */
   delete(fileUrl: string): Promise<void> {
     return this.deleteMedia(fileUrl);
+  }
+
+  /** {@inheritDoc MediaStorage.planDuplicate} */
+  planDuplicate(originalUrl: string): MediaDuplicatePlan {
+    const relativePath = this.relativePathFromUrl(originalUrl);
+    if (relativePath === null) {
+      throw new Error(`MediaService.planDuplicate: cannot parse URL "${originalUrl}"`);
+    }
+
+    const srcPath = path.join(this.uploadBasePath, relativePath);
+    const ext = path.extname(relativePath);
+    const newFileName = `snapshot_${uuidv4()}${ext}`;
+    const newRelativePath = path.join('snapshots', newFileName);
+    const destPath = path.join(this.uploadBasePath, newRelativePath);
+    const newFileUrl = `${ATTACHMENTS_FILE_PREFIX}${encodeURIComponent(newRelativePath)}`;
+    const guessedMimeType = this.guessMimeType(ext);
+
+    const commit = async (): Promise<MediaDuplicateResult> => {
+      await fs.mkdir(path.dirname(destPath), { recursive: true });
+      // COPYFILE_FICLONE = best-effort copy-on-write reflink (zero-copy on
+      // APFS, btrfs, XFS, ext4 5.6+) ; falls back to full byte copy on
+      // filesystems that do not support reflinks. COPYFILE_EXCL guards
+      // against overwriting the planned destination — since the UUID was
+      // committed at planDuplicate time, EEXIST here means a genuine
+      // collision (extremely improbable) and we surface it instead of
+      // silently overwriting the outbox-tracked URL.
+      // Note : `fsConstants.COPYFILE_FICLONE` is undefined on macOS in
+      // Node — bitwise OR with undefined yields the EXCL flag alone, which
+      // is acceptable (just no reflink optimization on dev).
+      const ficlone = (fsConstants.COPYFILE_FICLONE as number | undefined) ?? 0;
+      await fs.copyFile(srcPath, destPath, ficlone | fsConstants.COPYFILE_EXCL);
+      const stat = await fs.stat(destPath);
+      return {
+        fileUrl: newFileUrl,
+        filePath: newRelativePath,
+        fileName: newFileName,
+        fileSize: stat.size,
+        mimeType: guessedMimeType,
+      };
+    };
+
+    return {
+      plannedFileUrl: newFileUrl,
+      plannedFilePath: newRelativePath,
+      commit,
+    };
   }
 
   private guessMimeType(ext: string): string {

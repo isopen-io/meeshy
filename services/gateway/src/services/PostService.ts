@@ -4,7 +4,7 @@ import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { MediaService } from './MediaService';
-import type { MediaStorage } from './storage/MediaStorage';
+import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
@@ -847,6 +847,23 @@ export class PostService {
       // If we crash before reaching the untrack call, the worker will reap
       // the snapshot files on the next sweep cycle.
       const orphanRowIds: string[] = [];
+
+      // Helper that runs the producer pattern correctly : when an outbox
+      // is wired, register the destination URL BEFORE writing the file so
+      // a crash mid-write is recoverable. When no outbox, fall back to the
+      // simple single-shot duplicate() + post-hoc track that this code
+      // path used previously (no producer guarantee, but the inline catch
+      // still cleans up on synchronous failure).
+      const trackedDuplicate = async (sourceUrl: string): Promise<MediaDuplicateResult> => {
+        if (!this.orphanCleanup) {
+          return await this.mediaService.duplicate(sourceUrl);
+        }
+        const plan = this.mediaService.planDuplicate(sourceUrl);
+        const trackId = await this.orphanCleanup.track(plan.plannedFileUrl, 'repost-snapshot');
+        orphanRowIds.push(trackId);
+        return await plan.commit();
+      };
+
       try {
         const originalMedia = (original.media ?? []) as Array<{
           fileUrl: string;
@@ -856,16 +873,10 @@ export class PostService {
         }>;
 
         for (const [idx, m] of originalMedia.entries()) {
-          const dup = await this.mediaService.duplicate(m.fileUrl);
-          if (this.orphanCleanup) {
-            orphanRowIds.push(await this.orphanCleanup.track(dup.fileUrl, 'repost-snapshot'));
-          }
+          const dup = await trackedDuplicate(m.fileUrl);
           let dupThumbUrl: string | undefined;
           if (m.thumbnailUrl) {
-            const dupThumb = await this.mediaService.duplicate(m.thumbnailUrl);
-            if (this.orphanCleanup) {
-              orphanRowIds.push(await this.orphanCleanup.track(dupThumb.fileUrl, 'repost-snapshot'));
-            }
+            const dupThumb = await trackedDuplicate(m.thumbnailUrl);
             dupThumbUrl = dupThumb.fileUrl;
           }
           duplicatedMedia.push({
@@ -882,10 +893,7 @@ export class PostService {
 
         const audioUrl = original.audioUrl as string | null | undefined;
         if (audioUrl) {
-          const dupAudio = await this.mediaService.duplicate(audioUrl);
-          if (this.orphanCleanup) {
-            orphanRowIds.push(await this.orphanCleanup.track(dupAudio.fileUrl, 'repost-snapshot'));
-          }
+          const dupAudio = await trackedDuplicate(audioUrl);
           duplicatedAudioUrl = dupAudio.fileUrl;
           snapshotAudioUrl = dupAudio.fileUrl;
         }
