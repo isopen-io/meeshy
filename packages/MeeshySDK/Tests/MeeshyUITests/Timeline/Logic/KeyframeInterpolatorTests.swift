@@ -108,4 +108,25 @@ final class KeyframeInterpolatorTests: XCTestCase {
         let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: -1.0)
         XCTAssertEqual(result!, 5.0, accuracy: 0.0001 as Float)
     }
+
+    // MARK: - KeyframeInterpolator — N keyframes linear
+
+    func test_interpolate_twoKeyframes_atMidpoint_returnsAverage() {
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 0.0, value: 0.0,  easing: .linear),
+            (time: 2.0, value: 10.0, easing: .linear)
+        ]
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 1.0)
+        XCTAssertEqual(result!, 5.0, accuracy: 0.0001 as Float)
+    }
+
+    func test_interpolate_threeKeyframes_secondSegment() {
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 0.0, value: 0.0,   easing: .linear),
+            (time: 1.0, value: 10.0,  easing: .linear),
+            (time: 2.0, value: 100.0, easing: .linear)
+        ]
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 1.5)
+        XCTAssertEqual(result!, 55.0, accuracy: 0.0001 as Float)
+    }
 }
