@@ -37,8 +37,10 @@ final class RetryEngineTests: XCTestCase {
     }
 
     func test_sendFailed_afterMaxRetries_moveToFailed() async throws {
+        // maxRetries = 3 means three retries are permitted: a failure surfaces
+        // as .failed only once retryCount has already reached the cap.
         var record = MessageRecordFactory.make(localId: "retry_003", state: .sending)
-        record.retryCount = 2
+        record.retryCount = MessageStateMachine.maxRetries
         try await persistence.insertOptimistic(record)
 
         _ = try await persistence.applyEvent(localId: "retry_003",
@@ -46,7 +48,7 @@ final class RetryEngineTests: XCTestCase {
 
         let fetched = try persistence.messages(for: "conv_default", limit: 10)
         XCTAssertEqual(fetched[0].state, .failed)
-        XCTAssertEqual(fetched[0].retryCount, 3)
+        XCTAssertEqual(fetched[0].retryCount, MessageStateMachine.maxRetries)
     }
 
     func test_multipleFailedMessages_allRequeue() async throws {

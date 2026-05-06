@@ -65,10 +65,12 @@ final class MessageStateMachineTests: XCTestCase {
     }
 
     func test_apply_sendFailed_afterMaxRetries_transitionsToFailed() {
-        var sm = MessageStateMachine(state: .sending, retryCount: 2)
+        // maxRetries = 3 means three attempts are allowed: retryCount must
+        // already equal maxRetries for the next failure to surface as .failed.
+        var sm = MessageStateMachine(state: .sending, retryCount: MessageStateMachine.maxRetries)
         let result = sm.apply(.sendFailed(TestError.network))
         XCTAssertEqual(result, .failed)
-        XCTAssertEqual(sm.retryCount, 3)
+        XCTAssertEqual(sm.retryCount, MessageStateMachine.maxRetries)
     }
 
     func test_apply_retry_fromFailed_resetsAndRequeues() {

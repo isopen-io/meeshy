@@ -578,6 +578,9 @@ final class MessageSocketEventTests: XCTestCase {
     // MARK: - SocketNotificationEvent
 
     func testSocketNotificationEventDecodingAllFields() throws {
+        // Gateway now serialises sender/context/metadata as nested objects.
+        // The flat senderUsername/conversationId/etc. accessors on the Swift
+        // side are computed properties that resolve from the nested structs.
         let json = """
         {
             "id": "notif1",
@@ -587,12 +590,18 @@ final class MessageSocketEventTests: XCTestCase {
             "content": "Salut !",
             "priority": "high",
             "isRead": false,
-            "senderUsername": "alice",
-            "senderDisplayName": "Alice Dupont",
-            "senderAvatar": "https://cdn.meeshy.me/avatars/alice.jpg",
-            "messagePreview": "Salut ! Comment ca va ?",
-            "conversationId": "conv1",
-            "messageId": "msg1"
+            "actor": {
+                "username": "alice",
+                "displayName": "Alice Dupont",
+                "avatar": "https://cdn.meeshy.me/avatars/alice.jpg"
+            },
+            "context": {
+                "conversationId": "conv1",
+                "messageId": "msg1"
+            },
+            "metadata": {
+                "commentPreview": "Salut ! Comment ca va ?"
+            }
         }
         """.data(using: .utf8)!
 
