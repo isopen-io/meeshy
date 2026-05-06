@@ -899,17 +899,29 @@ class ConversationViewModel: ObservableObject {
             // GRDB store already has data (loaded in init + kept warm by socket events).
             // Let the store observation surface the current window — no direct assignment.
             await messageStore.loadInitial()
+            // The legacy CacheCoordinator can be in sync while GRDB is still cold for
+            // this conversation (first open after install / clear). Bootstrap GRDB
+            // from API so the user sees their messages instead of an empty bubble list.
+            if messageStore.messages.isEmpty {
+                await refreshMessagesFromAPI()
+            }
             await hydrateTranslationsFromCache()
 
         case .stale:
             // Surface GRDB data immediately, then revalidate in background.
             await messageStore.loadInitial()
-            await hydrateTranslationsFromCache()
-            isRevalidating = true
-            Task { [weak self] in
-                guard let self else { return }
-                await self.refreshMessagesFromAPI()
-                await MainActor.run { self.isRevalidating = false }
+            if messageStore.messages.isEmpty {
+                // GRDB cold for this conversation — fetch synchronously to render now.
+                await refreshMessagesFromAPI()
+                await hydrateTranslationsFromCache()
+            } else {
+                await hydrateTranslationsFromCache()
+                isRevalidating = true
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.refreshMessagesFromAPI()
+                    await MainActor.run { self.isRevalidating = false }
+                }
             }
 
         case .expired, .empty:
