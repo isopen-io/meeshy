@@ -1128,7 +1128,7 @@ struct ThemedMessageBubble: View {
 
                 // Attachment thumbnail or story thumbnail
                 if let thumbUrl = (reply.isStoryReply ? reply.storyThumbnailUrl : reply.attachmentThumbnailUrl), !thumbUrl.isEmpty {
-                    CachedAsyncImage(url: thumbUrl) {
+                    CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 38, height: 38)) {
                         Color(hex: reply.authorColor).opacity(0.3)
                     }
                     .aspectRatio(contentMode: .fill)

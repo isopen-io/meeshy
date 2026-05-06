@@ -1159,7 +1159,7 @@ extension StoryViewerView {
             // Avatar
             if let avatarURL = comment.authorAvatarURL,
                let url = MeeshyConfig.resolveMediaURL(avatarURL) {
-                CachedAsyncImage(url: url.absoluteString) {
+                CachedAsyncImage(url: url.absoluteString, targetSize: CGSize(width: 28, height: 28)) {
                     commentAvatarPlaceholder(color: comment.authorColor)
                 }
                 .frame(width: 28, height: 28)
