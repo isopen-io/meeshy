@@ -36,7 +36,8 @@ final class MessageServiceTests: XCTestCase {
             forwardedFromConversation: nil, reactionSummary: nil,
             reactionCount: nil, currentUserReactions: nil,
             deliveredToAllAt: nil, readByAllAt: nil,
-            deliveredCount: nil, readCount: nil, effectFlags: nil, translations: nil
+            deliveredCount: nil, readCount: nil, effectFlags: nil, translations: nil,
+            mentionedUsers: nil
         )
     }
 
@@ -46,7 +47,8 @@ final class MessageServiceTests: XCTestCase {
             data: messages ?? [makeMessage()],
             pagination: OffsetPagination(total: 1, hasMore: false, limit: 30, offset: 0),
             cursorPagination: nil,
-            hasNewer: nil
+            hasNewer: nil,
+            meta: nil
         )
     }
 

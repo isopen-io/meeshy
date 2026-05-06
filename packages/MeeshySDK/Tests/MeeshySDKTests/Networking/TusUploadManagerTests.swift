@@ -116,6 +116,7 @@ final class TusUploadManagerTests: XCTestCase {
             fileSize: 4096,
             fileUrl: "https://cdn.example.com/photo.jpg",
             thumbnailUrl: "https://cdn.example.com/thumb.jpg",
+            thumbHash: nil,
             width: 1920,
             height: 1080,
             duration: nil
@@ -145,6 +146,7 @@ final class TusUploadManagerTests: XCTestCase {
             fileSize: 8192,
             fileUrl: "https://cdn.example.com/video.mp4",
             thumbnailUrl: nil,
+            thumbHash: nil,
             width: nil,
             height: nil,
             duration: 120
