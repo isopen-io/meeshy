@@ -81,12 +81,14 @@ public final class MessageStore {
         tokens.regionCancellable = DatabaseRegionObservation(tracking: request)
             .start(in: dbPool, onError: { _ in }) { [weak self] _ in
                 // GRDB invokes this closure on its writer's serial queue, NOT
-                // MainActor. Accessing `self.tokens` (property of @MainActor
-                // class) from off-actor trips Swift 6's strict concurrency
-                // assertion (`_swift_task_checkIsolatedSwift` →
-                // `dispatch_assert_queue_fail`). Hop to MainActor before any
-                // self.* access.
-                Task { @MainActor [weak self] in
+                // MainActor. Even creating a `Task { @MainActor in ... }` from
+                // here trips Swift 6's strict concurrency assertion because the
+                // Task creation queries the current executor. We use
+                // DispatchQueue.main.async (a nonisolated dispatch primitive)
+                // to escape the GRDB queue WITHOUT a runtime isolation check,
+                // landing on MainActor's serial queue where self.tokens
+                // mutation is safe.
+                DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
                     self.tokens.refreshTask?.cancel()
                     self.tokens.refreshTask = Task { @MainActor [weak self] in
