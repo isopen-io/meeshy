@@ -16,7 +16,7 @@ final class MessageTimestampPrecomputeTests: XCTestCase {
 
         try await actor.insertOptimistic(record)
 
-        let stored = try pool.read { db in
+        let stored = try await pool.read { db in
             try MessageRecord.fetchOne(db, key: "x")
         }
         XCTAssertNotNil(stored?.cachedTimeString,
@@ -25,9 +25,9 @@ final class MessageTimestampPrecomputeTests: XCTestCase {
             "cachedTimeString must not be empty")
     }
 
-    func test_strftime_localtime_returnsDeviceLocalTime() throws {
+    func test_strftime_localtime_returnsDeviceLocalTime() async throws {
         let pool = try DatabaseQueue()
-        try pool.write { db in
+        try await pool.write { db in
             try db.execute(sql: "CREATE TABLE t (createdAt DATETIME)")
             let date = ISO8601DateFormatter().date(from: "2026-05-06T14:32:00Z")!
             try db.execute(
@@ -36,7 +36,7 @@ final class MessageTimestampPrecomputeTests: XCTestCase {
             )
         }
 
-        let result: String? = try pool.read { db in
+        let result: String? = try await pool.read { db in
             try String.fetchOne(db, sql: "SELECT strftime('%H:%M', createdAt, 'localtime') FROM t")
         }
         XCTAssertNotNil(result, "strftime must return a value")

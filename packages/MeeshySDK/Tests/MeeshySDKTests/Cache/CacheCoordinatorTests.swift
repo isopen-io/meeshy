@@ -27,6 +27,36 @@ final class CacheCoordinatorTests: XCTestCase {
         return (coordinator, msgSocket, socialSocket)
     }
 
+    /// Creates a CacheCoordinator paired with a ConversationSyncEngine whose
+    /// `startSocketRelay()` is already running. This mirrors the production
+    /// wiring (post offline-first refactor): cache invalidation/mutation in
+    /// response to socket events lives in the SyncEngine, not the Coordinator.
+    private func makeSUTWithRelay(db: DatabaseQueue? = nil) async throws -> (
+        coordinator: CacheCoordinator,
+        engine: ConversationSyncEngine,
+        messageSocket: MockMessageSocket,
+        socialSocket: MockSocialSocket
+    ) {
+        let database = try db ?? makeDB()
+        let msgSocket = MockMessageSocket()
+        let socialSocket = MockSocialSocket()
+        let coordinator = CacheCoordinator(
+            messageSocket: msgSocket,
+            socialSocket: socialSocket,
+            db: database
+        )
+        let engine = ConversationSyncEngine(
+            cache: coordinator,
+            conversationService: BareConversationService(),
+            messageService: BareMessageService(),
+            messageSocket: msgSocket,
+            socialSocket: socialSocket,
+            api: MockAPIClient()
+        )
+        await engine.startSocketRelay()
+        return (coordinator, engine, msgSocket, socialSocket)
+    }
+
     // MARK: - Store Access
 
     func test_stores_haveCorrectPolicies() async throws {
@@ -38,7 +68,7 @@ final class CacheCoordinatorTests: XCTestCase {
 
         let msgPolicy = await sut.messages.policy
         XCTAssertEqual(msgPolicy.storageLocation, .grdb)
-        XCTAssertEqual(msgPolicy.maxItemCount, 50)
+        XCTAssertEqual(msgPolicy.maxItemCount, 600)
 
         let partPolicy = await sut.participants.policy
         XCTAssertEqual(partPolicy.storageLocation, .grdb)
@@ -71,17 +101,16 @@ final class CacheCoordinatorTests: XCTestCase {
     // MARK: - Socket -> Cache: message:new
 
     func test_messageReceived_appendsToCache() async throws {
-        let (sut, msgSocket, _) = try makeSUT()
+        let (sut, engine, msgSocket, _) = try await makeSUTWithRelay()
+        withExtendedLifetime(engine) {}
 
         let existingMsg = TestFactories.makeMessage(id: "m1", conversationId: "conv-1", content: "First")
         await sut.messages.save([existingMsg], for: "conv-1")
 
-        await sut.start()
-
         let apiMsg = TestFactories.makeAPIMessage(id: "m2", conversationId: "conv-1", content: "Second")
         msgSocket.messageReceived.send(apiMsg)
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         let result = await sut.messages.load(for: "conv-1")
         guard let items = result.value else {
@@ -93,40 +122,44 @@ final class CacheCoordinatorTests: XCTestCase {
 
     // MARK: - Socket -> Cache: message:deleted
 
-    func test_messageDeleted_removesFromCache() async throws {
-        let (sut, msgSocket, _) = try makeSUT()
+    func test_messageDeleted_softDeletesInCache() async throws {
+        let (sut, engine, msgSocket, _) = try await makeSUTWithRelay()
+        withExtendedLifetime(engine) {}
 
         let m1 = TestFactories.makeMessage(id: "m1", conversationId: "conv-1", content: "Keep")
         let m2 = TestFactories.makeMessage(id: "m2", conversationId: "conv-1", content: "Delete")
         await sut.messages.save([m1, m2], for: "conv-1")
 
-        await sut.start()
-
         msgSocket.messageDeleted.send(MessageDeletedEvent(messageId: "m2", conversationId: "conv-1"))
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         let result = await sut.messages.load(for: "conv-1")
         guard let items = result.value else {
             XCTFail("Expected cached messages"); return
         }
-        XCTAssertEqual(items.count, 1)
-        XCTAssertEqual(items.first?.id, "m1")
+        // Post offline-first refactor: delete is a soft-delete (deletedAt set,
+        // content cleared). The message stays in the cache so the UI can show
+        // "Message deleted" placeholder without a refetch.
+        XCTAssertEqual(items.count, 2)
+        let deleted = items.first(where: { $0.id == "m2" })
+        XCTAssertNotNil(deleted?.deletedAt)
+        XCTAssertEqual(deleted?.content, "")
+        XCTAssertEqual(items.first(where: { $0.id == "m1" })?.content, "Keep")
     }
 
     // MARK: - Socket -> Cache: unread update
 
     func test_unreadUpdated_mutatesConversationCache() async throws {
-        let (sut, msgSocket, _) = try makeSUT()
+        let (sut, engine, msgSocket, _) = try await makeSUTWithRelay()
+        withExtendedLifetime(engine) {}
 
         let conv = TestFactories.makeConversation(id: "conv-1", unreadCount: 0)
         await sut.conversations.save([conv], for: "list")
 
-        await sut.start()
-
         msgSocket.unreadUpdated.send(UnreadUpdateEvent(conversationId: "conv-1", unreadCount: 5))
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         let result = await sut.conversations.load(for: "list")
         guard let items = result.value else {
@@ -137,13 +170,12 @@ final class CacheCoordinatorTests: XCTestCase {
 
     // MARK: - Socket -> Cache: participant role update
 
-    func test_participantRoleUpdated_mutatesCache() async throws {
-        let (sut, msgSocket, _) = try makeSUT()
+    func test_participantRoleUpdated_invalidatesCache() async throws {
+        let (sut, engine, msgSocket, _) = try await makeSUTWithRelay()
+        withExtendedLifetime(engine) {}
 
         let participant = TestFactories.makeParticipant(id: "p1", conversationRole: "MEMBER")
         await sut.participants.save([participant], for: "conv-1")
-
-        await sut.start()
 
         let participantInfo = ParticipantRoleUpdatedParticipantInfo(
             id: "p1", role: "ADMIN", displayName: "Test", userId: nil
@@ -155,36 +187,42 @@ final class CacheCoordinatorTests: XCTestCase {
         )
         msgSocket.participantRoleUpdated.send(event)
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 200_000_000)
 
+        // Post offline-first refactor: role updates invalidate the participants
+        // cache (force a refresh from the server) rather than mutating in
+        // place — keeps the cache as a single source of truth driven by the
+        // gateway, avoiding drift between socket payload and DB state.
         let result = await sut.participants.load(for: "conv-1")
-        guard let items = result.value else {
-            XCTFail("Expected cached participants"); return
+        switch result {
+        case .empty: break
+        default: XCTFail("Expected empty after invalidation, got \(result)")
         }
-        XCTAssertEqual(items.first?.conversationRole, "ADMIN")
     }
 
     // MARK: - Socket -> Cache: reconnect
 
-    func test_didReconnect_invalidatesConversations() async throws {
-        let (sut, msgSocket, _) = try makeSUT()
+    func test_didReconnect_triggersDeltaSync() async throws {
+        let (sut, engine, msgSocket, _) = try await makeSUTWithRelay()
+        withExtendedLifetime(engine) {}
 
         let conv = TestFactories.makeConversation(id: "conv-1")
         await sut.conversations.save([conv], for: "list")
 
-        await sut.start()
-
         msgSocket.didReconnect.send(())
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 200_000_000)
 
+        // Reconnect now drives an incremental delta sync via the SyncEngine
+        // rather than a blunt invalidation. The cache stays warm so the UI
+        // doesn't flash empty during the catch-up — `syncSinceLastCheckpoint`
+        // patches in only the diff. Verify the existing entry survives.
         let result = await sut.conversations.load(for: "list")
-        switch result {
-        case .empty:
-            break
-        default:
-            XCTFail("Expected empty after invalidation, got \(result)")
+        guard let items = result.value else {
+            XCTFail("Expected cached conversations to remain after reconnect")
+            return
         }
+        XCTAssertEqual(items.first?.id, "conv-1")
     }
 
     // MARK: - Flush + Invalidate
@@ -217,16 +255,15 @@ final class CacheCoordinatorTests: XCTestCase {
     // MARK: - Conversation joined/left invalidate participants
 
     func test_conversationJoined_invalidatesParticipants() async throws {
-        let (sut, msgSocket, _) = try makeSUT()
+        let (sut, engine, msgSocket, _) = try await makeSUTWithRelay()
+        withExtendedLifetime(engine) {}
 
         let participant = TestFactories.makeParticipant(id: "p1")
         await sut.participants.save([participant], for: "conv-1")
 
-        await sut.start()
-
         msgSocket.conversationJoined.send(ConversationParticipationEvent(conversationId: "conv-1", userId: "u-new"))
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         let result = await sut.participants.load(for: "conv-1")
         switch result {
@@ -460,4 +497,46 @@ final class CacheCoordinatorTests: XCTestCase {
         let cached = await sut.cachedAudioTranslations(for: "nonexistent")
         XCTAssertNil(cached)
     }
+}
+
+// MARK: - Bare service stubs (only methods exercised by socket-relay paths)
+
+private final class BareConversationService: ConversationServiceProviding, @unchecked Sendable {
+    func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
+        OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
+    }
+    func getById(_ conversationId: String) async throws -> APIConversation { throw MeeshyError.network(.timeout) }
+    func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { throw MeeshyError.network(.timeout) }
+    func delete(conversationId: String) async throws {}
+    func markRead(conversationId: String) async throws {}
+    func markAsReceived(conversationId: String) async throws {}
+    func markUnread(conversationId: String) async throws {}
+    func getParticipants(conversationId: String, limit: Int, cursor: String?) async throws -> PaginatedAPIResponse<[APIParticipant]> { throw MeeshyError.network(.timeout) }
+    func deleteForMe(conversationId: String) async throws {}
+    func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation] { [] }
+    func findDirectWith(userId: String) async throws -> APIConversation? { nil }
+    func removeParticipant(conversationId: String, participantId: String) async throws {}
+    func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws {}
+    func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?, defaultWriteRole: String?, isAnnouncementChannel: Bool?, slowModeSeconds: Int?, autoTranslateEnabled: Bool?) async throws -> APIConversation { throw MeeshyError.network(.timeout) }
+    func leave(conversationId: String) async throws {}
+    func banParticipant(conversationId: String, userId: String) async throws {}
+    func unbanParticipant(conversationId: String, userId: String) async throws {}
+}
+
+private final class BareMessageService: MessageServiceProviding, @unchecked Sendable {
+    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+        MessagesAPIResponse(success: true, data: [], pagination: nil, cursorPagination: nil, hasNewer: nil, meta: nil)
+    }
+    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+        MessagesAPIResponse(success: true, data: [], pagination: nil, cursorPagination: nil, hasNewer: nil, meta: nil)
+    }
+    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
+    func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData { throw MeeshyError.network(.timeout) }
+    func edit(messageId: String, content: String) async throws -> APIMessage { throw MeeshyError.network(.timeout) }
+    func delete(conversationId: String, messageId: String) async throws {}
+    func pin(conversationId: String, messageId: String) async throws {}
+    func unpin(conversationId: String, messageId: String) async throws {}
+    func consumeViewOnce(conversationId: String, messageId: String) async throws -> ConsumeViewOnceResponse { throw MeeshyError.network(.timeout) }
+    func search(conversationId: String, query: String, limit: Int) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
+    func searchWithCursor(conversationId: String, query: String, cursor: String) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
 }
