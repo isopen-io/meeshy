@@ -64,4 +64,64 @@ final class StoryModelsExtensionsTests: XCTestCase {
             XCTAssertEqual(decoded, kind)
         }
     }
+
+    // MARK: - StoryClipTransition
+
+    func test_storyClipTransition_init_assignsProperties() {
+        let t = StoryClipTransition(
+            id: "tr-1",
+            fromClipId: "clip-a",
+            toClipId: "clip-b",
+            kind: .crossfade,
+            duration: 0.5,
+            easing: .easeInOut
+        )
+        XCTAssertEqual(t.id, "tr-1")
+        XCTAssertEqual(t.fromClipId, "clip-a")
+        XCTAssertEqual(t.toClipId, "clip-b")
+        XCTAssertEqual(t.kind, .crossfade)
+        XCTAssertEqual(t.duration, 0.5)
+        XCTAssertEqual(t.easing, .easeInOut)
+    }
+
+    func test_storyClipTransition_init_defaultsEasingToNil_andGeneratesUUID() {
+        let t = StoryClipTransition(
+            fromClipId: "a",
+            toClipId: "b",
+            kind: .dissolve,
+            duration: 1.0
+        )
+        XCTAssertFalse(t.id.isEmpty)
+        XCTAssertNil(t.easing)
+    }
+
+    func test_storyClipTransition_codableRoundTrip_full() throws {
+        let original = StoryClipTransition(
+            id: "tr-42",
+            fromClipId: "intro.mp4",
+            toClipId: "photo1",
+            kind: .dissolve,
+            duration: 0.8,
+            easing: .easeOut
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(StoryClipTransition.self, from: data)
+        XCTAssertEqual(decoded.id, original.id)
+        XCTAssertEqual(decoded.fromClipId, original.fromClipId)
+        XCTAssertEqual(decoded.toClipId, original.toClipId)
+        XCTAssertEqual(decoded.kind, original.kind)
+        XCTAssertEqual(decoded.duration, original.duration, accuracy: 0.0001)
+        XCTAssertEqual(decoded.easing, original.easing)
+    }
+
+    func test_storyClipTransition_codableRoundTrip_omittingEasing() throws {
+        let original = StoryClipTransition(
+            fromClipId: "a", toClipId: "b",
+            kind: .crossfade, duration: 0.4
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(StoryClipTransition.self, from: data)
+        XCTAssertNil(decoded.easing)
+        XCTAssertEqual(decoded.kind, .crossfade)
+    }
 }
