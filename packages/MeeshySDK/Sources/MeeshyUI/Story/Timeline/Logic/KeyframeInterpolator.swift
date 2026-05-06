@@ -1,3 +1,16 @@
+//
+// KeyframeInterpolator.swift
+// MeeshyUI / Story / Timeline / Logic
+//
+// Generic keyframe interpolation with `Lerpable` protocol.
+// Supports Float, CGFloat, CGPoint, CGSize values with StoryEasing
+// applied per origin keyframe.
+//
+// Spec: docs/superpowers/specs/2026-05-05-story-timeline-editor-design.md §4.3
+//
+// No UIKit / SwiftUI imports — pure value computations.
+//
+
 import Foundation
 import CoreGraphics
 import MeeshySDK

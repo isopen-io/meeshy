@@ -1,3 +1,19 @@
+//
+// SnapEngine.swift
+// MeeshyUI / Story / Timeline / Logic
+//
+// Pure-Swift snap engine: takes a raw user time + a list of candidate
+// snap points and returns the snapped time + matched candidate.
+//
+// Used by TimelineViewModel during clip drag, keyframe drag, playhead
+// drag, and duration-handle drag. Tolerance is computed by the UI as
+// `6pt / pixelsPerSecond` so snap feel adapts to zoom level.
+//
+// Spec: docs/superpowers/specs/2026-05-05-story-timeline-editor-design.md §4.1
+//
+// No UIKit / SwiftUI imports — testable as pure logic.
+//
+
 import Foundation
 
 // MARK: - SnapCandidate

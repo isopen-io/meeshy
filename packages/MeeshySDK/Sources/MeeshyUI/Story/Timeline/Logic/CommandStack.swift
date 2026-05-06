@@ -1,3 +1,16 @@
+//
+// CommandStack.swift
+// MeeshyUI / Story / Timeline / Logic
+//
+// Linear undo/redo stack with FIFO cap (default 50) and time-based
+// coalescing (default 0.5s). Snapshot/restore enables persistence to
+// `{draft}.commands.json` so undo history survives composer close/reopen.
+//
+// Spec: docs/superpowers/specs/2026-05-05-story-timeline-editor-design.md §4.2
+//
+// No UIKit / SwiftUI imports — testable as pure logic.
+//
+
 import Foundation
 import MeeshySDK
 
