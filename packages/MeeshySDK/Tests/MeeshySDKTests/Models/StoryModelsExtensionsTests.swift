@@ -1089,4 +1089,101 @@ final class StoryModelsExtensionsTests: XCTestCase {
             XCTAssertEqual(decoded.property, property)
         }
     }
+
+    // MARK: - AnyEditCommand
+
+    private func makeAllCommandCases() -> [AnyEditCommand] {
+        let media = StoryMediaObject(id: "v1", postMediaId: "pm",
+                                     mediaType: "video", placement: "media")
+        let audio = StoryAudioPlayerObject(id: "a1", postMediaId: "pm",
+                                           placement: "overlay",
+                                           waveformSamples: [])
+        let text = StoryTextObject(id: "t1", content: "hi")
+        let transition = StoryClipTransition(id: "tr1", fromClipId: "v1",
+                                             toClipId: "v2", kind: .crossfade,
+                                             duration: 0.4)
+        let kf = StoryKeyframe(id: "kf1", time: 1.0, opacity: 0.5)
+
+        return [
+            .addClip(AddClipCommand(clipId: "v1", postMediaId: "pm",
+                                    kind: .video, startTime: 0, duration: 1)),
+            .deleteClip(DeleteClipCommand(clipId: "v1", kind: .video,
+                                          snapshotMedia: media,
+                                          snapshotAudio: nil,
+                                          snapshotText: nil,
+                                          insertionIndex: 0)),
+            .moveClip(MoveClipCommand(clipId: "v1", kind: .video,
+                                      oldStartTime: 0, newStartTime: 1)),
+            .trimClip(TrimClipCommand(clipId: "v1", kind: .video,
+                                      oldStartTime: 0, oldDuration: 5,
+                                      newStartTime: 1, newDuration: 3)),
+            .splitClip(SplitClipCommand(clipId: "v1", kind: .video,
+                                        splitAtRelativeTime: 1,
+                                        leftId: "L", rightId: "R")),
+            .addTransition(AddTransitionCommand(transition: transition)),
+            .removeTransition(RemoveTransitionCommand(transitionId: "tr1",
+                                                     snapshot: transition,
+                                                     insertionIndex: 0)),
+            .changeTransition(ChangeTransitionCommand(transitionId: "tr1",
+                                                     previous: transition,
+                                                     updated: transition)),
+            .addKeyframe(AddKeyframeCommand(clipId: "v1", kind: .video,
+                                            keyframe: kf)),
+            .moveKeyframe(MoveKeyframeCommand(clipId: "v1", kind: .video,
+                                              keyframeId: "kf1",
+                                              oldTime: 0, newTime: 1)),
+            .deleteKeyframe(DeleteKeyframeCommand(clipId: "v1", kind: .video,
+                                                  keyframeId: "kf1",
+                                                  snapshot: kf,
+                                                  insertionIndex: 0)),
+            .setClipProperty(SetClipPropertyCommand(clipId: "v1", kind: .video,
+                                                    property: .volume(old: 1, new: 0.5))),
+        ]
+    }
+
+    func test_anyEditCommand_hasExactlyTwelveCases() {
+        XCTAssertEqual(makeAllCommandCases().count, 12)
+    }
+
+    func test_anyEditCommand_underlying_returnsConcreteCommand() {
+        for any in makeAllCommandCases() {
+            let underlying = any.underlying
+            XCTAssertFalse(underlying.id.isEmpty)
+        }
+    }
+
+    func test_anyEditCommand_codableRoundTrip_allCases() throws {
+        for any in makeAllCommandCases() {
+            let data = try JSONEncoder().encode(any)
+            let decoded = try JSONDecoder().decode(AnyEditCommand.self, from: data)
+            XCTAssertEqual(decoded.typeTag, any.typeTag,
+                           "Tag mismatch for case \(any.typeTag)")
+        }
+    }
+
+    func test_anyEditCommand_apply_dispatchesToUnderlying() throws {
+        var project = makeEmptyProject()
+        let any = AnyEditCommand.addClip(
+            AddClipCommand(clipId: "v1", postMediaId: "pm",
+                           kind: .video, startTime: 0, duration: 1)
+        )
+        try any.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects.count, 1)
+    }
+
+    func test_anyEditCommand_revert_dispatchesToUnderlying() throws {
+        var project = makeEmptyProject()
+        let any = AnyEditCommand.addClip(
+            AddClipCommand(clipId: "v1", postMediaId: "pm",
+                           kind: .video, startTime: 0, duration: 1)
+        )
+        try any.apply(to: &project)
+        try any.revert(from: &project)
+        XCTAssertTrue(project.mediaObjects.isEmpty)
+    }
+
+    func test_anyEditCommand_decode_unknownType_throws() {
+        let json = #"{"type":"alienCommand","payload":{}}"#.data(using: .utf8)!
+        XCTAssertThrowsError(try JSONDecoder().decode(AnyEditCommand.self, from: json))
+    }
 }
