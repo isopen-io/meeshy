@@ -669,6 +669,7 @@ struct RootView: View {
     }
 
     private func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil, ensureUnread: Bool = false) {
+        // 1. Fast path: in-memory list (post-load happy path)
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
             var conv = existing
             if ensureUnread && conv.unreadCount == 0 {
@@ -677,7 +678,43 @@ struct RootView: View {
             router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
             return
         }
+
         Task {
+            // 2. Cache-first: GRDB conversations list (cold-start deep link path).
+            // Avoids forcing a network round-trip when previous-session data is
+            // already on disk; the network fetch then runs silently in the
+            // background to refresh the cache.
+            let cachedList = await CacheCoordinator.shared.conversations.load(for: "list")
+            let cachedConversations: [MeeshyConversation]? = {
+                switch cachedList {
+                case .fresh(let list, _), .stale(let list, _): return list
+                case .expired, .empty: return nil
+                }
+            }()
+            if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
+                var c = cached
+                if ensureUnread && c.unreadCount == 0 { c.unreadCount = 1 }
+                router.navigateToConversation(c, highlightMessageId: highlightMessageId)
+                // Background refresh — keeps the displayed conversation in sync
+                // without blocking navigation. Failures are silent: the user
+                // already sees the cached version.
+                Task.detached(priority: .utility) {
+                    let currentUserId = await AuthManager.shared.currentUser?.id ?? ""
+                    if let apiConv = try? await ConversationService.shared.getById(conversationId) {
+                        let refreshed = apiConv.toConversation(currentUserId: currentUserId)
+                        var merged = cachedConversations ?? []
+                        if let i = merged.firstIndex(where: { $0.id == refreshed.id }) {
+                            merged[i] = refreshed
+                        } else {
+                            merged.insert(refreshed, at: 0)
+                        }
+                        await CacheCoordinator.shared.conversations.save(merged, for: "list")
+                    }
+                }
+                return
+            }
+
+            // 3. Network fallback: cache miss + offline-aware error UX.
             do {
                 let currentUserId = AuthManager.shared.currentUser?.id ?? ""
                 let apiConv = try await ConversationService.shared.getById(conversationId)

@@ -400,6 +400,7 @@ struct FeedView: View {
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                                 viewModel.prefetchMediaForPost(post.id)
+                                viewModel.prefetchComments(post.id)
                                 trackImpression(postId: post.id)
                             }
                     }
@@ -479,6 +480,8 @@ struct FeedView: View {
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
             viewModel.feedStore?.stopObserving()
+            impressionTimer?.invalidate()
+            impressionTimer = nil
         }
         .sheet(isPresented: $showAudioComposer) {
             AudioPostComposerView { audioURL, mimeType, transcription in

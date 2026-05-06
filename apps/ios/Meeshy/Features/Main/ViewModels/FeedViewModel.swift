@@ -27,6 +27,9 @@ class FeedViewModel: ObservableObject {
     private let postService: PostServiceProviding
     private var cacheSaveTask: Task<Void, Never>?
     private var isFeedLoadInProgress = false
+    /// Tracks postIds whose comments are currently being prefetched, to coalesce
+    /// duplicate calls triggered by repeated cell .onAppear events.
+    private var prefetchingComments: Set<String> = []
 
     // MARK: - Persistence Layer
 
@@ -201,6 +204,49 @@ class FeedViewModel: ObservableObject {
         newPostsCount = 0
         Task.detached { await CacheCoordinator.shared.feed.invalidate(for: "main-feed") }
         await loadFeed()
+    }
+
+    // MARK: - Comments Prefetch
+
+    /// Pre-loads comments for a visible post into the cache so that opening the post
+    /// detail does not require a network round-trip. Cache-first: skips the network
+    /// call when the cache is already fresh. Coalesced: concurrent calls for the
+    /// same `postId` are no-ops while a prefetch is in flight.
+    func prefetchComments(_ postId: String) {
+        guard !prefetchingComments.contains(postId) else { return }
+        prefetchingComments.insert(postId)
+
+        Task(priority: .utility) { [weak self] in
+            guard let self else { return }
+            defer { self.prefetchingComments.remove(postId) }
+
+            let cacheKey = "post-\(postId)"
+            let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+            if case .fresh = cached { return }
+
+            do {
+                let response = try await self.postService.getComments(postId: postId, cursor: nil, limit: 20)
+                let langs = self.preferredLanguages
+                let comments = response.data.map { c -> FeedComment in
+                    let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+                        translations: c.translations,
+                        originalLanguage: c.originalLanguage,
+                        preferredLanguages: langs
+                    )
+                    return FeedComment(
+                        id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorAvatarURL: c.author.avatar,
+                        content: c.content, timestamp: c.createdAt,
+                        likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                        parentId: c.parentId,
+                        originalLanguage: c.originalLanguage, translatedContent: translatedContent
+                    )
+                }
+                await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+            } catch {
+                // Silent fail on prefetch — user-triggered open will retry the network.
+            }
+        }
     }
 
     // MARK: - New Posts Banner

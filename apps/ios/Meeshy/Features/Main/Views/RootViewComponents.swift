@@ -290,6 +290,7 @@ struct ThemedFeedOverlay: View {
                             .staggeredAppear(index: index, baseDelay: 0.06)
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
+                                viewModel.prefetchComments(post.id)
                             }
                     }
 
