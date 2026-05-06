@@ -286,6 +286,18 @@ export async function registerDownloadRoutes(
 
         const fileStats = await stat(filePath);
         const fileSize = fileStats.size;
+        // Weak ETag based on mtime+size — sufficient for HTTP cache validation
+        // (If-None-Match → 304). For content-based dedup across stories that
+        // share the same media after a snapshot copy, the client should use
+        // a stored content hash instead (see SOTA audit Pilier 16, V2).
+        const etag = `W/"${fileSize}-${Math.floor(fileStats.mtimeMs)}"`;
+
+        const ifNoneMatch = request.headers['if-none-match'];
+        if (ifNoneMatch && ifNoneMatch === etag) {
+          reply.header('ETag', etag);
+          reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+          return reply.code(304).send();
+        }
 
         const isMediaFile = mimeType.startsWith('audio/') || mimeType.startsWith('video/');
         if (isMediaFile) {
@@ -302,6 +314,7 @@ export async function registerDownloadRoutes(
             reply.header('Content-Range', `bytes ${start}-${end}/${fileSize}`);
             reply.header('Content-Length', chunkSize);
             reply.header('Content-Type', mimeType);
+            reply.header('ETag', etag);
             reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
             reply.header('Access-Control-Allow-Origin', '*');
             reply.header('Cache-Control', 'public, max-age=31536000, immutable');
@@ -313,6 +326,7 @@ export async function registerDownloadRoutes(
 
         reply.header('Content-Type', mimeType);
         reply.header('Content-Length', fileSize);
+        reply.header('ETag', etag);
         reply.header('Content-Disposition', 'inline');
         reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
         reply.header('Access-Control-Allow-Origin', '*');
