@@ -58,12 +58,10 @@ extension CommandStack {
 
     /// Push a command on top of the stack with optional coalescing.
     public func push(_ command: AnyEditCommand) {
-        // Truncate redo branch first.
         if cursor < commands.count {
             commands.removeSubrange(cursor..<commands.count)
         }
 
-        // Try to coalesce with the previous command if any.
         if let last = commands.last,
            let merged = Self.coalesce(previous: last, with: command,
                                       windowSeconds: coalesceWindow) {
@@ -86,7 +84,7 @@ extension CommandStack {
     ///   - they are within `windowSeconds` of each other,
     ///   - they belong to the (small) set of commands declared coalesceable
     ///     (currently MoveClip).
-    static func coalesce(previous: AnyEditCommand,
+    private static func coalesce(previous: AnyEditCommand,
                          with next: AnyEditCommand,
                          windowSeconds: TimeInterval) -> AnyEditCommand? {
         switch (previous, next) {
