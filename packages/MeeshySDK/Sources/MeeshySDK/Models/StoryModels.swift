@@ -1169,6 +1169,73 @@ public enum TimelineClipKind: String, Codable, CaseIterable, Sendable {
     case text
 }
 
+// MARK: - Edit Commands (12 concrete cases)
+
+public struct AddClipCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let postMediaId: String
+    public let kind: TimelineClipKind
+    public let startTime: Float
+    public let duration: Float
+    public let content: String?
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                postMediaId: String,
+                kind: TimelineClipKind,
+                startTime: Float,
+                duration: Float,
+                content: String? = nil) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.postMediaId = postMediaId
+        self.kind = kind
+        self.startTime = startTime
+        self.duration = duration
+        self.content = content
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        switch kind {
+        case .video, .image:
+            let mediaType = kind == .video ? "video" : "image"
+            project.mediaObjects.append(
+                StoryMediaObject(id: clipId, postMediaId: postMediaId,
+                                 mediaType: mediaType, placement: "media",
+                                 startTime: startTime, duration: duration)
+            )
+        case .audio:
+            project.audioPlayerObjects.append(
+                StoryAudioPlayerObject(id: clipId, postMediaId: postMediaId,
+                                       placement: "overlay",
+                                       waveformSamples: [],
+                                       startTime: startTime, duration: duration)
+            )
+        case .text:
+            project.textObjects.append(
+                StoryTextObject(id: clipId, content: content ?? "",
+                                startTime: startTime,
+                                displayDuration: duration)
+            )
+        }
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        switch kind {
+        case .video, .image:
+            project.mediaObjects.removeAll { $0.id == clipId }
+        case .audio:
+            project.audioPlayerObjects.removeAll { $0.id == clipId }
+        case .text:
+            project.textObjects.removeAll { $0.id == clipId }
+        }
+    }
+}
+
 // MARK: - Story Easing (Timeline V2)
 
 /// Easing curve applied between two interpolated values (transitions, keyframes).

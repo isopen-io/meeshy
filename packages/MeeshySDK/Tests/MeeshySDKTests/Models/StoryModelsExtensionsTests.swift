@@ -442,4 +442,71 @@ final class StoryModelsExtensionsTests: XCTestCase {
             XCTAssertEqual(decoded, kind)
         }
     }
+
+    // MARK: - AddClipCommand
+
+    private func makeEmptyProject() -> TimelineProject {
+        TimelineProject(slideId: "s1", slideDuration: 10.0)
+    }
+
+    func test_addClipCommand_apply_addsToCorrectCollection_video() throws {
+        var project = makeEmptyProject()
+        let cmd = AddClipCommand(
+            clipId: "v1", postMediaId: "pm-v1",
+            kind: .video, startTime: 0.5, duration: 3.0
+        )
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects.count, 1)
+        XCTAssertEqual(project.mediaObjects.first?.id, "v1")
+        XCTAssertEqual(project.mediaObjects.first?.mediaType, "video")
+        XCTAssertEqual(project.mediaObjects.first?.startTime, 0.5)
+        XCTAssertEqual(project.mediaObjects.first?.duration, 3.0)
+    }
+
+    func test_addClipCommand_apply_addsToCorrectCollection_audio() throws {
+        var project = makeEmptyProject()
+        let cmd = AddClipCommand(
+            clipId: "a1", postMediaId: "pm-a1",
+            kind: .audio, startTime: 1.0, duration: 5.0
+        )
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.audioPlayerObjects.count, 1)
+        XCTAssertEqual(project.audioPlayerObjects.first?.id, "a1")
+    }
+
+    func test_addClipCommand_apply_addsToCorrectCollection_text() throws {
+        var project = makeEmptyProject()
+        let cmd = AddClipCommand(
+            clipId: "t1", postMediaId: "",
+            kind: .text, startTime: 0, duration: 2.0,
+            content: "Hi"
+        )
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.textObjects.count, 1)
+        XCTAssertEqual(project.textObjects.first?.content, "Hi")
+        XCTAssertEqual(project.textObjects.first?.displayDuration, 2.0)
+    }
+
+    func test_addClipCommand_revert_isInverseOfApply_idempotentRoundTrip() throws {
+        var project = makeEmptyProject()
+        let cmd = AddClipCommand(
+            clipId: "v1", postMediaId: "pm-v1",
+            kind: .video, startTime: 0, duration: 2.0
+        )
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertTrue(project.mediaObjects.isEmpty)
+    }
+
+    func test_addClipCommand_codableRoundTrip() throws {
+        let cmd = AddClipCommand(
+            clipId: "v1", postMediaId: "pm",
+            kind: .video, startTime: 0, duration: 1.0
+        )
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(AddClipCommand.self, from: data)
+        XCTAssertEqual(decoded.id, cmd.id)
+        XCTAssertEqual(decoded.clipId, "v1")
+        XCTAssertEqual(decoded.kind, .video)
+    }
 }
