@@ -14,4 +14,18 @@ extension CommandStackTests {
                                timestamp: t0.addingTimeInterval(0.1)))
         XCTAssertEqual(stack.count, 1)
     }
+
+    // MARK: - FIFO cap untouched by coalesce
+
+    func test_push_coalesce_doesNotInteractWithFIFOCap() {
+        let stack = CommandStack(maxSize: 3, coalesceWindow: 0.5)
+        let t0 = Date(timeIntervalSinceReferenceDate: 2_000_000)
+        for i in 0..<100 {
+            stack.push(makeMoveCmd(clipId: "c1",
+                                   oldStart: Float(i),
+                                   newStart: Float(i + 1),
+                                   timestamp: t0.addingTimeInterval(Double(i) * 0.001)))
+        }
+        XCTAssertEqual(stack.count, 1)
+    }
 }
