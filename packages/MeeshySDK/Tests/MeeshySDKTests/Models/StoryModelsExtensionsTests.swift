@@ -863,4 +863,127 @@ final class StoryModelsExtensionsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ChangeTransitionCommand.self, from: data)
         XCTAssertEqual(decoded.updated.kind, .dissolve)
     }
+
+    // MARK: - Keyframe Commands (Add / Move / Delete)
+
+    private func makeProjectWithMedia() -> TimelineProject {
+        var project = makeEmptyProject()
+        project.mediaObjects = [
+            StoryMediaObject(id: "v1", postMediaId: "pm",
+                             mediaType: "video", placement: "media",
+                             startTime: 0, duration: 5)
+        ]
+        return project
+    }
+
+    func test_addKeyframeCommand_apply_appendsToObject() throws {
+        var project = makeProjectWithMedia()
+        let kf = StoryKeyframe(id: "kf1", time: 1.0, x: 0.5)
+        let cmd = AddKeyframeCommand(clipId: "v1", kind: .video, keyframe: kf)
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects[0].keyframes?.count, 1)
+        XCTAssertEqual(project.mediaObjects[0].keyframes?.first?.id, "kf1")
+    }
+
+    func test_addKeyframeCommand_revert_removesKeyframe() throws {
+        var project = makeProjectWithMedia()
+        let kf = StoryKeyframe(id: "kf1", time: 1.0)
+        let cmd = AddKeyframeCommand(clipId: "v1", kind: .video, keyframe: kf)
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertTrue(project.mediaObjects[0].keyframes?.isEmpty ?? true)
+    }
+
+    func test_addKeyframeCommand_apply_throwsWhenClipMissing() {
+        var project = makeEmptyProject()
+        let cmd = AddKeyframeCommand(clipId: "ghost", kind: .video,
+                                     keyframe: StoryKeyframe(time: 0))
+        XCTAssertThrowsError(try cmd.apply(to: &project)) { error in
+            XCTAssertEqual(error as? EditCommandError,
+                           .clipNotFound(id: "ghost"))
+        }
+    }
+
+    func test_moveKeyframeCommand_apply_changesKeyframeTime() throws {
+        var project = makeProjectWithMedia()
+        project.mediaObjects[0].keyframes = [StoryKeyframe(id: "kf1", time: 1.0)]
+        let cmd = MoveKeyframeCommand(clipId: "v1", kind: .video,
+                                      keyframeId: "kf1",
+                                      oldTime: 1.0, newTime: 3.0)
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects[0].keyframes?.first?.time, 3.0)
+    }
+
+    func test_moveKeyframeCommand_revert_restoresOldTime() throws {
+        var project = makeProjectWithMedia()
+        project.mediaObjects[0].keyframes = [StoryKeyframe(id: "kf1", time: 1.0)]
+        let cmd = MoveKeyframeCommand(clipId: "v1", kind: .video,
+                                      keyframeId: "kf1",
+                                      oldTime: 1.0, newTime: 3.0)
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertEqual(project.mediaObjects[0].keyframes?.first?.time, 1.0)
+    }
+
+    func test_moveKeyframeCommand_apply_throwsWhenKeyframeMissing() {
+        var project = makeProjectWithMedia()
+        project.mediaObjects[0].keyframes = []
+        let cmd = MoveKeyframeCommand(clipId: "v1", kind: .video,
+                                      keyframeId: "ghost",
+                                      oldTime: 0, newTime: 1)
+        XCTAssertThrowsError(try cmd.apply(to: &project)) { error in
+            XCTAssertEqual(error as? EditCommandError,
+                           .keyframeNotFound(id: "ghost"))
+        }
+    }
+
+    func test_deleteKeyframeCommand_apply_removesAndStoresSnapshot() throws {
+        var project = makeProjectWithMedia()
+        let kf = StoryKeyframe(id: "kf1", time: 1.0, opacity: 0.5)
+        project.mediaObjects[0].keyframes = [kf]
+        let cmd = DeleteKeyframeCommand(clipId: "v1", kind: .video,
+                                        keyframeId: "kf1",
+                                        snapshot: kf, insertionIndex: 0)
+        try cmd.apply(to: &project)
+        XCTAssertTrue(project.mediaObjects[0].keyframes?.isEmpty ?? true)
+    }
+
+    func test_deleteKeyframeCommand_revert_restoresAtIndex() throws {
+        var project = makeProjectWithMedia()
+        let kf = StoryKeyframe(id: "kf1", time: 1.0, opacity: 0.5)
+        project.mediaObjects[0].keyframes = [kf]
+        let cmd = DeleteKeyframeCommand(clipId: "v1", kind: .video,
+                                        keyframeId: "kf1",
+                                        snapshot: kf, insertionIndex: 0)
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertEqual(project.mediaObjects[0].keyframes?.first?.opacity, 0.5)
+    }
+
+    func test_addKeyframeCommand_codableRoundTrip() throws {
+        let cmd = AddKeyframeCommand(clipId: "v1", kind: .video,
+                                     keyframe: StoryKeyframe(id: "kf1", time: 1))
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(AddKeyframeCommand.self, from: data)
+        XCTAssertEqual(decoded.keyframe.id, "kf1")
+    }
+
+    func test_moveKeyframeCommand_codableRoundTrip() throws {
+        let cmd = MoveKeyframeCommand(clipId: "v1", kind: .video,
+                                      keyframeId: "kf1",
+                                      oldTime: 0, newTime: 1)
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(MoveKeyframeCommand.self, from: data)
+        XCTAssertEqual(decoded.newTime, 1)
+    }
+
+    func test_deleteKeyframeCommand_codableRoundTrip() throws {
+        let cmd = DeleteKeyframeCommand(clipId: "v1", kind: .video,
+                                        keyframeId: "kf1",
+                                        snapshot: StoryKeyframe(id: "kf1", time: 1),
+                                        insertionIndex: 0)
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(DeleteKeyframeCommand.self, from: data)
+        XCTAssertEqual(decoded.keyframeId, "kf1")
+    }
 }

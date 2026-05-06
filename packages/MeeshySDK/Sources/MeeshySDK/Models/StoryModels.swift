@@ -1628,6 +1628,150 @@ public struct ChangeTransitionCommand: EditCommand {
     }
 }
 
+// MARK: - Keyframe array helpers (private to this file)
+
+private extension TimelineProject {
+    mutating func mutateKeyframes(clipId: String,
+                                  kind: TimelineClipKind,
+                                  block: (inout [StoryKeyframe]) throws -> Void) throws {
+        switch kind {
+        case .video, .image:
+            guard let idx = mediaObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            var arr = mediaObjects[idx].keyframes ?? []
+            try block(&arr)
+            mediaObjects[idx].keyframes = arr
+        case .text:
+            guard let idx = textObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            var arr = textObjects[idx].keyframes ?? []
+            try block(&arr)
+            textObjects[idx].keyframes = arr
+        case .audio:
+            throw EditCommandError.invalidState(reason: "audio clips do not support keyframes")
+        }
+    }
+}
+
+public struct AddKeyframeCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let keyframe: StoryKeyframe
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                keyframe: StoryKeyframe) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.keyframe = keyframe
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
+            arr.append(keyframe)
+        }
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
+            arr.removeAll { $0.id == keyframe.id }
+        }
+    }
+}
+
+public struct MoveKeyframeCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let keyframeId: String
+    public let oldTime: Float
+    public let newTime: Float
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                keyframeId: String,
+                oldTime: Float,
+                newTime: Float) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.keyframeId = keyframeId
+        self.oldTime = oldTime
+        self.newTime = newTime
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try setTime(project: &project, time: newTime)
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try setTime(project: &project, time: oldTime)
+    }
+
+    private func setTime(project: inout TimelineProject, time: Float) throws {
+        try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
+            guard let idx = arr.firstIndex(where: { $0.id == keyframeId }) else {
+                throw EditCommandError.keyframeNotFound(id: keyframeId)
+            }
+            arr[idx].time = time
+        }
+    }
+}
+
+public struct DeleteKeyframeCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let keyframeId: String
+    public let snapshot: StoryKeyframe
+    public let insertionIndex: Int
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                keyframeId: String,
+                snapshot: StoryKeyframe,
+                insertionIndex: Int) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.keyframeId = keyframeId
+        self.snapshot = snapshot
+        self.insertionIndex = insertionIndex
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
+            guard arr.contains(where: { $0.id == keyframeId }) else {
+                throw EditCommandError.keyframeNotFound(id: keyframeId)
+            }
+            arr.removeAll { $0.id == keyframeId }
+        }
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
+            let idx = min(insertionIndex, arr.count)
+            arr.insert(snapshot, at: idx)
+        }
+    }
+}
+
 // MARK: - Story Easing (Timeline V2)
 
 /// Easing curve applied between two interpolated values (transitions, keyframes).
