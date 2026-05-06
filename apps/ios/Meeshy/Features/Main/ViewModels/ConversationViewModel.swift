@@ -1144,13 +1144,17 @@ class ConversationViewModel: ObservableObject {
                 let msg = msgs[i]
                 if msg.isEncrypted, !msg.senderId.isEmpty, !msg.content.isEmpty, let data = Data(base64Encoded: msg.content) {
                     let senderId = msg.senderId
+                    let msgId = msg.id
                     group.addTask {
+                        CryptoSignposts.beginDecrypt(messageId: msgId)
                         do {
                             let decrypted = try await SessionManager.shared.decryptMessage(data, from: senderId)
+                            CryptoSignposts.endDecrypt(messageId: msgId, bytes: decrypted.count)
                             if let text = String(data: decrypted, encoding: .utf8) {
                                 return (i, text)
                             }
                         } catch {
+                            CryptoSignposts.endDecrypt(messageId: msgId, bytes: 0)
                             return (i, "[Message chiffré - Échec du déchiffrement]")
                         }
                         return (i, nil)
