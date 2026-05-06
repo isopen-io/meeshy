@@ -30,9 +30,11 @@ public enum ImageDownsamplingConfig {
     /// before any `CachedAsyncImage` or `KFImage` view is rendered.
     ///
     /// Effects:
-    /// - Sets `DiskCacheStore` in-memory image cache to 60 MB
+    /// - Routes the memory cap through `CacheCoordinator.configureImageMemory(budgetBytes:)`,
+    ///   which splits the 60 MB budget across the UIImage cache (50 MB) and the
+    ///   CGImage cache (10 MB).
     public static func applyGlobal() {
-        DiskCacheStore.configureImageCache(memoryCostLimitBytes: recommendedMemoryCacheLimitBytes)
+        CacheCoordinator.configureImageMemory(budgetBytes: recommendedMemoryCacheLimitBytes)
     }
 
     /// Converts a SwiftUI **point** size into the pixel-size argument expected

@@ -46,6 +46,24 @@ public actor CacheCoordinator {
         DiskCacheStore.cachedImage(for: urlString)
     }
 
+    /// Configures memory caps for the image pipeline. Call once at app launch.
+    ///
+    /// Sets:
+    /// - The decoded UIImage cache (NSCache in `DiskCacheStore.images`) at the
+    ///   given byte limit, used by `CachedAsyncImage` and `ProgressiveCachedImage`.
+    /// - The decoded CGImage cache (`DecodedImageCache.shared`) proportionally —
+    ///   we leave 5/6 of the budget for UIImages (more frequent) and 1/6 for
+    ///   CGImages (used by full-screen viewers).
+    ///
+    /// - Parameter budgetBytes: Total budget for both decoded image caches combined.
+    ///   Recommended: 60 MB on iPhone, 100 MB on iPad.
+    nonisolated public static func configureImageMemory(budgetBytes: Int) {
+        let uiImageCap = (budgetBytes * 5) / 6
+        let cgImageCap = budgetBytes / 6
+        DiskCacheStore.configureImageCache(memoryCostLimitBytes: uiImageCap)
+        DecodedImageCache.shared.setTotalCostLimit(cgImageCap)
+    }
+
     // MARK: - In-Memory Translation/Transcription/Audio Caches (keyed by messageId)
 
     private static let maxTranslationCacheEntries = 500

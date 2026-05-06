@@ -13,19 +13,26 @@ import MeeshySDK
 final class ImageDownsamplingTests: XCTestCase {
 
     func test_applyGlobal_setsMemoryCacheToSixtyMB() {
-        // Arrange: store the original limit so we can verify a change
+        // Arrange
         let sixtyMB = 60 * 1024 * 1024
 
         // Act
         ImageDownsamplingConfig.applyGlobal()
 
-        // Assert: DiskCacheStore internal cache limit is now exactly 60 MB.
-        // We verify by calling applyGlobal and then confirming the constant
-        // is what the SDK's configureImageCache expects.
+        // Assert: budget constant is 60 MB.
         XCTAssertEqual(
             ImageDownsamplingConfig.recommendedMemoryCacheLimitBytes,
             sixtyMB,
             "Memory cache cap constant must be 60 MB"
+        )
+
+        // Assert: CacheCoordinator routes 1/6 of the budget to DecodedImageCache
+        // (CGImage cache) and 5/6 to the UIImage cache.
+        let expectedCGImageCap = sixtyMB / 6  // 10 MB
+        XCTAssertEqual(
+            DecodedImageCache.shared.totalCostLimit,
+            expectedCGImageCap,
+            "DecodedImageCache cost limit must be 1/6 of the total budget (10 MB)"
         )
     }
 
