@@ -1108,4 +1108,21 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.conversations[0].lastMessagePreview, "Second message")
         XCTAssertEqual(sut.conversations[0].lastMessageSenderName, "Bob")
     }
+
+    // MARK: - deinit: Task Cancellation
+
+    func test_deinit_cancelsStoryPrefetchTask() async {
+        var viewModel: ConversationListViewModel? = makeSUT().sut
+        viewModel!.prefetchRecentStories()
+        XCTAssertNotNil(viewModel!.storyPrefetchTask)
+
+        let taskRef = viewModel!.storyPrefetchTask
+
+        // Trigger dealloc
+        viewModel = nil
+
+        try? await Task.sleep(for: .milliseconds(50))
+        // After viewModel deinit, the task should have been cancelled
+        XCTAssertTrue(taskRef?.isCancelled ?? true)
+    }
 }
