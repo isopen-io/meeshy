@@ -220,10 +220,35 @@ public final class MessageStore {
 
         guard let newRecords, newRecords != messages else { return }
 
+        // Yield to a fresh runloop iteration before publishing the @Observable
+        // mutation. When refreshFromDB is invoked from a view's .task /
+        // .onAppear hook (initial conversation load), we are still inside
+        // SwiftUI's view update cycle. Mutating the @Observable `messages`
+        // property here trips "Publishing changes from within view updates is
+        // not allowed", which prevents the view from rendering the new state
+        // and silently shows an empty bubble list. The dispatch hop forces
+        // the mutation onto a fresh runloop tick AFTER the current view
+        // update completes.
+        await yieldToRunLoop()
+
+        // Re-check: state could have changed during the runloop yield (e.g.,
+        // a socket message arrived and another refresh wrote first).
+        guard newRecords != messages else { return }
+
         messages = newRecords
         _idIndex = nil
         recomputeSections()
         messagesDidChange.send()
+    }
+
+    /// Awaits the next main runloop tick. Used to escape the synchronous view
+    /// update cycle before mutating @Observable state.
+    private func yieldToRunLoop() async {
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async {
+                cont.resume()
+            }
+        }
     }
 
     // MARK: - Load Initial
