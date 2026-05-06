@@ -70,6 +70,12 @@ export class MediaService implements MediaStorage {
    *
    * The new file lives under <uploadBasePath>/snapshots/<uuid><ext> so it is
    * clearly separated from user-uploaded originals.
+   *
+   * COPYFILE_EXCL guards against overwriting a destination that somehow
+   * already exists. UUID v4 collisions are astronomically improbable
+   * (122 random bits) but a transient FS bug or a cloned process could
+   * still trip EEXIST. We retry with a fresh UUID up to 3 times before
+   * surfacing the error.
    */
   async duplicateMedia(originalUrl: string): Promise<MediaDuplicateResult> {
     const relativePath = this.relativePathFromUrl(originalUrl);
@@ -78,30 +84,50 @@ export class MediaService implements MediaStorage {
     }
 
     const srcPath = path.join(this.uploadBasePath, relativePath);
-
     const ext = path.extname(relativePath);
-    const newFileName = `snapshot_${uuidv4()}${ext}`;
-    const newRelativePath = path.join('snapshots', newFileName);
-    const destPath = path.join(this.uploadBasePath, newRelativePath);
 
-    await fs.mkdir(path.dirname(destPath), { recursive: true });
-    // COPYFILE_FICLONE = best-effort copy-on-write reflink (zero-copy on APFS,
-    // btrfs, XFS, ext4 5.6+) ; falls back to full byte copy on filesystems
-    // that do not support reflinks. COPYFILE_EXCL guards against overwriting
-    // a destination that somehow already exists (defensive against UUID race).
-    await fs.copyFile(srcPath, destPath, fsConstants.COPYFILE_FICLONE | fsConstants.COPYFILE_EXCL);
+    // Make the snapshot directory once outside the retry loop.
+    const snapshotsDir = path.join(this.uploadBasePath, 'snapshots');
+    await fs.mkdir(snapshotsDir, { recursive: true });
 
-    const stat = await fs.stat(destPath);
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const newFileName = `snapshot_${uuidv4()}${ext}`;
+      const newRelativePath = path.join('snapshots', newFileName);
+      const destPath = path.join(this.uploadBasePath, newRelativePath);
 
-    const newFileUrl = `${ATTACHMENTS_FILE_PREFIX}${encodeURIComponent(newRelativePath)}`;
+      try {
+        // COPYFILE_FICLONE = best-effort copy-on-write reflink (zero-copy on
+        // APFS, btrfs, XFS, ext4 5.6+) ; falls back to full byte copy on
+        // filesystems that do not support reflinks. COPYFILE_EXCL guards
+        // against overwriting an unexpected destination.
+        await fs.copyFile(srcPath, destPath, fsConstants.COPYFILE_FICLONE | fsConstants.COPYFILE_EXCL);
 
-    return {
-      fileUrl: newFileUrl,
-      filePath: newRelativePath,
-      fileName: newFileName,
-      fileSize: stat.size,
-      mimeType: this.guessMimeType(ext),
-    };
+        const stat = await fs.stat(destPath);
+        const newFileUrl = `${ATTACHMENTS_FILE_PREFIX}${encodeURIComponent(newRelativePath)}`;
+        return {
+          fileUrl: newFileUrl,
+          filePath: newRelativePath,
+          fileName: newFileName,
+          fileSize: stat.size,
+          mimeType: this.guessMimeType(ext),
+        };
+      } catch (err) {
+        lastError = err;
+        const code = (err as NodeJS.ErrnoException)?.code;
+        if (code !== 'EEXIST') {
+          // Anything other than UUID collision propagates immediately.
+          throw err;
+        }
+        // EEXIST → retry loop with a fresh UUID. Don't sleep — this is a
+        // CPU-only retry and the call site is already inside an async
+        // operation that can absorb the microsecond cost.
+      }
+    }
+    throw new Error(
+      `MediaService.duplicateMedia: failed to find a free snapshot path after 3 retries`,
+      { cause: lastError as Error | undefined },
+    );
   }
 
   /**

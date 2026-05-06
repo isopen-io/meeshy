@@ -64,7 +64,19 @@ export class OrphanMediaCleanupService {
     });
   }
 
-  /** Convenience : track a batch of fileUrls and return their row ids. */
+  /**
+   * Convenience : track a batch of fileUrls and return their row ids.
+   *
+   * Note on perf : `createManyAndReturn` is not supported by Prisma on
+   * MongoDB (only on relational connectors as of Prisma 6.x). `createMany`
+   * IS supported but does not return generated ObjectIds, which we need
+   * for the matching `untrackBatch` call. Therefore we fall back to
+   * parallel `create()` — N round-trips, but the connection pool
+   * absorbs the parallelism and each insert is ~1ms on a healthy
+   * cluster. For a 5-slide multi-media repost this is ~10ms total.
+   * Acceptable, but worth revisiting if a future migration moves the
+   * outbox to a relational store.
+   */
   async trackBatch(
     fileUrls: string[],
     source: string,

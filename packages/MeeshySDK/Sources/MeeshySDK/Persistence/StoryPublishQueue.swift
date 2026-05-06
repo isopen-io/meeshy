@@ -148,8 +148,23 @@ public actor StoryPublishQueue {
     ///     failure (4xx, validation) that should NOT be retried
     public var onPublish: ((StoryPublishQueueItem) async throws -> String)?
 
+    /// Registers the publish handler and immediately drains any items that
+    /// were restored from disk at init time. Without this trigger there is
+    /// a startup window where the connection observer may have fired before
+    /// the handler is set, leaving pending items untouched until the next
+    /// connectivity flip — which on a stable network may never come, so the
+    /// items would sit forever despite being publishable.
+    ///
+    /// This trigger is fire-and-forget : the caller does not need to await
+    /// the drain. processNext is idempotent and gated by `isProcessing` so
+    /// double-trigger is safe.
     public func setPublishHandler(_ handler: @escaping @Sendable (StoryPublishQueueItem) async throws -> String) {
+        let wasEmpty = items.isEmpty
         onPublish = handler
+        if !wasEmpty {
+            logger.info("Publish handler registered with \(self.items.count) restored items, draining now")
+            Task { await self.processNext() }
+        }
     }
 
     private init() {
