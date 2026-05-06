@@ -409,4 +409,20 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertEqual(decoded.mediaObjects.count, project.mediaObjects.count)
         XCTAssertEqual(decoded.clipTransitions.first?.kind, .crossfade)
     }
+
+    // MARK: - EditCommand protocol
+
+    func test_editCommand_protocol_existsAndComposesCodableSendable() {
+        // Compile-only: verifies protocol composition. A concrete conformer is
+        // added in Task 12 (AddClipCommand) and will be exercised there.
+        func acceptsAny<T: EditCommand>(_ value: T) -> String { value.id }
+        // Defining a private one-off conforming type to close compilation.
+        struct LocalNoop: EditCommand {
+            let id: String = "noop"
+            let timestamp: Date = Date()
+            func apply(to project: inout TimelineProject) throws {}
+            func revert(from project: inout TimelineProject) throws {}
+        }
+        XCTAssertEqual(acceptsAny(LocalNoop()), "noop")
+    }
 }

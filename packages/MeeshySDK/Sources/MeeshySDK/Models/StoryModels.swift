@@ -1137,6 +1137,26 @@ public struct TimelineProject: Codable, Sendable {
     }
 }
 
+// MARK: - Edit Command (Pattern Command for Undo/Redo)
+
+/// Atomic, reversible operation on a `TimelineProject`. Each conforming type
+/// captures the minimum delta required to apply and to revert the operation.
+public protocol EditCommand: Codable, Sendable {
+    var id: String { get }
+    var timestamp: Date { get }
+    func apply(to project: inout TimelineProject) throws
+    func revert(from project: inout TimelineProject) throws
+}
+
+/// Errors thrown when applying or reverting an `EditCommand` against a project
+/// whose state no longer matches the assumptions captured at command creation.
+public enum EditCommandError: Error, Sendable, Equatable {
+    case clipNotFound(id: String)
+    case transitionNotFound(id: String)
+    case keyframeNotFound(id: String)
+    case invalidState(reason: String)
+}
+
 // MARK: - Story Easing (Timeline V2)
 
 /// Easing curve applied between two interpolated values (transitions, keyframes).
