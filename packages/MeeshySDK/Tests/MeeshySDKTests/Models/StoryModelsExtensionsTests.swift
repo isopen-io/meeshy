@@ -673,4 +673,61 @@ final class StoryModelsExtensionsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(TrimClipCommand.self, from: data)
         XCTAssertEqual(decoded.newDuration, 3)
     }
+
+    // MARK: - SplitClipCommand
+
+    func test_splitClipCommand_apply_replacesOneVideoWithTwo() throws {
+        var project = makeEmptyProject()
+        project.mediaObjects = [
+            StoryMediaObject(id: "v1", postMediaId: "pm",
+                             mediaType: "video", placement: "media",
+                             startTime: 0, duration: 5.0)
+        ]
+        let cmd = SplitClipCommand(clipId: "v1", kind: .video,
+                                   splitAtRelativeTime: 2.0,
+                                   leftId: "v1L", rightId: "v1R")
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects.count, 2)
+        XCTAssertEqual(project.mediaObjects[0].id, "v1L")
+        XCTAssertEqual(project.mediaObjects[0].duration, 2.0)
+        XCTAssertEqual(project.mediaObjects[1].id, "v1R")
+        XCTAssertEqual(project.mediaObjects[1].startTime, 2.0)
+        XCTAssertEqual(project.mediaObjects[1].duration, 3.0)
+    }
+
+    func test_splitClipCommand_revert_restoresOriginalSingleClip() throws {
+        var project = makeEmptyProject()
+        let original = StoryMediaObject(id: "v1", postMediaId: "pm",
+                                        mediaType: "video", placement: "media",
+                                        startTime: 0, duration: 5.0)
+        project.mediaObjects = [original]
+        let cmd = SplitClipCommand(clipId: "v1", kind: .video,
+                                   splitAtRelativeTime: 2.0,
+                                   leftId: "v1L", rightId: "v1R")
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertEqual(project.mediaObjects.count, 1)
+        XCTAssertEqual(project.mediaObjects[0].id, "v1")
+        XCTAssertEqual(project.mediaObjects[0].duration, 5.0)
+    }
+
+    func test_splitClipCommand_apply_throwsWhenClipMissing() {
+        var project = makeEmptyProject()
+        let cmd = SplitClipCommand(clipId: "ghost", kind: .video,
+                                   splitAtRelativeTime: 1.0,
+                                   leftId: "L", rightId: "R")
+        XCTAssertThrowsError(try cmd.apply(to: &project)) { error in
+            XCTAssertEqual(error as? EditCommandError,
+                           .clipNotFound(id: "ghost"))
+        }
+    }
+
+    func test_splitClipCommand_codableRoundTrip() throws {
+        let cmd = SplitClipCommand(clipId: "v1", kind: .video,
+                                   splitAtRelativeTime: 1.5,
+                                   leftId: "L", rightId: "R")
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(SplitClipCommand.self, from: data)
+        XCTAssertEqual(decoded.splitAtRelativeTime, 1.5)
+    }
 }

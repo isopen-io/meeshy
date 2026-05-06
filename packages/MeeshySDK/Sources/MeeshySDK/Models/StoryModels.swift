@@ -1420,6 +1420,126 @@ public struct TrimClipCommand: EditCommand {
     }
 }
 
+public struct SplitClipCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let clipId: String
+    public let kind: TimelineClipKind
+    public let splitAtRelativeTime: Float
+    public let leftId: String
+    public let rightId: String
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                clipId: String,
+                kind: TimelineClipKind,
+                splitAtRelativeTime: Float,
+                leftId: String,
+                rightId: String) {
+        self.id = id
+        self.timestamp = timestamp
+        self.clipId = clipId
+        self.kind = kind
+        self.splitAtRelativeTime = splitAtRelativeTime
+        self.leftId = leftId
+        self.rightId = rightId
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        switch kind {
+        case .video, .image:
+            guard let idx = project.mediaObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            let original = project.mediaObjects[idx]
+            let originalStart = original.startTime ?? 0
+            let originalDuration = original.duration ?? 0
+            var left = original
+            left.id = leftId
+            left.duration = splitAtRelativeTime
+            var right = original
+            right.id = rightId
+            right.startTime = originalStart + splitAtRelativeTime
+            right.duration = max(0, originalDuration - splitAtRelativeTime)
+            project.mediaObjects.replaceSubrange(idx...idx, with: [left, right])
+        case .audio:
+            guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            let original = project.audioPlayerObjects[idx]
+            let originalStart = original.startTime ?? 0
+            let originalDuration = original.duration ?? 0
+            var left = original
+            left.id = leftId
+            left.duration = splitAtRelativeTime
+            var right = original
+            right.id = rightId
+            right.startTime = originalStart + splitAtRelativeTime
+            right.duration = max(0, originalDuration - splitAtRelativeTime)
+            project.audioPlayerObjects.replaceSubrange(idx...idx, with: [left, right])
+        case .text:
+            guard let idx = project.textObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            let original = project.textObjects[idx]
+            let originalStart = original.startTime ?? 0
+            let originalDuration = original.displayDuration ?? 0
+            var left = original
+            left.id = leftId
+            left.displayDuration = splitAtRelativeTime
+            var right = original
+            right.id = rightId
+            right.startTime = originalStart + splitAtRelativeTime
+            right.displayDuration = max(0, originalDuration - splitAtRelativeTime)
+            project.textObjects.replaceSubrange(idx...idx, with: [left, right])
+        }
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        switch kind {
+        case .video, .image:
+            guard let leftIdx = project.mediaObjects.firstIndex(where: { $0.id == leftId }),
+                  let rightIdx = project.mediaObjects.firstIndex(where: { $0.id == rightId }) else {
+                throw EditCommandError.clipNotFound(id: leftId)
+            }
+            let left = project.mediaObjects[leftIdx]
+            let right = project.mediaObjects[rightIdx]
+            var restored = left
+            restored.id = clipId
+            restored.duration = (left.duration ?? 0) + (right.duration ?? 0)
+            let lower = min(leftIdx, rightIdx)
+            let upper = max(leftIdx, rightIdx)
+            project.mediaObjects.replaceSubrange(lower...upper, with: [restored])
+        case .audio:
+            guard let leftIdx = project.audioPlayerObjects.firstIndex(where: { $0.id == leftId }),
+                  let rightIdx = project.audioPlayerObjects.firstIndex(where: { $0.id == rightId }) else {
+                throw EditCommandError.clipNotFound(id: leftId)
+            }
+            let left = project.audioPlayerObjects[leftIdx]
+            let right = project.audioPlayerObjects[rightIdx]
+            var restored = left
+            restored.id = clipId
+            restored.duration = (left.duration ?? 0) + (right.duration ?? 0)
+            let lower = min(leftIdx, rightIdx)
+            let upper = max(leftIdx, rightIdx)
+            project.audioPlayerObjects.replaceSubrange(lower...upper, with: [restored])
+        case .text:
+            guard let leftIdx = project.textObjects.firstIndex(where: { $0.id == leftId }),
+                  let rightIdx = project.textObjects.firstIndex(where: { $0.id == rightId }) else {
+                throw EditCommandError.clipNotFound(id: leftId)
+            }
+            let left = project.textObjects[leftIdx]
+            let right = project.textObjects[rightIdx]
+            var restored = left
+            restored.id = clipId
+            restored.displayDuration = (left.displayDuration ?? 0) + (right.displayDuration ?? 0)
+            let lower = min(leftIdx, rightIdx)
+            let upper = max(leftIdx, rightIdx)
+            project.textObjects.replaceSubrange(lower...upper, with: [restored])
+        }
+    }
+}
+
 // MARK: - Story Easing (Timeline V2)
 
 /// Easing curve applied between two interpolated values (transitions, keyframes).
