@@ -152,4 +152,37 @@ final class CommandStackTests: XCTestCase {
         XCTAssertTrue(stack.canUndo)
         XCTAssertFalse(stack.canRedo)
     }
+
+    // MARK: - CommandStack — branch truncation
+
+    func test_push_afterUndo_truncatesRedoBranch() {
+        let stack = CommandStack(coalesceWindow: 0)
+        stack.push(makeAddCmd(clipId: "a"))
+        stack.push(makeAddCmd(clipId: "b"))
+        stack.push(makeAddCmd(clipId: "c"))
+        XCTAssertEqual(stack.count, 3)
+
+        _ = stack.undo() // undo c
+        _ = stack.undo() // undo b
+        XCTAssertTrue(stack.canRedo)
+        XCTAssertEqual(stack.count, 3) // still 3 retained, just cursor is at 1
+
+        stack.push(makeAddCmd(clipId: "d")) // new branch — should drop b and c
+        XCTAssertEqual(stack.count, 2) // a + d
+        XCTAssertFalse(stack.canRedo)
+    }
+
+    func test_push_afterUndo_undoReturnsTheNewCommandFirst() {
+        let stack = CommandStack(coalesceWindow: 0)
+        stack.push(makeAddCmd(clipId: "a"))
+        stack.push(makeAddCmd(clipId: "b"))
+        _ = stack.undo() // undo b
+        stack.push(makeAddCmd(clipId: "c"))
+        let firstUndo = stack.undo()
+        if case let .addClip(cmd) = firstUndo {
+            XCTAssertEqual(cmd.clipId, "c")
+        } else {
+            XCTFail("Expected first undo after branch to return c")
+        }
+    }
 }
