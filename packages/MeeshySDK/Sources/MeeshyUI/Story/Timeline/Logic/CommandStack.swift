@@ -56,21 +56,52 @@ extension CommandStack {
     /// (includes both undone and applied).
     public var count: Int { commands.count }
 
-    /// Push a command on top of the stack.
-    ///
-    /// Side effects:
-    ///   - Truncates any redo branch (commands at index >= cursor are dropped).
-    ///   - May coalesce with the previous command (Task 24).
-    ///   - May evict the oldest command FIFO if `maxSize` is exceeded (Task 26).
-    ///   - Calls `didChange` after the mutation completes.
+    /// Push a command on top of the stack with optional coalescing.
     public func push(_ command: AnyEditCommand) {
         // Truncate redo branch first.
         if cursor < commands.count {
             commands.removeSubrange(cursor..<commands.count)
         }
-        commands.append(command)
+
+        // Try to coalesce with the previous command if any.
+        if let last = commands.last,
+           let merged = Self.coalesce(previous: last, with: command,
+                                      windowSeconds: coalesceWindow) {
+            commands[commands.count - 1] = merged
+        } else {
+            commands.append(command)
+        }
         cursor = commands.count
         didChange?(self)
+    }
+
+    /// Returns a merged command if `previous` and `next` are coalesceable,
+    /// otherwise `nil`. Two commands coalesce iff:
+    ///   - they target the same clipId,
+    ///   - they are of the same EditCommand type,
+    ///   - they are within `windowSeconds` of each other,
+    ///   - they belong to the (small) set of commands declared coalesceable
+    ///     (currently MoveClip).
+    static func coalesce(previous: AnyEditCommand,
+                         with next: AnyEditCommand,
+                         windowSeconds: TimeInterval) -> AnyEditCommand? {
+        switch (previous, next) {
+        case let (.moveClip(p), .moveClip(n))
+            where p.clipId == n.clipId
+              && p.kind == n.kind
+              && abs(n.timestamp.timeIntervalSince(p.timestamp)) <= windowSeconds:
+            let merged = MoveClipCommand(
+                id: n.id,
+                timestamp: n.timestamp,
+                clipId: n.clipId,
+                kind: n.kind,
+                oldStartTime: p.oldStartTime,
+                newStartTime: n.newStartTime
+            )
+            return .moveClip(merged)
+        default:
+            return nil
+        }
     }
 }
 

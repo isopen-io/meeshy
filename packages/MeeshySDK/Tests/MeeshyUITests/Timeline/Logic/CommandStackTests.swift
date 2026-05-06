@@ -185,4 +185,57 @@ final class CommandStackTests: XCTestCase {
             XCTFail("Expected first undo after branch to return c")
         }
     }
+
+    // MARK: - CommandStack — coalescing
+
+    func test_push_coalesce_twoMovesOnSameClipWithinWindow_collapsedToOne() {
+        let stack = CommandStack(coalesceWindow: 0.5)
+        let now = Date()
+        let m1 = makeMoveCmd(clipId: "c1", oldStart: 0, newStart: 1.0, timestamp: now)
+        let m2 = makeMoveCmd(clipId: "c1", oldStart: 1.0, newStart: 2.0,
+                             timestamp: now.addingTimeInterval(0.1))
+        stack.push(m1)
+        stack.push(m2)
+        XCTAssertEqual(stack.count, 1)
+    }
+
+    func test_push_coalesce_preservesOriginalOldStartTime() {
+        let stack = CommandStack(coalesceWindow: 0.5)
+        let now = Date()
+        let m1 = makeMoveCmd(clipId: "c1", oldStart: 0, newStart: 1.0, timestamp: now)
+        let m2 = makeMoveCmd(clipId: "c1", oldStart: 1.0, newStart: 5.0,
+                             timestamp: now.addingTimeInterval(0.2))
+        stack.push(m1)
+        stack.push(m2)
+        let undone = stack.undo()
+        if case let .moveClip(cmd) = undone {
+            XCTAssertEqual(cmd.oldStartTime, 0, accuracy: 0.0001)
+            XCTAssertEqual(cmd.newStartTime, 5.0, accuracy: 0.0001)
+        } else {
+            XCTFail("Expected coalesced moveClip command")
+        }
+    }
+
+    func test_push_coalesce_didChangeFiresOncePerPush() {
+        let stack = CommandStack(coalesceWindow: 0.5)
+        var changeCount = 0
+        stack.didChange = { _ in changeCount += 1 }
+        let now = Date()
+        stack.push(makeMoveCmd(clipId: "c1", oldStart: 0, newStart: 1, timestamp: now))
+        stack.push(makeMoveCmd(clipId: "c1", oldStart: 1, newStart: 2,
+                               timestamp: now.addingTimeInterval(0.1)))
+        XCTAssertEqual(changeCount, 2) // didChange always fires, even when coalesced
+    }
+
+    func test_push_coalesce_repeatedDragFrames_singleCommandRetained() {
+        let stack = CommandStack(coalesceWindow: 0.5)
+        let now = Date()
+        for i in 0..<100 {
+            stack.push(makeMoveCmd(clipId: "c1",
+                                   oldStart: Float(i),
+                                   newStart: Float(i + 1),
+                                   timestamp: now.addingTimeInterval(Double(i) * 0.001)))
+        }
+        XCTAssertEqual(stack.count, 1)
+    }
 }
