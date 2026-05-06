@@ -52,6 +52,12 @@ public struct OfflineRetrySuccess: Sendable {
     public let tempId: String
     public let serverId: String
     public let conversationId: String
+
+    public init(tempId: String, serverId: String, conversationId: String) {
+        self.tempId = tempId
+        self.serverId = serverId
+        self.conversationId = conversationId
+    }
 }
 
 // MARK: - Offline Queue
@@ -62,12 +68,16 @@ public actor OfflineQueue {
     public nonisolated let retrySucceeded = SendablePassthrough<OfflineRetrySuccess>()
 
     private static let maxQueueSize = 100
-    private static let queueFileName = "offline_queue.json"
+
+    // Legacy file names — kept only for deletion on first boot.
+    private static let legacyFileName = "offline_queue.json"
 
     private var items: [OfflineQueueItem] = []
     private var isRetrying = false
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+    /// Outbox pool — injected at boot via `configure(pool:)`. Nil until wired.
+    private var outboxPool: (any DatabaseWriter)?
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -75,42 +85,49 @@ public actor OfflineQueue {
         return e
     }()
 
-    private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
-    }()
-
-    /// Called when retrying a queued message. Returns the server-assigned
-    /// message id on success so the queue can emit a `retrySucceeded` event
-    /// that lets active ViewModels reconcile the optimistic `tempId` with the
-    /// authoritative `serverId` before the socket `message:new` broadcast
-    /// arrives.
+    /// Called when retrying a queued message via the in-memory path. Returns
+    /// the server-assigned message id on success so the queue can emit a
+    /// `retrySucceeded` event that lets active ViewModels reconcile the
+    /// optimistic `tempId` with the authoritative `serverId` before the socket
+    /// `message:new` broadcast arrives.
     public var onRetrySend: ((OfflineQueueItem) async -> String?)?
 
     public func setRetrySend(_ handler: @escaping @Sendable (OfflineQueueItem) async -> String?) {
         onRetrySend = handler
     }
 
+    /// Wires the outbox pool used for SQLite persistence.
+    /// Must be called once at boot before any `enqueue` calls.
+    public func configure(pool: any DatabaseWriter) {
+        outboxPool = pool
+    }
+
     private init() {
-        items = Self.loadItemsFromDisk()
         Task { await self.observeConnection() }
     }
 
     // MARK: - Queue Operations
 
-    public func enqueue(_ item: OfflineQueueItem) {
+    /// Enqueues `item` into the in-memory mirror and writes a corresponding
+    /// `OutboxRecord` to the SQLite outbox table. The outbox write is the
+    /// authoritative persistence store; the in-memory array is a fast read
+    /// cache that is consistent with it.
+    public func enqueue(_ item: OfflineQueueItem) async {
         if items.count >= Self.maxQueueSize {
             items.removeFirst()
         }
         items.append(item)
-        saveToDisk()
+        await writeToOutbox(item)
         logger.info("Enqueued offline message for conversation \(item.conversationId), queue size: \(self.items.count)")
     }
 
-    public func dequeue(_ itemId: String) {
+    public func dequeue(_ itemId: String) async {
+        let outboxId = "ofq_\(itemId)"
         items.removeAll { $0.id == itemId }
-        saveToDisk()
+        guard let pool = outboxPool else { return }
+        try? await pool.write { db in
+            try OutboxRecord.deleteOne(db, key: outboxId)
+        }
     }
 
     public var pendingItems: [OfflineQueueItem] {
@@ -157,11 +174,15 @@ public actor OfflineQueue {
             }
         }
 
+        let pool = outboxPool
         for id in successIds {
             items.removeAll { $0.id == id }
+            if let pool {
+                let outboxId = "ofq_\(id)"
+                try? await pool.write { db in try OutboxRecord.deleteOne(db, key: outboxId) }
+            }
         }
 
-        saveToDisk()
         isRetrying = false
 
         // Clean the optimistic rows out of the persisted message cache so an
@@ -199,66 +220,62 @@ public actor OfflineQueue {
             .store(in: &cancellables)
     }
 
-    // MARK: - Disk Persistence
+    // MARK: - Outbox Write
 
-    private var queueFileURL: URL {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-        }
-        return cacheDir.appendingPathComponent(Self.queueFileName)
-    }
-
-    private func saveToDisk() {
-        do {
-            let data = try encoder.encode(items)
-            try data.write(to: queueFileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        } catch {
-            logger.error("Failed to save offline queue: \(error.localizedDescription)")
-        }
-    }
-
-    private static func loadItemsFromDisk() -> [OfflineQueueItem] {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        let url = cacheDir.appendingPathComponent(queueFileName)
-        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
-
-        do {
-            let data = try Data(contentsOf: url)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            return try decoder.decode([OfflineQueueItem].self, from: data)
-        } catch {
-            return []
+    private func writeToOutbox(_ item: OfflineQueueItem) async {
+        guard let pool = outboxPool else { return }
+        let outboxId = "ofq_\(item.id)"
+        let enc = encoder
+        let payload = (try? enc.encode(item)) ?? Data()
+        try? await pool.write { db in
+            guard try OutboxRecord.fetchOne(db, key: outboxId) == nil else { return }
+            try OutboxRecord(
+                id: outboxId,
+                kind: .sendMessage,
+                conversationId: item.conversationId,
+                messageLocalId: item.tempId,
+                payload: payload,
+                status: .pending,
+                attempts: 0,
+                lastError: nil,
+                createdAt: item.createdAt,
+                updatedAt: Date(),
+                nextAttemptAt: Date()
+            ).insert(db)
         }
     }
 
     // MARK: - Clear
 
-    public func clearAll() {
+    public func clearAll() async {
+        let ids = items.map { $0.id }
         items.removeAll()
-        saveToDisk()
+        guard let pool = outboxPool else { return }
+        try? await pool.write { db in
+            for id in ids {
+                try OutboxRecord.deleteOne(db, key: "ofq_\(id)")
+            }
+        }
     }
 
-    // MARK: - Outbox Migration
+    // MARK: - Outbox Migration (utility / testing)
 
-    /// Migrates pending items from this JSON-file-backed queue into the unified
-    /// `outbox` SQLite table. Idempotent — items already migrated (matching id)
-    /// are skipped. Safe to call on every app launch.
+    /// Copies pending in-memory items into an arbitrary `pool`. Idempotent —
+    /// items already present (matched by prefixed id) are silently skipped.
+    ///
+    /// In production the outbox is already populated by `enqueue`. This method
+    /// exists as a utility for migration testing and for legacy one-time boot
+    /// migrations from old JSON files via `MigrateLegacyQueues`.
     public func migrateToOutbox(pool: any DatabaseWriter) async {
         let snapshot = items
         guard !snapshot.isEmpty else { return }
 
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-
+        let enc = encoder
         try? await pool.write { db in
             for item in snapshot {
                 let outboxId = "ofq_\(item.id)"
                 guard try OutboxRecord.fetchOne(db, key: outboxId) == nil else { continue }
-                let payload = (try? encoder.encode(item)) ?? Data()
+                let payload = (try? enc.encode(item)) ?? Data()
                 try OutboxRecord(
                     id: outboxId,
                     kind: .sendMessage,
@@ -274,5 +291,15 @@ public actor OfflineQueue {
                 ).insert(db)
             }
         }
+    }
+
+    // MARK: - Legacy JSON File Deletion
+
+    /// Deletes the legacy JSON persistence file from disk.
+    /// Called once on first boot after migration to the outbox pipeline.
+    public static func deleteLegacyFile() {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let url = documents.appendingPathComponent("meeshy_cache/\(legacyFileName)")
+        try? FileManager.default.removeItem(at: url)
     }
 }

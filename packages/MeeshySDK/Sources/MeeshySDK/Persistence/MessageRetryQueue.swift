@@ -55,6 +55,12 @@ public struct RetryQueueSuccess: Sendable {
     public let tempId: String
     public let serverId: String
     public let conversationId: String
+
+    public init(tempId: String, serverId: String, conversationId: String) {
+        self.tempId = tempId
+        self.serverId = serverId
+        self.conversationId = conversationId
+    }
 }
 
 /// Emitted when an item is permanently dropped after exhausting its retry
@@ -78,24 +84,22 @@ public actor MessageRetryQueue {
     private static let maxRetryInterval: TimeInterval = 30
     private static let maxQueueSize = 100
     private static let maxAgeSeconds: TimeInterval = 7 * 24 * 3600 // 7 days
-    private static let queueFileName = "message_retry_queue.json"
+
+    // Legacy file name — kept only for deletion on first boot.
+    private static let legacyFileName = "message_retry_queue.json"
 
     private var items: [RetryQueueItem] = []
     private var isRetrying = false
     private var retryTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "messageretry")
+    /// Outbox pool — injected at boot via `configure(pool:)`. Nil until wired.
+    private var outboxPool: (any DatabaseWriter)?
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601
         return e
-    }()
-
-    private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
     }()
 
     public var onRetrySend: ((RetryQueueItem) async -> String?)?
@@ -104,8 +108,13 @@ public actor MessageRetryQueue {
         onRetrySend = handler
     }
 
+    /// Wires the outbox pool used for SQLite persistence.
+    /// Must be called once at boot before any `enqueue` calls.
+    public func configure(pool: any DatabaseWriter) {
+        outboxPool = pool
+    }
+
     private init() {
-        items = Self.loadItemsFromDisk()
         Task {
             await purgeExpired()
             await observeConnection()
@@ -114,19 +123,27 @@ public actor MessageRetryQueue {
 
     // MARK: - Queue Operations
 
-    public func enqueue(_ item: RetryQueueItem) {
+    /// Enqueues `item` into the in-memory mirror and writes a corresponding
+    /// `OutboxRecord` to the SQLite outbox table. The outbox write is the
+    /// authoritative persistence store; the in-memory array is a fast read
+    /// cache that is consistent with it.
+    public func enqueue(_ item: RetryQueueItem) async {
         if items.count >= Self.maxQueueSize {
             items.removeFirst()
         }
         items.append(item)
-        saveToDisk()
+        await writeToOutbox(item)
         logger.info("Enqueued message for retry: \(item.conversationId), queue size: \(self.items.count)")
         startRetryLoop()
     }
 
-    public func dequeue(_ itemId: String) {
+    public func dequeue(_ itemId: String) async {
+        let outboxId = "mrq_\(itemId)"
         items.removeAll { $0.id == itemId }
-        saveToDisk()
+        guard let pool = outboxPool else { return }
+        try? await pool.write { db in
+            try OutboxRecord.deleteOne(db, key: outboxId)
+        }
     }
 
     public var pendingItems: [RetryQueueItem] {
@@ -216,13 +233,31 @@ public actor MessageRetryQueue {
             }
         }
 
+        let pool = outboxPool
         for id in toRemove {
             items.removeAll { $0.id == id }
+            if let pool {
+                let outboxId = "mrq_\(id)"
+                try? await pool.write { db in try OutboxRecord.deleteOne(db, key: outboxId) }
+            }
         }
 
-        if !toRemove.isEmpty || updated {
-            saveToDisk()
+        if updated, let pool {
+            // Persist updated retry counts back to the outbox.
+            let updatedItems = items.filter { $0.retryCount > 0 }
+            for item in updatedItems {
+                let outboxId = "mrq_\(item.id)"
+                let updatedItem = item
+                try? await pool.write { db in
+                    if var record = try OutboxRecord.fetchOne(db, key: outboxId) {
+                        record.attempts = updatedItem.retryCount
+                        record.updatedAt = updatedItem.lastRetryAt ?? Date()
+                        try record.update(db)
+                    }
+                }
+            }
         }
+
         isRetrying = false
 
         // Remove optimistic rows from the persisted cache so an inactive
@@ -261,71 +296,74 @@ public actor MessageRetryQueue {
 
     // MARK: - Purge Expired
 
-    private func purgeExpired() {
+    private func purgeExpired() async {
         let cutoff = Date().addingTimeInterval(-Self.maxAgeSeconds)
-        let before = items.count
+        let expired = items.filter { $0.createdAt < cutoff }
+        guard !expired.isEmpty else { return }
         items.removeAll { $0.createdAt < cutoff }
-        if items.count != before {
-            saveToDisk()
+        guard let pool = outboxPool else { return }
+        for item in expired {
+            let outboxId = "mrq_\(item.id)"
+            try? await pool.write { db in try OutboxRecord.deleteOne(db, key: outboxId) }
         }
     }
 
-    // MARK: - Disk Persistence
+    // MARK: - Outbox Write
 
-    private var queueFileURL: URL {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-        return cacheDir.appendingPathComponent(Self.queueFileName)
-    }
-
-    private func saveToDisk() {
-        do {
-            let data = try encoder.encode(items)
-            try data.write(to: queueFileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        } catch {
-            logger.error("Failed to save retry queue: \(error.localizedDescription)")
-        }
-    }
-
-    private static func loadItemsFromDisk() -> [RetryQueueItem] {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let path = documents.appendingPathComponent("meeshy_cache/\(queueFileName)")
-        guard FileManager.default.fileExists(atPath: path.path) else { return [] }
-        do {
-            let data = try Data(contentsOf: path)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            return try decoder.decode([RetryQueueItem].self, from: data)
-        } catch {
-            return []
+    private func writeToOutbox(_ item: RetryQueueItem) async {
+        guard let pool = outboxPool else { return }
+        let outboxId = "mrq_\(item.id)"
+        let enc = encoder
+        let payload = (try? enc.encode(item)) ?? Data()
+        try? await pool.write { db in
+            guard try OutboxRecord.fetchOne(db, key: outboxId) == nil else { return }
+            try OutboxRecord(
+                id: outboxId,
+                kind: .sendMessage,
+                conversationId: item.conversationId,
+                messageLocalId: item.tempId,
+                payload: payload,
+                status: .pending,
+                attempts: item.retryCount,
+                lastError: nil,
+                createdAt: item.createdAt,
+                updatedAt: item.lastRetryAt ?? item.createdAt,
+                nextAttemptAt: Date()
+            ).insert(db)
         }
     }
 
     // MARK: - Clear
 
-    public func clearAll() {
+    public func clearAll() async {
+        let ids = items.map { $0.id }
         items.removeAll()
-        saveToDisk()
+        guard let pool = outboxPool else { return }
+        try? await pool.write { db in
+            for id in ids {
+                try OutboxRecord.deleteOne(db, key: "mrq_\(id)")
+            }
+        }
     }
 
-    // MARK: - Outbox Migration
+    // MARK: - Outbox Migration (utility / testing)
 
-    /// Migrates pending items from this JSON-file-backed queue into the unified
-    /// `outbox` SQLite table. Idempotent — items already migrated (matching id)
-    /// are skipped. Safe to call on every app launch.
+    /// Copies pending in-memory items into an arbitrary `pool`. Idempotent —
+    /// items already present (matched by prefixed id) are silently skipped.
+    ///
+    /// In production the outbox is already populated by `enqueue`. This method
+    /// exists as a utility for migration testing and for legacy one-time boot
+    /// migrations from old JSON files via `MigrateLegacyQueues`.
     public func migrateToOutbox(pool: any DatabaseWriter) async {
         let snapshot = items
         guard !snapshot.isEmpty else { return }
 
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-
+        let enc = encoder
         try? await pool.write { db in
             for item in snapshot {
                 let outboxId = "mrq_\(item.id)"
                 guard try OutboxRecord.fetchOne(db, key: outboxId) == nil else { continue }
-                let payload = (try? encoder.encode(item)) ?? Data()
+                let payload = (try? enc.encode(item)) ?? Data()
                 try OutboxRecord(
                     id: outboxId,
                     kind: .sendMessage,
@@ -341,5 +379,15 @@ public actor MessageRetryQueue {
                 ).insert(db)
             }
         }
+    }
+
+    // MARK: - Legacy JSON File Deletion
+
+    /// Deletes the legacy JSON persistence file from disk.
+    /// Called once on first boot after migration to the outbox pipeline.
+    public static func deleteLegacyFile() {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let url = documents.appendingPathComponent("meeshy_cache/\(legacyFileName)")
+        try? FileManager.default.removeItem(at: url)
     }
 }

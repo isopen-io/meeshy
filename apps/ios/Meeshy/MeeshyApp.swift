@@ -123,6 +123,18 @@ struct MeeshyApp: App {
                         MeeshyFocusStore.shared.current.toSDKSnapshot()
                     }
                     await CacheCoordinator.shared.start()
+                    // Wire the outbox pool so OfflineQueue and MessageRetryQueue
+                    // can persist items to SQLite on enqueue. Must run before
+                    // any enqueue calls to avoid silent no-ops.
+                    let bootPool = dependencies.dbPool
+                    await OfflineQueue.shared.configure(pool: bootPool)
+                    await MessageRetryQueue.shared.configure(pool: bootPool)
+                    // Wire the in-memory retry handlers so the reconnection
+                    // path (socket reconnect → retryAll/retryPending) can
+                    // send queued items without going through the outbox
+                    // flusher. The outbox flusher handles items that survive
+                    // a crash or cold start; these handlers handle the hot
+                    // reconnection path for items that were in-memory.
                     await OfflineQueue.shared.setRetrySend { @Sendable item in
                         do {
                             let request = SendMessageRequest(
@@ -179,22 +191,25 @@ struct MeeshyApp: App {
                             return .transient
                         }
                     }
-                    // Migrate legacy JSON-file queues into the unified outbox table,
-                    // then flush any pending outbox rows back through the queues'
-                    // existing retry pipelines. Both ops run once per install
-                    // (idempotency-by-UserDefaults gate saves CPU on subsequent boots;
-                    // the underlying migrateToOutbox is also safe to call repeatedly).
-                    let didMigrateKey = "meeshy.outbox.legacyMigrationDone"
-                    if !UserDefaults.standard.bool(forKey: didMigrateKey) {
-                        let pool = dependencies.dbPool
+                    // Delete legacy JSON queue files from disk on the first boot
+                    // after migration to the SQLite outbox pipeline. The files are
+                    // no longer written to; this removes any stale data on device.
+                    let didDeleteLegacyKey = "meeshy.outbox.legacyFilesDeleted"
+                    if !UserDefaults.standard.bool(forKey: didDeleteLegacyKey) {
                         Task.detached(priority: .background) {
-                            await MigrateLegacyQueues.migrateOnce(into: pool)
-                            let flusher = OutboxFlusher(pool: pool, dispatcher: OutboxDispatcher())
-                            await flusher.flush()
+                            OfflineQueue.deleteLegacyFile()
+                            MessageRetryQueue.deleteLegacyFile()
                             await MainActor.run {
-                                UserDefaults.standard.set(true, forKey: didMigrateKey)
+                                UserDefaults.standard.set(true, forKey: didDeleteLegacyKey)
                             }
                         }
+                    }
+                    // Drain any outbox rows that survived a crash or cold start.
+                    // This runs at every boot (not just once) so items from the
+                    // previous session are retried as soon as the app is active.
+                    Task.detached(priority: .background) {
+                        let flusher = OutboxFlusher(pool: bootPool, dispatcher: OutboxDispatcher())
+                        await flusher.flush()
                     }
 
                     // Parallelize: friendship hydration + session check are independent
