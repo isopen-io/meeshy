@@ -15,6 +15,30 @@
 **Output module:** `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Logic/` (cree dans la Task 0).
 **Output tests:** `packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Logic/`.
 
+---
+
+## Convention de testing (xcodebuild, scheme MeeshyUI)
+
+**Pourquoi xcodebuild et non `swift test`** : le module `MeeshyUI` (qui contient `Logic/`) importe SwiftUI et est compilé pour iOS Simulator. `swift test` standalone échoue avec `no such module 'UIKit'` / `no such module 'SwiftUI'`.
+
+**Pattern complet pour les tests Logic** :
+```bash
+xcodebuild test \
+  -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK \
+  -scheme MeeshyUI \
+  -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" \
+  -only-testing:MeeshyUITests/SnapEngineTests
+```
+
+**Filtrage par méthode** : `-only-testing:MeeshyUITests/<TestClass>/<test_method>` (nom complet exact). Pour TDD red→green sur une méthode : utiliser le nom complet ; pour exécuter toute la classe : omettre le suffixe.
+
+**Régression check full SDK** :
+```bash
+xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5"
+```
+
+**Simulator UDID** : `30BFD3A6-C80B-489D-825E-5D14D6FCCAB5` (iPhone 16 Pro, iOS 18.2). Booté via `xcrun simctl boot 30BFD3A6-C80B-489D-825E-5D14D6FCCAB5 || true` (idempotent).
+
 **Scope rules:**
 - Aucun `import UIKit`, `import SwiftUI`. `import Foundation` et `import CoreGraphics` autorises.
 - Aucun acces a un singleton (`*.shared`).
@@ -112,7 +136,7 @@ final class LogicModuleSmokeTests: XCTestCase {
 
 - [ ] **Step 0.3: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter LogicModuleSmokeTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/LogicModuleSmokeTests`
 Expected: PASS (Plan 1 types are reachable). If FAIL with "Cannot find type 'StoryEasing'", abort and verify Plan 1 is merged.
 
 - [ ] **Step 0.4: Commit**
@@ -179,7 +203,7 @@ final class SnapEngineTests: XCTestCase {
 
 - [ ] **Step 1.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: FAIL with "Cannot find type 'SnapCandidate'" (or similar).
 
 - [ ] **Step 1.3: Write minimal implementation**
@@ -234,7 +258,7 @@ public struct SnapResult: Equatable, Sendable {
 
 - [ ] **Step 1.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 1.5: Commit**
@@ -286,7 +310,7 @@ Append to `SnapEngineTests`:
 
 - [ ] **Step 2.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: FAIL with "Cannot find 'SnapEngine' in scope".
 
 - [ ] **Step 2.3: Write minimal implementation**
@@ -314,7 +338,7 @@ public struct SnapEngine: Sendable {
 
 - [ ] **Step 2.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: PASS (7 tests total: 4 from Task 1 + 3 here).
 
 - [ ] **Step 2.5: Commit**
@@ -358,7 +382,7 @@ Append to `SnapEngineTests`:
 
 - [ ] **Step 3.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: FAIL — `snap(rawTime:candidates:disabled:)` does not exist.
 
 - [ ] **Step 3.3: Write minimal implementation**
@@ -411,7 +435,7 @@ extension SnapEngine {
 
 - [ ] **Step 3.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: PASS (9 tests total).
 
 - [ ] **Step 3.5: Commit**
@@ -465,7 +489,7 @@ Append:
 
 - [ ] **Step 4.2: Run test to verify it passes (logic from Task 3 already covers these cases)**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: PASS (12 tests total). If FAIL, the `pickBest` helper has a bug — fix before continuing.
 
 - [ ] **Step 4.3: Commit**
@@ -509,7 +533,7 @@ Append:
 
 - [ ] **Step 5.2: Run test to verify it passes (covered by Task 3 implementation)**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: PASS (14 tests).
 
 - [ ] **Step 5.3: Commit**
@@ -555,7 +579,7 @@ Append to `SnapEngineTests`:
 
 - [ ] **Step 6.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests/test_snap_multipleCandidatesInRange_picksNearest`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests
 Expected: FAIL — current naive pick returns the first in-range, not the nearest.
 
 - [ ] **Step 6.3: Update `pickBest` to score by distance**
@@ -584,7 +608,7 @@ Replace the body of `pickBest` in `SnapEngine.swift`:
 
 - [ ] **Step 6.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: PASS (16 tests).
 
 - [ ] **Step 6.5: Commit**
@@ -649,7 +673,7 @@ Append to `SnapEngineTests`:
 
 - [ ] **Step 7.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: FAIL on at least one of the four tie-break tests.
 
 - [ ] **Step 7.3: Add priority weights and refine `pickBest`**
@@ -712,7 +736,7 @@ extension SnapEngine {
 
 - [ ] **Step 7.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: PASS (20 tests).
 
 - [ ] **Step 7.5: Commit**
@@ -755,7 +779,7 @@ Append:
 
 - [ ] **Step 8.2: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: PASS (22 tests).
 
 - [ ] **Step 8.3: Commit**
@@ -803,7 +827,7 @@ Append:
 
 - [ ] **Step 9.2: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter SnapEngineTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests`
 Expected: PASS (24 tests — matches spec target).
 
 - [ ] **Step 9.3: Commit**
@@ -851,7 +875,7 @@ final class KeyframeInterpolatorTests: XCTestCase {
 
 - [ ] **Step 10.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: FAIL — `Float` has no static `lerp` method.
 
 - [ ] **Step 10.3: Write minimal implementation**
@@ -883,7 +907,7 @@ extension Float: Lerpable {
 
 - [ ] **Step 10.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 10.5: Commit**
@@ -942,7 +966,7 @@ Append to `KeyframeInterpolatorTests`:
 
 - [ ] **Step 11.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: FAIL — `CGFloat`, `CGPoint`, `CGSize` do not conform to `Lerpable`.
 
 - [ ] **Step 11.3: Add conformances**
@@ -977,7 +1001,7 @@ extension CGSize: Lerpable {
 
 - [ ] **Step 11.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: PASS (7 tests total).
 
 - [ ] **Step 11.5: Commit**
@@ -1029,7 +1053,7 @@ Append to `KeyframeInterpolatorTests`:
 
 - [ ] **Step 12.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: FAIL — `KeyframeInterpolator` namespace does not exist.
 
 - [ ] **Step 12.3: Write minimal implementation**
@@ -1092,7 +1116,7 @@ public enum KeyframeInterpolator {
 
 - [ ] **Step 12.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: PASS (10 tests total).
 
 - [ ] **Step 12.5: Commit**
@@ -1146,7 +1170,7 @@ Append:
 
 - [ ] **Step 13.2: Run test to verify it passes (covered by Task 12 implementation)**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: PASS (13 tests total).
 
 - [ ] **Step 13.3: Commit**
@@ -1193,7 +1217,7 @@ Append:
 
 - [ ] **Step 14.2: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: PASS (15 tests total).
 
 - [ ] **Step 14.3: Commit**
@@ -1252,7 +1276,7 @@ Append:
 
 - [ ] **Step 15.2: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: PASS (18 tests total).
 
 - [ ] **Step 15.3: Commit**
@@ -1290,7 +1314,7 @@ Append:
 
 - [ ] **Step 16.2: Run test to verify it passes (Task 12 sorts defensively)**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: PASS (19 tests).
 
 - [ ] **Step 16.3: Commit**
@@ -1329,7 +1353,7 @@ Append:
 
 - [ ] **Step 17.2: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter KeyframeInterpolatorTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/KeyframeInterpolatorTests`
 Expected: PASS (20 tests). Spec target was 16, we have 20 — over-coverage acceptable.
 
 - [ ] **Step 17.3: Commit**
@@ -1414,7 +1438,7 @@ final class CommandStackTests: XCTestCase {
 
 - [ ] **Step 18.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: FAIL — `CommandStackSnapshot` does not exist.
 
 - [ ] **Step 18.3: Write minimal implementation**
@@ -1443,7 +1467,7 @@ public struct CommandStackSnapshot: Codable, Sendable, Equatable {
 
 - [ ] **Step 18.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 18.5: Commit**
@@ -1491,7 +1515,7 @@ Append to `CommandStackTests`:
 
 - [ ] **Step 19.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: FAIL — `CommandStack` does not exist.
 
 - [ ] **Step 19.3: Write minimal implementation**
@@ -1536,7 +1560,7 @@ public final class CommandStack: @unchecked Sendable {
 
 - [ ] **Step 19.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (5 tests total).
 
 - [ ] **Step 19.5: Commit**
@@ -1579,7 +1603,7 @@ Append to `CommandStackTests`:
 
 - [ ] **Step 20.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: FAIL — `push(_:)` and `count` do not exist.
 
 - [ ] **Step 20.3: Add `push` + `count`**
@@ -1614,7 +1638,7 @@ extension CommandStack {
 
 - [ ] **Step 20.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (7 tests).
 
 - [ ] **Step 20.5: Commit**
@@ -1678,7 +1702,7 @@ Append to `CommandStackTests`:
 
 - [ ] **Step 21.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: FAIL — `undo()` does not exist.
 
 - [ ] **Step 21.3: Add `undo`**
@@ -1705,7 +1729,7 @@ extension CommandStack {
 
 - [ ] **Step 21.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (10 tests).
 
 - [ ] **Step 21.5: Commit**
@@ -1750,7 +1774,7 @@ Append to `CommandStackTests`:
 
 - [ ] **Step 22.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: FAIL — `redo()` does not exist.
 
 - [ ] **Step 22.3: Add `redo`**
@@ -1776,7 +1800,7 @@ extension CommandStack {
 
 - [ ] **Step 22.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (12 tests).
 
 - [ ] **Step 22.5: Commit**
@@ -1834,7 +1858,7 @@ Append:
 
 - [ ] **Step 23.2: Run test to verify it passes (Task 20 already truncates)**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (14 tests).
 
 - [ ] **Step 23.3: Commit**
@@ -1926,7 +1950,7 @@ Append to `CommandStackTests`:
 
 - [ ] **Step 24.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: FAIL — coalescing not yet implemented (count is 100 instead of 1).
 
 - [ ] **Step 24.3: Add coalescing logic**
@@ -1992,7 +2016,7 @@ Note: `SetClipPropertyCommand` coalescing is added in Task 25.
 
 - [ ] **Step 24.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (18 tests). The 100-frame-drag test should retain a single command with `oldStartTime: 0, newStartTime: 100`.
 
 - [ ] **Step 24.5: Commit**
@@ -2045,7 +2069,7 @@ Append:
 
 - [ ] **Step 25.2: Run test to verify it passes (Task 24 implementation enforces these constraints)**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (21 tests).
 
 - [ ] **Step 25.3: Commit**
@@ -2100,7 +2124,7 @@ Append to `CommandStackTests`:
 
 - [ ] **Step 26.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: FAIL — count is 4 instead of 3.
 
 - [ ] **Step 26.3: Update `push` to enforce FIFO cap**
@@ -2133,7 +2157,7 @@ Replace the existing `push(_:)` body in `CommandStack.swift` with:
 
 - [ ] **Step 26.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (23 tests).
 
 - [ ] **Step 26.5: Commit**
@@ -2201,7 +2225,7 @@ Append:
 
 - [ ] **Step 27.2: Run test to verify it fails**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: FAIL — `snapshot()` and `restore(_:)` do not exist.
 
 - [ ] **Step 27.3: Add snapshot / restore**
@@ -2229,7 +2253,7 @@ extension CommandStack {
 
 - [ ] **Step 27.4: Run test to verify it passes**
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (26 tests).
 
 - [ ] **Step 27.5: Commit**
@@ -2310,7 +2334,7 @@ Append:
 
 The `undo()`, `redo()` implementations from Tasks 21/22 already early-return without firing `didChange` when there is nothing to (un|re)do. Verify:
 
-Run: `cd packages/MeeshySDK && swift test --filter CommandStackTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/CommandStackTests`
 Expected: PASS (32 tests). If `test_didChange_doesNotFireWhenUndoIsNoop` fails, audit Tasks 21 and 22 — `didChange` must NOT fire on early-return.
 
 - [ ] **Step 28.3: Commit**
@@ -2556,7 +2580,7 @@ final class EditCommandIdempotenceTests: XCTestCase {
 
 - [ ] **Step 29.2: Run test to verify it passes (or surfaces Plan 1 bugs)**
 
-Run: `cd packages/MeeshySDK && swift test --filter EditCommandIdempotenceTests`
+Run: `cd packages/MeeshySDK && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/EditCommandIdempotenceTests`
 Expected: PASS (12 tests).
 
 If FAIL on a specific command:
@@ -2584,7 +2608,7 @@ git commit -m "test(timeline-logic): integration sweep — apply/revert round-tr
 
 - [ ] **Step 30.1: Run full test suite**
 
-Run: `cd packages/MeeshySDK && swift test --filter "SnapEngineTests|CommandStackTests|KeyframeInterpolatorTests|EditCommandIdempotenceTests|LogicModuleSmokeTests"`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshyUI -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyUITests/SnapEngineTests -only-testing:MeeshyUITests/CommandStackTests -only-testing:MeeshyUITests/KeyframeInterpolatorTests -only-testing:MeeshyUITests/EditCommandIdempotenceTests -only-testing:MeeshyUITests/LogicModuleSmokeTests`
 Expected: PASS — 24 + 32 + 20 + 12 + 1 = **89 tests** total for Plan 2.
 
 - [ ] **Step 30.2: Verify file size budget**
@@ -2665,7 +2689,7 @@ rm packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Logic/.gitkeep
 
 - [ ] **Step 30.5: Run full SDK test suite to ensure no regressions**
 
-Run: `cd packages/MeeshySDK && swift test`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5"`
 Expected: ALL tests PASS (the 89 new ones + the entire pre-existing suite). If any pre-existing test fails, do not proceed — investigate the regression introduced by the new module.
 
 - [ ] **Step 30.6: Verify the iOS app still builds**
@@ -2698,7 +2722,7 @@ EOF
 ## Self-review checklist (run before declaring Plan 2 complete)
 
 - [ ] All 31 tasks merged on `dev`
-- [ ] `swift test` (full SDK suite) green
+- [ ] `xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5"` (full SDK suite) green
 - [ ] `./apps/ios/meeshy.sh build` green
 - [ ] Each file in `Logic/` is < 400 lines (`wc -l`)
 - [ ] No `import UIKit` and no `import SwiftUI` in `Logic/` (`grep -r 'import UIKit\|import SwiftUI' packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Logic`) — should return zero hits
