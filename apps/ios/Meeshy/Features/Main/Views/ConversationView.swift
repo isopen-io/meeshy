@@ -655,22 +655,6 @@ struct ConversationView: View {
                     }
                 }
             }
-            .task {
-                // Wire up GRDB persistence when DependencyContainer is available.
-                // This is additive — the existing SwiftUI path stays primary.
-                guard viewModel.messageStore == nil else { return }
-                let container = DependencyContainer.shared
-                let store = MessageStore(
-                    conversationId: viewModel.conversationId,
-                    persistence: container.messagePersistence
-                )
-                viewModel.setupPersistence(
-                    store: store,
-                    persistence: container.messagePersistence,
-                    dbPool: container.dbPool
-                )
-                await store.loadInitial()
-            }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
                 // Language priority: keyboard layout > system language > current default
@@ -764,16 +748,12 @@ struct ConversationView: View {
         ZStack {
             conversationBackground
 
-            // UIKit bridge when GRDB store is ready; SwiftUI fallback otherwise
-            if let store = viewModel.messageStore {
-                MessageListView(
-                    store: store,
-                    currentUserId: viewModel.currentUserIdForView
-                ) { count in
-                    scrollState.unreadBadgeCount = count
-                }
-            } else {
-                messageScrollView
+            // UIKit bridge powered by GRDB store (always available after eager init)
+            MessageListView(
+                store: viewModel.messageStore,
+                currentUserId: viewModel.currentUserIdForView
+            ) { count in
+                scrollState.unreadBadgeCount = count
             }
 
             floatingHeaderSection

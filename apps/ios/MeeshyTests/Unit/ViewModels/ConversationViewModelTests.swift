@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 @testable import Meeshy
 import MeeshySDK
 
@@ -43,11 +44,13 @@ final class ConversationViewModelTests: XCTestCase {
         unreadCount: Int = 0,
         isDirect: Bool = false,
         participantUserId: String? = nil,
-        anonymousSession: AnonymousSessionContext? = nil
+        anonymousSession: AnonymousSessionContext? = nil,
+        dependencies: ConversationDependencies? = nil
     ) -> ConversationViewModel {
         let currentUser = MeeshyUser(id: testUserId, username: "testuser", displayName: "Test User")
         mockAuthManager.simulateLoggedIn(user: currentUser)
 
+        let deps = dependencies ?? makeTestDependencies()
         return ConversationViewModel(
             conversationId: conversationId ?? testConversationId,
             unreadCount: unreadCount,
@@ -58,7 +61,16 @@ final class ConversationViewModelTests: XCTestCase {
             messageService: mockMessageService,
             conversationService: mockConversationService,
             reactionService: mockReactionService,
-            reportService: mockReportService
+            reportService: mockReportService,
+            dependencies: deps
+        )
+    }
+
+    private func makeTestDependencies() -> ConversationDependencies {
+        let pool = try! makeInMemoryPool()
+        return ConversationDependencies(
+            dbPool: pool,
+            persistence: MessagePersistenceActor(dbWriter: pool)
         )
     }
 
@@ -497,7 +509,8 @@ final class ConversationViewModelTests: XCTestCase {
             messageService: mockMessageService,
             conversationService: mockConversationService,
             reactionService: mockReactionService,
-            reportService: mockReportService
+            reportService: mockReportService,
+            dependencies: makeTestDependencies()
         )
         sut.messages = [makeMessage(id: "msg-t", content: "Bonjour")]
         sut.messageTranslations["msg-t"] = [
@@ -536,7 +549,8 @@ final class ConversationViewModelTests: XCTestCase {
             messageService: mockMessageService,
             conversationService: mockConversationService,
             reactionService: mockReactionService,
-            reportService: mockReportService
+            reportService: mockReportService,
+            dependencies: makeTestDependencies()
         )
         sut.messages = [makeMessage(id: "msg-t", content: "Bonjour")]
         sut.messageTranslations["msg-t"] = [
@@ -809,7 +823,8 @@ final class ConversationViewModelTests: XCTestCase {
             messageService: mockMessageService,
             conversationService: mockConversationService,
             reactionService: mockReactionService,
-            reportService: mockReportService
+            reportService: mockReportService,
+            dependencies: makeTestDependencies()
         )
         sut.messages = [makeMessage(id: "msg-r", content: "Bonjour")]
         // No English translation available, but German (regional) is available
@@ -840,7 +855,8 @@ final class ConversationViewModelTests: XCTestCase {
             messageService: mockMessageService,
             conversationService: mockConversationService,
             reactionService: mockReactionService,
-            reportService: mockReportService
+            reportService: mockReportService,
+            dependencies: makeTestDependencies()
         )
         sut.messages = [makeMessage(id: "msg-n", content: "Bonjour")]
         // Only Japanese translation available, but user prefers English
@@ -870,7 +886,8 @@ final class ConversationViewModelTests: XCTestCase {
             messageService: mockMessageService,
             conversationService: mockConversationService,
             reactionService: mockReactionService,
-            reportService: mockReportService
+            reportService: mockReportService,
+            dependencies: makeTestDependencies()
         )
         sut.messages = [makeMessage(id: "msg-o", content: "Bonjour")]
         sut.messageTranslations["msg-o"] = [
@@ -1010,48 +1027,48 @@ final class ConversationViewModelTests: XCTestCase {
 
     // MARK: - Persistence Orchestrator Tests
 
-    func test_setupPersistence_assignsStoreAndPersistence() {
-        let sut = makeSUT()
-
-        // Before setup, both should be nil
-        XCTAssertNil(sut.messageStore)
-        XCTAssertNil(sut.messagePersistence)
-
-        // After setup, both should be assigned
-        let container = DependencyContainer.shared
-        let store = MessageStore(
-            conversationId: testConversationId,
-            persistence: container.messagePersistence
+    func test_init_createsMessageStoreEagerly() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let viewModel = ConversationViewModel(
+            conversationId: "conv-1",
+            authManager: mockAuthManager,
+            messageService: mockMessageService,
+            conversationService: mockConversationService,
+            reactionService: mockReactionService,
+            reportService: mockReportService,
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
         )
-        sut.setupPersistence(
-            store: store,
-            persistence: container.messagePersistence,
-            dbPool: container.dbPool
-        )
-
-        XCTAssertNotNil(sut.messageStore)
-        XCTAssertNotNil(sut.messagePersistence)
+        XCTAssertNotNil(viewModel.messageStore,
+            "messageStore must be available immediately after init")
     }
 
-    func test_setupPersistence_storeMatchesConversationId() {
-        let sut = makeSUT()
-        let container = DependencyContainer.shared
-        let store = MessageStore(
+    func test_init_messageStoreMatchesConversationId() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let viewModel = ConversationViewModel(
             conversationId: testConversationId,
-            persistence: container.messagePersistence
+            authManager: mockAuthManager,
+            messageService: mockMessageService,
+            conversationService: mockConversationService,
+            reactionService: mockReactionService,
+            reportService: mockReportService,
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
         )
-        sut.setupPersistence(
-            store: store,
-            persistence: container.messagePersistence,
-            dbPool: container.dbPool
-        )
-
-        XCTAssertEqual(sut.messageStore?.conversationId, testConversationId)
+        XCTAssertEqual(viewModel.messageStore.conversationId, testConversationId)
     }
 
     func test_currentUserIdForView_matchesAuthManagerUser() {
         let sut = makeSUT()
 
         XCTAssertEqual(sut.currentUserIdForView, testUserId)
+    }
+
+    // MARK: - Helpers
+
+    private func makeInMemoryPool() throws -> DatabaseQueue {
+        let db = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: db)
+        return db
     }
 }

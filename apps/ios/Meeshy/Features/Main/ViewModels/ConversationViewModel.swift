@@ -21,6 +21,21 @@ struct MessageTranslation: Identifiable {
 // MessageTranscription, MessageTranscriptionSegment, MessageTranslatedAudio
 // are defined in MeeshySDK.TranscriptionModels — use those directly.
 
+// MARK: - ConversationDependencies
+
+struct ConversationDependencies {
+    let dbPool: any DatabaseWriter
+    let persistence: MessagePersistenceActor
+
+    @MainActor
+    static var live: ConversationDependencies {
+        ConversationDependencies(
+            dbPool: DependencyContainer.shared.dbPool,
+            persistence: DependencyContainer.shared.messagePersistence
+        )
+    }
+}
+
 @MainActor
 class ConversationViewModel: ObservableObject {
 
@@ -419,11 +434,11 @@ class ConversationViewModel: ObservableObject {
     // MARK: - GRDB Persistence (additive — parallel data source alongside @Published messages)
 
     /// GRDB-backed observable store for UICollectionView bridge.
-    /// Set via `setupPersistence(store:persistence:dbPool:)`.
-    private(set) var messageStore: MessageStore?
+    /// Created eagerly in init so it is available at first paint.
+    private(set) var messageStore: MessageStore
 
     /// Actor for optimistic inserts and state-machine transitions.
-    private(set) var messagePersistence: MessagePersistenceActor?
+    private(set) var messagePersistence: MessagePersistenceActor
     private var lastOlderPaginationTime: Date = .distantPast
     private var lastNewerPaginationTime: Date = .distantPast
     private static let paginationDebounceInterval: TimeInterval = 1.0
@@ -635,7 +650,8 @@ class ConversationViewModel: ObservableObject {
         reactionService: ReactionServiceProviding = ReactionService.shared,
         reportService: ReportServiceProviding = ReportService.shared,
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
-        mentionService: MentionServiceProviding = MentionService.shared
+        mentionService: MentionServiceProviding = MentionService.shared,
+        dependencies: ConversationDependencies = .live
     ) {
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
@@ -650,12 +666,22 @@ class ConversationViewModel: ObservableObject {
         self.reportService = reportService
         self.syncEngine = syncEngine
         self.mentionService = mentionService
+        // Eagerly create GRDB persistence so messageStore is available at first paint.
+        self.messagePersistence = dependencies.persistence
+        let store = MessageStore(
+            conversationId: conversationId,
+            persistence: dependencies.persistence
+        )
+        self.messageStore = store
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: authManager.currentUser?.id ?? ""
         )
         handler.delegate = self
+        handler.persistence = dependencies.persistence
         self.socketHandler = handler
+        store.startObserving(dbPool: dependencies.dbPool)
+        Task { await store.loadInitial() }
         messagesPersistCancellable = $messages
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
@@ -671,20 +697,6 @@ class ConversationViewModel: ObservableObject {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
         }
-    }
-
-    // MARK: - Persistence Setup
-
-    /// Wire up the GRDB-backed message store and persistence actor.
-    /// Called from the view layer once `DependencyContainer` is available.
-    /// This is ADDITIVE — the existing `@Published var messages` stays as
-    /// the primary data source for the SwiftUI path; `MessageStore` powers
-    /// the UIKit `MessageListView` bridge in parallel.
-    func setupPersistence(store: MessageStore, persistence: MessagePersistenceActor, dbPool: any DatabaseWriter) {
-        self.messageStore = store
-        self.messagePersistence = persistence
-        store.startObserving(dbPool: dbPool)
-        socketHandler?.persistence = persistence
     }
 
     /// Reconcile optimistic messages with their server-assigned ids when the
@@ -1352,7 +1364,8 @@ class ConversationViewModel: ObservableObject {
         }
 
         // GRDB optimistic insert (parallel persistence path)
-        if let persistence = messagePersistence, existingTempId == nil {
+        if existingTempId == nil {
+            let persistence = messagePersistence
             let optimisticRecord = MessageRecord(
                 localId: tempId, serverId: nil,
                 conversationId: conversationId, senderId: currentUserId,
@@ -1441,12 +1454,10 @@ class ConversationViewModel: ObservableObject {
             }
 
             // GRDB server ack (parallel persistence path)
-            if let persistence = messagePersistence {
-                _ = try? await persistence.applyEvent(
-                    localId: tempId,
-                    event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
-                )
-            }
+            _ = try? await messagePersistence.applyEvent(
+                localId: tempId,
+                event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
+            )
 
             // Move conversation to top of list immediately (optimistic)
             let convId = conversationId
