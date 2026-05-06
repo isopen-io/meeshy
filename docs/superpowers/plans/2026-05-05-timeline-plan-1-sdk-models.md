@@ -12,6 +12,27 @@
 
 ---
 
+## Convention de testing (xcodebuild, pas swift test)
+
+**Pourquoi xcodebuild et non `swift test`** : le module `MeeshySDK` importe `UIKit` via `Cache/CacheCoordinator.swift`. La commande `swift test` standalone échoue avec `no such module 'UIKit'` car SPM compile pour la plateforme hôte (macOS). Toutes les commandes de test ci-dessous utilisent `xcodebuild` avec un destination iOS Simulator.
+
+**Pattern complet** :
+```bash
+xcodebuild test \
+  -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK \
+  -scheme MeeshySDK-Package \
+  -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" \
+  -only-testing:MeeshySDKTests/StoryModelsExtensionsTests
+```
+
+**Filtrage par méthode** : `xcodebuild` n'accepte pas de wildcard. Pour filtrer une méthode spécifique : `-only-testing:MeeshySDKTests/StoryModelsExtensionsTests/test_storyEasing_linear_returnsInputUnchanged` (nom complet exact). Pour exécuter toute la classe (recommandé pour les RED→GREEN steps), omettre le suffixe `/test_xxx`.
+
+**Simulator UDID** : `30BFD3A6-C80B-489D-825E-5D14D6FCCAB5` (iPhone 16 Pro). Si indisponible, lancer `xcrun simctl list devices iPhone 16 Pro`.
+
+**Gain de temps** : booter le simulator avant de démarrer la session — `xcrun simctl boot 30BFD3A6-C80B-489D-825E-5D14D6FCCAB5 || true` (idempotent, ignore si déjà booté).
+
+---
+
 ## Notes d'implémentation
 
 - **Ne pas confondre "extension"** au sens du spec et au sens Swift : Swift n'autorise pas les stored properties dans une `extension`. Les nouveaux champs `clipTransitions`, `keyframes` sont donc ajoutés directement à la définition de `StoryEffects`, `StoryMediaObject`, `StoryTextObject` (struct definitions dans `StoryModels.swift`), avec mise à jour du `init`, du `CodingKeys` et de la décode/encode logic existante. C'est conceptuellement une extension (champ optionnel ajouté), techniquement un ajout de stored property.
@@ -29,7 +50,7 @@
 
 - [ ] **Step 0.1: Verify SDK builds and tests pass before starting**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test 2>&1 | tail -30`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" 2>&1 | tail -30`
 Expected: "Test Suite 'All tests' passed" (or skipped-but-no-failure baseline). Si rouge, stop et résoudre avant de continuer.
 
 - [ ] **Step 0.2: Create the test file scaffold**
@@ -46,7 +67,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
 }
 ```
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests`
 Expected: PASS (suite vide, 0 test).
 
 - [ ] **Step 0.3: Commit scaffold**
@@ -120,7 +141,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 1.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyEasing 2>&1 | tail -20`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -20`
 Expected: FAIL with `cannot find 'StoryEasing' in scope` (compilation error).
 
 - [ ] **Step 1.3: Write minimal implementation**
@@ -155,7 +176,7 @@ public enum StoryEasing: String, Codable, CaseIterable, Sendable {
 
 - [ ] **Step 1.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyEasing 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 6 tests executed.
 
 - [ ] **Step 1.5: Commit**
@@ -196,7 +217,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 2.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyTransitionKind 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'StoryTransitionKind' in scope`.
 
 - [ ] **Step 2.3: Write minimal implementation**
@@ -217,7 +238,7 @@ public enum StoryTransitionKind: String, Codable, CaseIterable, Sendable {
 
 - [ ] **Step 2.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyTransitionKind 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 2 tests executed.
 
 - [ ] **Step 2.5: Commit**
@@ -303,7 +324,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 3.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyClipTransition 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'StoryClipTransition' in scope`.
 
 - [ ] **Step 3.3: Write minimal implementation**
@@ -341,7 +362,7 @@ public struct StoryClipTransition: Codable, Identifiable, Sendable {
 
 - [ ] **Step 3.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyClipTransition 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 4 tests executed.
 
 - [ ] **Step 3.5: Commit**
@@ -441,7 +462,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 4.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyKeyframe 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'StoryKeyframe' in scope`.
 
 - [ ] **Step 4.3: Write minimal implementation**
@@ -488,7 +509,7 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
 
 - [ ] **Step 4.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyKeyframe 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 5 tests executed.
 
 - [ ] **Step 4.5: Commit**
@@ -542,7 +563,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 5.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyEffects_clipTransitions 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `value of type 'StoryEffects' has no member 'clipTransitions'`.
 
 - [ ] **Step 5.3: Write minimal implementation**
@@ -575,7 +596,7 @@ Then locate the `init(...)` of `StoryEffects` (around line 544) and:
 
 - [ ] **Step 5.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyEffects_clipTransitions 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 3 tests executed.
 
 - [ ] **Step 5.5: Commit**
@@ -630,7 +651,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 6.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyMediaObject_keyframes 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `value of type 'StoryMediaObject' has no member 'keyframes'`.
 
 - [ ] **Step 6.3: Write minimal implementation**
@@ -697,7 +718,7 @@ Body change — locate the `self.init(...)` call and add `keyframes: keyframes` 
 
 - [ ] **Step 6.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyMediaObject_keyframes 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 3 tests executed.
 
 - [ ] **Step 6.5: Commit**
@@ -752,7 +773,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 7.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyTextObject_keyframes 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `value of type 'StoryTextObject' has no member 'keyframes'`.
 
 - [ ] **Step 7.3: Write minimal implementation**
@@ -797,7 +818,7 @@ Body change (add at the end before the closing brace):
 
 - [ ] **Step 7.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storyTextObject_keyframes 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 3 tests executed.
 
 - [ ] **Step 7.5: Commit**
@@ -874,7 +895,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 8.2: Run test to verify it passes (no impl change)**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_storySlide 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 2 tests executed.
 
 - [ ] **Step 8.3: Commit**
@@ -982,7 +1003,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 9.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_timelineProject 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'TimelineProject' in scope`.
 
 - [ ] **Step 9.3: Write minimal implementation**
@@ -1037,7 +1058,7 @@ public struct TimelineProject: Codable, Sendable {
 
 - [ ] **Step 9.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_timelineProject 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 5 tests executed.
 
 - [ ] **Step 9.5: Commit**
@@ -1097,7 +1118,7 @@ Replace the test above with this lighter compile-only check:
 
 - [ ] **Step 10.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_editCommand_protocol 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find type 'EditCommand' in scope`.
 
 - [ ] **Step 10.3: Write minimal implementation**
@@ -1128,7 +1149,7 @@ public enum EditCommandError: Error, Sendable, Equatable {
 
 - [ ] **Step 10.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_editCommand_protocol 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 1 test executed.
 
 - [ ] **Step 10.5: Commit**
@@ -1173,7 +1194,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 11.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_timelineClipKind 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'TimelineClipKind' in scope`.
 
 - [ ] **Step 11.3: Write minimal implementation**
@@ -1196,7 +1217,7 @@ public enum TimelineClipKind: String, Codable, CaseIterable, Sendable {
 
 - [ ] **Step 11.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_timelineClipKind 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 2 tests executed.
 
 - [ ] **Step 11.5: Commit**
@@ -1289,7 +1310,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 12.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_addClipCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'AddClipCommand' in scope`.
 
 - [ ] **Step 12.3: Write minimal implementation**
@@ -1367,7 +1388,7 @@ public struct AddClipCommand: EditCommand {
 
 - [ ] **Step 12.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_addClipCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 5 tests executed.
 
 - [ ] **Step 12.5: Commit**
@@ -1451,7 +1472,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 13.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_deleteClipCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'DeleteClipCommand' in scope`.
 
 - [ ] **Step 13.3: Write minimal implementation**
@@ -1534,7 +1555,7 @@ public struct DeleteClipCommand: EditCommand {
 
 - [ ] **Step 13.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_deleteClipCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 4 tests executed.
 
 - [ ] **Step 13.5: Commit**
@@ -1609,7 +1630,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 14.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_moveClipCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'MoveClipCommand' in scope`.
 
 - [ ] **Step 14.3: Write minimal implementation**
@@ -1671,7 +1692,7 @@ public struct MoveClipCommand: EditCommand {
 
 - [ ] **Step 14.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_moveClipCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 4 tests executed.
 
 - [ ] **Step 14.5: Commit**
@@ -1754,7 +1775,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 15.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_trimClipCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'TrimClipCommand' in scope`.
 
 - [ ] **Step 15.3: Write minimal implementation**
@@ -1826,7 +1847,7 @@ public struct TrimClipCommand: EditCommand {
 
 - [ ] **Step 15.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_trimClipCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 4 tests executed.
 
 - [ ] **Step 15.5: Commit**
@@ -1909,7 +1930,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 16.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_splitClipCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'SplitClipCommand' in scope`.
 
 - [ ] **Step 16.3: Write minimal implementation**
@@ -2040,7 +2061,7 @@ public struct SplitClipCommand: EditCommand {
 
 - [ ] **Step 16.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_splitClipCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 4 tests executed.
 
 - [ ] **Step 16.5: Commit**
@@ -2137,7 +2158,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 17.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_addTransitionCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'AddTransitionCommand' in scope`.
 
 - [ ] **Step 17.3: Write minimal implementation**
@@ -2202,7 +2223,7 @@ public struct RemoveTransitionCommand: EditCommand {
 
 - [ ] **Step 17.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_addTransitionCommand 2>&1 | tail -10 && swift test --filter StoryModelsExtensionsTests/test_removeTransitionCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10 && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 7 tests executed in total (3 + 4).
 
 - [ ] **Step 17.5: Commit**
@@ -2292,7 +2313,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 18.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_changeTransitionCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'ChangeTransitionCommand' in scope`.
 
 - [ ] **Step 18.3: Write minimal implementation**
@@ -2337,7 +2358,7 @@ public struct ChangeTransitionCommand: EditCommand {
 
 - [ ] **Step 18.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_changeTransitionCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 4 tests executed.
 
 - [ ] **Step 18.5: Commit**
@@ -2488,7 +2509,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 19.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_addKeyframeCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'AddKeyframeCommand' in scope`.
 
 - [ ] **Step 19.3: Write minimal implementation**
@@ -2643,7 +2664,7 @@ public struct DeleteKeyframeCommand: EditCommand {
 
 - [ ] **Step 19.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_addKeyframeCommand 2>&1 | tail -10 && swift test --filter StoryModelsExtensionsTests/test_moveKeyframeCommand 2>&1 | tail -10 && swift test --filter StoryModelsExtensionsTests/test_deleteKeyframeCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10 && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10 && xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 11 tests executed in total (4 + 4 + 3).
 
 - [ ] **Step 19.5: Commit**
@@ -2774,7 +2795,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 20.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_setClipPropertyCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'SetClipPropertyCommand' in scope`.
 
 - [ ] **Step 20.3: Write minimal implementation**
@@ -2964,7 +2985,7 @@ public struct SetClipPropertyCommand: EditCommand {
 
 - [ ] **Step 20.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_setClipPropertyCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 8 tests executed.
 
 - [ ] **Step 20.5: Commit**
@@ -3089,7 +3110,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 21.2: Run test to verify it fails**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_anyEditCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: FAIL with `cannot find 'AnyEditCommand' in scope`.
 
 - [ ] **Step 21.3: Write minimal implementation**
@@ -3221,7 +3242,7 @@ public enum AnyEditCommand: Codable, Sendable {
 
 - [ ] **Step 21.4: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_anyEditCommand 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 6 tests executed.
 
 - [ ] **Step 21.5: Commit**
@@ -3368,7 +3389,7 @@ Append inside the `StoryModelsExtensionsTests` class:
 
 - [ ] **Step 22.2: Run test to verify it passes**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests/test_allEditCommands 2>&1 | tail -10`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -10`
 Expected: PASS, 1 test executed.
 
 - [ ] **Step 22.3: Commit**
@@ -3384,12 +3405,12 @@ git commit -m "test(sdk): apply/revert idempotence sweep for all 12 EditCommands
 
 - [ ] **Step 23.1: Run the entire `StoryModelsExtensionsTests` suite**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests 2>&1 | tail -20`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | tail -20`
 Expected: All tests pass. Count must be ~70+ test methods (precise count: 1 + 1 + 4 + 5 + 3 + 3 + 3 + 2 + 5 + 1 + 2 + 5 + 4 + 4 + 4 + 4 + 7 + 4 + 11 + 8 + 6 + 1 = ~88, depending on grouping).
 
 - [ ] **Step 23.2: Run the full SDK test suite (regression check)**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test 2>&1 | tail -30`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" 2>&1 | tail -30`
 Expected: 0 failures. If the existing `StoryModelsTests` suite picks up errors due to the new optional fields breaking some `==`/synthesized assumptions, fix them in this step (most likely a no-op since all new fields are `Optional` and default to `nil`).
 
 - [ ] **Step 23.3: Build the iOS app to verify SDK consumers still compile**
@@ -3434,7 +3455,7 @@ Verify, by re-reading the diff (`git log --oneline -25` then `git show --stat`):
 
 - [ ] **Step 24.2: Final tally**
 
-Run: `cd /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK && swift test --filter StoryModelsExtensionsTests 2>&1 | grep -E "Test Suite 'StoryModelsExtensionsTests' passed|executed [0-9]+ tests"`
+Run: `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshySDKTests/StoryModelsExtensionsTests 2>&1 | grep -E "Test Suite 'StoryModelsExtensionsTests' passed|executed [0-9]+ tests"`
 Expected output line containing `executed XX tests` with `XX >= 80`.
 
 - [ ] **Step 24.3: Stop. Phase 0 complete.**
@@ -3446,7 +3467,7 @@ The next plan (`2026-05-05-timeline-plan-2-logic-core.md`, future work) builds o
 ## Final acceptance criteria for Phase 0
 
 - [ ] All 24 tasks committed independently
-- [ ] `swift test` green from `packages/MeeshySDK/`
+- [ ] `xcodebuild test -workspace /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5"` green
 - [ ] `./apps/ios/meeshy.sh build` green
 - [ ] No mutation to existing public APIs (only additions)
 - [ ] Old V1 JSON drafts decode without error in V2 (proven by `test_storySlide_decodeV1JSON_withoutTimelineV2Fields_succeeds` and per-type tests)
