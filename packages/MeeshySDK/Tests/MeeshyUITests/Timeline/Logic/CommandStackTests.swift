@@ -133,4 +133,23 @@ final class CommandStackTests: XCTestCase {
             XCTFail("Expected second undo to return first pushed (a)")
         }
     }
+
+    // MARK: - CommandStack.redo
+
+    func test_redo_withoutPriorUndo_returnsNil() {
+        let stack = CommandStack(coalesceWindow: 0)
+        stack.push(makeAddCmd())
+        XCTAssertNil(stack.redo())
+    }
+
+    func test_redo_afterUndo_restoresAndReturnsCommand() {
+        let stack = CommandStack(coalesceWindow: 0)
+        let cmd = makeAddCmd(clipId: "z")
+        stack.push(cmd)
+        _ = stack.undo()
+        let redone = stack.redo()
+        XCTAssertNotNil(redone)
+        XCTAssertTrue(stack.canUndo)
+        XCTAssertFalse(stack.canRedo)
+    }
 }

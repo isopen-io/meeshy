@@ -89,3 +89,18 @@ extension CommandStack {
         return cmd
     }
 }
+
+extension CommandStack {
+
+    /// Move the cursor one step forward (re-applying the previously undone command)
+    /// and return that command. Returns `nil` if there is nothing to redo.
+    /// Calls `didChange` after the mutation completes.
+    @discardableResult
+    public func redo() -> AnyEditCommand? {
+        guard canRedo else { return nil }
+        let cmd = commands[cursor]
+        cursor += 1
+        didChange?(self)
+        return cmd
+    }
+}
