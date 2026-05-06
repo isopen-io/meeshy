@@ -148,7 +148,7 @@ final class MessageModelsTests: XCTestCase {
 
     func testAttachmentStaticFactoryAudio() {
         let att = MeeshyMessageAttachment.audio(durationMs: 30000)
-        XCTAssertEqual(att.mimeType, "audio/mpeg")
+        XCTAssertEqual(att.mimeType, "audio/mp4")
         XCTAssertEqual(att.type, .audio)
         XCTAssertEqual(att.duration, 30000)
         XCTAssertEqual(att.thumbnailColor, "9B59B6")

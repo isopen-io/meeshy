@@ -35,28 +35,37 @@ final class StoryModelsTests: XCTestCase {
 
     func testStoryFilterAllCases() {
         let cases = StoryFilter.allCases
-        XCTAssertEqual(cases.count, 5)
+        XCTAssertEqual(cases.count, 8)
         XCTAssertTrue(cases.contains(.vintage))
         XCTAssertTrue(cases.contains(.bw))
         XCTAssertTrue(cases.contains(.warm))
         XCTAssertTrue(cases.contains(.cool))
         XCTAssertTrue(cases.contains(.dramatic))
+        XCTAssertTrue(cases.contains(.vivid))
+        XCTAssertTrue(cases.contains(.fade))
+        XCTAssertTrue(cases.contains(.chrome))
     }
 
     func testStoryFilterDisplayNames() {
         XCTAssertEqual(StoryFilter.vintage.displayName, "Vintage")
         XCTAssertEqual(StoryFilter.bw.displayName, "N&B")
-        XCTAssertEqual(StoryFilter.warm.displayName, "Warm")
-        XCTAssertEqual(StoryFilter.cool.displayName, "Cool")
+        XCTAssertEqual(StoryFilter.warm.displayName, "Chaud")
+        XCTAssertEqual(StoryFilter.cool.displayName, "Froid")
         XCTAssertEqual(StoryFilter.dramatic.displayName, "Dramatic")
+        XCTAssertEqual(StoryFilter.vivid.displayName, "Vivid")
+        XCTAssertEqual(StoryFilter.fade.displayName, "Fade")
+        XCTAssertEqual(StoryFilter.chrome.displayName, "Chrome")
     }
 
     func testStoryFilterCIFilterNames() {
         XCTAssertEqual(StoryFilter.vintage.ciFilterName, "CIPhotoEffectTransfer")
-        XCTAssertEqual(StoryFilter.bw.ciFilterName, "CIPhotoEffectNoir")
-        XCTAssertEqual(StoryFilter.warm.ciFilterName, "CIColorControls")
-        XCTAssertEqual(StoryFilter.cool.ciFilterName, "CIColorControls")
+        XCTAssertEqual(StoryFilter.bw.ciFilterName, "CIPhotoEffectMono")
+        XCTAssertEqual(StoryFilter.warm.ciFilterName, "CITemperatureAndTint")
+        XCTAssertEqual(StoryFilter.cool.ciFilterName, "CITemperatureAndTint")
         XCTAssertEqual(StoryFilter.dramatic.ciFilterName, "CIPhotoEffectProcess")
+        XCTAssertEqual(StoryFilter.vivid.ciFilterName, "CIColorControls")
+        XCTAssertEqual(StoryFilter.fade.ciFilterName, "CIPhotoEffectFade")
+        XCTAssertEqual(StoryFilter.chrome.ciFilterName, "CIPhotoEffectChrome")
     }
 
     // MARK: - StoryTransitionEffect
