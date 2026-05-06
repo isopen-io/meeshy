@@ -337,4 +337,58 @@ final class CommandStackTests: XCTestCase {
         XCTAssertFalse(stack.canUndo)
         XCTAssertFalse(stack.canRedo)
     }
+
+    // MARK: - CommandStack — didChange callback
+
+    func test_didChange_firesOnPush() {
+        let stack = CommandStack(coalesceWindow: 0)
+        var count = 0
+        stack.didChange = { _ in count += 1 }
+        stack.push(makeAddCmd())
+        XCTAssertEqual(count, 1)
+    }
+
+    func test_didChange_firesOnUndo() {
+        let stack = CommandStack(coalesceWindow: 0)
+        stack.push(makeAddCmd())
+        var count = 0
+        stack.didChange = { _ in count += 1 }
+        _ = stack.undo()
+        XCTAssertEqual(count, 1)
+    }
+
+    func test_didChange_firesOnRedo() {
+        let stack = CommandStack(coalesceWindow: 0)
+        stack.push(makeAddCmd())
+        _ = stack.undo()
+        var count = 0
+        stack.didChange = { _ in count += 1 }
+        _ = stack.redo()
+        XCTAssertEqual(count, 1)
+    }
+
+    func test_didChange_firesOnRestore() {
+        let stack = CommandStack()
+        var count = 0
+        stack.didChange = { _ in count += 1 }
+        stack.restore(CommandStackSnapshot(commands: [], cursor: 0))
+        XCTAssertEqual(count, 1)
+    }
+
+    func test_didChange_doesNotFireWhenUndoIsNoop() {
+        let stack = CommandStack()
+        var count = 0
+        stack.didChange = { _ in count += 1 }
+        _ = stack.undo() // empty stack — no-op
+        XCTAssertEqual(count, 0)
+    }
+
+    func test_didChange_doesNotFireWhenRedoIsNoop() {
+        let stack = CommandStack(coalesceWindow: 0)
+        stack.push(makeAddCmd())
+        var count = 0
+        stack.didChange = { _ in count += 1 }
+        _ = stack.redo() // nothing to redo
+        XCTAssertEqual(count, 0)
+    }
 }
