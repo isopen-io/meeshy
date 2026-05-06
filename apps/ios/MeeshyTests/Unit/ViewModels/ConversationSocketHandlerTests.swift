@@ -704,7 +704,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(delegate.messages[0].content, "Persisted!")
 
         // Verify the record was written to the database
-        let records = try db.read { db in
+        let records = try await db.read { db in
             try MessageRecord.filter(Column("localId") == "persist_new").fetchAll(db)
         }
         XCTAssertEqual(records.count, 1, "Incoming message should be persisted via actor")
@@ -760,7 +760,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertTrue(delegate.messages[0].isDeleted)
 
         // DB record has deletedAt set
-        let fetched = try db.read { db in
+        let fetched = try await db.read { db in
             try MessageRecord.fetchOne(db, key: "del_msg")
         }
         XCTAssertNotNil(fetched?.deletedAt, "Persistence should have deletedAt set after message:deleted event")
@@ -825,7 +825,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertTrue(delegate.messages[0].isEdited)
 
         // DB record updated
-        let fetched = try db.read { db in
+        let fetched = try await db.read { db in
             try MessageRecord.fetchOne(db, key: "edit_msg")
         }
         XCTAssertEqual(fetched?.content, "Edited content")

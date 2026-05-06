@@ -176,6 +176,7 @@ private final class TestableWebRTCClient: WebRTCClientProviding {
     var audioEffectsService: CallAudioEffectsServiceProviding? = nil
 
     func configure(iceServers: [IceServer]) throws { configureCallCount += 1 }
+    func updateIceServers(_ iceServers: [IceServer]) {}
     func createOffer() async throws -> SessionDescription { try createOfferResult.get() }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
     func setRemoteAnswer(_ answer: SessionDescription) async throws {}
