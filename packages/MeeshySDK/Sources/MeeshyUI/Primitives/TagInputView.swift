@@ -5,7 +5,8 @@ public struct TagInputView: View {
     @Binding var tags: [String]
     var onTagsChanged: (() -> Void)?
     @State private var inputText: String = ""
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(tags: Binding<[String]>, onTagsChanged: (() -> Void)? = nil) {
         self._tags = tags

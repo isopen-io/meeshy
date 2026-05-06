@@ -11,7 +11,8 @@ public struct EmptyStateView: View {
     public let compact: Bool
     public var onAction: (() -> Void)?
 
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.colorScheme) private var colorScheme
     @State private var appeared = false
 
     public init(
