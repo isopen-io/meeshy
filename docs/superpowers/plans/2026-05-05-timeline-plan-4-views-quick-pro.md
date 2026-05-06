@@ -968,7 +968,15 @@ import MeeshySDK
 
 // MARK: - Engine abstraction (testable seam for StoryTimelineEngine)
 
-public enum TimelineEngineMode: Sendable {
+// IMPORTANT (deep-coherence-review CH-1) : `TimelineEngineMode` doit être placé
+// dans un fichier dédié `Story/Timeline/Model/TimelineEngineMode.swift` (cf. Task 7.5)
+// pour être partagé par Plan 3 (StoryTimelineEngine) et Plan 4 (TimelineViewModel +
+// MockEngine) sans bridge fragile. Plan 3 Task D1 doit alors utiliser DIRECTEMENT
+// `TimelineEngineMode` au lieu de définir son propre nested `Mode` enum.
+//
+// Au moment de l'écriture de cette task, le type est défini ici pour ne pas casser
+// la lecture linéaire du plan ; le déplacement physique vers `Model/` est traité en Task 7.5.
+public enum TimelineEngineMode: Sendable, Equatable {
     case editing
     case preview
 }
@@ -10567,15 +10575,24 @@ public final class TimelineViewModel: ObservableObject {
         if networkMonitor.isOnline {
             await publishImmediately(visibility: visibility)
         } else {
-            offlineQueue.enqueue(.publishStory(
-                slides: allSlides,
-                slideImages: slideImages,
-                loadedImages: loadedImages,
-                loadedVideoURLs: loadedVideoURLs,
-                loadedAudioURLs: loadedAudioURLs,
+            // Patch deep-coherence-review ZO-1 : `OfflineQueue` (existant SDK) est
+            // SPÉCIFIQUE aux MESSAGES (champs conversationId, content, replyToId).
+            // Pour les stories on utilise `StoryOfflineQueue` créé en Task 74,
+            // qui sérialise les slides en JSON pour découpler de l'évolution du modèle.
+            let payloadData = try? JSONEncoder().encode(allSlides)
+            let payloadJSON = payloadData.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+            let mediaPaths: [String: String] = loadedVideoURLs.mapValues { $0.path }
+            let audioPaths: [String: String] = loadedAudioURLs.mapValues { $0.path }
+            let item = StoryOfflineQueueItem(
+                slideIds: allSlides.map { $0.id },
+                slidePayloadJSON: payloadJSON,
+                mediaURLPaths: mediaPaths,
+                audioURLPaths: audioPaths,
                 originalLanguage: originalLanguage,
-                visibility: visibility
-            ))
+                visibility: visibility.rawValue
+            )
+            await StoryOfflineQueue.shared.enqueue(item)
+            showOfflineQueuedConfirmation = true   // bannière snackbar 3s puis dismiss composer
         }
     }
 }
@@ -10947,7 +10964,522 @@ git commit -m "feat(timeline-ui): publish offline auto-queues without error dial
 
 ---
 
-## Plan Complete — Hand-off
+### Task 73: NetworkMonitor — global online/offline state via NWPathMonitor
+
+> **Why (deep-coherence-review ZO-2)** : Tasks 70/71/72 supposent un `NetworkMonitor.shared.isOnline` global, mais ce service N'EXISTE PAS dans le repo Meeshy actuel (verified `grep -r "NetworkMonitor" packages/MeeshySDK apps/ios/Meeshy` renvoie zéro hit non-Starscream). Cette task le crée comme pré-requis bloquant pour Tasks 70-72.
+
+**Files:**
+- Create: `packages/MeeshySDK/Sources/MeeshySDK/Networking/NetworkMonitor.swift`
+- Create: `packages/MeeshySDK/Tests/MeeshySDKTests/Networking/NetworkMonitorTests.swift`
+
+- [ ] **Step 1: Write the failing test**
+
+```swift
+import XCTest
+import Network
+@testable import MeeshySDK
+
+@MainActor
+final class NetworkMonitorTests: XCTestCase {
+
+    func test_shared_isMainActorSingleton() {
+        let a = NetworkMonitor.shared
+        let b = NetworkMonitor.shared
+        XCTAssertTrue(a === b, "NetworkMonitor.shared must be a true singleton")
+    }
+
+    func test_initialState_isOnlineDefault() {
+        // Default value before NWPathMonitor first callback is `true` (optimistic)
+        // so that UI doesn't flash "offline" badge during the first ~50ms after launch.
+        let monitor = NetworkMonitor.shared
+        XCTAssertTrue(monitor.isOnline, "Initial state must be online (optimistic) to avoid flashing badge")
+    }
+
+    func test_publishedIsOnline_emitsOnChange() async throws {
+        // Behavior test: publishedIsOnline emits exactly one event when isOnline flips.
+        let monitor = NetworkMonitor.shared
+        let exp = expectation(description: "publisher emits")
+        var received: [Bool] = []
+        let cancellable = monitor.$isOnline.sink { value in
+            received.append(value)
+            if received.count >= 1 { exp.fulfill() }
+        }
+        await fulfillment(of: [exp], timeout: 1.0)
+        cancellable.cancel()
+        XCTAssertFalse(received.isEmpty, "Initial value must be emitted on subscribe")
+    }
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd packages/MeeshySDK && swift test --filter MeeshySDKTests.NetworkMonitorTests 2>&1 | tail -10`
+Expected: FAIL with "cannot find type 'NetworkMonitor' in scope".
+
+- [ ] **Step 3: Write minimal implementation**
+
+```swift
+import Foundation
+import Network
+import Combine
+import os
+
+/// Observes the device's network reachability via `NWPathMonitor`.
+/// `MainActor` so SwiftUI views can bind directly to `isOnline` without dispatch.
+///
+/// Used by:
+///   - `OfflineIndicatorBadge` (Task 71) for the discreet ✈️ badge
+///   - `StoryComposerView` (Task 72) to decide between immediate publish vs offline queue
+///   - `OfflineEditFlowTests` (Task 70) via `MockNetworkMonitor` test double
+///
+/// Thread model: `NWPathMonitor` callbacks fire on a background queue ;
+/// we hop to MainActor before mutating `isOnline` so SwiftUI gets the change synchronously.
+@MainActor
+public final class NetworkMonitor: ObservableObject {
+
+    public static let shared = NetworkMonitor()
+
+    /// `true` when the device has at least one usable network interface (Wi-Fi, cellular, ethernet).
+    /// Defaults to `true` (optimistic) so the UI doesn't flash an offline badge during the
+    /// first ~50 ms while NWPathMonitor performs its initial check.
+    @Published public private(set) var isOnline: Bool = true
+
+    private let monitor: NWPathMonitor
+    private let queue = DispatchQueue(label: "me.meeshy.sdk.network.monitor", qos: .utility)
+    private let logger = Logger(subsystem: "me.meeshy.sdk", category: "network-monitor")
+
+    private init() {
+        self.monitor = NWPathMonitor()
+        startMonitoring()
+    }
+
+    deinit {
+        monitor.cancel()
+    }
+
+    private func startMonitoring() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            let online = (path.status == .satisfied)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.isOnline != online {
+                    self.isOnline = online
+                    self.logger.info("Network status changed: \(online ? "online" : "offline")")
+                }
+            }
+        }
+        monitor.start(queue: queue)
+    }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `cd packages/MeeshySDK && swift test --filter MeeshySDKTests.NetworkMonitorTests 2>&1 | tail -10`
+Expected: PASS, 3 tests passed.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/MeeshySDK/Sources/MeeshySDK/Networking/NetworkMonitor.swift \
+        packages/MeeshySDK/Tests/MeeshySDKTests/Networking/NetworkMonitorTests.swift
+git commit -m "feat(networking): NetworkMonitor singleton via NWPathMonitor for offline-first detection"
+```
+
+---
+
+### Task 74: StoryOfflineQueue — actor dédié aux stories en attente de publish
+
+> **Why (deep-coherence-review ZO-1)** : `OfflineQueue` existe dans le SDK Meeshy (`actor OfflineQueue`), MAIS son `OfflineQueueItem` est SPÉCIFIQUE aux MESSAGES (champs `conversationId`, `content`, `replyToId`, `attachmentIds`). Une story complète (avec ses slides, mediaURLs, audioURLs, images, transitions, keyframes) ne rentre pas dans ce schéma. Plutôt que de polluer `OfflineQueueItem` avec des champs optionnels, on crée un actor dédié `StoryOfflineQueue` modélisé sur le même pattern (singleton `actor`, persistance disque JSON, retry FIFO sur reconnect via `NetworkMonitor`).
+
+**Files:**
+- Create: `packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryOfflineQueue.swift`
+- Create: `packages/MeeshySDK/Tests/MeeshySDKTests/Persistence/StoryOfflineQueueTests.swift`
+
+- [ ] **Step 1: Write the failing test**
+
+```swift
+import XCTest
+@testable import MeeshySDK
+
+final class StoryOfflineQueueTests: XCTestCase {
+
+    private func makeItem() -> StoryOfflineQueueItem {
+        StoryOfflineQueueItem(
+            slideIds: ["slide-1"],
+            slidePayloadJSON: #"{"slides":[{"id":"slide-1","duration":5}]}"#,
+            mediaURLPaths: ["media-1": "/tmp/media-1.jpg"],
+            audioURLPaths: [:],
+            originalLanguage: "fr",
+            visibility: "PUBLIC"
+        )
+    }
+
+    func test_enqueue_dequeue_roundTrip() async {
+        let queue = StoryOfflineQueue.shared
+        await queue.purge()  // clean state for test
+        let item = makeItem()
+        await queue.enqueue(item)
+        let pending = await queue.pendingItems
+        XCTAssertEqual(pending.count, 1)
+        XCTAssertEqual(pending.first?.slideIds, ["slide-1"])
+        await queue.dequeue(item.id)
+        let pendingAfter = await queue.pendingItems
+        XCTAssertEqual(pendingAfter.count, 0)
+    }
+
+    func test_persistence_survivesReinstantiation() async {
+        let queue = StoryOfflineQueue.shared
+        await queue.purge()
+        let item = makeItem()
+        await queue.enqueue(item)
+        // Force reload from disk by calling internal `loadFromDisk` (test seam)
+        await queue.reloadFromDisk()
+        let pending = await queue.pendingItems
+        XCTAssertEqual(pending.count, 1, "Item must survive reload (persisted to disk)")
+        await queue.purge()
+    }
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd packages/MeeshySDK && swift test --filter MeeshySDKTests.StoryOfflineQueueTests 2>&1 | tail -10`
+Expected: FAIL with "cannot find type 'StoryOfflineQueue' in scope".
+
+- [ ] **Step 3: Write minimal implementation**
+
+```swift
+import Foundation
+import os
+
+// MARK: - Story Offline Queue Item
+
+/// Snapshot d'une story en attente de publish (offline-first).
+/// `slidePayloadJSON` contient le `[StorySlide]` sérialisé pour ne pas dépendre de
+/// l'évolution du modèle SDK (les anciens items en queue restent décodables).
+public struct StoryOfflineQueueItem: Codable, Identifiable, Sendable {
+    public let id: String
+    public let slideIds: [String]
+    public let slidePayloadJSON: String
+    public let mediaURLPaths: [String: String]   // mediaObjectId → file:// path
+    public let audioURLPaths: [String: String]
+    public let originalLanguage: String?
+    public let visibility: String                // PUBLIC, FRIENDS, etc.
+    public let createdAt: Date
+
+    public init(
+        id: String = UUID().uuidString,
+        slideIds: [String],
+        slidePayloadJSON: String,
+        mediaURLPaths: [String: String] = [:],
+        audioURLPaths: [String: String] = [:],
+        originalLanguage: String? = nil,
+        visibility: String = "PUBLIC"
+    ) {
+        self.id = id
+        self.slideIds = slideIds
+        self.slidePayloadJSON = slidePayloadJSON
+        self.mediaURLPaths = mediaURLPaths
+        self.audioURLPaths = audioURLPaths
+        self.originalLanguage = originalLanguage
+        self.visibility = visibility
+        self.createdAt = Date()
+    }
+}
+
+// MARK: - Story Offline Queue
+
+/// Persiste les stories en attente de publish lorsque le device est offline.
+/// Pattern miroir de `OfflineQueue` (messages) mais avec un schéma adapté aux stories.
+/// Flush automatique à la reconnexion via `NetworkMonitor` (cf. Task 73).
+public actor StoryOfflineQueue {
+    public static let shared = StoryOfflineQueue()
+
+    private static let maxQueueSize = 20    // stories sont plus lourdes que messages, cap plus bas
+    private static let queueFileName = "story_offline_queue.json"
+
+    private var items: [StoryOfflineQueueItem] = []
+    private var isRetrying = false
+    private let logger = Logger(subsystem: "me.meeshy.sdk", category: "story-offline-queue")
+
+    private let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        return e
+    }()
+
+    private let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return d
+    }()
+
+    /// Handler invoqué pour publier un item. Doit retourner true en cas de succès.
+    public var onPublish: ((StoryOfflineQueueItem) async -> Bool)?
+
+    public func setOnPublish(_ handler: @escaping @Sendable (StoryOfflineQueueItem) async -> Bool) {
+        onPublish = handler
+    }
+
+    private init() {
+        items = Self.loadItemsFromDisk()
+    }
+
+    // MARK: - Queue Operations
+
+    public func enqueue(_ item: StoryOfflineQueueItem) {
+        if items.count >= Self.maxQueueSize {
+            items.removeFirst()
+            logger.warning("StoryOfflineQueue full, evicted oldest item")
+        }
+        items.append(item)
+        saveToDisk()
+        logger.info("Enqueued story \(item.id), queue size: \(self.items.count)")
+    }
+
+    public func dequeue(_ itemId: String) {
+        items.removeAll { $0.id == itemId }
+        saveToDisk()
+    }
+
+    public var pendingItems: [StoryOfflineQueueItem] { items }
+
+    public func purge() {
+        items.removeAll()
+        saveToDisk()
+    }
+
+    /// Test seam : recharge depuis disque (utile pour vérifier la persistance).
+    public func reloadFromDisk() {
+        items = Self.loadItemsFromDisk()
+    }
+
+    /// Tente de flusher la queue. Appelé par `NetworkMonitor` à la reconnexion.
+    /// FIFO : on republie dans l'ordre d'arrivée. Sur échec d'un item, on s'arrête
+    /// et on retentera au prochain trigger.
+    public func flush() async {
+        guard !isRetrying, !items.isEmpty, let handler = onPublish else { return }
+        isRetrying = true
+        defer { isRetrying = false }
+        for item in items {
+            let success = await handler(item)
+            if success {
+                items.removeAll { $0.id == item.id }
+                saveToDisk()
+            } else {
+                logger.error("Story publish failed for \(item.id), pausing flush")
+                return
+            }
+        }
+    }
+
+    // MARK: - Persistence (file disk JSON)
+
+    private static func queueFileURL() -> URL? {
+        let fm = FileManager.default
+        guard let dir = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
+        return dir.appendingPathComponent(queueFileName)
+    }
+
+    private static func loadItemsFromDisk() -> [StoryOfflineQueueItem] {
+        guard let url = queueFileURL(), let data = try? Data(contentsOf: url) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([StoryOfflineQueueItem].self, from: data)) ?? []
+    }
+
+    private func saveToDisk() {
+        guard let url = Self.queueFileURL() else { return }
+        do {
+            let data = try encoder.encode(items)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            logger.error("Failed to save StoryOfflineQueue: \(error.localizedDescription)")
+        }
+    }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `cd packages/MeeshySDK && swift test --filter MeeshySDKTests.StoryOfflineQueueTests 2>&1 | tail -10`
+Expected: PASS, 2 tests passed.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryOfflineQueue.swift \
+        packages/MeeshySDK/Tests/MeeshySDKTests/Persistence/StoryOfflineQueueTests.swift
+git commit -m "feat(persistence): StoryOfflineQueue actor — story-specific queue parallel to OfflineQueue"
+```
+
+> **Note importante** : adapter Task 72 du Plan 4 pour utiliser `StoryOfflineQueue.shared.enqueue(StoryOfflineQueueItem(...))` au lieu de `OfflineQueue.shared.enqueue(.publishStory(...))` qui n'existait pas. Voir update Task 72 step 3.
+
+---
+
+### Task 75: Final self-review V2 + Final hand-off (covers all 75 tasks)
+
+> **Why (deep-coherence-review MED-2 + MED-3)** : Tasks 49 (initial self-review) et 50 (initial hand-off) ont été écrites avant que Tasks 35.5 + 52-72 + 73-74 soient ajoutées. Elles déclarent "50 tasks complete" alors que le plan en a maintenant 75 (50 + 35.5 + gap-on-51 + 52-74). Cette task remplace les compteurs et le hand-off final pour refléter l'état réel du plan.
+>
+> **À propos du gap Task 51** : la numérotation passe de Task 50 à Task 52 sans Task 51. Cela vient de l'extension du plan en deux phases successives (l'agent extension a démarré à 52 par convention). Plutôt que de renuméroter (risqué : toutes les références internes seraient à mettre à jour), on documente le gap explicitement comme une décision design. Aucun fichier n'est nommé "task 51" — pas d'impact opérationnel.
+
+**Files:**
+- Update: cette section (in-place dans le plan, pas de fichier Swift créé)
+
+- [ ] **Step 1: Vérifier le compte réel des tasks**
+
+Run: `grep -cE "^### Task " docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md`
+Expected: 75 (Tasks 1-50 + 35.5 + gap-51 + 52-75 = 50 + 1 + 0 + 24 = 75 ; le gap est compté comme 0 mais documenté).
+
+Run: `grep -cE "^- \[ \] " docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md`
+Expected: ~370 steps total (75 tasks × ~5 steps en moyenne).
+
+- [ ] **Step 2: Vérifier zéro régression sur les patches HIGH**
+
+```bash
+# Aucun bug HIGH ne doit subsister
+grep -c "fromStartTime\|toStartTime\|targetClipId\|atTime: currentTime" docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md
+# Expected: 0
+
+grep -cE "StoryMediaObject\(.*url:|StoryAudioPlayerObject\(.*url:" docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md
+# Expected: 0
+
+grep -c "engine.currentMode" docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md
+# Expected: 0
+
+grep -c "_onTimeUpdate\|_onPlaybackEnd\|_onError" docs/superpowers/plans/2026-05-05-timeline-plan-4-views-quick-pro.md
+# Expected: 0 (ou seulement dans les commentaires explicatifs du fix HIGH-A3)
+```
+
+- [ ] **Step 3: Vérifier les nouvelles dépendances créées par 73-74-75**
+
+```bash
+# NetworkMonitor.swift créé
+test -f /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK/Sources/MeeshySDK/Networking/NetworkMonitor.swift && echo OK || echo MANQUANT
+
+# StoryOfflineQueue.swift créé
+test -f /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryOfflineQueue.swift && echo OK || echo MANQUANT
+
+# TimelineEngineMode placé dans Model/ (CH-1, à exécuter en pre-flight)
+test -f /Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Model/TimelineEngineMode.swift && echo OK || echo À-CRÉER-EN-PRE-FLIGHT
+```
+
+- [ ] **Step 4: Pas de commit (verification only)**
+
+Cette task est une checklist méthodologique. Ne génère aucun nouveau fichier de production.
+
+---
+
+## Plan Complete — Hand-off V2 (FINAL — supersede Tasks 49 et 50)
+
+**Cette section remplace les compteurs et l'inventaire des Tasks 49/50.**
+
+### Compteurs réels (post deep-coherence-review)
+
+| Métrique | Valeur réelle |
+|----------|--------------|
+| **Total tasks** | **75** (Tasks 1-50 + Task 35.5 + GAP-51 documenté + Tasks 52-75) |
+| **Total tasks ajoutées en review** | **5** (35.5 bridge + 73 NetworkMonitor + 74 StoryOfflineQueue + 75 final hand-off + 21 extensions Tasks 52-72) |
+| **Total steps** | **~370** (~5 steps par task) |
+| **Total commits** | **75** (1 par task) |
+| **Total snapshot PNGs** | **60** |
+| **Total integration tests** | **6** (Tasks 46/47/48 end-to-end + Task 65 multi-audio + Task 66 video sync + Task 70 offline flow) |
+| **Total localization keys** | **73** (70 du Task 4 + 3 ajoutées pour offline indicator/snackbar) |
+| **Total Swift files créés (production)** | **~36** (32 initiaux + StoryTimelineEngine+Providing + NetworkMonitor + StoryOfflineQueue + TimelineEngineMode partagé) |
+| **Total Swift files créés (tests + mocks)** | **~32** |
+
+### Documentation du gap Task 51 (décision MED-2)
+
+La numérotation des tasks passe de **Task 50 directement à Task 52**, sans Task 51. C'est une **décision documentée**, pas un bug :
+- L'extension du plan a été faite en deux passes successives (agent A : Tasks 1-50 + 35.5 ; agent B : Tasks 52-66 + 67-72)
+- Renuméroter aurait obligé à mettre à jour toutes les références internes (commits, file inventories, dependencies cross-tasks) — risque trop élevé
+- Aucun fichier n'est nommé "Task 51" et aucune référence interne ne pointe vers Task 51
+- Cette section documente officiellement le gap pour les futurs developers
+
+### Files inventory (V2 actualisé — supersede Task 50)
+
+#### Production code
+
+```
+packages/MeeshySDK/Sources/MeeshySDK/Networking/
+  ├── APIClient.swift                                    (modifié Task 69 — assumesHTTP3Capable)
+  └── NetworkMonitor.swift                               (Task 73 NEW)
+
+packages/MeeshySDK/Sources/MeeshySDK/Persistence/
+  ├── OfflineQueue.swift                                 (existant — non modifié)
+  └── StoryOfflineQueue.swift                            (Task 74 NEW)
+
+packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/
+  ├── Model/
+  │   └── TimelineEngineMode.swift                       (CH-1 NEW — partagé Plan 3 + Plan 4)
+  ├── FeatureFlag/
+  │   └── StoryTimelineFeatureFlag.swift                 (Task 3)
+  ├── ViewModel/
+  │   ├── TimelineViewModel.swift                        (Tasks 7-15, 32, 46, 48)
+  │   ├── TimelineMode.swift                             (Task 5 — UI mode quick/pro)
+  │   └── ClipSelectionState.swift                       (Task 6)
+  ├── Engine/
+  │   └── StoryTimelineEngine+Providing.swift            (Task 35.5)
+  ├── Util/
+  │   └── SOTAImageThumbnail.swift                       (Task 67)
+  ├── Geometry/
+  │   └── TimelineGeometry.swift                         (Task 16)
+  ├── Views/Container/
+  │   ├── QuickTimelineView.swift                        (Tasks 32, 33, 71, 72)
+  │   ├── ProTimelineView.swift                          (Task 34)
+  │   └── TimelineContainerSwitcher.swift                (Task 35)
+  ├── Views/Track/
+  │   ├── TrackBarView.swift                             (Task 17)
+  │   ├── VideoClipBar.swift                             (Tasks 18, 67, 68)
+  │   ├── AudioClipBar.swift                             (Tasks 19, 68)
+  │   ├── TextClipBar.swift                              (Tasks 20, 68)
+  │   └── TransitionBadge.swift                          (Tasks 21, 68)
+  ├── Views/Overlay/
+  │   ├── RulerView.swift                                (Tasks 22, 68)
+  │   ├── PlayheadView.swift                             (Tasks 23, 68)
+  │   ├── SnapGuideView.swift                            (Task 24)
+  │   ├── DurationHandle.swift                           (Tasks 25, 68)
+  │   └── KeyframeMarkerView.swift                       (Tasks 26, 68)
+  ├── Views/Indicators/
+  │   └── OfflineIndicatorBadge.swift                    (Task 71 NEW)
+  ├── Views/Inspector/
+  │   ├── InspectorPresentation.swift                    (Task 27)
+  │   ├── ClipInspector.swift                            (Task 27)
+  │   ├── KeyframeInspector.swift                        (Task 28)
+  │   └── TransitionInspector.swift                      (Task 29)
+  └── Views/Controls/
+      ├── TransportBar.swift                             (Tasks 30, 62)
+      └── TimelineToolbar.swift                          (Tasks 31, 63)
+
+packages/MeeshySDK/Sources/MeeshyUI/Story/
+  ├── StoryComposerView.swift                            (modifié Tasks 36, 37)
+  └── StoryComposerViewModel.swift                       (modifié Task 37)
+
+packages/MeeshySDK/Sources/MeeshyUI/Resources/
+  └── Localizable.xcstrings                              (+73 clés, Task 4 + 3 offline)
+```
+
+### Pré-requis OBLIGATOIRES avant exécution Phase 3
+
+Le deep-coherence-review (rapport `2026-05-06-final-deep-coherence-review.md`) a identifié 2 décisions à exécuter en pre-flight de Phase 3 :
+
+1. **CH-1 — Unifier `TimelineEngineMode`** : créer `Story/Timeline/Model/TimelineEngineMode.swift` partagé, et modifier Plan 3 Task D1 pour utiliser ce type DIRECTEMENT (au lieu de `enum Mode`). Bénéfice : élimine le bridge fragile (Task 35.5) et réduit la dette technique. Effort : ~30 min.
+
+2. **MED-7 — Plan 3 G3 self-review** : étendre la checklist self-review du Plan 3 pour inclure les fichiers ajoutés en Section H (TimelineSignposter, StoryTimelineEngine extensions, CustomTransitionCompositor). Effort : ~5 min.
+
+### Métriques de succès offline (deep-coherence-review LOW-4)
+
+À ajouter dans spec section 11 :
+- `% sessions composer offline qui complètent un publish queue` : cible > 95%
+- `Latence sync queue à reconnect (P95)` : cible < 5 secondes pour 1 story
+- `Taux de perte de drafts en mode offline` : cible 0%
+
+---
+
+This is the FINAL hand-off. **Ne pas trust** Task 50 hand-off pour les compteurs : il est obsolète depuis l'extension du plan. **Toujours référencer** ce hand-off V2.
+
+## Plan Complete — Hand-off (V1 OBSOLÈTE — kept for diff history)
 
 This section closes Plan 4 (Phase 3 — Views Quick + Pro). Anything past this
 heading is metadata only; no further task numbers will be appended.

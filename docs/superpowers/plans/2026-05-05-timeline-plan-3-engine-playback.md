@@ -1903,15 +1903,22 @@ import MeeshySDK
 @MainActor
 public final class StoryTimelineEngine {
 
-    public enum Mode: Sendable, Equatable {
-        case preview
-        case editing
-    }
+    // PRE-FLIGHT NOTE (deep-coherence-review CH-1) :
+    // À l'origine ce plan définissait `public enum Mode: Sendable, Equatable { case preview, editing }`
+    // imbriqué. Le deep-coherence-review a identifié que ce nested enum dupliquait
+    // `TimelineEngineMode` (Plan 4 Task 7) et créait un bridge fragile (Task 35.5).
+    //
+    // DÉCISION : utiliser DIRECTEMENT `TimelineEngineMode` (importé depuis le module
+    // partagé `Story/Timeline/Model/TimelineEngineMode.swift`). Le bridge devient trivial
+    // (juste une conformance protocol sans mapping).
+    //
+    // Si pour une raison quelconque on doit garder un enum interne (legacy compat),
+    // ajouter `typealias Mode = TimelineEngineMode` ici pour préserver les sites d'appel.
 
     // MARK: Observable state
     public private(set) var currentTime: Float = 0
     public private(set) var isPlaying: Bool = false
-    public private(set) var mode: Mode = .preview
+    public private(set) var mode: TimelineEngineMode = .preview
     public var isMuted: Bool = false {
         didSet {
             player?.isMuted = isMuted
@@ -1945,7 +1952,7 @@ public final class StoryTimelineEngine {
         self.audioMixer = audioMixer ?? AudioMixer()
     }
 
-    public func setMode(_ newMode: Mode) {
+    public func setMode(_ newMode: TimelineEngineMode) {  // CH-1 : utilise type partagé
         mode = newMode
     }
 
@@ -2453,7 +2460,7 @@ Expected: FAIL — `setMode(.editing)` doesn't pause currently.
 
 Replace `setMode` in `StoryTimelineEngine`:
 ```swift
-public func setMode(_ newMode: Mode) {
+public func setMode(_ newMode: TimelineEngineMode) {  // CH-1 : utilise type partagé
     guard mode != newMode else { return }
     if newMode == .editing && isPlaying {
         pause()
@@ -3497,11 +3504,15 @@ Expected: Build succeeds without errors. Any unresolved symbol means we accident
 
 ---
 
-### Task G3: Self-review final (lecture en diagonale + checklist)
+### Task G3: Self-review final (lecture en diagonale + checklist) — INCLUT Section H SOTA
+
+> **Patch deep-coherence-review MED-7** : la self-review G3 originale a été écrite AVANT
+> que la Section H (SOTA Patches H1, H2, H3) soit ajoutée. Cette version étendue inclut
+> les vérifications sur les fichiers SOTA pour ne pas oublier de les valider.
 
 **Files:** none (review only)
 
-- [ ] **Step 1: Vérifications de cohérence**
+- [ ] **Step 1: Vérifications de cohérence (Sections A-G)**
 
 Lire en diagonale les fichiers créés et vérifier :
 - [ ] Aucun `try?` muet dans `StoryTimelineEngine.swift` (toutes les erreurs propagent via `onError` ou `logger`)
@@ -3515,6 +3526,19 @@ Lire en diagonale les fichiers créés et vérifier :
 - [ ] Aucun fichier > 400 lignes (sinon splitter)
 - [ ] Tous les commits suivent le format conventionnel `feat(timeline-engine):` / `feat(reader):` / `test(timeline-engine):`
 - [ ] Aucun `Co-Authored-By` dans les commits
+
+- [ ] **Step 1.5: Vérifications de cohérence Section H (SOTA Patches)** — ajouté par MED-7
+
+- [ ] `TimelineSignposter.swift` (Task H2) wrappe bien `configure`, `seek`, `recompose`, `apply`
+- [ ] `OSSignposter` utilise `OSLog(subsystem: "me.meeshy.app", category: "TimelineEngine")` (cohérent CLAUDE.md)
+- [ ] `MXSignpostMetric` enregistré au boot de l'app (intégration MetricKit)
+- [ ] `AVAudioSession.setPreferredIOBufferDuration(0.005)` appelé dans `configureAudioSession()`
+- [ ] `prepareAllNodes()` itère bien sur tous les `AVAudioPlayerNode`
+- [ ] `CustomTransitionCompositor` est un `@objc final class` conformant à `AVVideoCompositing`
+- [ ] `CustomTransitionCompositor` utilise `kCVPixelBufferMetalCompatibilityKey: true` dans ses pixel buffer attributes
+- [ ] `VideoCompositor.makeComposition` route bien vers `CustomTransitionCompositor` quand un `kind` non-built-in est utilisé (vide au launch, prêt pour push/wipe/zoom futurs)
+- [ ] **CH-1 (deep-coherence-review)** : `TimelineEngineMode` est utilisé directement (pas de `enum Mode` interne dupliqué). Le fichier `Story/Timeline/Model/TimelineEngineMode.swift` existe.
+- [ ] **MED-7 (deep-coherence-review)** : cette checklist Step 1.5 a été ajoutée pour ne pas oublier les vérifications SOTA
 
 - [ ] **Step 2: Relancer la suite complète**
 

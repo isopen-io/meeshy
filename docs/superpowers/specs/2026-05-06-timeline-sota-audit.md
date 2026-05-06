@@ -18,7 +18,7 @@
 | 3 | Upscaling / compositing GPU | Render natif 1080×1920, pas d'upscaling | ✅ SOTA | Ne PAS introduire MetalFX (coût mémoire/thermal trop élevé sur SE 3 pour un gain négligeable). Justifier explicitement l'absence dans le spec |
 | 4 | Audio engine multi-piste | `AVAudioEngine` + `AVAudioPlayerNode` + `AVAudioMixerNode` | ✅ SOTA | Garder. Ajouter cible latence explicite (~1.5 ms à 64 frames) et `AVAudioSession.setPreferredIOBufferDuration` |
 | 5 | Audio DSP (waveform, FFT) | ~80 samples pré-calculés + `AVAudioFile.read` chunked 4096 | ✅ SOTA | Garder. Si besoin de FFT live un jour : vDSP (8x plus rapide que MPS sur les tailles cibles). Documenter le choix |
-| 6 | Image pipeline (filtres, thumbnails) | `CIContext(metal:)` + `CIFilter` + Kingfisher + `UIImage.preparingThumbnail` | ⚠️ Hybride | Pour les frame-strip thumbnails depuis disque local (cas timeline), basculer sur `CGImageSourceCreateThumbnailAtIndex` + `kCGImageSourceShouldCacheImmediately:false` (2-4x plus rapide, moins de mémoire) |
+| 6 | Image pipeline (filtres, thumbnails) | `CIContext(metal:)` + `CIFilter` + AsyncImage/CacheCoordinator (Kingfisher retiré 2026-05) + `UIImage.preparingThumbnail` | ⚠️ Hybride | Pour les frame-strip thumbnails depuis disque local (cas timeline), basculer sur `CGImageSourceCreateThumbnailAtIndex` + `kCGImageSourceShouldCacheImmediately:false` (2-4x plus rapide, moins de mémoire) |
 | 7 | Compositing UI (ruler, waveform) | SwiftUI `Canvas` + Metal-backed CALayers indirects | ✅ SOTA | Garder. Ajouter `.drawingGroup()` sur `RulerView` et `AudioClipBar`. PAS de MTKView |
 | 8 | Concurrency (orchestration) | `@MainActor` + `Sendable` + `Combine PassthroughSubject` | ⚠️ Hybride | Pour Socket.IO events legacy : garder Combine. Pour les nouvelles streams 60Hz internes timeline : préférer `AsyncStream` + `Observation`. Cache `actor` → garder, mais évaluer `Mutex` (Swift 6 / iOS 18) si profiling montre contention |
 | 9 | Encoding export (futur) | `AVAssetExportSession` (stub) | ⚠️ Hybride | Pour preset HD1080 sans transition custom : OK. Dès que `dissolve` ou keyframe-driven export entre en jeu, basculer sur `AVAssetWriter` + `AVAssetReader` + `AVVideoCompositing` custom. À documenter MAINTENANT dans le stub |
@@ -192,7 +192,7 @@
 
 ## Pilier 6 — Image pipeline (filtres, thumbnails)
 
-**Choix actuel** : `CIContext(metal:)` + `CIFilter` + Kingfisher + `UIImage.preparingThumbnail(of:)` + `ImageIO` (`CGImageSourceCreateThumbnailAtIndex`).
+**Choix actuel** : `CIContext(metal:)` + `CIFilter` + AsyncImage/`CacheCoordinator` 3-tier (Kingfisher retiré 2026-05) + `UIImage.preparingThumbnail(of:)` + `ImageIO` (`CGImageSourceCreateThumbnailAtIndex`).
 
 **Sources consultées** :
 - [Fast Thumbnails with CGImageSource (Max Seelemann)](https://macguru.dev/fast-thumbnails-with-cgimagesource/) (avril 2026) — **CGImageSource path : HEIC 52ms / JPEG 24ms / PNG 95ms**, vs UIImageRenderer **HEIC 83ms / JPEG 105ms / PNG 363ms** → **2-4x plus rapide**
@@ -216,11 +216,11 @@
 **Recommandation** :
 1. **Pour les thumbnails depuis disque** (cas timeline thumbnails statiques) : préférer **systématiquement** `CGImageSourceCreateThumbnailAtIndex` avec `kCGImageSourceCreateThumbnailFromImageAlways:true` + `kCGImageSourceThumbnailMaxPixelSize` + `kCGImageSourceShouldCacheImmediately:false`. 2-4x plus rapide que `UIImage.preparingThumbnail` quand l'image est sur disque
 2. **Pour les frames vidéo strip** (8 frames/clip) : `AVAssetImageGenerator.generateCGImagesAsynchronously` (plural) — bien indiqué en spec
-3. **Pour Kingfisher** : garder pour la couche network/cache disque (avatars, network images), PAS pour le timeline strip
+3. **Pour les network images (avatars, etc.)** : utiliser `AsyncImage` + `CachedAsyncImage` + `CacheCoordinator` 3-tier (Kingfisher a été retiré du projet en 2026-05). PAS pour le timeline strip — préférer le path SOTA ci-dessus.
 4. **CIFilter** : garder. La différence de 5 ms vs MPS direct ne justifie pas la complexité d'un Metal compute kernel pour les filtres standards (blur, brightness, etc.)
 
 **Patches au spec/plans** :
-- Spec §"Image" : ajouter règle d'aiguillage : "Thumbnails depuis disque local → `CGImageSourceCreateThumbnailAtIndex` (2-4x plus rapide que preparingThumbnail). Network images → Kingfisher. Frames vidéo → AVAssetImageGenerator.generateCGImagesAsynchronously"
+- Spec §"Image" : ajouter règle d'aiguillage : "Thumbnails depuis disque local → `CGImageSourceCreateThumbnailAtIndex` (2-4x plus rapide que preparingThumbnail). Network images → AsyncImage + CacheCoordinator 3-tier (Kingfisher retiré 2026-05). Frames vidéo → AVAssetImageGenerator.generateCGImagesAsynchronously"
 - Plan 3 Task 11 (`VideoFrameExtractor` reuse) : ajouter test perf "extract 8 frames de 5s vidéo → < 100 ms total"
 - Plan 4 (Views) : ajouter dans `VideoClipBar` que la frame strip utilise `AVAssetImageGenerator` pas `UIImage`
 
@@ -438,7 +438,7 @@
 | P3 | §"Stack technique" Anti-patterns | Ajouter "❌ MetalFX upscaling : non pertinent (thermal+memory > gain marginal sur stories courtes)" | Moyenne |
 | P4 | §3.3 (AudioMixer) | Ajouter "Latence cible 30 ms en mode édition. `AVAudioSession.setPreferredIOBufferDuration(0.005)` configuré au start. Pré-`prepare` AVAudioPlayerNode au configure() pour éviter cold-start ~100 ms" | Haute |
 | P5 | §"Audio DSP" | Note : "vDSP exclusivement pour FFT live (8x plus rapide que MPS). MPS n'a pas de FFT natif en 2026" | Basse |
-| P6 | §"Image" | Règle d'aiguillage thumbnail : "Disque local → CGImageSourceCreateThumbnailAtIndex (2-4x plus rapide). Network → Kingfisher. Frames vidéo → AVAssetImageGenerator.generateCGImagesAsynchronously" | Haute |
+| P6 | §"Image" | Règle d'aiguillage thumbnail : "Disque local → CGImageSourceCreateThumbnailAtIndex (2-4x plus rapide). Network → AsyncImage + CacheCoordinator 3-tier (Kingfisher retiré 2026-05). Frames vidéo → AVAssetImageGenerator.generateCGImagesAsynchronously" | Haute |
 | P7 | §"Garanties de performance" | Règle : "Tous les composants Track/* MUST conformer Equatable et utiliser `.equatable()` modifier. `.drawingGroup()` sur RulerView et zone waveform" | Haute |
 | P8 | §"Stack technique → Interaction & Sync UI" | Aiguillage : "Streams 60Hz internes timeline → AsyncStream. Bridge Socket.IO existant → PassthroughSubject (legacy). Nouveaux ViewModels → @Observable" | Moyenne |
 | P9 | §3.1 (engine API) | `ExportPreset` : ajouter `var codec: AVVideoCodecType { .hevc }` avec fallback H.264 pre-A11. Encapsuler export derrière protocol `TimelineExporting` | Moyenne |

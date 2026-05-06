@@ -454,6 +454,11 @@ Append in `StoryModels.swift` immediately after the `StoryClipTransition` struct
 /// Single keyframe for animating an object's position / scale / opacity over time.
 /// `time` is the offset (seconds) relative to the owning object's `startTime`.
 /// All transform fields are optional — only non-nil fields are interpolated.
+///
+/// Note de déviation par rapport au spec §2.1 : `time` est `var` (mutable) et non
+/// `let`, car `MoveKeyframeCommand` (Task 19) doit pouvoir muter ce champ pour
+/// l'undo/redo. `id` reste `let`. Aucune propagation visible côté consumer car
+/// `StoryKeyframe` reste un value type (les copies sont indépendantes).
 public struct StoryKeyframe: Codable, Identifiable, Sendable {
     public let id: String
     public var time: Float

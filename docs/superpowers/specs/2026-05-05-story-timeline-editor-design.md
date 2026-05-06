@@ -147,9 +147,9 @@ Contrainte non-négociable : **toute manipulation image/audio/vidéo doit utilis
 |-----|------|----------|
 | `CIImage` + `CIContext(metal:)` | Pipeline image GPU | Metal-backed, jamais de CPU fallback |
 | `Image(uiImage:)` SwiftUI | Affichage statique | Cache automatique de SwiftUI |
-| `Kingfisher` (déjà présent) | Image network + cache disque | Async, throttled |
-| `UIImage.preparingThumbnail(of:)` | Downsampling pour les strips | iOS 15+, GPU |
-| `ImageIO` (`CGImageSourceCreateThumbnailAtIndex`) | Thumbnails depuis disque | Non bloquant, cache |
+| `AsyncImage` + `CachedAsyncImage` + `CacheCoordinator` 3-tier | Image network + cache disque (remplace Kingfisher retiré 2026-05) | Async, throttled |
+| `UIImage.preparingThumbnail(of:)` | Downsampling pour les strips (legacy) | iOS 15+, GPU |
+| `ImageIO` (`CGImageSourceCreateThumbnailAtIndex`) | **SOTA** Thumbnails depuis disque (cf. patches SOTA P6) | Non bloquant, 2-4× plus rapide que `preparingThumbnail` |
 
 ### Interaction & Sync UI
 
