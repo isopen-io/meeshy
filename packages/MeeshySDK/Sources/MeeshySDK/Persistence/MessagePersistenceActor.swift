@@ -227,6 +227,65 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// Undo a soft-delete, restoring the message to a non-deleted state.
+    /// Used as the optimistic rollback when a delete network call fails.
+    public func markUndeleted(localId: String) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE messages SET deletedAt = NULL,
+                    updatedAt = ?, changeVersion = changeVersion + 1 WHERE localId = ?
+                    """,
+                arguments: [Date(), localId]
+            )
+        }
+    }
+
+    /// Optimistically update the pin state of a message.
+    /// Pass `pinnedAt: nil, pinnedBy: nil` to unpin.
+    public func updatePinned(localId: String, pinnedAt: Date?, pinnedBy: String?) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE messages SET pinnedAt = ?, pinnedBy = ?,
+                    updatedAt = ?, changeVersion = changeVersion + 1 WHERE localId = ?
+                    """,
+                arguments: [pinnedAt, pinnedBy, Date(), localId]
+            )
+        }
+    }
+
+    /// Set or clear the blurred effect flag on a message.
+    /// Reads the current `effectFlags`, toggles the `.blurred` bit, and writes back.
+    public func updateBlurred(localId: String, isBlurred: Bool) throws {
+        let blurredBit: UInt32 = 1 << 1
+        try dbWriter.write { db in
+            guard var record = try MessageRecord.fetchOne(db, key: localId) else { return }
+            if isBlurred {
+                record.effectFlags |= blurredBit
+            } else {
+                record.effectFlags &= ~blurredBit
+            }
+            record.updatedAt = Date()
+            record.changeVersion += 1
+            try record.update(db)
+        }
+    }
+
+    /// Mark a view-once message as consumed: set `isBlurred` and blank the content.
+    /// The view-once count update is handled separately via `updateViewOnceCount`.
+    public func markConsumed(localId: String) throws {
+        let blurredBit: UInt32 = 1 << 1
+        try dbWriter.write { db in
+            guard var record = try MessageRecord.fetchOne(db, key: localId) else { return }
+            record.effectFlags |= blurredBit
+            record.content = nil
+            record.updatedAt = Date()
+            record.changeVersion += 1
+            try record.update(db)
+        }
+    }
+
     public func updateReactions(localId: String, reactionsJson: Data,
                                  reactionCount: Int, currentUserReactionsJson: Data?) throws {
         try dbWriter.write { db in

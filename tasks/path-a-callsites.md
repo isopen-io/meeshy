@@ -1,5 +1,36 @@
 # Path A Mutation Callsites — migration status
 
+## Task 1.6 COMPLETE — Audit + remove all remaining direct vm.messages mutations (Group A)
+
+All optimistic-update callsites now write through `MessagePersistenceActor`; the
+`MessageStore → ConversationViewModel` store observation surfaces every change.
+
+A lint invariant test (`MeeshyTests/Unit/Architecture/SingleSourceOfTruthTests.swift`)
+patrols the Group A mutation patterns and will fail if future code reintroduces them.
+
+### New persistence APIs added to `MessagePersistenceActor.swift`
+
+- `markUndeleted(localId:)` — rollback for optimistic soft-delete
+- `updatePinned(localId:pinnedAt:pinnedBy:)` — optimistic pin/unpin
+- `updateBlurred(localId:isBlurred:)` — toggle blurred effect flag
+- `markConsumed(localId:)` — set blurred flag + clear content (view-once consumed)
+
+### Group A sites migrated
+
+| Method | Migration |
+|--------|-----------|
+| `toggleReaction()` | `persistence.appendReaction` / `persistence.removeReaction` via Task |
+| `subscribeToQueueReconciliation` ReactionQueue rollback | same persistence calls in sink Task |
+| `deleteMessage(.local)` | removed `messages.remove(at:)`; LocallyHiddenMessagesStore + `_messagesByDate = nil` is sufficient |
+| `deleteMessage(.everyone)` | `try? await persistence.markDeleted` + rollback `markUndeleted` |
+| `deleteAttachment()` | `try? await persistence.updateAttachmentsJson` (optimistic + rollback) |
+| `togglePin()` | `try? await persistence.updatePinned` (optimistic + rollback) |
+| `consumeViewOnce()` | `try? await persistence.updateViewOnceCount` |
+| `markMessageAsConsumed()` | `Task { try? await persistence.markConsumed }` |
+| `editMessage()` | `try? await persistence.markEdited` (optimistic + rollback) |
+
+---
+
 ## Task 1.5 COMPLETE — sendMessage optimistic send + queue reconciliation
 
 `sendMessage()` no longer appends directly to `self.messages`. The optimistic
@@ -53,52 +84,38 @@ UI-only signals retained as-is (not messages mutations):
 
 ---
 
-The following sites remain in `ConversationViewModel.swift` for Tasks 1.5/1.6:
+## Deferred to Phase 2 — Group B (cache/load/refresh paths)
 
-All sites are in `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift`
-unless otherwise noted.
+These whole-array assignments remain in `ConversationViewModel.swift`. They touch
+the legacy CacheCoordinator + API merge logic that Phase 2 (FTS5 + outbox +
+GRDB-driven cache) will refactor. Migrating them now would conflict with Phase 2.
 
-## Whole-array assignments (`messages = ...`)
-
-| Line | Context | Proposed persistence call |
-|------|---------|--------------------------|
-| 743  | `subscribeToMessageStore()` — GRDB observation update | already uses MessageRecord path; this line IS the output |
-| 876  | `loadMessages()` — cache hit `.fresh` | replace with `messageStore.loadInitial()` + let store drive |
-| 880  | `loadMessages()` — cache hit `.stale` | same |
-| 898  | `loadMessages()` — cache miss, after API refresh | same |
-| 970  | `refreshMessagesFromAPI()` — after merge with API | move merge into persistence actor |
-| 1020 | `handleAccessRevoked()` — clear on 403 | `persistence.deleteAll(conversationId:)` + store will emit empty |
+| Line (approx) | Context | Phase 2 plan |
+|---------------|---------|--------------|
+| 744 | `subscribeToMessageStore()` — GRDB observation OUTPUT | This is the correct write site; not a violation |
+| 876 | `loadMessages()` — cache hit `.fresh` | `messageStore.loadInitial()` + store drives |
+| 880 | `loadMessages()` — cache hit `.stale` | same |
+| 898 | `loadMessages()` — cache miss, after API refresh | same |
+| 970 | `refreshMessagesFromAPI()` — after merge with API | move merge into persistence actor |
+| 1020 | `handleAccessRevoked()` — clear on 403 | `persistence.deleteAll(conversationId:)` + store emits empty |
 | 1137 | `subscribeToLanguagePreferenceChanges()` — delivery-status merge | update individual records via `persistence.applyEvent` |
 | 1140 | same (no new messages, delivery status only) | same |
 | 1180 | `loadOlderMessages()` — after fetching older page | `messageStore.loadOlder(before:)` already exists |
 | 2133 | `jumpToMessage()` — replace with messages around jump target | load window around target date |
 | 2204 | `clearSearch()` — restore saved messages after search | driven by store window; no explicit restore needed |
 
-## Element-level mutations (`messages[idx].field = ...`)
+Also Group B (deferred):
+- `messages.append(offlineMessage)` — offline send path
+- `messages.append(msg)` — audio message insert (`insertOptimisticAudioMessage`)
+- `messages.remove(at: idx)` + `messages.append(contentsOf:)` — retry/resend path
+- `messages.removeAll { expiresAt <= now }` — ephemeral message cleanup
 
-These represent optimistic UI updates that need matching `MessageRecord` updates:
-
-| Line range | Context | Proposed persistence call |
-|------------|---------|--------------------------|
-| ~~769~~    | ~~`subscribeToQueueReconciliation` — mark `.failed`~~ | ✅ DONE Task 1.5 — `persistence.applyEvent(.retryExhausted)` |
-| 785–792    | `subscribeToQueueReconciliation` — reconcile reactions from queue | `persistence.updateReactions(localId:reactionsJson:)` |
-| ~~818~~    | ~~`reconcileQueuedSend` — mark `.sent` after server ack~~ | ✅ DONE Task 1.5 — method removed; replaced by `persistence.applyEvent(.serverAck(...))` in `subscribeToQueueReconciliation` |
-| ~~1490–1491~~ | ~~`sendMessage()` — mark sent + timestamp after success~~ | ✅ DONE Task 1.5 — removed; GRDB `applyEvent(.serverAck)` was already called; store observation surfaces state |
-| ~~1542~~   | ~~`sendMessage()` — mark `.sending` on retry~~ | ✅ DONE Task 1.5 — replaced with `persistence.applyEvent(.sendFailed(error))` |
-| 1696–1713  | `toggleReaction()` — optimistic add/remove reaction | `persistence.updateReactions(...)` |
-| 1781–1782  | `deleteMessage()` — optimistic delete | `persistence.applyEvent(.softDelete)` |
-| 1788       | `deleteMessage()` — rollback on failure | `persistence.applyEvent(.restoreDeleted)` |
-| 1810–1818  | `deleteAttachment()` — optimistic remove + rollback | `persistence.updateAttachments(...)` |
-| 1832–1853  | `togglePin()` — optimistic pin/unpin + rollback | `persistence.updatePinned(...)` |
-| 1867       | `consumeViewOnce()` — update viewOnceCount | `persistence.applyEvent(.viewOnceConsumed(...))` |
-| 1890–1891  | `revealBlurredContent()` — un-blur | `persistence.updateBlurred(localId: isBlurred: false)` |
-| 1905–1928  | `editMessage()` — optimistic content + rollback | `persistence.applyEvent(.editApplied(...))` |
-
-## Test callsites (`sut.messages = [...]`)
+## Group C — Test fixtures (DEFERRED, leave as-is)
 
 Tests in `MeeshyTests/Unit/ViewModels/ConversationViewModelTests.swift` use
 direct assignment to seed test state. These will need to be replaced with
 `persistence.insertOptimistic(...)` + `await store propagation` patterns.
+The lint exempts test files.
 
 Lines with test-only mutations: 309, 320, 331, 342, 355, 367, 379, 392, 402,
 413, 423, 435, 446, 458, 467, 484, 515, 555, 607, 620, 627, 634, 646, 666,
@@ -106,11 +123,10 @@ Lines with test-only mutations: 309, 320, 331, 342, 355, 367, 379, 392, 402,
 
 ## Notes
 
-- The `storeObservation` subscription (line 743) is the OUTPUT of the GRDB
+- The `storeObservation` subscription (`messages = mapped` in `subscribeToMessageStore`) is the OUTPUT of the GRDB
   pipeline — it is the correct write site, not a legacy callsite.
-- `subscribeToLanguagePreferenceChanges()` delivery-status merges (lines
-  1137/1140) can be replaced by storing delivery status updates directly in
-  GRDB, which the store observation will surface automatically.
+- `subscribeToLanguagePreferenceChanges()` delivery-status merges can be replaced by storing delivery status updates
+  directly in GRDB, which the store observation will surface automatically.
 - All `messages[idx].X = Y` optimistic updates should write to GRDB first;
   the store observation fires within ~16ms (non-scroll) and surfaces the
   change to the view without any explicit `messages` mutation.

@@ -806,19 +806,24 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
-                guard let idx = self.messageIndex(for: payload.messageId) else { return }
                 let participantId = self._resolvedParticipantId ?? self.currentUserId
+                let localId = payload.messageId
+                let emoji = payload.emoji
                 switch payload.action {
                 case .add:
-                    self.messages[idx].reactions.removeAll {
-                        $0.emoji == payload.emoji && $0.participantId == participantId
+                    // Optimistic add failed permanently — remove the reaction we wrote
+                    Task { [weak self] in
+                        try? await self?.messagePersistence.removeReaction(
+                            localId: localId, emoji: emoji, participantId: participantId
+                        )
                     }
                 case .remove:
-                    if !self.messages[idx].reactions.contains(where: {
-                        $0.emoji == payload.emoji && $0.participantId == participantId
-                    }) {
-                        self.messages[idx].reactions.append(
-                            Reaction(messageId: payload.messageId, participantId: participantId, emoji: payload.emoji)
+                    // Optimistic remove failed permanently — restore the reaction we erased
+                    let remoteId = self.serverId(for: localId)
+                    Task { [weak self] in
+                        try? await self?.messagePersistence.appendReaction(
+                            localId: localId, reactionId: UUID().uuidString,
+                            messageId: remoteId, participantId: participantId, emoji: emoji
                         )
                     }
                 }
@@ -1665,7 +1670,11 @@ class ConversationViewModel: ObservableObject {
         let remoteId = serverId(for: messageId)
 
         if alreadyReacted {
-            messages[idx].reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
+            Task { [weak self] in
+                try? await self?.messagePersistence.removeReaction(
+                    localId: messageId, emoji: emoji, participantId: participantId
+                )
+            }
             let item = ReactionQueueItem(
                 messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
             )
@@ -1674,8 +1683,13 @@ class ConversationViewModel: ObservableObject {
                 await ReactionQueue.shared.retryAll()
             }
         } else {
-            let reaction = Reaction(messageId: remoteId, participantId: participantId, emoji: emoji)
-            messages[idx].reactions.append(reaction)
+            let reactionId = UUID().uuidString
+            Task { [weak self] in
+                try? await self?.messagePersistence.appendReaction(
+                    localId: messageId, reactionId: reactionId,
+                    messageId: remoteId, participantId: participantId, emoji: emoji
+                )
+            }
             let item = ReactionQueueItem(
                 messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
             )
@@ -1732,26 +1746,22 @@ class ConversationViewModel: ObservableObject {
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
         switch mode {
         case .local:
-            // Optimistic: hide locally and rebuild the date groups without
-            // this message. Reversible via LocallyHiddenMessagesStore so an
-            // "Undo" affordance could reinstate the row without a network
-            // round-trip.
+            // Optimistic: hide locally. LocallyHiddenMessagesStore persists
+            // the hidden id; messagesByDate filters it out on next evaluation.
+            // Reversible — an "Undo" affordance can call .unhide(messageId)
+            // without any network round-trip.
             LocallyHiddenMessagesStore.shared.hide(messageId)
-            if let idx = messageIndex(for: messageId) {
-                messages.remove(at: idx)
-            }
+            // Invalidate the date-group cache so the next messagesByDate
+            // recomputes without the hidden row.
+            _messagesByDate = nil
         case .everyone:
             // Optimistic: mark as deleted locally + blank content
-            if let idx = messageIndex(for: messageId) {
-                messages[idx].deletedAt = Date()
-                messages[idx].content = ""
-            }
+            try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
             do {
                 try await messageService.delete(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
-                if let idx = messageIndex(for: messageId) {
-                    messages[idx].deletedAt = nil
-                }
+                // Rollback: restore the message to a non-deleted state
+                try? await messagePersistence.markUndeleted(localId: messageId)
                 self.error = error.localizedDescription
             }
         }
@@ -1771,17 +1781,18 @@ class ConversationViewModel: ObservableObject {
             return
         }
 
-        // Optimistic: remove attachment from local message
-        let originalAttachments = messages[msgIdx].attachments
-        messages[msgIdx].attachments.removeAll { $0.id == attachmentId }
+        // Optimistic: remove attachment from local message via persistence
+        let originalAttachments = message.attachments
+        let updatedAttachments = originalAttachments.filter { $0.id != attachmentId }
+        let updatedJson = try? JSONEncoder().encode(updatedAttachments)
+        try? await messagePersistence.updateAttachmentsJson(localId: messageId, attachmentsJson: updatedJson)
 
         do {
             try await AttachmentService.shared.delete(attachmentId: attachmentId)
         } catch {
             // Revert on failure
-            if let idx = messageIndex(for: messageId) {
-                messages[idx].attachments = originalAttachments
-            }
+            let originalJson = try? JSONEncoder().encode(originalAttachments)
+            try? await messagePersistence.updateAttachmentsJson(localId: messageId, attachmentsJson: originalJson)
             self.error = error.localizedDescription
         }
     }
@@ -1791,31 +1802,31 @@ class ConversationViewModel: ObservableObject {
     func togglePin(messageId: String) async {
         guard let idx = messageIndex(for: messageId) else { return }
         let wasPinned = messages[idx].pinnedAt != nil
+        let previousPinnedAt = messages[idx].pinnedAt
+        let previousPinnedBy = messages[idx].pinnedBy
 
         if wasPinned {
             // Optimistic unpin
-            messages[idx].pinnedAt = nil
-            messages[idx].pinnedBy = nil
+            try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: nil, pinnedBy: nil)
 
             do {
                 try await messageService.unpin(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
                 // Revert
-                messages[idx].pinnedAt = Date()
+                try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: previousPinnedAt, pinnedBy: previousPinnedBy)
                 self.error = error.localizedDescription
             }
         } else {
             // Optimistic pin
             let now = Date()
-            messages[idx].pinnedAt = now
-            messages[idx].pinnedBy = authManager.currentUser?.id
+            let pinnedById = authManager.currentUser?.id
+            try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: now, pinnedBy: pinnedById)
 
             do {
                 try await messageService.pin(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
                 // Revert
-                messages[idx].pinnedAt = nil
-                messages[idx].pinnedBy = nil
+                try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: nil, pinnedBy: nil)
                 self.error = error.localizedDescription
             }
         }
@@ -1828,9 +1839,7 @@ class ConversationViewModel: ObservableObject {
             let result = try await messageService.consumeViewOnce(
                 conversationId: conversationId, messageId: serverId(for: messageId)
             )
-            if let idx = messageIndex(for: messageId) {
-                messages[idx].viewOnceCount = result.viewOnceCount
-            }
+            try? await messagePersistence.updateViewOnceCount(localId: messageId, count: result.viewOnceCount)
             return true
         } catch {
             self.error = error.localizedDescription
@@ -1851,9 +1860,11 @@ class ConversationViewModel: ObservableObject {
     }
 
     func markMessageAsConsumed(messageId: String) {
-        guard let idx = messageIndex(for: messageId) else { return }
-        messages[idx].isBlurred = true
-        messages[idx].content = "[Message vu]"
+        // Write through persistence; the store observation will surface the
+        // updated effectFlags (blurred) and cleared content to the view.
+        Task { [weak self] in
+            try? await self?.messagePersistence.markConsumed(localId: messageId)
+        }
     }
 
     // MARK: - Edit Message
@@ -1862,21 +1873,23 @@ class ConversationViewModel: ObservableObject {
         let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        // Optimistic update — snapshot the prior content so we can revert on
-        // failure AND record it in the edit history store for the "View
-        // edits" affordance (the backend does not expose edit history).
-        var originalContent: String?
-        if let idx = messageIndex(for: messageId) {
-            originalContent = messages[idx].content
-            if messages[idx].content != trimmed {
-                EditHistoryStore.shared.recordRevision(
-                    messageId: serverId(for: messageId),
-                    previousContent: messages[idx].content
-                )
-            }
-            messages[idx].content = trimmed
-            messages[idx].isEdited = true
+        // Snapshot original content for rollback and edit history before
+        // writing the optimistic update through persistence.
+        let originalContent: String? = messageIndex(for: messageId).map { messages[$0].content }
+
+        // Record history entry before overwriting (the backend does not
+        // expose edit history, so we maintain it locally).
+        if let original = originalContent, original != trimmed {
+            EditHistoryStore.shared.recordRevision(
+                messageId: serverId(for: messageId),
+                previousContent: original
+            )
         }
+
+        // Optimistic update: write through persistence so the store
+        // observation surfaces the change without a direct messages mutation.
+        let editedAt = Date()
+        try? await messagePersistence.markEdited(localId: messageId, newContent: trimmed, editedAt: editedAt)
 
         editInProgress.insert(messageId)
         defer { editInProgress.remove(messageId) }
@@ -1884,13 +1897,11 @@ class ConversationViewModel: ObservableObject {
         do {
             _ = try await messageService.edit(messageId: serverId(for: messageId), content: trimmed)
         } catch {
-            // Revert on failure — both the in-memory content AND the history
+            // Revert on failure — both the persisted content AND the history
             // entry we just wrote (so the user doesn't see a phantom
             // revision that never actually reached the server).
-            if let idx = messageIndex(for: messageId),
-               let original = originalContent {
-                messages[idx].content = original
-                messages[idx].isEdited = false
+            if let original = originalContent {
+                try? await messagePersistence.markEdited(localId: messageId, newContent: original, editedAt: editedAt)
                 EditHistoryStore.shared.removeHistory(for: serverId(for: messageId))
             }
             self.error = error.localizedDescription
