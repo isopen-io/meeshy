@@ -213,6 +213,15 @@ struct MeeshyApp: App {
                         // BGTasks → sync widgets) and guarantees the task id
                         // is ended even if a step throws.
                         Task { await BackgroundTransitionCoordinator.shared.enterBackground() }
+                        // Compact free pages and refresh query-planner stats on
+                        // every background transition. Runs at background priority
+                        // so the system can defer or kill it under memory pressure.
+                        // Capture dbPool before crossing the actor boundary.
+                        let pool = dependencies.dbPool
+                        Task.detached(priority: .background) {
+                            try? DatabaseMaintenance.runIncrementalVacuum(on: pool)
+                            try? DatabaseMaintenance.runOptimize(on: pool)
+                        }
                     case .inactive:
                         break
                     @unknown default:

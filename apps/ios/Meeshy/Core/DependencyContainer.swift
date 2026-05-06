@@ -23,6 +23,7 @@ final class DependencyContainer {
             let pool = try DatabasePool(path: dbPath, configuration: config)
             try MessageDatabaseMigrations.runAll(on: pool)
             try FeedDatabaseMigrations.runAll(on: pool)
+            DatabaseMaintenance.applyTuning(on: pool)
             self.dbPool = pool
             let persistence = MessagePersistenceActor(dbWriter: pool)
             self.messagePersistence = persistence
