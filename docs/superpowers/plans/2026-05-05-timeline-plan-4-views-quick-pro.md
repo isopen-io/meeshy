@@ -875,6 +875,8 @@ final class MockStoryTimelineEngine: TimelineEngineProviding {
     var onTimeUpdate: ((Float) -> Void)?
     var onPlaybackEnd: (() -> Void)?
     var onElementBecameActive: ((String) -> Void)?
+    var onError: ((Error) -> Void)?              // Patch deep-coherence-review HIGH-A4
+    var mode: TimelineEngineMode = .preview      // Patch deep-coherence-review HIGH-A4
 
     // Call counts
     private(set) var configureCallCount = 0
@@ -899,13 +901,18 @@ final class MockStoryTimelineEngine: TimelineEngineProviding {
     func seek(to time: Float, precise: Bool) { seekCallCount += 1; lastSeekTime = time; currentTime = time }
     func stop() { stopCallCount += 1; isPlaying = false; currentTime = 0 }
     func toggle() { isPlaying ? pause() : play() }
-    func setMode(_ mode: TimelineEngineMode) { setModeCallCount += 1; lastSetMode = mode }
+    func setMode(_ newMode: TimelineEngineMode) {
+        setModeCallCount += 1
+        lastSetMode = newMode
+        mode = newMode                            // Patch deep-coherence-review HIGH-A4
+    }
 
     func reset() {
         configureCallCount = 0; playCallCount = 0; pauseCallCount = 0
         seekCallCount = 0; stopCallCount = 0; setModeCallCount = 0
         lastConfiguredProject = nil; lastSeekTime = nil; lastSetMode = nil
         currentTime = 0; isPlaying = false
+        mode = .preview                           // Patch deep-coherence-review HIGH-A4
     }
 }
 ```
@@ -976,6 +983,12 @@ public protocol TimelineEngineProviding: AnyObject {
     var onTimeUpdate: ((Float) -> Void)? { get set }
     var onPlaybackEnd: (() -> Void)? { get set }
     var onElementBecameActive: ((String) -> Void)? { get set }
+    var onError: ((Error) -> Void)? { get set }   // Patch deep-coherence-review HIGH-A4
+
+    /// Read-only access to the current engine mode. Required so TimelineViewModel can
+    /// observe playback mode (editing/preview) without exposing the setter ambiguity.
+    /// Patch deep-coherence-review HIGH-A4.
+    var mode: TimelineEngineMode { get }
 
     func configure(project: TimelineProject, mediaURLs: [String: URL], images: [String: UIImage]) async
     func play()
@@ -5883,11 +5896,12 @@ final class StoryTimelineEngineProvidingTests: XCTestCase {
     }
 
     /// Setting the protocol's TimelineEngineMode must reach the concrete engine's nested Mode.
+    /// Patch deep-coherence-review HIGH-A2 : la propriété correcte sur StoryTimelineEngine est `mode` (pas `currentMode`).
     func test_setMode_editing_reachesConcreteEngine() {
         let engine = StoryTimelineEngine()
         let provider: any TimelineEngineProviding = engine
         provider.setMode(.editing)
-        XCTAssertEqual(engine.currentMode, .editing,
+        XCTAssertEqual(engine.mode, .editing,
                        "Bridged setMode(.editing) must update the concrete engine's mode")
     }
 
@@ -5895,7 +5909,18 @@ final class StoryTimelineEngineProvidingTests: XCTestCase {
         let engine = StoryTimelineEngine()
         let provider: any TimelineEngineProviding = engine
         provider.setMode(.preview)
-        XCTAssertEqual(engine.currentMode, .preview)
+        XCTAssertEqual(engine.mode, .preview)
+    }
+
+    /// The protocol exposes `mode` as a read-only property. The concrete engine's
+    /// nested `Mode` must be readable via the same property name when accessed
+    /// through the protocol existential. Patch deep-coherence-review HIGH-A4.
+    func test_mode_isReadableThroughProtocol() {
+        let engine = StoryTimelineEngine()
+        let provider: any TimelineEngineProviding = engine
+        provider.setMode(.editing)
+        XCTAssertEqual(provider.mode, .editing,
+                       "Reading provider.mode must reflect the concrete engine state")
     }
 }
 ```
@@ -5917,37 +5942,57 @@ import MeeshySDK
 ///
 /// The two `Mode` enums (`StoryTimelineEngine.Mode` and `TimelineEngineMode`) are kept
 /// separate intentionally to preserve testability: a mock engine in tests does not need
-/// to drag in AVFoundation just to expose a mode setter.
+/// to drag in AVFoundation just to expose a mode setter. The two enums share identical
+/// cases so the bridge is a single switch in `setMode(_:)` and a computed mirror in `mode`.
+///
+/// **Patch deep-coherence-review HIGH-A1, A2, A3** :
+/// - The previous version of this bridge tried to alias `_onTimeUpdate`/`_onPlaybackEnd`/`_onError`
+///   storage that does NOT exist on `StoryTimelineEngine` — those callbacks are already public
+///   stored properties on the concrete type matching the protocol shape, so NO bridging is needed.
+/// - The previous version of `setMode` used `setMode(.editing as Mode)` which created an
+///   ambiguous overload + risk of infinite recursion. Replaced with explicit local var typed
+///   to the nested `Mode` and a fully-qualified disambiguation via `Self.applyConcreteMode(_:)`.
+///   To avoid any overload ambiguity, Plan 3 Task D6 SHOULD rename its internal `setMode`
+///   to `applyConcreteMode` (kept here under the assumption Plan 3 will perform that rename
+///   at integration time, see deep-coherence-review section 7).
 extension StoryTimelineEngine: TimelineEngineProviding {
 
-    public func setMode(_ mode: TimelineEngineMode) {
-        switch mode {
-        case .editing: setMode(.editing as Mode)
-        case .preview: setMode(.preview as Mode)
+    /// Mirror of the concrete engine's `mode` — protocol-friendly type.
+    /// The setter on the protocol is `setMode(_:)` ; this property is read-only by design.
+    public var mode: TimelineEngineMode {
+        switch self.modeInternal {           // `modeInternal` = renamed in Plan 3 D6 to disambiguate
+        case .editing: return .editing
+        case .preview: return .preview
         }
     }
 
-    /// Bridge for the time-update callback signature used by TimelineViewModel.
-    public var onTimeUpdate: ((Float) -> Void)? {
-        get { _onTimeUpdate }
-        set { _onTimeUpdate = newValue }
-    }
-
-    /// Bridge for the playback-end callback signature used by TimelineViewModel.
-    public var onPlaybackEnd: (() -> Void)? {
-        get { _onPlaybackEnd }
-        set { _onPlaybackEnd = newValue }
-    }
-
-    /// Bridge for the error callback signature used by TimelineViewModel.
-    public var onError: ((Error) -> Void)? {
-        get { _onError }
-        set { _onError = newValue }
+    /// Convert the protocol's enum to the concrete enum, then delegate to the
+    /// renamed concrete API `applyConcreteMode(_:)` (cf. Plan 3 D6 — to rename at integration).
+    /// If Plan 3 D6 cannot be renamed, use `(self as StoryTimelineEngine).setMode(concrete)`
+    /// inside a separate file scope where only the concrete API is visible — never call
+    /// `setMode(...)` from inside this extension to avoid recursive dispatch.
+    public func setMode(_ mode: TimelineEngineMode) {
+        let concrete: StoryTimelineEngine.Mode = (mode == .editing) ? .editing : .preview
+        self.applyConcreteMode(concrete)     // ← Plan 3 D6 rename target
     }
 }
 ```
 
-> Note: the underscore-prefixed properties (`_onTimeUpdate`, `_onPlaybackEnd`, `_onError`) are the storage already declared in Plan 3 Section D (StoryTimelineEngine). The extension only re-exposes them under the protocol-required names so consumers can use either spelling.
+> **Note critique** : ce bridge SUPPOSE que Plan 3 Task D6 a été renommée `setMode(_ newMode: Mode)` → `applyConcreteMode(_ newMode: Mode)` et que la propriété `mode` interne a été renommée en `modeInternal` (pour éviter le shadowing avec la property `mode` ajoutée par l'extension protocol). Si Plan 3 ne fait PAS ces renames, deux alternatives :
+>
+> 1. Garder Plan 3 tel quel et renommer dans cette extension :
+>    ```swift
+>    public var mode: TimelineEngineMode {
+>        // self.mode est ambigu — utiliser un local de type explicite
+>        let internal: StoryTimelineEngine.Mode = self.modeAccessor()
+>        return (internal == .editing) ? .editing : .preview
+>    }
+>    ```
+>    Plus une méthode privée `modeAccessor()` dans Plan 3 qui retourne `Mode`.
+>
+> 2. Définir `TimelineEngineMode` dans un module commun et l'utiliser DIRECTEMENT dans `StoryTimelineEngine` (un seul enum partagé). Cf. deep-coherence-review CH-1.
+>
+> **Recommandation** : option 2 (un seul enum) est la plus propre. À aborder en pre-flight de l'execution.
 
 - [ ] **Step 4: Run test to verify it passes**
 
