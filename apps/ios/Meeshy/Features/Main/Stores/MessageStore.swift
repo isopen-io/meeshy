@@ -87,38 +87,46 @@ public final class MessageStore {
     func startObserving(dbPool: any DatabaseWriter) {
         stopObserving()
         let convId = conversationId
-        let request = MessageRecord
-            .filter(Column("conversationId") == convId)
 
-        // Capture only nonisolated values up front. GRDB invokes the onChange
-        // closure on its writer's serial queue, NOT MainActor. Capturing a
-        // `weak self` of a @MainActor class in the outer closure causes Swift 6
-        // strict concurrency to insert a `_swift_task_checkIsolatedSwift` call
-        // at closure invocation, which crashes when GRDB invokes off-actor.
-        // Capture only `tokens` (an `@unchecked Sendable` holder) and a
-        // dedicated `WeakBox` for self — both nonisolated.
+        // Use ValueObservation with explicit `.async(onQueue: .main)` scheduling
+        // instead of DatabaseRegionObservation. GRDB then runs its tracking
+        // fetch on its own reader queue and DELIVERS the onChange callback to
+        // us already on the main queue. Our closure never executes on the
+        // GRDB writer queue, so Swift 6's `_swift_task_checkIsolatedSwift`
+        // assertion (which fires when a @MainActor-context closure is invoked
+        // off-actor) is structurally avoided.
+        //
+        // The tracked value is a trivial row-id snapshot — we only use it as
+        // a "something changed" signal, then call our refreshFromDB() which
+        // honors the current windowMode.
+        let observation = ValueObservation.tracking { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM \(MessageRecord.databaseTableName) WHERE conversationId = ?",
+                arguments: [convId]
+            ) ?? 0
+        }
+
         let tokensRef = tokens
         let weakStore = WeakBox(self)
-        tokens.regionCancellable = DatabaseRegionObservation(tracking: request)
-            .start(in: dbPool, onError: { _ in }) { _ in
-                // No `self` capture in the outer closure — only nonisolated
-                // values. The hop to MainActor happens via DispatchQueue.main.async
-                // (a nonisolated primitive that does NOT query the current
-                // executor), and `tokens` is `@unchecked Sendable` so it can be
-                // mutated from the main queue without isolation friction.
-                DispatchQueue.main.async {
-                    tokensRef.refreshTask?.cancel()
-                    tokensRef.refreshTask = Task { @MainActor in
-                        guard let store = weakStore.value else { return }
-                        let delay: Duration = store.isUserScrolling
-                            ? .milliseconds(200)
-                            : .milliseconds(16)
-                        try? await Task.sleep(for: delay)
-                        guard !Task.isCancelled else { return }
-                        await store.refreshFromDB()
-                    }
+        tokens.regionCancellable = AnyDatabaseCancellable(observation.start(
+            in: dbPool,
+            scheduling: .async(onQueue: .main),
+            onError: { _ in },
+            onChange: { _ in
+                // Already on main queue (ValueObservation scheduling).
+                tokensRef.refreshTask?.cancel()
+                tokensRef.refreshTask = Task { @MainActor in
+                    guard let store = weakStore.value else { return }
+                    let delay: Duration = store.isUserScrolling
+                        ? .milliseconds(200)
+                        : .milliseconds(16)
+                    try? await Task.sleep(for: delay)
+                    guard !Task.isCancelled else { return }
+                    await store.refreshFromDB()
                 }
             }
+        ))
     }
 
     func stopObserving() {
