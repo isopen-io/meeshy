@@ -31,6 +31,36 @@ class StoryViewModel: ObservableObject {
         self.postService = postService
         self.socialSocket = socialSocket
         self.api = api
+        observeReconnectionForRetry()
+    }
+
+    // MARK: - Auto-retry on reconnect (SOTA audit Pilier 22, scope A)
+
+    /// When the message socket reconnects after a drop, automatically retry
+    /// any active upload that failed mid-flight. Manual retry via the upload
+    /// banner remains available; this just removes the friction of having
+    /// to tap retry yourself when the network comes back.
+    ///
+    /// Note: this only handles uploads still in `activeUpload` (process is
+    /// alive). Cross-restart resume is the StoryPublishQueue scope (V2).
+    private func observeReconnectionForRetry() {
+        MessageSocketManager.shared.$isConnected
+            .removeDuplicates()
+            .dropFirst()
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor in
+                    // Wait a bit so the connection stabilizes and any in-flight
+                    // request has a chance to complete first.
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    if case .failed = self.activeUpload?.phase {
+                        self.retryUpload()
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Background Upload State
