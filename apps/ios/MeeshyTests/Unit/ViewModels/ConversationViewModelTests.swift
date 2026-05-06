@@ -1064,6 +1064,57 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(sut.currentUserIdForView, testUserId)
     }
 
+    // MARK: - MessageStore Observation Tests (Task 1.3)
+
+    func test_messages_reflectsMessageStoreContent() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let viewModel = makeSUT(
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+        )
+
+        let record = MessageRecord(
+            localId: "m1", serverId: nil,
+            conversationId: testConversationId,
+            senderId: "other-user",
+            content: "hello", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: "Other", senderUsername: "other",
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil,
+            changeVersion: 1
+        )
+
+        try persistence.insertOptimistic(record)
+
+        // Allow observation pipeline to propagate:
+        // GRDB region observation → MessageStore.refreshFromDB() → messagesDidChange → ViewModel
+        try await Task.sleep(for: .milliseconds(300))
+
+        let matching = viewModel.messages.filter { $0.id == "m1" || $0.content == "hello" }
+        XCTAssertFalse(matching.isEmpty, "messages should reflect the inserted MessageRecord via store observation")
+        XCTAssertEqual(matching.first?.content, "hello")
+    }
+
     // MARK: - Helpers
 
     private func makeInMemoryPool() throws -> DatabaseQueue {

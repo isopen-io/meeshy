@@ -43,24 +43,38 @@ class ConversationViewModel: ObservableObject {
 
     @Published var messages: [Message] = [] {
         didSet {
-            let structureChanged = messages.count != oldValue.count
+            invalidateCaches(previousMessages: oldValue)
+        }
+    }
+
+    // MARK: - Cache Invalidation
+
+    /// Invalidates all derived caches that depend on `messages`.
+    /// Called both from the `messages.didSet` observer (legacy pipeline) and
+    /// from the MessageStore observation subscription (GRDB pipeline).
+    private func invalidateCaches(previousMessages: [Message]? = nil) {
+        let structureChanged: Bool
+        if let oldValue = previousMessages {
+            structureChanged = messages.count != oldValue.count
                 || messages.first?.id != oldValue.first?.id
                 || messages.last?.id != oldValue.last?.id
+        } else {
+            structureChanged = true
+        }
 
-            _messageIdIndex = nil
-            _cachedLastReceivedIndex = nil
+        _messageIdIndex = nil
+        _cachedLastReceivedIndex = nil
 
-            if structureChanged {
-                _messagesByDate = nil
-                _topActiveMembers = nil
-                _mediaSenderInfoMap = nil
-                _allVisualAttachments = nil
-                _mediaCaptionMap = nil
-                _allAudioItems = nil
-                _replyCountMap = nil
-                _mentionDisplayNames = nil
-                _mentionCandidates = nil
-            }
+        if structureChanged {
+            _messagesByDate = nil
+            _topActiveMembers = nil
+            _mediaSenderInfoMap = nil
+            _allVisualAttachments = nil
+            _mediaCaptionMap = nil
+            _allAudioItems = nil
+            _replyCountMap = nil
+            _mentionDisplayNames = nil
+            _mentionCandidates = nil
         }
     }
 
@@ -429,6 +443,9 @@ class ConversationViewModel: ObservableObject {
     private var nextMessageCursor: String?
     private var cancellables = Set<AnyCancellable>()
     private var messagesPersistCancellable: AnyCancellable?
+    /// Subscription that mirrors `MessageStore.messagesDidChange` into the
+    /// `messages` array.  Established once in `init` after `messageStore` is ready.
+    private var storeObservation: AnyCancellable?
     private var socketHandler: ConversationSocketHandler?
 
     // MARK: - GRDB Persistence (additive — parallel data source alongside @Published messages)
@@ -691,6 +708,7 @@ class ConversationViewModel: ObservableObject {
                 // optimistic rows land in cache under their server ids.
                 Task { [weak self] in await self?.persistMessagesUsingServerIds() }
             }
+        subscribeToMessageStore()
         subscribeToQueueReconciliation()
         subscribeToLanguagePreferenceChanges()
         if let session = anonymousSession {
@@ -705,6 +723,27 @@ class ConversationViewModel: ObservableObject {
     /// `message:new` socket broadcast arrives with an unknown id and the
     /// optimistic row would stay stuck in `.sending` forever while a duplicate
     /// appears.
+    // MARK: - MessageStore Observation (Task 1.3)
+
+    /// Subscribes to `messageStore.messagesDidChange` so that GRDB-driven
+    /// inserts/updates (optimistic sends, offline queue reconciliation) are
+    /// reflected in `messages` without an explicit assignment at the call site.
+    ///
+    /// When the store emits a change, this method maps the `[MessageRecord]`
+    /// snapshot to `[MeeshyMessage]`, replaces `messages`, and calls
+    /// `objectWillChange` so SwiftUI re-renders.
+    private func subscribeToMessageStore() {
+        storeObservation = messageStore.messagesDidChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                let userId = self.currentUserId
+                let mapped = self.messageStore.messages.map { $0.toMessage(currentUserId: userId) }
+                self.objectWillChange.send()
+                self.messages = mapped
+            }
+    }
+
     private func subscribeToQueueReconciliation() {
         OfflineQueue.shared.retrySucceeded
             .receive(on: DispatchQueue.main)
