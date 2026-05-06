@@ -91,6 +91,8 @@ public struct SnapEngine: Sendable {
 
 extension SnapEngine {
 
+    private nonisolated static let kDistanceEpsilon: Float = 1e-6
+
     /// Higher value = higher priority (wins tie-break at equal distance).
     /// Order matches spec section 4.1 priority hierarchy.
     nonisolated static func priority(for kind: SnapCandidate.Kind) -> Int {
@@ -136,8 +138,8 @@ extension SnapEngine {
             if d > tolerance { continue }
             let p = priority(for: c.kind)
             if let cur = best {
-                let isCloser = d < cur.distance - 1e-6
-                let isTieAndHigherPriority = abs(d - cur.distance) <= 1e-6 && p > cur.priority
+                let isCloser = d < cur.distance - Self.kDistanceEpsilon
+                let isTieAndHigherPriority = abs(d - cur.distance) <= Self.kDistanceEpsilon && p > cur.priority
                 if isCloser || isTieAndHigherPriority {
                     best = (c, d, p)
                 }
