@@ -2715,112 +2715,164 @@ git commit -m "perf(ios): remove cell-level springs in MessageRow, let UICollect
 
 ---
 
-### Task 3.2: Kingfisher DownsamplingImageProcessor global config
+### Task 3.2: Per-context downsampling on DiskCacheStore
 
 **Files:**
-- Modify: `apps/ios/Meeshy/MeeshyApp.swift` (or where Kingfisher is configured)
+- Modify: `packages/MeeshySDK/Sources/MeeshySDK/Cache/DiskCacheStore.swift`
 - Modify: `packages/MeeshySDK/Sources/MeeshyUI/Primitives/CachedAsyncImage.swift`
-- Test: `apps/ios/MeeshyTests/Unit/Services/ImageDownsamplingTests.swift`
+- Modify: app + SDK call sites of `CachedAsyncImage` to pass `targetSize`
+- Test: `packages/MeeshySDK/Tests/MeeshySDKTests/Cache/DiskCacheStoreDownsamplingTests.swift`
 
-**Context:** Aucun downsampling aujourd'hui. iPhone 8 OOM avec 4-5 grosses photos en mémoire. Cible : downsampling à la cible point size par contexte (avatar 40pt, cover 200pt, fullscreen).
+**Context (révisé 2026-05-06)** :
+Kingfisher a été supprimée du projet (commit `8959e28c`, SOTA audit Pilier 11) — aucun fichier n'importait `Kingfisher` malgré sa présence dans `Package.swift`. Le stack image actuel est :
+- `AsyncImage` SwiftUI (iOS 15+) pour les cas simples
+- `CachedAsyncImage` (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/CachedAsyncImage.swift`) qui wraps `DiskCacheStore` pour le path principal
+- `CacheCoordinator.shared.images` (= une instance `DiskCacheStore`) pour l'accès programmatique 3-tier (NSCache → FileManager → URLSession)
+
+**Le downsampling existe déjà** dans `DiskCacheStore.downsampledImage(data:maxPixelSize: 1200)` (ligne ~289) — `CGImageSourceCreateThumbnailAtIndex` + `kCGImageSourceThumbnailMaxPixelSize`. Le pattern Apple-natif recommandé en 2026 (cf. SOTA audit). Le manque actuel : la valeur `1200` est **codée en dur**. Une story embed (~360pt × scale) ne tire aucun bénéfice à décoder à 1200px ; un avatar (40pt × scale) encore moins.
+
+**Cible** : per-context max pixel size pilotable depuis le call site, défaut `1200` préservé (compat). Avatar 40pt, cover 200pt, media bubble 280pt, fullscreen `UIScreen.main.bounds.size.maxDimension`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```swift
+// packages/MeeshySDK/Tests/MeeshySDKTests/Cache/DiskCacheStoreDownsamplingTests.swift
 import XCTest
-import Kingfisher
-@testable import Meeshy
-@testable import MeeshyUI
+@testable import MeeshySDK
 
-final class ImageDownsamplingTests: XCTestCase {
+final class DiskCacheStoreDownsamplingTests: XCTestCase {
 
-    func test_kingfisherGlobalOptions_setsDownsampler() {
-        ImageDownsamplingConfig.applyGlobal()
-        let options = KingfisherManager.shared.defaultOptions
-        XCTAssertTrue(options.contains { String(describing: $0).contains("DownsamplingImageProcessor") })
+    func test_downsampledImage_respectsMaxPixelSize() throws {
+        // 4096x4096 white JPEG to disk
+        let largeData = makeJPEG(size: CGSize(width: 4096, height: 4096))
+
+        let small = DiskCacheStore._test_downsampledImage(data: largeData, maxPixelSize: 80)
+        XCTAssertNotNil(small)
+        XCTAssertLessThanOrEqual(max(small!.size.width, small!.size.height) * small!.scale, 80)
+
+        let medium = DiskCacheStore._test_downsampledImage(data: largeData, maxPixelSize: 200)
+        XCTAssertNotNil(medium)
+        XCTAssertLessThanOrEqual(max(medium!.size.width, medium!.size.height) * medium!.scale, 200)
+    }
+
+    func test_image_for_url_uses_per_call_maxPixelSize() async {
+        // store.image(for: "...", maxPixelSize: 80) returns an 80px-bounded UIImage
+        // store.image(for: "...") with no override defaults to 1200 (back-compat)
     }
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+Run: `xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,name=iPhone 16 Pro" -only-testing:MeeshySDKTests/DiskCacheStoreDownsamplingTests`. Expected: FAIL.
 
-Run: `./apps/ios/meeshy.sh test --filter ImageDownsamplingTests`
-Expected: FAIL.
+- [ ] **Step 2: Add maxPixelSize parameter to DiskCacheStore.image(for:)**
 
-- [ ] **Step 3: Create ImageDownsamplingConfig**
+In `DiskCacheStore.swift`, change the existing `image(for:)` and the private `downsampledImage(data:)`:
 
 ```swift
-// apps/ios/Meeshy/Core/ImageDownsamplingConfig.swift
-import Kingfisher
-import UIKit
+// Default kept at 1200 so existing call sites keep current behaviour.
+public static let defaultMaxPixelSize: CGFloat = 1200
 
-public enum ImageDownsamplingConfig {
+private static func downsampledImage(data: Data, maxPixelSize: CGFloat = defaultMaxPixelSize) -> UIImage? {
+    let options: [CFString: Any] = [
+        kCGImageSourceShouldCache: false,
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+    ]
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+          let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    else { return UIImage(data: data) }
+    return UIImage(cgImage: cgImage)
+}
 
-    public static func applyGlobal() {
-        KingfisherManager.shared.defaultOptions = [
-            .cacheOriginalImage,
-            .scaleFactor(UIScreen.main.scale),
-            .cacheSerializer(FormatIndicatedCacheSerializer.png),
-            .backgroundDecode
-        ]
-        // Memory cache cap
-        ImageCache.default.memoryStorage.config.totalCostLimit = 60 * 1024 * 1024  // 60 MB
-        // Disk cache cap
-        ImageCache.default.diskStorage.config.sizeLimit = 300 * 1024 * 1024  // 300 MB
-    }
-
-    public static func processor(for size: CGSize) -> DownsamplingImageProcessor {
-        DownsamplingImageProcessor(size: size)
-    }
+public func image(
+    for urlString: String,
+    maxPixelSize: CGFloat = Self.defaultMaxPixelSize
+) async -> UIImage? {
+    // ... existing L1/L2/network resolution ...
+    // pass maxPixelSize to downsampledImage when decoding fresh data
 }
 ```
 
-- [ ] **Step 4: Wire in MeeshyApp.task**
+Add an internal-only `_test_downsampledImage` accessor for the test (or expose under `#if DEBUG`).
+
+- [ ] **Step 3: Update CachedAsyncImage to accept targetSize**
+
+`CachedAsyncImage` already calls `await CacheCoordinator.shared.images.image(for: resolved)` (line 74 of `CachedAsyncImage.swift`). Thread the new param through:
 
 ```swift
-// MeeshyApp.swift inside .task before any KFImage usage:
-ImageDownsamplingConfig.applyGlobal()
-```
+public struct CachedAsyncImage<Placeholder: View>: View {
+    public let urlString: String?
+    public let targetPointSize: CGSize?  // nil → defaultMaxPixelSize (1200)
+    public let placeholder: () -> Placeholder
 
-- [ ] **Step 5: Update CachedAsyncImage to accept targetSize**
-
-```swift
-struct CachedAsyncImage<Placeholder: View>: View {
-    let url: String?
-    let targetSize: CGSize
-    let placeholder: () -> Placeholder
-
-    init(url: String?, targetSize: CGSize, @ViewBuilder placeholder: @escaping () -> Placeholder) {
-        self.url = url
-        self.targetSize = targetSize
+    public init(
+        url urlString: String?,
+        targetPointSize: CGSize? = nil,
+        @ViewBuilder placeholder: @escaping () -> Placeholder
+    ) {
+        self.urlString = urlString
+        self.targetPointSize = targetPointSize
         self.placeholder = placeholder
+        // existing init body — sync L1 peek via DiskCacheStore.cachedImage(for:)
+        // does NOT need the targetPointSize : if the L1 entry exists at any
+        // pixel size, returning it is a strict improvement over a network
+        // round-trip. The downsampling cap matters on the FIRST decode only.
     }
-    // body uses Kingfisher with `.processor(ImageDownsamplingConfig.processor(for: targetSize))`
+
+    private func loadImage(for currentUrlString: String?) async {
+        // ...
+        let maxPx = targetPointSize.map {
+            max($0.width, $0.height) * UIScreen.main.scale
+        } ?? DiskCacheStore.defaultMaxPixelSize
+        let loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPx)
+        // ... existing assignment ...
+    }
 }
 ```
 
-Update callsites to pass appropriate `targetSize`:
-- Avatar: `CGSize(width: 40, height: 40)`
-- Cover: `CGSize(width: 200, height: 200)`
-- Media bubble: `CGSize(width: 280, height: 280)`
-- Fullscreen: `UIScreen.main.bounds.size`
+Same change for `CachedAvatarImage` and the other variants in the same file (the file declares `CachedAsyncImage`, `CachedAvatarImage`, and a fullscreen variant — all four constructors).
 
-- [ ] **Step 6: Run test + manual memory check**
+- [ ] **Step 4: Update call sites with appropriate targetPointSize**
 
-Run: `./apps/ios/meeshy.sh test --filter ImageDownsamplingTests`
+Mechanical sweep — pass per-context size where the consuming view's frame is known :
+
+| Context | targetPointSize |
+|---------|-----------------|
+| Avatar (story tray, message author) | `CGSize(width: 40, height: 40)` |
+| Cover (story preview in feed cell) | `CGSize(width: 200, height: 200)` |
+| Media bubble (image attachment in conversation) | `CGSize(width: 280, height: 280)` |
+| Story canvas reader / fullscreen | `nil` (defaults to 1200) — let the screen size cap handle it |
+
+Use `grep -rn "CachedAsyncImage(url:" apps/ios/Meeshy/ packages/MeeshySDK/` to enumerate the ~20 call sites.
+
+- [ ] **Step 5: Run test + manual memory check**
+
+```bash
+xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,name=iPhone 16 Pro" -only-testing:MeeshySDKTests/DiskCacheStoreDownsamplingTests
+```
 Expected: PASS.
 
-Manual: scroll un feed avec 50 images, mesurer mémoire dans Instruments. Doit rester < 150 MB.
+Manual : scroll un feed avec 50 images via Instruments → Allocations. Cible peak memory < 150 MB sur iPhone SE 3 (A15, 4 GB RAM).
+
+- [ ] **Step 6: Document the CacheCoordinator boundary**
+
+The `DiskCacheStore.cachedImage(for:)` static peek used by `CachedAsyncImage` and `StoryCanvasReaderView` reads the same global NSCache that `DiskCacheStore` instance methods write to. This is **NOT** a CacheCoordinator bypass — it's a sync L1 fast path that shares the underlying singleton.
+
+The only soft bypass is `DiskCacheStore.cacheImageForPreview(_:key:)` called from `apps/ios/Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift:92` to seed an attachment preview before the server URL exists. Document this in `apps/ios/decisions.md` as an intentional pattern that does NOT trigger Socket.IO invalidation events (the seed is replaced by the server-resolved version once upload completes).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Core/ImageDownsamplingConfig.swift \
-        apps/ios/Meeshy/MeeshyApp.swift \
+git add packages/MeeshySDK/Sources/MeeshySDK/Cache/DiskCacheStore.swift \
         packages/MeeshySDK/Sources/MeeshyUI/Primitives/CachedAsyncImage.swift \
-        apps/ios/MeeshyTests/Unit/Services/ImageDownsamplingTests.swift
-git commit -m "perf(ios): Kingfisher DownsamplingImageProcessor config + per-context target sizes"
+        packages/MeeshySDK/Tests/MeeshySDKTests/Cache/DiskCacheStoreDownsamplingTests.swift \
+        apps/ios/decisions.md
+# plus the call site files modified in Step 4
+git commit -m "perf(ios): per-context downsampling in DiskCacheStore + CachedAsyncImage targetPointSize"
 ```
+
+**Note de migration** — la version originale de cette tâche planifiait Kingfisher's `DownsamplingImageProcessor` + `KingfisherManager.shared.defaultOptions`. Kingfisher a été retirée du projet (SOTA audit Pilier 11, commit `8959e28c`) car aucun fichier ne l'importait. Le pipeline de downsampling vit maintenant dans `DiskCacheStore.downsampledImage(data:maxPixelSize:)` qui utilise `CGImageSourceCreateThumbnailAtIndex` — l'API native Apple recommandée en 2026 par NSHipster / Swift Senpai (`https://nshipster.com/image-resizing/`). Cette tâche étend ce pipeline existant plutôt que de réintroduire une dépendance tierce.
 
 ---
 
