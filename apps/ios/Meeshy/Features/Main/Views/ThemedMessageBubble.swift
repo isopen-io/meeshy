@@ -1495,7 +1495,8 @@ struct ThemedMessageBubble: View {
                 message: message,
                 contactColor: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
                 visualAttachments: visualAttachments,
-                theme: theme,
+                isDark: isDark,
+                accentColor: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
                 textTranslations: textTranslations,
@@ -1510,6 +1511,7 @@ struct ThemedMessageBubble: View {
                 onRequestTranslation: onRequestTranslation,
                 activeAudioLanguageOverride: activeAudioLanguage
             )
+            .equatable()
 
         default:
             EmptyView()

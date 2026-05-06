@@ -273,12 +273,13 @@ struct CachedPlayIcon: View {
 }
 
 // MARK: - Audio Media View (shows placeholder until cached, then full player)
-struct AudioMediaView: View {
+struct AudioMediaView: View, Equatable {
     let attachment: MessageAttachment
     let message: Message
     let contactColor: String
     let visualAttachments: [MessageAttachment]
-    @ObservedObject var theme: ThemeManager
+    let isDark: Bool
+    let accentColor: String
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
     var textTranslations: [MessageTranslation] = []
@@ -289,6 +290,15 @@ struct AudioMediaView: View {
     var onShowTranslationDetail: ((String) -> Void)?
     var onRequestTranslation: ((String, String) -> Void)?
     var activeAudioLanguageOverride: String? = nil
+
+    static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
+        lhs.attachment.id == rhs.attachment.id
+            && lhs.message.id == rhs.message.id
+            && lhs.isDark == rhs.isDark
+            && lhs.accentColor == rhs.accentColor
+            && lhs.contactColor == rhs.contactColor
+            && lhs.activeAudioLanguageOverride == rhs.activeAudioLanguageOverride
+    }
 
     @State private var isCached = false
     @State private var isAudioPlaying = false
@@ -342,7 +352,7 @@ struct AudioMediaView: View {
                 MessageTextRenderer.render(
                     message.content,
                     fontSize: 13,
-                    color: theme.textMuted,
+                    color: isDark ? Color(hex: "818CF8").opacity(0.5) : Color(hex: "6366F1").opacity(0.4),
                     mentionColor: Color(hex: "818CF8"),
                     accentColor: Color(hex: contactColor),
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
@@ -382,7 +392,6 @@ struct AudioMediaView: View {
     }
 
     private var audioMetaRow: some View {
-        let isDark = theme.mode.isDark
         let accent = Color(hex: contactColor)
         let origCode = message.originalLanguage.lowercased()
         let metaColor: Color = isDark ? .white.opacity(0.7) : .black.opacity(0.5)
@@ -498,7 +507,6 @@ struct AudioMediaView: View {
 
     private var audioPlaceholder: some View {
         let accent = Color(hex: contactColor)
-        let isDark = theme.mode.isDark
 
         return HStack(spacing: 8) {
             // Play circle — triggers download
@@ -557,7 +565,6 @@ struct AudioMediaView: View {
     }
 
     private func audioDurationBadge(seconds: TimeInterval) -> some View {
-        let isDark = theme.mode.isDark
         return Text(formatDuration(seconds))
             .font(.system(size: 9, weight: .semibold, design: .monospaced))
             .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.5))

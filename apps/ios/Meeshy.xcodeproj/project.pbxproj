@@ -240,6 +240,7 @@
 		GS3300000000002F33 /* GlobalSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = GS3300000000001F33 /* GlobalSearchViewModel.swift */; };
 		GSTC002A3B4C5D6E7F890100 /* GuestConversationContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = GSTC001A3B4C5D6E7F890100 /* GuestConversationContainer.swift */; };
 		GSTC003A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = GSTC004A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift */; };
+		AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */; };
 		CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */; };
 		TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = TDTH0001000100010001000 /* TypingDotTimerHarness.swift */; };
 		HLPR0001000100010001001 /* JSONStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPR0001000100010001000 /* JSONStub.swift */; };
@@ -633,6 +634,7 @@
 		GS3300000000001F33 /* GlobalSearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalSearchViewModel.swift; sourceTree = "<group>"; };
 		GSTC001A3B4C5D6E7F890100 /* GuestConversationContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestConversationContainer.swift; sourceTree = "<group>"; };
 		GSTC004A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestConversationContainerTests.swift; sourceTree = "<group>"; };
+		AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMediaViewRenderTests.swift; sourceTree = "<group>"; };
 		CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewLifecycleTests.swift; sourceTree = "<group>"; };
 		TDTH0001000100010001000 /* TypingDotTimerHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingDotTimerHarness.swift; sourceTree = "<group>"; };
 		HLPR0001000100010001000 /* JSONStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONStub.swift; sourceTree = "<group>"; };
@@ -1302,6 +1304,7 @@
 			children = (
 				GSTC004A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift */,
 				CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */,
+				AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */,
 				TSTVWHLPR000G000G000001 /* Helpers */,
 			);
 			path = Views;
@@ -1917,6 +1920,7 @@
 				09B1C857CBCEAEE03639B305 /* AnonymousSessionStoreTests.swift in Sources */,
 				GSTC003A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift in Sources */,
 				CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */,
+				AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */,
 				TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */,
 				NTFY0001000100010001001 /* NotificationTests.swift in Sources */,
 				DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */,
