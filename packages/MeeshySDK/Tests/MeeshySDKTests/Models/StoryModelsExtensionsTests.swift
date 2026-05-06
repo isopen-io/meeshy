@@ -278,4 +278,54 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertNil(decoded.keyframes)
         XCTAssertEqual(decoded.content, "hello")
     }
+
+    // MARK: - Retro-compat: V1 slide JSON decodes into V2
+
+    func test_storySlide_decodeV1JSON_withoutTimelineV2Fields_succeeds() throws {
+        let json = #"""
+        {
+          "id": "s1",
+          "mediaURL": "https://x.test/img.jpg",
+          "content": "Hi",
+          "effects": {
+            "background": "FFFFFF",
+            "mediaObjects": [
+              {"id":"m1","postMediaId":"pm","mediaType":"image","placement":"media","x":0.5,"y":0.5,"scale":1.0,"rotation":0,"volume":1.0}
+            ],
+            "textObjects": [
+              {"id":"t1","content":"hello","x":0.5,"y":0.5,"scale":1.0,"rotation":0}
+            ]
+          },
+          "duration": 5,
+          "order": 0
+        }
+        """#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(StorySlide.self, from: json)
+        XCTAssertEqual(decoded.id, "s1")
+        XCTAssertNil(decoded.effects.clipTransitions)
+        XCTAssertNil(decoded.effects.mediaObjects?.first?.keyframes)
+        XCTAssertNil(decoded.effects.textObjects?.first?.keyframes)
+    }
+
+    func test_storySlide_encodeV2_thenDecode_preservesTimelineFields() throws {
+        var effects = StoryEffects()
+        effects.mediaObjects = [
+            StoryMediaObject(id: "m1", postMediaId: "pm",
+                             mediaType: "image", placement: "media")
+        ]
+        effects.mediaObjects?[0].keyframes = [
+            StoryKeyframe(time: 0.0, x: 0.0, y: 0.0),
+            StoryKeyframe(time: 2.0, x: 1.0, y: 1.0)
+        ]
+        effects.clipTransitions = [
+            StoryClipTransition(fromClipId: "m1", toClipId: "m2",
+                                kind: .dissolve, duration: 0.4,
+                                easing: .easeInOut)
+        ]
+        let slide = StorySlide(id: "s2", effects: effects, duration: 10, order: 0)
+        let data = try JSONEncoder().encode(slide)
+        let decoded = try JSONDecoder().decode(StorySlide.self, from: data)
+        XCTAssertEqual(decoded.effects.clipTransitions?.first?.kind, .dissolve)
+        XCTAssertEqual(decoded.effects.mediaObjects?.first?.keyframes?.count, 2)
+    }
 }
