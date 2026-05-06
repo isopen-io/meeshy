@@ -4,6 +4,7 @@ import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { MediaService } from './MediaService';
+import type { MediaStorage } from './storage/MediaStorage';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 
@@ -115,7 +116,10 @@ const postInclude = {
 export class PostService {
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly mediaService: MediaService = new MediaService(),
+    // Typed against the MediaStorage interface so a future swap to MinIO/R2
+    // (Pilier 7 SOTA migration path) does not need to touch this class.
+    // The default value remains the local-filesystem implementation.
+    private readonly mediaService: MediaStorage = new MediaService(),
   ) {}
 
   async createPost(data: {
@@ -838,10 +842,10 @@ export class PostService {
         }>;
 
         for (const [idx, m] of originalMedia.entries()) {
-          const dup = await this.mediaService.duplicateMedia(m.fileUrl);
+          const dup = await this.mediaService.duplicate(m.fileUrl);
           let dupThumbUrl: string | undefined;
           if (m.thumbnailUrl) {
-            const dupThumb = await this.mediaService.duplicateMedia(m.thumbnailUrl);
+            const dupThumb = await this.mediaService.duplicate(m.thumbnailUrl);
             dupThumbUrl = dupThumb.fileUrl;
           }
           duplicatedMedia.push({
@@ -858,7 +862,7 @@ export class PostService {
 
         const audioUrl = original.audioUrl as string | null | undefined;
         if (audioUrl) {
-          const dupAudio = await this.mediaService.duplicateMedia(audioUrl);
+          const dupAudio = await this.mediaService.duplicate(audioUrl);
           duplicatedAudioUrl = dupAudio.fileUrl;
           snapshotAudioUrl = dupAudio.fileUrl;
         }
@@ -892,10 +896,10 @@ export class PostService {
         return repost;
       } catch (err) {
         for (const dup of duplicatedMedia) {
-          await this.mediaService.deleteMedia(dup.fileUrl).catch(() => {});
+          await this.mediaService.delete(dup.fileUrl).catch(() => {});
         }
         if (duplicatedAudioUrl) {
-          await this.mediaService.deleteMedia(duplicatedAudioUrl).catch(() => {});
+          await this.mediaService.delete(duplicatedAudioUrl).catch(() => {});
         }
         throw err instanceof Error
           ? new Error('Media snapshot or post creation failed during repost', { cause: err })

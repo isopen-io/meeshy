@@ -1,23 +1,31 @@
 import { promises as fs, constants as fsConstants } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 
-export type MediaDuplicateResult = {
-  fileUrl: string;
-  filePath: string;
-  fileName: string;
-  fileSize: number;
-  mimeType: string;
-};
+// Re-export for backwards compatibility with call sites that imported the
+// type from `MediaService` rather than from the new `storage/MediaStorage`
+// module. New code should import from `storage/MediaStorage`.
+export type { MediaDuplicateResult };
 
 const ATTACHMENTS_FILE_PREFIX = '/api/v1/attachments/file/';
 
 /**
- * Service for low-level media file operations (copy, delete) that are
- * storage-backend aware. Currently targets the local filesystem under
- * UPLOAD_PATH, mirroring the layout used by UploadProcessor.
+ * Local-filesystem implementation of {@link MediaStorage}. Targets the
+ * UPLOAD_PATH volume mounted by the Docker container — the layout matches
+ * what `UploadProcessor` produces during user-uploaded media intake.
+ *
+ * The class also exposes `duplicateMedia` / `deleteMedia` aliases that
+ * preserve the original method names so existing call sites in
+ * `PostService` and elsewhere keep working unchanged. The new interface
+ * methods (`duplicate`, `delete`) are the canonical entry points for new
+ * code, especially when the call site is typed against `MediaStorage`.
+ *
+ * Reference: SOTA audit Pilier 7 — wrapping media operations behind a
+ * storage-agnostic interface to enable a future migration to MinIO / R2
+ * without touching PostService or the route handlers.
  */
-export class MediaService {
+export class MediaService implements MediaStorage {
   private readonly uploadBasePath: string;
   private readonly publicUrl: string;
 
@@ -106,6 +114,22 @@ export class MediaService {
 
     const fullPath = path.join(this.uploadBasePath, relativePath);
     await fs.unlink(fullPath).catch(() => {});
+  }
+
+  // MARK: - MediaStorage interface conformance
+  //
+  // The interface uses shorter method names (duplicate, delete). We keep
+  // duplicateMedia / deleteMedia as the existing public API so call sites
+  // don't need to change, and forward through these thin wrappers.
+
+  /** {@inheritDoc MediaStorage.duplicate} */
+  duplicate(originalUrl: string): Promise<MediaDuplicateResult> {
+    return this.duplicateMedia(originalUrl);
+  }
+
+  /** {@inheritDoc MediaStorage.delete} */
+  delete(fileUrl: string): Promise<void> {
+    return this.deleteMedia(fileUrl);
   }
 
   private guessMimeType(ext: string): string {
