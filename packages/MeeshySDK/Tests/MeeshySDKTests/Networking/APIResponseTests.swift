@@ -156,7 +156,7 @@ final class APIResponseTests: XCTestCase {
         let pagination = try decoder.decode(CursorPagination.self, from: json)
 
         XCTAssertEqual(pagination.nextCursor, "cursor_xyz")
-        XCTAssertTrue(pagination.hasMore)
+        XCTAssertEqual(pagination.hasMore, true)
         XCTAssertEqual(pagination.limit, 25)
     }
 
@@ -168,7 +168,7 @@ final class APIResponseTests: XCTestCase {
         let pagination = try decoder.decode(CursorPagination.self, from: json)
 
         XCTAssertNil(pagination.nextCursor)
-        XCTAssertFalse(pagination.hasMore)
+        XCTAssertEqual(pagination.hasMore, false)
         XCTAssertEqual(pagination.limit, 20)
     }
 
@@ -182,7 +182,7 @@ final class APIResponseTests: XCTestCase {
         let pagination = try decoder.decode(OffsetPagination.self, from: json)
 
         XCTAssertEqual(pagination.total, 100)
-        XCTAssertTrue(pagination.hasMore)
+        XCTAssertEqual(pagination.hasMore, true)
         XCTAssertEqual(pagination.limit, 15)
         XCTAssertEqual(pagination.offset, 30)
     }
@@ -195,7 +195,7 @@ final class APIResponseTests: XCTestCase {
         let pagination = try decoder.decode(OffsetPagination.self, from: json)
 
         XCTAssertNil(pagination.total)
-        XCTAssertFalse(pagination.hasMore)
+        XCTAssertEqual(pagination.hasMore, false)
         XCTAssertEqual(pagination.limit, 10)
         XCTAssertEqual(pagination.offset, 0)
     }
