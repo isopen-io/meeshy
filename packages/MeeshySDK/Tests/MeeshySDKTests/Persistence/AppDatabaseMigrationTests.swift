@@ -81,12 +81,14 @@ final class AppDatabaseMigrationTests: XCTestCase {
         }
     }
 
-    func test_v3Migration_preservesExistingTables() throws {
+    func test_v3Migration_preservesCacheMetadata() throws {
+        // The conversations/messages tables present in v1 are intentionally
+        // dropped at v4 (see test_v4Migration_dropsLegacyTables). Once all
+        // migrations have run, only the cache_metadata table created at v2
+        // is expected to remain alongside the v3+ cache_entries store.
         let db = try migratedDatabase()
         try db.read { db in
-            XCTAssertTrue(try db.tableExists("conversations"), "conversations table should still exist")
-            XCTAssertTrue(try db.tableExists("messages"), "messages table should still exist")
-            XCTAssertTrue(try db.tableExists("cache_metadata"), "cache_metadata table should still exist")
+            XCTAssertTrue(try db.tableExists("cache_metadata"), "cache_metadata table should still exist after v3 migration")
         }
     }
 

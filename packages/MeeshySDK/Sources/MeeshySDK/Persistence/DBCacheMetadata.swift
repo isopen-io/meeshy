@@ -11,6 +11,8 @@ struct DBCacheMetadata: Codable, FetchableRecord, PersistableRecord, Sendable {
     var lastFetchedAt: Date
 
     func isExpired(ttl: TimeInterval) -> Bool {
-        Date().timeIntervalSince(lastFetchedAt) > ttl
+        // Use `>=` to match CachePolicy.freshness: a record is expired the
+        // moment it reaches the TTL boundary, not strictly past it.
+        Date().timeIntervalSince(lastFetchedAt) >= ttl
     }
 }
