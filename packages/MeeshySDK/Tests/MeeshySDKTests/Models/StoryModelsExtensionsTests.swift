@@ -124,4 +124,78 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertNil(decoded.easing)
         XCTAssertEqual(decoded.kind, .crossfade)
     }
+
+    // MARK: - StoryKeyframe
+
+    func test_storyKeyframe_init_assignsAllProperties() {
+        let kf = StoryKeyframe(
+            id: "kf-1",
+            time: 1.5,
+            x: 0.3,
+            y: 0.7,
+            scale: 1.25,
+            opacity: 0.9,
+            easing: .easeIn
+        )
+        XCTAssertEqual(kf.id, "kf-1")
+        XCTAssertEqual(kf.time, 1.5)
+        XCTAssertEqual(kf.x, 0.3)
+        XCTAssertEqual(kf.y, 0.7)
+        XCTAssertEqual(kf.scale, 1.25)
+        XCTAssertEqual(kf.opacity, 0.9)
+        XCTAssertEqual(kf.easing, .easeIn)
+    }
+
+    func test_storyKeyframe_init_defaultsAllPropertiesToNil() {
+        let kf = StoryKeyframe(time: 2.0)
+        XCTAssertFalse(kf.id.isEmpty)
+        XCTAssertEqual(kf.time, 2.0)
+        XCTAssertNil(kf.x)
+        XCTAssertNil(kf.y)
+        XCTAssertNil(kf.scale)
+        XCTAssertNil(kf.opacity)
+        XCTAssertNil(kf.easing)
+    }
+
+    func test_storyKeyframe_codableRoundTrip_full() throws {
+        let original = StoryKeyframe(
+            id: "kf-99",
+            time: 3.25,
+            x: 0.5, y: 0.5,
+            scale: 1.0, opacity: 1.0,
+            easing: .easeInOut
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(StoryKeyframe.self, from: data)
+        XCTAssertEqual(decoded.id, original.id)
+        XCTAssertEqual(decoded.time, original.time, accuracy: 0.0001)
+        XCTAssertEqual(decoded.x, original.x)
+        XCTAssertEqual(decoded.y, original.y)
+        XCTAssertEqual(decoded.scale, original.scale)
+        XCTAssertEqual(decoded.opacity, original.opacity)
+        XCTAssertEqual(decoded.easing, original.easing)
+    }
+
+    func test_storyKeyframe_codableRoundTrip_partial_onlyTimeAndX() throws {
+        let original = StoryKeyframe(time: 0.5, x: 0.42)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(StoryKeyframe.self, from: data)
+        XCTAssertEqual(decoded.x, 0.42)
+        XCTAssertNil(decoded.y)
+        XCTAssertNil(decoded.scale)
+        XCTAssertNil(decoded.opacity)
+        XCTAssertNil(decoded.easing)
+    }
+
+    func test_storyKeyframe_decodeJSON_withoutOptionalFields() throws {
+        let json = #"{"id":"kf-bare","time":1.0}"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(StoryKeyframe.self, from: json)
+        XCTAssertEqual(decoded.id, "kf-bare")
+        XCTAssertEqual(decoded.time, 1.0)
+        XCTAssertNil(decoded.x)
+        XCTAssertNil(decoded.y)
+        XCTAssertNil(decoded.scale)
+        XCTAssertNil(decoded.opacity)
+        XCTAssertNil(decoded.easing)
+    }
 }
