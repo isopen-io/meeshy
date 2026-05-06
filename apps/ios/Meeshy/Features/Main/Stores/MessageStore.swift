@@ -18,6 +18,45 @@ private final class WeakBox<T: AnyObject>: @unchecked Sendable {
     init(_ value: T) { self.value = value }
 }
 
+/// Builds the ValueObservation used by MessageStore. Declared at file scope
+/// (NOT inside @MainActor MessageStore) so the closures inside are inferred
+/// as nonisolated. Swift 6 strict concurrency inserts
+/// `_swift_task_checkIsolatedSwift` at the invocation of any closure DECLARED
+/// in a @MainActor context — even when the closure has no isolated captures.
+/// Moving the closure declaration here breaks that inheritance.
+private func makeMessageStoreObservation(convId: String) -> ValueObservation<ValueReducers.Fetch<Int>> {
+    ValueObservation.tracking { db in
+        try Int.fetchOne(
+            db,
+            sql: "SELECT COUNT(*) FROM \(MessageRecord.databaseTableName) WHERE conversationId = ?",
+            arguments: [convId]
+        ) ?? 0
+    }
+}
+
+/// Schedules a refresh of `tokens.refreshTask` on MainActor, keying off
+/// the supplied weak store. Declared at file scope (nonisolated context)
+/// to prevent Swift 6 from injecting an isolation check at closure invocation
+/// when this is used as the ValueObservation `onChange` callback.
+/// The concrete types are private to this file but visible to the factory.
+private func makeMessageStoreOnChange(
+    tokens: ObservationTokens,
+    storeBox: WeakBox<MessageStore>
+) -> @Sendable (Int) -> Void {
+    return { _ in
+        tokens.refreshTask?.cancel()
+        tokens.refreshTask = Task { @MainActor in
+            guard let store = storeBox.value else { return }
+            let delay: Duration = store.isUserScrolling
+                ? .milliseconds(200)
+                : .milliseconds(16)
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await store.refreshFromDB()
+        }
+    }
+}
+
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
 /// Explicitly non-isolated so its methods can be called from any context.
 private final class ObservationTokens: @unchecked Sendable {
@@ -88,44 +127,21 @@ public final class MessageStore {
         stopObserving()
         let convId = conversationId
 
-        // Use ValueObservation with explicit `.async(onQueue: .main)` scheduling
-        // instead of DatabaseRegionObservation. GRDB then runs its tracking
-        // fetch on its own reader queue and DELIVERS the onChange callback to
-        // us already on the main queue. Our closure never executes on the
-        // GRDB writer queue, so Swift 6's `_swift_task_checkIsolatedSwift`
-        // assertion (which fires when a @MainActor-context closure is invoked
-        // off-actor) is structurally avoided.
-        //
-        // The tracked value is a trivial row-id snapshot — we only use it as
-        // a "something changed" signal, then call our refreshFromDB() which
-        // honors the current windowMode.
-        let observation = ValueObservation.tracking { db in
-            try Int.fetchOne(
-                db,
-                sql: "SELECT COUNT(*) FROM \(MessageRecord.databaseTableName) WHERE conversationId = ?",
-                arguments: [convId]
-            ) ?? 0
-        }
-
+        // Build the observation + onChange callback at file scope (via the
+        // private factory functions defined above). The closures are declared
+        // in a non-@MainActor context, so Swift 6 strict concurrency does NOT
+        // insert `_swift_task_checkIsolatedSwift` at their invocation. GRDB
+        // can safely run the fetch closure on its reader queue and the change
+        // callback on the main queue without isolation friction.
+        let observation = makeMessageStoreObservation(convId: convId)
         let tokensRef = tokens
         let weakStore = WeakBox(self)
+        let onChange = makeMessageStoreOnChange(tokens: tokensRef, storeBox: weakStore)
         tokens.regionCancellable = AnyDatabaseCancellable(observation.start(
             in: dbPool,
             scheduling: .async(onQueue: .main),
             onError: { _ in },
-            onChange: { _ in
-                // Already on main queue (ValueObservation scheduling).
-                tokensRef.refreshTask?.cancel()
-                tokensRef.refreshTask = Task { @MainActor in
-                    guard let store = weakStore.value else { return }
-                    let delay: Duration = store.isUserScrolling
-                        ? .milliseconds(200)
-                        : .milliseconds(16)
-                    try? await Task.sleep(for: delay)
-                    guard !Task.isCancelled else { return }
-                    await store.refreshFromDB()
-                }
-            }
+            onChange: onChange
         ))
     }
 
