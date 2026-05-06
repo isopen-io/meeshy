@@ -190,6 +190,15 @@ final class SnapEngineTests: XCTestCase {
         XCTAssertEqual(result.matched, highPri)
     }
 
+    func test_snap_equalDistanceAndPriority_returnsFirstEncountered() {
+        let engine = SnapEngine(toleranceSeconds: 0.5)
+        let first  = SnapCandidate(kind: .gridMinor, time: 0.9, label: nil)
+        let second = SnapCandidate(kind: .gridMinor, time: 1.1, label: nil)
+        let result = engine.snap(rawTime: 1.0, candidates: [first, second])
+        XCTAssertEqual(result.snappedTime, 0.9, accuracy: 0.0001)
+        XCTAssertEqual(result.matched, first)
+    }
+
     // MARK: - SnapEngine.snap — edge cases
 
     func test_snap_negativeRawTime_handledAsNumber() {
