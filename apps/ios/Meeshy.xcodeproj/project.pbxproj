@@ -1064,17 +1064,8 @@
 				00B3D9B4A2850060E2C9470D /* FloatingCallPillView.swift */,
 				823B2865CE9642B487B0FC22 /* VideoFilterControlView.swift */,
 				SMV0010010010010010001 /* StarredMessagesView.swift */,
-				VWHLPR000G000G000G00001 /* Helpers */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		VWHLPR000G000G000G00001 /* Helpers */ = {
-			isa = PBXGroup;
-			children = (
-				TDTH0001000100010001000 /* TypingDotTimerHarness.swift */,
-			);
-			path = Helpers;
 			sourceTree = "<group>";
 		};
 		95E93FD3E2B5A90538EA3320 /* Main */ = {
@@ -1311,8 +1302,17 @@
 			children = (
 				GSTC004A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift */,
 				CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */,
+				TSTVWHLPR000G000G000001 /* Helpers */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		TSTVWHLPR000G000G000001 /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				TDTH0001000100010001000 /* TypingDotTimerHarness.swift */,
+			);
+			path = Helpers;
 			sourceTree = "<group>";
 		};
 		HLPR000G000G000G000G001 /* Helpers */ = {
@@ -1763,7 +1763,6 @@
 				GALLERY001B001B001B00002 /* ConversationMediaGalleryView.swift in Sources */,
 				AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */,
 				E73445377212602BE34F97F6 /* ConversationHelperViews.swift in Sources */,
-				TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */,
 				PP2500000000002F25 /* ParticipantsView.swift in Sources */,
 				PP2600000000002F26 /* AddParticipantSheet.swift in Sources */,
 				ML2700000000002F27 /* MagicLinkView.swift in Sources */,
@@ -1918,6 +1917,7 @@
 				09B1C857CBCEAEE03639B305 /* AnonymousSessionStoreTests.swift in Sources */,
 				GSTC003A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift in Sources */,
 				CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */,
+				TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */,
 				NTFY0001000100010001001 /* NotificationTests.swift in Sources */,
 				DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */,
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,
