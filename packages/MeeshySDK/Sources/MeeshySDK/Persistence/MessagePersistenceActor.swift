@@ -59,7 +59,9 @@ public actor MessagePersistenceActor {
     // MARK: - Synchronous Writes
 
     public func insertOptimistic(_ record: MessageRecord) throws {
-        try dbWriter.write { db in try record.insert(db) }
+        var r = record
+        r.cachedTimeString = MessageRecord.computeTimeString(for: r.createdAt)
+        try dbWriter.write { db in try r.insert(db) }
     }
 
     public func applyEvent(localId: String, event: MessageEvent) throws -> MessageState? {
@@ -154,6 +156,7 @@ public actor MessagePersistenceActor {
                         cachedLastLineWidth: nil, cachedLineCount: nil,
                         cachedTimestampInline: nil,
                         layoutVersion: 0, layoutMaxWidth: nil,
+                        cachedTimeString: MessageRecord.computeTimeString(for: msg.createdAt),
                         changeVersion: 0
                     )
                     try record.insert(db)

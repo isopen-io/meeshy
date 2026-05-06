@@ -171,6 +171,19 @@ public enum MessageDatabaseMigrations {
                 """)
         }
 
+        migrator.registerMigration("messages_cached_time_string") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "cachedTimeString", .text)
+            }
+            // Backfill existing rows — strftime('%H:%M', createdAt) works because
+            // GRDB stores Date columns as ISO8601 strings ("2026-05-06T14:32:00.000")
+            try db.execute(sql: """
+                UPDATE messages SET cachedTimeString =
+                    strftime('%H:%M', createdAt)
+                WHERE cachedTimeString IS NULL
+                """)
+        }
+
         migrator.registerMigration("msg_v1_messages_fts5") { db in
             // External-content FTS5 — content lives in `messages`, FTS just indexes
             // unicode61 remove_diacritics 2 gives French-aware accent folding:

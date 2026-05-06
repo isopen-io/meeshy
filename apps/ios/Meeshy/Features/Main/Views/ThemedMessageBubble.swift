@@ -871,14 +871,8 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Message Meta (timestamp + delivery status)
 
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-
     private var timeString: String {
-        Self.timeFormatter.string(from: message.createdAt)
+        message.cachedTimeString ?? TimeStringCache.shared.format(message.createdAt)
     }
 
     private var timestampSpacerText: Text {
