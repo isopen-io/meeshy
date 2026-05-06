@@ -3,6 +3,25 @@ import Combine
 import os
 import MeeshySDK
 
+/// Bridge between `StoryPublishQueue` (SDK actor, no UIKit awareness) and the
+/// app's StoryViewModel (which owns the actual TUS upload pipeline + the
+/// in-memory media). Implementers reconstruct an upload from a queue item
+/// and run it to completion.
+///
+/// The protocol stays in the app target because it references types the SDK
+/// can't see (UIImage, the concrete TUS uploader chain). The queue handler
+/// in `StoryPublishService` calls through to whatever object set itself as
+/// the executor — typically the `StoryViewModel` mounted in `RootView`.
+@MainActor
+protocol StoryPublishExecutor: AnyObject, Sendable {
+    /// Runs the upload encoded in the queue item to completion. Must throw
+    /// on retryable failure (network, 5xx) so the queue keeps the item, or
+    /// throw `StoryPublishUnrecoverableError` for permanent failures (4xx,
+    /// missing media, etc.). Returns the server-assigned post id of the
+    /// published story (last slide's id for multi-slide stories).
+    func executeQueuedPublish(item: StoryPublishQueueItem) async throws -> String
+}
+
 /// App-side orchestrator for `StoryPublishQueue`. Owns three responsibilities :
 ///
 ///   1. Registers the publish handler at app startup so the queue can drive
@@ -33,6 +52,11 @@ final class StoryPublishService: ObservableObject {
     /// event + on app foreground). Surface this in the UI for "N en attente"
     /// badges — pattern used by WhatsApp, Telegram for offline messaging.
     @Published private(set) var pendingCount: Int = 0
+
+    /// Executor that actually runs queued uploads. Set by the view that owns
+    /// the StoryViewModel (typically RootView via .onAppear). Held weakly so
+    /// a logout / view-rebuild does not trap stale references.
+    weak var executor: StoryPublishExecutor?
 
     private let logger = Logger(subsystem: "me.meeshy.app", category: "story-publish-service")
     private var cancellables = Set<AnyCancellable>()
@@ -104,16 +128,21 @@ final class StoryPublishService: ObservableObject {
     // MARK: - Handler registration (stub until V3)
 
     private func registerPublishHandler() async {
-        await StoryPublishQueue.shared.setPublishHandler { [weak self] _ in
-            // V2 stub : the real upload flow lives in StoryViewModel and
-            // requires non-trivial state reconstruction (UIImage in-memory
-            // caches, TUS resume offsets, foreground PostMedia ids …).
-            // Throwing a non-Unrecoverable error keeps the item in the
-            // queue with retryCount bumped — the next reconnect or app
-            // foreground will trigger another attempt. When V3 lands,
-            // replace this body with the actual upload logic.
-            self?.logger.warning("StoryPublishQueue handler is in V2 stub mode — item kept for V3")
-            throw StoryPublishV2StubError()
+        await StoryPublishQueue.shared.setPublishHandler { [weak self] item in
+            guard let self else { throw StoryPublishExecutorMissingError() }
+            // The handler runs off the actor — hop to the main actor to
+            // dereference the executor (which is @MainActor-isolated). If
+            // no executor is registered (app boot race, post-logout window
+            // before RootView mounts), throw a retryable error so the
+            // queue preserves the item until the next attempt.
+            let executor: StoryPublishExecutor? = await MainActor.run {
+                self.executor
+            }
+            guard let executor else {
+                self.logger.warning("StoryPublishQueue handler invoked with no executor — keeping item for next attempt")
+                throw StoryPublishExecutorMissingError()
+            }
+            return try await executor.executeQueuedPublish(item: item)
         }
     }
 
@@ -160,12 +189,12 @@ final class StoryPublishService: ObservableObject {
     }
 }
 
-// MARK: - Stub error
+// MARK: - Sentinel errors
 
-/// Marker error thrown by the V2 publish handler stub. The queue treats it
-/// as a generic retryable failure (NOT StoryPublishUnrecoverableError) so
-/// the item is preserved and the retry budget is consumed normally.
-private struct StoryPublishV2StubError: Error {}
+/// Marker error thrown when no executor has been registered yet. Kept
+/// retryable (NOT StoryPublishUnrecoverableError) so the queue preserves
+/// the item until the executor mounts.
+private struct StoryPublishExecutorMissingError: Error {}
 
 // MARK: - UIKit import for foreground notification
 

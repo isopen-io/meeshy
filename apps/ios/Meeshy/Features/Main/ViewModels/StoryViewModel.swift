@@ -5,8 +5,13 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+/// Marker error thrown by `StoryViewModel.executeQueuedPublish` until the
+/// V3 upload reconstruction lands. Retryable so the queue preserves the
+/// item across builds that don't yet have the full implementation.
+struct StoryPublishV3PendingError: Error {}
+
 @MainActor
-class StoryViewModel: ObservableObject {
+class StoryViewModel: ObservableObject, StoryPublishExecutor {
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
     @Published var isPublishing = false
@@ -32,6 +37,51 @@ class StoryViewModel: ObservableObject {
         self.socialSocket = socialSocket
         self.api = api
         observeReconnectionForRetry()
+    }
+
+    // MARK: - StoryPublishExecutor conformance (Pilier 22 V3)
+
+    /// Reconstructs an upload from a queue item and runs it to completion.
+    /// Called by `StoryPublishService` when the queue dequeues an item
+    /// (offline → online transition, app cold start with pending items, ...).
+    ///
+    /// The implementation is intentionally INCOMPLETE in this commit: the
+    /// upload pipeline lives in `launchUploadTask` and uses an in-memory
+    /// `activeUpload: StoryUploadState` state machine plus mutable progress
+    /// tracking. Reusing it from a non-StoryViewModel-driven entry point
+    /// requires :
+    ///
+    ///   1. Decoding the slides payload (Codable) → `[StorySlide]`
+    ///   2. Loading media files from `item.mediaReferences` paths into
+    ///      [String: UIImage] / [String: URL] dictionaries (StoryDraftStore
+    ///      already persists this layout, but the queue item references
+    ///      arbitrary paths chosen at enqueue time — see V3 integration)
+    ///   3. Building a `StoryUploadState` and either :
+    ///      a) calling `publishStoryInBackground(...)` then awaiting
+    ///         `activeUpload` to terminate via `CheckedContinuation`
+    ///      b) extracting the upload-loop body of `launchUploadTask` into
+    ///         a parameter-driven async method that both call sites use
+    ///
+    ///   4. Returning the LAST `publishedPostIds` entry on success, or
+    ///      throwing on permanent failure (`StoryPublishUnrecoverableError`)
+    ///      vs retryable failure (any other Error).
+    ///
+    /// Until that integration is complete, the executor throws a marker
+    /// error so the queue preserves the item and a future build that
+    /// implements the actual upload reconstruction will pick it up. This
+    /// is strictly better than the previous V2 stub : the contract +
+    /// wiring + retry policy are now exercised end-to-end ; only the
+    /// final upload-runner remains.
+    func executeQueuedPublish(item: StoryPublishQueueItem) async throws -> String {
+        Logger.media.info(
+            "executeQueuedPublish called for tempId=\(item.tempStoryId, privacy: .public) — V3 upload reconstruction pending"
+        )
+        // Throwing a non-Unrecoverable error keeps the item in the queue
+        // and bumps retryCount. The queue's exponential backoff schedule
+        // (30s → 2min → 10min → 1h → 2h, max 5 retries) prevents a hot
+        // loop. When the V3 upload reconstruction lands, replace this
+        // throw with the actual upload logic.
+        throw StoryPublishV3PendingError()
     }
 
     // MARK: - Auto-retry on reconnect (SOTA audit Pilier 22, scope A)

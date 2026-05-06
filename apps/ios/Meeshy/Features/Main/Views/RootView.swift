@@ -313,6 +313,13 @@ struct RootView: View {
             // Observe sync events for conversation list
             conversationViewModel.observeSync()
 
+            // Pilier 22 V3 wiring — register the StoryViewModel as the
+            // queue's upload executor. The queue handler delegates here
+            // when items become eligible for retry. Set BEFORE loadStories
+            // so any previously-pending publishes start surfacing toasts
+            // as soon as the user lands on the home screen.
+            StoryPublishService.shared.executor = storyViewModel
+
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
             await conversationViewModel.loadConversations()
