@@ -136,4 +136,40 @@ final class SnapEngineTests: XCTestCase {
         let result = engine.snap(rawTime: 2.0, candidates: [outOfRange, inRange])
         XCTAssertEqual(result.matched, inRange)
     }
+
+    // MARK: - SnapEngine.snap — priority tie-break
+
+    func test_snap_equalDistance_playheadBeatsClipEnd() {
+        let engine = SnapEngine(toleranceSeconds: 1.0)
+        let playhead = SnapCandidate(kind: .playhead,  time: 2.5, label: nil)
+        let clipEnd  = SnapCandidate(kind: .clipEnd,   time: 1.5, label: nil)
+        // rawTime 2.0 is exactly equidistant between both
+        let result = engine.snap(rawTime: 2.0, candidates: [clipEnd, playhead])
+        XCTAssertEqual(result.matched, playhead)
+    }
+
+    func test_snap_equalDistance_clipStartBeatsKeyframe() {
+        let engine = SnapEngine(toleranceSeconds: 1.0)
+        let clipStart = SnapCandidate(kind: .clipStart, time: 2.5, label: nil)
+        let keyframe  = SnapCandidate(kind: .keyframe,  time: 1.5, label: nil)
+        let result = engine.snap(rawTime: 2.0, candidates: [keyframe, clipStart])
+        XCTAssertEqual(result.matched, clipStart)
+    }
+
+    func test_snap_equalDistance_keyframeBeatsGridMajor() {
+        let engine = SnapEngine(toleranceSeconds: 1.0)
+        let keyframe  = SnapCandidate(kind: .keyframe,  time: 2.5, label: nil)
+        let gridMajor = SnapCandidate(kind: .gridMajor, time: 1.5, label: nil)
+        let result = engine.snap(rawTime: 2.0, candidates: [gridMajor, keyframe])
+        XCTAssertEqual(result.matched, keyframe)
+    }
+
+    func test_snap_equalDistance_slideStartBeatsNothingHigher() {
+        let engine = SnapEngine(toleranceSeconds: 1.0)
+        let slideStart = SnapCandidate(kind: .slideStart, time: 2.5, label: nil)
+        let gridMinor  = SnapCandidate(kind: .gridMinor,  time: 1.5, label: nil)
+        // gridMinor priority > slideStart priority
+        let result = engine.snap(rawTime: 2.0, candidates: [slideStart, gridMinor])
+        XCTAssertEqual(result.matched, gridMinor)
+    }
 }

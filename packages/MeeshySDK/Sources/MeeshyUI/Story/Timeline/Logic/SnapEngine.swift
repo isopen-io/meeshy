@@ -61,6 +61,19 @@ public struct SnapEngine: Sendable {
 
 extension SnapEngine {
 
+    /// Higher value = higher priority (wins tie-break at equal distance).
+    /// Order matches spec section 4.1 priority hierarchy.
+    static func priority(for kind: SnapCandidate.Kind) -> Int {
+        switch kind {
+        case .playhead:                return 70
+        case .clipStart, .clipEnd:     return 60
+        case .keyframe:                return 50
+        case .gridMajor:               return 40
+        case .gridMinor:               return 30
+        case .slideStart, .slideEnd:   return 20
+        }
+    }
+
     /// Returns the snapped time and matching candidate (if any).
     ///
     /// - Parameters:
@@ -87,12 +100,19 @@ extension SnapEngine {
         guard !candidates.isEmpty else {
             return SnapResult(snappedTime: rawTime, matched: nil)
         }
-        var best: (candidate: SnapCandidate, distance: Float)?
+        var best: (candidate: SnapCandidate, distance: Float, priority: Int)?
         for c in candidates {
             let d = abs(c.time - rawTime)
             if d > tolerance { continue }
-            if best == nil || d < best!.distance {
-                best = (c, d)
+            let p = priority(for: c.kind)
+            if let cur = best {
+                let isCloser = d < cur.distance - 1e-6
+                let isTieAndHigherPriority = abs(d - cur.distance) <= 1e-6 && p > cur.priority
+                if isCloser || isTieAndHigherPriority {
+                    best = (c, d, p)
+                }
+            } else {
+                best = (c, d, p)
             }
         }
         guard let winner = best?.candidate else {
