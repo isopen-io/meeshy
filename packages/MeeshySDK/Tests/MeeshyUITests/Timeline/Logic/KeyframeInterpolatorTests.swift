@@ -174,4 +174,18 @@ final class KeyframeInterpolatorTests: XCTestCase {
         let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 1.5)
         XCTAssertEqual(result!, 55.0, accuracy: 0.0001 as Float)
     }
+
+    // MARK: - KeyframeInterpolator — exact time hit
+
+    func test_interpolate_exactlyOnInteriorKeyframe_returnsItsValue() {
+        let kfs: [(time: Float, value: Float, easing: StoryEasing)] = [
+            (time: 0.0, value: 0.0,   easing: .linear),
+            (time: 1.0, value: 10.0,  easing: .linear),
+            (time: 2.0, value: 100.0, easing: .linear)
+        ]
+        // At t=1.0 (exactly the second keyframe), expected value is 10
+        // (segment [0,1] gives lo=0,hi=10,u=1.0 -> 10)
+        let result: Float? = KeyframeInterpolator.interpolate(keyframes: kfs, at: 1.0)
+        XCTAssertEqual(result!, 10.0, accuracy: 0.0001 as Float)
+    }
 }
