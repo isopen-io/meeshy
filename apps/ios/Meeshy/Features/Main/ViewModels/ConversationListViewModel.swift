@@ -50,7 +50,7 @@ class ConversationListViewModel: ObservableObject {
     private let autoLoadCap = 1000
     private var currentOffset = 0
     private var cancellables = Set<AnyCancellable>()
-    private var storyPrefetchTask: Task<Void, Never>?
+    var storyPrefetchTask: Task<Void, Never>?
 
     // O(1) conversation lookup by ID
     private var _convIdIndex: [String: Int]?
@@ -764,7 +764,7 @@ class ConversationListViewModel: ObservableObject {
 
     /// Précharge les stories : 2 premières de chaque groupe + 3 premiers groupes complets.
     /// Utilise les DiskCacheStore existants (images/video) avec cache-hit check.
-    private func prefetchRecentStories() {
+    func prefetchRecentStories() {
         storyPrefetchTask?.cancel()
 
         storyPrefetchTask = Task.detached(priority: .utility) { [storyService = self.storyService] in
@@ -870,6 +870,13 @@ class ConversationListViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - Lifecycle
+
+    nonisolated deinit {
+        storyPrefetchTask?.cancel()
+        groupingTask?.cancel()
     }
 
     // MARK: - Helpers
