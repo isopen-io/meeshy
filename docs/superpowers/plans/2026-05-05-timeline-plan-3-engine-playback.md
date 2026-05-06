@@ -3530,6 +3530,476 @@ Expected: SUCCESS.
 
 ---
 
+## Section H — SOTA Patches
+
+> Cette section intègre les recommandations de l'audit SOTA (`docs/superpowers/specs/2026-05-06-timeline-sota-audit.md`) appliquées au moteur de lecture. Les 3 tasks ci-dessous correspondent aux patches P3 (audio low-latency), P10 (instrumentation MetricKit/Instruments) et P5/P1 (compositor Metal extensible). Elles s'exécutent APRÈS la Section G (toutes les autres tasks doivent être vertes avant d'attaquer celles-ci).
+
+### Task H1: Audio low-latency setup (`AVAudioSession.setPreferredIOBufferDuration` + `prepare()` des nodes)
+
+> **Why:** Patch SOTA P3 du rapport d'audit. Sans ces appels, le cold-start audio prend ~100 ms (mesuré sur forum Apple — délai d'allocation des buffers RemoteIO). Cible : latence ~1.5 ms à 64 frames de buffer (5 ms à 256 frames). Combiné avec `prepare()` sur tous les `AVAudioPlayerNode` au moment du `configure`, on supprime le hiccup de premier `play()` après attach.
+
+**Files:**
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift` (ajouter méthode interne `configureAudioSession()` appelée au début de `configure(project:mediaURLs:images:)`)
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/AudioMixer.swift` (ajouter méthode publique `prepareAllNodes()` qui itère sur tous les `AVAudioPlayerNode` et appelle `.prepare(withFrameCount:)`)
+- Create: `packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/AudioLowLatencyTests.swift`
+
+- [ ] **Step 1: Write the failing test**
+
+```swift
+// packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/AudioLowLatencyTests.swift
+import XCTest
+import AVFoundation
+@testable import MeeshyUI
+import MeeshySDK
+
+@MainActor
+final class AudioLowLatencyTests: XCTestCase {
+
+    private func makeProject() -> TimelineProject {
+        TimelineProject(
+            slideId: "low-lat",
+            slideDuration: 5,
+            mediaObjects: [],
+            audioPlayerObjects: [
+                StoryAudioPlayerObject(id: "a1", postMediaId: "pma1")
+            ],
+            textObjects: [],
+            clipTransitions: []
+        )
+    }
+
+    func test_configure_setsPreferredIOBufferDurationTo5ms() async {
+        let mixer = MockAudioMixer()
+        let engine = StoryTimelineEngine(audioMixer: mixer)
+        await engine.configure(project: makeProject(), mediaURLs: [:], images: [:])
+        let actual = AVAudioSession.sharedInstance().preferredIOBufferDuration
+        XCTAssertEqual(actual, 0.005, accuracy: 0.0005,
+                       "Expected preferredIOBufferDuration == 5ms after configure, got \(actual)")
+    }
+
+    func test_configure_callsPrepareAllNodesOnMixer() async {
+        let mixer = MockAudioMixer()
+        let engine = StoryTimelineEngine(audioMixer: mixer)
+        await engine.configure(project: makeProject(), mediaURLs: [:], images: [:])
+        XCTAssertEqual(mixer.prepareAllNodesCallCount, 1,
+                       "Expected mixer.prepareAllNodes() to be called once during configure")
+    }
+}
+```
+
+Add to `MockAudioMixer` (in the existing mocks file):
+```swift
+public private(set) var prepareAllNodesCallCount: Int = 0
+public func prepareAllNodes() { prepareAllNodesCallCount += 1 }
+```
+
+And add to `AudioMixerProviding` protocol:
+```swift
+func prepareAllNodes()
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/AudioLowLatencyTests -quiet`
+Expected: FAIL — `prepareAllNodesCallCount == 0`, `preferredIOBufferDuration` non configuré (valeur système par défaut ~23 ms).
+
+- [ ] **Step 3: Write minimal implementation**
+
+In `StoryTimelineEngine.swift`, add a private method and call it at the very beginning of `configure(project:mediaURLs:images:)`:
+```swift
+private func configureAudioSession() {
+    do {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(
+            .playAndRecord,
+            mode: .default,
+            options: [.mixWithOthers, .defaultToSpeaker]
+        )
+        try session.setPreferredIOBufferDuration(0.005)
+        try session.setActive(true, options: [.notifyOthersOnDeactivation])
+    } catch {
+        logger.error("StoryTimelineEngine audio session setup failed: \(error.localizedDescription)")
+    }
+}
+```
+
+Modify `configure(project:mediaURLs:images:)` to call it BEFORE building the composition and AFTER the mixer configure:
+```swift
+public func configure(
+    project: TimelineProject,
+    mediaURLs: [String: URL],
+    images: [String: UIImage]
+) async {
+    configureAudioSession()
+    // ... existing composition build ...
+    await audioMixer.configure(audios: project.audioPlayerObjects, mediaURLs: mediaURLs)
+    audioMixer.prepareAllNodes()
+    // ... rest of configure ...
+}
+```
+
+In `AudioMixer.swift`, implement:
+```swift
+public func prepareAllNodes() {
+    for node in playerNodes.values {
+        node.prepare(withFrameCount: 4096)
+    }
+}
+```
+
+(adapt `playerNodes.values` to the actual storage name used by `AudioMixer` — it might be `audioNodes` or `nodes` depending on the implementation chosen in Section C).
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/AudioLowLatencyTests -quiet`
+Expected: PASS (2 tests).
+
+Also run the full Engine suite to verify no regression on existing audio mixer tests:
+Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/AudioMixerTests -only-testing:MeeshyUITests/StoryTimelineEngineTests -quiet`
+Expected: ALL PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/AudioMixer.swift packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/AudioLowLatencyTests.swift packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/Mocks/MockAudioMixer.swift
+git commit -m "feat(timeline-engine): audio low-latency setup (5ms IO buffer + node prepare)"
+```
+
+---
+
+### Task H2: `OSSignposter` + `MXSignpostMetric` MetricKit pour profiling SOTA
+
+> **Why:** Patch SOTA P10 du rapport d'audit. Wrap les opérations critiques du moteur (`configure`, `seek`, `recompose`, `applyCommand`) avec `OSSignposter` (iOS 16+) afin de :
+> 1. Visualiser les hot-paths dans Instruments (catégorie `TimelineEngine`)
+> 2. Collecter automatiquement en production via `MXSignpostMetric` MetricKit (le système agrège les durées des intervalles signpostés sur 24h glissantes, sans cost CPU)
+>
+> Zero overhead en release car `OSSignposter` no-op si aucun outil n'écoute.
+
+**Files:**
+- Create: `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/TimelineSignposter.swift`
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift` (wrapper `configure`, `seek`, `recompose` avec signposts)
+- Create: `packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/TimelineSignposterTests.swift`
+
+- [ ] **Step 1: Write the failing test**
+
+```swift
+// packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/TimelineSignposterTests.swift
+import XCTest
+@testable import MeeshyUI
+
+final class TimelineSignposterTests: XCTestCase {
+
+    func test_interval_returnsSyncResult() {
+        let result = TimelineSignposter.interval("test_sync") { 42 }
+        XCTAssertEqual(result, 42)
+    }
+
+    func test_interval_propagatesThrows() {
+        struct E: Error {}
+        XCTAssertThrowsError(try TimelineSignposter.interval("test_throw") { () -> Int in throw E() })
+    }
+
+    func test_intervalAsync_returnsAsyncResult() async {
+        let result = await TimelineSignposter.intervalAsync("test_async") { 7 }
+        XCTAssertEqual(result, 7)
+    }
+
+    func test_intervalAsync_propagatesThrows() async {
+        struct E: Error {}
+        do {
+            _ = try await TimelineSignposter.intervalAsync("test_async_throw") { () async throws -> Int in throw E() }
+            XCTFail("Expected throw")
+        } catch is E {
+            // OK
+        } catch {
+            XCTFail("Wrong error type: \(error)")
+        }
+    }
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/TimelineSignposterTests -quiet`
+Expected: FAIL with "Cannot find 'TimelineSignposter' in scope".
+
+- [ ] **Step 3: Write minimal implementation**
+
+Create `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/TimelineSignposter.swift`:
+```swift
+import Foundation
+import os
+import os.signpost
+
+/// SOTA wrapper around `OSSignposter` (iOS 16+) for hot-path instrumentation of
+/// `StoryTimelineEngine`. All intervals appear in Instruments under the
+/// `TimelineEngine` category, and are automatically aggregated in production via
+/// `MXSignpostMetric` MetricKit reports (24h rolling window, zero CPU overhead
+/// when no profiler is attached).
+///
+/// Usage:
+/// ```swift
+/// await TimelineSignposter.intervalAsync("configure") {
+///     // body
+/// }
+/// ```
+public struct TimelineSignposter {
+    private static let log = OSLog(subsystem: "me.meeshy.app", category: "TimelineEngine")
+    private static let signposter = OSSignposter(logHandle: log)
+
+    /// Wraps a synchronous block in a signpost interval. Re-throws any error.
+    @discardableResult
+    public static func interval<T>(_ name: StaticString, _ work: () throws -> T) rethrows -> T {
+        let state = signposter.beginInterval(name)
+        defer { signposter.endInterval(name, state) }
+        return try work()
+    }
+
+    /// Wraps an async block in a signpost interval. Re-throws any error.
+    @discardableResult
+    public static func intervalAsync<T>(_ name: StaticString, _ work: () async throws -> T) async rethrows -> T {
+        let state = signposter.beginInterval(name)
+        defer { signposter.endInterval(name, state) }
+        return try await work()
+    }
+}
+```
+
+In `StoryTimelineEngine.swift`, wrap the hot-path methods. For `configure`:
+```swift
+public func configure(
+    project: TimelineProject,
+    mediaURLs: [String: URL],
+    images: [String: UIImage]
+) async {
+    await TimelineSignposter.intervalAsync("configure") {
+        configureAudioSession()
+        // ... existing configure body unchanged ...
+    }
+}
+```
+
+For `seek(to:precise:)`:
+```swift
+public func seek(to time: Float, precise: Bool = true) {
+    TimelineSignposter.interval("seek") {
+        // ... existing seek body unchanged ...
+    }
+}
+```
+
+For any internal `recompose()` / `rebuildComposition()` method (if present after Section B/D):
+```swift
+private func recompose() {
+    TimelineSignposter.interval("recompose") {
+        // ... existing body ...
+    }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/TimelineSignposterTests -quiet`
+Expected: PASS (4 tests).
+
+Verify no regression in engine tests:
+Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/StoryTimelineEngineTests -quiet`
+Expected: ALL PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/TimelineSignposter.swift packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/TimelineSignposterTests.swift
+git commit -m "feat(timeline-engine): OSSignposter wrapping for hot-path operations (Instruments + MetricKit)"
+```
+
+---
+
+### Task H3: Stub `CustomTransitionCompositor` Metal pour transitions futures
+
+> **Why:** Patch SOTA P5/P1 du rapport d'audit. Les transitions `crossfade` (opacity ramp natif via `setOpacityRamp`) et `dissolve` (`CIDissolveTransition` via `CIFilter`) sont déjà couvertes par `VideoCompositor` (Section B). Pour les transitions futures `push` / `wipe` / `zoom` / `swipe`, AVFoundation NE PROPOSE PAS d'API native — il faut un `AVVideoCompositing` custom Metal-backed.
+>
+> Cette task pose le squelette dès maintenant pour qu'ajouter un nouveau kind = ajouter un case + un Metal compute kernel, SANS refactor de `VideoCompositor`. Au launch, le compositor custom est registré conditionnellement (uniquement si un `clipTransition.kind` non built-in est présent dans le projet — donc jamais en pratique tant qu'aucune nouvelle kind n'est introduite).
+
+**Files:**
+- Create: `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/CustomTransitionCompositor.swift`
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/VideoCompositor.swift` (router `kind` vers le compositor custom UNIQUEMENT si une transition non built-in est utilisée)
+- Create: `packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/CustomTransitionCompositorTests.swift`
+
+- [ ] **Step 1: Write the failing test**
+
+```swift
+// packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/CustomTransitionCompositorTests.swift
+import XCTest
+import AVFoundation
+@testable import MeeshyUI
+import MeeshySDK
+
+final class CustomTransitionCompositorTests: XCTestCase {
+
+    private func makeProject(transitions: [StoryClipTransition]) -> TimelineProject {
+        TimelineProject(
+            slideId: "compositor-test",
+            slideDuration: 10,
+            mediaObjects: [],
+            audioPlayerObjects: [],
+            textObjects: [],
+            clipTransitions: transitions
+        )
+    }
+
+    func test_makeComposition_withOnlyCrossfade_doesNotRegisterCustomCompositor() {
+        let transitions = [
+            StoryClipTransition(id: "t1", fromClipId: "a", toClipId: "b", at: 1.0, duration: 0.5, kind: .crossfade)
+        ]
+        let project = makeProject(transitions: transitions)
+        let composition = AVMutableComposition()
+        let videoComposition = VideoCompositor.makeComposition(
+            project: project,
+            composition: composition
+        )
+        XCTAssertNil(videoComposition.customVideoCompositorClass,
+                     "Crossfade is built-in (opacity ramp), no custom compositor needed")
+    }
+
+    func test_makeComposition_withOnlyDissolve_doesNotRegisterCustomCompositor() {
+        let transitions = [
+            StoryClipTransition(id: "t1", fromClipId: "a", toClipId: "b", at: 1.0, duration: 0.5, kind: .dissolve)
+        ]
+        let project = makeProject(transitions: transitions)
+        let composition = AVMutableComposition()
+        let videoComposition = VideoCompositor.makeComposition(
+            project: project,
+            composition: composition
+        )
+        XCTAssertNil(videoComposition.customVideoCompositorClass,
+                     "Dissolve uses CIDissolveTransition CIFilter, no custom compositor needed")
+    }
+
+    func test_customCompositor_conformsToAVVideoCompositing() {
+        let compositor = CustomTransitionCompositor()
+        XCTAssertNotNil(compositor.sourcePixelBufferAttributes)
+        XCTAssertFalse(compositor.requiredPixelBufferAttributesForRenderContext.isEmpty)
+    }
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/CustomTransitionCompositorTests -quiet`
+Expected: FAIL with "Cannot find 'CustomTransitionCompositor' in scope".
+
+- [ ] **Step 3: Write minimal implementation**
+
+Create `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/CustomTransitionCompositor.swift`:
+```swift
+import AVFoundation
+import Metal
+import MetalKit
+
+/// Custom `AVVideoCompositing` implementation reserved for future non-opacity
+/// transitions (`push`, `wipe`, `zoom`, `swipe`).
+///
+/// At launch, this compositor is REGISTERED on the `AVMutableVideoComposition`
+/// only when a `StoryClipTransition.kind` falls outside the built-in paths
+/// already handled by `VideoCompositor`:
+/// - `.crossfade` → `setOpacityRamp(...)` (no custom compositor, native AVFoundation)
+/// - `.dissolve`  → `CIDissolveTransition` via `CIFilter` (no custom compositor)
+///
+/// Since both currently-supported kinds are built-in, this compositor is
+/// effectively dormant at launch. Adding a new transition kind = adding a
+/// new case in `startRequest` + a Metal compute kernel. NO refactor of
+/// `VideoCompositor` is required.
+@objc public final class CustomTransitionCompositor: NSObject, AVVideoCompositing {
+
+    public var sourcePixelBufferAttributes: [String: Any]? = [
+        kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
+        kCVPixelBufferMetalCompatibilityKey as String: true,
+    ]
+
+    public var requiredPixelBufferAttributesForRenderContext: [String: Any] = [
+        kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
+        kCVPixelBufferMetalCompatibilityKey as String: true,
+    ]
+
+    private let device: MTLDevice
+    private let commandQueue: MTLCommandQueue
+
+    public override init() {
+        guard let device = MTLCreateSystemDefaultDevice(),
+              let queue = device.makeCommandQueue() else {
+            fatalError("CustomTransitionCompositor: Metal not available on this device")
+        }
+        self.device = device
+        self.commandQueue = queue
+        super.init()
+    }
+
+    public func renderContextChanged(_ newRenderContext: AVVideoCompositionRenderContext) {
+        // No-op for stub. Production transitions will configure render targets,
+        // pixel buffer pools, and Metal textures here.
+    }
+
+    public func startRequest(_ asyncVideoCompositionRequest: AVAsynchronousVideoCompositionRequest) {
+        // STUB: at launch, this compositor is never reached because
+        // `VideoCompositor.makeComposition(...)` only registers it when a
+        // non-built-in `StoryTransitionKind` is present in the project.
+        //
+        // For future kinds (`.push`, `.wipe`, `.zoom`, `.swipe`):
+        //   1. Read source frames via `asyncVideoCompositionRequest.sourceFrame(byTrackID:)`
+        //   2. Allocate destination buffer via `asyncVideoCompositionRequest.renderContext.newPixelBuffer()`
+        //   3. Encode Metal compute kernel for the transition
+        //   4. Call `asyncVideoCompositionRequest.finish(withComposedVideoFrame: outputBuffer)`
+        asyncVideoCompositionRequest.finish(with: NSError(
+            domain: "CustomTransitionCompositor",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "No custom transition kind active at launch"]
+        ))
+    }
+
+    public func cancelAllPendingVideoCompositionRequests() {
+        // No-op for stub.
+    }
+}
+```
+
+In `VideoCompositor.swift`, modify `makeComposition(project:composition:renderSize:)` to conditionally register the custom compositor. Add at the end of the method, BEFORE the `return videoComposition`:
+```swift
+let usesCustomKind = project.clipTransitions.contains { transition in
+    switch transition.kind {
+    case .crossfade, .dissolve:
+        return false
+    // Future cases (push, wipe, zoom, swipe) will be added here AND in
+    // CustomTransitionCompositor.startRequest. Until then, the compositor
+    // remains dormant.
+    @unknown default:
+        return true
+    }
+}
+if usesCustomKind {
+    videoComposition.customVideoCompositorClass = CustomTransitionCompositor.self
+}
+return videoComposition
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/CustomTransitionCompositorTests -quiet`
+Expected: PASS (3 tests).
+
+Verify no regression in `VideoCompositorTests`:
+Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/VideoCompositorTests -quiet`
+Expected: ALL PASS — built-in `crossfade` and `dissolve` still produce `customVideoCompositorClass == nil`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/CustomTransitionCompositor.swift packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/VideoCompositor.swift packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Engine/CustomTransitionCompositorTests.swift
+git commit -m "feat(timeline-engine): CustomTransitionCompositor stub for future push/wipe/zoom transitions (Metal-ready)"
+```
+
+---
+
 ## Récapitulatif
 
 | Section | Tasks | Steps | Description |
@@ -3541,10 +4011,11 @@ Expected: SUCCESS.
 | E | 5 | 25 | `StoryCanvasReaderView` extensions: ReaderTransitionResolver + ReaderKeyframeResolver + wiring (foreground media + text) |
 | F | 3 | 9 | XCTMetric performance baselines |
 | G | 3 | 6 | Final verification & self-review |
+| H | 3 | 15 | SOTA Patches: audio low-latency, OSSignposter/MetricKit, CustomTransitionCompositor stub |
 
-**Total : 36 tasks, 165 steps.**
+**Total : 39 tasks, 180 steps.**
 
-**Effort estimé : 5-7 jours-développeur senior Swift+AVFoundation.**
+**Effort estimé : 5-7 jours-développeur senior Swift+AVFoundation (Sections A-G) + 0.5 jour pour la Section H SOTA.**
 
 ---
 
