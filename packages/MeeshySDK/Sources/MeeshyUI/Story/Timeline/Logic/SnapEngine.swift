@@ -87,8 +87,15 @@ extension SnapEngine {
         guard !candidates.isEmpty else {
             return SnapResult(snappedTime: rawTime, matched: nil)
         }
-        let inRange = candidates.filter { abs($0.time - rawTime) <= tolerance }
-        guard let winner = inRange.first else {
+        var best: (candidate: SnapCandidate, distance: Float)?
+        for c in candidates {
+            let d = abs(c.time - rawTime)
+            if d > tolerance { continue }
+            if best == nil || d < best!.distance {
+                best = (c, d)
+            }
+        }
+        guard let winner = best?.candidate else {
             return SnapResult(snappedTime: rawTime, matched: nil)
         }
         return SnapResult(snappedTime: winner.time, matched: winner)

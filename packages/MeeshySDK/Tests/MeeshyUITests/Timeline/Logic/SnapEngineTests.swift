@@ -116,4 +116,24 @@ final class SnapEngineTests: XCTestCase {
         XCTAssertEqual(result.snappedTime, 3.0, accuracy: 0.0001)
         XCTAssertEqual(result.matched, candidate)
     }
+
+    // MARK: - SnapEngine.snap — nearest
+
+    func test_snap_multipleCandidatesInRange_picksNearest() {
+        let engine = SnapEngine(toleranceSeconds: 1.0)
+        let near = SnapCandidate(kind: .gridMinor, time: 2.1, label: nil)
+        let far  = SnapCandidate(kind: .gridMinor, time: 2.8, label: nil)
+        // Order in array intentionally puts far first to verify that proximity wins, not order.
+        let result = engine.snap(rawTime: 2.0, candidates: [far, near])
+        XCTAssertEqual(result.matched, near)
+        XCTAssertEqual(result.snappedTime, 2.1, accuracy: 0.0001)
+    }
+
+    func test_snap_multipleCandidatesInRange_skipsOutOfRange() {
+        let engine = SnapEngine(toleranceSeconds: 0.3)
+        let outOfRange = SnapCandidate(kind: .gridMajor, time: 1.0, label: nil)
+        let inRange    = SnapCandidate(kind: .gridMinor, time: 2.05, label: nil)
+        let result = engine.snap(rawTime: 2.0, candidates: [outOfRange, inRange])
+        XCTAssertEqual(result.matched, inRange)
+    }
 }
