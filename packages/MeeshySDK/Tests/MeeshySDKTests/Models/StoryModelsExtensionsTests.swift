@@ -567,4 +567,53 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertEqual(decoded.clipId, "v1")
         XCTAssertEqual(decoded.snapshotMedia?.id, "v1")
     }
+
+    // MARK: - MoveClipCommand
+
+    func test_moveClipCommand_apply_changesStartTimeOfMedia() throws {
+        var project = makeEmptyProject()
+        project.mediaObjects = [
+            StoryMediaObject(id: "v1", postMediaId: "pm",
+                             mediaType: "video", placement: "media",
+                             startTime: 1.0, duration: 2.0)
+        ]
+        let cmd = MoveClipCommand(clipId: "v1", kind: .video,
+                                  oldStartTime: 1.0, newStartTime: 3.0)
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects[0].startTime, 3.0)
+    }
+
+    func test_moveClipCommand_revert_restoresOldStartTime() throws {
+        var project = makeEmptyProject()
+        project.audioPlayerObjects = [
+            StoryAudioPlayerObject(id: "a1", postMediaId: "pm",
+                                   placement: "overlay",
+                                   waveformSamples: [],
+                                   startTime: 0.5, duration: 1.0)
+        ]
+        let cmd = MoveClipCommand(clipId: "a1", kind: .audio,
+                                  oldStartTime: 0.5, newStartTime: 2.0)
+        try cmd.apply(to: &project)
+        try cmd.revert(from: &project)
+        XCTAssertEqual(project.audioPlayerObjects[0].startTime, 0.5)
+    }
+
+    func test_moveClipCommand_apply_throwsWhenClipMissing() {
+        var project = makeEmptyProject()
+        let cmd = MoveClipCommand(clipId: "ghost", kind: .text,
+                                  oldStartTime: 0, newStartTime: 1)
+        XCTAssertThrowsError(try cmd.apply(to: &project)) { error in
+            XCTAssertEqual(error as? EditCommandError,
+                           .clipNotFound(id: "ghost"))
+        }
+    }
+
+    func test_moveClipCommand_codableRoundTrip() throws {
+        let cmd = MoveClipCommand(clipId: "v1", kind: .video,
+                                  oldStartTime: 0, newStartTime: 1)
+        let data = try JSONEncoder().encode(cmd)
+        let decoded = try JSONDecoder().decode(MoveClipCommand.self, from: data)
+        XCTAssertEqual(decoded.clipId, "v1")
+        XCTAssertEqual(decoded.newStartTime, 1)
+    }
 }
