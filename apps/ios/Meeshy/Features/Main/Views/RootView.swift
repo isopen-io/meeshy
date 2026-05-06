@@ -711,6 +711,7 @@ struct RootView: View {
                             merged.insert(refreshed, at: 0)
                         }
                         await CacheCoordinator.shared.conversations.save(merged, for: "list")
+                        await SearchIndex.shared.indexConversations([refreshed])
                     }
                 }
                 return

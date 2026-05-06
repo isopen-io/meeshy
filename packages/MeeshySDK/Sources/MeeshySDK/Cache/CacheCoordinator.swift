@@ -163,6 +163,28 @@ public actor CacheCoordinator {
         resolveCurrentUserId()
         loadTranslationCaches()
         subscribeToLifecycle()
+        Task { await self.backfillSearchIndexIfNeeded() }
+    }
+
+    // MARK: - Search Index Backfill
+
+    /// Seeds the FTS5 conversations index from the cache the first time we
+    /// boot a user that has cached data already. Gated by a UserDefaults
+    /// flag so subsequent cold starts skip the work — the per-save hooks
+    /// keep the index live afterwards. Users are NOT backfilled here because
+    /// the `.profiles` store is keyed per-user (no canonical "list" key);
+    /// they get indexed naturally as the user navigates and `UserProfileViewModel`
+    /// calls `SearchIndex.shared.indexUsers` after each fetch.
+    private func backfillSearchIndexIfNeeded() async {
+        let key = "meeshy.searchindex.backfillDone.v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+
+        if let cachedConversations = await conversations.load(for: "list").value,
+           !cachedConversations.isEmpty {
+            await SearchIndex.shared.indexConversations(cachedConversations)
+        }
+
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     /// Tear the coordinator down after logout/account-switch so a subsequent
@@ -199,8 +221,13 @@ public actor CacheCoordinator {
         await video.invalidateAll()
         await thumbnails.invalidateAll()
         await UserColorCache.shared.invalidateAll()
+        await SearchIndex.shared.clearAll()
         // No translation persist task to cancel — persistence is now incremental
         clearTranslationCacheDB()
+
+        // Reset the search-index backfill flag so the next user's first
+        // `start()` re-runs the backfill against their freshly hydrated cache.
+        UserDefaults.standard.removeObject(forKey: "meeshy.searchindex.backfillDone.v1")
 
         // 2. Tear down the coordinator state so the next `start()` re-arms.
         isStarted = false

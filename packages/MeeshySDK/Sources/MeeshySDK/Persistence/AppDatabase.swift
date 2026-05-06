@@ -167,6 +167,11 @@ public final class AppDatabase: @unchecked Sendable {
             try db.create(index: "idx_translation_cache_messageId", on: "translation_cache", columns: ["messageId"])
         }
 
+        // FTS5 indexes for conversations + users — sit alongside cache_entries
+        // so the search index lives in the same database as the data the
+        // GRDBCacheStore persists. Defined in `SearchIndexMigrations`.
+        SearchIndexMigrations.registerAll(in: &migrator)
+
         try migrator.migrate(writer)
     }
 }
