@@ -7,7 +7,7 @@ final class MessageSearchServiceTests: XCTestCase {
     func test_search_returnsMatches_orderedByRelevance() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
-        try pool.write { db in
+        try await pool.write { db in
             try MessageRecordFactory.make(localId: "1", content: "hello world").insert(db)
             try MessageRecordFactory.make(localId: "2", content: "world peace hello").insert(db)
             try MessageRecordFactory.make(localId: "3", content: "unrelated").insert(db)
@@ -22,7 +22,7 @@ final class MessageSearchServiceTests: XCTestCase {
     func test_search_scopedByConversationId() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
-        try pool.write { db in
+        try await pool.write { db in
             try MessageRecordFactory.make(localId: "a", conversationId: "c1", content: "hello").insert(db)
             try MessageRecordFactory.make(localId: "b", conversationId: "c2", content: "hello").insert(db)
         }
@@ -44,7 +44,7 @@ final class MessageSearchServiceTests: XCTestCase {
     func test_search_diacriticsIgnored() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
-        try pool.write { db in
+        try await pool.write { db in
             try MessageRecordFactory.make(localId: "fr", content: "Bonjour à tous").insert(db)
         }
 

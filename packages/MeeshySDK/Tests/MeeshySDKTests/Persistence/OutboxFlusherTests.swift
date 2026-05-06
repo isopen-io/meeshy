@@ -9,7 +9,7 @@ final class OutboxFlusherTests: XCTestCase {
         try MessageDatabaseMigrations.runAll(on: pool)
 
         let now = Date()
-        try pool.write { db in
+        try await pool.write { db in
             try OutboxRecord(
                 id: "1", kind: .sendMessage, conversationId: "c1",
                 payload: Data(), status: .pending, attempts: 0, lastError: nil,
@@ -30,7 +30,7 @@ final class OutboxFlusherTests: XCTestCase {
         let processed = await dispatcher.processedIds
         XCTAssertEqual(processed, ["1", "2"])
 
-        let remaining = try pool.read { db in
+        let remaining = try await pool.read { db in
             try OutboxRecord.filter(Column("status") == OutboxStatus.pending.rawValue).fetchCount(db)
         }
         XCTAssertEqual(remaining, 0)
@@ -41,7 +41,7 @@ final class OutboxFlusherTests: XCTestCase {
         try MessageDatabaseMigrations.runAll(on: pool)
 
         let now = Date()
-        try pool.write { db in
+        try await pool.write { db in
             try OutboxRecord(
                 id: "x", kind: .sendMessage, conversationId: "c1",
                 payload: Data(), status: .pending, attempts: 0, lastError: nil,
@@ -52,7 +52,7 @@ final class OutboxFlusherTests: XCTestCase {
         let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(shouldFail: true))
         await flusher.flush()
 
-        let after = try pool.read { db in
+        let after = try await pool.read { db in
             try OutboxRecord.fetchOne(db, key: "x")!
         }
         XCTAssertEqual(after.attempts, 1)
@@ -66,7 +66,7 @@ final class OutboxFlusherTests: XCTestCase {
         try MessageDatabaseMigrations.runAll(on: pool)
 
         let now = Date()
-        try pool.write { db in
+        try await pool.write { db in
             try OutboxRecord(
                 id: "x", kind: .sendMessage, conversationId: "c1",
                 payload: Data(), status: .pending, attempts: 4, lastError: nil,
@@ -77,7 +77,7 @@ final class OutboxFlusherTests: XCTestCase {
         let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(shouldFail: true))
         await flusher.flush()
 
-        let after = try pool.read { db in
+        let after = try await pool.read { db in
             try OutboxRecord.fetchOne(db, key: "x")!
         }
         XCTAssertEqual(after.status, .exhausted,

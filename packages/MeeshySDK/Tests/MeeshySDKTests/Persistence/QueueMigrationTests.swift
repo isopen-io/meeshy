@@ -36,7 +36,7 @@ final class QueueMigrationTests: XCTestCase {
 
         await OfflineQueue.shared.migrateToOutbox(pool: pool)
 
-        let outboxRecords = try pool.read { db in
+        let outboxRecords = try await pool.read { db in
             try OutboxRecord
                 .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
                 .fetchAll(db)
@@ -61,7 +61,7 @@ final class QueueMigrationTests: XCTestCase {
 
         await OfflineQueue.shared.migrateToOutbox(pool: pool)
 
-        let record = try pool.read { db in
+        let record = try await pool.read { db in
             try OutboxRecord.fetchOne(db, key: "ofq_\(item.id)")
         }
         XCTAssertEqual(record?.conversationId, "conv-abc")
@@ -79,10 +79,10 @@ final class QueueMigrationTests: XCTestCase {
         )
 
         await OfflineQueue.shared.migrateToOutbox(pool: pool)
-        let firstCount = try pool.read { db in try OutboxRecord.fetchCount(db) }
+        let firstCount = try await pool.read { db in try OutboxRecord.fetchCount(db) }
 
         await OfflineQueue.shared.migrateToOutbox(pool: pool)
-        let secondCount = try pool.read { db in try OutboxRecord.fetchCount(db) }
+        let secondCount = try await pool.read { db in try OutboxRecord.fetchCount(db) }
 
         XCTAssertEqual(firstCount, secondCount,
             "Repeated OfflineQueue migration must not duplicate outbox rows")
@@ -103,7 +103,7 @@ final class QueueMigrationTests: XCTestCase {
 
         await MessageRetryQueue.shared.migrateToOutbox(pool: pool)
 
-        let outboxRecords = try pool.read { db in
+        let outboxRecords = try await pool.read { db in
             try OutboxRecord
                 .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
                 .fetchAll(db)
@@ -128,7 +128,7 @@ final class QueueMigrationTests: XCTestCase {
 
         await MessageRetryQueue.shared.migrateToOutbox(pool: pool)
 
-        let record = try pool.read { db in
+        let record = try await pool.read { db in
             try OutboxRecord.fetchOne(db, key: "mrq_\(item.id)")
         }
         XCTAssertEqual(record?.attempts, item.retryCount)
@@ -145,10 +145,10 @@ final class QueueMigrationTests: XCTestCase {
         )
 
         await MessageRetryQueue.shared.migrateToOutbox(pool: pool)
-        let firstCount = try pool.read { db in try OutboxRecord.fetchCount(db) }
+        let firstCount = try await pool.read { db in try OutboxRecord.fetchCount(db) }
 
         await MessageRetryQueue.shared.migrateToOutbox(pool: pool)
-        let secondCount = try pool.read { db in try OutboxRecord.fetchCount(db) }
+        let secondCount = try await pool.read { db in try OutboxRecord.fetchCount(db) }
 
         XCTAssertEqual(firstCount, secondCount,
             "Repeated MessageRetryQueue migration must not duplicate outbox rows")
@@ -169,7 +169,7 @@ final class QueueMigrationTests: XCTestCase {
 
         await MigrateLegacyQueues.migrateOnce(into: pool)
 
-        let count = try pool.read { db in try OutboxRecord.fetchCount(db) }
+        let count = try await pool.read { db in try OutboxRecord.fetchCount(db) }
         XCTAssertGreaterThanOrEqual(count, 2,
             "migrateOnce should migrate items from both queues")
     }
@@ -183,10 +183,10 @@ final class QueueMigrationTests: XCTestCase {
         )
 
         await MigrateLegacyQueues.migrateOnce(into: pool)
-        let firstCount = try pool.read { db in try OutboxRecord.fetchCount(db) }
+        let firstCount = try await pool.read { db in try OutboxRecord.fetchCount(db) }
 
         await MigrateLegacyQueues.migrateOnce(into: pool)
-        let secondCount = try pool.read { db in try OutboxRecord.fetchCount(db) }
+        let secondCount = try await pool.read { db in try OutboxRecord.fetchCount(db) }
 
         XCTAssertEqual(firstCount, secondCount,
             "Repeated migrateOnce must not duplicate outbox rows")
