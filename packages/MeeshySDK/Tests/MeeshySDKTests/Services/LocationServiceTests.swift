@@ -2,6 +2,7 @@ import XCTest
 import Combine
 @testable import MeeshySDK
 
+@MainActor
 final class LocationServiceTests: XCTestCase {
 
     // MARK: - Publisher existence

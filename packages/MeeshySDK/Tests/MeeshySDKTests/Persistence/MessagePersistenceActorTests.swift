@@ -131,12 +131,13 @@ final class MessagePersistenceActorTests: XCTestCase {
     // MARK: - Concurrent Safety
 
     func test_100ConcurrentInserts_noCorruption() async throws {
+        let capturedActor = actor!
         try await withThrowingTaskGroup(of: Void.self) { group in
             for i in 0..<100 {
+                let record = MessageRecordFactory.make(
+                    localId: "concurrent_\(i)", conversationId: "conv_stress")
                 group.addTask {
-                    let record = MessageRecordFactory.make(
-                        localId: "concurrent_\(i)", conversationId: "conv_stress")
-                    try await self.actor.insertOptimistic(record)
+                    try await capturedActor.insertOptimistic(record)
                 }
             }
             try await group.waitForAll()

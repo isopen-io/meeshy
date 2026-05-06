@@ -22,11 +22,10 @@ final class NotificationCoordinatorTests: XCTestCase {
         private let lock = NSLock()
         private var _writes: [Int] = []
         var writes: [Int] {
-            lock.lock(); defer { lock.unlock() }
-            return _writes
+            lock.withLock { _writes }
         }
         func setBadgeCount(_ count: Int) async {
-            lock.lock(); _writes.append(count); lock.unlock()
+            lock.withLock { _writes.append(count) }
         }
     }
 
