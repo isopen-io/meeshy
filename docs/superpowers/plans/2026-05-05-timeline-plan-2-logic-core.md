@@ -1456,7 +1456,13 @@ import MeeshySDK
 /// Persistable snapshot of a CommandStack — written to `{draft}.commands.json`
 /// alongside the draft itself. Versioning is by JSON shape; any new field added
 /// later must be `Optional` + `decodeIfPresent` to preserve forward compat.
-public struct CommandStackSnapshot: Codable, Sendable, Equatable {
+///
+/// NOTE: Originally specced as `Equatable` but Plan 1 shipped `AnyEditCommand`
+/// without `Equatable`, so synthesis is not possible. None of Plan 2's 32
+/// CommandStackTests asserts `==` on snapshots — they compare via individual
+/// fields (commands.count, cursor, JSON round-trip). If Equatable is later
+/// needed, Plan 3+ should add it on `AnyEditCommand` first.
+public struct CommandStackSnapshot: Codable, Sendable {
     public let commands: [AnyEditCommand]
     public let cursor: Int
 
