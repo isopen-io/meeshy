@@ -78,11 +78,16 @@ final class StoryPublishQueueTests: XCTestCase {
     // MARK: - processNext — retryable failure
 
     func test_processNext_retryableFailure_bumpsRetryCount() async {
-        let item = makeItem(visibility: "PUBLIC")
-        await queue.enqueue(item)
-
+        // Set the handler BEFORE enqueuing so the M5 auto-drain trigger in
+        // setPublishHandler does not fire (it only triggers when items is
+        // non-empty at registration time). Without this ordering, the
+        // auto-drain race-conditions with the explicit processNext() and
+        // makes the asserted retryCount non-deterministic across runs.
         struct TransientError: Error {}
         await queue.setPublishHandler { _ in throw TransientError() }
+
+        let item = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(item)
         await queue.processNext()
 
         let pending = await queue.pendingItems
