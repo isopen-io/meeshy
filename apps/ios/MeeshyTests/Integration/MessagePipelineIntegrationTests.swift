@@ -112,6 +112,125 @@ final class MessagePipelineIntegrationTests: XCTestCase {
         store.stopObserving()
     }
 
+    // MARK: - Task 1.4 — persistence-only path (no Path A)
+
+    /// Validates that buffering an incoming message via the persistence actor
+    /// alone (no direct delegate.messages.append) surfaces the row in the store
+    /// within the observation window. This is the invariant that Task 1.4
+    /// enforces: socket handlers write through persistence; views read from store.
+    @MainActor
+    func test_bufferIncoming_surfacesInStore_withoutPathAWrite() async throws {
+        let store = MessageStore(conversationId: "conv_t14_incoming", persistence: actor)
+        store.startObserving(dbPool: dbQueue)
+
+        let incoming = MessagePersistenceActor.IncomingMessageData(
+            id: "t14_msg_001",
+            conversationId: "conv_t14_incoming",
+            senderId: "user_other",
+            content: "hello from socket",
+            createdAt: Date(),
+            computedState: .delivered
+        )
+        await actor.bufferIncoming([incoming])
+        try await Task.sleep(for: .milliseconds(150))
+
+        XCTAssertEqual(store.messages.count, 1, "message must appear in store via observation alone")
+        XCTAssertEqual(store.messages.first?.localId, "t14_msg_001")
+        XCTAssertEqual(store.messages.first?.content, "hello from socket")
+
+        store.stopObserving()
+    }
+
+    /// Validates the reaction append path: appendReaction writes to GRDB, the
+    /// store observation fires, and the updated reactionsJson is visible.
+    @MainActor
+    func test_appendReaction_surfacesInStore() async throws {
+        let store = MessageStore(conversationId: "conv_t14_react", persistence: actor)
+        store.startObserving(dbPool: dbQueue)
+
+        let record = MessageRecordFactory.make(
+            localId: "t14_react_001", conversationId: "conv_t14_react")
+        try await actor.insertOptimistic(record)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(store.messages.count, 1)
+
+        try await actor.appendReaction(
+            localId: "t14_react_001",
+            reactionId: "rxn_001",
+            messageId: "t14_react_001",
+            participantId: "user_a",
+            emoji: "❤️"
+        )
+        try await Task.sleep(for: .milliseconds(100))
+
+        let reactionsJson = store.messages.first?.reactionsJson
+        XCTAssertNotNil(reactionsJson, "reactionsJson must be updated in store")
+        let reactions = try JSONDecoder().decode([MeeshyReaction].self, from: reactionsJson!)
+        XCTAssertEqual(reactions.count, 1)
+        XCTAssertEqual(reactions.first?.emoji, "❤️")
+        XCTAssertEqual(reactions.first?.participantId, "user_a")
+
+        store.stopObserving()
+    }
+
+    /// Validates the reaction remove path: removeReaction writes to GRDB, the
+    /// store observation fires, and the reaction is gone.
+    @MainActor
+    func test_removeReaction_surfacesInStore() async throws {
+        let store = MessageStore(conversationId: "conv_t14_rmreact", persistence: actor)
+        store.startObserving(dbPool: dbQueue)
+
+        let record = MessageRecordFactory.make(
+            localId: "t14_rmreact_001", conversationId: "conv_t14_rmreact")
+        try await actor.insertOptimistic(record)
+        try await actor.appendReaction(
+            localId: "t14_rmreact_001",
+            reactionId: "rxn_001",
+            messageId: "t14_rmreact_001",
+            participantId: "user_a",
+            emoji: "👍"
+        )
+        try await Task.sleep(for: .milliseconds(100))
+
+        try await actor.removeReaction(
+            localId: "t14_rmreact_001",
+            emoji: "👍",
+            participantId: "user_a"
+        )
+        try await Task.sleep(for: .milliseconds(100))
+
+        let reactionsJson = store.messages.first?.reactionsJson
+        let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                         from: reactionsJson ?? Data())) ?? []
+        XCTAssertEqual(reactions.count, 0, "reaction must be removed in store")
+
+        store.stopObserving()
+    }
+
+    /// Validates the touchUpdatedAt path: bumping updatedAt triggers store
+    /// observation so attachment-status events surface without a Path A write.
+    @MainActor
+    func test_touchUpdatedAt_triggersStoreObservation() async throws {
+        let store = MessageStore(conversationId: "conv_t14_touch", persistence: actor)
+        store.startObserving(dbPool: dbQueue)
+
+        let record = MessageRecordFactory.make(
+            localId: "t14_touch_001", conversationId: "conv_t14_touch",
+            changeVersion: 0)
+        try await actor.insertOptimistic(record)
+        try await Task.sleep(for: .milliseconds(100))
+        let initialVersion = store.messages.first?.changeVersion ?? 0
+
+        try await actor.touchUpdatedAt(localId: "t14_touch_001")
+        try await Task.sleep(for: .milliseconds(100))
+
+        let newVersion = store.messages.first?.changeVersion ?? 0
+        XCTAssertGreaterThan(newVersion, initialVersion,
+                             "changeVersion must increment after touchUpdatedAt")
+
+        store.stopObserving()
+    }
+
     func test_100ConcurrentInserts_allPersisted() async throws {
         try await withThrowingTaskGroup(of: Void.self) { group in
             for i in 0..<100 {

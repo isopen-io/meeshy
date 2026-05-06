@@ -21,6 +21,21 @@ struct MessageTranslation: Identifiable {
 // MessageTranscription, MessageTranscriptionSegment, MessageTranslatedAudio
 // are defined in MeeshySDK.TranscriptionModels — use those directly.
 
+// MARK: - ConversationDependencies
+
+struct ConversationDependencies {
+    let dbPool: any DatabaseWriter
+    let persistence: MessagePersistenceActor
+
+    @MainActor
+    static var live: ConversationDependencies {
+        ConversationDependencies(
+            dbPool: DependencyContainer.shared.dbPool,
+            persistence: DependencyContainer.shared.messagePersistence
+        )
+    }
+}
+
 @MainActor
 class ConversationViewModel: ObservableObject {
 
@@ -28,24 +43,38 @@ class ConversationViewModel: ObservableObject {
 
     @Published var messages: [Message] = [] {
         didSet {
-            let structureChanged = messages.count != oldValue.count
+            invalidateCaches(previousMessages: oldValue)
+        }
+    }
+
+    // MARK: - Cache Invalidation
+
+    /// Invalidates all derived caches that depend on `messages`.
+    /// Called both from the `messages.didSet` observer (legacy pipeline) and
+    /// from the MessageStore observation subscription (GRDB pipeline).
+    private func invalidateCaches(previousMessages: [Message]? = nil) {
+        let structureChanged: Bool
+        if let oldValue = previousMessages {
+            structureChanged = messages.count != oldValue.count
                 || messages.first?.id != oldValue.first?.id
                 || messages.last?.id != oldValue.last?.id
+        } else {
+            structureChanged = true
+        }
 
-            _messageIdIndex = nil
-            _cachedLastReceivedIndex = nil
+        _messageIdIndex = nil
+        _cachedLastReceivedIndex = nil
 
-            if structureChanged {
-                _messagesByDate = nil
-                _topActiveMembers = nil
-                _mediaSenderInfoMap = nil
-                _allVisualAttachments = nil
-                _mediaCaptionMap = nil
-                _allAudioItems = nil
-                _replyCountMap = nil
-                _mentionDisplayNames = nil
-                _mentionCandidates = nil
-            }
+        if structureChanged {
+            _messagesByDate = nil
+            _topActiveMembers = nil
+            _mediaSenderInfoMap = nil
+            _allVisualAttachments = nil
+            _mediaCaptionMap = nil
+            _allAudioItems = nil
+            _replyCountMap = nil
+            _mentionDisplayNames = nil
+            _mentionCandidates = nil
         }
     }
 
@@ -414,16 +443,19 @@ class ConversationViewModel: ObservableObject {
     private var nextMessageCursor: String?
     private var cancellables = Set<AnyCancellable>()
     private var messagesPersistCancellable: AnyCancellable?
+    /// Subscription that mirrors `MessageStore.messagesDidChange` into the
+    /// `messages` array.  Established once in `init` after `messageStore` is ready.
+    private var storeObservation: AnyCancellable?
     private var socketHandler: ConversationSocketHandler?
 
     // MARK: - GRDB Persistence (additive — parallel data source alongside @Published messages)
 
     /// GRDB-backed observable store for UICollectionView bridge.
-    /// Set via `setupPersistence(store:persistence:dbPool:)`.
-    private(set) var messageStore: MessageStore?
+    /// Created eagerly in init so it is available at first paint.
+    private(set) var messageStore: MessageStore
 
     /// Actor for optimistic inserts and state-machine transitions.
-    private(set) var messagePersistence: MessagePersistenceActor?
+    private(set) var messagePersistence: MessagePersistenceActor
     private var lastOlderPaginationTime: Date = .distantPast
     private var lastNewerPaginationTime: Date = .distantPast
     private static let paginationDebounceInterval: TimeInterval = 1.0
@@ -438,6 +470,7 @@ class ConversationViewModel: ObservableObject {
     private let syncEngine: ConversationSyncEngineProviding
     private let mentionService: MentionServiceProviding
     private var mentionDebounceTask: Task<Void, Never>?
+    private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
     private static let mentionDebounceMs: UInt64 = 300_000_000
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
@@ -635,7 +668,8 @@ class ConversationViewModel: ObservableObject {
         reactionService: ReactionServiceProviding = ReactionService.shared,
         reportService: ReportServiceProviding = ReportService.shared,
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
-        mentionService: MentionServiceProviding = MentionService.shared
+        mentionService: MentionServiceProviding = MentionService.shared,
+        dependencies: ConversationDependencies = .live
     ) {
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
@@ -650,12 +684,22 @@ class ConversationViewModel: ObservableObject {
         self.reportService = reportService
         self.syncEngine = syncEngine
         self.mentionService = mentionService
+        // Eagerly create GRDB persistence so messageStore is available at first paint.
+        self.messagePersistence = dependencies.persistence
+        let store = MessageStore(
+            conversationId: conversationId,
+            persistence: dependencies.persistence
+        )
+        self.messageStore = store
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: authManager.currentUser?.id ?? ""
         )
         handler.delegate = self
+        handler.persistence = dependencies.persistence
         self.socketHandler = handler
+        store.startObserving(dbPool: dependencies.dbPool)
+        Task { await store.loadInitial() }
         messagesPersistCancellable = $messages
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
@@ -665,6 +709,7 @@ class ConversationViewModel: ObservableObject {
                 // optimistic rows land in cache under their server ids.
                 Task { [weak self] in await self?.persistMessagesUsingServerIds() }
             }
+        subscribeToMessageStore()
         subscribeToQueueReconciliation()
         subscribeToLanguagePreferenceChanges()
         if let session = anonymousSession {
@@ -673,32 +718,54 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Persistence Setup
-
-    /// Wire up the GRDB-backed message store and persistence actor.
-    /// Called from the view layer once `DependencyContainer` is available.
-    /// This is ADDITIVE — the existing `@Published var messages` stays as
-    /// the primary data source for the SwiftUI path; `MessageStore` powers
-    /// the UIKit `MessageListView` bridge in parallel.
-    func setupPersistence(store: MessageStore, persistence: MessagePersistenceActor, dbPool: any DatabaseWriter) {
-        self.messageStore = store
-        self.messagePersistence = persistence
-        store.startObserving(dbPool: dbPool)
-        socketHandler?.persistence = persistence
-    }
-
     /// Reconcile optimistic messages with their server-assigned ids when the
     /// OfflineQueue or MessageRetryQueue finally lands the send, and flip rows
     /// to `.failed` when the retry budget is exhausted. Without this mapping a
     /// `message:new` socket broadcast arrives with an unknown id and the
     /// optimistic row would stay stuck in `.sending` forever while a duplicate
     /// appears.
+    // MARK: - MessageStore Observation (Task 1.3)
+
+    /// Subscribes to `messageStore.messagesDidChange` so that GRDB-driven
+    /// inserts/updates (optimistic sends, offline queue reconciliation) are
+    /// reflected in `messages` without an explicit assignment at the call site.
+    ///
+    /// When the store emits a change, this method maps the `[MessageRecord]`
+    /// snapshot to `[MeeshyMessage]`, replaces `messages`, and calls
+    /// `objectWillChange` so SwiftUI re-renders.
+    private func subscribeToMessageStore() {
+        storeObservation = messageStore.messagesDidChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                let userId = self.currentUserId
+                let previousCount = self.messages.count
+                let mapped = self.messageStore.messages.map { $0.toMessage(currentUserId: userId) }
+                self.objectWillChange.send()
+                self.messages = mapped
+                // Increment scroll-to-bottom counter when an optimistic send
+                // surfaces via store observation (replaces the former increment
+                // that sat next to messages.append in sendMessage).
+                if mapped.count > previousCount {
+                    self.newMessageAppended += 1
+                }
+            }
+    }
+
     private func subscribeToQueueReconciliation() {
         OfflineQueue.shared.retrySucceeded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
-                self.reconcileQueuedSend(tempId: payload.tempId, serverId: payload.serverId)
+                pendingServerIds[payload.tempId] = payload.serverId
+                let localId = payload.tempId
+                let serverId = payload.serverId
+                Task { [weak self] in
+                    _ = try? await self?.messagePersistence.applyEvent(
+                        localId: localId,
+                        event: .serverAck(serverId: serverId, at: Date())
+                    )
+                }
             }
             .store(in: &cancellables)
 
@@ -706,7 +773,15 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
-                self.reconcileQueuedSend(tempId: payload.tempId, serverId: payload.serverId)
+                pendingServerIds[payload.tempId] = payload.serverId
+                let localId = payload.tempId
+                let serverId = payload.serverId
+                Task { [weak self] in
+                    _ = try? await self?.messagePersistence.applyEvent(
+                        localId: localId,
+                        event: .serverAck(serverId: serverId, at: Date())
+                    )
+                }
             }
             .store(in: &cancellables)
 
@@ -714,8 +789,13 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
-                guard let idx = self.messageIndex(for: payload.tempId) else { return }
-                self.messages[idx].deliveryStatus = .failed
+                let localId = payload.tempId
+                Task { [weak self] in
+                    _ = try? await self?.messagePersistence.applyEvent(
+                        localId: localId,
+                        event: .retryExhausted
+                    )
+                }
             }
             .store(in: &cancellables)
 
@@ -727,19 +807,24 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
-                guard let idx = self.messageIndex(for: payload.messageId) else { return }
                 let participantId = self._resolvedParticipantId ?? self.currentUserId
+                let localId = payload.messageId
+                let emoji = payload.emoji
                 switch payload.action {
                 case .add:
-                    self.messages[idx].reactions.removeAll {
-                        $0.emoji == payload.emoji && $0.participantId == participantId
+                    // Optimistic add failed permanently — remove the reaction we wrote
+                    Task { [weak self] in
+                        try? await self?.messagePersistence.removeReaction(
+                            localId: localId, emoji: emoji, participantId: participantId
+                        )
                     }
                 case .remove:
-                    if !self.messages[idx].reactions.contains(where: {
-                        $0.emoji == payload.emoji && $0.participantId == participantId
-                    }) {
-                        self.messages[idx].reactions.append(
-                            Reaction(messageId: payload.messageId, participantId: participantId, emoji: payload.emoji)
+                    // Optimistic remove failed permanently — restore the reaction we erased
+                    let remoteId = self.serverId(for: localId)
+                    Task { [weak self] in
+                        try? await self?.messagePersistence.appendReaction(
+                            localId: localId, reactionId: UUID().uuidString,
+                            messageId: remoteId, participantId: participantId, emoji: emoji
                         )
                     }
                 }
@@ -760,14 +845,6 @@ class ConversationViewModel: ObservableObject {
                 self?._cachedPreferredLanguagesUserId = nil
             }
             .store(in: &cancellables)
-    }
-
-    private func reconcileQueuedSend(tempId: String, serverId: String) {
-        guard let idx = messageIndex(for: tempId) else { return }
-        messages[idx].deliveryStatus = .sent
-        // The socket handler now matches on `pendingServerIds.value == apiMsg.id`
-        // and performs the atomic id swap when `message:new` arrives.
-        pendingServerIds[tempId] = serverId
     }
 
     deinit {
@@ -1139,33 +1216,21 @@ class ConversationViewModel: ObservableObject {
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
         guard isDirect else { return }
 
-        await withTaskGroup(of: (Int, String?).self) { group in
-            for i in 0..<msgs.count {
-                let msg = msgs[i]
-                if msg.isEncrypted, !msg.senderId.isEmpty, !msg.content.isEmpty, let data = Data(base64Encoded: msg.content) {
-                    let senderId = msg.senderId
-                    let msgId = msg.id
-                    group.addTask {
-                        CryptoSignposts.beginDecrypt(messageId: msgId)
-                        do {
-                            let decrypted = try await SessionManager.shared.decryptMessage(data, from: senderId)
-                            CryptoSignposts.endDecrypt(messageId: msgId, bytes: decrypted.count)
-                            if let text = String(data: decrypted, encoding: .utf8) {
-                                return (i, text)
-                            }
-                        } catch {
-                            CryptoSignposts.endDecrypt(messageId: msgId, bytes: 0)
-                            return (i, "[Message chiffré - Échec du déchiffrement]")
-                        }
-                        return (i, nil)
-                    }
-                }
-            }
+        let payloads: [DecryptionPayload] = msgs.compactMap { msg in
+            guard msg.isEncrypted, !msg.senderId.isEmpty,
+                  !msg.content.isEmpty,
+                  let data = Data(base64Encoded: msg.content)
+            else { return nil }
+            return DecryptionPayload(messageId: msg.id, senderId: msg.senderId, ciphertext: data)
+        }
+        guard !payloads.isEmpty else { return }
 
-            for await result in group {
-                if let text = result.1 {
-                    msgs[result.0].content = text
-                }
+        let results = await decryptionActor.decrypt(payloads)
+        let resultsByMessageId = Dictionary(uniqueKeysWithValues: results.map { ($0.messageId, $0) })
+
+        for i in msgs.indices {
+            if let plaintext = resultsByMessageId[msgs[i].id]?.plaintext {
+                msgs[i].content = plaintext
             }
         }
     }
@@ -1306,53 +1371,10 @@ class ConversationViewModel: ObservableObject {
             case .location: return .location
             }
         }()
+        // GRDB optimistic insert — the store observation surfaces the row in `messages`
+        // automatically (Task 1.5: no direct messages.append here).
         if existingTempId == nil {
-            let optimisticMessage = Message(
-                id: tempId,
-                conversationId: conversationId,
-                senderId: currentUserId,
-                content: text,
-                messageType: optimisticMessageType,
-                replyToId: replyToId,
-                storyReplyToId: storyReplyToId,
-                forwardedFromId: forwardedFromId,
-                forwardedFromConversationId: forwardedFromConversationId,
-                expiresAt: resolvedExpiresAt,
-                effects: {
-                    var e = pendingEffects
-                    if resolvedIsViewOnce { e.flags.insert(.viewOnce) }
-                    if resolvedBlur == true { e.flags.insert(.blurred) }
-                    if resolvedExpiresAt != nil { e.flags.insert(.ephemeral) }
-                    return e
-                }(),
-                maxViewOnceCount: resolvedMaxViewOnceCount,
-                viewOnceCount: 0,
-                createdAt: Date(),
-                updatedAt: Date(),
-                attachments: resolvedAttachments,
-                replyTo: replyRef,
-                deliveryStatus: .sending,
-                isMe: true
-            )
-            messages.append(optimisticMessage)
-            newMessageAppended += 1
-
-            // Persister le message optimiste en cache pour qu'il survive
-            // si l'utilisateur quitte la conversation avant la confirmation serveur.
-            let convId = conversationId
-            let snapshot = messages
-            Task.detached(priority: .utility) {
-                await CacheCoordinator.shared.messages.mergeUpdate(for: convId) { cached in
-                    let cachedIds = Set(cached.map(\.id))
-                    let newOnly = snapshot.filter { !cachedIds.contains($0.id) }
-                    guard !newOnly.isEmpty else { return cached }
-                    return (cached + newOnly).sorted { $0.createdAt < $1.createdAt }
-                }
-            }
-        }
-
-        // GRDB optimistic insert (parallel persistence path)
-        if let persistence = messagePersistence, existingTempId == nil {
+            let persistence = messagePersistence
             let optimisticRecord = MessageRecord(
                 localId: tempId, serverId: nil,
                 conversationId: conversationId, senderId: currentUserId,
@@ -1365,7 +1387,7 @@ class ConversationViewModel: ObservableObject {
                 replyToId: replyToId, storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
-                replyToJson: nil, forwardedFromJson: nil,
+                replyToJson: replyRef.flatMap { try? JSONEncoder().encode($0) }, forwardedFromJson: nil,
                 expiresAt: resolvedExpiresAt, effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : 0,
                 maxViewOnceCount: resolvedMaxViewOnceCount, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
@@ -1430,34 +1452,25 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId, request: body
             )
 
-            // Marquer comme envoyé sans changer l'id — évite le flash SwiftUI
-            // (ForEach utilise message.id comme clé, un changement d'id cause un
-            // unmount/remount du composant). Le remplacement complet se fera
-            // atomiquement quand message:new arrivera via le socket handler.
-            if let idx = messageIndex(for: tempId) {
-                messages[idx].deliveryStatus = .sent
-                messages[idx].updatedAt = responseData.createdAt
-                pendingServerIds[tempId] = responseData.id
-            }
+            // Register tempId → serverId mapping so the socket handler can reconcile
+            // the `message:new` broadcast without creating a duplicate row.
+            // UI update (sent state) flows through persistence → store observation.
+            pendingServerIds[tempId] = responseData.id
 
-            // GRDB server ack (parallel persistence path)
-            if let persistence = messagePersistence {
-                _ = try? await persistence.applyEvent(
-                    localId: tempId,
-                    event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
-                )
-            }
+            // GRDB server ack — state machine transitions to .sent; store observation
+            // surfaces the change to the view without a direct messages[idx] write.
+            _ = try? await messagePersistence.applyEvent(
+                localId: tempId,
+                event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
+            )
 
             // Move conversation to top of list immediately (optimistic)
             let convId = conversationId
             let msgContent = text
             let msgTime = responseData.createdAt
 
-            // Persist with the authoritative server id so that a future
-            // cold-start REST fetch reconciles without duplicate `temp_…`
-            // / server-id pairs. The in-memory `messages[idx].id` stays as
-            // `tempId` so SwiftUI ForEach keeps a stable key (no flash when
-            // the socket broadcast arrives — see ConversationSocketHandler).
+            // Persist the server-id mapping so that a future cold-start REST fetch
+            // reconciles without duplicate `temp_…` / server-id pairs.
             Task { [weak self] in
                 await self?.persistMessagesUsingServerIds()
             }
@@ -1487,17 +1500,13 @@ class ConversationViewModel: ObservableObject {
             isSending = false
             return true
         } catch {
-            // Mark optimistic message as sending (retry in progress)
-            if let idx = messageIndex(for: tempId) {
-                messages[idx].deliveryStatus = .sending
-            }
-
-            // Persist with the `sending` status so the bubble (with its clock
-            // glyph) survives navigation. The tempId stays in cache because
-            // no server id exists yet — it will be swapped in when
-            // `MessageRetryQueue.retrySucceeded` fires or the row flips to
-            // `.failed` via `retryExhausted`.
-            Task { [weak self] in await self?.persistMessagesUsingServerIds() }
+            // Apply sendFailed — state machine increments retryCount and transitions
+            // to .queued (retries remaining) or .failed (budget exhausted).
+            // The store observation surfaces the updated state to the view.
+            _ = try? await messagePersistence.applyEvent(
+                localId: tempId,
+                event: .sendFailed(error)
+            )
 
             // Enqueue for persistent auto-retry (5 attempts × 10s interval).
             // Pass the optimistic tempId so `MessageRetryQueue.retrySucceeded`
@@ -1650,7 +1659,11 @@ class ConversationViewModel: ObservableObject {
         let remoteId = serverId(for: messageId)
 
         if alreadyReacted {
-            messages[idx].reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
+            Task { [weak self] in
+                try? await self?.messagePersistence.removeReaction(
+                    localId: messageId, emoji: emoji, participantId: participantId
+                )
+            }
             let item = ReactionQueueItem(
                 messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
             )
@@ -1659,8 +1672,13 @@ class ConversationViewModel: ObservableObject {
                 await ReactionQueue.shared.retryAll()
             }
         } else {
-            let reaction = Reaction(messageId: remoteId, participantId: participantId, emoji: emoji)
-            messages[idx].reactions.append(reaction)
+            let reactionId = UUID().uuidString
+            Task { [weak self] in
+                try? await self?.messagePersistence.appendReaction(
+                    localId: messageId, reactionId: reactionId,
+                    messageId: remoteId, participantId: participantId, emoji: emoji
+                )
+            }
             let item = ReactionQueueItem(
                 messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
             )
@@ -1717,26 +1735,22 @@ class ConversationViewModel: ObservableObject {
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
         switch mode {
         case .local:
-            // Optimistic: hide locally and rebuild the date groups without
-            // this message. Reversible via LocallyHiddenMessagesStore so an
-            // "Undo" affordance could reinstate the row without a network
-            // round-trip.
+            // Optimistic: hide locally. LocallyHiddenMessagesStore persists
+            // the hidden id; messagesByDate filters it out on next evaluation.
+            // Reversible — an "Undo" affordance can call .unhide(messageId)
+            // without any network round-trip.
             LocallyHiddenMessagesStore.shared.hide(messageId)
-            if let idx = messageIndex(for: messageId) {
-                messages.remove(at: idx)
-            }
+            // Invalidate the date-group cache so the next messagesByDate
+            // recomputes without the hidden row.
+            _messagesByDate = nil
         case .everyone:
             // Optimistic: mark as deleted locally + blank content
-            if let idx = messageIndex(for: messageId) {
-                messages[idx].deletedAt = Date()
-                messages[idx].content = ""
-            }
+            try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
             do {
                 try await messageService.delete(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
-                if let idx = messageIndex(for: messageId) {
-                    messages[idx].deletedAt = nil
-                }
+                // Rollback: restore the message to a non-deleted state
+                try? await messagePersistence.markUndeleted(localId: messageId)
                 self.error = error.localizedDescription
             }
         }
@@ -1756,17 +1770,18 @@ class ConversationViewModel: ObservableObject {
             return
         }
 
-        // Optimistic: remove attachment from local message
-        let originalAttachments = messages[msgIdx].attachments
-        messages[msgIdx].attachments.removeAll { $0.id == attachmentId }
+        // Optimistic: remove attachment from local message via persistence
+        let originalAttachments = message.attachments
+        let updatedAttachments = originalAttachments.filter { $0.id != attachmentId }
+        let updatedJson = try? JSONEncoder().encode(updatedAttachments)
+        try? await messagePersistence.updateAttachmentsJson(localId: messageId, attachmentsJson: updatedJson)
 
         do {
             try await AttachmentService.shared.delete(attachmentId: attachmentId)
         } catch {
             // Revert on failure
-            if let idx = messageIndex(for: messageId) {
-                messages[idx].attachments = originalAttachments
-            }
+            let originalJson = try? JSONEncoder().encode(originalAttachments)
+            try? await messagePersistence.updateAttachmentsJson(localId: messageId, attachmentsJson: originalJson)
             self.error = error.localizedDescription
         }
     }
@@ -1776,31 +1791,31 @@ class ConversationViewModel: ObservableObject {
     func togglePin(messageId: String) async {
         guard let idx = messageIndex(for: messageId) else { return }
         let wasPinned = messages[idx].pinnedAt != nil
+        let previousPinnedAt = messages[idx].pinnedAt
+        let previousPinnedBy = messages[idx].pinnedBy
 
         if wasPinned {
             // Optimistic unpin
-            messages[idx].pinnedAt = nil
-            messages[idx].pinnedBy = nil
+            try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: nil, pinnedBy: nil)
 
             do {
                 try await messageService.unpin(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
                 // Revert
-                messages[idx].pinnedAt = Date()
+                try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: previousPinnedAt, pinnedBy: previousPinnedBy)
                 self.error = error.localizedDescription
             }
         } else {
             // Optimistic pin
             let now = Date()
-            messages[idx].pinnedAt = now
-            messages[idx].pinnedBy = authManager.currentUser?.id
+            let pinnedById = authManager.currentUser?.id
+            try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: now, pinnedBy: pinnedById)
 
             do {
                 try await messageService.pin(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
                 // Revert
-                messages[idx].pinnedAt = nil
-                messages[idx].pinnedBy = nil
+                try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: nil, pinnedBy: nil)
                 self.error = error.localizedDescription
             }
         }
@@ -1813,9 +1828,7 @@ class ConversationViewModel: ObservableObject {
             let result = try await messageService.consumeViewOnce(
                 conversationId: conversationId, messageId: serverId(for: messageId)
             )
-            if let idx = messageIndex(for: messageId) {
-                messages[idx].viewOnceCount = result.viewOnceCount
-            }
+            try? await messagePersistence.updateViewOnceCount(localId: messageId, count: result.viewOnceCount)
             return true
         } catch {
             self.error = error.localizedDescription
@@ -1836,9 +1849,11 @@ class ConversationViewModel: ObservableObject {
     }
 
     func markMessageAsConsumed(messageId: String) {
-        guard let idx = messageIndex(for: messageId) else { return }
-        messages[idx].isBlurred = true
-        messages[idx].content = "[Message vu]"
+        // Write through persistence; the store observation will surface the
+        // updated effectFlags (blurred) and cleared content to the view.
+        Task { [weak self] in
+            try? await self?.messagePersistence.markConsumed(localId: messageId)
+        }
     }
 
     // MARK: - Edit Message
@@ -1847,21 +1862,23 @@ class ConversationViewModel: ObservableObject {
         let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        // Optimistic update — snapshot the prior content so we can revert on
-        // failure AND record it in the edit history store for the "View
-        // edits" affordance (the backend does not expose edit history).
-        var originalContent: String?
-        if let idx = messageIndex(for: messageId) {
-            originalContent = messages[idx].content
-            if messages[idx].content != trimmed {
-                EditHistoryStore.shared.recordRevision(
-                    messageId: serverId(for: messageId),
-                    previousContent: messages[idx].content
-                )
-            }
-            messages[idx].content = trimmed
-            messages[idx].isEdited = true
+        // Snapshot original content for rollback and edit history before
+        // writing the optimistic update through persistence.
+        let originalContent: String? = messageIndex(for: messageId).map { messages[$0].content }
+
+        // Record history entry before overwriting (the backend does not
+        // expose edit history, so we maintain it locally).
+        if let original = originalContent, original != trimmed {
+            EditHistoryStore.shared.recordRevision(
+                messageId: serverId(for: messageId),
+                previousContent: original
+            )
         }
+
+        // Optimistic update: write through persistence so the store
+        // observation surfaces the change without a direct messages mutation.
+        let editedAt = Date()
+        try? await messagePersistence.markEdited(localId: messageId, newContent: trimmed, editedAt: editedAt)
 
         editInProgress.insert(messageId)
         defer { editInProgress.remove(messageId) }
@@ -1869,13 +1886,11 @@ class ConversationViewModel: ObservableObject {
         do {
             _ = try await messageService.edit(messageId: serverId(for: messageId), content: trimmed)
         } catch {
-            // Revert on failure — both the in-memory content AND the history
+            // Revert on failure — both the persisted content AND the history
             // entry we just wrote (so the user doesn't see a phantom
             // revision that never actually reached the server).
-            if let idx = messageIndex(for: messageId),
-               let original = originalContent {
-                messages[idx].content = original
-                messages[idx].isEdited = false
+            if let original = originalContent {
+                try? await messagePersistence.markEdited(localId: messageId, newContent: original, editedAt: editedAt)
                 EditHistoryStore.shared.removeHistory(for: serverId(for: messageId))
             }
             self.error = error.localizedDescription

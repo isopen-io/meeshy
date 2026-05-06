@@ -52,6 +52,7 @@
 		63036D51D98A1B79ADC9401D /* OverlayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */; };
 		644A4482BA0D3FC7FF371CDA /* TextBubbleCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21E51581C5317A00E6174FB /* TextBubbleCell.swift */; };
 		689F77EEC404C2A855F716E2 /* CrashDiagnosticsManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D76BBB5EB4ED2304836A9E37 /* CrashDiagnosticsManagerTests.swift */; };
+		SSOT0001000100010001BLD /* SingleSourceOfTruthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SSOT0001000100010001REF /* SingleSourceOfTruthTests.swift */; };
 		6E75FBB8A88317499B405448 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */; };
 		72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */; };
 		738E225E02495FB6C1A4D074 /* DiscoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66A6D610352D04764BA347D /* DiscoverViewModel.swift */; };
@@ -590,6 +591,7 @@
 		D649E679109B0A647D67B7F9 /* DeliveryIndicatorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeliveryIndicatorView.swift; sourceTree = "<group>"; };
 		D6E7F8091A2B3C4D5E6F7081 /* ReplyThreadOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyThreadOverlay.swift; sourceTree = "<group>"; };
 		D76BBB5EB4ED2304836A9E37 /* CrashDiagnosticsManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CrashDiagnosticsManagerTests.swift; sourceTree = "<group>"; };
+		SSOT0001000100010001REF /* SingleSourceOfTruthTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = apps/ios/MeeshyTests/Unit/Architecture/SingleSourceOfTruthTests.swift; sourceTree = SOURCE_ROOT; };
 		DA190704EDDA2E1CA660F898 /* OnboardingStepViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingStepViews.swift; sourceTree = "<group>"; };
 		DD0100000000003F01 /* ConversationDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDashboardView.swift; sourceTree = "<group>"; };
 		DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
@@ -1401,6 +1403,7 @@
 		TSTS000C000C000C000C001 /* Unit */ = {
 			isa = PBXGroup;
 			children = (
+				SSOT0001000100010001GRP /* Architecture */,
 				DLNK000G000G000G000G001 /* Navigation */,
 				MSTSGRP001001001001001 /* Stores */,
 				TSTS000D000D000D000D001 /* Services */,
@@ -1408,6 +1411,14 @@
 				GSTC005A3B4C5D6E7F890100 /* Views */,
 			);
 			path = Unit;
+			sourceTree = "<group>";
+		};
+		SSOT0001000100010001GRP /* Architecture */ = {
+			isa = PBXGroup;
+			children = (
+				SSOT0001000100010001REF /* SingleSourceOfTruthTests.swift */,
+			);
+			path = Architecture;
 			sourceTree = "<group>";
 		};
 		MSTSGRP001001001001001 /* Stores */ = {
@@ -1987,6 +1998,7 @@
 				91664E56C9958BA865B3A608 /* MockFriendService.swift in Sources */,
 				443B3C791B4DDEDC517D35DF /* MockCacheService.swift in Sources */,
 				689F77EEC404C2A855F716E2 /* CrashDiagnosticsManagerTests.swift in Sources */,
+				SSOT0001000100010001BLD /* SingleSourceOfTruthTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

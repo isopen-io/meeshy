@@ -225,40 +225,43 @@ final class ConversationSocketHandler {
                     // persisting (see `ConversationViewModel.serverIdMappedSnapshot`).
                     if apiMsg.senderId == userId,
                        let tempId = delegate.pendingServerIds.first(where: { $0.value == apiMsg.id })?.key,
-                       let idx = delegate.messageIndex(for: tempId) {
+                       delegate.messageIndex(for: tempId) != nil {
                         let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
                         var msgArray = [decoded]
                         await delegate.decryptMessagesIfNeeded(&msgArray)
                         guard let serverMsg = msgArray.first else { return }
-                        await MainActor.run {
-                            var existing = delegate.messages[idx]
-                            existing.content = serverMsg.content
-                            if serverMsg.deliveryStatus.isBetterThan(existing.deliveryStatus) {
-                                existing.deliveryStatus = serverMsg.deliveryStatus
-                            }
-                            existing.updatedAt = serverMsg.updatedAt
-                            existing.attachments = serverMsg.attachments
-                            existing.reactions = serverMsg.reactions
-                            existing.pinnedAt = serverMsg.pinnedAt
-                            existing.pinnedBy = serverMsg.pinnedBy
-                            existing.deliveredCount = serverMsg.deliveredCount
-                            existing.readCount = serverMsg.readCount
-                            existing.deliveredToAllAt = serverMsg.deliveredToAllAt
-                            existing.readByAllAt = serverMsg.readByAllAt
-                            existing.isEdited = serverMsg.isEdited
-                            existing.editedAt = serverMsg.editedAt
-                            existing.deletedAt = serverMsg.deletedAt
-                            delegate.messages[idx] = existing
-                            // Keep pendingServerIds[tempId] = serverId so future
-                            // backend ops keep resolving correctly until reload.
-                        }
-                        // Persist server ACK via actor
+                        // Persist server ACK (state machine) via actor — store
+                        // observation will surface the delivery-status change.
                         if let persistence = self.persistence {
                             _ = try? await persistence.applyEvent(
                                 localId: tempId,
-                                event: .serverAck(serverId: apiMsg.id, at: serverMsg.updatedAt ?? Date())
+                                event: .serverAck(serverId: apiMsg.id, at: serverMsg.updatedAt)
+                            )
+                            // Persist server-confirmed content/attachments/reactions
+                            // so the store snapshot reflects ground-truth values.
+                            let attachmentsJson = serverMsg.attachments.isEmpty ? nil
+                                : try? JSONEncoder().encode(serverMsg.attachments)
+                            let reactionsJson = serverMsg.reactions.isEmpty ? nil
+                                : try? JSONEncoder().encode(serverMsg.reactions)
+                            try? await persistence.updateServerAckedFields(
+                                localId: tempId,
+                                content: serverMsg.content,
+                                attachmentsJson: attachmentsJson,
+                                reactionsJson: reactionsJson,
+                                pinnedAt: serverMsg.pinnedAt,
+                                pinnedBy: serverMsg.pinnedBy,
+                                isEdited: serverMsg.isEdited,
+                                editedAt: serverMsg.editedAt,
+                                deletedAt: serverMsg.deletedAt,
+                                deliveredCount: serverMsg.deliveredCount,
+                                readCount: serverMsg.readCount,
+                                deliveredToAllAt: serverMsg.deliveredToAllAt,
+                                readByAllAt: serverMsg.readByAllAt,
+                                updatedAt: serverMsg.updatedAt
                             )
                         }
+                        // Keep pendingServerIds[tempId] = serverId so future
+                        // backend ops keep resolving correctly until reload.
 
                         // Persist using server id so a future cold-start REST
                         // fetch reconciles cleanly without duplicates.
@@ -273,10 +276,15 @@ final class ConversationSocketHandler {
                             let existing = delegate.messages[idx]
                             let hasNewData = existing.attachments.count != socketAttachments.count
                                 || existing.deliveryStatus == .sending
-                            if hasNewData {
-                                await MainActor.run {
-                                    delegate.messages[idx] = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
-                                }
+                            if hasNewData, let persistence = self.persistence {
+                                // Write refreshed attachment data through persistence;
+                                // store observation surfaces the update to the view.
+                                let refreshed = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
+                                let attachmentsJson = try? JSONEncoder().encode(refreshed.attachments)
+                                try? await persistence.updateAttachmentsJson(
+                                    localId: existing.id,
+                                    attachmentsJson: attachmentsJson
+                                )
                             }
                         }
                         return
@@ -292,9 +300,25 @@ final class ConversationSocketHandler {
                     await delegate.decryptMessagesIfNeeded(&msgArray)
                     guard let msg = msgArray.first else { return }
 
+                    // Persist incoming message; store observation will surface
+                    // the new row to viewModel.messages automatically.
+                    if let persistence = self.persistence {
+                        let incoming = MessagePersistenceActor.IncomingMessageData(
+                            id: msg.id,
+                            conversationId: msg.conversationId,
+                            senderId: msg.senderId,
+                            content: msg.content,
+                            createdAt: msg.createdAt,
+                            computedState: .delivered
+                        )
+                        await persistence.bufferIncoming([incoming])
+                    }
+
                     await MainActor.run {
                         guard !delegate.containsMessage(id: msg.id) else { return }
-                        delegate.messages.append(msg)
+                        // UI signals: unread badge and scroll anchor.
+                        // These are not "messages" mutations — they remain as-is
+                        // until a future task derives them from the store delta.
                         delegate.lastUnreadMessage = msg
                         delegate.newMessageAppended += 1
 
@@ -313,19 +337,6 @@ final class ConversationSocketHandler {
                         // the cache update is local-first), so calling it per inbound
                         // message is safe.
                         delegate.markAsRead()
-                    }
-
-                    // Persist incoming message via actor if available
-                    if let persistence = self.persistence {
-                        let incoming = MessagePersistenceActor.IncomingMessageData(
-                            id: msg.id,
-                            conversationId: msg.conversationId,
-                            senderId: msg.senderId,
-                            content: msg.content,
-                            createdAt: msg.createdAt,
-                            computedState: .delivered
-                        )
-                        await persistence.bufferIncoming([incoming])
                     }
 
                     // mark-as-received is handled globally by ConversationListViewModel
@@ -350,14 +361,9 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiMsg in
-                guard let self, let delegate = self.delegate else { return }
-                if let idx = delegate.messageIndex(for: apiMsg.id) {
-                    var updated = delegate.messages[idx]
-                    updated.content = apiMsg.content ?? ""
-                    updated.isEdited = true
-                    delegate.messages[idx] = updated
-                }
+                guard let self else { return }
                 if let persistence = self.persistence {
+                    // Write through persistence; store observation surfaces the edit.
                     Task { try? await persistence.markEdited(
                         localId: apiMsg.id,
                         newContent: apiMsg.content ?? "",
@@ -372,15 +378,10 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let delegate = self.delegate else { return }
-                let now = Date()
-                if let idx = delegate.messageIndex(for: event.messageId) {
-                    var updated = delegate.messages[idx]
-                    updated.deletedAt = now
-                    updated.content = ""
-                    delegate.messages[idx] = updated
-                }
+                guard let self else { return }
                 if let persistence = self.persistence {
+                    // Write through persistence; store observation surfaces the deletion.
+                    let now = Date()
                     Task { try? await persistence.markDeleted(localId: event.messageId, deletedAt: now) }
                 }
             }
@@ -391,16 +392,16 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let delegate = self.delegate else { return }
-                if let idx = delegate.messageIndex(for: event.messageId) {
-                    let exists = delegate.messages[idx].reactions.contains {
-                        $0.emoji == event.emoji && $0.participantId == event.participantId
-                    }
-                    if !exists {
-                        let reaction = Reaction(messageId: event.messageId, participantId: event.participantId, emoji: event.emoji)
-                        delegate.messages[idx].reactions.append(reaction)
-                    }
-                    self.persistReactions(for: event.messageId, reactions: delegate.messages[idx].reactions)
+                guard let self, let persistence = self.persistence else { return }
+                // Write through persistence; store observation surfaces the reaction.
+                Task {
+                    try? await persistence.appendReaction(
+                        localId: event.messageId,
+                        reactionId: UUID().uuidString,
+                        messageId: event.messageId,
+                        participantId: event.participantId,
+                        emoji: event.emoji
+                    )
                 }
             }
             .store(in: &cancellables)
@@ -410,12 +411,14 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let delegate = self.delegate else { return }
-                if let idx = delegate.messageIndex(for: event.messageId) {
-                    delegate.messages[idx].reactions.removeAll {
-                        $0.emoji == event.emoji && $0.participantId == event.participantId
-                    }
-                    self.persistReactions(for: event.messageId, reactions: delegate.messages[idx].reactions)
+                guard let self, let persistence = self.persistence else { return }
+                // Write through persistence; store observation surfaces the removal.
+                Task {
+                    try? await persistence.removeReaction(
+                        localId: event.messageId,
+                        emoji: event.emoji,
+                        participantId: event.participantId
+                    )
                 }
             }
             .store(in: &cancellables)
@@ -446,38 +449,22 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Read status updated (delivered / read) — update in-memory UI state
-        // Cache persistence is handled by ConversationSyncEngine
+        // Read status updated (delivered / read) — persist delivery state;
+        // store observation surfaces the updated checkmarks in the view.
         socketManager.readStatusUpdated
             .filter { $0.conversationId == convId }
             .filter { ($0.userId ?? $0.participantId) != userId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let delegate = self.delegate else { return }
+                guard let self else { return }
                 let summary = event.summary
-
-                let newStatus: Message.DeliveryStatus = summary.readCount > 0 ? .read
-                    : summary.deliveredCount > 0 ? .delivered : .sent
-
-                for i in delegate.messages.indices.reversed() {
-                    guard delegate.messages[i].isMe else { continue }
-                    let current = delegate.messages[i].deliveryStatus
-                    guard current != .read else { break }
-                    if newStatus.isBetterThan(current) {
-                        var msg = delegate.messages[i]
-                        msg.deliveryStatus = newStatus
-                        msg.deliveredCount = summary.deliveredCount
-                        msg.readCount = summary.readCount
-                        delegate.messages[i] = msg
-                    }
-                }
-
-                // Batch-update delivery state in persistence
                 if let persistence = self.persistence {
-                    let event: MessageEvent = summary.readCount > 0
+                    // Batch-update delivery state; store observation will rebuild
+                    // the message list with updated deliveryStatus for all rows.
+                    let deliveryEvent: MessageEvent = summary.readCount > 0
                         ? .readBy(userId: userId, at: Date())
                         : .delivered(count: summary.deliveredCount, at: Date())
-                    Task { await persistence.bufferBatchDelivery(conversationId: convId, event: event) }
+                    Task { await persistence.bufferBatchDelivery(conversationId: convId, event: deliveryEvent) }
                 }
             }
             .store(in: &cancellables)
@@ -500,9 +487,10 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let delegate = self?.delegate else { return }
-                guard let msgIdx = delegate.messageIndex(for: event.messageId) else { return }
-                delegate.messages[msgIdx].updatedAt = Date()
+                guard let self, let persistence = self.persistence else { return }
+                // Touch the record so the store observation fires and
+                // bubbles re-render with the updated attachment status.
+                Task { try? await persistence.touchUpdatedAt(localId: event.messageId) }
             }
             .store(in: &cancellables)
 
@@ -512,18 +500,25 @@ final class ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let delegate = self.delegate else { return }
-                if let idx = delegate.messageIndex(for: event.messageId) {
-                    delegate.messages[idx].viewOnceCount = event.viewOnceCount
-                    if event.isFullyConsumed {
-                        delegate.evictViewOnceMedia(message: delegate.messages[idx])
-                        delegate.markMessageAsConsumed(messageId: event.messageId)
-                    }
-                }
+                // Capture the current message snapshot for eviction BEFORE
+                // the persistence write updates the record and the store
+                // observation refreshes delegate.messages.
+                let messageForEviction: Message? = event.isFullyConsumed
+                    ? delegate.messages.first(where: { $0.id == event.messageId })
+                    : nil
                 if let persistence = self.persistence {
+                    // Write through persistence; store observation surfaces the count update.
                     Task { try? await persistence.updateViewOnceCount(
                         localId: event.messageId,
                         count: event.viewOnceCount
                     ) }
+                }
+                // Eviction is media-cache housekeeping; not a messages array mutation.
+                if event.isFullyConsumed {
+                    if let msg = messageForEviction {
+                        delegate.evictViewOnceMedia(message: msg)
+                    }
+                    delegate.markMessageAsConsumed(messageId: event.messageId)
                 }
             }
             .store(in: &cancellables)
@@ -724,22 +719,6 @@ final class ConversationSocketHandler {
                 delegate.isConversationClosed = true
             }
             .store(in: &cancellables)
-    }
-
-    // MARK: - Persistence Helpers
-
-    private func persistReactions(for messageId: String, reactions: [Reaction]) {
-        guard let persistence else { return }
-        let encoder = JSONEncoder()
-        guard let json = try? encoder.encode(reactions) else { return }
-        let count = reactions.count
-        let noUserReactions: Data? = nil
-        Task { try? await persistence.updateReactions(
-            localId: messageId,
-            reactionsJson: json,
-            reactionCount: count,
-            currentUserReactionsJson: noUserReactions
-        ) }
     }
 
     // MARK: - Reconnection Sync
