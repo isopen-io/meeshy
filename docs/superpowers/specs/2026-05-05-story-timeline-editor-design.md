@@ -70,6 +70,8 @@ Les stories sont au cœur du produit Meeshy. Avec l'arrivée du composer timelin
 - **250+ tests** Swift + 80 snapshots + 12 tests manuels QA
 - **Migration incrémentale** sans breaking change wire ni perte de drafts existants
 - **iOS 17+, Swift 6 strict**
+- **OFFLINE-FIRST OBLIGATOIRE** : toute l'édition timeline (compose, drag, trim, snap, undo, keyframes, transitions, preview) DOIT fonctionner sans connexion réseau. La connexion n'est requise QUE pour : (1) l'envoi d'événements Socket.IO (réception/émission temps-réel), (2) l'upload des médias finaux à la publication. Si offline, la story est mise en queue (`OfflineQueue`) et publiée automatiquement à la reconnexion. Les TTS audio variants (qui dépendent du backend translator) sont OPTIONNELLES et ne bloquent jamais l'édition ni la publication.
+- **Toutes les API SOTA validées par audit** (cf. `2026-05-06-timeline-sota-audit.md`) : intégration des Top 5 patches (CGImageSourceCreateThumbnailAtIndex, Equatable+drawingGroup, AVAudioSession.setPreferredIOBufferDuration, OSSignposter+MetricKit, CustomTransitionCompositor stub)
 
 ### Non-Goals (out of scope explicite, candidats cycles ultérieurs)
 
@@ -181,17 +183,100 @@ Contrainte non-négociable : **toute manipulation image/audio/vidéo doit utilis
 - ❌ Création répétée d'`AVAudioFormat` ou `AVAudioBuffer` → cacher/réutiliser
 - ❌ `Thread.sleep()` ou `DispatchQueue.main.async` pour synchroniser → utiliser `await` Swift Concurrency
 - ❌ Charger un `AVURLAsset` puis lire `.tracks` synchrone → utiliser `try await asset.load(.tracks)`
-- ❌ Stockage de `UIImage` non-downscaled en mémoire → toujours `preparingThumbnail(of:)`
+- ❌ Stockage de `UIImage` non-downscaled en mémoire → toujours `preparingThumbnail(of:)` OU `CGImageSourceCreateThumbnailAtIndex` (cf. patches SOTA)
+- ❌ **MetalFX upscaling** sur stories 1080p natives → anti-pattern A15 (thermal throttling, mémoire pool, gain négligeable). Render natif uniquement.
+- ❌ **`MPS FFT`** pour analyse audio → utiliser `vDSP_fft_zrip` (8× plus rapide en pratique, MPS sans FFT natif en 2026)
+- ❌ **`MTKView` direct** pour ruler/waveform/playhead → SwiftUI `Canvas` + `.drawingGroup()` est SOTA et plus simple
+
+### Patches SOTA appliqués (validés par audit)
+
+Référence : `docs/superpowers/specs/2026-05-06-timeline-sota-audit.md` (16 WebSearch + 6 WebFetch internet réels).
+
+**Patches OBLIGATOIRES intégrés dans ce spec** :
+
+1. **Image thumbnails timeline** : `CGImageSourceCreateThumbnailAtIndex` avec `kCGImageSourceCreateThumbnailFromImageAlways: true` + `kCGImageSourceShouldCacheImmediately: false` pour les frame-strips depuis disque local. Mesuré 2-4× plus rapide que `UIImage.preparingThumbnail(of:)` (HEIC : 52ms vs 83ms ; JPEG : 24ms vs 105ms — sources Apple Eng forum).
+
+2. **Equatable views + drawingGroup()** : toutes les leaf views (`VideoClipBar`, `AudioClipBar`, `RulerView`, `PlayheadView`, `KeyframeMarkerView`, `TransitionBadge`) doivent :
+   - Conformer `Equatable` avec hash sur les seuls champs visuels effectifs
+   - Être enveloppées par `.equatable()` modifier dans le parent
+   - Pour le rendu Canvas (RulerView, AudioClipBar) : ajouter `.drawingGroup()` pour baker la composition en une layer Metal
+   - Effet : évite la cascade re-eval SwiftUI à chaque frame du playhead
+
+3. **Audio low-latency setup** : au `configure()` du `StoryTimelineEngine`, exécuter :
+   ```swift
+   try? AVAudioSession.sharedInstance().setPreferredIOBufferDuration(0.005)  // 5ms target
+   try? AVAudioSession.sharedInstance().setActive(true)
+   for node in audioPlayerNodes.values { node.prepare() }  // élimine cold-start ~100ms
+   ```
+   Cible : latence audio ~1.5ms à 64 frames (vs ~100ms cold-start sans `prepare`).
+
+4. **Profiling SOTA** : `OSSignposter` (iOS 16+ Swift natif, replaces `os_signpost`) wrappe les opérations critiques (`configure`, `seek`, `recompose`, `apply` command). Intégration `MXSignpostMetric` MetricKit pour collecte perf en prod (sans Instruments). Custom `.instrumentspackage` Xcode à committer pour visualiser les signposts dans Instruments.
+
+5. **Stub `CustomTransitionCompositor`** : préparer dès maintenant un fichier `Engine/CustomTransitionCompositor.swift` qui implémente `AVVideoCompositing` avec Metal compute (vide sauf squelette + tests). Permet aux transitions futures (push/wipe/zoom) d'être branchées sans refactor de `VideoCompositor`. Au launch, seul crossfade (opacity ramp natif) et dissolve (CIDissolveTransition) sont actifs.
+
+6. **HTTP/3 + QUIC explicite** : `URLSessionConfiguration.default.assumesHTTP3Capable = true` au `MeeshyConfig` setup. iOS active déjà HTTP/3 par défaut depuis iOS 15, mais cette flag skip la phase de discovery pour l'upload des médias finaux (gain ~150-300ms sur le first request).
+
+7. **`AsyncStream + Observation` pour streams 60Hz internes timeline** : remplacer `Combine PassthroughSubject` par `AsyncStream<Float>` pour `onTimeUpdate` (60Hz playback). Utiliser le framework `Observation` (Swift 5.9+) sur `TimelineViewModel` (déjà `@Observable`). Combine reste pour les events Socket.IO (legacy compat).
 
 ### Profiling obligatoire
 
 Outils Instruments à passer avant chaque release timeline :
-- **SwiftUI** instrument : vérifier que les `body` re-evaluations sont localisées (pas de cascade sur changements de playhead)
+- **SwiftUI** instrument : vérifier que les `body` re-evaluations sont localisées (pas de cascade sur changements de playhead). Utiliser `_printChanges()` en debug.
 - **Allocations** : memory peak < 250 MB, pas de leak après edit session de 5 min
 - **Time Profiler** : aucun `MainActor` work > 16 ms
 - **Core Animation** : 60 fps stable pendant scrubbing avec 5 clips actifs
 - **Network** : requêtes media throttlées (pas de N+1)
 - **Energy** : impact "low" pendant lecture preview
+- **Metal System Trace** : pour valider que les `drawingGroup()` créent bien des layers Metal (et pas du software fallback)
+- **MetricKit prod** : surveiller `MXSignpostMetric.timeline.recompose` P95 < 100ms après rollout
+
+---
+
+## Architecture OFFLINE-FIRST (non-négociable)
+
+L'éditeur timeline doit fonctionner **sans aucune connexion réseau** pour toute opération d'édition. Cette contrainte est fondamentale et structure les décisions techniques.
+
+### Ce qui marche OFFLINE (toujours)
+
+| Fonctionnalité | Mécanisme |
+|----------------|-----------|
+| Ouverture composer | Aucun appel réseau (engine + ViewModel locaux) |
+| Sélection médias depuis PhotoPicker / Camera | Local iOS framework |
+| Drag/drop clips, trim, snap, pinch zoom | `SnapEngine` Swift pur, aucune dépendance réseau |
+| Ajout texte / sticker / drawing | Local SwiftUI + PencilKit |
+| Ajout transitions intra-slide | `StoryClipTransition` + `VideoCompositor` purement local |
+| Ajout keyframes (position/scale/opacity) | `KeyframeInterpolator` Swift pur |
+| Undo/Redo (50 commandes) | `CommandStack` local + persistance disque |
+| Preview lecture (vidéo + audio + transitions) | `StoryTimelineEngine` + `AudioMixer` + `VideoCompositor` 100% local AVFoundation |
+| Save draft (auto + manuel) | Écriture fichier disque (`StoryComposerDraft.json` + `.commands.json`) |
+| Resume draft après close + crash | Lecture fichier disque |
+| Export MP4 local *(futur)* | `AVAssetExportSession` 100% local hardware encoder |
+
+### Ce qui requiert le réseau (uniquement)
+
+| Fonctionnalité | Comportement offline |
+|----------------|----------------------|
+| Publish story (POST `/api/v1/posts`) | **Mise en queue** dans `OfflineQueue` (existant) → publish auto à reconnect |
+| Upload médias (S3/CDN) | Inclus dans le queue ; transfer chunked résumable |
+| Réception events Socket.IO (likes/comments) | Mode dégradé : snapshot dernière fois online ; sync auto à reconnect |
+| TTS audio variants (translator backend) | **OPTIONNEL** : audio joué en VO original. Variants ajoutées en background quand reconnect, non-bloquant pour la publication |
+| Background music library (catalog distant) | Cache local des derniers tracks utilisés ; fallback bibliothèque locale iOS |
+
+### Implémentation offline-first
+
+1. **Pas de spinner offline** : si action requiert le réseau et user est offline, affiche directement la confirmation "Story sauvegardée — sera publiée à la reconnexion" + badge ⏳ dans la story tray.
+2. **Détection réseau** : `NWPathMonitor` (Network framework) écoute en continu, expose `@Published var isOnline: Bool` global.
+3. **Queue persistée** : `OfflineQueue` (existant Meeshy) sérialise les actions Codable sur disque, retry FIFO à reconnect.
+4. **Conflict resolution** : si user édite la même story sur 2 devices puis sync : last-write-wins par `updatedAt` timestamp + merge des `clipTransitions`/`keyframes` non conflictuels.
+5. **Tests obligatoires** : suite `OfflineEditFlowTests` qui vérifie en `Network.simulator(.offline)` toute la grammaire de gestes + composition + preview + save draft + resume.
+6. **Storage budget** : drafts + queue persisté < 100 MB (eviction LRU au-delà), notifications quand approche du seuil.
+
+### Garanties UX offline
+
+- **Aucune erreur "Pas de connexion"** dans le composer (sauf au moment du Publish explicite)
+- **Aucune fonctionnalité d'édition désactivée** offline
+- **Indicateur de mode** : badge subtil "✈️ Hors-ligne" en haut du composer si `!isOnline`, sans rouge ni alarme
+- **Auto-resume** : à la reconnexion, sync silencieux sans dialog interruption
 
 ---
 
@@ -1520,3 +1605,9 @@ Toutes les couleurs respectent les contrastes WCAG AA en light + dark theme (tes
 
 - **2026-05-05 v1** — Initial draft (jcharlesnm)
 - **2026-05-05 v2** — Enrichissement post-review : ajout section Stack technique iOS, sémantique isBackground (2.6), modes preview/édition (3.7), gestion d'erreurs (3.8), inspector Quick Mode (5.5), accessibilité (7.13), internationalisation (7.14), risques techniques (10), métriques de succès (11), annexes G (mapping), H (i18n strings), I (palette)
+- **2026-05-06 v3** — Audit SOTA appliqué (rapport `2026-05-06-timeline-sota-audit.md`, 16 WebSearch + 6 WebFetch internet réels) :
+  - Nouveau Goal "OFFLINE-FIRST OBLIGATOIRE" + nouvelle section "Architecture OFFLINE-FIRST"
+  - Anti-patterns enrichis : MetalFX upscaling, MPS FFT, MTKView direct (tous proscrits)
+  - Sous-section "Patches SOTA appliqués" avec 7 patches : (1) `CGImageSourceCreateThumbnailAtIndex` pour frame-strips (2-4× plus rapide), (2) `Equatable` views + `.drawingGroup()` pour leaf views, (3) `AVAudioSession.setPreferredIOBufferDuration(0.005)` + `prepare()` nodes au configure, (4) `OSSignposter` + `MXSignpostMetric` MetricKit, (5) stub `CustomTransitionCompositor` Metal pour transitions futures, (6) `URLSessionConfiguration.assumesHTTP3Capable = true`, (7) `AsyncStream + Observation` pour streams 60Hz internes
+  - Profiling enrichi : Metal System Trace + MetricKit prod (P95 monitoring)
+  - Décisions clés validées par recherche : WWDC 2024-2025 n'a pas changé le stack, MetalFX = anti-pattern A15, vDSP > MPS pour FFT, HTTP/3 actif par défaut iOS 15+
