@@ -60,27 +60,140 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(content.kind, .burned)
     }
 
-    // Helpers — STUB ONLY for Task 1. The real implementations land in Task 2 along
-    // with the BubbleContentBuilder. For Task 1, write helpers that compile (build
-    // a minimal Message + Attachment) so the test file builds. The tests
-    // themselves WILL FAIL at runtime in Task 1 — that's expected. They become
-    // green in Task 2 when the BubbleContent(message:...) initializer ships.
+    // MARK: - Pure helper tests (Step 2.4)
+
+    func test_buildAvailableFlags_excludesActiveLang() {
+        let flags = BubbleContent.buildAvailableFlags(
+            activeLang: "fr",
+            originalLang: "fr",
+            preferredLang: "en",
+            regional: "es",
+            custom: nil,
+            translations: [
+                MessageTranslation(
+                    id: "t1",
+                    messageId: "m1",
+                    sourceLanguage: "fr",
+                    targetLanguage: "en",
+                    translatedContent: "Hi",
+                    translationModel: "nllb",
+                    confidenceScore: nil
+                ),
+                MessageTranslation(
+                    id: "t2",
+                    messageId: "m1",
+                    sourceLanguage: "fr",
+                    targetLanguage: "es",
+                    translatedContent: "Hola",
+                    translationModel: "nllb",
+                    confidenceScore: nil
+                ),
+            ],
+            translatedAudios: []
+        )
+        XCTAssertEqual(flags, ["en", "es"])
+    }
+
+    func test_resolveEffectiveContent_returnsOriginalWhenActiveLangIsOriginal() {
+        let msg = makeMessage(content: "Bonjour")
+        let resolved = BubbleContent.resolveEffectiveContent(
+            message: msg,
+            preferredTranslation: nil,
+            activeLangCode: "fr"
+        )
+        XCTAssertEqual(resolved, "Bonjour")
+    }
+
+    // MARK: - Helpers
+
     private func makeMessage(
         id: String = "m1",
         content: String,
+        senderId: String = "u1",
+        isMe: Bool = false,
         attachments: [MeeshyMessageAttachment] = [],
+        replyTo: ReplyReference? = nil,
         deletedAt: Date? = nil,
+        expiresAt: Date? = nil,
         isViewOnce: Bool = false,
-        viewOnceCount: Int = 0
+        viewOnceCount: Int = 0,
+        pinnedAt: Date? = nil,
+        forwardedFromId: String? = nil,
+        isEdited: Bool = false,
+        reactions: [MeeshyReaction] = []
     ) -> MeeshyMessage {
-        // Construct a minimal MeeshyMessage — fields chosen to compile against the
-        // current MeeshySDK definition. If a required field is missing or
-        // signatures changed, look at packages/MeeshySDK/Sources/MeeshySDK/Models/CoreModels.swift
-        // and adapt.
-        fatalError("implement in Task 2 — Task 1 only needs the file to compile")
+        var effects = MessageEffects(flags: [])
+        if isViewOnce {
+            effects.flags.insert(.viewOnce)
+        }
+        return MeeshyMessage(
+            id: id,
+            conversationId: "c1",
+            senderId: senderId,
+            content: content,
+            originalLanguage: "fr",
+            messageType: .text,
+            messageSource: .user,
+            isEdited: isEdited,
+            editedAt: nil,
+            deletedAt: deletedAt,
+            replyToId: nil,
+            storyReplyToId: nil,
+            forwardedFromId: forwardedFromId,
+            forwardedFromConversationId: nil,
+            expiresAt: expiresAt,
+            effects: effects,
+            maxViewOnceCount: nil,
+            viewOnceCount: viewOnceCount,
+            pinnedAt: pinnedAt,
+            pinnedBy: nil,
+            isEncrypted: false,
+            encryptionMode: nil,
+            createdAt: Date(timeIntervalSince1970: 0),
+            updatedAt: Date(timeIntervalSince1970: 0),
+            attachments: attachments,
+            reactions: reactions,
+            replyTo: replyTo,
+            forwardedFrom: nil,
+            senderName: "Tester",
+            senderUsername: "tester",
+            senderColor: "#888",
+            senderAvatarURL: nil,
+            senderUserId: senderId,
+            deliveryStatus: .sent,
+            isMe: isMe,
+            deliveredToAllAt: nil,
+            readByAllAt: nil,
+            deliveredCount: 0,
+            readCount: 0,
+            cachedTimeString: "12:34"
+        )
     }
 
-    private func makeAttachment(type: MeeshyMessageAttachment.AttachmentType) -> MeeshyMessageAttachment {
-        fatalError("implement in Task 2")
+    private func makeAttachment(
+        id: String = UUID().uuidString,
+        type: MeeshyMessageAttachment.AttachmentType
+    ) -> MeeshyMessageAttachment {
+        let mime: String = {
+            switch type {
+            case .image: return "image/jpeg"
+            case .video: return "video/mp4"
+            case .audio: return "audio/m4a"
+            case .file: return "application/octet-stream"
+            case .location: return "application/x-location"
+            }
+        }()
+        return MeeshyMessageAttachment(
+            id: id,
+            messageId: "m1",
+            fileName: "f",
+            originalName: "f",
+            mimeType: mime,
+            fileSize: 1024,
+            filePath: "",
+            fileUrl: "https://example.com/f",
+            uploadedBy: "u1",
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
     }
 }
