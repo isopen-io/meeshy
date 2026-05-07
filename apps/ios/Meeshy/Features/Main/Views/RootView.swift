@@ -11,8 +11,15 @@ import MeeshyUI
 /// Identifiable wrapper so the fullScreenCover receives the userId directly in
 /// its content closure, avoiding the SwiftUI race where isPresented flips true
 /// before the sibling @State (userId) has propagated through the view graph.
+///
+/// `initialAction` (Phase F) carries an optional one-shot side-effect for the
+/// presented `StoryViewerView`: when set, the viewer auto-opens either the
+/// comments overlay or the viewers/reactions sheet on first appear. Defaults
+/// to `nil` so every existing call site (tray taps, deep link, notification
+/// reaction tap) preserves the legacy "open viewer normally" behaviour.
 struct StoryViewerRequest: Identifiable, Equatable {
     let id: String
+    var initialAction: StoryViewerInitialAction? = nil
 }
 
 struct RootView: View {
