@@ -1182,146 +1182,23 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Reactions Overlay (themed, accent-aware)
 
-    private let maxVisibleReactions = 4
-
+    /// Thin facade over `BubbleReactionsOverlay`. The implementation, including
+    /// pill styling, overflow pill, add button, and accessibility labels, lives
+    /// in `Bubble/BubbleReactionsOverlay.swift`.
     @ViewBuilder
     private var reactionsOverlay: some View {
-        let accent = Color(hex: contactColor)
-        let hasReactions = !reactionSummaries.isEmpty
-        let visible = Array(reactionSummaries.prefix(maxVisibleReactions))
-        let overflowCount = reactionSummaries.count - visible.count
-
-        if message.isMe {
-            if hasReactions {
-                HStack(spacing: 3) {
-                    ForEach(visible, id: \.emoji) { reaction in
-                        reactionPill(reaction: reaction, isDark: isDark, accent: accent)
-                    }
-                    if overflowCount > 0 {
-                        overflowPill(count: overflowCount, isDark: isDark, accent: accent)
-                    }
-                }
-            }
-        } else {
-            HStack(spacing: 3) {
-                if overflowCount > 0 {
-                    overflowPill(count: overflowCount, isDark: isDark, accent: accent)
-                } else if isLastReceivedMessage {
-                    addReactionButton(isDark: isDark, accent: accent)
-                }
-
-                ForEach(visible, id: \.emoji) { reaction in
-                    reactionPill(reaction: reaction, isDark: isDark, accent: accent)
-                }
-            }
-        }
-    }
-
-    private func addReactionButton(isDark: Bool, accent: Color) -> some View {
-        Image(systemName: "face.smiling")
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(isDark ? accent.opacity(0.6) : accent.opacity(0.5))
-            .frame(width: 22, height: 22)
-            .background(
-                Circle()
-                    .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
-                    .overlay(
-                        Circle()
-                            .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
-                    )
-                    .shadow(color: accent.opacity(0.1), radius: 3, y: 1)
-            )
-            .contentShape(Circle())
-            .onTapGesture {
-                HapticFeedback.light()
-                onAddReaction?(message.id)
-            }
-            .onLongPressGesture(minimumDuration: 0.4) {
-                HapticFeedback.medium()
-                onOpenReactPicker?(message.id)
-            }
-            .accessibilityLabel("Ajouter une reaction")
-            .accessibilityHint("Appuyer pour reagir rapidement, maintenir pour choisir un emoji")
-    }
-
-    private func overflowPill(count: Int, isDark: Bool, accent: Color) -> some View {
-        Button {
-            HapticFeedback.light()
-            onShowReactions?(message.id)
-        } label: {
-            Text("+\(count)")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(accent)
-        }
-        .frame(height: 22)
-        .padding(.horizontal, 6)
-        .background(
-            Capsule()
-                .fill(isDark ? accent.opacity(0.12) : accent.opacity(0.08))
-                .overlay(
-                    Capsule()
-                        .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
-                )
+        BubbleReactionsOverlay(
+            messageId: message.id,
+            summaries: reactionSummaries,
+            isMe: message.isMe,
+            isDark: isDark,
+            isLastReceivedMessage: isLastReceivedMessage,
+            accentHex: contactColor,
+            onAddReaction: onAddReaction,
+            onToggleReaction: onToggleReaction,
+            onOpenReactPicker: onOpenReactPicker,
+            onShowReactions: onShowReactions
         )
-        .accessibilityLabel("\(count) reactions supplementaires")
-        .accessibilityHint("Voir toutes les reactions")
-    }
-
-    private func reactionPillAccessibilityLabel(_ reaction: ReactionSummary) -> String {
-        let countLabel = reaction.count == 1 ? "reaction" : "reactions"
-        let meLabel = reaction.includesMe ? ", vous avez reagi" : ""
-        return "\(reaction.emoji) \(reaction.count) \(countLabel)\(meLabel)"
-    }
-
-    private func reactionPill(reaction: ReactionSummary, isDark: Bool, accent: Color) -> some View {
-        let pillContent = HStack(spacing: 2) {
-            Text(reaction.emoji)
-                .font(.system(size: 11))
-            if reaction.count > 1 {
-                Text("\(reaction.count)")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(
-                        reaction.includesMe
-                            ? (isDark ? .white : .white)
-                            : (isDark ? .white.opacity(0.7) : accent)
-                    )
-            }
-        }
-        .padding(.horizontal, reaction.count > 1 ? 6 : 5)
-        .frame(height: 22)
-
-        let fillColor: Color = reaction.includesMe
-            ? (isDark ? accent.opacity(0.5) : accent.opacity(0.35))
-            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
-
-        let strokeColor: Color = reaction.includesMe
-            ? accent.opacity(isDark ? 0.8 : 0.6)
-            : accent.opacity(isDark ? 0.15 : 0.1)
-
-        let strokeWidth: CGFloat = reaction.includesMe ? 1.5 : 0.5
-
-        let shadowColor: Color = reaction.includesMe ? accent.opacity(0.3) : .clear
-
-        return pillContent
-            .background(
-                Capsule()
-                    .fill(fillColor)
-                    .overlay(
-                        Capsule()
-                            .stroke(strokeColor, lineWidth: strokeWidth)
-                    )
-                    .shadow(color: shadowColor, radius: 4, y: 2)
-            )
-            .onTapGesture {
-                HapticFeedback.light()
-                onToggleReaction?(reaction.emoji)
-            }
-            .onLongPressGesture(minimumDuration: 0.4) {
-                HapticFeedback.medium()
-                onShowReactions?(message.id)
-            }
-            .accessibilityLabel(reactionPillAccessibilityLabel(reaction))
-            .accessibilityHint("Appuyer pour basculer la reaction")
     }
 
     // MARK: - Bubble Background

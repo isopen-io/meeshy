@@ -36,4 +36,50 @@ final class BubbleEquatableTests: XCTestCase {
             BubblePinnedIndicator()
         )
     }
+
+    func test_reactionsOverlay_sameSummaries_equal() {
+        // MeeshyReactionSummary has no latestAt field — drop the spec template
+        // value, the manual Equatable on BubbleReactionsOverlay projects
+        // (emoji, count, includesMe) only.
+        let s = [ReactionSummary(emoji: "👍", count: 2, includesMe: true)]
+        let a = BubbleReactionsOverlay(
+            messageId: "m1",
+            summaries: s,
+            isMe: false,
+            isDark: true,
+            isLastReceivedMessage: true,
+            accentHex: "FFF"
+        )
+        let b = BubbleReactionsOverlay(
+            messageId: "m1",
+            summaries: s,
+            isMe: false,
+            isDark: true,
+            isLastReceivedMessage: true,
+            accentHex: "FFF"
+        )
+        XCTAssertEqual(a, b)
+    }
+
+    func test_reactionsOverlay_callbackDifference_stillEqual() {
+        // Les callbacks ne participent PAS à l'égalité.
+        var a = BubbleReactionsOverlay(
+            messageId: "m1",
+            summaries: [],
+            isMe: false,
+            isDark: false,
+            isLastReceivedMessage: false,
+            accentHex: "F"
+        )
+        let b = BubbleReactionsOverlay(
+            messageId: "m1",
+            summaries: [],
+            isMe: false,
+            isDark: false,
+            isLastReceivedMessage: false,
+            accentHex: "F"
+        )
+        a.onAddReaction = { _ in }
+        XCTAssertEqual(a, b)
+    }
 }
