@@ -807,13 +807,17 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
     // MARK: - Room Management
 
-    func test_init_joinsConversationRoom() {
+    func test_init_joinsConversationRoom() async throws {
         let socket = MockMessageSocket()
         let _ = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
             messageSocket: socket
         )
+
+        // Post Phase 1.5: init defers joinConversation via DispatchQueue.main.async
+        // (to escape the SwiftUI view-update cycle). Wait one runloop tick.
+        try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(socket.joinConversationIds.contains(conversationId))
     }
@@ -891,14 +895,22 @@ final class ConversationSocketHandlerTests: XCTestCase {
         sut.armSocketSubscriptions()
         sut.armSocketSubscriptions()
 
+        // The deferred join in init() runs via DispatchQueue.main.async; allow
+        // it to complete so the subscriber pipeline is fully wired before we
+        // emit. Otherwise the messageReceived sink may not be subscribed yet.
+        try await Task.sleep(nanoseconds: 100_000_000)
+
         let apiMsg = makeAPIMessage(id: "duptest", senderId: otherUserId, content: "Once")
         socket.simulateMessage(apiMsg)
 
         await Task.yield()
-        try await Task.sleep(nanoseconds: 300_000_000)
+        try await Task.sleep(nanoseconds: 500_000_000)
 
-        XCTAssertEqual(delegate.messages.count, 1, "Should receive message only once despite double armSocketSubscriptions()")
-        XCTAssertEqual(delegate.newMessageAppended, 1)
+        // Post Phase 1.5: delegate.messages is no longer mutated. The
+        // newMessageAppended counter is the canonical "message appended"
+        // UI signal — and `armSocketSubscriptions` early-returns on the
+        // second call so only one subscription fires per event.
+        XCTAssertEqual(delegate.newMessageAppended, 1, "Should receive message only once despite double armSocketSubscriptions()")
     }
 
     // MARK: - Persistence Actor Integration
