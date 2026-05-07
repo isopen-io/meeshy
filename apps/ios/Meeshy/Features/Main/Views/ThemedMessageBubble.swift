@@ -359,68 +359,16 @@ struct ThemedMessageBubble: View {
         }
     }
 
+    /// Thin facade over `BubbleDeletedView`. Implementation lives in
+    /// `Bubble/BubbleSystemViews.swift`.
     private var deletedMessageView: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if message.isMe { Spacer(minLength: 50) }
-
-            HStack(spacing: 6) {
-                Image(systemName: "nosign")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                Text("Message supprime")
-                    .font(.system(size: 13, weight: .regular))
-                    .italic()
-                    .foregroundColor(theme.textMuted)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                    .overlay(
-                        Capsule()
-                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
-                    )
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Message supprime")
-
-            if !message.isMe { Spacer(minLength: 50) }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 2)
+        BubbleDeletedView(isMe: message.isMe, isDark: isDark)
     }
 
+    /// Thin facade over `BubbleBurnedView`. Implementation lives in
+    /// `Bubble/BubbleSystemViews.swift`.
     private var burnedMessageView: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if message.isMe { Spacer(minLength: 50) }
-
-            HStack(spacing: 6) {
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.orange)
-                Text("Vu et effacé")
-                    .font(.system(size: 13, weight: .regular))
-                    .italic()
-                    .foregroundColor(theme.textMuted)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(Color.orange.opacity(0.08))
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.orange.opacity(0.15), lineWidth: 0.5)
-                    )
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Message vu et effacé")
-
-            if !message.isMe { Spacer(minLength: 50) }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 2)
+        BubbleBurnedView(isMe: message.isMe, isDark: isDark)
     }
 
     @ViewBuilder
