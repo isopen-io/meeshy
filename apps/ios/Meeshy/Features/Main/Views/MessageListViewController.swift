@@ -20,6 +20,13 @@ final class MessageListViewController: UIViewController {
     private var isLoadingOlder = false
     var onNewMessagesBadge: ((Int) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
+    /// Invoked when the scroll position approaches the older-messages
+    /// threshold. The parent (typically `ConversationViewModel`) is the
+    /// only owner that knows how to chain cache lookup + network fetch
+    /// (see `ConversationViewModel.loadOlderMessages`). Going through the
+    /// store directly would bypass the network fallback and silently
+    /// stall pagination once the local GRDB window is exhausted.
+    var onLoadOlder: (() async -> Void)?
     var resolveBubbleData: (String) -> MessageBubbleData = { _ in MessageBubbleData() }
 
     init(
@@ -268,14 +275,17 @@ extension MessageListViewController: UICollectionViewDelegate {
         let distanceFromBottom = contentHeight - offset - frameHeight
 
         if distanceFromBottom < 300, !isLoadingOlder {
+            // The collection view is `scaleY: -1` flipped, so what looks like
+            // the visual top (older messages) lives at the data tail. Approaching
+            // `distanceFromBottom < 300` means the user is scrolling toward the
+            // older end. Hand off to `onLoadOlder` (wired to the ViewModel) so
+            // pagination tries cache first, then network — the store-only path
+            // would stall once GRDB has no more rows.
+            guard !store.messages.isEmpty, let onLoadOlder else { return }
             isLoadingOlder = true
-            guard let oldest = store.messages.first?.createdAt else {
-                isLoadingOlder = false
-                return
-            }
-            Task { @MainActor in
-                _ = await store.loadOlder(before: oldest)
-                isLoadingOlder = false
+            Task { @MainActor [weak self] in
+                await onLoadOlder()
+                self?.isLoadingOlder = false
             }
         }
     }

@@ -24,6 +24,11 @@ struct MessageListView: UIViewControllerRepresentable {
     var bottomInset: CGFloat = 0
     var onNewMessagesBadge: ((Int) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
+    /// Invoked when the user approaches the older-messages threshold. Wire to
+    /// `ConversationViewModel.loadOlderMessages()` so pagination chains cache
+    /// then network — bypassing this hook leaves the store stuck on whatever
+    /// GRDB already holds.
+    var onLoadOlder: (() async -> Void)?
     /// Resolves the dynamic per-message data (translations, transcriptions,
     /// audio translations) at cell-config time. Closure is invoked on main
     /// thread inside `UICollectionView.CellRegistration`. Defaults to empty.
@@ -48,6 +53,7 @@ struct MessageListView: UIViewControllerRepresentable {
         )
         vc.onNewMessagesBadge = onNewMessagesBadge
         vc.onScrollToMessage = onScrollToMessage
+        vc.onLoadOlder = onLoadOlder
         vc.resolveBubbleData = resolveBubbleData
         vc.applyBottomInset(bottomInset)
         return vc
@@ -56,6 +62,7 @@ struct MessageListView: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: MessageListViewController, context: Context) {
         vc.update(isDark: colorScheme == .dark, accentColor: accentColor)
         vc.onScrollToMessage = onScrollToMessage
+        vc.onLoadOlder = onLoadOlder
         vc.resolveBubbleData = resolveBubbleData
         vc.applyBottomInset(bottomInset)
     }
