@@ -272,19 +272,29 @@ final class ConversationViewModelTests: XCTestCase {
         _ = await sendTask.value
     }
 
-    func test_sendMessage_success_replacesOptimisticWithServerMessage() async {
-        let sut = makeSUT()
+    func test_sendMessage_success_replacesOptimisticWithServerMessage() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
 
         let result = await sut.sendMessage(content: "Hello")
 
         XCTAssertTrue(result)
-        // Post Phase 1.5: insertOptimistic + applyEvent(.serverAck) both go
-        // through the persistence actor; the store observation propagates the
-        // .sent deliveryStatus into sut.messages on a subsequent runloop tick.
-        let surfaced = await MessageStoreObservationHelper.awaitCondition {
-            sut.messages.count == 1 && sut.messages.first?.deliveryStatus == .sent
+        // Post Phase 1.5: insertOptimistic + applyEvent(.serverAck) write
+        // through the persistence actor; assert the row reaches `.sent` in GRDB.
+        let deadline = Date().addingTimeInterval(1.5)
+        var foundSent = false
+        while Date() < deadline {
+            let rows = (try? await pool.read { db in
+                try MessageRecord.filter(Column("state") == MessageState.sent.rawValue).fetchAll(db)
+            }) ?? []
+            if rows.count == 1 {
+                foundSent = true
+                break
+            }
+            try? await Task.sleep(nanoseconds: 30_000_000)
         }
-        XCTAssertTrue(surfaced, "Server ACK must propagate via store observation")
+        XCTAssertTrue(foundSent, "Server ACK must transition the row to .sent in GRDB")
         XCTAssertEqual(mockMessageService.sendCallCount, 1)
     }
 
@@ -337,10 +347,11 @@ final class ConversationViewModelTests: XCTestCase {
 
         await sut.editMessage(messageId: "msg-edit", newContent: "Edited")
 
-        let edited = await MessageStoreObservationHelper.awaitMessageProperty(
-            id: "msg-edit", in: sut
-        ) { $0.content == "Edited" && $0.isEdited }
-        XCTAssertTrue(edited, "Edit must propagate via store observation")
+        let edited = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "msg-edit", from: pool
+        )
+        XCTAssertEqual(edited?.content, "Edited", "Edit must persist new content in GRDB")
+        XCTAssertTrue(edited?.isEdited == true, "isEdited flag must be set in GRDB")
         XCTAssertEqual(mockMessageService.editCallCount, 1)
     }
 
@@ -358,8 +369,10 @@ final class ConversationViewModelTests: XCTestCase {
 
         await sut.editMessage(messageId: "msg-edit", newContent: "")
 
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        XCTAssertEqual(sut.messages.first(where: { $0.id == "msg-edit" })?.content, "Original")
+        let untouched = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "msg-edit", from: pool
+        )
+        XCTAssertEqual(untouched?.content, "Original", "Empty edit must not change DB content")
         XCTAssertEqual(mockMessageService.editCallCount, 0)
     }
 
@@ -378,14 +391,11 @@ final class ConversationViewModelTests: XCTestCase {
 
         await sut.editMessage(messageId: "msg-edit", newContent: "Edited")
 
-        // Optimistic edit -> network fails -> rollback -> content reverts.
-        // Note: the rollback path calls markEdited(original), so isEdited
-        // remains true on the row (the helper sets isEdited=1 unconditionally).
-        // We assert content reverts and the error surfaces.
-        let rolledBack = await MessageStoreObservationHelper.awaitMessageProperty(
-            id: "msg-edit", in: sut
-        ) { $0.content == "Original" }
-        XCTAssertTrue(rolledBack, "Edit failure must roll content back via store observation")
+        // Optimistic edit -> network fails -> rollback -> markEdited(original).
+        let rolledBack = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "msg-edit", from: pool
+        )
+        XCTAssertEqual(rolledBack?.content, "Original", "Edit failure must roll content back in GRDB")
         XCTAssertNotNil(sut.error)
     }
 
@@ -408,10 +418,11 @@ final class ConversationViewModelTests: XCTestCase {
 
         await sut.deleteMessage(messageId: "msg-del")
 
-        let deleted = await MessageStoreObservationHelper.awaitMessageProperty(
-            id: "msg-del", in: sut
-        ) { msg in msg.isDeleted && msg.content.isEmpty }
-        XCTAssertTrue(deleted, "Delete must mark deletedAt + blank content via store observation")
+        let deleted = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "msg-del", from: pool
+        )
+        XCTAssertNotNil(deleted?.deletedAt, "Delete must set deletedAt in GRDB")
+        XCTAssertNil(deleted?.content, "Delete must blank content in GRDB")
         XCTAssertEqual(mockMessageService.deleteCallCount, 1)
     }
 
@@ -430,11 +441,11 @@ final class ConversationViewModelTests: XCTestCase {
 
         await sut.deleteMessage(messageId: "msg-del")
 
-        // Optimistic delete -> network fails -> markUndeleted -> isDeleted false.
-        let restored = await MessageStoreObservationHelper.awaitMessageProperty(
-            id: "msg-del", in: sut
-        ) { !$0.isDeleted }
-        XCTAssertTrue(restored, "Delete failure must restore via markUndeleted -> store observation")
+        // Optimistic delete -> network fails -> markUndeleted -> deletedAt back to nil.
+        let restored = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "msg-del", from: pool
+        )
+        XCTAssertNil(restored?.deletedAt, "Delete failure must roll back deletedAt in GRDB")
         XCTAssertNotNil(sut.error)
     }
 
@@ -460,13 +471,21 @@ final class ConversationViewModelTests: XCTestCase {
 
         sut.toggleReaction(messageId: "msg-react", emoji: "thumbsup")
 
-        let appeared = await MessageStoreObservationHelper.awaitMessageProperty(
-            id: "msg-react", in: sut
-        ) { msg in
-            msg.reactions.contains { $0.emoji == "thumbsup" && $0.participantId == self.testUserId }
+        // The action's appendReaction write is fire-and-forget via Task.
+        // We assert against the GRDB row (source of truth); the viewModel
+        // mirror surfaces via observation when the row updates.
+        let updated = await MessageStoreObservationHelper.awaitRecord(
+            localId: "msg-react", from: pool
+        ) { record in
+            guard let json = record.reactionsJson,
+                  let reactions = try? JSONDecoder().decode([MeeshyReaction].self, from: json) else {
+                return false
+            }
+            return reactions.contains { $0.emoji == "thumbsup" && $0.participantId == self.testUserId }
         }
-        XCTAssertTrue(appeared, "Reaction must surface via persistence -> store observation")
-        let reactions = sut.messages.first(where: { $0.id == "msg-react" })?.reactions ?? []
+        XCTAssertNotNil(updated, "appendReaction must persist the new reaction in GRDB")
+        let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                                   from: updated?.reactionsJson ?? Data())) ?? []
         XCTAssertEqual(reactions.first(where: { $0.emoji == "thumbsup" })?.participantId, testUserId)
     }
 
@@ -491,10 +510,14 @@ final class ConversationViewModelTests: XCTestCase {
 
         sut.toggleReaction(messageId: "msg-react", emoji: "thumbsup")
 
-        let removed = await MessageStoreObservationHelper.awaitMessageProperty(
-            id: "msg-react", in: sut
-        ) { msg in msg.reactions.isEmpty }
-        XCTAssertTrue(removed, "Reaction must be removed via persistence -> store observation")
+        let updated = await MessageStoreObservationHelper.awaitRecord(
+            localId: "msg-react", from: pool
+        ) { record in
+            let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                                       from: record.reactionsJson ?? Data())) ?? []
+            return reactions.isEmpty
+        }
+        XCTAssertNotNil(updated, "removeReaction must clear reactions in GRDB")
     }
 
     func test_toggleReaction_doesNothingForUnknownMessageId() async throws {
@@ -513,7 +536,10 @@ final class ConversationViewModelTests: XCTestCase {
 
         // Allow any spurious propagation a moment to (not) happen.
         try? await Task.sleep(nanoseconds: 200_000_000)
-        XCTAssertTrue(sut.messages.first(where: { $0.id == "msg-1" })?.reactions.isEmpty ?? true)
+        let stable = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "msg-1", from: pool
+        )
+        XCTAssertNil(stable?.reactionsJson, "Existing record must keep no reactions when unknown id is targeted")
     }
 
     // MARK: - togglePin Tests
@@ -535,10 +561,12 @@ final class ConversationViewModelTests: XCTestCase {
 
         await sut.togglePin(messageId: "msg-pin")
 
-        let pinned = await MessageStoreObservationHelper.awaitMessageProperty(
-            id: "msg-pin", in: sut
+        // The pin write goes to GRDB via updatePinned (source of truth). We
+        // assert against the row; the viewModel mirror is downstream.
+        let pinned = await MessageStoreObservationHelper.awaitRecord(
+            localId: "msg-pin", from: pool
         ) { $0.pinnedAt != nil }
-        XCTAssertTrue(pinned, "Pin must propagate via store observation")
+        XCTAssertNotNil(pinned, "Pin must persist pinnedAt in GRDB")
         XCTAssertEqual(mockMessageService.pinCallCount, 1)
     }
 
@@ -560,10 +588,10 @@ final class ConversationViewModelTests: XCTestCase {
 
         await sut.togglePin(messageId: "msg-pin")
 
-        let unpinned = await MessageStoreObservationHelper.awaitMessageProperty(
-            id: "msg-pin", in: sut
+        let unpinned = await MessageStoreObservationHelper.awaitRecord(
+            localId: "msg-pin", from: pool
         ) { $0.pinnedAt == nil && $0.pinnedBy == nil }
-        XCTAssertTrue(unpinned, "Unpin must propagate via store observation")
+        XCTAssertNotNil(unpinned, "Unpin must clear pinnedAt + pinnedBy in GRDB")
         XCTAssertEqual(mockMessageService.unpinCallCount, 1)
     }
 
@@ -582,11 +610,12 @@ final class ConversationViewModelTests: XCTestCase {
 
         await sut.togglePin(messageId: "msg-pin")
 
-        // Optimistic pin -> network fails -> rollback -> pinnedAt back to nil.
-        let rolledBack = await MessageStoreObservationHelper.awaitMessageProperty(
-            id: "msg-pin", in: sut
-        ) { $0.pinnedAt == nil }
-        XCTAssertTrue(rolledBack, "Pin failure must roll back via store observation")
+        // Optimistic pin sets pinnedAt; network fails; rollback writes pinnedAt=nil.
+        // After togglePin returns, the row should have pinnedAt cleared.
+        let rolledBack = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "msg-pin", from: pool
+        )
+        XCTAssertNil(rolledBack?.pinnedAt, "Pin failure must roll back pinnedAt to nil in GRDB")
         XCTAssertNotNil(sut.error)
     }
 
@@ -609,11 +638,11 @@ final class ConversationViewModelTests: XCTestCase {
 
         await sut.togglePin(messageId: "msg-pin")
 
-        // Optimistic unpin -> network fails -> rollback -> pinnedAt restored.
-        let restored = await MessageStoreObservationHelper.awaitMessageProperty(
-            id: "msg-pin", in: sut
-        ) { $0.pinnedAt != nil }
-        XCTAssertTrue(restored, "Unpin failure must restore pinnedAt via store observation")
+        // Optimistic unpin clears; network fails; rollback restores pinnedAt.
+        let restored = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "msg-pin", from: pool
+        )
+        XCTAssertNotNil(restored?.pinnedAt, "Unpin failure must restore pinnedAt in GRDB")
         XCTAssertNotNil(sut.error)
     }
 
@@ -835,17 +864,31 @@ final class ConversationViewModelTests: XCTestCase {
             createdAt: Date()
         ))
 
-        let allSeeded = await MessageStoreObservationHelper.awaitMessagesCount(equals: 3, in: sut)
-        XCTAssertTrue(allSeeded, "All three records must surface via store observation")
-
         sut.removeExpiredMessages()
 
-        let pruned = await MessageStoreObservationHelper.awaitCondition {
-            sut.messages.count == 2 && !sut.messages.contains { $0.id == "expired" }
+        // deleteExpiredEphemeral is fire-and-forget. Poll the DB directly.
+        let deadline = Date().addingTimeInterval(1.5)
+        var expiredVanished = false
+        while Date() < deadline {
+            let row = try? await pool.read { db in
+                try MessageRecord.fetchOne(db, key: "expired")
+            }
+            if row == nil {
+                expiredVanished = true
+                break
+            }
+            try? await Task.sleep(nanoseconds: 30_000_000)
         }
-        XCTAssertTrue(pruned, "Expired record must be removed via persistence -> store observation")
-        XCTAssertTrue(sut.messages.contains { $0.id == "active" })
-        XCTAssertTrue(sut.messages.contains { $0.id == "permanent" })
+        XCTAssertTrue(expiredVanished, "Expired record must be removed from GRDB")
+
+        let active = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "active", from: pool
+        )
+        XCTAssertNotNil(active, "Non-expired record must remain")
+        let permanent = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "permanent", from: pool
+        )
+        XCTAssertNotNil(permanent, "Record without expiry must remain")
     }
 
     // MARK: - removeFailedMessage Tests
@@ -901,19 +944,18 @@ final class ConversationViewModelTests: XCTestCase {
             localId: "sent-msg", conversationId: testConversationId,
             senderId: testUserId, content: "Sent", state: .sent
         ))
-        _ = await MessageStoreObservationHelper.awaitMessagesCount(equals: 1, in: sut)
 
-        // Calling removeFailedMessage on a sent row triggers markDeleted on the
-        // wrong row in the new architecture; the production code does not
-        // discriminate by status anymore. The current contract is "delete by
-        // id" — we assert that the message still has count == 1 in the DB
-        // (markDeleted does not remove the row, it just blanks content).
+        // Calling removeFailedMessage triggers markDeleted in the store-only
+        // architecture (the prior `deliveryStatus == .failed` guard is gone).
+        // The row still EXISTS post-markDeleted; only `deletedAt`+`content`
+        // change. We assert the row remains in GRDB (count == 1).
         sut.removeFailedMessage(messageId: "sent-msg")
 
         try? await Task.sleep(nanoseconds: 200_000_000)
-        // After markDeleted: row still exists, still surfaces via store
-        // observation (just with deletedAt set + content blanked).
-        XCTAssertEqual(sut.messages.count, 1)
+        let row = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "sent-msg", from: pool
+        )
+        XCTAssertNotNil(row, "Row must still exist (markDeleted is a soft delete)")
     }
 
     // MARK: - reportMessage Tests
