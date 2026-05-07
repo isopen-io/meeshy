@@ -782,6 +782,14 @@ struct ConversationView: View {
                     // refreshFromDB which re-emits the snapshot).
                     Task { await viewModel.loadMessagesAround(messageId: targetId) }
                 },
+                onLoadOlder: {
+                    // Infinite scroll: VM owns the cache + network sequence
+                    // (syncEngine.fetchOlderMessages → store.loadOlder).
+                    // Going through the store directly stalls once the local
+                    // GRDB window is exhausted, leaving older messages
+                    // unreachable.
+                    await viewModel.loadOlderMessages()
+                },
                 resolveBubbleData: { messageId in
                     // Pulls live translation/transcription state from the
                     // ConversationViewModel. The closure runs on main thread
