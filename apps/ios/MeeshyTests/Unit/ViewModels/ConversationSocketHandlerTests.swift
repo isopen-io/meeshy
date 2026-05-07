@@ -172,23 +172,37 @@ final class ConversationSocketHandlerTests: XCTestCase {
     }
 
     // MARK: - messageReceived: From Other User
+    //
+    // Post Phase 1.5: messageReceived no longer mutates delegate.messages
+    // directly. The socket handler writes to GRDB via
+    // `persistence.bufferIncoming(...)` and emits UI signals through the
+    // delegate (lastUnreadMessage, newMessageAppended, markAsRead). This
+    // test seeds a persistence actor on the handler and verifies that the
+    // record landed in the database and the UI signals fired.
 
     func test_messageReceived_fromOtherUser_appendsToDelegate() async throws {
+        let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
-        _ = sut
+        sut.persistence = actor
 
         let apiMsg = makeAPIMessage(id: "newmsg", senderId: otherUserId, content: "Hey!")
         socket.simulateMessage(apiMsg)
 
-        // Combine pipeline needs RunLoop processing — yield and wait
-        await Task.yield()
-        try await Task.sleep(nanoseconds: 300_000_000)
+        // Wait for the buffered write + actor processor to commit.
+        try await Task.sleep(nanoseconds: 500_000_000)
 
-        XCTAssertEqual(delegate.messages.count, 1)
-        XCTAssertEqual(delegate.messages[0].id, "newmsg")
-        XCTAssertEqual(delegate.messages[0].content, "Hey!")
+        // 1. Record landed in the database via persistence.bufferIncoming.
+        let records = try await db.read { db in
+            try MessageRecord.filter(Column("localId") == "newmsg").fetchAll(db)
+        }
+        XCTAssertEqual(records.count, 1, "Incoming message must be persisted to GRDB")
+        XCTAssertEqual(records.first?.content, "Hey!")
+        XCTAssertEqual(records.first?.conversationId, conversationId)
+
+        // 2. UI signals on delegate are still expected.
         XCTAssertEqual(delegate.newMessageAppended, 1)
         XCTAssertNotNil(delegate.lastUnreadMessage)
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "newmsg")
         XCTAssertEqual(
             delegate.markAsReadCallCount, 1,
             "Inbound message in an active conversation must auto-trigger markAsRead so the sender's checkmark turns purple"
@@ -230,12 +244,50 @@ final class ConversationSocketHandlerTests: XCTestCase {
     }
 
     // MARK: - messageReceived: Own message with attachments updates existing
+    //
+    // Post Phase 1.5: when an own-message echo arrives with new attachments,
+    // the socket handler writes them through `persistence.updateAttachmentsJson`.
+    // The delegate.messages array stays the gating signal (containsMessage check)
+    // but the actual update happens via persistence. We verify the DB row.
 
     func test_messageReceived_ownMessageWithAttachments_updatesExisting() async throws {
+        let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
-        _ = sut
+        sut.persistence = actor
+
+        // Seed both the delegate (so containsMessage gates the branch) and
+        // the GRDB row (so updateAttachmentsJson has something to update).
         delegate.messages = [makeMessage(id: "mymsg", senderId: currentUserId, isMe: true)]
         delegate.invalidateIndex()
+        let record = MessageRecord(
+            localId: "mymsg", serverId: nil,
+            conversationId: conversationId, senderId: currentUserId,
+            content: "My msg", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sending, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        try await actor.insertOptimistic(record)
 
         let apiMsg: APIMessage = JSONStub.decode("""
         {
@@ -249,19 +301,60 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.simulateMessage(apiMsg)
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 400_000_000)
 
-        XCTAssertEqual(delegate.messages.count, 1, "Should update existing, not add new")
-        XCTAssertFalse(delegate.messages[0].attachments.isEmpty, "Should have updated attachments")
+        // The DB row's attachmentsJson should now contain the inbound attachment.
+        let updated = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "mymsg")
+        }
+        XCTAssertNotNil(updated?.attachmentsJson, "attachmentsJson must be set after own-message echo")
+        let attachments = (try? JSONDecoder().decode([MeeshyMessageAttachment].self,
+                                                     from: updated!.attachmentsJson!)) ?? []
+        XCTAssertFalse(attachments.isEmpty, "Persistence must hold the new attachments")
+        XCTAssertEqual(attachments.first?.id, "att1")
     }
 
     // MARK: - messageEdited
+    //
+    // Post Phase 1.5: messageEdited writes via `persistence.markEdited`.
+    // delegate.messages is no longer mutated — assertions verify the DB row.
 
     func test_messageEdited_updatesContentAndSetsIsEdited() async throws {
+        let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
-        _ = sut
-        delegate.messages = [makeMessage(id: "msg1", content: "Original")]
-        delegate.invalidateIndex()
+        sut.persistence = actor
+        _ = delegate
+
+        // Seed a row in GRDB so markEdited has something to update.
+        let record = MessageRecord(
+            localId: "msg1", serverId: nil,
+            conversationId: conversationId, senderId: otherUserId,
+            content: "Original", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .delivered, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        try await actor.insertOptimistic(record)
 
         let editedApiMsg: APIMessage = JSONStub.decode("""
         {
@@ -275,10 +368,14 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.simulateMessageEdited(editedApiMsg)
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 300_000_000)
 
-        XCTAssertEqual(delegate.messages[0].content, "Edited content")
-        XCTAssertTrue(delegate.messages[0].isEdited)
+        let updated = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        XCTAssertEqual(updated?.content, "Edited content", "Edited content must propagate to DB")
+        XCTAssertTrue(updated?.isEdited == true, "isEdited flag must be set after socket edit")
+        XCTAssertNotNil(updated?.editedAt)
     }
 
     func test_messageEdited_unknownMessage_noEffect() async throws {
@@ -300,23 +397,61 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 100_000_000)
 
+        // Without persistence wired, delegate.messages stays as seeded.
         XCTAssertEqual(delegate.messages[0].content, "Original")
     }
 
     // MARK: - messageDeleted
+    //
+    // Post Phase 1.5: messageDeleted writes via `persistence.markDeleted`.
+    // delegate.messages is no longer mutated — assertions verify the DB row.
 
     func test_messageDeleted_setsIsDeletedAndClearsContent() async throws {
+        let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
-        _ = sut
-        delegate.messages = [makeMessage(id: "msg1", content: "Will be deleted")]
-        delegate.invalidateIndex()
+        sut.persistence = actor
+        _ = delegate
+
+        // Seed a row so markDeleted has something to update.
+        let record = MessageRecord(
+            localId: "msg1", serverId: nil,
+            conversationId: conversationId, senderId: otherUserId,
+            content: "Will be deleted", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .delivered, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        try await actor.insertOptimistic(record)
 
         socket.simulateMessageDeleted(MessageDeletedEvent(messageId: "msg1", conversationId: conversationId))
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 300_000_000)
 
-        XCTAssertTrue(delegate.messages[0].isDeleted)
-        XCTAssertEqual(delegate.messages[0].content, "")
+        let deleted = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        XCTAssertNotNil(deleted?.deletedAt, "deletedAt must be set after socket delete")
+        XCTAssertNil(deleted?.content, "content must be blanked after socket delete")
     }
 
     func test_messageDeleted_unknownMessage_noEffect() async throws {
