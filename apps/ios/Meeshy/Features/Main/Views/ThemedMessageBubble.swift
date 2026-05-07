@@ -63,7 +63,6 @@ struct ThemedMessageBubble: View {
     @State private var isBlurRevealed: Bool = false
     @State private var blurRevealTask: Task<Void, Never>?
     @State private var fogOpacity: CGFloat = 0
-    @State private var isTextExpanded: Bool = false
     @State var revealedAttachmentIds: Set<String> = [] // internal for cross-file extension access
 
     @State var fullscreenLocationAttachment: MessageAttachment? = nil
@@ -758,8 +757,6 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Expandable Text
 
-    private static let textTruncateLimit = 512
-
     private var linkTint: Color {
         message.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
     }
@@ -768,54 +765,19 @@ struct ThemedMessageBubble: View {
         Color(hex: "818CF8") // indigo400 — distinct des liens URL
     }
 
+    /// Thin facade over `BubbleExpandableText`. La logique de troncature
+    /// "show more / show less" et l'etat `isExpanded` vivent dans
+    /// `Bubble/BubbleExpandableText.swift`.
     @ViewBuilder
     private var expandableTextView: some View {
-        let content = effectiveContent
-        let needsTruncation = content.count > Self.textTruncateLimit && !isTextExpanded
-        let textColor = message.isMe ? Color.white : theme.textPrimary
-
-        if needsTruncation {
-            let truncated = Self.truncateAtWord(content, limit: Self.textTruncateLimit)
-            VStack(alignment: .leading, spacing: 4) {
-                (MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightSearchTerm)
-                + timestampSpacerText)
-                .fixedSize(horizontal: false, vertical: true)
-                .tint(linkTint)
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isTextExpanded = true
-                    }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(textColor.opacity(0.6))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 2)
-                }
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 4) {
-                (MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightSearchTerm)
-                + timestampSpacerText)
-                .fixedSize(horizontal: false, vertical: true)
-                .tint(linkTint)
-
-                if isTextExpanded && content.count > Self.textTruncateLimit {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            isTextExpanded = false
-                        }
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(textColor.opacity(0.6))
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.top, 2)
-                    }
-                }
-            }
-        }
+        BubbleExpandableText(
+            content: effectiveContent,
+            isMe: message.isMe,
+            mentionDisplayNames: mentionDisplayNames,
+            highlightTerm: highlightSearchTerm,
+            mentionTint: mentionTint,
+            linkTint: linkTint
+        )
     }
 
     // MARK: - Secondary Content (inline translation)
@@ -854,13 +816,6 @@ struct ThemedMessageBubble: View {
             }
             .transition(.opacity.combined(with: .move(edge: .top)))
         }
-    }
-
-    private static func truncateAtWord(_ text: String, limit: Int) -> String {
-        guard text.count > limit else { return text }
-        let prefix = String(text.prefix(limit))
-        guard let lastSpace = prefix.lastIndex(of: " ") else { return prefix }
-        return String(prefix[prefix.startIndex..<lastSpace])
     }
 
     // MARK: - Message Meta (timestamp + delivery status)
